@@ -1,8 +1,7 @@
 import { createServer } from "node:http";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { extname, join, normalize, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { extname, join, normalize } from "node:path";
 import {
   applyExpertPolicyToPlan,
   expertExamplesForProfile,
@@ -994,7 +993,7 @@ export async function rookRequestHandler(request, response) {
 }
 
 const launchedDirectly =
-  process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+  process.argv[1] && /(?:^|[/\\])server\.mjs$/u.test(process.argv[1]);
 
 if (launchedDirectly) {
   const server = createServer(rookRequestHandler);
