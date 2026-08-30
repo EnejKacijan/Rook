@@ -1,0 +1,101 @@
+.week-navigation {
+  display: grid;
+  grid-template-columns: 44px minmax(64px, auto) 44px;
+  align-items: center;
+  gap: 0;
+  flex: 0 0 auto;
+}
+
+.week-navigation button {
+  width: 44px;
+  height: 44px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #3f5f51;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+.week-navigation button:hover:not(:disabled) { background: #e9efec; }
+.week-navigation button:disabled { color: #8f8c87; opacity: .58; }
+.week-navigation span { color: #315f4b; font-size: 12px; font-weight: 600; text-align: center; white-space: nowrap; }
+.today-screen .screen-top {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  column-gap: 8px;
+  row-gap: 3px;
+  align-items: center;
+}
+.today-screen .screen-top > .eyebrow {
+  grid-column: 1;
+  min-width: 0;
+  max-width: none;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.today-screen .screen-top > .week-navigation { grid-column: 2; justify-self: end; }
+.today-program-name { grid-column: 1 / -1; min-width: 0; color: #1b1a19; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.active-workout-hero > p { margin: 10px 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.active-workout-hero > .button { margin-top: 22px; }
+.plan-ready-notice { position: relative; margin-top: 16px; padding: 12px 42px 12px 13px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 14px; background: #eaf2ee; }
+.plan-ready-notice > button { position: absolute; top: 3px; right: 4px; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: #6f837a; font-size: 20px; line-height: 1; }
+.plan-ready-notice .eyebrow { color: #1f6b4c; }
+.plan-ready-notice p,.plan-ready-notice > div { margin: 5px 0 0; color: #275d47; font-size: 12px; line-height: 1.4; }
+.plan-ready-notice > div { display: grid; gap: 2px; }
+.plan-ready-notice > div strong { font-size: 13px; }
+.plan-ready-notice > div span { color: #4e6258; }
+.plan-ready-notice + .today-hero { padding-top: 22px; }
+
+@media (max-width: 500px) {
+  .today-screen .today-hero { padding-top: 12px; }
+  .today-screen .plan-ready-notice + .today-hero { padding-top: 18px; }
+}
+
+/* Dot color communicates workout state; selection is communicated by the day card. */
+.week-strip .workout-planned .workout-dot { background: #b9b5af; }
+.week-strip .workout-completed .completed-dot { background: #1f6b4c; }
+.week-strip .selected-day.workout-planned .workout-dot { background: #f6f5f2; }
+.week-strip .selected-day.workout-completed .completed-dot { background: #7fd0aa; }
+.week-strip .today-date:not(.selected-day) { border: 2px solid #1b1a19; }
+.rest-day-state { margin-top: 48px; }
+.rest-day-state h1 { margin: 10px 0 0; font-size: 36px; }
+.rest-day-state > p { margin-top: 8px; }
+.rest-up-next { margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(27,26,25,.08); }
+.rest-up-next time { display: block; margin-top: 10px; color: #6f6c68; font-size: 12px; }
+.rest-up-next h2 { margin: 5px 0 0; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+.rest-up-next > span { display: block; margin-top: 6px; color: #6f6c68; font-size: 13px; }
+.rest-up-next .rest-view-workout { width: auto; min-height: 46px; margin-top: 18px; padding: 0 20px; border-radius: 13px; }
+.train-anyway { display: block; margin: 10px 0 0; min-height: 44px; padding: 0 8px; color: #6f6c68; text-decoration: underline; text-decoration-color: rgba(111,108,104,.35); text-underline-offset: 3px; }
+.optional-session-note { display: block; margin-top: 8px; color: #1f6b4c; }
+.today-screen .compact-workout-title .workout-title-primary { white-space: nowrap; overflow-wrap: normal; }
+.rest-training-sheet { padding-top: 34px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+.rest-training-option,.move-workout-row { width: 100%; min-height: 68px; padding: 13px 2px; border: 0; border-bottom: 1px solid rgba(27,26,25,.08); background: transparent; color: #1b1a19; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
+.rest-training-option span,.move-workout-row span { display: flex; flex-direction: column; gap: 4px; }
+.rest-training-option strong,.move-workout-row strong { font-size: 13px; }
+.rest-training-option small,.move-workout-row small,.move-workout-row em { color: #8a8783; font-size: 11px; font-style: normal; line-height: 1.35; }
+.rest-training-option > i,.move-workout-row > i { color: #1f6b4c; font-size: 20px; font-style: normal; }
+.move-preview { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 24px 0 14px; }
+.move-preview span { padding: 15px; border: 1px solid rgba(27,26,25,.09); border-radius: 14px; background: #fff; display: flex; flex-direction: column; gap: 6px; }
+.move-preview small,.optional-field > span,.optional-duration > span { color: #a3a09b; font-size: 9px; font-weight: 750; letter-spacing: .1em; }
+.move-preview strong { font-size: 13px; }
+.optional-field { margin-top: 24px; display: flex; flex-direction: column; gap: 8px; }
+.optional-field select { width: 100%; height: 52px; padding: 0 14px; border: 1px solid rgba(27,26,25,.11); border-radius: 14px; background: #fff; }
+.optional-duration { margin: 22px 0; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.optional-duration > div { display: flex; align-items: center; gap: 14px; }
+.optional-duration button { width: 40px; height: 40px; border: 1px solid rgba(27,26,25,.1); border-radius: 12px; background: #fff; }
+.optional-duration strong { min-width: 52px; text-align: center; }
+.sheet-footnote { display: block; margin-top: 10px; color: #8a8783; text-align: center; }
+
+@media (max-width: 390px) {
+  .today-screen .screen-top { column-gap: 4px; }
+  .week-navigation { grid-template-columns: 40px minmax(72px, auto) 40px; }
+  .week-navigation span { font-size: 11px; }
+}
+@media (max-width: 350px) {
+  .today-screen .screen-top > .eyebrow { grid-column: 1 / -1; grid-row: 1; }
+  .today-program-name { grid-row: 2; }
+  .today-screen .screen-top > .week-navigation { grid-column: 1 / -1; grid-row: 3; }
+}

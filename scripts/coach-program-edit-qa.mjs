@@ -1,0 +1,30 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+import { blankState, buildProgram, isoDay, weekday } from '../src/domain.js';
+
+const outputRoot = new URL('../artifacts/coach-program-edit/', import.meta.url); await mkdir(outputRoot, { recursive: true });
+const output = name => fileURLToPath(new URL(name, outputRoot));
+const state = blankState();
+state.profile = { ...state.profile, goal: 'Build muscle', experience: 'Advanced', daysPerWeek: 4, availableDays: ['Mon', 'Tue', 'Thu', 'Fri'], sessionMinutes: 60, environment: 'Commercial gym', equipment: ['full gym'], priorities: ['Chest'], effortStyle: 'Fewer hard sets · 2 sets · 0–1 RIR', onboardingComplete: true };
+state.program = buildProgram(state.profile); state.program.source = 'ai'; state.selectedDay = weekday(); state.selectedDate = isoDay();
+const upperDays = state.program.days.filter(day => /upper/i.test(day.name)); assert.equal(upperDays.length, 2);
+let changes = [];
+
+const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
+await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
+const page = await context.newPage(); const errors = []; const coachContexts = [];
+page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true, provider: 'qa' }) }));
+await page.route('**/api/ai', async route => { const body = route.request().postDataJSON(); if (body.operation !== 'coach') return route.continue(); const coachContext = body.payload.context; coachContexts.push(coachContext); const restQuestion = /rest day/i.test(body.payload.message); if (!restQuestion) { const availableChest = coachContext.availableExercises.filter(item => item.muscles.includes('Chest')); changes = coachContext.program.days.filter(day => /upper/i.test(day.name)).map(day => ({ workoutId: day.id, addExerciseIds: [availableChest.find(item => !day.exercises.some(exercise => exercise.exerciseId === item.exerciseId)).exerciseId], removeExerciseIds: [] })); } const data = restQuestion ? { text: 'Yes. Today is a rest day; no workout is scheduled.', action: null } : { text: 'I prepared a chest exercise for each Upper workout. Review the two additions below before applying them.', action: { type: 'program-exercise-change', changes, explanation: 'Add one chest movement to each Upper workout while leaving every existing exercise unchanged.' } }; await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data }) }); });
+await page.goto(`http://127.0.0.1:4173/?coach-program-qa=${Date.now()}`, { waitUntil: 'domcontentloaded' }); await page.getByRole('button', { name: 'COACH' }).click();
+await page.getByLabel('Ask Coach').fill('I want a chest exercise in both Upper workouts.'); await page.getByRole('button', { name: 'Send message' }).click(); await page.waitForFunction(() => Boolean(JSON.parse(localStorage.getItem('lift-v2-state')).conversations.at(-1)?.reply)); const afterReply = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); const proposedReply = afterReply.conversations.at(-1).reply; assert.equal(proposedReply.action?.type, 'program-exercise-change', `validated program action is present: ${JSON.stringify({ reply: proposedReply, changes, activeWorkout: afterReply.activeWorkout, days: afterReply.program.days.map(day => ({ id: day.id, name: day.name, ids: day.exercises.map(exercise => exercise.exerciseId) })) })}`); assert.equal(changes.length, 2, 'Coach proposes one change for each Upper workout'); await page.getByRole('heading', { name: 'Review program changes' }).waitFor(); assert.equal(await page.locator('.program-change').count(), 2, 'both Upper changes are visible in review');
+let stored = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); for (const change of changes) assert.ok(!stored.program.days.find(day => day.id === change.workoutId).exercises.some(exercise => change.addExerciseIds.includes(exercise.exerciseId)), 'review does not mutate the program');
+await page.screenshot({ path: output('390-review.png'), fullPage: false }); await page.getByRole('button', { name: 'APPLY TO PROGRAM' }).click(); await page.getByText('✓ APPLIED TO PROGRAM', { exact: true }).waitFor();
+stored = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); for (const change of changes) assert.ok(stored.program.days.find(day => day.id === change.workoutId).exercises.some(exercise => change.addExerciseIds.includes(exercise.exerciseId)), 'apply persists each reviewed addition');
+await page.getByLabel('Ask Coach').fill('Is today a rest day?'); await page.getByRole('button', { name: 'Send message' }).click(); await page.getByText('Yes. Today is a rest day; no workout is scheduled.', { exact: true }).waitFor();
+assert.equal(coachContexts.at(-1).todayStatus.type, 'rest-day'); assert.equal(coachContexts.at(-1).today, null); assert.deepEqual(errors, []);
+await context.close(); await browser.close();
+console.log('Coach program-edit QA passed: recurring changes require review/apply, both Upper additions persist, and today is explicitly understood as a rest day.');

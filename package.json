@@ -1,0 +1,37 @@
+{
+  "name": "rook-fitness-pwa",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node --env-file-if-exists=.env server.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:ui": "node scripts/functional-qa.mjs",
+    "test:edge": "node scripts/edge-qa.mjs",
+    "qa:visual": "node scripts/visual-qa.mjs",
+    "qa:personalization": "node scripts/personalization-audit.mjs",
+    "qa:rest-day": "node scripts/rest-day-qa.mjs",
+    "qa:planned-today": "node scripts/planned-today-qa.mjs",
+    "qa:bottom-sheet-drag": "node scripts/bottom-sheet-drag-qa.mjs",
+    "qa:coach-history": "node scripts/coach-history-qa.mjs",
+    "qa:coach-coverage": "node scripts/coach-coverage-adapt-qa.mjs",
+    "qa:plan-upgrade": "node scripts/plan-upgrade-fallback-qa.mjs",
+    "qa:scratch-plan": "node scripts/scratch-plan-qa.mjs",
+    "qa:active-workout-bottom": "node scripts/active-workout-bottom-qa.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^6.1.0",
+    "jsdom": "^25.0.1",
+    "playwright-core": "^1.62.1",
+    "vite": "^8.2.2",
+    "vitest": "^4.1.11"
+  }
+}

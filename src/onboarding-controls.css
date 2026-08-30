@@ -1,0 +1,184 @@
+.onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(24px + env(safe-area-inset-top)); padding-left: 24px; padding-right: 24px; }
+.onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) { overflow: clip; }
+.onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 20px; }
+.onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 28px 0 18px; }
+
+.select-all-check { width: max-content; display: flex; align-items: center; gap: 8px; margin-top: 18px; color: #4e4b47; font-size: 12px; font-weight: 650; cursor: pointer; }
+.select-all-check input { width: 18px; height: 18px; margin: 0; accent-color: #1f6b4c; cursor: pointer; }
+.option-list.day-options { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
+.option-list.day-options .onboarding-option { min-height: 48px; padding: 0; justify-content: center; border-radius: 12px; }
+.day-options .option-card-copy { align-items: center; }
+.day-options .option-card-copy strong { font-size: 12px; text-align: center; }
+.day-options .option-card-check { display: none; }
+
+.onboarding-goal .option-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 20px; }
+.onboarding-goal .onboarding-option { min-height: 62px; }
+.onboarding-goal .onboarding-option:last-child:nth-child(odd) { grid-column: 1 / -1; }
+.goal-plan-preview { margin-top: 12px; padding: 11px 13px 12px; border: 1px solid rgba(27, 26, 25, .08); border-radius: 15px; background: #efeee9; }
+.goal-plan-preview > span { display: block; color: #8d8984; font-size: 9px; font-weight: 750; letter-spacing: .12em; }
+.goal-plan-preview > strong { display: block; margin-top: 5px; font-size: 13px; line-height: 1.2; }
+.goal-plan-preview > p { margin: 4px 0 0; font-size: 11px; line-height: 1.4; }
+.goal-plan-preview.has-selection { border-color: rgba(31, 107, 76, .14); background: #eaf2ee; }
+.goal-plan-preview.has-selection > span,.goal-plan-preview.has-selection > strong { color: #1f6b4c; }
+
+.personal-fields { display: flex; flex-direction: column; gap: 14px; margin-top: 24px; }
+.personal-fields label { display: flex; flex-direction: column; gap: 7px; color: #6f6c68; font-size: 12px; font-weight: 650; }
+.personal-fields label span { display: flex; justify-content: space-between; }
+.personal-fields label small { color: #a3a09b; font-weight: 500; }
+.personal-fields input,
+.personal-fields select { width: 100%; height: 54px; padding: 0 15px; border: 1px solid rgba(27, 26, 25, .12); border-radius: 14px; background: #fff; color: #1b1a19; }
+.personal-fields .privacy-note { margin: 0; font-size: 11px; }
+.text-answer.compact-answer { min-height: 86px; margin-top: 12px; }
+.option-list .onboarding-option { min-height: 58px; padding: 11px 17px; }
+.option-card-copy { min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 3px; }
+.option-card-copy strong { color: inherit; font-size: 14px; font-weight: 650; line-height: 1.2; text-align: left; }
+.option-card-copy small { max-width: 100%; color: #8d8984; font-size: 11.5px; font-weight: 500; line-height: 1.25; text-align: left; white-space: nowrap; }
+.onboarding-option.selected-option .option-card-copy small { color: rgba(255, 255, 255, .7); }
+.option-card-check { width: 18px; flex: 0 0 18px; margin-left: 10px; color: inherit; font-size: 13px; font-weight: 750; text-align: center; }
+
+.schedule-fields,.setup-fields { display: grid; gap: 15px; margin-top: 18px; }
+.onboarding-question-group { margin: 0; }
+.onboarding-group-heading { min-height: 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.onboarding-group-heading > strong { color: #4e4b47; font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.onboarding-group-heading > small { color: #8a8783; font-size: 10px; }
+.onboarding-group-heading .select-all-check { margin: 0; font-size: 11px; }
+.onboarding-group-heading .select-all-check input { width: 16px; height: 16px; }
+.schedule-frequency .option-list,
+.schedule-duration .option-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }
+.schedule-frequency .onboarding-option,
+.schedule-duration .onboarding-option { min-height: 50px; padding: 4px 2px; justify-content: center; border-radius: 12px; }
+.schedule-frequency .option-card-copy,
+.schedule-duration .option-card-copy { align-items: center; }
+.schedule-frequency .option-card-copy strong,
+.schedule-duration .option-card-copy strong { font-size: 11px; text-align: center; }
+.schedule-frequency .option-card-check,
+.schedule-duration .option-card-check { display: none; }
+.schedule-days .day-options { margin-top: 7px; }
+.schedule-hint { display: block; margin-top: 6px; color: #8b6440; font-size: 10px; }
+.setup-environment .option-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 0; }
+.setup-environment .onboarding-option { min-height: 58px; padding: 7px; justify-content: center; }
+.setup-environment .option-card-copy { align-items: center; }
+.setup-environment .option-card-copy strong { font-size: 12px; text-align: center; }
+.setup-environment .option-card-check { display: none; }
+.setup-confirmation { min-height: 58px; padding: 11px 13px; border: 1px solid rgba(31,107,76,.16); border-radius: 13px; background: #edf5f1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.setup-confirmation strong { color: #1f6b4c; font-size: 12px; }
+.setup-confirmation small { color: #527363; font-size: 11px; line-height: 1.35; }
+.setup-equipment .option-list { gap: 7px; margin-top: 8px; }
+.setup-equipment .onboarding-option { min-height: 50px; padding-block: 8px; }
+
+.onboarding-priorities .option-list { gap: 7px; margin-top: 18px; }
+.onboarding-priorities .onboarding-option { min-height: 52px; padding-block: 8px; }
+.onboarding-priorities .physique-review-entry { min-height: 52px; margin-top: 10px; }
+
+.onboarding.onboarding-preferences { overflow-x: clip !important; overflow-y: auto !important; }
+.preference-fields { display: grid; gap: 20px; margin-top: 18px; }
+.onboarding-preferences .split-recommendation { margin-top: 0; }
+.onboarding-preferences .split-recommendation .onboarding-option { min-height: 68px; border-color: rgba(31, 107, 76, .22); background: #f4f8f5; }
+.onboarding-preferences .split-recommendation .onboarding-option.selected-option { border-color: #1b1a19; background: #1b1a19; }
+.onboarding-preferences .split-recommendation .option-card-copy strong { font-size: 11px; letter-spacing: .08em; }
+.onboarding-preferences .split-recommendation .option-card-copy small { white-space: normal; }
+.specific-split-toggle { width: 100%; min-height: 44px; margin-top: 4px; padding: 9px 2px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-bottom: 1px solid rgba(27, 26, 25, .09); background: transparent; color: #1f6b4c; text-align: left; }
+.specific-split-toggle span { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.specific-split-toggle strong { font-size: 12px; font-weight: 700; }
+.specific-split-toggle small { overflow: hidden; color: #77736e; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
+.specific-split-toggle i { flex: 0 0 auto; font-size: 18px; font-style: normal; }
+.onboarding-preferences .split-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 7px; }
+.onboarding-preferences .split-options .onboarding-option { min-height: 46px; padding: 6px 10px; justify-content: center; border-radius: 12px; }
+.onboarding-preferences .split-options .option-card-copy { align-items: center; }
+.onboarding-preferences .split-options strong { font-size: 11.5px; text-align: center; }
+.onboarding-preferences .split-options .option-card-check { display: none; }
+.onboarding-preferences .split-other-answer { min-height: 66px; margin-top: 7px; }
+.onboarding-preferences .text-answer.compact-answer { min-height: 66px; margin-top: 7px; }
+.onboarding-preferences .compact-options { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 7px; margin-top: 12px; }
+.onboarding-preferences .compact-options .onboarding-option { min-height: 54px; padding: 7px; justify-content: center; }
+.onboarding-preferences .compact-options .option-card-copy { align-items: center; }
+.onboarding-preferences .compact-options strong { font-size: 11px; text-align: center; }
+.onboarding-preferences .compact-options .option-card-check { display: none; }
+
+@media (max-height: 760px) {
+  .onboarding-preferences .onboarding-content { padding-top: 20px !important; }
+  .onboarding-preferences .onboarding-content > p { margin-block: 8px; font-size: 12px; }
+  .onboarding-preferences h1 { font-size: 27px !important; }
+  .onboarding-preferences .preference-fields { gap: 13px; margin-top: 11px; }
+  .onboarding-preferences .split-recommendation .onboarding-option { min-height: 60px; }
+  .onboarding-preferences .split-options { gap: 5px; }
+  .onboarding-preferences .split-options .onboarding-option { min-height: 41px; }
+  .onboarding-preferences .text-answer.compact-answer { min-height: 54px; }
+  .onboarding-preferences .compact-options { margin-top: 6px !important; }
+  .onboarding-preferences .compact-options .onboarding-option { min-height: 47px; }
+}
+
+.physique-review-entry { width: 100%; min-height: 58px; margin-top: 18px; padding: 10px 2px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 0; border-top: 1px solid rgba(27, 26, 25, .08); background: transparent; color: #1f6b4c; text-align: left; }
+.physique-review-entry span { display: flex; flex-direction: column; gap: 4px; }
+.physique-review-entry strong { color: #4e4b47; font-size: 12px; }
+.physique-review-entry small { color: #1f6b4c; font-size: 12px; }
+.physique-review-entry i { font-size: 20px; font-style: normal; }
+.physique-review-screen { overflow-y: auto; }
+.physique-review-content { flex: 1; padding: 52px 0 30px; }
+.physique-review-content > p { max-width: 410px; }
+.physique-caution,.photo-guidance { margin-top: 24px; padding: 14px 15px; border-radius: 14px; background: #efeee9; color: #6f6c68; font-size: 12px; line-height: 1.5; }
+.physique-analysis { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; padding-bottom: 50px; }
+.physique-analysis .building-spinner { margin-bottom: 22px; }
+.physique-analysis p { max-width: 330px; }
+.photo-inputs { display: flex; flex-direction: column; gap: 9px; margin-top: 20px; }
+.photo-inputs label { min-height: 64px; padding: 11px 15px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(27, 26, 25, .11); border-radius: 15px; background: #fff; cursor: pointer; }
+.photo-inputs label.ready { border-color: rgba(31, 107, 76, .38); background: #f5faf7; }
+.photo-inputs input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
+.photo-inputs span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.photo-inputs strong { font-size: 14px; text-transform: capitalize; }
+.photo-inputs small { overflow: hidden; color: #8a8783; font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+.photo-inputs i { color: #1f6b4c; font-size: 18px; font-style: normal; }
+.photo-privacy { display: block; margin-top: 16px; color: #8a8783; font-size: 10.5px; line-height: 1.45; }
+.physique-suggestions { display: flex; flex-direction: column; gap: 9px; margin-top: 22px; }
+.physique-suggestions button { width: 100%; min-height: 72px; padding: 13px 15px; display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; border: 1px solid rgba(27, 26, 25, .1); border-radius: 15px; background: #fff; color: #1b1a19; text-align: left; }
+.physique-suggestions button.selected { border-color: #1b1a19; background: #1b1a19; color: #fff; }
+.physique-suggestions span { min-width: 0; display: grid; grid-template-columns: 1fr auto; gap: 3px 10px; }
+.physique-suggestions strong { font-size: 14px; }
+.physique-suggestions small { color: #1f6b4c; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+.physique-suggestions em { grid-column: 1 / -1; color: #77736e; font-size: 11px; font-style: normal; line-height: 1.4; }
+.physique-suggestions .selected small,.physique-suggestions .selected em { color: rgba(255,255,255,.68); }
+.physique-suggestions i { width: 18px; color: inherit; font-size: 13px; font-style: normal; text-align: center; }
+.physique-control-copy { font-size: 11px !important; font-weight: 650; }
+.priority-settings .option-list { margin-top: 22px; }
+.priority-settings > .physique-review-entry { margin-bottom: 18px; }
+.priority-settings > .button { margin-top: 8px; }
+.confirmed-physique { margin-top: 26px !important; }
+.confirmed-physique .info-row button { border: 0; background: transparent; color: #8b554b; font-size: 11px; }
+.profile-priority-empty { margin-bottom: 4px !important; }
+
+@media (max-width: 374px) {
+  .option-list.day-options { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  .setup-equipment .option-grid,
+  .onboarding-priorities .option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .schedule-frequency .option-list,
+  .schedule-duration .option-list { gap: 4px; }
+  .physique-review-content { padding-top: 38px; }
+  .physique-suggestions span { grid-template-columns: 1fr; }
+  .physique-suggestions small { grid-row: 2; }
+}
+
+@media (max-height: 700px) {
+  .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(22px + env(safe-area-inset-top)); padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
+  .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 19px; }
+  .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 25px 0 14px; }
+  .onboarding:not(.entry-screen):not(.physique-review-screen) h1 { font-size: 28px; }
+  .onboarding:not(.entry-screen):not(.physique-review-screen) .option-list { margin-top: 16px; }
+  .onboarding-schedule .schedule-fields,.onboarding-setup .setup-fields { gap: 12px; margin-top: 14px; }
+  .onboarding-schedule .onboarding-question-group .option-list,
+  .onboarding-setup .onboarding-question-group .option-list { margin-top: 6px; }
+  .onboarding-setup .setup-environment .option-list { margin-top: 0; }
+  .onboarding-personal .personal-fields { gap: 10px; margin-top: 16px; }
+  .onboarding-personal .personal-fields input,
+  .onboarding-personal .personal-fields select { height: 50px; }
+  .onboarding-goal .goal-plan-preview { margin-top: 7px; padding-block: 8px; }
+  .onboarding-goal .onboarding-option { min-height: 54px; }
+}
+
+@media (max-height: 640px) {
+  .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) { overflow-x: clip; overflow-y: auto; }
+}
+.follow-up-onboarding .onboarding-content { padding-top: 34px; }
+.follow-up-onboarding h1 { max-width: 360px; }
+.follow-up-onboarding .follow-up-hint { max-width: 390px; margin-top: 16px; color: #4f4c48; font-size: 13px; line-height: 1.5; }
+.follow-up-onboarding .follow-up-note { margin-top: 10px; color: #a3a09b; font-size: 12px; }
+.follow-up-onboarding .text-answer { margin-top: 20px; }
