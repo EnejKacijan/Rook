@@ -1,7 +1,8 @@
 import { createServer } from "node:http";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
-import { extname, join, normalize } from "node:path";
+import { extname, join, normalize, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   applyExpertPolicyToPlan,
   expertExamplesForProfile,
@@ -871,7 +872,7 @@ async function openAI(operation, payload) {
   return callProvider(operation, payload);
 }
 
-const server = createServer(async (request, response) => {
+export async function rookRequestHandler(request, response) {
   if (request.url === "/api/expert-lab/status") {
     let feedbackCount = 0;
     if (expertLabEnabled) {
@@ -990,7 +991,14 @@ const server = createServer(async (request, response) => {
       response.end("Build the app first with npm run build.");
     }
   }
-});
-server.listen(port, "127.0.0.1", () =>
-  console.log(`Rook server running at http://127.0.0.1:${port}`),
-);
+}
+
+const launchedDirectly =
+  process.argv[1] && resolve(process.argv[1]) === resolve(fileURLToPath(import.meta.url));
+
+if (launchedDirectly) {
+  const server = createServer(rookRequestHandler);
+  server.listen(port, "127.0.0.1", () =>
+    console.log(`Rook server running at http://127.0.0.1:${port}`),
+  );
+}
