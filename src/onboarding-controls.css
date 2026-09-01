@@ -1,15 +1,22 @@
 .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(24px + env(safe-area-inset-top)); padding-left: 24px; padding-right: 24px; }
 .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) { overflow: clip; }
 .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 20px; }
-.onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 28px 0 18px; }
+.onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line > span { transition: width 220ms cubic-bezier(.2, 0, 0, 1); }
+.onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 28px 0 18px; animation: onboarding-step-enter 180ms cubic-bezier(.2, 0, 0, 1); }
+
+@keyframes onboarding-step-enter {
+  from { opacity: 0; transform: translateY(6px); }
+  to { opacity: 1; transform: translateY(0); }
+}
 
 .select-all-check { width: max-content; display: flex; align-items: center; gap: 8px; margin-top: 18px; color: #4e4b47; font-size: 12px; font-weight: 650; cursor: pointer; }
 .select-all-check input { width: 18px; height: 18px; margin: 0; accent-color: #1f6b4c; cursor: pointer; }
-.option-list.day-options { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 4px; margin-top: 12px; }
-.option-list.day-options .onboarding-option { min-height: 48px; padding: 0; justify-content: center; border-radius: 12px; }
+.option-list.day-options { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; margin-top: 12px; }
+.option-list.day-options .onboarding-option { position: relative; min-width: 48px; min-height: 48px; padding: 0 17px 0 10px; justify-content: center; border-radius: 12px; transition: transform 120ms cubic-bezier(.2, 0, 0, 1), background-color 180ms cubic-bezier(.2, 0, 0, 1), border-color 180ms cubic-bezier(.2, 0, 0, 1), color 180ms cubic-bezier(.2, 0, 0, 1); }
+.option-list.day-options .onboarding-option:active { transform: scale(.98); }
 .day-options .option-card-copy { align-items: center; }
 .day-options .option-card-copy strong { font-size: 12px; text-align: center; }
-.day-options .option-card-check { display: none; }
+.day-options .option-card-check { position: absolute; top: 5px; right: 6px; display: block; width: auto; margin: 0; font-size: 9px; line-height: 1; }
 
 .onboarding-goal .option-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 20px; }
 .onboarding-goal .onboarding-option { min-height: 62px; }
@@ -27,6 +34,62 @@
 .personal-fields label small { color: #a3a09b; font-weight: 500; }
 .personal-fields input,
 .personal-fields select { width: 100%; height: 54px; padding: 0 15px; border: 1px solid rgba(27, 26, 25, .12); border-radius: 14px; background: #fff; color: #1b1a19; }
+.age-range-picker { position: relative; width: 100%; }
+.age-range-trigger {
+  width: 100%;
+  height: 54px;
+  padding: 0 14px 0 15px;
+  border: 1px solid rgba(27, 26, 25, .12);
+  border-radius: 14px;
+  background: #fff;
+  color: #1b1a19;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.personal-fields .age-range-trigger > span { min-width: 0; display: block; font-weight: 650; }
+.age-range-trigger .placeholder { color: #77736e; }
+.age-range-trigger > i { color: #77736e; }
+.age-range-trigger[aria-expanded="true"] .disclosure-chevron::before { transform: rotate(225deg); }
+.age-range-options {
+  position: absolute;
+  z-index: 24;
+  top: calc(100% + 5px);
+  left: 0;
+  width: 100%;
+  padding: 4px;
+  border: 1px solid rgba(27, 26, 25, .12);
+  border-radius: 14px;
+  background: #fff;
+  color: #1b1a19;
+  box-shadow: 0 14px 32px rgba(27, 26, 25, .13);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+.age-range-options.opens-above { top: auto; bottom: calc(100% + 5px); }
+.age-range-options > button {
+  width: 100%;
+  min-height: 42px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #1b1a19;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.age-range-options > button > span { display: block; font-size: 14px; font-weight: 650; }
+.age-range-options > button > i { padding-right: 1px; color: #1f6b4c; font-style: normal; font-weight: 800; }
+.age-range-options > button[aria-selected="true"] { background: rgba(31, 107, 76, .09); color: #1f6b4c; }
+.age-range-options > button:is(:hover, .is-active) { background: rgba(31, 107, 76, .055); }
+.age-range-options > button[aria-selected="true"].is-active { background: rgba(31, 107, 76, .11); }
+.age-range-options > button:focus-visible { outline: 2px solid rgba(31, 107, 76, .45); outline-offset: -2px; }
 .personal-fields .privacy-note { margin: 0; font-size: 11px; }
 .text-answer.compact-answer { min-height: 86px; margin-top: 12px; }
 .option-list .onboarding-option { min-height: 58px; padding: 11px 17px; }
@@ -54,6 +117,7 @@
 .schedule-frequency .option-card-check,
 .schedule-duration .option-card-check { display: none; }
 .schedule-days .day-options { margin-top: 7px; }
+.schedule-selection-count { display: block; margin-top: 7px; color: #77736e; font-size: 10.5px; }
 .schedule-hint { display: block; margin-top: 6px; color: #8b6440; font-size: 10px; }
 .setup-environment .option-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 0; }
 .setup-environment .onboarding-option { min-height: 58px; padding: 7px; justify-content: center; }
@@ -70,7 +134,8 @@
 .onboarding-priorities .onboarding-option { min-height: 52px; padding-block: 8px; }
 .onboarding-priorities .physique-review-entry { min-height: 52px; margin-top: 10px; }
 
-.onboarding.onboarding-preferences { overflow-x: clip !important; overflow-y: auto !important; }
+.onboarding.onboarding-preferences { overflow-x: clip !important; overflow-y: auto !important; scroll-padding-bottom: calc(22px + env(safe-area-inset-bottom)); }
+.onboarding-preferences .onboarding-footer { flex: 0 0 auto; padding-bottom: max(4px, env(safe-area-inset-bottom)); }
 .preference-fields { display: grid; gap: 20px; margin-top: 18px; }
 .onboarding-preferences .split-recommendation { margin-top: 0; }
 .onboarding-preferences .split-recommendation .onboarding-option { min-height: 68px; border-color: rgba(31, 107, 76, .22); background: #f4f8f5; }
@@ -82,6 +147,7 @@
 .specific-split-toggle strong { font-size: 12px; font-weight: 700; }
 .specific-split-toggle small { overflow: hidden; color: #77736e; font-size: 10.5px; text-overflow: ellipsis; white-space: nowrap; }
 .specific-split-toggle i { flex: 0 0 auto; font-size: 18px; font-style: normal; }
+.specific-split-toggle[aria-expanded="true"] .disclosure-chevron { transform: rotate(180deg); }
 .onboarding-preferences .split-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 7px; }
 .onboarding-preferences .split-options .onboarding-option { min-height: 46px; padding: 6px 10px; justify-content: center; border-radius: 12px; }
 .onboarding-preferences .split-options .option-card-copy { align-items: center; }
@@ -96,16 +162,16 @@
 .onboarding-preferences .compact-options .option-card-check { display: none; }
 
 @media (max-height: 760px) {
-  .onboarding-preferences .onboarding-content { padding-top: 20px !important; }
+  .onboarding-preferences .onboarding-content { padding-top: 12px !important; }
   .onboarding-preferences .onboarding-content > p { margin-block: 8px; font-size: 12px; }
   .onboarding-preferences h1 { font-size: 27px !important; }
-  .onboarding-preferences .preference-fields { gap: 13px; margin-top: 11px; }
+  .onboarding-preferences .preference-fields { gap: 10px; margin-top: 8px; }
   .onboarding-preferences .split-recommendation .onboarding-option { min-height: 60px; }
   .onboarding-preferences .split-options { gap: 5px; }
   .onboarding-preferences .split-options .onboarding-option { min-height: 41px; }
-  .onboarding-preferences .text-answer.compact-answer { min-height: 54px; }
+  .onboarding-preferences .text-answer.compact-answer { min-height: 50px; }
   .onboarding-preferences .compact-options { margin-top: 6px !important; }
-  .onboarding-preferences .compact-options .onboarding-option { min-height: 47px; }
+  .onboarding-preferences .compact-options .onboarding-option { min-height: 45px; }
 }
 
 .physique-review-entry { width: 100%; min-height: 58px; margin-top: 18px; padding: 10px 2px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 0; border-top: 1px solid rgba(27, 26, 25, .08); background: transparent; color: #1f6b4c; text-align: left; }
@@ -146,8 +212,11 @@
 .confirmed-physique .info-row button { border: 0; background: transparent; color: #8b554b; font-size: 11px; }
 .profile-priority-empty { margin-bottom: 4px !important; }
 
+@media (min-width: 421px) {
+  .option-list.day-options { grid-template-columns: repeat(7, minmax(48px, 1fr)); gap: 4px; }
+}
+
 @media (max-width: 374px) {
-  .option-list.day-options { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
   .setup-equipment .option-grid,
   .onboarding-priorities .option-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .schedule-frequency .option-list,
@@ -155,6 +224,17 @@
   .physique-review-content { padding-top: 38px; }
   .physique-suggestions span { grid-template-columns: 1fr; }
   .physique-suggestions small { grid-row: 2; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line > span { transition-duration: 80ms; }
+  .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { animation: onboarding-step-fade 120ms linear; }
+  .option-list.day-options .onboarding-option { transition: background-color 80ms linear, border-color 80ms linear, color 80ms linear; }
+  .option-list.day-options .onboarding-option:active { transform: none; }
+  @keyframes onboarding-step-fade {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
 @media (max-height: 700px) {
@@ -169,7 +249,8 @@
   .onboarding-setup .setup-environment .option-list { margin-top: 0; }
   .onboarding-personal .personal-fields { gap: 10px; margin-top: 16px; }
   .onboarding-personal .personal-fields input,
-  .onboarding-personal .personal-fields select { height: 50px; }
+  .onboarding-personal .personal-fields select,
+  .onboarding-personal .age-range-trigger { height: 50px; }
   .onboarding-goal .goal-plan-preview { margin-top: 7px; padding-block: 8px; }
   .onboarding-goal .onboarding-option { min-height: 54px; }
 }

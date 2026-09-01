@@ -87,6 +87,10 @@ export function validateSupersetExercises(exercises = []) {
       errors.push(
         "This plan has an invalid superset. Remove and recreate the pairing.",
       );
+    else if (
+      exercises[indices[0]].sets.length !== exercises[indices[1]].sets.length
+    )
+      errors.push("Paired exercises must have the same number of sets.");
   });
   return errors;
 }
@@ -99,4 +103,51 @@ export function remapCopiedSupersetIds(exercises = [], makeId) {
       idMap.set(exercise.supersetId, makeId());
     return { ...exercise, supersetId: idMap.get(exercise.supersetId) };
   });
+}
+
+export function pairActiveWorkoutExercises(
+  exercises = [],
+  firstExerciseId,
+  secondExerciseId,
+  supersetId,
+) {
+  const firstIndex = exercises.findIndex((item) => item.id === firstExerciseId);
+  const secondIndex = exercises.findIndex((item) => item.id === secondExerciseId);
+  if (
+    firstIndex < 0 ||
+    secondIndex < 0 ||
+    firstIndex === secondIndex ||
+    !supersetId
+  )
+    return false;
+  const first = exercises[firstIndex];
+  const second = exercises[secondIndex];
+  if (
+    first.supersetId ||
+    second.supersetId ||
+    first.sets.length !== second.sets.length ||
+    [...first.sets, ...second.sets].some((set) => set.completed)
+  )
+    return false;
+  const [partner] = exercises.splice(secondIndex, 1);
+  const updatedFirstIndex = exercises.findIndex(
+    (item) => item.id === firstExerciseId,
+  );
+  exercises.splice(updatedFirstIndex + 1, 0, partner);
+  exercises[updatedFirstIndex].supersetId = supersetId;
+  exercises[updatedFirstIndex + 1].supersetId = supersetId;
+  return true;
+}
+
+export function unpairActiveWorkoutExercises(exercises = [], supersetId) {
+  const members = supersetMembers(exercises, supersetId);
+  if (
+    members.length !== 2 ||
+    members.some(({ exercise }) =>
+      exercise.sets.some((set) => set.completed),
+    )
+  )
+    return false;
+  members.forEach(({ exercise }) => delete exercise.supersetId);
+  return true;
 }

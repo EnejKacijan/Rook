@@ -16,15 +16,15 @@ async function reachEffortStep(experience) {
   await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true }) }));
   await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
-  await page.getByLabel('Age range').selectOption('18–29'); await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await page.getByRole('combobox', { name: 'Age range' }).click(); await page.getByRole('option', { name: '18–29' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Build muscle' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: new RegExp(`^${experience}`) }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: '3 days' }).click();
-  await page.getByLabel('Select all days').check();
+  await page.getByLabel('Make any day available').check();
   await page.getByRole('button', { name: '60 min' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Commercial gym' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Balanced' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
-  assert.equal(await page.locator('.step-count').textContent(), 'STEP 7');
+  assert.equal(await page.locator('.step-count').textContent(), 'STEP 7/8');
   return { context, page, errors };
 }
 
@@ -34,7 +34,7 @@ for (const experience of ['Beginner', 'Intermediate', 'Advanced']) {
   const copy = await page.locator('.onboarding-content').innerText();
   if (experience === 'Beginner') {
     assert.doesNotMatch(copy, /\bRIR\b|reps in reserve/i);
-    assert.match(copy, /How much training volume feels manageable/);
+    assert.match(copy, /How much work per exercise feels manageable/);
     assert.equal(await page.getByRole('button', { name: /Balanced starting point/ }).count(), 1);
   } else {
     assert.match(copy, /reps in reserve/i);

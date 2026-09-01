@@ -9,12 +9,13 @@
   backdrop-filter: blur(8px);
   cursor: wait;
   touch-action: none;
+  animation: building-fade-in 140ms ease-out both;
 }
 
 .building-card {
   width: min(100%, 340px);
-  min-height: 300px;
-  padding: 34px 28px 30px;
+  min-height: 270px;
+  padding: 36px 28px 30px;
   border-radius: 24px;
   background: #f6f5f2;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.2);
@@ -22,25 +23,25 @@
 }
 
 .building-spinner {
-  width: 54px;
-  height: 54px;
-  margin: 0 auto 24px;
-  border: 5px solid #d9e4de;
+  width: 34px;
+  height: 34px;
+  margin: 24px auto 0;
+  border: 3px solid #d9e4de;
   border-top-color: #1f6b4c;
   border-radius: 50%;
   animation: building-spin 0.8s linear infinite;
 }
 
 .building-card .eyebrow { color: #1f6b4c; }
-.building-card h2 { min-height: 60px; margin: 12px 0 0; font-size: 25px; letter-spacing: -0.02em; }
-.building-card p { min-height: 63px; margin: 10px 0 0; color: #6f6c68; font-size: 14px; line-height: 1.5; }
+.building-card h2 { margin: 13px 0 0; font-size: 25px; letter-spacing: -0.02em; }
+.building-card p { min-height: 42px; margin: 11px 0 0; color: #6f6c68; font-size: 14px; line-height: 1.5; }
 .building-card small { display: block; margin-top: 18px; color: #a3a09b; font-size: 11px; }
-.building-card .building-step { margin-top: 9px; color: #1f6b4c; font-weight: 700; letter-spacing: .04em; }
-.building-card .building-step + p { margin-top: 11px; }
 .building-cancel { min-height: 42px; margin-top: 16px; padding: 0 10px; border: 0; background: transparent; color: #1f6b4c; font-size: 11px; font-weight: 750; letter-spacing: .08em; }
 
 @keyframes building-spin { to { transform: rotate(360deg); } }
+@keyframes building-fade-in { from { opacity: 0; } }
 
 @media (prefers-reduced-motion: reduce) {
-  .building-spinner { animation-duration: 1.8s; }
+  .building-overlay,
+  .building-spinner { animation: none; }
 }

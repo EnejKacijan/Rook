@@ -8,3 +8,5 @@ artifacts/
 tmp/
 output/
 .netlify/
+.preview.log
+.preview.err.log

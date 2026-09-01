@@ -161,11 +161,17 @@ function explicitAvoidance(text, catalog) {
     return { exerciseIds: [], patterns: [], nameTokens: [], labels: [], hasOperator: false };
   const exerciseIds = [];
   const labels = [];
+  const genericMovementNames = new Set([
+    "squat", "squats", "lunge", "lunges", "deadlift", "deadlifts", "bench press",
+  ]);
   for (const item of catalog || []) {
     const names = [item.name, ...(item.aliases || [])]
       .map(normalize)
       .filter((name) => name.length > 3);
-    if (names.some((name) => text.includes(name))) {
+    if (
+      names.some((name) => text.includes(name)) &&
+      !names.some((name) => genericMovementNames.has(name))
+    ) {
       exerciseIds.push(item.id);
       labels.push(item.name);
     }

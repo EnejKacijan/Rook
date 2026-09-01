@@ -22,6 +22,10 @@
 .plan-editor .plan-name-field > input { height: 46px; padding-inline: 12px; font-size: 17px; font-weight: 720; }
 .workout-name-field { margin-bottom: 10px; }
 .plan-editor .workout-name-field > input { height: 42px; font-size: 14px; font-weight: 680; }
+.workout-name-fields { display: grid; gap: 0; }
+.workout-descriptor-field > input { font-size: 13px !important; font-weight: 580 !important; }
+.plan-editor-workout-title { display: grid; gap: 4px; }
+.plan-editor-workout-title > small { color: #8a8783; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
 .plan-conditioning-card { margin: 14px 0 2px; padding: 14px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 15px; background: #eaf2ee; color: #1b1a19; }
 .plan-conditioning-card > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .plan-conditioning-card > div span { color: #1f6b4c; font-size: 9px; font-weight: 750; letter-spacing: .1em; }
@@ -39,6 +43,8 @@
 .personalization-summary + .import-preview { margin-top: 20px; }
 .import-day { padding: 18px 0; border-bottom: 1px solid rgba(27, 26, 25, 0.08); }
 .import-day > strong { display: block; margin-bottom: 10px; font-size: 14px; }
+.is-import-review .import-day { padding: 15px 0; }
+.is-import-review .import-day > strong { margin-bottom: 9px; color: #4f4b47; font-size: 11px; font-weight: 800; letter-spacing: .07em; text-transform: uppercase; }
 .import-day > span { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: 13px; }
 .import-day small { color: #6f6c68; text-align: right; }
 .import-exercise { display: grid; gap: 5px; padding: 6px 0; }
@@ -111,13 +117,21 @@
 .scratch-exercise-results .scratch-custom-exercise strong { font-size: 12px; overflow-wrap: anywhere; }
 .scratch-exercise-results .scratch-custom-exercise small { color: #8a8783; font-size: 10px; }
 .initial-import-screen { width: 100%; max-width: 500px; min-height: 100dvh; margin: 0 auto; background: #f6f5f2; }
+.generated-plan-preview { padding-bottom: calc(20px + env(safe-area-inset-bottom)); }
 .generated-plan-preview > .button,.edit-plan-screen > .button,.plan-editor-sheet > .button { margin-top: 18px; }
 .plan-editor-sheet { padding-top: 58px; max-height: 96dvh; overflow-y: auto; }
 .plan-editor-sheet h1 { margin: 12px 0 0; font-size: 30px; line-height: 1.1; letter-spacing: -.03em; }
 .plan-editor-cards { display: grid; gap: 9px; }
 .plan-editor-exercise { display: block; padding: 0; overflow: hidden; border: 1px solid rgba(27, 26, 25, .11); border-radius: 15px; background: #fff; transition: border-color .18s ease, box-shadow .18s ease; }
 .plan-editor-exercise.is-expanded { border-color: rgba(31, 107, 76, .3); box-shadow: 0 8px 24px rgba(27, 26, 25, .055); }
-.plan-editor-exercise.needs-review { border-color: #d7b483; }
+.plan-editor-exercise.needs-review { border-color: rgba(31,107,76,.28); }
+.import-review-summary { width: 100%; min-height: 62px; margin: 14px 0 2px; padding: 11px 13px; border: 1px solid rgba(31,107,76,.18); border-radius: 14px; background: #f2f7f4; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+.import-review-summary.has-issues { border-color: rgba(31,107,76,.22); background: #f6f5f2; }
+.import-review-summary > span { min-width: 0; display: grid; gap: 4px; }
+.import-review-summary strong { font-size: 12px; }
+.import-review-summary small { color: #77736f; font-size: 10px; text-align: left; }
+.import-review-summary b { flex: 0 0 auto; color: #1f6b4c; font-size: 8.5px; letter-spacing: .09em; }
+.import-review-summary i { color: #1f6b4c; font-style: normal; font-weight: 800; }
 .plan-editor-summary { width: 100%; min-height: 70px; padding: 13px 14px 13px 15px; border: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
 .plan-editor-heading { min-width: 0; display: grid; gap: 5px; }
 .plan-editor-heading > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; white-space: nowrap; }
@@ -125,15 +139,37 @@
 .plan-editor-exercise.is-superset { border-left: 3px solid rgba(31,107,76,.46); }
 .plan-editor-exercise.superset-a1 { margin-bottom: -5px; border-bottom-left-radius: 8px; }
 .plan-editor-exercise.superset-a2 { border-top-left-radius: 8px; }
-.superset-role { display: inline-grid; place-items: center; width: 25px; height: 21px; margin-right: 8px; border-radius: 7px; background: #eaf2ee; color: #1f6b4c; font-size: 9px; font-style: normal; letter-spacing: .06em; vertical-align: middle; }
+.superset-role { display: inline-grid; place-items: center; min-width: 34px; height: 21px; margin-right: 8px; padding: 0 6px; border-radius: 7px; background: #eaf2ee; color: #1f6b4c; font-size: 8px; font-style: normal; letter-spacing: .06em; vertical-align: middle; }
 .plan-editor-heading > .superset-round-rest { color: #1f6b4c; font-size: 10px; }
 .plan-editor-summary-action { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; color: #1f6b4c; }
 .plan-editor-summary-action b { font-size: 9px; letter-spacing: .1em; }
 .plan-editor-summary-action i { width: 20px; height: 20px; flex: 0 0 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; color: inherit; font-size: 0; font-style: normal; line-height: 0; }
 .plan-editor-summary-action i::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transform-origin: center; transition: transform 150ms ease; }
 .plan-editor-summary[aria-expanded="true"] .plan-editor-summary-action i::before { transform: rotate(225deg); }
-.needs-review .plan-editor-summary-action { color: #8b6440; }
+.needs-review .plan-editor-summary-action { color: #1f6b4c; }
+.needs-review .plan-editor-summary-action b { max-width: 54px; line-height: 1.2; text-align: right; }
 .plan-editor-fields { padding: 2px 14px 14px; border-top: 1px solid rgba(27, 26, 25, .07); }
+.import-review-resolution { margin-top: 11px; padding: 12px; border: 1px solid rgba(31,107,76,.14); border-radius: 12px; background: #f6f5f2; }
+.import-review-status { display: inline-flex; min-height: 22px; padding: 0 7px; border-radius: 7px; background: #e5efe9; color: #1f6b4c; align-items: center; font-size: 8px; font-weight: 800; letter-spacing: .09em; }
+.import-review-resolution > p { margin: 8px 0 10px; color: #5f5b57; font-size: 11px; line-height: 1.45; }
+.import-review-resolution .import-review-primary { border-color: #1f6b4c; background: #1f6b4c; color: #fff; }
+.import-review-resolution .import-review-primary strong { color: inherit; font-size: 10px; letter-spacing: .07em; }
+.import-review-resolution .import-review-primary i { color: inherit; }
+.import-review-custom-trigger { width: 100%; min-height: 48px; margin-top: 8px; padding: 9px 11px; border: 1px solid rgba(31,107,76,.3); border-radius: 10px; background: transparent; color: #1f6b4c; display: grid; gap: 3px; font: inherit; text-align: left; }
+.import-review-custom-trigger strong { font-size: 10px; letter-spacing: .07em; }
+.import-review-custom-trigger small { color: #77736f; font-size: 9.5px; line-height: 1.35; overflow-wrap: anywhere; }
+.import-review-custom-name { display: grid; gap: 6px; margin-top: 4px; }
+.import-review-custom-name > span { color: #8a8783; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.import-review-custom-name > button { min-height: 40px; border: 0; border-radius: 10px; background: #1f6b4c; color: #fff; font: inherit; font-size: 9px; font-weight: 800; letter-spacing: .07em; }
+.import-review-picker .import-review-picker-label { display: block; padding: 9px 10px 5px; color: #8a8783; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-align: left; text-transform: uppercase; }
+.import-review-compact-editor { min-height: 48px; margin-top: 9px; padding: 8px 1px; border-top: 1px solid rgba(27,26,25,.07); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.import-review-compact-editor > span { min-width: 0; display: grid; gap: 4px; }
+.import-review-compact-editor small { color: #a3a09b; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-align: left; }
+.import-review-compact-editor strong { color: #5f5b57; font-size: 11px; font-weight: 650; overflow-wrap: anywhere; }
+.import-review-compact-editor > button { flex: 0 0 auto; min-height: 34px; padding: 0 2px; border: 0; background: transparent; color: #1f6b4c; font: inherit; font-size: 8.5px; font-weight: 800; letter-spacing: .07em; }
+.import-review-weights .plan-editor-weights.is-on-demand { margin-top: 0; padding-bottom: 6px; }
+.import-review-footer-actions { justify-content: flex-end; gap: 16px; border-top: 1px solid rgba(27,26,25,.07); padding-top: 5px; }
+.import-review-footer-actions .import-review-remove { margin-right: auto; color: #8b554b; font-weight: 650; }
 .plan-editor-select { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
 .plan-editor-custom-name > small { color: #77736f; font-size: 10px; line-height: 1.4; text-align: left; }
 .plan-editor-select > span,.plan-editor-prescription span,.plan-editor-weights > span,.plan-editor-starting-weight > span { color: #a3a09b; font-size: 9px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
@@ -174,10 +210,10 @@
 .superset-picker > small { color: #617168; font-size: 10px; line-height: 1.4; text-align: left; }
 .superset-picker > div { display: grid; gap: 1px; margin-top: 3px; border: 1px solid rgba(27,26,25,.08); border-radius: 9px; overflow: hidden; }
 .superset-picker > div > button { min-height: 40px; padding: 9px 10px; border: 0; background: #fff; color: #1b1a19; text-align: left; font: inherit; font-size: 11px; font-weight: 650; }
-.bulk-match-review { margin: 18px 0 4px; padding: 15px; border: 1px solid #dfd0bb; border-radius: 15px; background: #fbf7ef; }
-.bulk-match-review .eyebrow { color: #8b6440; }
+.bulk-match-review { margin: 18px 0 4px; padding: 15px; border: 1px solid rgba(31,107,76,.2); border-radius: 15px; background: #f6f5f2; }
+.bulk-match-review .eyebrow { color: #1f6b4c; }
 .bulk-match-review > button { width: 100%; margin-top: 10px; padding: 0; border: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; gap: 12px; text-align: left; }
-.bulk-match-review > button > i { width: 34px; height: 34px; flex: 0 0 auto; border: 1px solid #c9b496; border-radius: 10px; background: #fff; color: #1f6b4c; display: grid; place-items: center; font-style: normal; font-weight: 800; }
+.bulk-match-review > button > i { width: 34px; height: 34px; flex: 0 0 auto; border: 1px solid rgba(31,107,76,.28); border-radius: 10px; background: #fff; color: #1f6b4c; display: grid; place-items: center; font-style: normal; font-weight: 800; }
 .bulk-match-review > button > span { display: grid; gap: 4px; }
 .bulk-match-review strong { font-size: 11px; letter-spacing: .06em; }
 .bulk-match-review small { color: #77736f; font-size: 10px; line-height: 1.35; }

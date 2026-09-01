@@ -1,5 +1,6 @@
 import {
   BASELINE_TEMPLATE_BY_FREQUENCY,
+  TRAINING_STRUCTURES,
   selectStructuralTemplate,
 } from "./splitPreferences.js";
 import { generateWarmup } from "./warmups.js";
@@ -8,7 +9,27 @@ import {
   exerciseAllowedByTrainingSafety,
   trainingSafetyBlocks,
 } from "./trainingSafety.js";
+import {
+  fewerHardRepRange,
+  inferredProgrammingRole,
+  isFewerHardSets,
+  minimumWorkingSetsForExercise,
+} from "./prescriptionPolicy.js";
 import { validateSupersetExercises } from "./supersets.js";
+import { workoutGuideExercises } from "./workoutGuideCatalog.js";
+import {
+  accumulateStimulus,
+  hypertrophyTargetsForProfile,
+  priorityProgrammingGroupsForProfile,
+  priorityStimulusMusclesForProfile,
+  stimulusMutationPreservesPolicy,
+  stimulusProfileForItem,
+} from "./trainingVolume.js";
+export {
+  priorityProgrammingGroupsForProfile,
+  priorityStimulusMusclesForProfile,
+  stimulusMutationPreservesPolicy,
+} from "./trainingVolume.js";
 
 export const STORAGE_KEY = "lift-v2-state";
 export const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -231,7 +252,12 @@ export const exerciseCatalog = {
   "seated-cable-row": {
     id: "seated-cable-row",
     name: "Seated Cable Row",
-    aliases: ["Cable Row", "Seated Row", "Seated Cable Low Row"],
+    aliases: [
+      "Cable Row",
+      "Cable Low Row",
+      "Seated Row",
+      "Seated Cable Low Row",
+    ],
     pattern: "horizontal-pull",
     muscles: ["Back", "Arms"],
     equipment: ["cables"],
@@ -647,6 +673,7 @@ export const exerciseCatalog = {
     aliases: [
       "Triceps Pushdown",
       "Tricep Pushdown",
+      "Cable Triceps Pushdown",
       "Cable Pushdown",
       "Rope Triceps Pushdown",
       "Rope Pushdown",
@@ -978,9 +1005,27 @@ const EXPANDED_EXERCISES = [
   ["standing-leg-curl","Standing Leg Curl",["Single-Leg Leg Curl","Single-Leg Hamstring Curl"],"knee-flexion",["Hamstrings / glutes"],["machines"],5,75,"isolation"],
   ["single-leg-leg-extension","Single-Leg Leg Extension",["One-Leg Leg Extension","Unilateral Leg Extension"],"knee-extension",["Quads"],["machines"],5,60,"isolation"],
   ["single-leg-leg-press","Single-Leg Leg Press",["One-Leg Leg Press","Unilateral Leg Press"],"single-leg",["Quads","Hamstrings / glutes"],["machines"],5,105,"compound"],
+  ["bosu-balance","BOSU Balance",["BOSU Ball Balance","Balance on BOSU","Ravnotežje na BOSU žogi"],"balance",["Core","Hamstrings / glutes"],["bosu"],1,45,"isolation",{bodyweight:true,measure:"seconds",durationRange:[30,60],generation:"library-only"}],
+  ["y-balance-reach","Y Balance Reach",["Y Balance","Y-Balance Reach","Y ravnotežni doseg"],"balance",["Core","Hamstrings / glutes"],["bodyweight"],1,45,"isolation",{bodyweight:true,generation:"library-only"}],
+  ["pogo-jumps","Pogo Jumps",["Pogos","Pogo Hops","Ankle Pogo Jumps","Pogo poskoki"],"power",["Calves"],["bodyweight"],1,60,"power",{bodyweight:true,generation:"library-only"}],
+  ["forward-single-leg-hops","Forward Single-Leg Hops",["Single-Leg Forward Hops","Forward Hops - Single Leg","Enonožni poskoki naprej"],"power",["Calves","Hamstrings / glutes"],["bodyweight"],1,75,"power",{bodyweight:true,generation:"library-only"}],
   ["hip-abduction-machine","Hip Abduction Machine",["Abductor Machine","Seated Hip Abduction"],"hip-abduction",["Hamstrings / glutes"],["machines"],5,60,"isolation",{generation:"library-only"}],
   ["hip-adduction-machine","Hip Adduction Machine",["Adductor Machine","Seated Hip Adduction"],"hip-adduction",["Adductors"],["machines"],5,60,"isolation",{generation:"library-only"}],
-  ["leg-press-calf-raise","Leg Press Calf Raise",["Calf Raise on Leg Press","Calf Raises on Leg Press"],"calf",["Calves"],["machines"],5,60,"isolation"],
+  ["leg-press-calf-raise","Leg Press Calf Raise",[
+    "Calf Raise on Leg Press",
+    "Calf Raises on Leg Press",
+    "Leg Press Calf Raises",
+    "Calf Raise on Leg Press Machine",
+    "Calf Raises on Leg Press Machine",
+    "Calf Raise na Leg Press masini",
+    "Calf Raises na Leg Press masini",
+    "Calf Raise na Leg Press mašini",
+    "Calf Raises na Leg Press mašini",
+    "Calf Raise na Leg Pressu",
+    "Calf Raises na Leg Pressu",
+    "Dvigi na prste na Leg Press masini",
+    "Dvigi na prste na Leg Press mašini",
+  ],"calf",["Calves"],["machines"],5,60,"isolation"],
   ["ez-bar-curl","EZ-Bar Curl",["EZ Curl","EZ Bar Curl"],"elbow-flexion",["Arms"],["barbell"],2.5,60,"isolation"],
   ["incline-dumbbell-curl","Incline Dumbbell Curl",["Incline Curl","Incline DB Curl"],"elbow-flexion",["Arms"],["dumbbells","bench"],2,60,"isolation"],
   ["preacher-curl","Preacher Curl",["EZ-Bar Preacher Curl","EZ Preacher Curl"],"elbow-flexion",["Arms"],["barbell","bench"],2.5,60,"isolation"],
@@ -989,10 +1034,223 @@ const EXPANDED_EXERCISES = [
   ["skull-crusher","Skull Crusher",["Lying Triceps Extension","EZ-Bar Skull Crusher"],"elbow-extension",["Arms"],["barbell","bench"],2.5,75,"isolation",{generation:"library-only"}],
   ["close-grip-bench-press","Close-Grip Bench Press",["Close-Grip Barbell Bench Press","CGBP"],"elbow-extension",["Arms","Chest"],["barbell","rack","bench"],2.5,135,"compound",{generation:"library-only"}],
   ["ab-wheel-rollout","Ab Wheel Rollout",["Wheel Rollout","Ab Roller"],"core",["Core"],["bodyweight"],1,75,"compound",{bodyweight:true,generation:"library-only"}],
-  ["pallof-press","Pallof Press",["Cable Pallof Press","Anti-Rotation Press"],"core",["Core"],["cables"],2.5,60,"isolation"],
+  ["pallof-press","Pallof Press",["Cable Pallof Press","Anti-Rotation Press","Cable Anti-Rotation Press"],"core",["Core"],["cables"],2.5,60,"isolation"],
 ];
 for (const [id,name,aliases,pattern,muscles,equipment,increment,restSeconds,kind,extra = {}] of EXPANDED_EXERCISES)
   exerciseCatalog[id] = { id, name, aliases, pattern, muscles, equipment, increment, restSeconds, kind, ...extra };
+
+const workoutGuideNameKey = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/dumbbells?/g, "db")
+    .replace(/[^a-z0-9]/g, "");
+// User-facing/import aliases may be broader than the upstream library labels,
+// but only when the pictured setup and movement remain the same.
+const WORKOUT_GUIDE_IMPORT_ALIASES = Object.freeze({
+  "banded-monster-walk": ["Monster Walk", "Monster Walks"],
+  "skater-hop": [
+    "Skater Hops",
+    "Lateral Skater Hop",
+    "Lateral Skater Hops",
+  ],
+  "single-leg-box-squat": [
+    "Single-Leg Sit-to-Stand",
+    "Single Leg Sit to Stand",
+  ],
+  cycling: ["Stationary Bike", "Exercise Bike", "Sobno kolo"],
+  "hip-adduction-machine": ["Adductor", "Adductor Machine"],
+});
+const catalogByWorkoutGuideName = new Map();
+const catalogEntriesLinkedToWorkoutGuide = new Set();
+for (const item of Object.values(exerciseCatalog))
+  for (const name of [item.name, ...(item.aliases || [])])
+    catalogByWorkoutGuideName.set(workoutGuideNameKey(name), item);
+const comparableIllustrationEquipment = (item) =>
+  item === "pull-up bar" ? "bodyweight" : item;
+for (const rawSource of workoutGuideExercises) {
+  const source = {
+    ...rawSource,
+    aliases: [
+      ...new Set([
+        ...(rawSource.aliases || []),
+        ...(WORKOUT_GUIDE_IMPORT_ALIASES[rawSource.sourceSlug] || []),
+      ]),
+    ],
+  };
+  const existing = catalogByWorkoutGuideName.get(workoutGuideNameKey(source.name));
+  const equipmentCompatible =
+    !existing?.equipment?.length ||
+    !source.equipment?.length ||
+    existing.equipment.some((item) =>
+      source.equipment
+        .map(comparableIllustrationEquipment)
+        .includes(comparableIllustrationEquipment(item)),
+    );
+  if (
+    existing &&
+    equipmentCompatible &&
+    !catalogEntriesLinkedToWorkoutGuide.has(existing.id)
+  ) {
+    existing.aliases = [
+      ...new Set([
+        ...(existing.aliases || []),
+        source.name,
+        ...(source.aliases || []),
+      ]),
+    ];
+    existing.artId = source.artId;
+    existing.visualSource = source.visualSource;
+    existing.visualLicense = source.visualLicense;
+    catalogEntriesLinkedToWorkoutGuide.add(existing.id);
+    continue;
+  }
+  const id = `wg-${source.sourceSlug}`;
+  exerciseCatalog[id] = { ...source, id };
+  catalogByWorkoutGuideName.set(workoutGuideNameKey(source.name), exerciseCatalog[id]);
+}
+
+// Preserve the user's imported wording while resolving common Slovenian names
+// to a stable exercise identity. These stay intentionally specific: a broad
+// label such as "potisk" or "veslanje" does not identify one safe movement.
+const SLOVENIAN_EXERCISE_ALIASES = Object.freeze({
+  "barbell-bench-press": ["Potisk s prsi z drogom", "Potisk z drogom na ravni klopi"],
+  "dumbbell-bench-press": ["Potisk s prsi z ročkami", "Potisk z ročkami na ravni klopi"],
+  "incline-barbell-bench-press": ["Poševni potisk z drogom", "Potisk z drogom na poševni klopi"],
+  "incline-dumbbell-press": ["Poševni potisk z ročkami", "Potisk z ročkami na poševni klopi"],
+  "push-up": ["Skleca", "Sklece"],
+  "pull-up": ["Zgib", "Zgibi", "Zgibi z nadprijemom"],
+  "barbell-row": ["Veslanje z drogom", "Veslanje v predklonu z drogom"],
+  "one-arm-dumbbell-row": ["Enoročno veslanje z ročko", "Enoročno veslanje z utežjo"],
+  "seated-cable-row": ["Veslanje sede na škripcu", "Veslanje na škripcu sede"],
+  "lat-pulldown": ["Vleka na prsi", "Vleka na prsi na škripcu"],
+  "barbell-overhead-press": ["Potisk nad glavo z drogom", "Ramenski potisk z drogom"],
+  "dumbbell-shoulder-press": ["Potisk nad glavo z ročkami", "Ramenski potisk z ročkami"],
+  "lateral-raise": ["Stranski dvig z ročkami", "Stranski dvigi z ročkami", "Stranski dvigi", "Odročenje z ročkami"],
+  "back-squat": ["Počep z drogom", "Zadnji počep z drogom"],
+  "goblet-squat": ["Goblet počep", "Čašasti počep"],
+  "leg-press": ["Nožni potisk", "Potisk z nogami na napravi"],
+  "hack-squat": ["Hack počep"],
+  "leg-extension": ["Izteg nog", "Izteg kolena na napravi"],
+  "leg-curl": ["Upogib nog", "Upogib kolena na napravi"],
+  "standing-leg-curl": ["Enonožni upogib nog stoje", "Enonožni upogib kolena stoje"],
+  "single-leg-leg-extension": ["Enonožni izteg nog", "Enonožni izteg kolena na napravi"],
+  "bulgarian-split-squat": ["Bolgarski počep", "Bolgarski počep z ročkami"],
+  deadlift: ["Mrtvi dvig", "Klasični mrtvi dvig"],
+  "romanian-deadlift": ["Romunski mrtvi dvig", "Romunski mrtvi dvig z drogom"],
+  "dumbbell-rdl": ["Romunski mrtvi dvig z ročkami"],
+  "hip-thrust": ["Dvig bokov z drogom", "Potisk bokov z drogom"],
+  "glute-bridge": ["Most za zadnjico", "Zadnjični most"],
+  "calf-raise": ["Dvig na prste", "Dvig na prste stoje"],
+  "seated-calf-raise": ["Sedeči dvig na prste", "Dvig na prste sede"],
+  "dumbbell-curl": ["Biceps pregib z ročkami"],
+  "hammer-curl": ["Kladivasti pregib", "Kladivasti pregib z ročkami"],
+  "barbell-curl": ["Biceps pregib z drogom"],
+  "cable-curl": ["Biceps pregib na škripcu"],
+  "cable-triceps-pressdown": ["Triceps potisk na škripcu", "Triceps potisk z vrvjo"],
+  plank: ["Deska"],
+  "side-plank": ["Stranska deska"],
+  "dead-bug": ["Mrtvi hrošč"],
+  "hanging-leg-raise": ["Dvig nog v vesi", "Dvigi nog v vesi"],
+  "cable-crunch": ["Trebušnjaki na škripcu"],
+  "wg-running": ["Tek"],
+  "wg-walking": ["Hoja"],
+  "wg-rowing": ["Veslanje na ergometru", "Veslaški ergometer"],
+  "wg-jump-rope": ["Kolebnica", "Skakanje s kolebnico"],
+  "wg-stair-climber": ["Naprava za stopnice", "Stopnice na napravi"],
+});
+for (const [exerciseId, aliases] of Object.entries(SLOVENIAN_EXERCISE_ALIASES)) {
+  const exercise = exerciseCatalog[exerciseId];
+  if (!exercise) continue;
+  exercise.aliases = [...new Set([...(exercise.aliases || []), ...aliases])];
+}
+
+export const ROOK_ADAPTED_ILLUSTRATIONS = Object.freeze({
+  "single-leg-leg-extension": "rook-single-leg-leg-extension",
+  "standing-leg-curl": "rook-standing-single-leg-leg-curl",
+  "bosu-balance": "rook-bosu-balance",
+  "y-balance-reach": "rook-y-balance-reach",
+  "pogo-jumps": "rook-pogo-jumps",
+  "forward-single-leg-hops": "rook-forward-single-leg-hops",
+  "incline-machine-press": "rook-incline-machine-press",
+  "machine-high-row": "rook-machine-high-row",
+  "barbell-curl": "rook-barbell-curl",
+  "band-chest-press": "rook-band-chest-press",
+  "band-fly": "rook-band-fly",
+  "band-overhead-press": "rook-band-overhead-press",
+  "band-leg-curl": "rook-band-leg-curl",
+  "band-curl": "rook-band-curl",
+  "band-triceps-pressdown": "rook-band-triceps-pressdown",
+  "dumbbell-calf-raise": "rook-dumbbell-calf-raise",
+  "broad-jump": "rook-standing-broad-jump",
+  "single-arm-cable-lat-pulldown": "rook-single-arm-cable-lat-pulldown",
+  "pendulum-squat": "rook-pendulum-squat",
+  "single-leg-leg-press": "rook-single-leg-leg-press",
+});
+
+// The source assets share a normalized canvas, but complex equipment can make
+// the actual movement silhouette read smaller at 46px. Keep these restrained
+// thumbnail-only adjustments separate from the underlying artwork so detail
+// views and light/dark paint treatment can remain independent.
+export const EXERCISE_THUMBNAIL_NORMALIZATION = Object.freeze({
+  "wg-machine-chest-press": Object.freeze({ scale: 1.04, x: 0, y: 0 }),
+  "wg-single-arm-cable-row": Object.freeze({ scale: 1.06, x: 0, y: 0 }),
+  "wg-machine-shoulder-press": Object.freeze({ scale: 1.05, x: 0, y: 0 }),
+  "wg-straight-arm-pulldown": Object.freeze({ scale: 1.12, x: 0, y: 1 }),
+  "wg-lateral-raise": Object.freeze({ scale: 1.07, x: 0, y: 0 }),
+});
+for (const [exerciseId, assetSlug] of Object.entries(ROOK_ADAPTED_ILLUSTRATIONS)) {
+  const exercise = exerciseCatalog[exerciseId];
+  if (!exercise) continue;
+  exercise.artId = `wg-${assetSlug}`;
+  exercise.visualSource = "Bryl Lim / Everkinetic · ROOK adaptation";
+  exercise.visualLicense = "CC BY-SA 4.0";
+}
+
+// Share artwork only when the visible setup and movement are equivalent.
+// Broad movement-pattern fallbacks can teach the wrong exercise.
+export const EXERCISE_ILLUSTRATION_EQUIVALENTS = Object.freeze({
+  "barbell-row": "barbell-row",
+  "low-row": "machine-row",
+  "machine-row": "machine-row",
+  "lateral-raise": "lateral-raise",
+  // The source frame visibly uses high pulleys and finishes low across the body.
+  "high-to-low-cable-fly": "cable-fly",
+  // Diamond hand placement is the library's faithful close-grip push-up frame.
+  "close-grip-push-up": "diamond-push-up",
+  "back-squat": "squat",
+  "hamstring-walkout": "lying-hamstring-walkout",
+  "calf-raise": "calf-raise",
+  "dumbbell-curl": "bicep-curl",
+  "dumbbell-overhead-triceps-extension":
+    "dumbbell-overhead-tricep-extension",
+  "cable-overhead-triceps-extension": "overhead-tricep-extension",
+  "band-row": "banded-row",
+  "band-lat-pulldown": "banded-lat-pulldown",
+  "squat-jump": "jump-squat",
+  "feet-elevated-push-up": "decline-push-up",
+  "neutral-grip-lat-pulldown": "close-grip-lat-pulldown",
+  "machine-lateral-raise": "machine-lateral-raise",
+  "dumbbell-shoulder-press": "standing-dumbbell-press",
+  "standing-calf-raise-machine": "standing-calf-raise",
+  "back-extension-45": "back-extension",
+  "machine-preacher-curl": "preacher-curl",
+  "bodyweight-split-squat": "split-squat",
+  "reverse-lunge": "reverse-lunge",
+  "preacher-curl": "preacher-curl",
+});
+const workoutGuideBySlug = new Map(
+  workoutGuideExercises.map((item) => [item.sourceSlug, item]),
+);
+for (const [exerciseId, sourceSlug] of Object.entries(
+  EXERCISE_ILLUSTRATION_EQUIVALENTS,
+)) {
+  const exercise = exerciseCatalog[exerciseId];
+  const source = workoutGuideBySlug.get(sourceSlug);
+  if (!exercise || !source) continue;
+  exercise.artId = source.artId;
+  exercise.visualSource = source.visualSource;
+  exercise.visualLicense = source.visualLicense;
+}
 
 const GLOBALLY_BLOCKED_EXERCISE_IDS = new Set([
   "dead-bug",
@@ -1003,6 +1261,9 @@ const AUTO_GENERATION_BLOCKED_EXERCISE_IDS = new Set([
   "floor-lat-pulldown",
   "prone-w-raise",
   "prone-swimmer-pull",
+  // Useful as an explicit/manual anti-rotation option, but too obscure and
+  // non-essential for ROOK's default general training plans.
+  "pallof-press",
 ]);
 const GLOBALLY_BLOCKED_EXERCISE_NAMES = [
   /\bdead bugs?\b/,
@@ -1123,6 +1384,7 @@ const FULL_GYM = new Set([
   "pull-up bar",
   "resistance bands",
   "bodyweight",
+  "bosu",
 ]);
 const dayNames = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const WORKOUT_DAY_NAMES = {
@@ -1167,6 +1429,105 @@ export function normalizeWorkoutName(name, day) {
   }
   return value || "Workout";
 }
+const WORKOUT_IDENTITY_PATTERN =
+  "(?:Full\\s+Body|Upper|Lower|Push|Pull|Legs?|Noge|Chest|Prsa|Back|Hrbet|Shoulders?|Ramena|Arms?|Roke)(?:\\s+[ABC123])?";
+function descriptorKey(value) {
+  return String(value || "")
+    .normalize("NFKD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[-_]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+function recognizedWorkoutDescriptor(value) {
+  const key = descriptorKey(value);
+  if (!key) return false;
+  if (
+    /^(?:strength|hypertrophy|power|functional(?: training)?|heavy|light|volume|technique|moc|hipertrofija|funkcija|funkcional(?:no|ni|na)?|tezko|tezak|tezka|lahko|lahek|lahka|volumen|tehnika)$/u.test(
+      key,
+    )
+  )
+    return true;
+  if (/^(?:balanced|high|low|moderate|athletic)\s+(?:strength|volume|power|hypertrophy)$/u.test(key))
+    return true;
+  if (/^athletic strength and conditioning$/u.test(key)) return true;
+  return /^(?:chest|back|shoulders?|arms?|quads?|quadriceps|hamstrings?|glutes?|posterior|prsa|hrbet|ramena|roke|kvadricepsi|zadnja loza|zadnjica|gluteusi)(?:\s+(?:focus|focused|emphasis|width|priority|poudarek))$/u.test(
+    key,
+  );
+}
+function recognizedWorkoutDescriptorExpression(value) {
+  if (recognizedWorkoutDescriptor(value)) return true;
+  const nested = String(value || "").match(/^(.*?)\s*\((.+)\)\s*$/u);
+  return Boolean(nested && recognizedWorkoutDescriptor(nested[1]));
+}
+function displayWorkoutDescriptor(value) {
+  let text = String(value || "")
+    .trim()
+    .replace(/^\(|\)$/g, "")
+    .replace(/\s+/g, " ");
+  if (!text) return "";
+  if (/^[\p{Lu}\d\s&/-]+$/u.test(text))
+    text = text.toLocaleLowerCase().replace(/^\p{Ll}/u, (letter) =>
+      letter.toLocaleUpperCase(),
+    );
+  text = text.replace(
+    /\b(chest|back|shoulders?|arms?|quads?|quadriceps|hamstrings?|glutes?|posterior)[ -]?focused\b/gi,
+    (_, area) => `${area[0].toUpperCase()}${area.slice(1).toLowerCase()} focus`,
+  );
+  return text;
+}
+export function workoutDisplayParts(value, day) {
+  const source = typeof value === "object" && value ? value : null;
+  const title = normalizeWorkoutName(source?.name ?? value, day || source?.weekday);
+  if (source?.workoutName) {
+    return {
+      primary: String(source.workoutName).trim() || title,
+      detail: String(source.workoutDescriptor || "").trim(),
+      context: "",
+    };
+  }
+  let primary = title;
+  let detail = "";
+  let context = "";
+  const parenthetical = title.match(/^(.+?)\s*\(([^()]+)\)\s*$/u);
+  if (parenthetical && recognizedWorkoutDescriptor(parenthetical[2])) {
+    primary = parenthetical[1];
+    detail = parenthetical[2];
+  } else {
+    const separated = title.match(/^(.+?)\s*(?:[—–·|/:]|\s-\s)\s*(.+)$/u);
+    if (separated && recognizedWorkoutDescriptorExpression(separated[2])) {
+      primary = separated[1];
+      detail = separated[2];
+    } else {
+      const prefixed = title.match(
+        new RegExp(`^(.+?[- ]focused)\\s+(${WORKOUT_IDENTITY_PATTERN})$`, "iu"),
+      );
+      if (prefixed && recognizedWorkoutDescriptor(prefixed[1])) {
+        primary = prefixed[2];
+        detail = prefixed[1];
+      } else {
+        const suffixed = title.match(
+          new RegExp(`^(${WORKOUT_IDENTITY_PATTERN})\\s+(.+)$`, "iu"),
+        );
+        if (suffixed && recognizedWorkoutDescriptor(suffixed[2])) {
+          primary = suffixed[1];
+          detail = suffixed[2];
+        }
+      }
+    }
+  }
+  const nestedContext = detail.match(/^(.*?)\s*\((.+)\)\s*$/u);
+  if (nestedContext && recognizedWorkoutDescriptor(nestedContext[1])) {
+    detail = nestedContext[1];
+    context = nestedContext[2];
+  }
+  return {
+    primary: primary.trim(),
+    detail: displayWorkoutDescriptor(detail),
+    context: context.trim(),
+  };
+}
 export const displayDate = (date = new Date()) =>
   new Intl.DateTimeFormat("en", {
     weekday: "long",
@@ -1179,6 +1540,19 @@ export const pluralize = (count, singular, plural = `${singular}s`) =>
   `${count} ${Number(count) === 1 ? singular : plural}`;
 export const exerciseMeasure = (exercise) =>
   exerciseCatalog[exercise?.exerciseId]?.measure || exercise?.measure || "reps";
+export function workingSetCanComplete(exercise, set) {
+  const item = exerciseCatalog[exercise?.exerciseId];
+  const repetitions = Number(set?.reps);
+  if (!Number.isFinite(repetitions) || repetitions <= 0) return false;
+  const weightOptional =
+    exerciseMeasure(exercise) === "seconds" ||
+    Boolean(item?.bodyweight || exercise?.bodyweight) ||
+    item?.equipment?.includes("bodyweight") ||
+    exercise?.equipment?.includes?.("bodyweight");
+  if (weightOptional) return true;
+  const weight = Number(set?.weight);
+  return Number.isFinite(weight) && weight > 0;
+}
 export const exerciseValueLabel = (exercise, value) =>
   exerciseMeasure(exercise) === "seconds" ? `${value} sec` : String(value);
 export const repRangeLabel = (minimum, maximum) =>
@@ -1245,7 +1619,7 @@ export const PHYSIQUE_PRIORITY_OPTIONS = {
   rear_delts: {
     label: "Rear delts",
     trainingPriority: "Shoulders",
-    patterns: ["horizontal-pull"],
+    patterns: ["rear-delt"],
   },
   back_width: {
     label: "Back width",
@@ -1328,6 +1702,8 @@ export function defaultProfile() {
     rirEnabled: false,
     recommendedWarmupsEnabled: true,
     rampUpSetsEnabled: true,
+    showExerciseImages: true,
+    themePreference: "system",
     restTimerEnabled: true,
     restTimerAutoStart: true,
     restTimerSeconds: null,
@@ -1425,11 +1801,36 @@ function migrateBlockedExercises(stored) {
       .filter((item) => item.exerciseId);
   return stored;
 }
+function migrateMissingExerciseRest(stored) {
+  const migrateWorkout = (workout) => {
+    for (const exercise of workout?.exercises || []) {
+      if (exercise.restSeconds !== null && exercise.restSeconds !== undefined)
+        continue;
+      const sourceName =
+        exercise.importedName ||
+        exercise.originalImportedName ||
+        exercise.importedExercise?.name;
+      const matchedId = sourceName
+        ? matchImportedExerciseName(sourceName).exerciseId
+        : null;
+      exercise.restSeconds =
+        exerciseCatalog[exercise.exerciseId]?.restSeconds ||
+        exerciseCatalog[matchedId]?.restSeconds ||
+        90;
+    }
+  };
+  stored.program?.days?.forEach(migrateWorkout);
+  migrateWorkout(stored.activeWorkout);
+  for (const session of stored.optionalSessions || [])
+    migrateWorkout(session?.workout);
+  return stored;
+}
 export function loadState() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (!stored || stored.schemaVersion !== 2) return blankState();
     migrateBlockedExercises(stored);
+    migrateMissingExerciseRest(stored);
     const base = blankState();
     stored.program?.days?.forEach((day) =>
       normalizeTimedExercises(day.exercises),
@@ -1439,6 +1840,16 @@ export function loadState() {
     repairedProgram?.days?.forEach((day) => {
       if (!day.nameEdited)
         day.name = normalizeWorkoutName(day.name, day.weekday);
+      const titleParts = workoutDisplayParts(day, day.weekday);
+      if (!day.workoutName && titleParts.detail) {
+        day.workoutName = titleParts.primary;
+        day.workoutDescriptor = titleParts.detail;
+      }
+      if (
+        repairedProgram.source === "ai-import" &&
+        !day.originalImportedWorkoutName
+      )
+        day.originalImportedWorkoutName = day.name;
     });
     const validationProfile = repairedProgram?.userEdited
       ? { ...(stored.profile || {}), sessionMinutes: null }
@@ -1458,6 +1869,11 @@ export function loadState() {
     const profile = {
       ...base.profile,
       ...(stored.profile || {}),
+      themePreference: ["system", "light", "dark", "premium"].includes(
+        stored.profile?.themePreference,
+      )
+        ? stored.profile.themePreference
+        : "light",
       prioritySources: {
         ...base.profile.prioritySources,
         ...legacyPrioritySources,
@@ -1515,7 +1931,7 @@ export function loadState() {
         (conversations.length ? "legacy" : null);
     if (
       stored.activeWorkout?.warmup &&
-      stored.activeWorkout.warmup.generatorVersion !== 1
+      stored.activeWorkout.warmup.generatorVersion !== 2
     )
       refreshWorkoutWarmup(stored.activeWorkout, profile, program);
     return {
@@ -1526,6 +1942,9 @@ export function loadState() {
       activeWorkout: Array.isArray(stored.activeWorkout?.exercises)
         ? {
             ...stored.activeWorkout,
+            workoutDateKey:
+              stored.activeWorkout.workoutDateKey ||
+              isoDay(stored.activeWorkout.startedAt || new Date()),
             handledSupersetRestRounds: Array.isArray(
               stored.activeWorkout.handledSupersetRestRounds,
             )
@@ -1980,7 +2399,7 @@ export const PROGRAM_TEMPLATES = {
           slot("vertical-push", { role: "main" }),
           slot("vertical-pull"),
           slot(["single-leg", "squat"]),
-          slot(["elbow-flexion", "elbow-extension"], { essential: false }),
+          slot("calf", { essential: false }),
         ],
       },
       {
@@ -2273,7 +2692,6 @@ export const PROGRAM_TEMPLATES = {
           slot("hinge"),
           slot("single-leg"),
           slot("knee-flexion"),
-          slot("knee-extension", { essential: false }),
           slot("calf", { essential: false }),
         ],
       },
@@ -2281,10 +2699,10 @@ export const PROGRAM_TEMPLATES = {
         name: "Push",
         slots: [
           slot(["incline-push", "horizontal-push"], { role: "main" }),
+          slot("chest-isolation", { essential: false }),
           slot("vertical-push"),
           slot("shoulder-isolation"),
           slot("elbow-extension"),
-          slot("horizontal-push", { essential: false }),
         ],
       },
       {
@@ -2292,7 +2710,7 @@ export const PROGRAM_TEMPLATES = {
         slots: [
           slot("vertical-pull", { role: "main" }),
           slot("horizontal-pull"),
-          slot("upper-back-pull", { essential: false }),
+          slot("rear-delt", { essential: false }),
           slot("elbow-flexion"),
           slot("core", { essential: false }),
         ],
@@ -2964,7 +3382,7 @@ function trainingPrescription(profile, item, role = "accessory") {
   const fatLoss = profile.goal === "Lose fat";
   const experience = profile.experience || "Beginner";
   const effort = String(profile.effortStyle || "");
-  const hard = effort.startsWith("Fewer hard");
+  const hard = isFewerHardSets(profile);
   const moderate = effort.startsWith("More moderate");
   const balanced = effort.startsWith("Balanced workload");
   const olderAdult = profile.ageRange === "60+";
@@ -2997,9 +3415,16 @@ function trainingPrescription(profile, item, role = "accessory") {
     repMax = power ? 5 : compound ? 6 : 12;
     targetRir = power ? 3 : compound ? 3 : 2;
   }
-  if (hard) targetRir = 1;
-  if (moderate) targetRir = Math.max(targetRir, compound || power ? 3 : 2);
-  if (olderAdult) targetRir = Math.max(targetRir, compound || power ? 3 : 2);
+  if (hard) {
+    [repMin, repMax] = fewerHardRepRange(profile, item, role);
+    // Power work ends on speed/quality loss, not proximity to muscular failure.
+    targetRir = power ? null : 1;
+  }
+  if (moderate && !power)
+    targetRir = Math.max(targetRir, compound ? 3 : 2);
+  if (olderAdult && !power)
+    targetRir = Math.max(targetRir, compound ? 3 : 2);
+  if (power) targetRir = null;
   let restSeconds = item.restSeconds;
   if (power) restSeconds = Math.max(120, restSeconds || 0);
   else if (strength && compound)
@@ -3018,14 +3443,12 @@ function trainingPrescription(profile, item, role = "accessory") {
   return { sets, repMin, repMax, targetRir, restSeconds };
 }
 function physiquePriorityMatch(item, profile) {
-  return confirmedPhysiquePriorities(profile).some((priority) => {
-    const option = PHYSIQUE_PRIORITY_OPTIONS[priority.priorityId];
-    return (
-      option &&
-      item.muscles.includes(option.trainingPriority) &&
-      option.patterns.includes(item.pattern)
-    );
-  });
+  const stimulus = stimulusProfileForItem(item);
+  return priorityProgrammingGroupsForProfile(profile).some(group =>
+    group.source === "confirmed" &&
+    group.patterns?.includes(item.pattern) &&
+    group.muscles.some(muscle => stimulus[muscle] === 1),
+  );
 }
 const PATTERN_PREFERENCES = {
   "horizontal-push": [
@@ -3197,6 +3620,23 @@ export function candidateScore(
       : preferenceIndex >= 0
         ? 12 - preferenceIndex
         : 0;
+  // No preference removes equipment bias, but a main back slot still benefits
+  // from a stable bilateral row that is straightforward to load and progress.
+  // Keep unilateral cable rows available as accessories/fallbacks rather than
+  // letting the deterministic tie-break promote one to the primary row.
+  if (neutralModality && role === "main" && pattern === "horizontal-pull") {
+    const mainRowOrder = [
+      "chest-supported-row",
+      "t-bar-row",
+      "machine-row",
+      "low-row",
+      "seated-cable-row",
+      "barbell-row",
+    ];
+    const mainRowIndex = mainRowOrder.indexOf(item.id);
+    if (mainRowIndex >= 0) value += mainRowOrder.length - mainRowIndex;
+    if (item.id === "single-arm-cable-row") value -= 2;
+  }
   const compoundMainPatterns = new Set([
     "horizontal-push",
     "incline-push",
@@ -3324,6 +3764,7 @@ function makeProgramExercise(item, profile, options = {}) {
     id: uid("program-exercise"),
     exerciseId: item.id,
     programmingRole: options.role || "accessory",
+    effortMode: item.kind === "power" ? "velocity-quality" : "rir",
     requiredRole: options.requiredRole !== false,
     slotPatterns: options.slotPatterns || [item.pattern],
     sets: Array.from({ length: setCount }, () => ({
@@ -3371,14 +3812,7 @@ export function roundedEstimate(minutes, step = 5) {
   return Math.max(increment, Math.round(value / increment) * increment);
 }
 function minimumWorkingSets(profile, exercise) {
-  if (String(profile.effortStyle || "").startsWith("More moderate")) return 3;
-  if (String(profile.effortStyle || "").startsWith("Fewer hard")) return 2;
-  const accessory = exercise.programmingRole !== "main";
-  const shortSession = Number(profile.sessionMinutes) <= 30;
-  const highFrequencyLowDose =
-    Number(profile.daysPerWeek) >= 5 &&
-    ["General fitness", "Lose fat"].includes(profile.goal);
-  return accessory && (shortSession || highFrequencyLowDose) ? 1 : 2;
+  return minimumWorkingSetsForExercise(profile, exercise);
 }
 function fitSessionToDuration(
   exercises,
@@ -3387,7 +3821,9 @@ function fitSessionToDuration(
   session = null,
 ) {
   const result = [...exercises];
-  while (estimateSessionMinutes(result) > minutes + 5) {
+  // The requested duration is the generation budget. Display-estimation
+  // tolerance belongs in validation, not as free programming time.
+  while (estimateSessionMinutes(result) > minutes) {
     const reducible = [...result]
       .reverse()
       .find(
@@ -3501,6 +3937,61 @@ function namedSessionFocus(day) {
   if (/upper/.test(name)) return "upper";
   if (/full body/.test(name)) return "full";
   return null;
+}
+export function sessionStructureKey(day) {
+  const name = String(day?.name || "").toLowerCase();
+  if (/chest\s*(?:&|and)\s*back/.test(name)) return "chest-back";
+  if (/shoulders?\s*(?:&|and)\s*arms?/.test(name)) return "shoulders-arms";
+  if (/full body/.test(name)) return "full-body";
+  if (/torso/.test(name)) return "torso";
+  if (/limbs?/.test(name)) return "limbs";
+  if (/upper/.test(name)) return "upper";
+  if (/lower/.test(name)) return "lower";
+  if (/push/.test(name)) return "push";
+  if (/pull/.test(name)) return "pull";
+  if (/legs?/.test(name)) return "legs";
+  if (/chest/.test(name)) return "chest";
+  if (/back|posterior/.test(name)) return "back";
+  if (/shoulders?/.test(name)) return "shoulders";
+  if (/arms?/.test(name)) return "arms";
+  return "mixed";
+}
+function expandedSessionSequence(sequence, count) {
+  if (!sequence?.length) return [];
+  return Array.from({ length: count }, (_, index) => sequence[index % sequence.length]);
+}
+function orderSessionsByStructuralSequence(days, sequence) {
+  const expected = expandedSessionSequence(sequence, days.length);
+  if (!expected.length) return days;
+  const queues = new Map();
+  for (const day of days) {
+    const key = day.structureKey || sessionStructureKey(day);
+    if (!queues.has(key)) queues.set(key, []);
+    queues.get(key).push(day);
+  }
+  const ordered = expected.map((key) => queues.get(key)?.shift()).filter(Boolean);
+  return ordered.length === days.length ? ordered : days;
+}
+function structureIdForTemplate(templateId, splitPreferenceId = null) {
+  if (splitPreferenceId && TRAINING_STRUCTURES[splitPreferenceId])
+    return splitPreferenceId;
+  if (/PPLUL|ULPPL/.test(templateId || "")) return "pplul";
+  if (/PPL/.test(templateId || "")) return "push-pull-legs";
+  if (/ARNOLD/.test(templateId || "")) return "arnold";
+  if (/(?:^|-)UL/.test(templateId || "")) return "upper-lower";
+  if (/(?:^|-)PP(?:$|-)/.test(templateId || "")) return "push-pull";
+  if (/(?:^|-)TL/.test(templateId || "")) return "torso-limbs";
+  if (/(?:^|-)BP/.test(templateId || "")) return "body-part";
+  if (/(?:^|-)FB/.test(templateId || "")) return "full-body";
+  return null;
+}
+function sequenceForTemplate(templateId, splitPreferenceId = null) {
+  if (templateId === "T5-ULPPL")
+    return ["upper", "lower", "push", "pull", "legs"];
+  if (templateId === "T5-PPLUL")
+    return ["push", "pull", "legs", "upper", "lower"];
+  const id = structureIdForTemplate(templateId, splitPreferenceId);
+  return TRAINING_STRUCTURES[id]?.canonicalSessionSequence || null;
 }
 function sessionFocus(day) {
   const named = namedSessionFocus(day);
@@ -3682,37 +4173,70 @@ function recoveryPenalty(days, scheduledDays) {
     }
   return penalty;
 }
-function sessionPermutations(values, used = [], result = []) {
-  if (used.length === values.length) {
-    result.push([...used]);
-    return result;
-  }
-  for (const value of values) {
-    if (used.includes(value)) continue;
-    used.push(value);
-    sessionPermutations(values, used, result);
-    used.pop();
-  }
-  return result;
+function overlapRelationship(previousKey, currentKey) {
+  if (previousKey === "full-body" && currentKey === "full-body")
+    return "full-body-to-full-body";
+  if (previousKey === currentKey && ["upper", "lower"].includes(currentKey))
+    return `${currentKey}-to-${currentKey}`;
+  if (["push", "pull"].includes(previousKey) && currentKey === "upper")
+    return `${previousKey}-to-upper`;
+  if (previousKey === "legs" && currentKey === "lower")
+    return "legs-to-lower";
+  if (previousKey === "chest-back" && currentKey === "shoulders-arms")
+    return "chest-back-to-shoulders-arms";
+  return null;
 }
-function arrangeSessionsForRecovery(days, scheduledDays) {
+function weekdayGap(previous, current) {
+  return (
+    (WEEKDAYS.indexOf(current) - WEEKDAYS.indexOf(previous) + 7) % 7
+  );
+}
+function adaptConsecutiveSessionRecovery(days, profile) {
   if (days.length < 2) return days;
-  const originalIndex = new Map(days.map((day, index) => [day, index]));
-  let best = days;
-  let bestScore = Infinity;
-  for (const candidate of sessionPermutations(days)) {
-    const recovery = recoveryPenalty(candidate, scheduledDays);
-    const displacement = candidate.reduce(
-      (sum, day, index) => sum + Math.abs(originalIndex.get(day) - index),
-      0,
+  const adjusted = days.map((day) => ({
+    ...day,
+    exercises: day.exercises.map((exercise) => ({
+      ...exercise,
+      sets: exercise.sets.map((set) => ({ ...set })),
+    })),
+  }));
+  const volumePolicy = profile.goal === "Build muscle" ? hypertrophyVolumeTargets(profile) : null;
+  const priorityMuscles = priorityStimulusMusclesForProfile(profile);
+  const priorityMuscle = muscle => priorityMuscles.has(muscle);
+  for (let index = 0; index < adjusted.length; index++) {
+    const previous = adjusted[(index - 1 + adjusted.length) % adjusted.length];
+    const current = adjusted[index];
+    if (weekdayGap(previous.weekday, current.weekday) !== 1) continue;
+    const relationship = overlapRelationship(
+      previous.structureKey || sessionStructureKey(previous),
+      current.structureKey || sessionStructureKey(current),
     );
-    const score = recovery * 100 + displacement;
-    if (score < bestScore) {
-      best = candidate;
-      bestScore = score;
-    }
+    if (!relationship) continue;
+    const previousVolume = fractionalVolumeForExercises(previous.exercises);
+    const weeklyVolume = volumePolicy ? weeklyStimulusVolume({ days: adjusted }) : null;
+    const reducible = current.exercises
+      .map((exercise, exerciseIndex) => ({
+        exercise,
+        exerciseIndex,
+        overlap: Object.entries(stimulusProfileForExercise(exercise.exerciseId))
+          .reduce((sum, [muscle, credit]) => sum + (previousVolume[muscle] ? credit : 0), 0),
+      }))
+      .filter(entry => entry.overlap > 0 && entry.exercise.sets.length > minimumWorkingSets(profile, entry.exercise))
+      .filter(entry => !volumePolicy || Object.entries(stimulusProfileForExercise(entry.exercise.exerciseId)).every(
+        ([muscle, credit]) => (weeklyVolume[muscle] || 0) - credit >=
+          (priorityMuscle(muscle) ? volumePolicy[muscle]?.target : volumePolicy[muscle]?.floor),
+      ))
+      .sort((a, b) => b.overlap - a.overlap || b.exerciseIndex - a.exerciseIndex || a.exercise.exerciseId.localeCompare(b.exercise.exerciseId))[0];
+    if (!reducible) continue;
+    reducible.exercise.sets.pop();
+    current.recoveryAdjustment = {
+      relationship,
+      strategy: "reduced-overlap-volume",
+      previousWeekday: previous.weekday,
+    };
+    current.estimatedMinutes = estimateSessionMinutes(current.exercises);
   }
-  return best;
+  return adjusted;
 }
 function repairProgramSchedule(program) {
   if (!program || !Array.isArray(program.days) || program.days.length < 2)
@@ -3722,7 +4246,11 @@ function repairProgramSchedule(program) {
     (a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday),
   );
   const scheduledDays = chronological.map((day) => day.weekday);
-  const arranged = arrangeSessionsForRecovery(chronological, scheduledDays);
+  const sequence =
+    program.trainingStructure?.userRequestedSequence ||
+    program.trainingStructure?.canonicalSessionSequence ||
+    sequenceForTemplate(program.templateId, program.splitPreference?.id);
+  const arranged = orderSessionsByStructuralSequence(chronological, sequence);
   if (arranged.every((day, index) => day === chronological[index]))
     return program;
   return {
@@ -3735,16 +4263,21 @@ function repairProgramSchedule(program) {
   };
 }
 function prioritySetBudgets(profile) {
-  const priorities = (profile.priorities || []).filter(
-    (value) => value && value !== "Balanced",
-  );
   const bonus = profile.goal === "Build muscle" ? 4 : 2;
-  return new Map(priorities.map((priority) => [priority, bonus]));
+  return new Map(priorityProgrammingGroupsForProfile(profile).map((group, index) => [
+    `${group.source}:${group.key}:${index}`,
+    { ...group, remaining: bonus },
+  ]));
 }
 function takePrioritySet(item, budgets) {
-  const muscle = item.muscles.find((value) => (budgets.get(value) || 0) > 0);
-  if (!muscle) return false;
-  budgets.set(muscle, budgets.get(muscle) - 1);
+  const stimulus = stimulusProfileForExercise(item);
+  const priority = [...budgets.entries()].find(([, group]) =>
+    group.remaining > 0 &&
+    (!group.patterns?.length || group.patterns.includes(item.pattern)) &&
+    group.muscles.some(muscle => stimulus[muscle] === 1),
+  );
+  if (!priority) return false;
+  priority[1].remaining -= 1;
   return true;
 }
 const upperMovementFamily = (pattern) =>
@@ -3841,7 +4374,8 @@ function resolveTemplateSession(
   if (
     chestHypertrophyPriority &&
     /^Push$/i.test(session.name) &&
-    !slots.some((definition) => definition.patterns.includes("chest-isolation"))
+    slots.filter((definition) => definition.patterns.some((pattern) =>
+      ["horizontal-push", "incline-push"].includes(pattern))).length < 2
   ) {
     const firstChest = slots.findIndex((definition) =>
       definition.patterns.some((pattern) =>
@@ -3852,12 +4386,12 @@ function resolveTemplateSession(
       slots.splice(
         firstChest + 1,
         0,
-        slot("chest-isolation", { essential: false }),
+        slot("horizontal-push", { essential: false }),
       );
   }
   if (
     chestHypertrophyPriority &&
-    /^Upper$/i.test(session.name) &&
+    /^Upper(?:\s+[ABC])?$/i.test(session.name) &&
     slots.filter((definition) =>
       definition.patterns.some((pattern) =>
         ["horizontal-push", "incline-push", "chest-isolation"].includes(
@@ -3878,20 +4412,19 @@ function resolveTemplateSession(
         slot("chest-isolation", { essential: false }),
       );
   }
-  if (profile.goal === "Build muscle" && !chestHypertrophyPriority) {
-    let chestCompoundSlotSeen = false;
-    slots = slots.filter((definition) => {
-      const chestCompound = definition.patterns.some((pattern) =>
-        ["horizontal-push", "incline-push"].includes(pattern),
-      );
-      if (!chestCompound) return true;
-      if (!chestCompoundSlotSeen) {
-        chestCompoundSlotSeen = true;
-        return true;
-      }
-      return definition.essential;
-    });
+  if (
+    profile.goal === "Build muscle" &&
+    (profile.priorities || []).includes("Back") &&
+    /^Pull$/i.test(session.name) &&
+    !slots.some((definition) => definition.patterns.includes("upper-back-pull"))
+  ) {
+    const lastPull = slots.findLastIndex((definition) => definition.patterns.some(
+      (pattern) => ["horizontal-pull", "vertical-pull"].includes(pattern),
+    ));
+    if (lastPull >= 0) slots.splice(lastPull + 1, 0, slot("upper-back-pull", { essential: false }));
   }
+  // Weekly balancing decides whether optional chest work is useful. Deleting it
+  // here previously underdosed Balanced push work while retaining every pull.
   if (chestHypertrophyPriority) {
     const firstChest = slots.findIndex((definition) =>
       definition.patterns.some((pattern) =>
@@ -3998,24 +4531,19 @@ function resolveTemplateSession(
   }
   return sequenceMixedUpperExercises(exercises, session, profile);
 }
-export function weeklyFractionalVolume(program) {
-  const volume = {};
-  for (const exercise of (program?.days || []).flatMap(
-    (day) => day.exercises || [],
-  )) {
-    const item = exerciseCatalog[exercise.exerciseId];
-    if (!item) continue;
-    const sets = (exercise.sets || []).filter(
-      (set) => set.planned !== false && !set.added,
-    ).length;
-    item.muscles.forEach((muscle, index) => {
-      volume[muscle] = Number(
-        ((volume[muscle] || 0) + sets * (index === 0 ? 1 : 0.5)).toFixed(1),
-      );
-    });
-  }
-  return volume;
+export function stimulusProfileForExercise(itemOrId) {
+  const item = typeof itemOrId === "string" ? exerciseCatalog[itemOrId] : itemOrId;
+  return stimulusProfileForItem(item);
 }
+
+export function weeklyStimulusVolume(program) {
+  return accumulateStimulus(
+    (program?.days || []).flatMap(day => day.exercises || []),
+    exerciseId => exerciseCatalog[exerciseId],
+  );
+}
+
+export const weeklyFractionalVolume = weeklyStimulusVolume;
 export function weeklyDirectVolume(program) {
   const volume = {
     Chest: 0,
@@ -4074,18 +4602,7 @@ export function weeklyDirectVolume(program) {
   );
 }
 function fractionalVolumeForExercises(exercises) {
-  const volume = {};
-  for (const exercise of exercises || []) {
-    const item = exerciseCatalog[exercise.exerciseId];
-    if (!item) continue;
-    const sets = (exercise.sets || []).filter(
-      (set) => set.planned !== false && !set.added,
-    ).length;
-    item.muscles.forEach((muscle, index) => {
-      volume[muscle] = (volume[muscle] || 0) + sets * (index === 0 ? 1 : 0.5);
-    });
-  }
-  return volume;
+  return accumulateStimulus(exercises, exerciseId => exerciseCatalog[exerciseId]);
 }
 export function programWarnings(program, profile = {}) {
   const warnings = [];
@@ -4157,6 +4674,221 @@ function initialVolumeCeiling(profile) {
     return profile.experience === "Beginner" ? 10 : 14;
   return profile.goal === "Athletic performance" ? 14 : 16;
 }
+
+export function hypertrophyVolumeTargets(profile = {}) {
+  return hypertrophyTargetsForProfile(profile);
+}
+
+function sessionSupportsStimulus(day, muscle) {
+  const key = day.structureKey || sessionStructureKey(day);
+  if (["Chest", "AnteriorDelts", "LateralDelts", "Triceps"].includes(muscle))
+    return ["push", "upper", "full-body", "chest", "shoulders", "arms", "chest-back", "shoulders-arms", "torso"].includes(key);
+  if (["Back", "Biceps", "RearDelts"].includes(muscle))
+    return ["pull", "upper", "full-body", "back", "arms", "chest-back", "shoulders-arms", "torso"].includes(key);
+  if (["Quads", "Hamstrings", "Glutes", "Calves"].includes(muscle))
+    return ["legs", "lower", "full-body", "limbs"].includes(key);
+  return muscle === "Core";
+}
+
+function refreshHypertrophyCoverage(program, profile) {
+  if (profile.goal !== "Build muscle") return program;
+  const targets = hypertrophyVolumeTargets(profile);
+  const volume = weeklyStimulusVolume(program);
+  program.volumeTargets = targets;
+  program.coverageConstrained = Object.fromEntries(Object.entries(targets)
+    .filter(([muscle, policy]) => (volume[muscle] || 0) < policy.floor)
+    .map(([muscle, policy]) => [muscle, {
+      actual: volume[muscle] || 0,
+      floor: policy.floor,
+      reason: program.coverageConstraintReasons?.[muscle] || "time",
+    }]));
+  return program;
+}
+
+function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts = new Map()) {
+  if (profile.goal !== "Build muscle") return program;
+  const targets = hypertrophyVolumeTargets(profile);
+  const fixedTwoSetPolicy = String(profile.effortStyle || "").startsWith("Fewer hard");
+  const priorityMuscles = priorityStimulusMusclesForProfile(profile);
+  const isPriorityMuscle = muscle => priorityMuscles.has(muscle);
+  const majorMuscles = ["Chest", "Back", "Quads", "Hamstrings", "Glutes"];
+  let volume = weeklyStimulusVolume(program);
+  const mutationWithinVolumePolicy = ({
+    addItem = null,
+    addSets = 0,
+    removeItem = null,
+    removeSets = 0,
+    protectTargets = [],
+  } = {}) => {
+    const added = addItem ? stimulusProfileForExercise(addItem) : {};
+    const removed = removeItem ? stimulusProfileForExercise(removeItem) : {};
+    return stimulusMutationPreservesPolicy({
+      volume,
+      targets,
+      addProfile: added,
+      addSets,
+      removeProfile: removed,
+      removeSets,
+      protectedTargetMuscles: protectTargets,
+      priorityMuscles: Object.keys(targets).filter(isPriorityMuscle),
+    });
+  };
+  const muscleOrder = Object.keys(targets).sort((a, b) => Number(!majorMuscles.includes(a)) - Number(!majorMuscles.includes(b)) || a.localeCompare(b));
+  for (const threshold of ["floor", "target"]) {
+  for (const muscle of muscleOrder) {
+    const desiredVolume = targets[muscle][threshold];
+    let guard = 0;
+    while ((volume[muscle] || 0) < desiredVolume && guard++ < 12) {
+      const candidates = fixedTwoSetPolicy ? [] : program.days.flatMap((day, dayIndex) => day.exercises.map((exercise, exerciseIndex) => ({ day, dayIndex, exercise, exerciseIndex, item: exerciseCatalog[exercise.exerciseId] })))
+        .filter(entry => (stimulusProfileForExercise(entry.item)[muscle] || 0) === 1)
+        .filter(entry => entry.exercise.sets.length < 4)
+        .sort((a, b) => a.exercise.sets.length - b.exercise.sets.length || Number(a.exercise.programmingRole === "main") - Number(b.exercise.programmingRole === "main") || a.dayIndex - b.dayIndex || a.exerciseIndex - b.exerciseIndex || a.exercise.exerciseId.localeCompare(b.exercise.exerciseId));
+      let selected = candidates.find(entry => {
+        const nextSets = [...entry.exercise.sets, { ...entry.exercise.sets.at(-1), id: uid("set") }];
+        const nextExercises = entry.day.exercises.map(exercise => exercise === entry.exercise ? { ...exercise, sets: nextSets } : exercise);
+        return estimateSessionMinutes(nextExercises) <= Number(profile.sessionMinutes || 45) &&
+          mutationWithinVolumePolicy({ addItem: entry.item, addSets: 1 });
+      });
+      let donor = null;
+      let donorRemoveIndex = null;
+      if (!selected) {
+        for (const candidate of candidates) {
+          const donors = candidate.day.exercises.map((exercise, exerciseIndex) => ({
+            exercise,
+            exerciseIndex,
+            item: exerciseCatalog[exercise.exerciseId],
+          })).filter(entry => entry.exercise !== candidate.exercise)
+            .filter(entry => entry.exercise.sets.length > minimumWorkingSets(profile, entry.exercise))
+            .map(entry => {
+              const directMuscle = Object.entries(stimulusProfileForExercise(entry.item)).find(([, credit]) => credit === 1)?.[0];
+              const donorThreshold = isPriorityMuscle(muscle)
+                ? targets[directMuscle]?.floor
+                : targets[directMuscle]?.target;
+              return { ...entry, directMuscle, surplus: directMuscle ? (volume[directMuscle] || 0) - (donorThreshold || Infinity) : -Infinity };
+            })
+            .filter(entry => entry.surplus > 0)
+            .sort((a, b) => b.surplus - a.surplus || b.exerciseIndex - a.exerciseIndex || a.exercise.exerciseId.localeCompare(b.exercise.exerciseId));
+          donor = donors.find(entry => {
+            const nextExercises = candidate.day.exercises.map(exercise => {
+              if (exercise === candidate.exercise) return { ...exercise, sets: [...exercise.sets, { ...exercise.sets.at(-1), id: uid("set") }] };
+              if (exercise === entry.exercise) return { ...exercise, sets: exercise.sets.slice(0, -1) };
+              return exercise;
+            });
+            return estimateSessionMinutes(nextExercises) <= Number(profile.sessionMinutes || 45) &&
+              mutationWithinVolumePolicy({
+                addItem: candidate.item,
+                addSets: 1,
+                removeItem: entry.item,
+                removeSets: 1,
+                protectTargets: !isPriorityMuscle(muscle) && entry.directMuscle ? [entry.directMuscle] : [],
+              });
+          }) || null;
+          if (donor) { selected = candidate; break; }
+          const removable = candidate.day.exercises.map((exercise, exerciseIndex) => ({
+            exercise,
+            exerciseIndex,
+            item: exerciseCatalog[exercise.exerciseId],
+          })).filter(entry => entry.exercise !== candidate.exercise && entry.exercise.programmingRole !== "main" && !entry.exercise.requiredRole)
+            .filter(entry => mutationWithinVolumePolicy({
+              addItem: candidate.item,
+              addSets: 1,
+              removeItem: entry.item,
+              removeSets: entry.exercise.sets.length,
+            }))
+            .sort((a, b) => b.exerciseIndex - a.exerciseIndex || a.exercise.exerciseId.localeCompare(b.exercise.exerciseId));
+          const removed = removable.find(entry => {
+            const next = candidate.day.exercises.filter((_, index) => index !== entry.exerciseIndex).map(exercise =>
+              exercise === candidate.exercise
+                ? { ...exercise, sets: [...exercise.sets, { ...exercise.sets.at(-1), id: uid("set") }] }
+                : exercise);
+            return estimateSessionMinutes(next) <= Number(profile.sessionMinutes || 45) &&
+              requiredSessionRolesSatisfied(candidate.day, next) && sessionNameMatchesExercises(candidate.day, next);
+          });
+          if (removed) {
+            selected = candidate;
+            donorRemoveIndex = removed.exerciseIndex;
+            break;
+          }
+        }
+      }
+      if (selected) {
+        if (donor) donor.exercise.sets.pop();
+        if (Number.isInteger(donorRemoveIndex)) selected.day.exercises.splice(donorRemoveIndex, 1);
+        selected.exercise.sets.push({ ...selected.exercise.sets.at(-1), id: uid("set") });
+        selected.day.estimatedMinutes = estimateSessionMinutes(selected.day.exercises);
+      } else {
+        const deficit = desiredVolume - (volume[muscle] || 0);
+        const directAllowed = allowed.filter(item => (stimulusProfileForExercise(item)[muscle] || 0) === 1);
+        const externallyLoadable = directAllowed.filter(item => !item.bodyweight && item.progressionQuality === "load-and-repetition");
+        const additionPool = externallyLoadable.length ? externallyLoadable : directAllowed;
+        const additions = program.days.flatMap((day, dayIndex) => {
+          if (!sessionSupportsStimulus(day, muscle) || day.exercises.length >= 8) return [];
+          const existing = new Set(day.exercises.map(exercise => exercise.exerciseId));
+          const existingPatterns = new Set(day.exercises.map(exercise => exerciseCatalog[exercise.exerciseId]?.pattern).filter(Boolean));
+          return additionPool.filter(item => !existing.has(item.id) && !existingPatterns.has(item.pattern))
+            .map(item => ({ day, dayIndex, item }));
+        }).sort((a, b) =>
+          Number(a.item.bodyweight) - Number(b.item.bodyweight) ||
+          (usedCounts.get(a.item.id) || 0) - (usedCounts.get(b.item.id) || 0) ||
+          a.dayIndex - b.dayIndex || a.item.id.localeCompare(b.item.id));
+        const makeAddition = entry => {
+          const exercise = makeProgramExercise(entry.item, profile, {
+            requiredRole: false,
+            slotPatterns: [entry.item.pattern],
+          });
+          const desiredSets = Math.max(minimumWorkingSets(profile, exercise), Math.ceil(deficit));
+          exercise.sets = exercise.sets.slice(0, Math.min(exercise.sets.length, desiredSets));
+          return exercise;
+        };
+        let addition = additions.find(entry => {
+          entry.exercise = makeAddition(entry);
+          return estimateSessionMinutes([...entry.day.exercises, entry.exercise]) <= Number(profile.sessionMinutes || 45) &&
+            mutationWithinVolumePolicy({ addItem: entry.item, addSets: entry.exercise.sets.length });
+        });
+        if (!addition) {
+          for (const entry of additions) {
+            const exercise = entry.exercise || makeAddition(entry);
+            const donors = entry.day.exercises.map((candidate, exerciseIndex) => ({
+              exercise: candidate,
+              exerciseIndex,
+              item: exerciseCatalog[candidate.exerciseId],
+            })).filter(candidate => candidate.exercise.programmingRole !== "main" && !candidate.exercise.requiredRole)
+              .filter(candidate => mutationWithinVolumePolicy({
+                addItem: exercise.exerciseId,
+                addSets: exercise.sets.length,
+                removeItem: candidate.item,
+                removeSets: candidate.exercise.sets.length,
+              }))
+              .sort((a, b) => b.exerciseIndex - a.exerciseIndex || a.exercise.exerciseId.localeCompare(b.exercise.exerciseId));
+            const swap = donors.find(candidate => {
+              const next = entry.day.exercises.map((current, index) => index === candidate.exerciseIndex ? exercise : current);
+              return estimateSessionMinutes(next) <= Number(profile.sessionMinutes || 45) &&
+                requiredSessionRolesSatisfied(entry.day, next) && sessionNameMatchesExercises(entry.day, next);
+            });
+            if (swap) {
+              addition = { ...entry, exercise, swapIndex: swap.exerciseIndex };
+              break;
+            }
+          }
+        }
+        if (!addition) {
+          program.coverageConstraintReasons ||= {};
+          program.coverageConstraintReasons[muscle] = directAllowed.length
+            ? additions.length ? "time" : "split"
+            : "equipment-or-restriction";
+          break;
+        }
+        if (Number.isInteger(addition.swapIndex)) addition.day.exercises.splice(addition.swapIndex, 1, addition.exercise);
+        else addition.day.exercises.push(addition.exercise);
+        addition.day.estimatedMinutes = estimateSessionMinutes(addition.day.exercises);
+        usedCounts.set(addition.item.id, (usedCounts.get(addition.item.id) || 0) + 1);
+      }
+      volume = weeklyStimulusVolume(program);
+    }
+  }
+  }
+  return refreshHypertrophyCoverage(program, profile);
+}
 export function conditioningForProfile(profile = {}) {
   if (profile.goal !== "Lose fat") return null;
   const strengthDays = Math.max(
@@ -4187,13 +4919,24 @@ export function conditioningForProfile(profile = {}) {
 }
 function enforceInitialVolumeCeilings(program, profile) {
   const ceiling = initialVolumeCeiling(profile);
+  const hardPolicy = profile.goal === "Build muscle" ? hypertrophyVolumeTargets(profile) : null;
+  const balancedPolicy = profile.goal === "Build muscle" &&
+    !(profile.priorities || []).some(value => value !== "Balanced")
+      ? hypertrophyVolumeTargets(profile)
+      : null;
+  const limitFor = muscle => Math.min(
+    balancedPolicy?.[muscle]?.softCap || ceiling,
+    hardPolicy?.[muscle]?.hardCap || ceiling,
+  );
   let volumes = weeklyFractionalVolume(program);
   let guard = 0;
   while (
-    Object.values(volumes).some((value) => value > ceiling) &&
+    Object.entries(volumes).some(([muscle, value]) => value > limitFor(muscle)) &&
     guard++ < 200
   ) {
-    const muscle = Object.entries(volumes).sort((a, b) => b[1] - a[1])[0]?.[0];
+    const muscle = Object.entries(volumes)
+      .filter(([name, value]) => value > limitFor(name))
+      .sort((a, b) => (b[1] - limitFor(b[0])) - (a[1] - limitFor(a[0])) || a[0].localeCompare(b[0]))[0]?.[0];
     const entries = program.days
       .flatMap((day, dayIndex) =>
         day.exercises.map((exercise, exerciseIndex) => ({
@@ -4204,19 +4947,22 @@ function enforceInitialVolumeCeilings(program, profile) {
           item: exerciseCatalog[exercise.exerciseId],
         })),
       )
-      .filter((entry) => entry.item?.muscles.includes(muscle));
+      .filter((entry) => (stimulusProfileForExercise(entry.item)[muscle] || 0) > 0);
     const reducible = entries
       .filter(
         (entry) =>
           entry.exercise.sets.length >
           minimumWorkingSets(profile, entry.exercise),
       )
+      .filter((entry) => !hardPolicy || Object.entries(stimulusProfileForExercise(entry.item)).every(
+        ([affectedMuscle, credit]) => (volumes[affectedMuscle] || 0) - credit >= (hardPolicy[affectedMuscle]?.floor || 0),
+      ))
       .sort(
         (a, b) =>
           Number(a.exercise.programmingRole === "main") -
             Number(b.exercise.programmingRole === "main") ||
-          Number(b.item.muscles[0] === muscle) -
-            Number(a.item.muscles[0] === muscle) ||
+          Number((stimulusProfileForExercise(b.item)[muscle] || 0) === 1) -
+            Number((stimulusProfileForExercise(a.item)[muscle] || 0) === 1) ||
           b.dayIndex - a.dayIndex ||
           b.exerciseIndex - a.exerciseIndex,
       );
@@ -4238,13 +4984,16 @@ function enforceInitialVolumeCeilings(program, profile) {
               entry.day.exercises.filter(
                 (_, index) => index !== entry.exerciseIndex,
               ),
-            ),
+            ) &&
+            (!hardPolicy || Object.entries(stimulusProfileForExercise(entry.item)).every(
+              ([affectedMuscle, credit]) => (volumes[affectedMuscle] || 0) - credit * entry.exercise.sets.length >= (hardPolicy[affectedMuscle]?.floor || 0),
+            )),
         )
         .sort(
           (a, b) =>
             Number(a.exercise.requiredRole) - Number(b.exercise.requiredRole) ||
-            Number(b.item.muscles[0] === muscle) -
-              Number(a.item.muscles[0] === muscle) ||
+            Number((stimulusProfileForExercise(b.item)[muscle] || 0) === 1) -
+              Number((stimulusProfileForExercise(a.item)[muscle] || 0) === 1) ||
             b.dayIndex - a.dayIndex ||
             b.exerciseIndex - a.exerciseIndex,
         );
@@ -4255,7 +5004,7 @@ function enforceInitialVolumeCeilings(program, profile) {
   }
   for (const day of program.days)
     day.estimatedMinutes = estimateSessionMinutes(day.exercises);
-  return program;
+  return refreshHypertrophyCoverage(program, profile);
 }
 export function buildProgram(profile) {
   const trainingSafety = compileProfileTrainingSafety(
@@ -4318,7 +5067,14 @@ export function buildProgram(profile) {
   );
   const usedCounts = new Map();
   const budgets = prioritySetBudgets(profile);
-  const sessions = template.sessions.map((definition, dayIndex) => {
+  const requestedSequence =
+    structuralSelection.userRequestedSequence ||
+    structuralSelection.canonicalSessionSequence ||
+    sequenceForTemplate(templateId, structuralSelection.preference?.id);
+  const sessionDefinitions = scopedRegion
+    ? template.sessions
+    : orderSessionsByStructuralSequence(template.sessions, requestedSequence);
+  const sessions = sessionDefinitions.map((definition, dayIndex) => {
     const resolved = resolveTemplateSession(
       definition,
       profile,
@@ -4349,12 +5105,16 @@ export function buildProgram(profile) {
         ? `${emphasized.slice(0, -1).join(", ")} & ${emphasized.at(-1)}`
         : emphasized[0];
     const name = emphasis ? `Upper · ${emphasis} emphasis` : definition.name;
+    const titleParts = workoutDisplayParts(name);
     return {
       id: uid("program-day"),
       weekday: null,
       location: profile.environment === "Home gym" ? "Home" : "Commercial gym",
       type: "workout",
       name,
+      workoutName: titleParts.detail ? titleParts.primary : undefined,
+      workoutDescriptor: titleParts.detail || undefined,
+      structureKey: sessionStructureKey(definition),
       estimatedMinutes: estimateSessionMinutes(fitted),
       exercises: fitted,
     };
@@ -4365,9 +5125,11 @@ export function buildProgram(profile) {
     profile,
     sessions,
   );
-  const days = arrangeSessionsForRecovery(sessions, scheduledDays).map(
-    (day, index) => ({ ...day, weekday: scheduledDays[index] }),
-  );
+  const placedSessions = sessions.map((day, index) => ({
+    ...day,
+    weekday: scheduledDays[index],
+  }));
+  const days = placedSessions;
   const splitPreference = structuralSelection.preference
     ? {
         id: structuralSelection.preference.id,
@@ -4376,6 +5138,8 @@ export function buildProgram(profile) {
         exactFrequencyMatch: structuralSelection.exactFrequencyMatch,
         fidelity: structuralSelection.fidelity,
         fallbackReason: structuralSelection.fallbackReason,
+        structureFamily: structuralSelection.structuralFamily,
+        userRequestedSequence: structuralSelection.userRequestedSequence,
       }
     : null;
   const parsed = structuralSelection.parsedPreference;
@@ -4393,12 +5157,12 @@ export function buildProgram(profile) {
           periodization: parsed.periodization,
           namedProgram: parsed.namedProgram,
           fidelity: structuralSelection.fidelity || parsed.fidelity,
+          userRequestedSequence: parsed.userRequestedSequence,
           confidence: parsed.confidence,
           reasonCodes: parsed.reasonCodes,
         }
       : null;
-  return enforceInitialVolumeCeilings(
-    {
+  const generatedProgram = {
       id: uid("program"),
       name: template.name,
       templateId,
@@ -4410,6 +5174,19 @@ export function buildProgram(profile) {
       profileSnapshot: structuredClone(profile),
       splitPreference,
       trainingStyle,
+      trainingStructure: {
+        structureFamily:
+          structuralSelection.structuralFamily ||
+          structureIdForTemplate(templateId),
+        canonicalSessionSequence:
+          structuralSelection.canonicalSessionSequence ||
+          sequenceForTemplate(templateId),
+        userRequestedSequence: structuralSelection.userRequestedSequence,
+        scheduledSessionSequence: days.map((day) => day.structureKey),
+        schedulingFlexibility: structuralSelection.schedulingFlexibility,
+        recoveryRelationships: structuralSelection.recoveryRelationships,
+        fidelity: structuralSelection.fidelity,
+      },
       volumeCeiling: initialVolumeCeiling(profile),
       conditioning: conditioningForProfile(profile),
       includeRecommendedWarmups: profile.recommendedWarmupsEnabled !== false,
@@ -4419,9 +5196,177 @@ export function buildProgram(profile) {
         constraintHash: trainingSafety.constraintHash,
       },
       days,
-    },
-    profile,
+  };
+  rebalanceHypertrophyFloors(generatedProgram, profile, allowed, usedCounts);
+  generatedProgram.days = adaptConsecutiveSessionRecovery(generatedProgram.days, profile);
+  return enforceInitialVolumeCeilings(generatedProgram, profile);
+}
+
+const REPLACEMENT_GENERATOR_VERSION = 1;
+const replacementSlots = (program) =>
+  (program?.days || []).flatMap((day, dayIndex) =>
+    (day.exercises || []).map((exercise, exerciseIndex) => ({
+      day,
+      dayIndex,
+      exercise,
+      exerciseIndex,
+    })),
   );
+const replacementHistoryCounts = (workouts = []) => {
+  const counts = new Map();
+  for (const workout of workouts || [])
+    for (const exercise of workout.exercises || [])
+      if ((exercise.sets || []).some((set) => set.completed))
+        counts.set(
+          exercise.exerciseId,
+          (counts.get(exercise.exerciseId) || 0) + 1,
+        );
+  return counts;
+};
+const correspondingReplacementExercise = (
+  currentProgram,
+  candidateDay,
+  dayIndex,
+  exerciseIndex,
+) => {
+  const currentDay =
+    currentProgram?.days?.find((day) => day.weekday === candidateDay.weekday) ||
+    currentProgram?.days?.find(
+      (day) =>
+        candidateDay.structureKey && day.structureKey === candidateDay.structureKey,
+    ) ||
+    currentProgram?.days?.[dayIndex];
+  return currentDay?.exercises?.[exerciseIndex] || null;
+};
+export function replacementProgramDifference(candidate, currentProgram) {
+  const slots = replacementSlots(candidate);
+  const changed = slots.filter(({ day, dayIndex, exercise, exerciseIndex }) =>
+    exercise.exerciseId !==
+    correspondingReplacementExercise(
+      currentProgram,
+      day,
+      dayIndex,
+      exerciseIndex,
+    )?.exerciseId,
+  ).length;
+  return {
+    changed,
+    total: slots.length,
+    ratio: slots.length ? changed / slots.length : 0,
+  };
+}
+function replacementVariantSeed(profile, currentProgram, generation) {
+  const fingerprint = JSON.stringify({
+    goal: profile.goal,
+    experience: profile.experience,
+    daysPerWeek: profile.daysPerWeek,
+    availableDays: profile.availableDays,
+    sessionMinutes: profile.sessionMinutes,
+    equipment: profile.equipment,
+    priorities: profile.priorities,
+    exercisePreference: profile.exercisePreference,
+    effortStyle: profile.effortStyle,
+    templateId: currentProgram?.templateId,
+    generation,
+    generatorVersion: REPLACEMENT_GENERATOR_VERSION,
+  });
+  let hash = 2166136261;
+  for (const character of fingerprint) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 16777619);
+  }
+  return `replacement-${REPLACEMENT_GENERATOR_VERSION}-${(hash >>> 0).toString(36)}`;
+}
+export function buildReplacementProgram(
+  profile,
+  currentProgram,
+  workouts = [],
+) {
+  const program = buildProgram(profile);
+  const generation = Math.max(
+    1,
+    Number(currentProgram?.replacementGeneration || 0) + 1,
+  );
+  const initialDifference = replacementProgramDifference(program, currentProgram);
+  const minimumChanged = Math.min(
+    initialDifference.total,
+    initialDifference.total <= 1
+      ? initialDifference.total
+      : Math.max(2, Math.ceil(initialDifference.total * 0.3)),
+  );
+  const historyCounts = replacementHistoryCounts(workouts);
+  const occupied = new Set(
+    replacementSlots(program).map(({ exercise }) => exercise.exerciseId),
+  );
+  const unchangedSlots = replacementSlots(program)
+    .filter(({ day, dayIndex, exercise, exerciseIndex }) =>
+      exercise.exerciseId ===
+      correspondingReplacementExercise(
+        currentProgram,
+        day,
+        dayIndex,
+        exerciseIndex,
+      )?.exerciseId,
+    )
+    .sort(
+      (a, b) =>
+        (historyCounts.get(a.exercise.exerciseId) || 0) -
+          (historyCounts.get(b.exercise.exerciseId) || 0) ||
+        a.exerciseIndex - b.exerciseIndex ||
+        a.dayIndex - b.dayIndex,
+    );
+  const firstByDay = [];
+  const remaining = [];
+  const seenDays = new Set();
+  for (const slot of unchangedSlots)
+    if (!seenDays.has(slot.dayIndex)) {
+      seenDays.add(slot.dayIndex);
+      firstByDay.push(slot);
+    } else remaining.push(slot);
+  const orderedSlots = [...firstByDay, ...remaining];
+  let difference = initialDifference;
+  for (const { exercise, dayIndex, exerciseIndex } of orderedSlots) {
+    if (difference.changed >= minimumChanged) break;
+    const current = exerciseCatalog[exercise.exerciseId];
+    if (!current) continue;
+    occupied.delete(exercise.exerciseId);
+    const alternatives = compatibleReplacementCandidates(
+      exercise,
+      profile,
+      [...occupied],
+    ).filter(
+      (item) =>
+        !occupied.has(item.id) &&
+        item.kind === current.kind &&
+        item.pattern === current.pattern,
+    );
+    if (!alternatives.length) {
+      occupied.add(exercise.exerciseId);
+      continue;
+    }
+    const topAlternatives = alternatives.slice(0, Math.min(3, alternatives.length));
+    const replacement =
+      topAlternatives[
+        (generation + dayIndex + exerciseIndex - 1) % topAlternatives.length
+      ];
+    exercise.exerciseId = replacement.id;
+    exercise.restSeconds = replacement.restSeconds;
+    exercise.defaultIncrement = replacement.increment;
+    occupied.add(replacement.id);
+    difference = replacementProgramDifference(program, currentProgram);
+  }
+  return {
+    ...program,
+    source: "personalized-replacement",
+    generatorVersion: REPLACEMENT_GENERATOR_VERSION,
+    replacementGeneration: generation,
+    variantSeed: replacementVariantSeed(profile, currentProgram, generation),
+    replacementSummary: {
+      ...difference,
+      minimumChanged,
+      limitedBySafeAlternatives: difference.changed < minimumChanged,
+    },
+  };
 }
 export function validateProgram(program, profile = null, options = {}) {
   const errors = [];
@@ -4618,9 +5563,23 @@ export function validateProgram(program, profile = null, options = {}) {
       errors.push(`Estimated duration is incompatible on ${day.weekday}.`);
   }
   if (!allowImportedExercises)
-    for (const [muscle, sets] of Object.entries(weeklyFractionalVolume(program)))
-      if (sets > 20)
-        errors.push(`${muscle} exceeds the hard weekly volume limit.`);
+    for (const [muscle, sets] of Object.entries(weeklyFractionalVolume(program))) {
+      const hardCap = profile?.goal === "Build muscle"
+        ? hypertrophyVolumeTargets(profile)[muscle]?.hardCap || 20
+        : 20;
+      if (sets > hardCap)
+        errors.push(`${muscle} exceeds the hard weekly volume limit of ${hardCap}.`);
+    }
+  if (!allowImportedExercises && profile?.goal === "Build muscle" && program.volumeTargets) {
+    const volume = weeklyStimulusVolume(program);
+    const targets = hypertrophyVolumeTargets(profile);
+    for (const [muscle, policy] of Object.entries(targets)) {
+      const constrained = program.coverageConstrained?.[muscle];
+      if ((volume[muscle] || 0) < policy.floor &&
+          (!constrained || constrained.actual !== (volume[muscle] || 0) || constrained.floor !== policy.floor || !constrained.reason))
+        errors.push(`${muscle} is below its weekly floor without a recorded constraint reason.`);
+    }
+  }
   if (
     program.source === "fixed-template" &&
     (!PROGRAM_TEMPLATES[program.templateId] ||
@@ -4687,14 +5646,62 @@ export function normalizedExerciseName(value) {
     .trim()
     .replace(/\s+/g, " ");
 }
+function compactExerciseName(value) {
+  return normalizedExerciseName(value).replace(/\s+/g, "");
+}
+const EXECUTION_MODIFIER_PREFIX =
+  /^(?:(?:slow\s+)?eccentric|ekscentricn(?:i|a|o)|tempo|paused?)\s+/u;
+const EXECUTION_MODIFIER_SUFFIXES = [
+  /\s+(?:(?:\d+(?:[.,]\d+)?\s*(?:s|sec|seconds?|sek|sekund(?:a|e|i)?))\s+)?(?:isometric|iso|izometricn(?:i|a|o)|izometricen)\s+(?:hold|zadrzek|zadrzevanje)(?:\s+\d+(?:[.,]\d+)?\s*(?:s|sec|seconds?|sek|sekund(?:a|e|i)?))?$/u,
+  /\s+(?:paused?|with\s+(?:a\s+)?pause|s\s+pavzo|s\s+premorom|z\s+zadrzkom)$/u,
+  /\s+(?:(?:\d+\s+){1,3})?tempo(?:\s+(?:\d+\s*){1,4})?$/u,
+  /\s+(?:(?:slow\s+)?eccentric|ekscentricn(?:i|a|o)(?:\s+del)?)$/u,
+];
+export function exerciseNameWithoutExecutionModifier(value) {
+  const normalized = normalizedExerciseName(value);
+  if (!normalized) return "";
+  let candidate = normalized.replace(EXECUTION_MODIFIER_PREFIX, "");
+  for (const pattern of EXECUTION_MODIFIER_SUFFIXES)
+    candidate = candidate.replace(pattern, "");
+  return candidate.trim().replace(/\s+/g, " ");
+}
+const IMPORTED_EXERCISE_NAMES_REQUIRING_REVIEW = new Set([
+  "balance",
+  "ravnotezje",
+]);
+export function importedExerciseNameNeedsReview(value) {
+  return IMPORTED_EXERCISE_NAMES_REQUIRING_REVIEW.has(
+    normalizedExerciseName(value),
+  );
+}
+function pluralizedExerciseName(value) {
+  const words = normalizedExerciseName(value).split(" ").filter(Boolean);
+  if (!words.length) return "";
+  const last = words.at(-1);
+  if (/[^aeiou]y$/u.test(last)) words[words.length - 1] = `${last.slice(0, -1)}ies`;
+  else if (/(?:ss|x|z|ch|sh)$/u.test(last)) words[words.length - 1] = `${last}es`;
+  else if (!/s$/u.test(last)) words[words.length - 1] = `${last}s`;
+  return words.join(" ");
+}
+function catalogExerciseNames(item) {
+  return [item?.name, ...(item?.aliases || [])].filter(Boolean);
+}
 export function exerciseMatchesQuery(item, query) {
   const normalizedQuery = normalizedExerciseName(query);
   if (!normalizedQuery) return true;
-  return [item?.name, ...(item?.aliases || [])]
-    .filter(Boolean)
-    .some((value) =>
-      normalizedExerciseName(value).includes(normalizedQuery),
-    );
+  const compactQuery = compactExerciseName(query);
+  return catalogExerciseNames(item).some(
+    (value) => {
+      const normalizedValue = normalizedExerciseName(value);
+      const pluralValue = pluralizedExerciseName(value);
+      return (
+        normalizedValue.includes(normalizedQuery) ||
+        pluralValue.includes(normalizedQuery) ||
+        compactExerciseName(normalizedValue).includes(compactQuery) ||
+        compactExerciseName(pluralValue).includes(compactQuery)
+      );
+    },
+  );
 }
 function importedSourceName(value) {
   const cleaned = String(value || "")
@@ -4712,13 +5719,28 @@ function importedSourceName(value) {
     .replace(/[\s:|–—-]+$/g, "")
     .trim();
 }
-export function cleanImportedExerciseLabel(value) {
+function stripImportedExerciseClassification(value) {
   return importedSourceName(value)
     .replace(
       /\s*\(\s*(?:compound(?:\s+exercise)?|isolation(?:\s+exercise)?|accessory(?:\s+exercise)?|warm[- ]?up|core)\s*\)?\s*$/iu,
       "",
     )
     .trim();
+}
+export function splitImportedExerciseLabel(value) {
+  const cleaned = stripImportedExerciseClassification(value);
+  if (!cleaned || matchImportedExerciseName(cleaned).exerciseId)
+    return { name: cleaned, note: null };
+  const annotated = cleaned.match(/^(.+?)\s*\(\s*([^()]*)\)?\s*$/u);
+  if (!annotated) return { name: cleaned, note: null };
+  const name = annotated[1].trim();
+  const note = annotated[2].trim();
+  if (!name || !note || !matchImportedExerciseName(name).exerciseId)
+    return { name: cleaned, note: null };
+  return { name, note };
+}
+export function cleanImportedExerciseLabel(value) {
+  return splitImportedExerciseLabel(value).name;
 }
 export function authoritativeImportedExerciseNames(sourceText, proposedNames) {
   return findImportedOccurrences(sourceText, proposedNames).map(
@@ -4840,15 +5862,79 @@ export function matchImportedExerciseName(value) {
   const exact = Object.values(exerciseCatalog).filter(
     (item) => normalizedExerciseName(item.name) === normalized,
   );
-  if (exact.length === 1) return { exerciseId: exact[0].id, status: "matched" };
+  const exactCanonical = exact.filter((item) => !item.id.startsWith("wg-"));
+  if (exact.length === 1 || exactCanonical.length === 1)
+    return {
+      exerciseId: (exactCanonical[0] || exact[0]).id,
+      status: "matched",
+    };
   const aliases = Object.values(exerciseCatalog).filter((item) =>
     (item.aliases || []).some(
       (alias) => normalizedExerciseName(alias) === normalized,
     ),
   );
-  return aliases.length === 1
-    ? { exerciseId: aliases[0].id, status: "alias" }
-    : { exerciseId: null, status: "unresolved" };
+  const aliasCanonical = aliases.filter((item) => !item.id.startsWith("wg-"));
+  if (aliases.length === 1 || aliasCanonical.length === 1)
+    return {
+      exerciseId: (aliasCanonical[0] || aliases[0]).id,
+      status: "alias",
+    };
+  const pluralExact = Object.values(exerciseCatalog).filter(
+    (item) => pluralizedExerciseName(item.name) === normalized,
+  );
+  const pluralExactCanonical = pluralExact.filter(
+    (item) => !item.id.startsWith("wg-"),
+  );
+  if (pluralExact.length === 1 || pluralExactCanonical.length === 1)
+    return {
+      exerciseId: (pluralExactCanonical[0] || pluralExact[0]).id,
+      status: "alias",
+    };
+  const pluralAliases = Object.values(exerciseCatalog).filter((item) =>
+    (item.aliases || []).some(
+      (alias) => pluralizedExerciseName(alias) === normalized,
+    ),
+  );
+  const pluralAliasCanonical = pluralAliases.filter(
+    (item) => !item.id.startsWith("wg-"),
+  );
+  if (pluralAliases.length === 1 || pluralAliasCanonical.length === 1)
+    return {
+        exerciseId: (pluralAliasCanonical[0] || pluralAliases[0]).id,
+        status: "alias",
+      };
+  // Separators are only formatting differences (Pull-up / Pull up / Pullup).
+  // Compact matching is accepted only when one canonical exercise remains.
+  const compact = compactExerciseName(normalized);
+  const compactMatches = Object.values(exerciseCatalog).filter((item) =>
+    catalogExerciseNames(item).some((name) =>
+      [normalizedExerciseName(name), pluralizedExerciseName(name)].some(
+        (candidate) => compactExerciseName(candidate) === compact,
+      ),
+    ),
+  );
+  const compactCanonical = compactMatches.filter(
+    (item) => !item.id.startsWith("wg-"),
+  );
+  if (compactMatches.length === 1 || compactCanonical.length === 1)
+    return {
+      exerciseId: (compactCanonical[0] || compactMatches[0]).id,
+      status: "alias",
+    };
+  // Execution cues can reuse the base movement artwork only after the full
+  // name has failed to resolve. Equipment, stance and movement words stay
+  // untouched, so e.g. seated and lying curls never collapse into each other.
+  const baseMovement = exerciseNameWithoutExecutionModifier(normalized);
+  if (
+    !/[()]/u.test(String(value || "")) &&
+    baseMovement &&
+    baseMovement !== normalized
+  ) {
+    const baseMatch = matchImportedExerciseName(baseMovement);
+    if (baseMatch.exerciseId)
+      return { exerciseId: baseMatch.exerciseId, status: "alias" };
+  }
+  return { exerciseId: null, status: "unresolved" };
 }
 function importedCustomId(value) {
   let hash = 2166136261;
@@ -4900,10 +5986,11 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
       throw new Error(
         `AI plan is missing exercises for ${day.weekday || "a day"}.`,
       );
-    const exercises = day.exercises.map((value) => {
-      const importedName = preserve
-        ? importedSourceName(value.sourceName)
-        : null;
+    const exercises = day.exercises.map((value, index) => {
+      const importedLabel = preserve
+        ? splitImportedExerciseLabel(value.sourceName)
+        : { name: null, note: null };
+      const importedName = importedLabel.name;
       const importedMatch = preserve
         ? matchImportedExerciseName(importedName)
         : null;
@@ -4924,21 +6011,41 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
         throw new Error(`Unknown exercise: ${value.exerciseId}`);
       if (!item && !importedName)
         throw new Error("Imported exercise is missing its source name.");
+      const explicitProgrammingRole = ["main", "accessory", "power"].includes(
+        value.programmingRole,
+      )
+        ? value.programmingRole
+        : null;
+      const programmingRole = preserve
+        ? undefined
+        : item?.kind === "power"
+          ? "power"
+          : explicitProgrammingRole === "main" ||
+              explicitProgrammingRole === "accessory"
+            ? explicitProgrammingRole
+            : inferredProgrammingRole(day.exercises, index, (exercise) =>
+                exerciseCatalog[resolveCatalogId(exercise.exerciseId)],
+              );
       const fallback = item
-        ? trainingPrescription(profile, item)
+        ? trainingPrescription(profile, item, programmingRole)
         : { targetRir: null };
       const count = Number(value.sets);
       const repMin = Number(value.repMin);
       const repMax = Number(value.repMax);
       const targetRir =
-        preserve && (value.targetRir === null || value.targetRir === undefined)
+        !preserve && item?.kind === "power"
           ? null
-          : Number(value.targetRir ?? fallback.targetRir);
-      const restSeconds =
-        preserve &&
-        (value.restSeconds === null || value.restSeconds === undefined)
-          ? null
-          : Number(value.restSeconds);
+          : preserve &&
+              (value.targetRir === null || value.targetRir === undefined)
+            ? null
+            : Number(value.targetRir ?? fallback.targetRir);
+      const importedRestWasProvided =
+        value.restSeconds !== null && value.restSeconds !== undefined;
+      const restSeconds = preserve
+        ? importedRestWasProvided
+          ? Number(value.restSeconds)
+          : item?.restSeconds || 90
+        : Number(value.restSeconds);
       const commonWeight =
         preserve && value.weightKg !== null && value.weightKg !== undefined
           ? Number(value.weightKg)
@@ -4971,6 +6078,16 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
         throw new Error(
           `AI returned an invalid prescription for ${exerciseId}.`,
         );
+      if (
+        !preserve &&
+        isFewerHardSets(profile) &&
+        (count !== fallback.sets ||
+          repMin !== fallback.repMin ||
+          repMax !== fallback.repMax)
+      )
+        throw new Error(
+          `${item.name} must use ${fallback.sets} sets of ${fallback.repMin}–${fallback.repMax} for the selected Fewer hard sets approach.`,
+        );
       const importedExercise =
         preserve && !item
           ? {
@@ -4986,6 +6103,9 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
       return {
         id: uid("program-exercise"),
         exerciseId,
+        programmingRole,
+        effortMode:
+          !preserve && item?.kind === "power" ? "velocity-quality" : undefined,
         importedName,
         originalImportedName: importedName,
         exerciseSource: preserve
@@ -4996,12 +6116,22 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
         importedExercise,
         measure: preserve ? value.measure || item?.measure || null : item?.measure,
         matchStatus: preserve
-          ? value.sourceVerified && !item
-            ? "confirmed-custom"
-            : importedMatch.status
+          ? importedExerciseNameNeedsReview(importedName)
+            ? "needs-name-review"
+            : !item
+              ? "unresolved"
+              : importedMatch.status
           : undefined,
         failureTarget: preserve ? Boolean(value.failureTarget) : false,
-        notes: preserve && value.notes ? String(value.notes) : null,
+        notes: preserve
+          ? [
+              ...new Set(
+                [importedLabel.note, value.notes && String(value.notes)].filter(
+                  Boolean,
+                ),
+              ),
+            ].join(" · ") || null
+          : null,
         sets: Array.from({ length: count }, (_, index) => ({
           id: uid("set"),
           weight: setWeights
@@ -5023,12 +6153,18 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
     const location =
       day.location ||
       (profile.environment === "Home gym" ? "Home" : "Commercial gym");
+    const normalizedWorkoutName = normalizeWorkoutName(day.name, day.weekday);
+    const titleParts = workoutDisplayParts(normalizedWorkoutName, day.weekday);
     return {
       id: uid("program-day"),
       weekday: day.weekday,
       location,
       type: "workout",
-      name: normalizeWorkoutName(day.name, day.weekday),
+      name: normalizedWorkoutName,
+      originalImportedWorkoutName: preserve ? normalizedWorkoutName : undefined,
+      workoutName: titleParts.detail ? titleParts.primary : undefined,
+      workoutDescriptor: titleParts.detail || undefined,
+      structureKey: sessionStructureKey(day),
       estimatedMinutes: estimateSessionMinutes(exercises),
       exercises,
     };
@@ -5054,6 +6190,8 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
         exactFrequencyMatch: structuralSelection.exactFrequencyMatch,
         fidelity: structuralSelection.fidelity,
         fallbackReason: structuralSelection.fallbackReason,
+        structureFamily: structuralSelection.structuralFamily,
+        userRequestedSequence: structuralSelection.userRequestedSequence,
       }
     : null;
   const trainingStyle =
@@ -5070,6 +6208,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
           periodization: parsed.periodization,
           namedProgram: parsed.namedProgram,
           fidelity: structuralSelection.fidelity || parsed.fidelity,
+          userRequestedSequence: parsed.userRequestedSequence,
           confidence: parsed.confidence,
           reasonCodes: parsed.reasonCodes,
         }
@@ -5084,6 +6223,21 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
     profileSnapshot: structuredClone(profile),
     splitPreference,
     trainingStyle,
+    trainingStructure: structuralSelection
+      ? {
+          structureFamily:
+            structuralSelection.structuralFamily ||
+            structureIdForTemplate(structuralSelection.templateId),
+          canonicalSessionSequence:
+            structuralSelection.canonicalSessionSequence ||
+            sequenceForTemplate(structuralSelection.templateId),
+          userRequestedSequence: structuralSelection.userRequestedSequence,
+          scheduledSessionSequence: days.map((day) => day.structureKey),
+          schedulingFlexibility: structuralSelection.schedulingFlexibility,
+          recoveryRelationships: structuralSelection.recoveryRelationships,
+          fidelity: structuralSelection.fidelity,
+        }
+      : null,
     conditioning: preserve ? null : conditioningForProfile(profile),
     days,
   };
@@ -5103,12 +6257,22 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
   if (!result.valid) throw new Error(result.errors.join(" "));
   return program;
 }
-export const exerciseName = (value) =>
+const rawExerciseName = (value) =>
   value.originalImportedName ||
   value.importedName ||
   value.importedExercise?.name ||
   exerciseCatalog[value.exerciseId]?.name ||
   "Unknown exercise";
+export const exerciseName = (value) =>
+  splitImportedExerciseLabel(rawExerciseName(value)).name;
+export const exerciseNote = (value) => {
+  const imported = splitImportedExerciseLabel(rawExerciseName(value));
+  return (
+    [...new Set([imported.note, value?.notes && String(value.notes)].filter(Boolean))].join(
+      " · ",
+    ) || null
+  );
+};
 export function templateForToday(program, date = new Date(), selectedDay) {
   if (!program) return null;
   return (
@@ -5203,12 +6367,36 @@ export function warmupForWorkout(workout, profile, program = null) {
 }
 export function refreshWorkoutWarmup(workout, profile, program = null) {
   if (!workout) return workout;
-  const skipped = Boolean(workout.warmup?.skipped);
-  workout.warmup = warmupForWorkout(workout, profile, program);
-  if (workout.warmup) workout.warmup.skipped = skipped;
+  const previous = workout.warmup;
+  const next = warmupForWorkout(workout, profile, program);
+  if (next) {
+    const previousStages = previous?.stages || [];
+    const previousRampSets = new Map(
+      (previous?.rampUpSets || []).flatMap((entry) =>
+        (entry.sets || []).map((set) => [set.id, Boolean(set.completed)]),
+      ),
+    );
+    for (const stage of next.stages || []) {
+      const priorStage = previousStages.find((item) => item.id === stage.id);
+      if (priorStage) {
+        stage.completed = Boolean(priorStage.completed);
+        stage.skipped = Boolean(priorStage.skipped);
+      } else if (stage.exerciseIndex === 0 && !previousStages.length) {
+        stage.completed = Boolean(previous?.completed);
+        stage.skipped = Boolean(previous?.skipped);
+      }
+      for (const entry of stage.rampUpSets || [])
+        for (const set of entry.sets || [])
+          if (previousRampSets.has(set.id))
+            set.completed = previousRampSets.get(set.id);
+    }
+  }
+  workout.warmup = next;
   return workout;
 }
 export function startWorkout(state, template) {
+  if (state.activeWorkout)
+    throw new Error("A workout is already in progress. Resume or finish it first.");
   const supersetErrors = validateSupersetExercises(template?.exercises || []);
   if (supersetErrors.length) throw new Error(supersetErrors[0]);
   const trainingSafety = compileProfileTrainingSafety(
@@ -5242,8 +6430,12 @@ export function startWorkout(state, template) {
     id: uid("active"),
     templateId: template.weekday,
     programDayId: template.id,
+    workoutDateKey: state.selectedDate || isoDay(),
     optionalSessionId: template.optionalSessionId || null,
     name: template.name,
+    workoutName: template.workoutName,
+    workoutDescriptor: template.workoutDescriptor,
+    originalImportedWorkoutName: template.originalImportedWorkoutName,
     startedAt: Date.now(),
     updatedAt: Date.now(),
     exerciseIndex: 0,
@@ -5481,6 +6673,7 @@ export function workoutSetSummary(workout) {
   const planned = sets.filter((set) => set.planned !== false && !set.added);
   const completed = sets.filter((set) => set.completed);
   return {
+    total: sets.length,
     planned: planned.length,
     completedPlanned: planned.filter((set) => set.completed).length,
     completed: completed.length,
@@ -5599,7 +6792,7 @@ export function completeWorkout(state) {
   if (!state.activeWorkout) return state;
   const endedAt = Date.now();
   const summary = workoutSetSummary(state.activeWorkout);
-  const endedEarly = summary.completedPlanned < summary.planned;
+  const endedEarly = summary.completed < summary.total;
   const session = {
     ...structuredClone(state.activeWorkout),
     id: uid("workout"),

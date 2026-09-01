@@ -11,7 +11,7 @@ const page = await context.newPage(); const errors = [];
 page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false }) }));
 await page.goto('http://127.0.0.1:4173/?scratch-plan-qa=1', { waitUntil: 'networkidle' });
-await page.getByRole('button', { name: /START FROM SCRATCH/ }).click();
+await page.getByRole('button', { name: /Start from scratch/i }).click();
 await page.getByRole('heading', { name: 'Create your own week.' }).waitFor();
 assert.equal(await page.getByText('Choose your training days, then build each workout yourself.', { exact: true }).count(), 1);
 assert.equal(await page.getByText('Choose at least one day', { exact: true }).count(), 1);
@@ -57,7 +57,7 @@ async function addExercise(day, query, name) {
   await daySection.getByLabel(`Search exercise for ${day}`).fill(query);
   await daySection.getByRole('option', { name, exact: true }).click();
 }
-await addExercise('Mon', 'Barbell Bench', 'Barbell Bench Press');
+await addExercise('Mon', 'Bench Press', 'Bench Press');
 const monDay = page.locator('.scratch-workout-day').filter({ has: page.getByLabel('Mon workout name') });
 const thuDay = page.locator('.scratch-workout-day').filter({ has: page.getByLabel('Thu workout name') });
 assert.equal(await monDay.getByText('1 exercise · 1 more needed', { exact: true }).count(), 1);

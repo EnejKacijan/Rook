@@ -24,7 +24,7 @@ page.on('console', message => {
   if (message.type() === 'error') errors.push(message.text());
 });
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
-await page.getByRole('button', { name: /I ALREADY HAVE A PLAN/ }).click();
+await page.getByRole('button', { name: /Already have a plan/i }).click();
 
 const screen = page.locator('.import-plan-screen');
 const textarea = page.getByPlaceholder('Paste your workout notes here...');

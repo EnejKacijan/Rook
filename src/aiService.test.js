@@ -16,6 +16,7 @@ import {
   blankState,
   buildProgram,
   exerciseCatalog,
+  exerciseName,
   isExerciseAllowed,
   startWorkout,
   weekday,
@@ -870,6 +871,19 @@ Use double progression.`;
     expect(result.profile.daysPerWeek).toBe(raw.days.length);
     expect(calls).toHaveLength(0);
   });
+  it("keeps a canonical imported exercise separate from its free-text note", async () => {
+    const source =
+      "Monday: Legs\nSingle-Leg Leg Extension (curl masina) — 3×10\nLeg Press — 3×8";
+    const result = await AIService.importTrainingPlan(
+      blankState().profile,
+      source,
+    );
+    const exercise = result.program.days[0].exercises[0];
+    expect(exercise.exerciseId).toBe("single-leg-leg-extension");
+    expect(exercise.importedName).toBe("Single-Leg Leg Extension");
+    expect(exercise.notes).toBe("curl masina");
+    expect(exerciseName(exercise)).toBe("Single-Leg Leg Extension");
+  });
   it("treats an explicit rest-only calendar entry as a rest day instead of an invalid workout", async () => {
     const state = stateWithPlan();
     const raw = {
@@ -959,9 +973,9 @@ Use double progression.`;
       "Potisk s prsi",
       "Veslanje z oporo prsi",
     ]);
-    expect(
-      exercises.every((item) => item.matchStatus === "confirmed-custom"),
-    ).toBe(true);
+    expect(exercises.every((item) => item.matchStatus === "unresolved")).toBe(
+      true,
+    );
     expect(exercises[0].sets.map((set) => set.weight)).toEqual([
       72.5, 72.5, 72.5,
     ]);

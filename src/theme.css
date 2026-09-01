@@ -1,0 +1,721 @@
+/* ROOK theme layer.
+   Three token blocks (light / dark / premium) drive one shared structural layer.
+   The structural rules below are scoped to the "dark family" selector
+   :root:is([data-theme="dark"],[data-theme="premium"]) so Premium reuses every
+   dark-surface rule and only the tokens differ. Light is untouched. */
+
+:root {
+  --rook-bg: #f6f5f2;
+  --rook-page: #eceae5;
+  --rook-surface: #ffffff;
+  --rook-surface-elevated: #fbfaf7;
+  --rook-surface-muted: #f1eee8;
+  --rook-text: #171715;
+  --rook-secondary: #6f6b64;
+  --rook-muted: #8a8783;
+  --rook-border: #dedbd4;
+  --rook-accent: #1f6b4c;
+  --rook-accent-fill: #206b4c;
+  --rook-accent-fill-strong: #17553c;
+  --rook-accent-text: #176b49;
+  --rook-on-accent-fill: #f7f6f2;
+  --rook-accent-soft: #e5efe9;
+  --rook-selected: #191918;
+  --rook-on-selected: #f6f5f2;
+  --rook-warning-surface: #f4ebdd;
+  --rook-warning-text: #7a521c;
+  --rook-disabled-surface: #efede8;
+  --rook-disabled-text: #9b9791;
+  --rook-scrim: rgba(17, 18, 16, .42);
+  --rook-shadow: rgba(0, 0, 0, .14);
+  --rook-timer: #1b1a19;
+  /* shared roles referenced by the dark-family layer; harmless in light */
+  --rook-on-accent: #ffffff;
+  --rook-success: #1f6b4c;
+  --rook-success-soft: #eaf2ee;
+  --rook-success-line: rgba(31, 107, 76, .18);
+  --rook-focus-ring: rgba(31, 107, 76, .35);
+  --rook-selected-line: #191918;
+  --rook-on-success: #ffffff;
+  --rook-nav-active: #171715;
+  --rook-progress: #191918;
+  --rook-accent-strong: #17553c;
+  --rook-set-wash: rgba(31, 107, 76, .075);
+  --rook-motion-press-in: 80ms;
+  --rook-motion-press-out: 120ms;
+  --rook-motion-state: 200ms;
+  --rook-motion-state-long: 240ms;
+  --rook-ease-standard: cubic-bezier(.2, 0, 0, 1);
+  --rook-ease-release: cubic-bezier(.2, .8, .2, 1);
+}
+
+/* ── Dark — "Graphite" ──────────────────────────────────────────────────
+   Neutral, green-undertone surfaces carry depth while ROOK green remains the
+   single interaction accent. Completion uses a quieter green step so it does
+   not compete with the current actionable set. */
+:root[data-theme="dark"] {
+  --rook-page: #0a0c0b;
+  --rook-bg: #111413;
+  --rook-surface: #1c201e;
+  --rook-surface-elevated: #171a19;
+  --rook-surface-muted: #232825;
+  --rook-surface-raised: #2d3330;
+  --rook-text: #ebeeec;
+  --rook-secondary: #a6afaa;
+  --rook-muted: #89918c;
+  --rook-border: #262b28;
+  --rook-border-strong: #363d39;
+  --rook-control-border: #626c66;
+
+  --rook-accent: #4fbf87;
+  --rook-accent-fill: #4fbf87;
+  --rook-accent-fill-strong: #3da571;
+  --rook-accent-text: #4fbf87;
+  --rook-on-accent-fill: #04140c;
+  --rook-accent-strong: #3da571;
+  --rook-accent-soft: #10231a;
+  --rook-accent-hairline: rgba(79, 191, 135, .24);
+  --rook-accent-ring: rgba(79, 191, 135, .6);
+  --rook-accent-glow: rgba(79, 191, 135, .1);
+  --rook-focus-ring: rgba(79, 191, 135, .82);
+  --rook-focus-ring-soft: rgba(79, 191, 135, .58);
+  --rook-on-accent: #04140c;
+
+  --rook-selected: #ebeeec;
+  --rook-selected-line: #ebeeec;
+  --rook-on-selected: #111413;
+
+  --rook-success: #2f9e6b;
+  --rook-success-soft: #12231b;
+  --rook-success-line: rgba(47, 158, 107, .32);
+  --rook-on-success: #ecf5f0;
+
+  --rook-set-active: #171b19;
+  --rook-set-active-line: rgba(79, 191, 135, .16);
+  --rook-set-edited: #1a201d;
+  --rook-set-edited-line: rgba(79, 191, 135, .4);
+  --rook-set-ready: #16241c;
+  --rook-set-ready-line: rgba(79, 191, 135, .36);
+  --rook-set-done: #161d19;
+  --rook-set-done-line: rgba(47, 158, 107, .26);
+  --rook-set-wash: rgba(79, 191, 135, .08);
+
+  --rook-warning-surface: #2a2113;
+  --rook-warning-text: #e6b76c;
+  --rook-warning-line: rgba(230, 183, 108, .24);
+  --rook-warning-tint: rgba(230, 183, 108, .15);
+  --rook-warning-strong: rgba(230, 183, 108, .3);
+  --rook-error-surface: #2e1a1b;
+  --rook-error-text: #f2948e;
+
+  --rook-disabled-surface: #171b19;
+  --rook-disabled-text: #7e8781;
+
+  --rook-coach-surface: #1a1e1c;
+  --rook-coach-text: #d4dad6;
+  --rook-coach-badge-bg: #10231a;
+  --rook-coach-badge-text: #4fbf87;
+
+  --rook-nav-bg: rgba(14, 17, 16, .94);
+  --rook-nav-active: var(--rook-text);
+  --rook-progress: var(--rook-text);
+  --rook-dot: #798480;
+  --rook-week-surface-line: #2f3532;
+
+  --rook-scrim: rgba(4, 7, 6, .72);
+  --rook-shadow: rgba(0, 0, 0, .5);
+  --rook-timer: #1e2522;
+  --rook-art-filter: grayscale(1) sepia(1) hue-rotate(92deg) saturate(2.4) brightness(1.26);
+}
+
+/* ── Premium — "Champagne" ────────────────────────────────────────────────
+   Gold-led identity. Interaction and completion use different steps of the
+   same hue: bright champagne for actions, receded antique gold for success. */
+:root[data-theme="premium"] {
+  --rook-premium-accent: #d7b15a;
+  --rook-premium-accent-muted: #b99a50;
+  --rook-premium-surface: #181714;
+  --rook-premium-border: #34312a;
+
+  --rook-page: #0c0d0b;
+  --rook-bg: #11110f;
+  --rook-surface: var(--rook-premium-surface);
+  --rook-surface-elevated: #1e1d19;
+  --rook-surface-muted: #201e1a;
+  --rook-surface-raised: #28261f;
+  --rook-text: #f4f1e8;
+  --rook-secondary: #b7b1a5;
+  --rook-muted: #aaa49a;
+  --rook-border: var(--rook-premium-border);
+  --rook-border-strong: #48443a;
+  --rook-control-border: #686154;
+
+  --rook-accent: var(--rook-premium-accent);
+  --rook-accent-fill: var(--rook-premium-accent);
+  --rook-accent-fill-strong: #c49b40;
+  --rook-accent-text: var(--rook-premium-accent);
+  --rook-on-accent-fill: #17140d;
+  --rook-accent-strong: #c49b40;
+  --rook-accent-soft: #231f15;
+  --rook-accent-hairline: rgba(215, 177, 90, .28);
+  --rook-accent-ring: rgba(215, 177, 90, .64);
+  --rook-accent-glow: rgba(215, 177, 90, .08);
+  --rook-focus-ring: rgba(215, 177, 90, .84);
+  --rook-focus-ring-soft: rgba(215, 177, 90, .62);
+  --rook-on-accent: #17140d;
+
+  --rook-selected: #242016;
+  --rook-selected-line: #9b7d38;
+  --rook-on-selected: #f0d589;
+
+  --rook-success: var(--rook-premium-accent-muted);
+  --rook-success-soft: transparent;
+  --rook-success-line: transparent;
+  --rook-on-success: #17140d;
+
+  --rook-set-active: rgba(215, 177, 90, .035);
+  --rook-set-active-line: rgba(215, 177, 90, .32);
+  --rook-set-edited: rgba(215, 177, 90, .045);
+  --rook-set-edited-line: rgba(215, 177, 90, .46);
+  --rook-set-ready: rgba(215, 177, 90, .055);
+  --rook-set-ready-line: rgba(215, 177, 90, .58);
+  --rook-set-done: transparent;
+  --rook-set-done-line: transparent;
+  --rook-set-wash: rgba(215, 177, 90, .075);
+
+  --rook-warning-surface: #2c2010;
+  --rook-warning-text: #edb266;
+  --rook-warning-line: rgba(237, 178, 102, .26);
+  --rook-warning-tint: rgba(237, 178, 102, .15);
+  --rook-warning-strong: rgba(237, 178, 102, .32);
+  --rook-error-surface: #331d19;
+  --rook-error-text: #f09a8d;
+
+  --rook-disabled-surface: #1a1b14;
+  --rook-disabled-text: #837d6d;
+
+  --rook-coach-surface: #1e1f17;
+  --rook-coach-text: #dcd6c8;
+  --rook-coach-badge-bg: #2a2517;
+  --rook-coach-badge-text: var(--rook-premium-accent);
+
+  --rook-nav-bg: rgba(20, 21, 15, .96);
+  --rook-nav-active: var(--rook-accent);
+  --rook-progress: var(--rook-accent);
+  --rook-dot: #9a8552;
+  --rook-week-surface-line: #43443a;
+  --rook-week-range: var(--rook-premium-accent);
+  --rook-week-selected-surface: #2a2518;
+  --rook-week-selected-line: var(--rook-premium-accent);
+  --rook-week-selected-text: #f1d58a;
+  --rook-week-planned-text: #d7d2c7;
+  --rook-week-rest-text: #858078;
+
+  --rook-scrim: rgba(0, 0, 0, .76);
+  --rook-shadow: rgba(0, 0, 0, .52);
+  --rook-timer: #181714;
+  --rook-timer-text: #f4f1e8;
+  --rook-timer-secondary: #aaa49a;
+  --rook-timer-border: #34312a;
+  --rook-timer-button: #28261f;
+  --rook-timer-button-text: #d8d3c8;
+  --rook-art-filter: grayscale(1) sepia(1) saturate(1.9) brightness(1.46);
+}
+
+/* Premium follows the operating-system surface brightness while preserving
+   the same restrained gold semantics. Pale champagne is never used as text
+   on the light variant. */
+:root[data-theme="premium"][data-premium-scheme="light"] {
+  --rook-premium-accent: #8a670f;
+  --rook-premium-accent-muted: #9a761a;
+  --rook-premium-surface: #ffffff;
+  --rook-premium-border: #d8d2c7;
+
+  --rook-page: #ece8e0;
+  --rook-bg: #f7f5f0;
+  --rook-surface: var(--rook-premium-surface);
+  --rook-surface-elevated: #fbfaf7;
+  --rook-surface-muted: #f0ece4;
+  --rook-surface-raised: #e9e3d8;
+  --rook-text: #1d1b18;
+  --rook-secondary: #5f5a52;
+  --rook-muted: #6d675e;
+  --rook-border: var(--rook-premium-border);
+  --rook-border-strong: #beb5a7;
+  --rook-control-border: #a89e8f;
+
+  --rook-accent: var(--rook-premium-accent);
+  --rook-accent-fill: #b8891e;
+  --rook-accent-fill-strong: #9d7312;
+  --rook-accent-text: var(--rook-premium-accent);
+  --rook-on-accent-fill: #1d1b18;
+  --rook-accent-strong: #745509;
+  --rook-accent-soft: #f1e8cf;
+  --rook-accent-hairline: rgba(138, 103, 15, .3);
+  --rook-accent-ring: rgba(138, 103, 15, .7);
+  --rook-accent-glow: rgba(138, 103, 15, .07);
+  --rook-focus-ring: rgba(138, 103, 15, .8);
+  --rook-focus-ring-soft: rgba(138, 103, 15, .58);
+  --rook-on-accent: #1d1b18;
+
+  --rook-selected: #f1e8cf;
+  --rook-selected-line: #8a670f;
+  --rook-on-selected: #5e4507;
+
+  --rook-success: var(--rook-premium-accent-muted);
+  --rook-success-soft: transparent;
+  --rook-success-line: transparent;
+  --rook-on-success: #ffffff;
+
+  --rook-set-active: rgba(138, 103, 15, .025);
+  --rook-set-active-line: rgba(138, 103, 15, .38);
+  --rook-set-edited: rgba(138, 103, 15, .035);
+  --rook-set-edited-line: rgba(138, 103, 15, .5);
+  --rook-set-ready: rgba(138, 103, 15, .045);
+  --rook-set-ready-line: rgba(138, 103, 15, .62);
+  --rook-set-done: transparent;
+  --rook-set-done-line: transparent;
+  --rook-set-wash: rgba(138, 103, 15, .065);
+
+  --rook-warning-surface: #f4ebdd;
+  --rook-warning-text: #7a521c;
+  --rook-warning-line: rgba(122, 82, 28, .28);
+  --rook-warning-tint: rgba(122, 82, 28, .12);
+  --rook-warning-strong: rgba(122, 82, 28, .35);
+  --rook-error-surface: #f8e9e7;
+  --rook-error-text: #8c2f2a;
+  --rook-disabled-surface: #ebe7df;
+  --rook-disabled-text: #888177;
+  --rook-coach-surface: #ffffff;
+  --rook-coach-text: #2d2a26;
+  --rook-coach-badge-bg: #f1e8cf;
+  --rook-coach-badge-text: #745509;
+  --rook-nav-bg: rgba(247, 245, 240, .96);
+  --rook-nav-active: var(--rook-accent);
+  --rook-progress: var(--rook-accent);
+  --rook-dot: #8f877b;
+  --rook-week-surface-line: #d8d2c7;
+  --rook-week-range: #745509;
+  --rook-week-selected-surface: #f1e8cf;
+  --rook-week-selected-line: #8a670f;
+  --rook-week-selected-text: #5e4507;
+  --rook-week-planned-text: #39352f;
+  --rook-week-rest-text: #6d675e;
+  --rook-scrim: rgba(29, 27, 24, .46);
+  --rook-shadow: rgba(29, 27, 24, .16);
+  --rook-timer: #1d1b18;
+  --rook-timer-text: #f4f1e8;
+  --rook-timer-secondary: #aaa49a;
+  --rook-timer-border: #34312a;
+  --rook-timer-button: #39352f;
+  --rook-timer-button-text: #f4f1e8;
+  --rook-art-filter: grayscale(1) sepia(1) saturate(2.1) brightness(.86);
+}
+
+/* ── Appearance settings chrome (theme-agnostic) ──────────────────────── */
+.appearance-theme-row {
+  width: 100%;
+  min-height: 62px;
+  padding: 13px 0;
+  border: 0;
+  border-bottom: 1px solid rgba(27, 26, 25, .07);
+  background: transparent;
+  color: #1b1a19;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+}
+.appearance-theme-row > span:first-child { display: flex; flex-direction: column; gap: 5px; }
+.appearance-theme-row strong { font-size: 14px; }
+.appearance-theme-row small { color: #8a8783; font-size: 11px; }
+.appearance-theme-row > span:last-child { color: #a3a09b; font-size: 20px; }
+.appearance-theme-group + .logging-group { margin-top: 28px; }
+
+.theme-choice-layer {
+  position: fixed;
+  z-index: 80;
+  inset: 0;
+  width: min(100%, 500px);
+  margin: 0 auto;
+  background: var(--rook-scrim);
+  display: flex;
+  align-items: flex-end;
+}
+.theme-choice-sheet {
+  width: 100%;
+  padding: 0 22px calc(24px + env(safe-area-inset-bottom));
+  border: 1px solid rgba(27, 26, 25, .08);
+  border-bottom: 0;
+  border-radius: 24px 24px 0 0;
+  background: var(--rook-bg);
+  color: var(--rook-text);
+  box-shadow: 0 -12px 40px var(--rook-shadow);
+}
+.theme-choice-sheet .sheet-grab-zone { height: 42px; display: grid; place-items: center; }
+.theme-choice-sheet .sheet-grab-zone span { width: 38px; height: 4px; border-radius: 999px; background: var(--rook-muted); }
+.theme-choice-sheet > header { display: flex; align-items: center; justify-content: space-between; }
+.theme-choice-sheet h2 { margin: 0; font-size: 24px; }
+.theme-choice-sheet > header button { width: 44px; height: 44px; border: 0; background: transparent; color: inherit; font-size: 25px; }
+.theme-choice-list { margin-top: 12px; }
+.theme-choice-list > button {
+  width: 100%;
+  min-height: 64px;
+  padding: 11px 2px;
+  border: 0;
+  border-bottom: 1px solid var(--rook-border);
+  background: transparent;
+  color: inherit;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  text-align: left;
+}
+.theme-choice-list > button > span { display: flex; flex-direction: column; gap: 4px; }
+.theme-choice-list strong { font-size: 14px; }
+.theme-choice-list small { color: var(--rook-secondary); font-size: 11px; }
+.theme-choice-list i { color: var(--rook-accent); font-style: normal; font-weight: 800; }
+.theme-choice-list .selected strong { color: var(--rook-accent); }
+
+/* ── Shared dark-family structural layer ──────────────────────────────── */
+:root:is([data-theme="dark"],[data-theme="premium"]) { color: var(--rook-text); background: var(--rook-page); }
+:root:is([data-theme="dark"],[data-theme="premium"]) body { color: var(--rook-text); background: var(--rook-page); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.app-shell, .onboarding, .initial-import-screen, .coach-header, .coach-screen > .coach-history-surface) { background: var(--rook-bg); color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.screen, .sheet, .modal-layer > .screen, .workout-confirm, .building-card, .theme-choice-sheet) { background-color: var(--rook-bg); color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .progress-line { background: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .progress-line > span { background: var(--rook-progress); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(h1, h2, h3, strong, label, button) { color: inherit; }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.screen p, .onboarding p, .sheet p, .setting-help, .selection-note, .exercise-meta, .consistency span, .info-row span, .choice-row small, .workout-warmup-toggle small, .appearance-credits p) { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.eyebrow, .step-count, .list-row small, .workout-header small, .set-labels span, .set-row > span, .muted, .week-row small, .up-next small, .stat-grid small, .theme-choice-list small, .workout-title-detail, .workout-title-context, .rest-up-next time, .rest-up-next-descriptor, .rest-up-next > span, .active-workout-notice small, .active-workout-start-lock, .restriction-helper, .profile-current-program p, .change-plan-sheet .plan-choice small, .sheet-footnote, .personal-fields label, .personal-fields label small, .option-card-copy small, .onboarding-group-heading > strong, .onboarding-group-heading > small, .specific-split-toggle small, .physique-review-entry strong, .warmup-layer small, .warmup-ramp > small, .warmup-complete-status small, .action-card small, .scratch-day-status small) { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-row > .navigation-row-end { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-row .navigation-chevron { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .exercise-heading .exercise-user-note,
+:root:is([data-theme="dark"],[data-theme="premium"]) .up-next .up-next-note,
+:root:is([data-theme="dark"],[data-theme="premium"]) .up-next .up-next-prescription { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .up-next .up-next-title { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(a, .text-button, .week-row button, .week-navigation > button, .replacement-secondary > button, .specific-split-toggle, .physique-review-entry, .scratch-days-heading > button, .scratch-add-exercise > button, .import-plan-paste, .disclosure-chevron) { color: var(--rook-accent); }
+
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(input, select, textarea) {
+  border-color: var(--rook-control-border);
+  background-color: var(--rook-surface);
+  color: var(--rook-text);
+  caret-color: var(--rook-accent);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.stepper, .check, .rest-duration-setting select, .exercise-search, .optional-field select, .optional-duration button, .plan-editor-picker-trigger) { border-color: var(--rook-control-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(input, textarea)::placeholder { color: var(--rook-muted); opacity: 1; }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(input, select, textarea):focus-visible { outline-color: var(--rook-focus-ring-soft); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(input, select, textarea):disabled { background-color: var(--rook-disabled-surface); color: var(--rook-disabled-text); opacity: 1; }
+:root:is([data-theme="dark"],[data-theme="premium"]) option { background: var(--rook-surface); color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-trigger {
+  border-color: var(--rook-control-border);
+  background: var(--rook-surface);
+  color: var(--rook-text);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-trigger .placeholder,
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-trigger > i { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-options {
+  border-color: var(--rook-control-border);
+  background: var(--rook-surface);
+  color: var(--rook-text);
+  box-shadow: 0 16px 36px var(--rook-shadow);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-options > button { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-options > button:is(:hover, .is-active) { background: var(--rook-surface-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-options > button[aria-selected="true"] { background: var(--rook-accent-soft); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-options > button[aria-selected="true"],
+:root:is([data-theme="dark"],[data-theme="premium"]) .age-range-options > button > i { color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) input:-webkit-autofill {
+  -webkit-text-fill-color: var(--rook-text);
+  box-shadow: 0 0 0 1000px var(--rook-surface) inset;
+}
+
+/* Primary actions carry the theme accent. */
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.primary, .warmup-finish, .training-safety-actions button, .scratch-day-options button.selected, .coach-screen .today-update-check) { background: var(--rook-accent); color: var(--rook-on-accent); border-color: var(--rook-accent); }
+/* Completion is a success state, not a brand accent. */
+:root:is([data-theme="dark"],[data-theme="premium"]) .set-row.set-done .check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.dark, .option-list .selected-option, .week-strip .selected-day, .onboarding-option.selected-option, .physique-suggestions button.selected) { background: var(--rook-selected); color: var(--rook-on-selected); border-color: var(--rook-selected-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.week-strip .selected-day small, .week-strip .selected-day strong, .onboarding-option.selected-option .option-card-copy small) { color: var(--rook-on-selected); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .onboarding-option.selected-option .option-card-copy small { opacity: .7; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .today-date:not(.selected-day) { border-color: var(--rook-selected-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.secondary, .option-list button:not(.selected-option), .choice-row, .week-strip button:not(.selected-day), .prompt-list button, .action-card, .coach-message, .stepper, .check, .warmup-ramp button, .segmented .active, .move-preview span, .optional-field select, .optional-duration button, .existing-plan-action, .scratch-day-options button, .scratch-workout-day input, .scratch-exercise-results, .scratch-exercise-results button, .plan-editor-exercise, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger, .plan-editor-picker > div, .plan-editor-picker > div > button, .superset-picker > div > button, .photo-inputs label, .physique-suggestions button, .exercise-search, .training-safety-actions.clearance-reasons button + button) { background-color: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .week-strip button:not(.selected-day) { background-color: var(--rook-surface-muted); border-color: var(--rook-week-surface-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .week-strip .today-date:not(.selected-day) { border-color: var(--rook-selected-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .workout-planned .workout-dot { background: var(--rook-dot); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .selected-day.workout-planned .workout-dot { background: var(--rook-on-selected); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .selected-day.workout-completed .completed-dot { background: var(--rook-success); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-format-examples code { background: var(--rook-surface); color: var(--rook-secondary); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .segmented { background: var(--rook-surface-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .segmented button { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .logging-screen .segmented .active { background: var(--rook-selected); color: var(--rook-on-selected); box-shadow: none; }
+
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.bottom-nav, .coach-screen .coach-input) { background: var(--rook-nav-bg); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .user-message {
+  border: 1px solid var(--rook-border-strong);
+  background: var(--rook-surface-raised);
+  color: var(--rook-text) !important;
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-message {
+  border-color: var(--rook-border-strong);
+  background: var(--rook-coach-surface);
+  box-shadow: none;
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-message p { color: var(--rook-coach-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-message header strong { color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-message header span {
+  background: var(--rook-coach-badge-bg);
+  color: var(--rook-coach-badge-text);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .bottom-nav button { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bottom-nav .nav-active { color: var(--rook-nav-active); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bottom-nav .nav-active::after { background: var(--rook-nav-active); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.list-row, .info-row, .toggle-row, .increment-row, .workout-header, .workout-warmup, .warmup-layer, .warmup-ramp, .up-next, .up-next button, .week-row, .coach-history-header, .coach-history-group button, .coach-screen .adapt-review-list > button, .coach-screen .action-card-reviewing .action-card-buttons, .plan-editor-summary, .appearance-theme-row, .appearance-credits, .scratch-plan-action, .rest-training-option, .move-workout-row) { border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.list-row, .workout-warmup-toggle, .up-next button, .plan-editor-summary, .scratch-plan-action, .rest-training-option, .move-workout-row, .coach-history-group button, .coach-screen .adapt-review-list > button) { color: var(--rook-text); }
+
+/* Informational / accent-tinted surfaces. */
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.recommendation, .recommendation.applied, .active-workout-notice, .plan-ready-notice, .goal-plan-preview.has-selection, .setup-confirmation, .plan-conditioning-card, .personalization-summary, .superset-role, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); color: var(--rook-accent); border-color: var(--rook-accent-hairline); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.recommendation strong, .recommendation p, .active-workout-notice strong, .plan-ready-notice strong) { color: var(--rook-accent); }
+/* Success-tinted surfaces. */
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.set-row.set-done, .warmup-ramp button.completed, .warmup-complete-status > span, .coach-screen .action-applied) { background: var(--rook-success-soft); color: var(--rook-success); border-color: var(--rook-success-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.warmup-complete-status, .warmup-ramp button.completed, .coach-screen .action-applied) { color: var(--rook-success); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.offline-banner, .warmup-safety, .recommendation.hold, .training-safety-summary.needs-confirmation, .action-card-conflict) { background: var(--rook-warning-surface); color: var(--rook-warning-text) !important; border-color: var(--rook-warning-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.offline-banner *, .warmup-safety *, .recommendation.hold strong, .recommendation.hold p, .training-safety-summary.needs-confirmation *, .action-card-conflict *) { color: inherit; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-summary { background: var(--rook-surface-muted); color: var(--rook-text); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-exercise.needs-review,
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-summary.has-issues,
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution,
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review { border-color: var(--rook-accent-hairline); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.import-review-summary.has-issues, .import-review-resolution, .bulk-match-review) { background: var(--rook-surface-muted); color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.import-review-summary.has-issues b, .needs-review .plan-editor-summary-action, .bulk-match-review .eyebrow) { color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution > p { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-status { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution .import-review-primary { background: var(--rook-accent-fill) !important; border-color: var(--rook-accent-fill) !important; color: var(--rook-on-accent-fill) !important; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution .import-review-primary :is(strong, i) { color: inherit; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-custom-trigger { background: transparent; border-color: var(--rook-accent-hairline); color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-custom-trigger small { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review > button { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review > button > i { background: var(--rook-surface); border-color: var(--rook-accent-hairline); color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review small { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-compact-editor { border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-compact-editor strong { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .is-import-review .import-day > strong { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker {
+  background: var(--rook-surface-elevated);
+  border-color: var(--rook-border);
+  box-shadow: 0 12px 28px var(--rook-shadow);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor .plan-editor-picker > input {
+  background-color: var(--rook-surface-muted);
+  border-color: var(--rook-control-border);
+  color: var(--rook-text);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker > div {
+  background: var(--rook-surface);
+  border-color: var(--rook-border);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker > div > button {
+  background: var(--rook-surface);
+  color: var(--rook-text);
+  border-color: var(--rook-border);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker > div > button:is(:hover, :focus-visible),
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker > div > button[aria-selected="true"] {
+  background: var(--rook-accent-soft);
+  color: var(--rook-accent);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker .import-review-picker-label {
+  color: var(--rook-muted);
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.coach-note, .coach-empty, .goal-plan-preview, .physique-caution, .photo-guidance, .training-safety-summary, .clearance-limits-block, .set-row.set-future .check) { background: var(--rook-disabled-surface); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(button:disabled, .setting-switch.disabled, .rest-duration-setting.disabled, .set-row.set-future .check) { color: var(--rook-disabled-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) button.secondary:disabled { background: var(--rook-disabled-surface); border-color: var(--rook-border); opacity: 1; }
+:root:is([data-theme="dark"],[data-theme="premium"]) button.button:is(.primary, .dark):disabled {
+  background-color: var(--rook-disabled-surface);
+  color: var(--rook-disabled-text);
+  border-color: var(--rook-border);
+  opacity: 1;
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row { background: transparent; border-color: transparent; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-active { background: var(--rook-set-active); border-color: var(--rook-set-active-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-edited { background: var(--rook-set-edited); border-color: var(--rook-set-edited-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-ready { background: var(--rook-set-ready); border-color: var(--rook-set-ready-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done { background: var(--rook-set-done); border-color: var(--rook-set-done-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-completing::after { background: var(--rook-set-wash); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row .check:disabled { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border-color: var(--rook-border); opacity: 1; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-ready .check:not(:disabled) { background: var(--rook-surface); color: var(--rook-accent); border-color: var(--rook-accent-ring); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done .check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); box-shadow: none; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row :is(.stepper input, select) { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.with-rir select { background: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-control-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-meta { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-history-meta { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-options-button { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-options-button:is(:hover, :focus-visible) { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .workout-exercise-actions .text-button:not(:disabled) { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-active .set-index-label > b { color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-heading > .text-button:disabled { color: var(--rook-muted); opacity: .76; }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.validation-error, .field-error, [role="alert"].error) { color: var(--rook-error-text) !important; }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--rook-error-text); background: var(--rook-error-surface); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
+
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.modal-layer, .workout-confirm-layer, .building-overlay) { background: var(--rook-scrim); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.modal-layer > .screen, .sheet, .workout-confirm, .building-card, .theme-choice-sheet) { box-shadow: 0 -12px 40px var(--rook-shadow); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.modal-drag-handle i, .sheet-grab-zone i, .theme-choice-sheet .sheet-grab-zone span) { background: var(--rook-muted); }
+
+:root:is([data-theme="dark"],[data-theme="premium"]) .rest-timer { background: var(--rook-timer); color: var(--rook-timer-text, var(--rook-text)); border: 1px solid var(--rook-timer-border, var(--rook-border)); box-shadow: 0 8px 24px var(--rook-shadow); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .rest-timer i { background: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .rest-timer .button { background: var(--rook-timer-button, var(--rook-surface-raised)); color: var(--rook-timer-button-text, var(--rook-secondary)); border-color: transparent; }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.consistency-bars i, .workout-dot, .up-next button i) { background: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.consistency-bars .filled, .completed-dot, .chart i, .progression-row.progression-progress > span:first-child > small:first-of-type::before) { background: var(--rook-success); }
+
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.exercise-heading-art-button, .exercise-detail-art) { background: var(--rook-surface-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) img[src*="/assets/wg-"],
+:root:is([data-theme="dark"],[data-theme="premium"]) img[src*="wg-"] { filter: var(--rook-art-filter); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .setting-switch i { background: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .setting-switch i::after { background: var(--rook-text); box-shadow: 0 1px 3px rgba(0, 0, 0, .38); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .setting-switch input:checked + i { background: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .setting-switch input:checked + i::after { background: var(--rook-on-accent); }
+
+@media (forced-colors: active) {
+  .primary, .dark, .selected-option, .week-strip .selected-day, .check { forced-color-adjust: auto; }
+}
+
+/* Current and completed sets stay distinct by shape, weight and tone. */
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-ready .check:not(:disabled) { border-width: 2px; font-weight: 800; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done .check { border-width: 1px; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done :is(.stepper input, select) { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done .set-index-label > b { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-ready .set-index-label > b { color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-ready { box-shadow: none; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done { box-shadow: none; }
+:root[data-theme="premium"] .logging-screen .segmented .active { border: 1px solid var(--rook-selected-line); }
+:root[data-theme="premium"] .week-navigation span {
+  color: var(--rook-week-range);
+}
+:root[data-theme="premium"] .today-screen .week-strip .selected-day {
+  background: var(--rook-week-selected-surface);
+  color: var(--rook-week-selected-text);
+  border-color: var(--rook-week-selected-line);
+}
+.today-screen .week-strip button { position: relative; }
+.today-screen .week-strip .selected-day.day-selection-trace::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+  inset: -2px;
+  padding: 2px;
+  border-radius: inherit;
+  background: conic-gradient(from 0deg, transparent 0 72%, var(--rook-accent) 82%, transparent 94%);
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  animation: rook-day-selection-trace 460ms var(--rook-ease-standard) both;
+}
+:root[data-theme="premium"]
+  .today-screen
+  .week-strip
+  .selected-day
+  :is(small, strong) {
+  color: var(--rook-week-selected-text);
+}
+:root[data-theme="premium"]
+  .today-screen
+  .week-strip
+  .selected-day.workout-planned
+  .workout-dot {
+  background: var(--rook-week-selected-text);
+}
+:root[data-theme="premium"]
+  .today-screen
+  .week-strip
+  .workout-planned:not(.selected-day) {
+  color: var(--rook-week-planned-text);
+}
+:root[data-theme="premium"]
+  .today-screen
+  .week-strip
+  .workout-rest:not(.selected-day) {
+  color: var(--rook-week-rest-text);
+}
+
+:is(.button, .warmup-finish) {
+  transition:
+    transform var(--rook-motion-press-out) var(--rook-ease-release),
+    background-color var(--rook-motion-state) var(--rook-ease-standard),
+    color var(--rook-motion-state) var(--rook-ease-standard),
+    border-color var(--rook-motion-state) var(--rook-ease-standard),
+    filter var(--rook-motion-press-out) var(--rook-ease-standard);
+}
+:is(.button, .warmup-finish):not(:disabled):active {
+  transform: translateY(1px) scale(.985);
+  filter: brightness(.94);
+  transition-duration: var(--rook-motion-press-in);
+}
+.text-button:not(:disabled) {
+  transition:
+    transform var(--rook-motion-press-out) var(--rook-ease-release),
+    color var(--rook-motion-state) var(--rook-ease-standard),
+    background-color var(--rook-motion-state) var(--rook-ease-standard);
+}
+.text-button:not(:disabled):active {
+  transform: scale(.97);
+  transition-duration: var(--rook-motion-press-in);
+}
+:root[data-theme="premium"] :is(.button.primary, .warmup-finish):not(:disabled):active {
+  background: var(--rook-accent-strong);
+  border-color: var(--rook-accent-strong);
+}
+:root[data-theme="premium"] .workout-screen .workout-header > .text-button { color: var(--rook-accent); }
+:root[data-theme="premium"] .workout-screen :is(.warmup-skip, .workout-exercise-actions .text-button, .exercise-options-button) { color: var(--rook-muted); }
+:root[data-theme="premium"] .workout-screen :is(.warmup-skip, .workout-exercise-actions .text-button):is(:hover, :focus-visible) { color: var(--rook-secondary); }
+:root[data-theme="premium"] .workout-screen .set-row.set-done { background: transparent; border-color: transparent; }
+:root[data-theme="premium"] .workout-screen .set-row.set-done .check { background: var(--rook-premium-accent-muted); border-color: var(--rook-premium-accent-muted); color: var(--rook-on-success); }
+:root[data-theme="premium"] .workout-screen .rest-timer { box-shadow: 0 7px 20px var(--rook-shadow); }
+:root[data-theme="premium"] .workout-screen .rest-timer .button {
+  background: var(--rook-timer-button);
+  color: var(--rook-timer-button-text);
+  border-color: transparent;
+}
+@keyframes rook-day-selection-trace {
+  from { opacity: 0; transform: rotate(-30deg); }
+  18% { opacity: 1; }
+  82% { opacity: 1; }
+  to { opacity: 0; transform: rotate(330deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(.button, .warmup-finish, .text-button) {
+    transition: background-color 100ms linear, color 100ms linear, border-color 100ms linear;
+  }
+  :is(.button, .warmup-finish, .text-button):not(:disabled):active { transform: none; filter: none; }
+  .today-screen .week-strip .selected-day.day-selection-trace::after { display: none; animation: none; }
+}
+:root[data-theme="premium"] .brand { color: var(--rook-accent); }
+:root[data-theme="premium"] .today-screen .today-hero > .eyebrow:first-child { color: var(--rook-accent); }
+
+/* Graphite relies on tonal elevation instead of outlining every card. */
+:root[data-theme="dark"] :is(.action-card, .coach-message, .recommendation, .plan-conditioning-card, .personalization-summary, .setup-confirmation, .goal-plan-preview, .coach-note, .coach-empty, .import-review-summary, .plan-editor-summary) { border-color: transparent; }
+:root[data-theme="dark"]
+  .initial-import-screen
+  .plan-editor-cards
+  .plan-editor-exercise {
+  background-color: var(--rook-surface-muted);
+  border-color: var(--rook-border-strong);
+}
+:root[data-theme="dark"] :is(.today-hero, .exercise-preview) { border-color: var(--rook-border); }
+:root[data-theme="dark"] .coach-screen .coach-message { border-color: transparent; }
+:root[data-theme="dark"] :is(.primary, .warmup-finish):active { background: var(--rook-accent-strong); border-color: var(--rook-accent-strong); }
+
+/* Remap component-level legacy green so Dark consistently uses its new accent. */
+:root[data-theme="dark"] :is(.brand, .goal-plan-preview.has-selection > span, .goal-plan-preview.has-selection > strong, .building-card .eyebrow, .building-cancel, .coach-empty .eyebrow, .coach-history-header button:last-child, .coach-screen .adapt-duration-contract, .coach-screen .optional-workout-list > div > span, .setup-confirmation strong, .progression-next, .progression-row.progression-progress > span:first-child > small:first-of-type, .exercise-progression.progression-progress > strong, .training-safety-summary.constraints-active .eyebrow, .training-safety-summary > button, .complete-profile > .eyebrow, .change-plan-sheet .plan-choice i, .superset-next-step, .age-range-options > button > i, .select-all-check input:checked, .import-plan-paste, .coach-history-trigger:is(:hover, :focus-visible)) { color: var(--rook-accent) !important; }
+:root[data-theme="dark"] .setup-confirmation small { color: var(--rook-secondary); }
+:root[data-theme="dark"] :is(.coach-empty, .complete-profile) { border-left-color: var(--rook-accent-hairline); }
+:root[data-theme="dark"] .select-all-check input { accent-color: var(--rook-accent); }
+:root[data-theme="dark"] :is(.coach-screen .optional-workout-list > div > span, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); }
+:root[data-theme="dark"] :is(.restriction-spinner, .button-spinner, .building-spinner, .spinner) { border-color: var(--rook-accent-hairline); border-top-color: var(--rook-accent); }
+:root[data-theme="dark"] :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
+:root[data-theme="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
+:root[data-theme="dark"] .setting-switch input:focus-visible + i { outline-color: var(--rook-focus-ring-soft); }
+:root[data-theme="dark"] :is(.complete-mark, .coach-screen .today-update-check, .coach-screen .adapt-review-list > button.selected .adapt-check) { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+:root[data-theme="dark"] .coach-screen .adapt-review-list > button:disabled .adapt-check { background: var(--rook-disabled-surface); border-color: var(--rook-border); color: var(--rook-disabled-text); }
+:root[data-theme="dark"] .coach-screen .action-card-applied { border-color: var(--rook-success-line); background: var(--rook-success-soft); }
+:root[data-theme="dark"] .coach-screen .action-card-applied > small { color: var(--rook-secondary); }

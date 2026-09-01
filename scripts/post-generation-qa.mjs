@@ -8,6 +8,7 @@ import { createReturningUserFixture } from '../src/demoFixture.js';
 const target = new URL('../artifacts/post-generation/', import.meta.url); await mkdir(target, { recursive: true });
 const output = name => fileURLToPath(new URL(name, target));
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+const fullWeekday = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
 
 async function freshPage() {
   const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' }); const page = await context.newPage(); const errors = [];
@@ -17,9 +18,9 @@ async function freshPage() {
 }
 
 async function buildFirstPlan(page, days, priorities = ['Balanced']) {
-  await page.getByRole('button', { name: 'BUILD MY PLAN' }).click(); await page.getByLabel('Age range').selectOption('18–29'); await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await page.getByRole('button', { name: 'BUILD MY PLAN' }).click(); await page.getByRole('combobox', { name: 'Age range' }).click(); await page.getByRole('option', { name: '18–29' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Build muscle' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click(); await page.getByRole('button', { name: /^Beginner/ }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
-  await page.getByRole('button', { name: `${days.length} days` }).click(); for (const day of days) await page.locator('.day-options').getByRole('button', { name: day, exact: true }).click(); await page.getByRole('button', { name: '45 min' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await page.getByRole('button', { name: `${days.length} days` }).click(); for (const day of days) await page.locator('.day-options').getByRole('button', { name: fullWeekday[day], exact: true }).click(); await page.getByRole('button', { name: '45 min' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Commercial gym' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click(); for (const priority of priorities) await page.locator('.option-list').getByRole('button', { name: priority, exact: true }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: /Balanced starting point/ }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click(); await page.getByRole('button', { name: 'BUILD MY PLAN' }).click(); await page.getByRole('heading', { name: 'Your week is ready.' }).waitFor(); await page.getByRole('button', { name: 'USE THIS PLAN' }).click(); await page.getByText('YOUR PLAN IS READY', { exact: true }).waitFor();
 }

@@ -63,7 +63,7 @@ await page.route('**/api/ai/status', route => route.fulfill({ status: 200, conte
 let aiRequests = 0;
 await page.route('**/api/ai', route => { aiRequests += 1; return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: raw }) }); });
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
-await page.getByRole('button', { name: /I ALREADY HAVE A PLAN/ }).click();
+await page.getByRole('button', { name: /Already have a plan/i }).click();
 async function importHeaderMetrics(eyebrow) {
   const [header, title, firstContent] = await Promise.all([page.locator('.import-plan-screen .detail-header').boundingBox(), page.locator('.import-plan-screen .detail-header > strong').boundingBox(), eyebrow.boundingBox()]);
   assert.ok(Math.abs(title.x + title.width / 2 - (header.x + header.width / 2)) < 1, 'Import plan title is geometrically centered in its header');
@@ -81,6 +81,7 @@ await page.getByRole('button', { name: 'Paste workout notes from clipboard' }).c
 assert.equal(await page.getByPlaceholder('Paste your workout notes here...').inputValue(), 'Bench Press 3×8–10');
 assert.equal(await createPreview.isEnabled(), true, 'clipboard text enables Create Preview');
 await page.getByPlaceholder('Paste your workout notes here...').fill('   ');
+await page.waitForFunction(() => document.querySelector('button') && [...document.querySelectorAll('button')].some(button => button.textContent?.includes('CREATE PREVIEW') && button.disabled));
 assert.equal(await createPreview.isDisabled(), true, 'whitespace-only notes keep Create Preview disabled');
 for (const width of [375, 390, 430, 500]) {
   await page.setViewportSize({ width, height: 844 });
@@ -90,16 +91,32 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText);
 const previewStarted = Date.now();
 await page.getByRole('button', { name: 'CREATE PREVIEW' }).click();
+const buildingOverlay = page.locator('.building-overlay');
+await buildingOverlay.waitFor();
+assert.match(
+  await buildingOverlay.innerText(),
+  /BUILDING YOUR PROGRAM[\s\S]*Building your training week[\s\S]*Applying your preferences and checking the plan/i,
+  'imports reuse the personalized plan-building transition',
+);
+assert.doesNotMatch(await buildingOverlay.innerText(), /Reading your notes/i);
+await page.screenshot({ path: output('390-import-building.png'), fullPage: false });
 await page.getByRole('heading', { name: 'Review your plan' }).waitFor();
 const reviewHeader = await importHeaderMetrics(page.locator('.import-plan-screen > .eyebrow'));
 assert.equal(reviewHeader.contentGap, composeHeader.contentGap, 'compose and review states use the same spacing below the shared header');
 assert.deepEqual({ x: reviewHeader.header.x, width: reviewHeader.header.width }, { x: composeHeader.header.x, width: composeHeader.header.width }, 'header placement stays fixed when preview opens');
 const previewMilliseconds = Date.now() - previewStarted;
 assert.equal(aiRequests, 0, 'clearly structured Notes use the local fast path');
-assert.ok(previewMilliseconds < 1500, `structured preview opens quickly (${previewMilliseconds} ms)`);
+assert.ok(
+  previewMilliseconds >= 1500 && previewMilliseconds < 3000,
+  `structured preview uses the same deliberate plan-building transition (${previewMilliseconds} ms)`,
+);
 assert.equal(await page.getByRole('heading', { name: 'Bring your existing workout into Rook.' }).count(), 0);
 assert.equal(await page.getByText(/Paste it from Notes/).count(), 0);
-assert.equal(await page.getByRole('heading', { name: 'Build Muscle' }).count(), 1);
+assert.equal(
+  await page.locator('.import-plan-meta h2').innerText(),
+  'Build Muscle',
+  'the imported plan name stays normalized',
+);
 assert.equal(await page.getByText('4 days/week', { exact: true }).count(), 1);
 assert.equal(await page.getByText(/0 RIR/).count(), 0);
 assert.equal(await page.locator('.import-day').count(), 4);
@@ -120,7 +137,7 @@ assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getA
 assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'import does not show the generated-plan-only confirmation');
 assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program.source), 'ai-import');
 await page.getByRole('button', { name: 'PROFILE', exact: true }).click(); await page.getByRole('button', { name: 'REPLACE PLAN' }).click(); await page.getByRole('button', { name: /Import a different plan/ }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor(); await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
-assert.equal(await page.getByRole('button', { name: 'PROFILE', exact: true }).getAttribute('aria-current'), 'page', 'replacement import preserves its administrative Profile destination');
+assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getAttribute('aria-current'), 'page', 'replacement import returns to Today');
 assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'replacement import does not borrow the generated-plan success state');
 assert.deepEqual(errors, [], `preview console remains clean: ${errors.join('; ')}`);
 await browser.close();

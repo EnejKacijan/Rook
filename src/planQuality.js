@@ -1,11 +1,13 @@
 import { selectStructuralTemplate } from './splitPreferences.js';
 import { compileProfileTrainingSafety, exerciseAllowedByTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
+import { fewerHardRepRange, inferredProgrammingRole, minimumWorkingSetsForExercise } from './prescriptionPolicy.js';
+import { accumulateStimulus, hypertrophyTargetsForProfile, priorityProgrammingGroupsForProfile, priorityStimulusMusclesForProfile, stimulusMutationPreservesPolicy, stimulusProfileForItem } from './trainingVolume.js';
 
 const WEEKDAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 const UPPER_PATTERNS = new Set(['horizontal-push', 'incline-push', 'horizontal-pull', 'vertical-push', 'vertical-pull', 'shoulder-isolation', 'elbow-flexion', 'elbow-extension', 'power-upper']);
 const LOWER_PATTERNS = new Set(['squat', 'hinge', 'single-leg', 'knee-flexion', 'hip-extension', 'calf', 'power-lower']);
 const INTERCHANGEABLE_COMPOUND_PATTERNS = new Set(['horizontal-push', 'horizontal-pull', 'vertical-push', 'vertical-pull']);
-const TEMPLATE_SESSION_NAMES = { 'T2-FB': ['Full Body A', 'Full Body B'], 'T3-FB': ['Full Body A', 'Full Body B', 'Full Body C'], 'T4-UL': ['Upper A', 'Lower A', 'Upper B', 'Lower B'], 'T5-ULPPL': ['Upper', 'Lower', 'Push', 'Pull', 'Legs'], 'T6-PPL2': ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'] };
+const TEMPLATE_SESSION_NAMES = { 'T2-FB': ['Full Body A', 'Full Body B'], 'T3-FB': ['Full Body A', 'Full Body B', 'Full Body C'], 'T4-UL': ['Upper A', 'Lower A', 'Upper B', 'Lower B'], 'T5-ULPPL': ['Upper', 'Lower', 'Push', 'Pull', 'Legs'], 'T5-PPLUL': ['Push', 'Pull', 'Legs', 'Upper', 'Lower'], 'T6-PPL2': ['Push A', 'Pull A', 'Legs A', 'Push B', 'Pull B', 'Legs B'] };
 
 const unique = values => [...new Set((values || []).filter(Boolean))];
 const boundedNumber = (value, fallback, min, max) => Math.max(min, Math.min(max, Number(value) || fallback));
@@ -31,7 +33,23 @@ function effortPolicyFor(profile = {}) {
   const mode = selected.startsWith('Fewer hard') ? 'fewer-hard' : selected.startsWith('More moderate') ? 'more-moderate' : selected.startsWith('Balanced workload') ? 'balanced' : 'automatic';
   const setRange = mode === 'fewer-hard' ? [2, 2] : mode === 'more-moderate' ? [3, 4] : mode === 'balanced' ? [2, 4] : profile.experience === 'Beginner' ? [2, 3] : [2, 4];
   const rirRange = mode === 'fewer-hard' ? [1, olderAdult ? 2 : 1] : mode === 'more-moderate' ? [2, 3] : mode === 'balanced' ? [1, 3] : [1, 3];
-  return { mode, setRange, rirRange, compoundMinimumRir: olderAdult ? 3 : rirRange[0], isolationMinimumRir: olderAdult ? 2 : rirRange[0], olderAdultConservativeStart: olderAdult, neverRequiresFailure: true };
+  return {
+    mode,
+    setRange,
+    rirRange,
+    compoundMinimumRir: olderAdult ? 3 : rirRange[0],
+    isolationMinimumRir: olderAdult ? 2 : rirRange[0],
+    olderAdultConservativeStart: olderAdult,
+    neverRequiresFailure: true,
+    repPolicy: mode === 'fewer-hard' ? {
+      standardMaximum: 12,
+      hypertrophyCompound: [6, 8],
+      isolation: [8, 12],
+      strengthMain: [3, 6],
+      power: [2, 5],
+      timedUsesCanonicalDuration: true
+    } : null
+  };
 }
 
 export function buildProgrammingContext(profile = {}, catalog = [], historySummary = null) {
@@ -40,6 +58,7 @@ export function buildProgrammingContext(profile = {}, catalog = [], historySumma
   const daysPerWeek = boundedNumber(profile.daysPerWeek, 3, 2, 6);
   const sessionMinutes = boundedNumber(profile.sessionMinutes, 60, 20, 180);
   const priorities = unique([...(profile.priorities || []), ...((profile.confirmedPhysiquePriorities || profile.prioritySources?.physiqueConfirmed || []).map(item => item.trainingPriority || item.label))]).filter(value => value !== 'Balanced');
+  const priorityProgrammingGroups = priorityProgrammingGroupsForProfile(profile);
   const experience = profile.experience || 'Unknown';
   const workload = experience === 'Beginner'
     ? { exercisesPerSession: [Math.max(2, Math.floor(sessionMinutes / 18)), Math.min(6, Math.max(3, Math.ceil(sessionMinutes / 12)))], workingSetsPerSession: [5, Math.min(18, Math.max(8, Math.floor(sessionMinutes / 4)))] }
@@ -70,7 +89,12 @@ export function buildProgrammingContext(profile = {}, catalog = [], historySumma
     effortPreference: profile.effortStyle || null,
     effortPolicy: effortPolicyFor(profile),
     confirmedPriorities: priorities,
-    exerciseSelectionPolicy: profile.goal === 'Build muscle' ? { hypertrophyModalities: 'Machines and free weights are both valid; rank by target fit, stability, comfort, progression and preference.', chestPriority: priorities.includes('Chest') ? 'Start at least one chest-focused session with a stable incline press when compatible equipment is available, then use a complementary horizontal press across the week. Do not default to barbell bench press unless strength or free-weight preference justifies it.' : null } : null,
+    priorityProgrammingGroups,
+    exerciseSelectionPolicy: {
+      hypertrophyModalities: profile.goal === 'Build muscle' ? 'Machines and free weights are both valid; rank by target fit, stability, comfort, progression and preference.' : null,
+      chestPriority: profile.goal === 'Build muscle' && priorities.includes('Chest') ? 'Start at least one chest-focused session with a stable incline press when compatible equipment is available, then use a complementary horizontal press across the week. Do not default to barbell bench press unless strength or free-weight preference justifies it.' : null,
+      mainHorizontalPull: 'When suitable commercial-gym equipment is available, use a stable bilateral row such as chest-supported row, T-bar row, machine row, low row, or seated cable row as the primary horizontal pull. Single-arm cable row is supporting work or a limited-equipment fallback, not the default main back exercise.',
+    },
     exercisePreference: profile.exercisePreference || null,
     freeTextPreferences: profile.trainingPreferences || null,
     restrictedExerciseIds: unique([
@@ -80,10 +104,24 @@ export function buildProgrammingContext(profile = {}, catalog = [], historySumma
     restrictionText: profile.avoid || null,
     trainingSafety,
     desiredExposure,
-    structuralTemplate: { templateId: safetyScopedRegion ? `SAFETY-${safetyScopedRegion === 'upper_body' ? 'UPPER' : 'LOWER'}` : structuralSelection.templateId, role: safetyScopedRegion ? 'literal confirmed clinician scope' : preferenceCanChangeStructure ? 'preference-shaped evidence-informed baseline' : 'evidence-informed baseline', lockedByFrequency: safetyScopedRegion ? false : !preferenceCanChangeStructure, fidelity: safetyScopedRegion ? 'required' : structuralSelection.fidelity },
-    preferredSplit: preferredSplit ? { ...preferredSplit, exactFrequencyMatch: structuralSelection.exactFrequencyMatch, fidelity: structuralSelection.fidelity, requiresMaterialAdaptation: preferenceCanChangeStructure } : null,
+    structuralTemplate: {
+      templateId: safetyScopedRegion ? `SAFETY-${safetyScopedRegion === 'upper_body' ? 'UPPER' : 'LOWER'}` : structuralSelection.templateId,
+      role: safetyScopedRegion ? 'literal confirmed clinician scope' : preferenceCanChangeStructure ? 'preference-shaped evidence-informed baseline' : 'evidence-informed baseline',
+      lockedByFrequency: safetyScopedRegion ? false : !preferenceCanChangeStructure,
+      fidelity: safetyScopedRegion ? 'required' : structuralSelection.fidelity,
+      structureFamily: structuralSelection.structuralFamily,
+      canonicalSessionSequence: structuralSelection.canonicalSessionSequence,
+      userRequestedSequence: safetyScopedRegion || !preferenceCanChangeStructure ? null : structuralSelection.userRequestedSequence,
+      schedulingFlexibility: structuralSelection.schedulingFlexibility,
+      recoveryRelationships: structuralSelection.recoveryRelationships
+    },
+    preferredSplit: preferredSplit ? { ...preferredSplit, exactFrequencyMatch: structuralSelection.exactFrequencyMatch, fidelity: structuralSelection.fidelity, requiresMaterialAdaptation: preferenceCanChangeStructure, userRequestedSequence: structuralSelection.userRequestedSequence } : null,
     trainingStyle: structuralSelection.parsedPreference,
-    volumePolicy: { counting: 'primary=1.0, secondary=0.5, incomplete=0', initialPerMuscleCeiling: volumeCeiling, hardPerMuscleCeiling: 20 },
+    volumePolicy: {
+      counting: 'shared anatomical stimulus profiles; direct=1.0, meaningful secondary=0.5',
+      initialPerMuscleCeiling: volumeCeiling,
+      muscleTargets: profile.goal === 'Build muscle' ? hypertrophyTargetsForProfile(profile) : null,
+    },
     progressionPolicy: { comparableTopRangeExposuresBeforeLoadIncrease: 2, upperLoadJumpLimit: .075, lowerLoadJumpLimit: .10, incompleteSetsCanTriggerIncrease: false, missingLoadCanTriggerIncrease: false, plateauMinimumExposures: 4, plateauMinimumDays: 14 },
     recoveryContext: {
       avoidRepeatedFocusOnAdjacentDays: true,
@@ -116,7 +154,12 @@ export function summarizeTrainingHistory(workouts = [], program = null, { now = 
       entry.appearances++; if (sets.length) entry.completedAppearances++; else entry.skippedAppearances++;
       const loads = sets.map(set => Number(set.weight)).filter(Number.isFinite); const reps = sets.map(set => Number(set.reps)).filter(Number.isFinite); const rir = sets.map(set => Number(set.rir)).filter(Number.isFinite);
       if (loads.length) entry.recentLoadsKg.push(Math.max(...loads)); if (reps.length) entry.recentTopReps.push(Math.max(...reps)); if (rir.length) entry.recentRir.push(Number((rir.reduce((sum, value) => sum + value, 0) / rir.length).toFixed(1)));
-      if (key && sets.length) { const weekVolume = volumeByWeek.get(key) || {}; for (const muscle of byId.get(exercise.exerciseId)?.muscles || []) weekVolume[muscle] = (weekVolume[muscle] || 0) + sets.length; volumeByWeek.set(key, weekVolume); }
+      if (key && sets.length) {
+        const weekVolume = volumeByWeek.get(key) || {};
+        for (const [muscle, credit] of Object.entries(stimulusProfileForItem(byId.get(exercise.exerciseId))))
+          weekVolume[muscle] = Number(((weekVolume[muscle] || 0) + sets.length * credit).toFixed(1));
+        volumeByWeek.set(key, weekVolume);
+      }
       exercises.set(exercise.exerciseId, entry);
     }
     const template = programDays.get(workout.programDayId); if (template) {
@@ -201,16 +244,163 @@ function matchesPreferredSplit(plan, preference, byId = new Map()) {
   return true;
 }
 
+function sessionNameStructureKey(day) {
+  const name = normalized(day?.name);
+  if (/chest (?:and )?back/.test(name)) return 'chest-back';
+  if (/shoulders? (?:and )?arms?/.test(name)) return 'shoulders-arms';
+  if (/full body/.test(name)) return 'full-body';
+  for (const key of ['torso', 'limbs', 'upper', 'lower', 'push', 'pull', 'legs', 'chest', 'back', 'shoulders', 'arms'])
+    if (new RegExp(`\\b${key}\\b`).test(name)) return key;
+  return 'mixed';
+}
+
+export function rawPlanStimulusVolume(plan, catalog = []) {
+  const byId = new Map(catalog.map(item => [item.id, item]));
+  return accumulateStimulus(
+    (plan?.days || []).flatMap(day => day.exercises || []),
+    exerciseId => byId.get(exerciseId),
+    exercise => Number(exercise.sets) || 0,
+  );
+}
+
+function rawSessionSupportsMuscle(day, muscle) {
+  const key = sessionNameStructureKey(day);
+  if (["Chest", "AnteriorDelts", "LateralDelts", "Triceps"].includes(muscle))
+    return ["push", "upper", "full-body", "torso", "chest-back", "shoulders-arms", "chest", "shoulders", "arms", "mixed"].includes(key);
+  if (["Back", "RearDelts", "Biceps"].includes(muscle))
+    return ["pull", "upper", "full-body", "torso", "chest-back", "shoulders-arms", "back", "shoulders", "arms", "mixed"].includes(key);
+  if (["Quads", "Hamstrings", "Glutes", "Calves"].includes(muscle))
+    return ["legs", "lower", "full-body", "limbs", "mixed"].includes(key);
+  return muscle === "Core";
+}
+
+function rawSessionStructureValid(day, exercises, byId) {
+  const name = normalized(day?.name);
+  const focus = /lower|legs?/.test(name) ? 'lower' : /push/.test(name) ? 'push'
+    : /pull/.test(name) ? 'pull' : /upper/.test(name) ? 'upper'
+      : /full body/.test(name) ? 'full' : null;
+  if (!focus || !exercises.length) return true;
+  const patterns = exercises.map(exercise => byId.get(exercise.exerciseId)?.pattern).filter(Boolean);
+  const patternSet = new Set(patterns);
+  const lower = new Set(['squat', 'hinge', 'single-leg', 'knee-flexion', 'hip-extension', 'calf', 'power-lower']);
+  const push = new Set(['horizontal-push', 'incline-push', 'chest-isolation', 'vertical-push', 'shoulder-isolation', 'elbow-extension', 'power-upper']);
+  const pull = new Set(['horizontal-pull', 'vertical-pull', 'elbow-flexion']);
+  const upper = new Set([...push, ...pull]);
+  const count = set => patterns.filter(pattern => set.has(pattern)).length;
+  const has = values => values.some(value => patternSet.has(value));
+  const majority = Math.ceil(patterns.length / 2);
+  const nameMatches = focus === 'push' ? count(push) >= majority
+    : focus === 'pull' ? count(pull) >= majority
+      : focus === 'lower' ? count(lower) >= majority
+        : focus === 'upper' ? count(upper) >= majority
+          : count(upper) > 0 && count(lower) > 0;
+  const rolesSatisfied = focus === 'pull'
+    ? has(['horizontal-pull']) && has(['vertical-pull'])
+    : focus === 'push'
+      ? has(['horizontal-push', 'incline-push']) && has(['vertical-push'])
+      : focus === 'lower'
+        ? has(['squat', 'single-leg']) && has(['hinge', 'knee-flexion', 'hip-extension'])
+        : focus === 'upper'
+          ? has(['horizontal-push', 'incline-push', 'vertical-push']) && has(['horizontal-pull', 'vertical-pull'])
+          : focus === 'full'
+            ? has(['horizontal-push', 'incline-push', 'vertical-push']) && has(['horizontal-pull', 'vertical-pull']) && has(['squat', 'single-leg']) && has(['hinge', 'knee-flexion', 'hip-extension'])
+            : true;
+  return nameMatches && rolesSatisfied;
+}
+
+export function verifiedRawCoverageConstraintReason(plan, profile, catalog, programmingContext, muscle, volume, targets) {
+  const restricted = new Set(programmingContext?.restrictedExerciseIds || []);
+  const direct = catalog.filter(item =>
+    (item.stimulusProfile?.[muscle] || 0) === 1 && !restricted.has(item.id));
+  const compatibleByDay = new Map((plan.days || []).map(day => {
+    const equipment = new Set(equipmentFor(profile, day.location));
+    return [day, direct.filter(item => (item.equipment || []).every(value => equipment.has(value)))];
+  }));
+  const supportedDays = (plan.days || []).filter(day => rawSessionSupportsMuscle(day, muscle));
+  if (!supportedDays.length) return 'split';
+  if (!supportedDays.some(day => (compatibleByDay.get(day) || []).length)) return 'equipment-or-restriction';
+  const fixedTwo = String(profile.effortStyle || '').startsWith('Fewer hard');
+  const priorityMuscles = [...priorityStimulusMusclesForProfile(profile)];
+  const canMutate = ({ addItem, addSets = 0, removeItem = null, removeSets = 0, protectTargets = [] }) => stimulusMutationPreservesPolicy({
+    volume,
+    targets,
+    addProfile: addItem?.stimulusProfile || {},
+    addSets,
+    removeProfile: removeItem?.stimulusProfile || {},
+    removeSets,
+    protectedTargetMuscles: protectTargets,
+    priorityMuscles,
+  });
+  const byId = new Map(catalog.map(item => [item.id, item]));
+  const fits = (day, exercises) => estimatedMinutes(exercises, byId) <= Number(profile.sessionMinutes || day.estimatedMinutes);
+  for (const day of supportedDays) {
+    const compatible = compatibleByDay.get(day) || [];
+    const existing = (day.exercises || []).filter(exercise =>
+      compatible.some(item => item.id === exercise.exerciseId && (item.stimulusProfile?.[muscle] || 0) === 1));
+    if (!fixedTwo) for (const exercise of existing) {
+      const item = compatible.find(candidate => candidate.id === exercise.exerciseId);
+      if (Number(exercise.sets) >= 4 || !canMutate({ addItem: item, addSets: 1 })) continue;
+      const next = day.exercises.map(candidate => candidate === exercise ? { ...candidate, sets: Number(candidate.sets) + 1 } : candidate);
+      if (fits(day, next)) return null;
+      for (const donor of day.exercises) {
+        if (donor === exercise || Number(donor.sets) <= minimumWorkingSetsForExercise(profile, donor)) continue;
+        const donorItem = byId.get(donor.exerciseId);
+        const directDonorMuscle = Object.entries(donorItem?.stimulusProfile || {}).find(([, credit]) => credit === 1)?.[0];
+        const protectTargets = !priorityMuscles.includes(muscle) && directDonorMuscle ? [directDonorMuscle] : [];
+        if (!canMutate({ addItem: item, addSets: 1, removeItem: donorItem, removeSets: 1, protectTargets })) continue;
+        const transferred = day.exercises.map(candidate => candidate === exercise
+          ? { ...candidate, sets: Number(candidate.sets) + 1 }
+          : candidate === donor ? { ...candidate, sets: Number(candidate.sets) - 1 } : candidate);
+        if (fits(day, transferred)) return null;
+      }
+      for (const donor of day.exercises) {
+        if (donor === exercise || donor.programmingRole === 'main' || donor.requiredRole || day.exercises.length <= 2) continue;
+        const donorItem = byId.get(donor.exerciseId);
+        if (!canMutate({ addItem: item, addSets: 1, removeItem: donorItem, removeSets: Number(donor.sets) })) continue;
+        const funded = day.exercises.filter(candidate => candidate !== donor).map(candidate => candidate === exercise ? { ...candidate, sets: Number(candidate.sets) + 1 } : candidate);
+        if (fits(day, funded) && rawSessionStructureValid(day, funded, byId)) return null;
+      }
+    }
+    const hasFreeSlot = (day.exercises || []).length < 8;
+    const existingIds = new Set((day.exercises || []).map(exercise => exercise.exerciseId));
+    const existingPatterns = new Set((day.exercises || []).map(exercise => catalog.find(item => item.id === exercise.exerciseId)?.pattern).filter(Boolean));
+    for (const item of compatible) {
+      if (existingIds.has(item.id) || existingPatterns.has(item.pattern)) continue;
+      const sets = fixedTwo ? 2 : Math.min(3, Math.max(2, Math.ceil(targets[muscle].floor - (volume[muscle] || 0))));
+      if (!canMutate({ addItem: item, addSets: sets })) continue;
+      const candidate = { exerciseId: item.id, sets, repMin: 8, repMax: 12, targetRir: 2, restSeconds: item.kind === 'compound' ? 120 : 60 };
+      if (hasFreeSlot && fits(day, [...day.exercises, candidate])) return null;
+      for (const donor of day.exercises) {
+        if (donor.programmingRole === 'main' || donor.requiredRole) continue;
+        const donorItem = byId.get(donor.exerciseId);
+        if (!canMutate({ addItem: item, addSets: sets, removeItem: donorItem, removeSets: Number(donor.sets) })) continue;
+        const swapped = day.exercises.map(current => current === donor ? candidate : current);
+        if (fits(day, swapped) && rawSessionStructureValid(day, swapped, byId)) return null;
+      }
+    }
+  }
+  return 'time';
+}
+
 export function validateRawPlan(plan, profile = {}, catalog = [], programmingContext = null) {
   const issues = []; const add = (code, message, day = null, exerciseId = null) => issues.push({ code, severity: 'hard', day, exerciseId, message });
   if (!plan || !Array.isArray(plan.days)) return { valid: false, issues: [{ code: 'missing_days', severity: 'hard', day: null, exerciseId: null, message: 'Program is missing days.' }] };
-  const byId = new Map(catalog.map(item => [item.id, item])); const requested = Number(profile.daysPerWeek); const allowedDays = new Set(profile.availableDays?.length ? profile.availableDays : WEEKDAYS); const restricted = new Set(programmingContext?.restrictedExerciseIds || []); const weeklyVolume = {};
+  const byId = new Map(catalog.map(item => [item.id, item])); const requested = Number(profile.daysPerWeek); const allowedDays = new Set(profile.availableDays?.length ? profile.availableDays : WEEKDAYS); const restricted = new Set(programmingContext?.restrictedExerciseIds || []);
   if (trainingSafetyBlocks(programmingContext?.trainingSafety?.status)) add('training_safety', programmingContext.trainingSafety.message || 'Training restrictions need review.');
   if (!Number.isInteger(requested) || requested < 2 || requested > 6) add('invalid_frequency', 'Training frequency must be between 2 and 6 days per week.');
   if (Number.isFinite(requested) && plan.days.length !== requested) add('day_count', `Plan has ${plan.days.length} days instead of ${requested}.`);
   const expectedSessions = programmingContext?.structuralTemplate?.lockedByFrequency ? TEMPLATE_SESSION_NAMES[programmingContext.structuralTemplate.templateId] : null;
   if (expectedSessions && (plan.days.length !== expectedSessions.length || expectedSessions.some(expected => !plan.days.some(day => normalized(day.name).startsWith(normalized(expected)))))) add('structural_template', `Plan does not preserve the required ${programmingContext.structuralTemplate.templateId} session structure.`);
   if (!matchesPreferredSplit(plan, programmingContext?.preferredSplit, byId)) add('split_preference', `Plan does not materially reflect the explicit ${programmingContext.preferredSplit.label} preference.`);
+  const requestedSequence = programmingContext?.structuralTemplate?.userRequestedSequence;
+  if (requestedSequence?.length) {
+    const expectedOrder = Array.from({ length: plan.days.length }, (_, index) => requestedSequence[index % requestedSequence.length]);
+    const actualOrder = [...plan.days]
+      .sort((a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday))
+      .map(sessionNameStructureKey);
+    if (actualOrder.some((value, index) => value !== expectedOrder[index]))
+      add('session_sequence', `Plan does not preserve the requested ${expectedOrder.join(' -> ')} session order.`);
+  }
   const seenDays = new Set(); const signatures = [];
   for (const day of plan.days) {
     if (!WEEKDAYS.includes(day.weekday) || !allowedDays.has(day.weekday) || seenDays.has(day.weekday)) add('invalid_weekday', `Invalid, unavailable, or duplicate weekday ${day.weekday}.`, day.weekday); seenDays.add(day.weekday);
@@ -218,28 +408,42 @@ export function validateRawPlan(plan, profile = {}, catalog = [], programmingCon
     const validLocation = ['Commercial gym', 'Home'].includes(day.location) && !(profile.environment === 'Commercial gym' && day.location !== 'Commercial gym') && !(profile.environment === 'Home gym' && day.location !== 'Home');
     if (!validLocation) add('invalid_location', `Location is incompatible on ${day.weekday}.`, day.weekday);
     const availableEquipment = new Set(equipmentFor(profile, day.location)); const seen = new Set(); const patternCounts = new Map();
-    for (const exercise of day.exercises || []) {
+    for (const [exerciseIndex, exercise] of (day.exercises || []).entries()) {
       const item = byId.get(exercise.exerciseId);
       if (!item) add('unknown_exercise', `Unknown exercise ID ${exercise.exerciseId}.`, day.weekday, exercise.exerciseId);
       else {
         if ((item.equipment || []).some(value => !availableEquipment.has(value))) add('equipment', `${item.name} is unavailable at ${day.location}.`, day.weekday, item.id);
         if (restricted.has(item.id)) add('restriction', `${item.name} conflicts with an explicit restriction.`, day.weekday, item.id);
+        const stableMainRowAvailable = catalog.some(candidate =>
+          ['chest-supported-row', 't-bar-row', 'machine-row', 'low-row', 'seated-cable-row'].includes(candidate.id) &&
+          !restricted.has(candidate.id) &&
+          (candidate.equipment || []).every(value => availableEquipment.has(value))
+        );
+        if (exercise.programmingRole === 'main' && item.id === 'single-arm-cable-row' && stableMainRowAvailable)
+          add('suboptimal_main_row', 'Single-Arm Cable Row should be supporting work when a stable bilateral main row is available.', day.weekday, item.id);
         const loadableAlternative = item.bodyweight && item.kind !== 'power' && catalog.some(candidate => candidate.id !== item.id && candidate.pattern === item.pattern && candidate.primaryMuscles?.[0] === item.primaryMuscles?.[0] && !candidate.bodyweight && candidate.progressionQuality === 'load-and-repetition' && !restricted.has(candidate.id) && (candidate.equipment || []).every(value => availableEquipment.has(value)));
         if (loadableAlternative) add('avoidable_bodyweight', `${item.name} is harder to progress consistently than an available externally loaded alternative.`, day.weekday, item.id);
         if (item.kind === 'compound' && INTERCHANGEABLE_COMPOUND_PATTERNS.has(item.pattern)) patternCounts.set(item.pattern, (patternCounts.get(item.pattern) || 0) + 1);
-        (item.muscles || []).forEach((muscle, index) => { weeklyVolume[muscle] = (weeklyVolume[muscle] || 0) + Number(exercise.sets || 0) * (index === 0 ? 1 : .5); });
       }
       if (seen.has(exercise.exerciseId)) add('duplicate_exercise', `Duplicate exercise ${exercise.exerciseId}.`, day.weekday, exercise.exerciseId); seen.add(exercise.exerciseId);
       const maxRep = item?.measure === 'seconds' ? 600 : 100;
       if (!Number.isInteger(exercise.sets) || exercise.sets < 1 || exercise.sets > 6 || !Number.isInteger(exercise.repMin) || !Number.isInteger(exercise.repMax) || exercise.repMin < 1 || exercise.repMax < exercise.repMin || exercise.repMax > maxRep || !Number.isInteger(exercise.targetRir) || exercise.targetRir < 0 || exercise.targetRir > 4 || !Number.isInteger(exercise.restSeconds) || exercise.restSeconds < 30 || exercise.restSeconds > 300) add('invalid_prescription', `Invalid prescription for ${exercise.exerciseId}.`, day.weekday, exercise.exerciseId);
-      const effortPolicy = programmingContext?.effortPolicy; const compoundLike = item?.kind === 'compound' || item?.kind === 'power';
+      const effortPolicy = programmingContext?.effortPolicy; const compoundLike = item?.kind === 'compound';
       if (effortPolicy?.mode === 'fewer-hard' && exercise.sets !== 2) add('effort_set_count', `${exercise.exerciseId} does not use the selected two-set approach.`, day.weekday, exercise.exerciseId);
+      if (effortPolicy?.mode === 'fewer-hard' && item) {
+        const role = exercise.programmingRole === 'main' || exercise.programmingRole === 'accessory'
+          ? exercise.programmingRole
+          : inferredProgrammingRole(day.exercises, exerciseIndex, candidate => byId.get(candidate.exerciseId));
+        const [expectedMin, expectedMax] = fewerHardRepRange(profile, item, role);
+        if (exercise.repMin !== expectedMin || exercise.repMax !== expectedMax)
+          add('effort_rep_range', `${exercise.exerciseId} must use ${expectedMin}-${expectedMax} for the selected fewer-hard approach.`, day.weekday, exercise.exerciseId);
+      }
       if (effortPolicy?.mode === 'more-moderate' && (exercise.sets < 3 || exercise.sets > 4)) add('effort_set_count', `${exercise.exerciseId} does not use the selected three-to-four-set approach.`, day.weekday, exercise.exerciseId);
-      const minimumRir = compoundLike ? effortPolicy?.compoundMinimumRir : effortPolicy?.isolationMinimumRir;
+      const minimumRir = item?.kind === 'power' ? null : compoundLike ? effortPolicy?.compoundMinimumRir : effortPolicy?.isolationMinimumRir;
       if (Number.isFinite(minimumRir) && exercise.targetRir < minimumRir) add('effort_intensity', `${exercise.exerciseId} is harder than the selected effort policy.`, day.weekday, exercise.exerciseId);
       const restrictionMinimumRir = programmingContext?.trainingSafety?.constraints?.minRirByExerciseId?.[exercise.exerciseId];
       if (Number.isFinite(restrictionMinimumRir) && exercise.targetRir < restrictionMinimumRir) add('restriction_effort', `${exercise.exerciseId} is harder than the explicit training restriction.`, day.weekday, exercise.exerciseId);
-      if (effortPolicy?.mode === 'fewer-hard' && !effortPolicy.olderAdultConservativeStart && exercise.targetRir > 1) add('effort_intensity', `${exercise.exerciseId} is not consistent with the selected hard-set approach.`, day.weekday, exercise.exerciseId);
+      if (effortPolicy?.mode === 'fewer-hard' && item?.kind !== 'power' && !effortPolicy.olderAdultConservativeStart && exercise.targetRir > 1) add('effort_intensity', `${exercise.exerciseId} is not consistent with the selected hard-set approach.`, day.weekday, exercise.exerciseId);
       if (effortPolicy?.mode === 'more-moderate' && exercise.targetRir > 3) add('effort_intensity', `${exercise.exerciseId} is easier than the selected moderate-set range.`, day.weekday, exercise.exerciseId);
     }
     for (const [pattern, count] of patternCounts) if (count > 1) add('interchangeable_redundancy', `Multiple interchangeable ${pattern} compounds occur in one session.`, day.weekday);
@@ -247,7 +451,29 @@ export function validateRawPlan(plan, profile = {}, catalog = [], programmingCon
     const focus = dayFocus(day, byId); if (contradiction(day, focus)) add('name_content_conflict', `Session name and exercise content conflict on ${day.weekday}.`, day.weekday);
     signatures.push({ weekday: day.weekday, ids: new Set((day.exercises || []).map(exercise => exercise.exerciseId)), focus });
   }
-  for (const [muscle, sets] of Object.entries(weeklyVolume)) if (sets > 20) add('weekly_volume_cap', `${muscle} exceeds the hard limit of 20 fractional sets per week.`);
+  const weeklyVolume = rawPlanStimulusVolume(plan, catalog);
+  const muscleTargets = profile.goal === 'Build muscle' ? hypertrophyTargetsForProfile(profile) : null;
+  for (const [muscle, policy] of Object.entries(muscleTargets || {})) {
+    const sets = weeklyVolume[muscle] || 0;
+    const constraint = plan.coverageConstrained?.[muscle];
+    if (sets > policy.hardCap) add('weekly_volume_cap', `${muscle} exceeds the hard limit of ${policy.hardCap} stimulus sets per week.`);
+    if (sets >= policy.floor) {
+      if (constraint) add('coverage_constraint_mismatch', `${muscle} has stale coverage-constraint metadata.`);
+      continue;
+    }
+    if (!constraint) {
+      add('weekly_volume_floor', `${muscle} is below the minimum of ${policy.floor} stimulus sets per week.`);
+      continue;
+    }
+    if (Number(constraint.actual) !== sets || Number(constraint.floor) !== policy.floor)
+      add('coverage_constraint_mismatch', `${muscle} coverage metadata does not match recomputed volume.`);
+    const allowedReasons = new Set(['time', 'split', 'equipment-or-restriction']);
+    const verifiedReason = verifiedRawCoverageConstraintReason(plan, profile, catalog, programmingContext, muscle, weeklyVolume, muscleTargets);
+    if (!allowedReasons.has(constraint.reason) || constraint.reason !== verifiedReason)
+      add('coverage_constraint_reason', `${muscle} coverage reason ${constraint.reason || 'missing'} does not match ${verifiedReason || 'feasible coverage'}.`);
+  }
+  for (const muscle of Object.keys(plan.coverageConstrained || {}))
+    if (!muscleTargets?.[muscle]) add('coverage_constraint_mismatch', `${muscle} is not a recognized hypertrophy coverage target.`);
   const chronological = [...signatures].sort((a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday));
   for (let index = 0; index < chronological.length; index++) {
     const current = chronological[index]; const next = chronological[(index + 1) % chronological.length]; const gap = (WEEKDAYS.indexOf(next.weekday) - WEEKDAYS.indexOf(current.weekday) + 7) % 7;
@@ -260,6 +486,7 @@ export function plannerCatalog(catalog = []) {
   return catalog.map(item => ({
     id: item.id, name: item.name, movementPattern: item.pattern, pattern: item.pattern,
     primaryMuscles: item.muscles?.slice(0, 1) || [], secondaryMuscles: item.muscles?.slice(1) || [], muscles: item.muscles || [],
+    stimulusProfile: stimulusProfileForItem(item),
     equipment: item.equipment || [], role: item.kind, kind: item.kind, unilateral: Boolean(item.unilateral), technicalDifficulty: item.technicalDifficulty || 1, stability: item.stability || 'moderate', fatigueCost: item.fatigueCost || 'moderate', progressionQuality: item.progressionQuality || null, trackingSupport: item.trackingSupport || 'reps-and-load',
     similarityGroup: item.kind === 'compound' && INTERCHANGEABLE_COMPOUND_PATTERNS.has(item.pattern) ? item.pattern : null,
     setupCost: item.kind === 'compound' ? 'moderate' : 'low', bodyweight: Boolean(item.bodyweight), measure: item.measure || 'reps', durationRange: item.durationRange || null

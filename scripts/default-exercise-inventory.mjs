@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { buildProgram, defaultProfile, exerciseCatalog, hasBalancedPullEquipment, validateProgram, WEEKDAYS } from '../src/domain.js';
+import { buildProgram, defaultProfile, exerciseCatalog, validateProgram, WEEKDAYS } from '../src/domain.js';
 
 const goals = ['Build muscle', 'Get stronger', 'General fitness', 'Lose fat', 'Athletic performance'];
 const experiences = ['Beginner', 'Intermediate', 'Advanced'];
@@ -19,7 +19,6 @@ const efforts = [null, 'Fewer hard sets · 2 sets · 0–1 RIR', 'More moderate 
 const contexts = new Map();
 let programs = 0;
 let invalid = 0;
-let unsupported = 0;
 let supportedInvalid = 0;
 const invalidReasons = new Map();
 const supportedInvalidContexts = [];
@@ -30,9 +29,7 @@ function record(overrides, axis) {
   const validation = validateProgram(program, profile, { requireProgramQuality: true });
   if (!validation.valid) {
     invalid += 1;
-    const supported = hasBalancedPullEquipment(profile);
-    if (supported) { supportedInvalid += 1; supportedInvalidContexts.push({ axis, profile, errors: validation.errors }); }
-    else unsupported += 1;
+    supportedInvalid += 1; supportedInvalidContexts.push({ axis, profile, errors: validation.errors });
     for (const error of validation.errors) invalidReasons.set(error, (invalidReasons.get(error) || 0) + 1);
   }
   for (const day of program.days) for (const exercise of day.exercises) {
@@ -55,9 +52,9 @@ const rows = [...contexts.entries()].map(([id, context]) => ({
 })).sort((a, b) => b.count - a.count || a.name.localeCompare(b.name));
 
 const outputDir = new URL('../artifacts/exercise-audit/', import.meta.url); await mkdir(outputDir, { recursive: true });
-await writeFile(new URL('default-exercise-inventory.json', outputDir), JSON.stringify({ generatedAt: new Date().toISOString(), programs, invalid, unsupported, supportedInvalid, supportedInvalidContexts, invalidReasons: [...invalidReasons.entries()].sort((a, b) => b[1] - a[1]), exerciseCount: rows.length, rows }, null, 2));
+await writeFile(new URL('default-exercise-inventory.json', outputDir), JSON.stringify({ generatedAt: new Date().toISOString(), programs, invalid, supportedInvalid, supportedInvalidContexts, invalidReasons: [...invalidReasons.entries()].sort((a, b) => b[1] - a[1]), exerciseCount: rows.length, rows }, null, 2));
 const table = rows.map(row => `| ${row.name} | ${row.pattern} | ${row.equipment.join(', ')} | ${row.progressionQuality} | ${row.stability} | ${row.fatigueCost} | ${row.count} |`).join('\n');
-await writeFile(new URL('default-exercise-inventory.md', outputDir), `# Rook default exercise inventory\n\n${programs} generated program attempts; ${unsupported} intentionally unsupported bodyweight-only contexts; ${supportedInvalid} invalid supported contexts; ${rows.length} exercises selected at least once.\n\n| Exercise | Pattern | Equipment | Progression | Stability | Fatigue | Uses |\n|---|---|---|---|---|---|---:|\n${table}\n`);
-console.log(`Default exercise inventory: ${rows.length} exercises across ${programs} generated-program attempts (${unsupported} unsupported bodyweight-only contexts; ${supportedInvalid} invalid supported contexts).`);
+await writeFile(new URL('default-exercise-inventory.md', outputDir), `# Rook default exercise inventory\n\n${programs} generated program attempts; ${supportedInvalid} invalid contexts; ${rows.length} exercises selected at least once.\n\n| Exercise | Pattern | Equipment | Progression | Stability | Fatigue | Uses |\n|---|---|---|---|---|---|---:|\n${table}\n`);
+console.log(`Default exercise inventory: ${rows.length} exercises across ${programs} generated-program attempts (${supportedInvalid} invalid contexts).`);
 if (invalid) console.log(`Invalid reasons:\n${[...invalidReasons.entries()].sort((a, b) => b[1] - a[1]).map(([reason, count]) => `${count}\t${reason}`).join('\n')}`);
 console.log(rows.map(row => `${row.name}\t${row.pattern}\t${row.equipment.join('/')}\t${row.count}`).join('\n'));

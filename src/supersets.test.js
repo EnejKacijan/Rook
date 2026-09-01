@@ -2,14 +2,18 @@ import { describe, expect, it } from "vitest";
 import {
   isSupersetRoundBoundary,
   nextSupersetStep,
+  pairActiveWorkoutExercises,
   remapCopiedSupersetIds,
   supersetMeta,
   supersetSteps,
   validateSupersetExercises,
+  unpairActiveWorkoutExercises,
 } from "./supersets.js";
 import {
   blankState,
   completeWorkout,
+  loadState,
+  saveState,
   startWorkout,
 } from "./domain.js";
 
@@ -86,6 +90,65 @@ describe("superset scheduling", () => {
 });
 
 describe("superset persistence", () => {
+  it("creates and removes an active-workout pair before work is logged", () => {
+    const exercises = [
+      exercise("a", 2, null),
+      exercise("middle", 2, null),
+      exercise("b", 2, null),
+    ];
+    expect(
+      pairActiveWorkoutExercises(exercises, "a", "b", "active-pair"),
+    ).toBe(true);
+    expect(exercises.map((item) => item.id)).toEqual(["a", "b", "middle"]);
+    expect(exercises.slice(0, 2).map((item) => item.supersetId)).toEqual([
+      "active-pair",
+      "active-pair",
+    ]);
+    expect(unpairActiveWorkoutExercises(exercises, "active-pair")).toBe(true);
+    expect(exercises.slice(0, 2).every((item) => !item.supersetId)).toBe(true);
+  });
+
+  it("refuses to pair or unpair exercises after work is logged", () => {
+    const unpaired = [exercise("a", 2, null), exercise("b", 2, null)];
+    unpaired[1].sets[0].completed = true;
+    expect(
+      pairActiveWorkoutExercises(unpaired, "a", "b", "active-pair"),
+    ).toBe(false);
+    const paired = [exercise("a", 2), exercise("b", 2)];
+    paired[0].sets[0].completed = true;
+    expect(unpairActiveWorkoutExercises(paired, "pair-1")).toBe(false);
+  });
+
+  it("requires equal set counts so round labels stay exact", () => {
+    const unequal = [exercise("a", 3, null), exercise("b", 2, null)];
+    expect(
+      pairActiveWorkoutExercises(unequal, "a", "b", "active-pair"),
+    ).toBe(false);
+    expect(
+      validateSupersetExercises([exercise("a", 3), exercise("b", 2)]),
+    ).toContain("Paired exercises must have the same number of sets.");
+  });
+
+  it("preserves active-only pairing through persisted state reload", () => {
+    const state = blankState();
+    state.activeWorkout = {
+      id: "active-1",
+      startedAt: Date.now(),
+      exerciseIndex: 0,
+      exercises: [
+        { ...exercise("a", 2), exerciseId: "barbell-bench-press" },
+        { ...exercise("b", 2), exerciseId: "machine-row" },
+      ],
+    };
+    saveState(state);
+    const loaded = loadState();
+    expect(loaded.activeWorkout.exercises.map((item) => item.supersetId)).toEqual([
+      "pair-1",
+      "pair-1",
+    ]);
+    localStorage.clear();
+  });
+
   it("rejects orphaned, oversized and non-adjacent groups", () => {
     expect(validateSupersetExercises([exercise("a", 2)])).toHaveLength(1);
     expect(

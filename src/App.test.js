@@ -5,11 +5,19 @@ import {
   displayImportedPlanName,
   displayProgramName,
   effortGuidanceFor,
+  exerciseArt,
+  exerciseThumbnailPresentation,
+  exerciseHistoryEntries,
   exerciseHistoryPerformanceLabel,
   exerciseHistoryWeightLabel,
   formatActiveWorkoutDuration,
+  latestLoggedWeightSet,
   normalizeStepperValue,
+  validStepperDraft,
+  planEditorAllowsSupersets,
   profileTrainingRows,
+  resolvedTheme,
+  setupSelectionValid,
   shouldEnableRir,
   splitAdaptationCopy,
   splitRecommendationCopy,
@@ -17,6 +25,156 @@ import {
   weekLabel,
   workoutTitleParts,
 } from "./App.jsx";
+import { workingSetCanComplete } from "./domain.js";
+
+describe("training setup validation", () => {
+  it("keeps superset planning in Edit plan and out of previews", () => {
+    expect(planEditorAllowsSupersets("edit")).toBe(true);
+    for (const mode of ["review", "scratch", "import", "expert", "read-only"])
+      expect(planEditorAllowsSupersets(mode)).toBe(false);
+  });
+
+  it("resolves explicit and system theme preferences without changing app data", () => {
+    expect(resolvedTheme("system", false)).toBe("light");
+    expect(resolvedTheme("system", true)).toBe("dark");
+    expect(resolvedTheme("light", true)).toBe("light");
+    expect(resolvedTheme("dark", false)).toBe("dark");
+    expect(resolvedTheme("premium", false)).toBe("premium");
+    expect(resolvedTheme("premium", true)).toBe("premium");
+  });
+
+  it("uses only faithful exercise-specific art and no pattern fallback", () => {
+    expect(exerciseArt({ exerciseId: "barbell-bench-press" })).toMatch(/wg-bench-press.*\.svg/);
+    expect(exerciseArt({ exerciseId: "barbell-row" })).toMatch(/wg-barbell-row.*\.svg/);
+    expect(exerciseArt({ exerciseId: "single-leg-leg-press" })).toMatch(
+      /wg-rook-single-leg-leg-press.*\.svg/,
+    );
+    expect(exerciseArt({ exerciseId: "imported-custom-exercise", pattern: "horizontal-pull" })).toBeNull();
+    expect(
+      exerciseArt({
+        exerciseId: "imported-custom-machine-lateral-raise",
+        importedName: "Machine Lateral Raise",
+      }),
+    ).toMatch(/wg-machine-lateral-raise.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "imported-custom-cable-triceps-pushdown",
+        importedName: "Cable Triceps Pushdown",
+      }),
+    ).toMatch(/wg-tricep-pushdown.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "free-text-exercise",
+        name: "Incline DB Press",
+      }),
+    ).toMatch(/wg-incline-dumbbell-press.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "free-text-exercise",
+        title: "Romanian Deadlift",
+      }),
+    ).toMatch(/wg-romanian-deadlift.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "imported-custom-lateral-raises",
+        importedName: "Lateral Raises",
+      }),
+    ).toMatch(/wg-lateral-raise.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "imported-custom-slovenian",
+        importedName: "Poševni potisk z ročkami",
+      }),
+    ).toMatch(/wg-incline-dumbbell-press.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "imported-custom-compact",
+        importedName: "stranskidvigi",
+      }),
+    ).toMatch(/wg-lateral-raise.*\.svg/);
+    expect(
+      exerciseArt({
+        exerciseId: "imported-custom-leg-curl-hold",
+        importedName: "Leg Curl Izometrični Hold",
+      }),
+    ).toMatch(/wg-leg-curl.*\.svg/);
+  });
+
+  it("normalizes only known thumbnail outliers without changing their artwork family", () => {
+    expect(
+      exerciseThumbnailPresentation({ exerciseId: "straight-arm-cable-pulldown" }),
+    ).toEqual({
+      artId: "wg-straight-arm-pulldown",
+      style: {
+        "--exercise-art-scale": 1.12,
+        "--exercise-art-offset-x": "0px",
+        "--exercise-art-offset-y": "1px",
+      },
+    });
+    expect(
+      exerciseThumbnailPresentation({
+        exerciseId: "imported-custom-lateral-raises",
+        importedName: "Lateral Raises",
+      }),
+    ).toEqual({
+      artId: "wg-lateral-raise",
+      style: {
+        "--exercise-art-scale": 1.07,
+        "--exercise-art-offset-x": "0px",
+        "--exercise-art-offset-y": "0px",
+      },
+    });
+    expect(
+      exerciseThumbnailPresentation({ exerciseId: "barbell-bench-press" }),
+    ).toEqual({
+      artId: "wg-bench-press",
+      style: {
+        "--exercise-art-scale": 1,
+        "--exercise-art-offset-x": "0px",
+        "--exercise-art-offset-y": "0px",
+      },
+    });
+  });
+
+  it("accepts bodyweight-only as a complete home-gym setup", () => {
+    expect(
+      setupSelectionValid({
+        environment: "Home gym",
+        equipment: ["bodyweight only"],
+      }),
+    ).toBe(true);
+    expect(
+      setupSelectionValid({ environment: "Home gym", equipment: [] }),
+    ).toBe(false);
+  });
+
+  it("explains when selected equipment requires a different split", () => {
+    expect(
+      splitAdaptationCopy({
+        days: Array.from({ length: 5 }, () => ({})),
+        splitPreference: {
+          label: "Push / Pull / Legs",
+          honored: false,
+          fallbackReason: "split-needs-pull-equipment",
+        },
+      }),
+    ).toBe(
+      "Push / Pull / Legs needs pulling equipment for dedicated pull sessions, so Rook used a structure that fits your available equipment.",
+    );
+    expect(
+      splitAdaptationCopy({
+        days: Array.from({ length: 5 }, () => ({})),
+        splitPreference: {
+          label: "Full Body",
+          honored: false,
+          fallbackReason: "bodyweight-high-frequency-volume",
+        },
+      }),
+    ).toBe(
+      "Rook adapted your Full Body preference to keep a high-frequency bodyweight plan within recoverable weekly volume.",
+    );
+  });
+});
 
 describe("training clearance summary", () => {
   it("labels exclusions and exercise effort limits explicitly", () => {
@@ -206,21 +364,101 @@ describe("exercise history presentation", () => {
         { completed: true, reps: 8 },
         { completed: true, reps: 7 },
       ]),
-    ).toBe("8 reps / 7 reps");
+    ).toBe("8 / 7 reps");
     expect(
       exerciseHistoryPerformanceLabel({ exerciseId: "plank" }, [
         { completed: true, reps: 45 },
       ]),
     ).toBe("45 sec");
   });
+
+  it("keeps varying reps compact and includes RIR only when consistently logged", () => {
+    expect(
+      exerciseHistoryPerformanceLabel({ exerciseId: "barbell-bench-press" }, [
+        { completed: true, reps: 8, rir: 2 },
+        { completed: true, reps: 8, rir: 2 },
+        { completed: true, reps: 7, rir: 2 },
+      ]),
+    ).toBe("8 / 8 / 7 reps · 2 RIR");
+    expect(
+      exerciseHistoryPerformanceLabel({ exerciseId: "barbell-bench-press" }, [
+        { completed: true, reps: 8, rir: 2 },
+        { completed: true, reps: 7, rir: null },
+      ]),
+    ).toBe("8 / 7 reps");
+  });
+
+  it("finds exercise history globally across plans and the latest relevant load", () => {
+    const workouts = [
+      {
+        completedAt: "2026-08-01T12:00:00.000Z",
+        programId: "old-plan",
+        exercises: [
+          {
+            exerciseId: "barbell-bench-press",
+            sets: [{ completed: true, reps: 8, weight: 80 }],
+          },
+        ],
+      },
+      {
+        completedAt: "2026-08-20T12:00:00.000Z",
+        programId: "new-plan",
+        exercises: [
+          {
+            exerciseId: "barbell-bench-press",
+            sets: [{ completed: true, reps: 8, weight: null }],
+          },
+        ],
+      },
+    ];
+    const history = exerciseHistoryEntries(
+      workouts,
+      "barbell-bench-press",
+    );
+    expect(history).toHaveLength(2);
+    expect(latestLoggedWeightSet(history)?.weight).toBe(80);
+  });
 });
 
 describe("workout input and duration contracts", () => {
+  it("requires reps and meaningful load only when the exercise uses external weight", () => {
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "barbell-bench-press" },
+        { weight: null, reps: 8 },
+      ),
+    ).toBe(false);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "barbell-bench-press" },
+        { weight: 100, reps: 8 },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "push-up" },
+        { weight: null, reps: 12 },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "plank" },
+        { weight: null, reps: 0 },
+      ),
+    ).toBe(false);
+  });
+
   it("accepts decimal load entry, decimal commas and integer-only reps", () => {
     expect(normalizeStepperValue("52.5")).toBe(52.5);
     expect(normalizeStepperValue("27,5")).toBe(27.5);
     expect(normalizeStepperValue("8.9", { min: 1, integer: true })).toBe(8);
     expect(normalizeStepperValue("invalid")).toBeUndefined();
+    expect(validStepperDraft("52,")).toBe(true);
+    expect(validStepperDraft("52,5")).toBe(true);
+    expect(validStepperDraft("52.5")).toBe(true);
+    expect(validStepperDraft("52,5.5")).toBe(false);
+    expect(validStepperDraft("8", { integer: true })).toBe(true);
+    expect(validStepperDraft("8,5", { integer: true })).toBe(false);
   });
 
   it("states whether the reviewed duration fits or is the closest valid option", () => {
@@ -259,6 +497,52 @@ describe("workout title hierarchy", () => {
       context: "",
     });
   });
+
+  it("separates confident imported workout modifiers while preserving their language", () => {
+    expect(workoutTitleParts("NOGE B (FUNKCIJA)", "Mon")).toEqual({
+      primary: "NOGE B",
+      detail: "Funkcija",
+      context: "",
+    });
+    expect(workoutTitleParts("NOGE A (MOČ)", "Mon")).toEqual({
+      primary: "NOGE A",
+      detail: "Moč",
+      context: "",
+    });
+    expect(workoutTitleParts("Upper (Chest Focused)", "Mon")).toEqual({
+      primary: "Upper",
+      detail: "Chest focus",
+      context: "",
+    });
+    expect(workoutTitleParts("Pull - Back Width", "Mon")).toEqual({
+      primary: "Pull",
+      detail: "Back Width",
+      context: "",
+    });
+    expect(workoutTitleParts("Lower Hypertrophy", "Mon")).toEqual({
+      primary: "Lower",
+      detail: "Hypertrophy",
+      context: "",
+    });
+    expect(workoutTitleParts("Chest-focused Upper", "Mon")).toEqual({
+      primary: "Upper",
+      detail: "Chest focus",
+      context: "",
+    });
+  });
+
+  it("keeps ambiguous custom workout titles intact", () => {
+    expect(workoutTitleParts("Monday Madness (John's version)", "Mon")).toEqual({
+      primary: "Monday Madness (John's version)",
+      detail: "",
+      context: "",
+    });
+    expect(workoutTitleParts("Upper - Outdoors", "Mon")).toEqual({
+      primary: "Upper - Outdoors",
+      detail: "",
+      context: "",
+    });
+  });
 });
 
 describe("experience-aware effort guidance", () => {
@@ -267,8 +551,8 @@ describe("experience-aware effort guidance", () => {
     expect(JSON.stringify(guidance)).not.toMatch(/\bRIR\b|reps in reserve/i);
     expect(guidance.options.map((option) => option.label)).toEqual([
       "Balanced starting point",
-      "Shorter, focused sessions",
-      "More practice and volume",
+      "Fewer hard sets",
+      "More sets and practice",
     ]);
   });
 

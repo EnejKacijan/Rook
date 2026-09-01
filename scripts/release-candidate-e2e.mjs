@@ -10,7 +10,7 @@ const output = name => fileURLToPath(new URL(name, root));
 const state = createReturningUserFixture(2); const currentWeekday = weekday(); const scheduledToday = state.program.days.find(item => item.weekday === currentWeekday); const day = scheduledToday || state.program.days[0];
 if (!scheduledToday) { const replacedWeekday = day.weekday; day.weekday = currentWeekday; state.profile.availableDays = state.profile.availableDays.map(item => item === replacedWeekday ? currentWeekday : item); }
 state.program.rotationStartDate = null;
-for (const workout of state.workouts) for (const exercise of workout.exercises) exercise.sets.forEach(set => { set.completed = true; set.weight = 50; set.reps = exercise.repMax; set.rir = exercise.targetRir; });
+for (const workout of state.workouts) for (const exercise of workout.exercises) exercise.sets.forEach(set => { set.completed = true; set.weight = 100; set.reps = exercise.repMax; set.rir = exercise.targetRir; });
 state.selectedDay = day.weekday; state.selectedDate = isoDay(); let recurringProgram = null; const initialWorkoutCount = state.workouts.length;
 
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });

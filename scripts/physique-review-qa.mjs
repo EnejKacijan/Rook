@@ -13,6 +13,7 @@ const suggestionData = { status: 'success', summary: 'These are optional trainin
   { priorityId: 'back_width', label: 'Back width', priorityLevel: 'moderate', reason: 'Back width may benefit from additional focus if you want it.' }
 ], retryMessage: null };
 const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=', 'base64');
+const fullWeekday = { Mon: 'Monday', Tue: 'Tuesday', Wed: 'Wednesday', Thu: 'Thursday', Fri: 'Friday', Sat: 'Saturday', Sun: 'Sunday' };
 
 async function routes(page, result = suggestionData, delay = 700) {
   await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true, provider: 'qa', model: 'vision-qa' }) }));
@@ -20,9 +21,9 @@ async function routes(page, result = suggestionData, delay = 700) {
 }
 async function reachPriorities(page) {
   await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
-  await page.getByLabel('Age range').selectOption('18–29'); await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await page.getByRole('combobox', { name: 'Age range' }).click(); await page.getByRole('option', { name: '18–29' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   for (const choice of ['Build muscle', 'Intermediate', '4 days']) { await page.getByRole('button', { name: choice, exact: false }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click(); }
-  for (const day of ['Mon', 'Tue', 'Thu', 'Sat']) await page.getByRole('button', { name: day, exact: true }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
+  for (const day of ['Mon', 'Tue', 'Thu', 'Sat']) await page.getByRole('button', { name: fullWeekday[day], exact: true }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: '60 min' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click(); await page.getByRole('button', { name: 'Commercial gym' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByText('What would you like to emphasize?').waitFor();
 }

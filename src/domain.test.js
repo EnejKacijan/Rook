@@ -1,6 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  EXERCISE_ILLUSTRATION_EQUIVALENTS,
+  ROOK_ADAPTED_ILLUSTRATIONS,
   PROGRAM_TEMPLATES,
+  PHYSIQUE_PRIORITY_OPTIONS,
   STORAGE_KEY,
   WEEKDAYS,
   adaptTodayProposal,
@@ -11,6 +14,7 @@ import {
   authoritativeImportedWeights,
   blankState,
   buildProgram,
+  buildReplacementProgram,
   candidateScore,
   coachActionConflict,
   coachContext,
@@ -25,10 +29,14 @@ import {
   estimateSessionMinutes,
   exerciseCatalog,
   exerciseMatchesQuery,
+  exerciseNameWithoutExecutionModifier,
   exerciseName,
+  exerciseNote,
   exerciseValueLabel,
   firstScheduledDate,
   hasBalancedPullEquipment,
+  hypertrophyVolumeTargets,
+  importedExerciseNameNeedsReview,
   isExerciseAllowed,
   isExerciseAutoGenerationBlocked,
   isoDay,
@@ -44,13 +52,19 @@ import {
   previousExercise,
   progressionFor,
   programWarnings,
+  priorityProgrammingGroupsForProfile,
   proposeOptionalStrengthWorkout,
   proposeWeekScheduleChange,
   recentExerciseProgress,
   replacementCandidates,
+  replacementProgramDifference,
   roundedEstimate,
   saveState,
+  sessionStructureKey,
+  splitImportedExerciseLabel,
   startWorkout,
+  stimulusProfileForExercise,
+  stimulusMutationPreservesPolicy,
   storedWeight,
   targetLabel,
   templateIdForFrequency,
@@ -60,7 +74,9 @@ import {
   weekday,
   weeklyDirectVolume,
   weeklyFractionalVolume,
+  weeklyStimulusVolume,
   workoutSetSummary,
+  workingSetCanComplete,
 } from "./domain.js";
 
 function profile(overrides = {}) {
@@ -111,6 +127,148 @@ describe("personalized training domain", () => {
     });
   });
 
+  it("separates imported exercise annotations from canonical identities", () => {
+    expect(
+      splitImportedExerciseLabel("Single-Leg Leg Extension (curl masina"),
+    ).toEqual({
+      name: "Single-Leg Leg Extension",
+      note: "curl masina",
+    });
+    expect(splitImportedExerciseLabel("Bench Press (paused)")).toEqual({
+      name: "Bench Press",
+      note: "paused",
+    });
+    expect(splitImportedExerciseLabel("Potisk z ročkami (poševna klop)")).toEqual(
+      {
+        name: "Potisk z ročkami (poševna klop)",
+        note: null,
+      },
+    );
+    const legacyExercise = {
+      exerciseId: "single-leg-leg-extension",
+      originalImportedName: "Single-Leg Leg Extension (curl mašina",
+      notes: "Slow tempo",
+    };
+    expect(exerciseName(legacyExercise)).toBe("Single-Leg Leg Extension");
+    expect(exerciseNote(legacyExercise)).toBe("curl mašina · Slow tempo");
+  });
+
+  it("prefers stable catalog identities when an imported library name overlaps", () => {
+    expect(matchImportedExerciseName("Machine Lateral Raise")).toEqual({
+      exerciseId: "machine-lateral-raise",
+      status: "matched",
+    });
+    expect(exerciseCatalog["machine-lateral-raise"].artId).toBe(
+      "wg-machine-lateral-raise",
+    );
+    expect(matchImportedExerciseName("Cable Triceps Pushdown")).toEqual({
+      exerciseId: "cable-triceps-pressdown",
+      status: "alias",
+    });
+  });
+
+  it("includes the complete Workout Guide catalog without auto-programming unreviewed additions", () => {
+    const sourced = Object.values(exerciseCatalog).filter(
+      (item) => item.visualSource === "Workout Guide",
+    );
+    expect(sourced.length).toBeGreaterThan(302);
+    expect(new Set(sourced.map((item) => item.artId)).size).toBe(302);
+    expect(
+      sourced
+        .filter((item) => item.id.startsWith("wg-"))
+        .every((item) => isExerciseAutoGenerationBlocked(item)),
+    ).toBe(true);
+  });
+
+  it("keeps every shared exercise illustration mapping explicit and resolvable", () => {
+    for (const [exerciseId, sourceSlug] of Object.entries(
+      EXERCISE_ILLUSTRATION_EQUIVALENTS,
+    )) {
+      expect(exerciseCatalog[exerciseId]).toBeDefined();
+      expect(exerciseCatalog[exerciseId].artId).toBe(`wg-${sourceSlug}`);
+    }
+    expect(exerciseCatalog["single-leg-leg-press"].artId).toBe(
+      "wg-rook-single-leg-leg-press",
+    );
+    for (const [exerciseId, assetSlug] of Object.entries(
+      ROOK_ADAPTED_ILLUSTRATIONS,
+    ))
+      expect(exerciseCatalog[exerciseId].artId).toBe(`wg-${assetSlug}`);
+    expect(exerciseCatalog["low-row"].artId).toBe("wg-machine-row");
+    expect(exerciseCatalog["machine-row"].artId).toBe("wg-machine-row");
+    expect(exerciseCatalog["machine-row"].artId).not.toBe("wg-barbell-row");
+    expect(exerciseCatalog["dumbbell-shoulder-press"].artId).toBe(
+      "wg-standing-dumbbell-press",
+    );
+    expect(exerciseCatalog["standing-calf-raise-machine"].artId).toBe(
+      "wg-standing-calf-raise",
+    );
+    expect(exerciseCatalog["high-to-low-cable-fly"].artId).toBe(
+      "wg-cable-fly",
+    );
+    expect(exerciseCatalog["close-grip-push-up"].artId).toBe(
+      "wg-diamond-push-up",
+    );
+    expect(exerciseCatalog["reverse-lunge"].artId).toBe("wg-reverse-lunge");
+    expect(exerciseCatalog["preacher-curl"].artId).toBe("wg-preacher-curl");
+    expect(exerciseCatalog["machine-preacher-curl"].artId).toBe(
+      "wg-preacher-curl",
+    );
+    expect(matchImportedExerciseName("Cable Low Row")).toEqual({
+      exerciseId: "seated-cable-row",
+      status: "alias",
+    });
+    expect(
+      matchImportedExerciseName("Calf Raises na Leg Press mašini"),
+    ).toEqual({
+      exerciseId: "leg-press-calf-raise",
+      status: "alias",
+    });
+    expect(
+      matchImportedExerciseName("Dvigi na prste na Leg Press masini"),
+    ).toEqual({
+      exerciseId: "leg-press-calf-raise",
+      status: "alias",
+    });
+    for (const [label, sourceSlug] of [
+      ["Monster Walk", "banded-monster-walk"],
+      ["Lateral Skater Hops", "skater-hop"],
+      ["Single-Leg Sit-to-Stand", "single-leg-box-squat"],
+      ["Sobno kolo", "cycling"],
+    ]) {
+      const match = matchImportedExerciseName(label);
+      expect(match.status, label).toBe("alias");
+      expect(exerciseCatalog[match.exerciseId].artId, label).toBe(
+        `wg-${sourceSlug}`,
+      );
+    }
+    expect(matchImportedExerciseName("Adductor")).toEqual({
+      exerciseId: "hip-adduction-machine",
+      status: "alias",
+    });
+    expect(exerciseCatalog["hip-adduction-machine"].artId).toBe(
+      "wg-hip-adduction-machine",
+    );
+    expect(matchImportedExerciseName("Calf Raises na Leg Pressu")).toEqual({
+      exerciseId: "leg-press-calf-raise",
+      status: "alias",
+    });
+  });
+
+  it("requires faithful artwork for every exercise ROOK may auto-generate", () => {
+    const missing = Object.values(exerciseCatalog)
+      .filter(
+        (item) =>
+          !item.id.startsWith("wg-") &&
+          !isExerciseAutoGenerationBlocked(item) &&
+          !item.artId,
+      )
+      .map((item) => item.name);
+    expect(missing).toEqual([]);
+    expect(isExerciseAutoGenerationBlocked("pallof-press")).toBe(true);
+    expect(exerciseCatalog["pallof-press"].artId).toBe("wg-pallof-press");
+  });
+
   it("searches canonical names and aliases", () => {
     expect(
       exerciseMatchesQuery(exerciseCatalog["romanian-deadlift"], "RDL"),
@@ -124,6 +282,45 @@ describe("personalized training domain", () => {
     expect(
       exerciseMatchesQuery(exerciseCatalog["barbell-row"], "bent over row"),
     ).toBe(true);
+    expect(
+      exerciseMatchesQuery(exerciseCatalog["lateral-raise"], "lateral raises"),
+    ).toBe(true);
+  });
+
+  it("resolves common plural free-text names for every illustrated canonical exercise", () => {
+    const pluralize = (value) => {
+      const words = value.split(/\s+/u);
+      const last = words.at(-1);
+      if (/[^aeiou]y$/iu.test(last))
+        words[words.length - 1] = `${last.slice(0, -1)}ies`;
+      else if (/(?:ss|x|z|ch|sh)$/iu.test(last))
+        words[words.length - 1] = `${last}es`;
+      else if (!/s$/iu.test(last)) words[words.length - 1] = `${last}s`;
+      return words.join(" ");
+    };
+    const illustratedCanonicalExercises = Object.values(exerciseCatalog).filter(
+      (item) => item.artId && !item.id.startsWith("wg-"),
+    );
+    expect(illustratedCanonicalExercises.length).toBeGreaterThan(100);
+    for (const item of illustratedCanonicalExercises) {
+      for (const label of [item.name, pluralize(item.name)]) {
+        const match = matchImportedExerciseName(label);
+        expect(match.exerciseId, label).toBeTruthy();
+        expect(exerciseCatalog[match.exerciseId].artId, label).toBeTruthy();
+      }
+    }
+    expect(matchImportedExerciseName("Lateral Raises")).toEqual({
+      exerciseId: "lateral-raise",
+      status: "alias",
+    });
+    expect(matchImportedExerciseName("Cable Flies")).toEqual({
+      exerciseId: "cable-fly",
+      status: "alias",
+    });
+    expect(matchImportedExerciseName("Bench Presses")).toEqual({
+      exerciseId: "barbell-bench-press",
+      status: "alias",
+    });
   });
 
   it("adds the four high-value catalog gaps with valid metadata", () => {
@@ -255,12 +452,14 @@ describe("personalized training domain", () => {
     delete state.profile.restTimerAutoStart;
     delete state.profile.restTimerSeconds;
     delete state.profile.prioritySources;
+    delete state.profile.themePreference;
     state.profile.increments = { barbell: 3 };
     saveState(state);
     const loaded = loadState();
     expect(loaded.profile.restTimerEnabled).toBe(true);
     expect(loaded.profile.restTimerAutoStart).toBe(true);
     expect(loaded.profile.restTimerSeconds).toBeNull();
+    expect(loaded.profile.themePreference).toBe("light");
     expect(loaded.profile.prioritySources.manual).toEqual(["Back"]);
     expect(loaded.profile.increments).toMatchObject({
       barbell: 3,
@@ -268,6 +467,34 @@ describe("personalized training domain", () => {
       machines: 5,
       cables: 2.5,
     });
+  });
+  it("restores per-exercise rest recommendations in existing imported plans and active workouts", () => {
+    const state = stateFor();
+    state.program.source = "ai-import";
+    const planned = state.program.days[0].exercises[0];
+    const expectedRest = exerciseCatalog[planned.exerciseId].restSeconds;
+    planned.importedName = exerciseCatalog[planned.exerciseId].name;
+    planned.restSeconds = null;
+    state.activeWorkout = startWorkout({ workouts: [] }, state.program.days[0]);
+    state.activeWorkout.exercises[0].restSeconds = null;
+    saveState(state);
+
+    const loaded = loadState();
+    expect(loaded.program.days[0].exercises[0].restSeconds).toBe(expectedRest);
+    expect(loaded.activeWorkout.exercises[0].restSeconds).toBe(expectedRest);
+  });
+  it("uses system appearance for new profiles and preserves an explicit theme", () => {
+    expect(blankState().profile.themePreference).toBe("system");
+    const state = stateFor();
+    state.profile.themePreference = "dark";
+    saveState(state);
+    expect(loadState().profile.themePreference).toBe("dark");
+  });
+  it("persists a premium theme preference", () => {
+    const state = blankState();
+    state.profile.themePreference = "premium";
+    saveState(state);
+    expect(loadState().profile.themePreference).toBe("premium");
   });
   it("builds meaningfully different valid programs from different complete profiles", () => {
     const profiles = [
@@ -315,7 +542,7 @@ describe("personalized training domain", () => {
       2: "T2-FB",
       3: "T3-FB",
       4: "T4-UL",
-      5: "T5-ULPPL",
+      5: "T5-PPLUL",
       6: "T6-PPL2",
     };
     for (const [days, templateId] of Object.entries(expected)) {
@@ -334,6 +561,53 @@ describe("personalized training domain", () => {
         validateProgram(program, p, { requireProgramQuality: true }).valid,
       ).toBe(true);
     }
+  });
+  it("builds a deterministic but meaningfully different replacement plan", () => {
+    const p = profile({
+      experience: "Intermediate",
+      daysPerWeek: 4,
+      availableDays: ["Mon", "Tue", "Thu", "Fri"],
+      sessionMinutes: 60,
+    });
+    const current = buildProgram(p);
+    const loggedId = current.days[0].exercises[0].exerciseId;
+    const workouts = [
+      {
+        exercises: [
+          {
+            exerciseId: loggedId,
+            sets: [{ completed: true, weight: 40, reps: 8 }],
+          },
+        ],
+      },
+    ];
+    const first = buildReplacementProgram(p, current, workouts);
+    const repeated = buildReplacementProgram(p, current, workouts);
+    const difference = replacementProgramDifference(first, current);
+    expect(first.days.map((day) => day.weekday)).toEqual(
+      current.days.map((day) => day.weekday),
+    );
+    expect(first.days.map((day) => day.name)).toEqual(
+      current.days.map((day) => day.name),
+    );
+    expect(first.days.flatMap((day) => day.exercises.map((item) => item.exerciseId))).toEqual(
+      repeated.days.flatMap((day) =>
+        day.exercises.map((item) => item.exerciseId),
+      ),
+    );
+    expect(difference.changed).toBeGreaterThanOrEqual(
+      first.replacementSummary.minimumChanged,
+    );
+    expect(difference.ratio).toBeGreaterThanOrEqual(0.3);
+    expect(first).toMatchObject({
+      source: "personalized-replacement",
+      generatorVersion: 1,
+      replacementGeneration: 1,
+      variantSeed: repeated.variantSeed,
+    });
+    expect(
+      validateProgram(first, p, { requireProgramQuality: true }).valid,
+    ).toBe(true);
   });
   it("globally blocks excluded exercises and migrates them out of saved plans and pending workouts", () => {
     const p = profile();
@@ -563,7 +837,8 @@ describe("personalized training domain", () => {
           (exercise) =>
             exercise.repMin === 2 &&
             exercise.repMax === 5 &&
-            exercise.targetRir >= 3,
+            exercise.targetRir === null &&
+            exercise.effortMode === "velocity-quality",
         ),
     ).toBe(true);
   });
@@ -709,6 +984,46 @@ describe("personalized training domain", () => {
       new Set(allowed.map((item) => item.pattern)).size,
     ).toBeGreaterThanOrEqual(8);
   });
+  it("preserves an imported workout title while storing its confident display hierarchy", () => {
+    const p = profile({
+      daysPerWeek: 1,
+      availableDays: ["Mon"],
+      sessionMinutes: null,
+    });
+    const program = normalizeGeneratedProgram(
+      {
+        name: "Imported plan",
+        days: [
+          {
+            weekday: "Mon",
+            location: "Commercial gym",
+            name: "NOGE B (FUNKCIJA)",
+            estimatedMinutes: 40,
+            exercises: [
+              {
+                exerciseId: "leg-press",
+                sourceName: "Leg Press",
+                sets: 2,
+                repMin: 8,
+                repMax: 10,
+                targetRir: null,
+                restSeconds: null,
+              },
+            ],
+          },
+        ],
+      },
+      p,
+      { preservePrescription: true },
+    );
+    expect(program.days[0]).toMatchObject({
+      name: "NOGE B (FUNKCIJA)",
+      originalImportedWorkoutName: "NOGE B (FUNKCIJA)",
+      workoutName: "NOGE B",
+      workoutDescriptor: "Funkcija",
+    });
+  });
+
   it("round-trips the regression import exercise identities and prescriptions without trusting suggested substitutions", () => {
     const p = profile({
       daysPerWeek: 4,
@@ -910,15 +1225,66 @@ describe("personalized training domain", () => {
     expect(matchImportedExerciseName("Rear-foot-elevated split squat")).toEqual(
       { exerciseId: "bulgarian-split-squat", status: "alias" },
     );
+    expect(matchImportedExerciseName("pullups")).toEqual({
+      exerciseId: "pull-up",
+      status: "alias",
+    });
+    expect(matchImportedExerciseName("LowToHigh Cable Fly")).toEqual({
+      exerciseId: "low-to-high-cable-fly",
+      status: "alias",
+    });
     for (const name of [
-      "Machine Incline Press",
-      "Dumbbell Chest-Supported Row",
-      "Landmine Press",
+      "Rotating Iso Chest Sweep",
+      "Offset Aurora Row",
+      "Diagonal Atlas Press",
     ])
       expect(matchImportedExerciseName(name)).toEqual({
         exerciseId: null,
         status: "unresolved",
       });
+  });
+  it("reuses base movement identity for safe execution-only variants", () => {
+    for (const [label, exerciseId] of [
+      ["Leg Curl Izometrični Hold", "leg-curl"],
+      ["Seated Leg Curl Isometric Hold", "seated-leg-curl"],
+      ["Bench Press Paused", "barbell-bench-press"],
+      ["Tempo Pull-up", "pull-up"],
+      ["Romanian Deadlift Slow Eccentric", "romanian-deadlift"],
+    ])
+      expect(matchImportedExerciseName(label), label).toEqual({
+        exerciseId,
+        status: "alias",
+      });
+    expect(exerciseNameWithoutExecutionModifier("Leg Curl Izometrični Hold")).toBe(
+      "leg curl",
+    );
+    expect(matchImportedExerciseName("Cable Rotation Isometric Hold")).toEqual({
+      exerciseId: null,
+      status: "unresolved",
+    });
+  });
+  it("resolves safe Slovenian exercise names while preserving ambiguous labels", () => {
+    for (const [label, exerciseId] of [
+      ["Poševni potisk z ročkami", "incline-dumbbell-press"],
+      ["stranski-dvigi", "lateral-raise"],
+      ["Veslanje na škripcu sede", "seated-cable-row"],
+      ["Romunski_mrtvi-dvig", "romanian-deadlift"],
+      ["Sklece", "push-up"],
+      ["Zgibi", "pull-up"],
+      ["Veslanje na ergometru", "wg-rowing"],
+    ]) {
+      const match = matchImportedExerciseName(label);
+      expect(match, label).toEqual({ exerciseId, status: "alias" });
+      expect(exerciseCatalog[exerciseId].artId, label).toBeTruthy();
+    }
+    for (const ambiguous of ["Potisk", "Veslanje", "Počep"])
+      expect(matchImportedExerciseName(ambiguous)).toEqual({
+        exerciseId: null,
+        status: "unresolved",
+      });
+    expect(importedExerciseNameNeedsReview("Ravnotežje")).toBe(true);
+    expect(importedExerciseNameNeedsReview("balance")).toBe(true);
+    expect(importedExerciseNameNeedsReview("BOSU Balance")).toBe(false);
   });
   it("accepts only source-authoritative exercise names in their original order", () => {
     const source =
@@ -1081,6 +1447,13 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       [60, 62.5, 60],
       [null, null, null],
     ]);
+    expect(
+      program.days[0].exercises.map((exercise) => exercise.restSeconds),
+    ).toEqual([
+      exerciseCatalog["barbell-bench-press"].restSeconds,
+      exerciseCatalog["chest-supported-row"].restSeconds,
+      exerciseCatalog["lateral-raise"].restSeconds,
+    ]);
     const active = startWorkout({ workouts: [] }, program.days[0]);
     expect(
       active.exercises.map((exercise) =>
@@ -1107,14 +1480,14 @@ leg curl: 3 sets of 12, pavza 60 sec`;
   });
   it("imports unseen exercise names as stable custom identities without catalog substitution", () => {
     const names = [
-      "Meadows Row",
-      "Pendlay Row",
-      "Larsen Press",
-      "Cable Y-Raise",
-      "Bayesian Cable Curl",
-      "Sissy Squat",
-      "Seal Row",
-      "JM Press",
+      "Aurora Meadows Row",
+      "Offset Pendulum Row",
+      "Floating Larsen Press",
+      "Cable Comet Raise",
+      "Bayesian Spiral Curl",
+      "Cyclone Sissy Squat",
+      "Harbor Seal Row",
+      "Atlas JM Press",
     ];
     const p = profile({
       daysPerWeek: 1,
@@ -1167,9 +1540,62 @@ leg curl: 3 sets of 12, pavza 60 sec`;
           item.importedExercise.pattern === null &&
           item.importedExercise.muscles === null &&
           item.targetRir === null &&
-          item.restSeconds === null,
+          item.restSeconds === 90,
       ),
     ).toBe(true);
+  });
+  it("preserves imported rest and otherwise derives it from the matched exercise", () => {
+    const p = profile({
+      daysPerWeek: 1,
+      availableDays: ["Mon"],
+      sessionMinutes: null,
+    });
+    const raw = {
+      name: "Rest-aware import",
+      days: [
+        {
+          weekday: "Mon",
+          name: "Upper",
+          exercises: [
+            {
+              sourceName: "Machine Chest Press",
+              sets: 2,
+              repMin: 6,
+              repMax: 8,
+              targetRir: null,
+              restSeconds: null,
+            },
+            {
+              sourceName: "Lateral Raise",
+              sets: 2,
+              repMin: 8,
+              repMax: 12,
+              targetRir: null,
+              restSeconds: 75,
+            },
+            {
+              sourceName: "Unlisted Custom Movement",
+              sets: 2,
+              repMin: 8,
+              repMax: 12,
+              targetRir: null,
+              restSeconds: null,
+            },
+          ],
+        },
+      ],
+    };
+    const program = normalizeGeneratedProgram(raw, p, {
+      preservePrescription: true,
+    });
+
+    expect(
+      program.days[0].exercises.map((exercise) => exercise.restSeconds),
+    ).toEqual([
+      exerciseCatalog["machine-chest-press"].restSeconds,
+      75,
+      90,
+    ]);
   });
   it("keeps custom imported exercise history, progression, and Coach context under the same identity", () => {
     const p = profile({
@@ -1185,7 +1611,7 @@ leg curl: 3 sets of 12, pavza 60 sec`;
           location: "Commercial gym",
           name: "Pull",
           estimatedMinutes: 30,
-          exercises: ["Meadows Row", "Bayesian Cable Curl"].map(
+          exercises: ["Aurora Meadows Row", "Bayesian Spiral Curl"].map(
             (sourceName) => ({
               exerciseId: null,
               sourceName,
@@ -1224,15 +1650,15 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       evidenceExposures: 2,
     });
     expect(coachContext(state).recentWorkouts[0].exercises[0].name).toBe(
-      "Meadows Row",
+      "Aurora Meadows Row",
     );
     expect(
       coachContext(state).progressionResults.find(
-        (item) => item.name === "Meadows Row",
+        (item) => item.name === "Aurora Meadows Row",
       ),
     ).toBeTruthy();
     expect(
-      deterministicCoach(state, "Should I increase Meadows Row?").text,
+      deterministicCoach(state, "Should I increase Aurora Meadows Row?").text,
     ).toContain("21 kg");
   });
   it("enforces equipment by environment and workout location", () => {
@@ -1315,6 +1741,25 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       previousExercise(blankState().workouts, first.exercises[0].exerciseId),
     ).toBeNull();
   });
+  it("anchors an active workout to its selected date and rejects a second session", () => {
+    const state = stateFor();
+    state.selectedDate = "2026-08-27";
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    expect(state.activeWorkout.workoutDateKey).toBe("2026-08-27");
+    expect(() => startWorkout(state, state.program.days[1])).toThrow(
+      /already in progress/i,
+    );
+  });
+  it("migrates a legacy active workout to the date on which it started", () => {
+    const state = stateFor();
+    state.profile.onboardingComplete = true;
+    state.selectedDate = "2026-08-27";
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    state.activeWorkout.startedAt = new Date("2026-08-27T12:00:00").getTime();
+    delete state.activeWorkout.workoutDateKey;
+    saveState(state);
+    expect(loadState().activeWorkout.workoutDateKey).toBe("2026-08-27");
+  });
   it("never prefills values from incomplete historical sets", () => {
     const state = stateFor();
     const first = startWorkout(state, state.program.days[0]);
@@ -1341,7 +1786,7 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(next.exercises[0].sets[1].weight).toBeNull();
     expect(next.exercises[0].sets[1].reps).toBe(next.exercises[0].repMin);
   });
-  it("distinguishes a complete workout from one ended early using planned-set data", () => {
+  it("distinguishes a complete workout from one ended early using every working set", () => {
     const earlyState = stateFor();
     earlyState.activeWorkout = startWorkout(
       earlyState,
@@ -1384,6 +1829,34 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(full.workouts.at(-1).completedPlannedSetCount).toBe(
       full.workouts.at(-1).plannedSetCount,
     );
+
+    const extraState = stateFor();
+    extraState.activeWorkout = startWorkout(
+      extraState,
+      extraState.program.days[0],
+    );
+    extraState.activeWorkout.exercises
+      .flatMap((item) => item.sets)
+      .forEach((set) => {
+        set.completed = true;
+      });
+    extraState.activeWorkout.exercises[0].sets.push({
+      id: "unfinished-extra",
+      planned: false,
+      added: true,
+      completed: false,
+      weight: 20,
+      reps: 10,
+      rir: null,
+    });
+    expect(workoutSetSummary(extraState.activeWorkout)).toMatchObject({
+      completed: workoutSetSummary(extraState.activeWorkout).total - 1,
+      extras: 1,
+    });
+    expect(completeWorkout(extraState).workouts.at(-1)).toMatchObject({
+      status: "ended-early",
+      endedEarly: true,
+    });
   });
   it("commits a workout exactly once when completion is dispatched twice", () => {
     const state = stateFor();
@@ -2245,21 +2718,21 @@ leg curl: 3 sets of 12, pavza 60 sec`;
         priorities: ["Balanced"],
       }),
     );
-    expect(muscle.templateId).toBe("T5-ULPPL");
-    expect(strength.templateId).toBe("T5-ULPPL");
+    expect(muscle.templateId).toBe("T5-PPLUL");
+    expect(strength.templateId).toBe("T5-PPLUL");
     expect(muscle.days.map((day) => day.name.replace(/ ·.*$/, ""))).toEqual([
-      "Upper",
-      "Lower",
       "Push",
       "Pull",
       "Legs",
+      "Upper",
+      "Lower",
     ]);
     expect(strength.days.map((day) => day.name)).toEqual([
-      "Upper",
-      "Lower",
       "Push",
       "Pull",
       "Legs",
+      "Upper",
+      "Lower",
     ]);
     expect(muscle.days.some((day) => day.name.includes("Chest"))).toBe(true);
     expect(muscle.days[0].exercises[0].repMin).not.toBe(
@@ -2384,7 +2857,7 @@ leg curl: 3 sets of 12, pavza 60 sec`;
         5: "T5-UL",
         6: "T6-UL3",
       },
-      PPL: { 3: "T3-PPL", 4: "T4-PPL", 5: "T5-ULPPL", 6: "T6-PPL2" },
+      PPL: { 3: "T3-PPL", 4: "T4-PPL", 5: "T5-PPLUL", 6: "T6-PPL2" },
       "Full Body": { 2: "T2-FB", 3: "T3-FB", 4: "T4-FB" },
     };
     for (const [preference, frequencies] of Object.entries(supported))
@@ -2538,16 +3011,16 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(program.days.map((day) => day.weekday)).toEqual([
       "Mon",
       "Tue",
-      "Thu",
+      "Wed",
       "Fri",
       "Sat",
     ]);
     expect(program.days.map((day) => day.name)).toEqual([
-      "Upper",
-      "Lower",
       "Push",
       "Pull",
       "Legs",
+      "Upper",
+      "Lower",
     ]);
   });
   it("makes a five-day Chest and Back emphasis measurable instead of decorative", () => {
@@ -2568,7 +3041,7 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(program.days.map((day) => day.weekday)).toEqual([
       "Mon",
       "Tue",
-      "Thu",
+      "Wed",
       "Fri",
       "Sat",
     ]);
@@ -3016,8 +3489,9 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       );
     expect(hardCompound.sets).toHaveLength(2);
     expect(hardCompound.repMin).toBe(6);
-    expect(hardCompound.repMax).toBe(10);
+    expect(hardCompound.repMax).toBe(8);
     expect(hardCompound.targetRir).toBe(1);
+    expect([hardIsolation?.repMin, hardIsolation?.repMax]).toEqual([8, 12]);
     expect(hardIsolation?.targetRir).toBe(1);
     expect(strengthCompound.repMin).toBe(3);
     expect(strengthCompound.repMax).toBe(6);
@@ -3025,6 +3499,181 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(strengthCompound.sets.length).toBeGreaterThan(
       hardCompound.sets.length,
     );
+  });
+  it("uses deterministic goal-specific rep ranges for every fewer-hard generated plan", () => {
+    const expectedCompound = {
+      "Build muscle": { main: [6, 8], accessory: [6, 8] },
+      "General fitness": { main: [6, 8], accessory: [8, 10] },
+      "Lose fat": { main: [6, 8], accessory: [8, 10] },
+      "Get stronger": { main: [3, 6], accessory: [6, 8] },
+      "Athletic performance": { main: [3, 6], accessory: [6, 8] },
+    };
+    for (const goal of Object.keys(expectedCompound)) {
+      const program = buildProgram(
+        profile({
+          goal,
+          daysPerWeek: 4,
+          availableDays: WEEKDAYS,
+          sessionMinutes: 75,
+          effortStyle: "Fewer hard sets · 2 sets · 0–1 RIR",
+        }),
+      );
+      for (const exercise of program.days.flatMap((day) => day.exercises)) {
+        const item = exerciseCatalog[exercise.exerciseId];
+        expect(exercise.sets, `${goal} / ${item.name}`).toHaveLength(2);
+        const expected =
+          item.measure === "seconds"
+            ? item.durationRange
+            : item.kind === "power"
+              ? [2, 5]
+              : item.kind === "compound"
+                ? expectedCompound[goal][exercise.programmingRole]
+                : [8, 12];
+        expect(
+          [exercise.repMin, exercise.repMax],
+          `${goal} / ${item.name} / ${exercise.programmingRole}`,
+        ).toEqual(expected);
+        if (item.kind === "power") {
+          expect(exercise.targetRir).toBeNull();
+          expect(exercise.effortMode).toBe("velocity-quality");
+        }
+      }
+    }
+  });
+  it("rejects broad AI rep ranges for fewer-hard plans but preserves authored imports", () => {
+    const p = profile({
+      daysPerWeek: 2,
+      availableDays: ["Tue", "Sat"],
+      sessionMinutes: 90,
+      effortStyle: "Fewer hard sets · 2 sets · 0–1 RIR",
+    });
+    const generated = buildProgram(p);
+    const raw = {
+      name: generated.name,
+      days: generated.days.map((day) => ({
+        weekday: day.weekday,
+        location: day.location,
+        name: day.name,
+        estimatedMinutes: day.estimatedMinutes,
+        exercises: day.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          programmingRole: exercise.programmingRole,
+          sets: exercise.sets.length,
+          repMin: exercise.repMin,
+          repMax: exercise.repMax,
+          targetRir: exercise.targetRir,
+          restSeconds: exercise.restSeconds,
+        })),
+      })),
+    };
+    expect(() => normalizeGeneratedProgram(raw, p)).not.toThrow();
+    const broad = structuredClone(raw);
+    const isolation = broad.days
+      .flatMap((day) => day.exercises)
+      .find(
+        (exercise) =>
+          exerciseCatalog[exercise.exerciseId].kind === "isolation" &&
+          exerciseCatalog[exercise.exerciseId].measure !== "seconds",
+      );
+    isolation.repMin = 10;
+    isolation.repMax = 15;
+    expect(() => normalizeGeneratedProgram(broad, p)).toThrow(
+      /must use 2 sets of 8–12/i,
+    );
+
+    const imported = {
+      name: "Authored plan",
+      days: [
+        {
+          weekday: "Tue",
+          location: "Commercial gym",
+          name: "Upper",
+          estimatedMinutes: 30,
+          exercises: [
+            {
+              exerciseId: null,
+              sourceName: "Lateral Raise",
+              sets: 3,
+              repMin: 10,
+              repMax: 15,
+              targetRir: 2,
+              restSeconds: 60,
+            },
+            {
+              exerciseId: null,
+              sourceName: "Cable Curl",
+              sets: 3,
+              repMin: 12,
+              repMax: 15,
+              targetRir: 2,
+              restSeconds: 60,
+            },
+          ],
+        },
+      ],
+    };
+    const preserved = normalizeGeneratedProgram(
+      imported,
+      { ...p, daysPerWeek: 1, availableDays: ["Tue"] },
+      {
+      preservePrescription: true,
+      },
+    );
+    expect(
+      preserved.days[0].exercises.map((exercise) => [
+        exercise.sets.length,
+        exercise.repMin,
+        exercise.repMax,
+      ]),
+    ).toEqual([
+      [3, 10, 15],
+      [3, 12, 15],
+    ]);
+  });
+  it("converts the AI power sentinel into non-RIR velocity-quality semantics", () => {
+    const p = profile({
+      goal: "Athletic performance",
+      daysPerWeek: 3,
+      availableDays: ["Mon", "Wed", "Fri"],
+      sessionMinutes: 75,
+      effortStyle: "Fewer hard sets · 2 sets · 0–1 RIR",
+    });
+    const generated = buildProgram(p);
+    const raw = {
+      name: generated.name,
+      days: generated.days.map((day) => ({
+        weekday: day.weekday,
+        location: day.location,
+        name: day.name,
+        estimatedMinutes: day.estimatedMinutes,
+        exercises: day.exercises.map((exercise) => ({
+          exerciseId: exercise.exerciseId,
+          programmingRole: exercise.programmingRole,
+          sets: exercise.sets.length,
+          repMin: exercise.repMin,
+          repMax: exercise.repMax,
+          targetRir:
+            exerciseCatalog[exercise.exerciseId].kind === "power"
+              ? 0
+              : exercise.targetRir,
+          restSeconds: exercise.restSeconds,
+        })),
+      })),
+    };
+    const normalized = normalizeGeneratedProgram(raw, p);
+    const power = normalized.days
+      .flatMap((day) => day.exercises)
+      .filter(
+        (exercise) => exerciseCatalog[exercise.exerciseId].kind === "power",
+      );
+    expect(power.length).toBeGreaterThan(0);
+    expect(
+      power.every(
+        (exercise) =>
+          exercise.targetRir === null &&
+          exercise.effortMode === "velocity-quality",
+      ),
+    ).toBe(true);
   });
   it("keeps all three effort choices materially distinct after duration and weekly-volume fitting", () => {
     const options = {
@@ -3410,6 +4059,33 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     });
     expect(candidateScore(base, user)).toBe(candidateScore(machine, user));
   });
+  it("keeps stable bilateral rows ahead of a unilateral cable row for a main back slot", () => {
+    const user = profile({
+      goal: "Build muscle",
+      environment: "Commercial gym",
+      equipment: ["full gym"],
+      exercisePreference: "No preference",
+    });
+    const score = (id) =>
+      candidateScore(
+        exerciseCatalog[id],
+        user,
+        new Map(),
+        "horizontal-pull",
+        0,
+        "main",
+        [],
+      );
+    expect(score("chest-supported-row")).toBeGreaterThan(
+      score("single-arm-cable-row"),
+    );
+    expect(score("machine-row")).toBeGreaterThan(
+      score("single-arm-cable-row"),
+    );
+    expect(score("seated-cable-row")).toBeGreaterThan(
+      score("single-arm-cable-row"),
+    );
+  });
   it("applies a soft fatigue-collision penalty after two demanding lower compounds", () => {
     const user = profile({ goal: "Get stronger" });
     const hipThrust = exerciseCatalog["hip-thrust"];
@@ -3664,5 +4340,249 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(roundedEstimate(64)).toBe(65);
     expect(roundedEstimate(61)).toBe(60);
     expect(roundedEstimate(30)).toBe(30);
+  });
+
+  describe("split structure and calendar placement", () => {
+    const sequence = (program) => program.days.map(sessionStructureKey);
+
+    it("keeps the same Upper / Lower structure for different available weekdays", () => {
+      const base = {
+        daysPerWeek: 4,
+        trainingPreferences: "Upper / Lower split",
+      };
+      const first = buildProgram(
+        profile({ ...base, availableDays: ["Mon", "Tue", "Thu", "Fri"] }),
+      );
+      const second = buildProgram(
+        profile({ ...base, availableDays: ["Tue", "Wed", "Sat", "Sun"] }),
+      );
+      expect(first.templateId).toBe(second.templateId);
+      expect(sequence(first)).toEqual(["upper", "lower", "upper", "lower"]);
+      expect(sequence(second)).toEqual(sequence(first));
+      expect(second.days.map((day) => day.weekday)).not.toEqual(
+        first.days.map((day) => day.weekday),
+      );
+    });
+
+    it.each([
+      ["Full Body", 3, ["full-body", "full-body", "full-body"]],
+      ["Upper / Lower", 4, ["upper", "lower", "upper", "lower"]],
+      ["Push Pull Legs", 6, ["push", "pull", "legs", "push", "pull", "legs"]],
+      ["Arnold Split", 3, ["chest-back", "shoulders-arms", "legs"]],
+      ["Push Pull split", 4, ["push", "pull", "push", "pull"]],
+      ["Torso Limbs", 4, ["torso", "limbs", "torso", "limbs"]],
+      ["Body part split", 5, ["chest", "back", "legs", "shoulders", "arms"]],
+    ])("preserves recognizable %s session identity", (preference, daysPerWeek, expected) => {
+      const program = buildProgram(
+        profile({
+          daysPerWeek,
+          availableDays: WEEKDAYS,
+          trainingPreferences: preference,
+        }),
+      );
+      expect(sequence(program)).toEqual(expected);
+      expect(program.trainingStructure.scheduledSessionSequence).toEqual(expected);
+    });
+
+    it("preserves an explicit hybrid order while mapping it to real days", () => {
+      const program = buildProgram(
+        profile({
+          daysPerWeek: 5,
+          availableDays: ["Mon", "Tue", "Wed", "Fri", "Sun"],
+          trainingPreferences: "Upper Lower Push Pull Legs",
+        }),
+      );
+      expect(program.templateId).toBe("T5-ULPPL");
+      expect(sequence(program)).toEqual(["upper", "lower", "push", "pull", "legs"]);
+      expect(program.trainingStructure.userRequestedSequence).toEqual(sequence(program));
+      expect(program.days.map((day) => day.weekday)).toEqual(["Mon", "Tue", "Wed", "Fri", "Sun"]);
+    });
+
+    it("adapts overlap volume instead of changing the split when adjacency is unavoidable", () => {
+      const common = {
+        daysPerWeek: 3,
+        trainingPreferences: "Full Body",
+        effortStyle: "Balanced workload · usually 3 sets · 1–2 RIR",
+      };
+      const adjacent = buildProgram(
+        profile({
+          ...common,
+          availableDays: ["Wed", "Thu", "Sun"],
+        }),
+      );
+      const spaced = buildProgram(profile({ ...common, availableDays: ["Mon", "Wed", "Fri"] }));
+      expect(sequence(adjacent)).toEqual(["full-body", "full-body", "full-body"]);
+      expect(adjacent.days[1].recoveryAdjustment).toMatchObject({
+        relationship: "full-body-to-full-body",
+        strategy: "reduced-overlap-volume",
+        previousWeekday: "Wed",
+      });
+      expect(adjacent.days.flatMap(day => day.exercises).reduce((sum, exercise) => sum + exercise.sets.length, 0))
+        .toBeLessThan(spaced.days.flatMap(day => day.exercises).reduce((sum, exercise) => sum + exercise.sets.length, 0));
+      const finalVolume = weeklyStimulusVolume(adjacent);
+      for (const [muscle, policy] of Object.entries(hypertrophyVolumeTargets(profile(common))))
+        if ((finalVolume[muscle] || 0) < policy.floor)
+          expect(adjacent.coverageConstrained[muscle]).toBeDefined();
+    });
+
+    it("lets priorities, equipment and duration alter programming without silently changing structure", () => {
+      const common = {
+        daysPerWeek: 4,
+        availableDays: ["Mon", "Tue", "Thu", "Fri"],
+        trainingPreferences: "Upper Lower",
+      };
+      const balanced = buildProgram(profile(common));
+      const prioritized = buildProgram(profile({ ...common, priorities: ["Chest"] }));
+      const home = buildProgram(
+        profile({
+          ...common,
+          environment: "Home gym",
+          equipment: ["dumbbells", "resistance bands"],
+        }),
+      );
+      const short = buildProgram(profile({ ...common, sessionMinutes: 30 }));
+      const long = buildProgram(profile({ ...common, sessionMinutes: 90 }));
+      for (const candidate of [balanced, prioritized, home, short, long])
+        expect(sequence(candidate)).toEqual(["upper", "lower", "upper", "lower"]);
+      expect(
+        weeklyDirectVolume(prioritized).Chest,
+      ).toBeGreaterThan(weeklyDirectVolume(balanced).Chest);
+      expect(short.days.flatMap((day) => day.exercises).length).toBeLessThanOrEqual(
+        long.days.flatMap((day) => day.exercises).length,
+      );
+    });
+
+    it("balances the advanced five-day PPLUL regression with explicit stimulus credits", () => {
+      const user = profile({
+        experience: "Advanced",
+        daysPerWeek: 5,
+        availableDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        sessionMinutes: 60,
+      });
+      const program = buildProgram(user);
+      const volume = weeklyStimulusVolume(program);
+      expect(program.days.map((day) => day.name)).toEqual([
+        "Push", "Pull", "Legs", "Upper", "Lower",
+      ]);
+      expect(volume.Chest).toBeGreaterThanOrEqual(8);
+      expect(volume.Chest).toBeLessThanOrEqual(14);
+      expect(volume.Back).toBeGreaterThanOrEqual(10);
+      expect(volume.Back).toBeLessThanOrEqual(14);
+      expect(volume.AnteriorDelts).toBeLessThanOrEqual(8);
+      expect(volume.RearDelts).toBeGreaterThanOrEqual(4);
+      expect(volume.Calves).toBeGreaterThanOrEqual(6);
+      expect(program.days.every((day) => day.estimatedMinutes <= 60)).toBe(true);
+      expect(program.coverageConstrained).toEqual({});
+    });
+
+    it("uses anatomical stimulus profiles instead of catalog muscle ordering", () => {
+      expect(stimulusProfileForExercise("machine-chest-press")).toMatchObject({
+        Chest: 1,
+        AnteriorDelts: 0.5,
+        Triceps: 0.5,
+      });
+      expect(stimulusProfileForExercise("chest-supported-row")).toMatchObject({
+        Back: 1,
+        Biceps: 0.5,
+        RearDelts: 0.5,
+      });
+      expect(stimulusProfileForExercise("back-squat").Hamstrings).toBeUndefined();
+      expect(stimulusProfileForExercise("romanian-deadlift").Back).toBeUndefined();
+      expect(stimulusProfileForExercise("straight-arm-cable-pulldown")).toEqual({ Back: 1 });
+    });
+
+    it("preserves confirmed physique subregions while keeping manual broad priorities broad", () => {
+      const base = profile({ experience: "Advanced" });
+      const confirmed = priorityId => ({
+        ...base,
+        priorities: [PHYSIQUE_PRIORITY_OPTIONS[priorityId]?.trainingPriority || "Balanced"],
+        prioritySources: { manual: ["Balanced"], physiqueConfirmed: [{ priorityId }] },
+      });
+      const balanced = hypertrophyVolumeTargets(base);
+      const rear = hypertrophyVolumeTargets(confirmed("rear_delts"));
+      expect(rear.RearDelts.target).toBe(balanced.RearDelts.target + 1);
+      expect(rear.AnteriorDelts.target).toBe(balanced.AnteriorDelts.target);
+      expect(rear.LateralDelts.target).toBe(balanced.LateralDelts.target);
+      const biceps = hypertrophyVolumeTargets(confirmed("biceps"));
+      expect(biceps.Biceps.target).toBe(balanced.Biceps.target + 1);
+      expect(biceps.Triceps.target).toBe(balanced.Triceps.target);
+      const hamstrings = hypertrophyVolumeTargets(confirmed("hamstrings"));
+      expect(hamstrings.Hamstrings.target).toBe(balanced.Hamstrings.target + 1);
+      expect(hamstrings.Glutes.target).toBe(balanced.Glutes.target);
+      const manualShoulders = hypertrophyVolumeTargets(profile({ experience: "Advanced", priorities: ["Shoulders"], prioritySources: { manual: ["Shoulders"], physiqueConfirmed: [] } }));
+      for (const muscle of ["AnteriorDelts", "LateralDelts", "RearDelts"])
+        expect(manualShoulders[muscle].target).toBe(balanced[muscle].target + 1);
+      const manualArms = hypertrophyVolumeTargets(profile({ experience: "Advanced", priorities: ["Arms"], prioritySources: { manual: ["Arms"], physiqueConfirmed: [] } }));
+      expect(manualArms.Biceps.target).toBe(balanced.Biceps.target + 1);
+      expect(manualArms.Triceps.target).toBe(balanced.Triceps.target + 1);
+      expect(priorityProgrammingGroupsForProfile(confirmed("upper_chest"))[0].patterns).toEqual(["incline-push"]);
+      expect(priorityProgrammingGroupsForProfile(confirmed("back_width"))[0].patterns).toEqual(["vertical-pull"]);
+    });
+
+    it("rejects a set transfer that would create a collateral secondary-muscle deficit", () => {
+      const targets = hypertrophyVolumeTargets(profile({ experience: "Advanced" }));
+      const row = stimulusProfileForExercise("chest-supported-row");
+      const lateralRaise = stimulusProfileForExercise("lateral-raise");
+      expect(stimulusMutationPreservesPolicy({
+        volume: { Back: 10.5, Biceps: 4, RearDelts: 4, LateralDelts: 3 },
+        targets,
+        addProfile: lateralRaise,
+        addSets: 1,
+        removeProfile: row,
+        removeSets: 1,
+        protectedTargetMuscles: ["Back"],
+      })).toBe(false);
+    });
+
+    it("keeps final floors and hard caps truthful across compressed PPLUL plans", () => {
+      for (const sessionMinutes of [30, 45, 60]) {
+        const user = profile({
+          experience: "Advanced",
+          daysPerWeek: 5,
+          availableDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+          sessionMinutes,
+        });
+        const program = buildProgram(user);
+        const volume = weeklyStimulusVolume(program);
+        const targets = hypertrophyVolumeTargets(user);
+        for (const [muscle, policy] of Object.entries(targets)) {
+          expect(volume[muscle] || 0).toBeLessThanOrEqual(policy.hardCap);
+          if ((volume[muscle] || 0) < policy.floor)
+            expect(program.coverageConstrained[muscle]).toMatchObject({
+              actual: volume[muscle] || 0,
+              floor: policy.floor,
+              reason: expect.stringMatching(/^(?:time|split|equipment-or-restriction)$/),
+            });
+        }
+        expect(program.days.every(day => day.estimatedMinutes <= sessionMinutes)).toBe(true);
+      }
+    });
+
+    it("avoids concentrated session-volume warnings in the default advanced PPLUL week", () => {
+      const user = profile({
+        experience: "Advanced",
+        daysPerWeek: 5,
+        availableDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        sessionMinutes: 60,
+      });
+      const program = buildProgram(user);
+      expect(programWarnings(program, user).filter(warning => warning.code.includes("session_volume"))).toEqual([]);
+      expect(program.days.find(day => day.name === "Lower").exercises.filter(exercise =>
+        ["squat", "single-leg", "knee-extension"].includes(exerciseCatalog[exercise.exerciseId].pattern)
+      ).reduce((sets, exercise) => sets + exercise.sets.length, 0)).toBeLessThanOrEqual(8);
+    });
+
+    it("lets fewer-hard coverage add whole exercises without inflating any exercise above two sets", () => {
+      const user = profile({
+        experience: "Advanced",
+        daysPerWeek: 5,
+        availableDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
+        sessionMinutes: 45,
+        effortStyle: "Fewer hard sets · 2 sets · 0–1 RIR",
+      });
+      const program = buildProgram(user);
+      expect(program.days.flatMap(day => day.exercises).every(exercise => exercise.sets.length === 2)).toBe(true);
+      expect(validateProgram(program, user).valid).toBe(true);
+    });
   });
 });

@@ -38,6 +38,22 @@ const errors = [];
 page.on('pageerror', error => errors.push(error.message));
 page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) }));
+await page.route('**/api/ai', route => {
+  const request = route.request().postDataJSON();
+  if (request?.operation !== 'training-safety') return route.continue();
+  const sourceText = String(request.payload?.sourceText || '');
+  const scopeQuote = 'surgeon cleared upper-body strength training only';
+  const scopeStart = sourceText.indexOf(scopeQuote);
+  const data = {
+    schemaVersion: 2,
+    findings: [
+      { kind: 'recent_procedure', confidence: 0.98, evidence: [{ start: 0, end: 12, quote: 'Post-op knee' }], targetText: null, minimumRir: null, allowedBodyRegion: null },
+      { kind: 'clinician_allowed_scope', confidence: 0.99, evidence: [{ start: scopeStart, end: scopeStart + scopeQuote.length, quote: scopeQuote }], targetText: null, minimumRir: null, allowedBodyRegion: 'upper_body' },
+    ],
+    unresolved: [],
+  };
+  return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data }) });
+});
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByText('TRAINING PAUSED', { exact: true }).waitFor();
 assert.equal(await page.getByRole('button', { name: 'START WORKOUT' }).count(), 0);
@@ -46,16 +62,20 @@ await page.screenshot({ path: output('390-training-paused.png'), fullPage: false
 
 await page.getByRole('button', { name: 'REVIEW RESTRICTIONS' }).click();
 assert.equal(await page.getByRole('heading', { name: 'Apply only clear limits.' }).count(), 1);
-assert.match(await page.locator('.training-safety-summary').last().textContent(), /restriction needs a clear training scope/i);
+assert.match(await page.locator('.training-safety-summary').last().textContent(), /TRAINING PAUSED.*unresolved restriction.*cannot determine an appropriate strength-training plan/i);
 await page.screenshot({ path: output('390-restriction-review.png'), fullPage: false });
 
 const field = page.getByRole('textbox', { name: 'Restrictions or clinician limits' });
 await field.fill('Post-op knee; surgeon cleared upper-body strength training only.');
+await page.getByRole('button', { name: 'SAVE RESTRICTIONS' }).click();
+await page.getByRole('button', { name: 'CONFIRM LIMIT' }).waitFor();
 assert.match(await page.locator('.training-safety-summary').last().textContent(), /CONFIRM LIMIT.*Upper-body strength training only.*does not determine medical clearance/i);
 await page.screenshot({ path: output('390-confirm-limit.png'), fullPage: false });
 await page.getByRole('button', { name: 'CONFIRM LIMIT' }).click();
+await page.getByText('RESTRICTIONS APPLIED', { exact: true }).waitFor();
 assert.match(await page.locator('.training-safety-summary').last().textContent(), /RESTRICTIONS APPLIED.*Upper-body strength training only/i);
 await page.screenshot({ path: output('390-confirmed-clinician-scope.png'), fullPage: false });
+await page.getByRole('button', { name: 'SAVE RESTRICTIONS' }).click();
 assert.deepEqual(errors, []);
 
 await context.close();

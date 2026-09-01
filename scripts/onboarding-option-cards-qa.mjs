@@ -15,7 +15,8 @@ page.on('console', message => { if (message.type() === 'error') errors.push(mess
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true, provider: 'qa' }) }));
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
-await page.getByLabel('Age range').selectOption('18–29');
+await page.getByRole('combobox', { name: 'Age range' }).click();
+await page.getByRole('option', { name: '18–29' }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 
 const goalExplanations = [

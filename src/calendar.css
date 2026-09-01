@@ -40,6 +40,14 @@
 .today-program-name { grid-column: 1 / -1; min-width: 0; color: #1b1a19; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
 .active-workout-hero > p { margin: 10px 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .active-workout-hero > .button { margin-top: 22px; }
+.active-workout-notice { margin-top: 16px; padding: 12px 8px 12px 13px; border: 1px solid rgba(31,107,76,.15); border-radius: 14px; background: #eaf2ee; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; }
+.active-workout-notice > span { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.active-workout-notice .eyebrow { color: #1f6b4c; }
+.active-workout-notice strong { min-width: 0; font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
+.active-workout-notice small { color: #6f6c68; font-size: 11px; line-height: 1.3; }
+.active-workout-notice > button { min-width: 64px; min-height: 44px; padding: 0 7px; color: #1f6b4c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
+.active-workout-start-lock { max-width: 330px; margin: 20px 0 0 !important; color: #6f6c68; font-size: 13px; line-height: 1.45; }
+.active-workout-notice + .rest-day-state { margin-top: 32px; }
 .plan-ready-notice { position: relative; margin-top: 16px; padding: 12px 42px 12px 13px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 14px; background: #eaf2ee; }
 .plan-ready-notice > button { position: absolute; top: 3px; right: 4px; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: #6f837a; font-size: 20px; line-height: 1; }
 .plan-ready-notice .eyebrow { color: #1f6b4c; }
@@ -55,21 +63,37 @@
 }
 
 /* Dot color communicates workout state; selection is communicated by the day card. */
+.week-strip button {
+  transition:
+    transform 120ms cubic-bezier(.2, 0, 0, 1),
+    background-color 180ms cubic-bezier(.2, 0, 0, 1),
+    border-color 180ms cubic-bezier(.2, 0, 0, 1),
+    color 180ms cubic-bezier(.2, 0, 0, 1);
+}
+.week-strip button:active { transform: scale(.98); }
 .week-strip .workout-planned .workout-dot { background: #b9b5af; }
 .week-strip .workout-completed .completed-dot { background: #1f6b4c; }
 .week-strip .selected-day.workout-planned .workout-dot { background: #f6f5f2; }
 .week-strip .selected-day.workout-completed .completed-dot { background: #7fd0aa; }
 .week-strip .today-date:not(.selected-day) { border: 2px solid #1b1a19; }
+@media (prefers-reduced-motion: reduce) {
+  .week-strip button {
+    transition: background-color 80ms linear, border-color 80ms linear, color 80ms linear;
+  }
+  .week-strip button:active { transform: none; }
+}
 .rest-day-state { margin-top: 48px; }
 .rest-day-state h1 { margin: 10px 0 0; font-size: 36px; }
 .rest-day-state > p { margin-top: 8px; }
 .rest-up-next { margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(27,26,25,.08); }
 .rest-up-next time { display: block; margin-top: 10px; color: #6f6c68; font-size: 12px; }
 .rest-up-next h2 { margin: 5px 0 0; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
+.rest-up-next .rest-up-next-descriptor { display: block; margin-top: 4px; color: #6f6c68; font-size: 14px; font-weight: 600; line-height: 1.3; }
 .rest-up-next > span { display: block; margin-top: 6px; color: #6f6c68; font-size: 13px; }
 .rest-up-next .rest-view-workout { width: auto; min-height: 46px; margin-top: 18px; padding: 0 20px; border-radius: 13px; }
 .train-anyway { display: block; margin: 10px 0 0; min-height: 44px; padding: 0 8px; color: #6f6c68; text-decoration: underline; text-decoration-color: rgba(111,108,104,.35); text-underline-offset: 3px; }
 .optional-session-note { display: block; margin-top: 8px; color: #1f6b4c; }
+.today-screen .workout-title-primary { max-width: 100%; text-wrap: balance; }
 .today-screen .compact-workout-title .workout-title-primary { white-space: nowrap; overflow-wrap: normal; }
 .rest-training-sheet { padding-top: 34px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
 .rest-training-option,.move-workout-row { width: 100%; min-height: 68px; padding: 13px 2px; border: 0; border-bottom: 1px solid rgba(27,26,25,.08); background: transparent; color: #1b1a19; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
@@ -88,6 +112,8 @@
 .optional-duration button { width: 40px; height: 40px; border: 1px solid rgba(27,26,25,.1); border-radius: 12px; background: #fff; }
 .optional-duration strong { min-width: 52px; text-align: center; }
 .sheet-footnote { display: block; margin-top: 10px; color: #8a8783; text-align: center; }
+.today-screen .workout-title-detail { margin-top: 7px; color: #6f6c68; font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; overflow-wrap: anywhere; }
+.today-screen .workout-title-context { margin-top: 3px; color: #8a8783; font-size: 14px; font-weight: 550; line-height: 1.35; }
 
 @media (max-width: 390px) {
   .today-screen .screen-top { column-gap: 4px; }

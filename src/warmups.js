@@ -96,7 +96,11 @@ export function generateWarmup(
     trainingSafety.pastResolved ||
     PREVIOUS_INJURY_LANGUAGE.test(String(profile.avoid || ""));
   const exercises = (workout?.exercises || [])
-    .map((exercise) => ({ exercise, item: catalog[exercise.exerciseId] }))
+    .map((exercise, exerciseIndex) => ({
+      exercise,
+      exerciseIndex,
+      item: catalog[exercise.exerciseId],
+    }))
     .filter(
       (row) =>
         row.item && exerciseAllowedByTrainingSafety(row.item, trainingSafety),
@@ -108,10 +112,11 @@ export function generateWarmup(
   if (safetyHold) {
     const general = [];
     return {
-      generatorVersion: 1,
+      generatorVersion: 2,
       general,
       movementPreparation: [],
       rampUpSets: [],
+      stages: [],
       nonRampMinutes: general.reduce((sum, item) => sum + item.minutes, 0),
       estimatedMinutes: general.reduce((sum, item) => sum + item.minutes, 0),
       safetyMessage,
@@ -135,7 +140,9 @@ export function generateWarmup(
 
   const movementPreparation = [];
   const firstMain = exercises.find(
-    (row) => row.item.kind === "compound" || row.item.kind === "power",
+    (row) =>
+      row.exerciseIndex === 0 &&
+      (row.item.kind === "compound" || row.item.kind === "power"),
   );
   if (
     includeRecommendedWarmups &&
@@ -157,19 +164,13 @@ export function generateWarmup(
   }
 
   const rampUpSets = [];
+  let firstRamp = null;
+  let secondRamp = null;
   if (includeRampUpSets) {
-    const seenFamilies = new Set();
-    const maxExercises = Number(profile.sessionMinutes) <= 30 ? 1 : 2;
-    const eligible = exercises.filter(
-      ({ exercise, item }) =>
-        item.kind === "compound" &&
-        item.progressionQuality === "load-and-repetition" &&
-        (exercise.programmingRole === "main" || rampUpSets.length === 0),
-    );
-    for (const { exercise, item } of eligible) {
-      const family = movementFamily(item.pattern);
-      if (seenFamilies.has(family) || seenFamilies.size >= maxExercises)
-        continue;
+    const eligible = ({ item }) =>
+      item.kind === "compound" &&
+      item.progressionQuality === "load-and-repetition";
+    const createRamp = ({ exercise, exerciseIndex, item }) => {
       const workingWeight =
         (exercise.sets || []).find((set) => Number(set.weight) > 0)?.weight ??
         null;
@@ -183,9 +184,28 @@ export function generateWarmup(
         ),
         completed: false,
       }));
-      rampUpSets.push({ exerciseId: item.id, exerciseName: item.name, sets });
-      seenFamilies.add(family);
-    }
+      return {
+        exerciseId: item.id,
+        exerciseInstanceId: exercise.id || null,
+        exerciseIndex,
+        exerciseName: item.name,
+        movementFamily: movementFamily(item.pattern),
+        sets,
+      };
+    };
+    const first = exercises.find((row) => row.exerciseIndex === 0);
+    const second = exercises.find((row) => row.exerciseIndex === 1);
+    if (first && eligible(first)) firstRamp = createRamp(first);
+    if (
+      Number(profile.sessionMinutes) > 30 &&
+      second &&
+      eligible(second) &&
+      (!firstRamp ||
+        movementFamily(second.item.pattern) !== firstRamp.movementFamily)
+    )
+      secondRamp = createRamp(second);
+    if (firstRamp) rampUpSets.push(firstRamp);
+    if (secondRamp) rampUpSets.push(secondRamp);
   }
 
   const nonRampMinutes = Math.min(
@@ -195,6 +215,78 @@ export function generateWarmup(
   );
   const rampCount = rampUpSets.reduce((sum, item) => sum + item.sets.length, 0);
   const estimatedMinutes = nonRampMinutes + Math.ceil(rampCount * 0.5);
+  const stageRow = (exerciseIndex) => {
+    const matched = exercises.find((row) => row.exerciseIndex === exerciseIndex);
+    if (matched) return matched;
+    const exercise = workout?.exercises?.[exerciseIndex];
+    if (!exercise) return null;
+    return {
+      exercise,
+      exerciseIndex,
+      item: {
+        id: exercise.exerciseId || `custom-${exerciseIndex}`,
+        name:
+          exercise.importedName ||
+          exercise.originalImportedName ||
+          exercise.name ||
+          "Custom exercise",
+      },
+    };
+  };
+  const firstExercise = stageRow(0);
+  const secondExercise = stageRow(1);
+  const pairedFirstTwo = Boolean(
+    firstExercise?.exercise.supersetId &&
+      firstExercise.exercise.supersetId === secondExercise?.exercise.supersetId,
+  );
+  const stageFor = (
+    row,
+    stageGeneral,
+    stageMovementPreparation,
+    stageRampUpSets,
+  ) => {
+    if (
+      !row ||
+      (!stageGeneral.length &&
+        !stageMovementPreparation.length &&
+        !stageRampUpSets.length)
+    )
+      return null;
+    const stageRampCount = stageRampUpSets.reduce(
+      (sum, entry) => sum + entry.sets.length,
+      0,
+    );
+    const stageNonRampMinutes =
+      stageGeneral.reduce((sum, item) => sum + item.minutes, 0) +
+      stageMovementPreparation.reduce((sum, item) => sum + item.minutes, 0);
+    return {
+      id: `warmup-stage-${row.exercise.id || row.exerciseIndex}-${row.item.id}`,
+      exerciseId: row.item.id,
+      exerciseInstanceId: row.exercise.id || null,
+      exerciseIndex: row.exerciseIndex,
+      exerciseName: row.item.name,
+      general: stageGeneral,
+      movementPreparation: stageMovementPreparation,
+      rampUpSets: stageRampUpSets,
+      estimatedMinutes: Math.max(
+        1,
+        stageNonRampMinutes + Math.ceil(stageRampCount * 0.5),
+      ),
+      completed: false,
+      skipped: false,
+    };
+  };
+  const stages = [
+    stageFor(
+      firstExercise,
+      general,
+      movementPreparation,
+      [firstRamp, pairedFirstTwo ? secondRamp : null].filter(Boolean),
+    ),
+    pairedFirstTwo
+      ? null
+      : stageFor(secondExercise, [], [], secondRamp ? [secondRamp] : []),
+  ].filter(Boolean);
   if (
     !general.length &&
     !movementPreparation.length &&
@@ -203,10 +295,11 @@ export function generateWarmup(
   )
     return null;
   return {
-    generatorVersion: 1,
+    generatorVersion: 2,
     general,
     movementPreparation,
     rampUpSets,
+    stages,
     nonRampMinutes,
     estimatedMinutes,
     safetyMessage,

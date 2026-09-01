@@ -9,6 +9,8 @@ import './workout-controls.css';
 import './onboarding-controls.css';
 import './import-plan.css';
 import './coach.css';
+import './landing.css';
+import './theme.css';
 
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 createRoot(document.getElementById('root')).render(<React.StrictMode><App /></React.StrictMode>);

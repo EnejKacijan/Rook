@@ -36,7 +36,7 @@ async function openScreen(buttonName) {
 }
 
 {
-  const { panel } = await openScreen('Logging & increments'); await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'the back/close arrow uses the same downward sheet animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const { panel } = await openScreen('Logging & increments'); const close = page.getByRole('button', { name: 'Close', exact: true }); assert.equal((await close.innerText()).trim(), '×', 'Logging uses a neutral close control instead of a back arrow'); await close.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'the close button uses the same downward sheet animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
 
 for (const name of ['Logging & increments', 'Review priorities', 'Add a few details']) {

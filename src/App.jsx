@@ -17,9 +17,11 @@ import { rampWeightForWorkingLoad } from "./warmups.js";
 import {
   isSupersetRoundBoundary,
   nextSupersetStep,
+  pairActiveWorkoutExercises,
   remapCopiedSupersetIds,
   supersetMeta,
   supersetRoundKey,
+  unpairActiveWorkoutExercises,
 } from "./supersets.js";
 import {
   compileTrainingSafety,
@@ -37,6 +39,7 @@ import {
 } from "./splitPreferences.js";
 import {
   EQUIPMENT_BY_ENVIRONMENT,
+  EXERCISE_THUMBNAIL_NORMALIZATION,
   PHYSIQUE_PRIORITY_OPTIONS,
   WEEKDAYS,
   adaptedTemplateForToday,
@@ -44,6 +47,7 @@ import {
   applyWeekScheduleChanges,
   blankState,
   buildProgram,
+  buildReplacementProgram,
   coachActionConflict,
   combinedTrainingPriorities,
   completeWorkout,
@@ -57,10 +61,11 @@ import {
   exerciseMeasure,
   exerciseMatchesQuery,
   exerciseName,
+  exerciseNote,
   exerciseValueLabel,
   firstScheduledDate,
   formatDuration,
-  hasBalancedPullEquipment,
+  importedExerciseNameNeedsReview,
   isExerciseAllowed,
   isoDay,
   loadState,
@@ -76,6 +81,7 @@ import {
   refreshWorkoutWarmup,
   roundedEstimate,
   saveState,
+  splitImportedExerciseLabel,
   startWorkout,
   storedWeight,
   targetLabel,
@@ -88,6 +94,8 @@ import {
   weekday,
   weightUnit,
   workoutSetSummary,
+  workoutDisplayParts,
+  workingSetCanComplete,
 } from "./domain.js";
 import { EXPERT_ISSUES } from "./expertFeedback.js";
 const navItems = [
@@ -101,36 +109,106 @@ const afterVisibleFrame = () =>
   new Promise((resolve) =>
     requestAnimationFrame(() => requestAnimationFrame(resolve)),
   );
-async function generatePersonalizedProgram(profile, { onStage } = {}) {
+const waitFor = (milliseconds) =>
+  new Promise((resolve) => setTimeout(resolve, milliseconds));
+const MINIMUM_PLAN_TRANSITION_MS = 1600;
+async function generatePersonalizedProgram(
+  profile,
+  { onStage, currentProgram = null, workouts = [] } = {},
+) {
+  const startedAt = performance.now();
   onStage?.("preparing");
+  await afterVisibleFrame();
+  await waitFor(260);
   onStage?.("building");
   await afterVisibleFrame();
-  const program = buildProgram(profile);
+  const program = currentProgram
+    ? buildReplacementProgram(profile, currentProgram, workouts)
+    : buildProgram(profile);
+  await waitFor(620);
   onStage?.("checking");
   await afterVisibleFrame();
   const validation = validateProgram(program, profile, {
     requireProgramQuality: true,
   });
   if (!validation.valid) throw new Error(validation.errors.join(" "));
+  const remaining = MINIMUM_PLAN_TRANSITION_MS - (performance.now() - startedAt);
+  if (remaining > 0) await waitFor(remaining);
   return { program, source: "personalized-template" };
 }
 function useLiftState() {
   const [state, setState] = useState(() => {
     const initial = loadState();
     if (initial.profile.onboardingComplete) {
-      initial.selectedDay = weekday();
-      initial.selectedDate = isoDay();
+      const landingDate = initial.activeWorkout?.workoutDateKey || isoDay();
+      initial.selectedDay = weekday(`${landingDate}T12:00:00`);
+      initial.selectedDate = landingDate;
     }
     return initial;
   });
   useLayoutEffect(() => saveState(state), [state]);
   return [state, (fn) => setState((previous) => fn(clone(previous)))];
 }
+export function resolvedTheme(preference, systemDark = false) {
+  if (preference === "premium") return "premium";
+  return preference === "dark" || (preference === "system" && systemDark)
+    ? "dark"
+    : "light";
+}
+function useResolvedTheme(preference = "system") {
+  useLayoutEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const apply = () => {
+      const theme = resolvedTheme(preference, media.matches);
+      const premiumScheme = media.matches ? "dark" : "light";
+      document.documentElement.dataset.theme = theme;
+      if (theme === "premium")
+        document.documentElement.dataset.premiumScheme = premiumScheme;
+      else delete document.documentElement.dataset.premiumScheme;
+      document.documentElement.style.colorScheme =
+        theme === "premium" ? premiumScheme : theme === "light" ? "light" : "dark";
+      document
+        .querySelector('meta[name="theme-color"]')
+        ?.setAttribute(
+          "content",
+          theme === "premium"
+            ? premiumScheme === "dark" ? "#11110f" : "#f7f5f0"
+            : theme === "dark"
+              ? "#111413"
+              : "#f6f5f2",
+        );
+    };
+    apply();
+    if (!['system', 'premium'].includes(preference)) return undefined;
+    media.addEventListener?.("change", apply);
+    return () => media.removeEventListener?.("change", apply);
+  }, [preference]);
+}
 function Button({ children, variant = "primary", className = "", ...props }) {
   return (
     <button className={`button ${variant} ${className}`} {...props}>
       {children}
     </button>
+  );
+}
+function triggerHaptic(type = "tap") {
+  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
+    return;
+  const pattern = type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
+  try {
+    navigator.vibrate(pattern);
+  } catch {
+    // Haptics are an optional enhancement and must never block the action.
+  }
+}
+function BackLabel() {
+  return (
+    <>
+      <span className="back-chevron" aria-hidden="true">
+        ‹
+      </span>
+      Back
+    </>
   );
 }
 function trainingSafetyFor(profile) {
@@ -488,12 +566,19 @@ function TrainingSafetySummary({
     );
   return null;
 }
-function OnboardingOptionCard({ label, description, selected, onClick }) {
+function OnboardingOptionCard({
+  label,
+  ariaLabel,
+  description,
+  selected,
+  onClick,
+}) {
   return (
     <button
       type="button"
       className={`onboarding-option ${selected ? "selected-option" : ""}`}
       aria-pressed={selected}
+      aria-label={ariaLabel}
       onPointerUp={(event) => event.currentTarget.blur()}
       onClick={onClick}
     >
@@ -506,6 +591,14 @@ function OnboardingOptionCard({ label, description, selected, onClick }) {
       </span>
     </button>
   );
+}
+function localizedWeekdayLabel(day, width = "short") {
+  const index = WEEKDAYS.indexOf(day);
+  if (index < 0) return day;
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: width,
+    timeZone: "UTC",
+  }).format(new Date(Date.UTC(2024, 0, index + 1)));
 }
 export function splitRecommendationCopy(daysPerWeek) {
   const days = Math.max(2, Math.min(6, Number(daysPerWeek) || 3));
@@ -567,7 +660,7 @@ function TrainingPreferencesStep({
             <strong>I have a specific split</strong>
             {selectedSpecific && <small>{selectedSpecific.label}</small>}
           </span>
-          <i aria-hidden="true">{specificSplitOpen ? "⌄" : "›"}</i>
+          <i className="disclosure-chevron" aria-hidden="true" />
         </button>
         {specificSplitOpen && (
           <div
@@ -622,11 +715,10 @@ function TrainingPreferencesStep({
               trainingSafetySupplementalLimits: null,
             }))
           }
-          placeholder="Current pain, recent surgery, movements to avoid, or clinician limits"
+          placeholder="Knee pain, recent surgery, movements to avoid..."
         />
         <small className="restriction-helper">
-          Write it naturally. Rook checks injuries, pain, recovery, movements
-          to avoid, and clinician limits before building your plan.
+          Write it naturally. Rook will account for it when building your plan.
         </small>
         {safetyAnalysisStatus === "checking" && (
           <div className="restriction-checking" role="status" aria-live="polite">
@@ -672,7 +764,7 @@ function TrainingPreferencesStep({
       </section>
       <section className="onboarding-question-group">
         <div className="onboarding-group-heading">
-          <strong>Exercise style</strong>
+          <strong>EXERCISE PREFERENCE</strong>
         </div>
         <div className="option-list compact-options">
           {["Prefer free weights", "Prefer machines", "No preference"].map(
@@ -709,35 +801,10 @@ function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
   );
 }
 export function workoutTitleParts(name, day) {
-  const title = normalizeWorkoutName(name, day);
-  let primary = title;
-  let detail = "";
-  const separated = title.match(/^(.+?)\s+(?:[—–·|:]|-)\s+(.+)$/u);
-  if (separated) [, primary, detail] = separated;
-  else {
-    const simple = title.match(
-      /^(Full Body|Upper|Lower|Push|Pull|Legs?|Chest|Back|Shoulders?|Arms?)(?:\s+[ABC])?$/iu,
-    );
-    const structured =
-      !simple &&
-      title.match(
-        /^(Full Body|Upper|Lower|Push|Pull|Legs?|Chest|Back|Shoulders?|Arms?)(\s+[ABC])?\s+(.+)$/iu,
-      );
-    if (simple) primary = title;
-    else if (structured) {
-      primary = `${structured[1]}${structured[2] || ""}`;
-      detail = structured[3];
-    }
-  }
-  const contextMatch = detail.match(/^(.*?)\s*\((.+)\)\s*$/u);
-  return {
-    primary: primary.trim(),
-    detail: (contextMatch ? contextMatch[1] : detail).trim(),
-    context: contextMatch ? contextMatch[2].trim() : "",
-  };
+  return workoutDisplayParts(name, day);
 }
-function WorkoutTitle({ name, day }) {
-  const parts = workoutTitleParts(name, day);
+function WorkoutTitle({ workout, name, day }) {
+  const parts = workoutTitleParts(workout || name, day);
   const compact =
     !parts.detail &&
     !parts.context &&
@@ -1080,48 +1147,30 @@ function ModalLayer({ children, close, backgroundRef }) {
     </div>
   );
 }
-const GENERATION_STAGES = {
-  preparing: {
-    step: 1,
-    title: "Preparing your profile…",
-    detail: "Organizing your goals, schedule, equipment, and preferences.",
-  },
-  building: {
-    step: 2,
-    title: "Building your program…",
-    detail: "Creating a program around your training profile.",
-  },
-  refining: {
-    step: 2,
-    title: "Refining your program…",
-    detail: "Improving the plan before checking it again.",
-  },
-  checking: {
-    step: 3,
-    title: "Checking your plan…",
-    detail: "Making sure the schedule and training details fit together.",
-  },
-  saving: {
-    step: 4,
-    title: "Saving your program…",
-    detail: "Keeping your new program ready for the first workout.",
-  },
-};
 function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
   const [waitLevel, setWaitLevel] = useState(0);
+  const [visible, setVisible] = useState(kind === "import");
+  const [showCancel, setShowCancel] = useState(kind === "import");
   const overlayRef = useRef(null);
-  const current = GENERATION_STAGES[stage] || GENERATION_STAGES.building;
-  const waiting = stage === "building" || stage === "refining";
+  const cancellable = Boolean(onCancel);
   useEffect(() => {
     setWaitLevel(0);
-    if (!waiting) return undefined;
-    const reassuring = setTimeout(() => setWaitLevel(1), 6000);
-    const long = setTimeout(() => setWaitLevel(2), 15000);
+    setVisible(kind === "import");
+    setShowCancel(kind === "import" && cancellable);
+    const reveal =
+      kind === "program" ? setTimeout(() => setVisible(true), 250) : null;
+    const revealCancel =
+      kind === "program" && cancellable
+        ? setTimeout(() => setShowCancel(true), 3000)
+        : null;
+    const long =
+      kind === "program" ? setTimeout(() => setWaitLevel(1), 5000) : null;
     return () => {
-      clearTimeout(reassuring);
-      clearTimeout(long);
+      if (reveal) clearTimeout(reveal);
+      if (revealCancel) clearTimeout(revealCancel);
+      if (long) clearTimeout(long);
     };
-  }, [stage, waiting]);
+  }, [kind, cancellable]);
   useEffect(() => {
     const overlay = overlayRef.current;
     if (!overlay) return undefined;
@@ -1131,7 +1180,7 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
         ?.focus({ preventScroll: true });
     const frame = requestAnimationFrame(focus);
     const keydown = (event) => {
-      if (event.key === "Escape" && onCancel) {
+      if (event.key === "Escape" && showCancel && onCancel) {
         event.preventDefault();
         onCancel();
         return;
@@ -1161,7 +1210,8 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
       cancelAnimationFrame(frame);
       removeEventListener("keydown", keydown);
     };
-  }, [onCancel]);
+  }, [onCancel, showCancel, visible]);
+  if (!visible) return null;
   if (kind === "import")
     return (
       <div
@@ -1173,13 +1223,13 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
         aria-describedby="building-detail"
       >
         <div className="building-card" role="status" aria-live="polite">
-          <div className="building-spinner" aria-hidden="true" />
           <Eyebrow>IMPORTING YOUR PLAN</Eyebrow>
           <h2 id="building-title">Reading your notes…</h2>
           <p id="building-detail">
             Structuring the plan for review without changing your exercises.
           </p>
-          {onCancel ? (
+          <div className="building-spinner" aria-hidden="true" />
+          {showCancel && onCancel ? (
             <button
               type="button"
               className="building-cancel"
@@ -1187,18 +1237,17 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
             >
               CANCEL
             </button>
-          ) : (
-            <small>Please keep this page open.</small>
-          )}
+          ) : null}
         </div>
       </div>
     );
-  const detail =
-    waiting && waitLevel === 1
-      ? "Personalized plans can take a few more seconds."
-      : waiting && waitLevel === 2
-        ? "Still working — larger programs can take up to two minutes."
-        : current.detail;
+  const saving = stage === "saving";
+  const title = saving ? "Saving your program…" : "Building your training week…";
+  const detail = saving
+    ? "Keeping your new program ready for the first workout."
+    : waitLevel
+      ? "This is taking a little longer than usual."
+      : "Applying your preferences and checking the plan.";
   return (
     <div
       ref={overlayRef}
@@ -1214,18 +1263,15 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
         aria-live="polite"
         aria-atomic="true"
       >
-        <div className="building-spinner" aria-hidden="true" />
         <Eyebrow>BUILDING YOUR PROGRAM</Eyebrow>
-        <h2 id="building-title">{current.title}</h2>
-        <small className="building-step">Step {current.step} of 4</small>
+        <h2 id="building-title">{title}</h2>
         <p id="building-detail">{detail}</p>
-        {onCancel ? (
+        <div className="building-spinner" aria-hidden="true" />
+        {showCancel && onCancel ? (
           <button type="button" className="building-cancel" onClick={onCancel}>
             CANCEL
           </button>
-        ) : (
-          <small>Please keep this page open.</small>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -1290,6 +1336,56 @@ const EQUIPMENT_LABELS = {
   "resistance bands": "Resistance bands",
   "bodyweight only": "Bodyweight only",
 };
+const EXERCISE_ART_ASSETS = import.meta.glob("./assets/exercise-art/wg-*.svg", {
+  eager: true,
+  query: "?url",
+  import: "default",
+});
+function exerciseArtId(exercise) {
+  const aliasMatch = [
+    exercise?.importedName,
+    exercise?.name,
+    exercise?.exerciseName,
+    exercise?.title,
+  ]
+    .filter(Boolean)
+    .map((name) => matchImportedExerciseName(splitImportedExerciseLabel(name).name))
+    .find((match) => exerciseCatalog[match?.exerciseId]?.artId);
+  const artId =
+    exerciseCatalog[exercise?.exerciseId]?.artId ||
+    exerciseCatalog[aliasMatch?.exerciseId]?.artId ||
+    exercise?.artId;
+  return artId || null;
+}
+export function exerciseArt(exercise) {
+  const artId = exerciseArtId(exercise);
+  return artId
+    ? EXERCISE_ART_ASSETS[`./assets/exercise-art/${artId}.svg`] || null
+    : null;
+}
+export function exerciseThumbnailPresentation(exercise) {
+  const artId = exerciseArtId(exercise);
+  const normalization = EXERCISE_THUMBNAIL_NORMALIZATION[artId] || {
+    scale: 1,
+    x: 0,
+    y: 0,
+  };
+  return {
+    artId: artId || null,
+    style: {
+      "--exercise-art-scale": normalization.scale,
+      "--exercise-art-offset-x": `${normalization.x}px`,
+      "--exercise-art-offset-y": `${normalization.y}px`,
+    },
+  };
+}
+export function setupSelectionValid(answers = {}) {
+  return Boolean(
+    answers.environment &&
+      (answers.environment === "Commercial gym" ||
+        (answers.equipment || []).some((item) => item !== "full gym")),
+  );
+}
 const PRIORITIES = [
   "Balanced",
   "Chest",
@@ -1307,26 +1403,26 @@ const EFFORT_STYLES = [
 ];
 const EFFORT_GUIDANCE = {
   Beginner: {
-    question: "How much training volume feels manageable?",
-    hint: "Choose a simple starting point. Rook will manage the effort targets for you, and you can adjust this later.",
+    question: "How much work per exercise feels manageable?",
+    hint: "Choose a starting point. ROOK will manage effort targets for you.",
     options: [
       {
         label: "Balanced starting point",
         description: "Usually 3 sets per exercise",
       },
       {
-        label: "Shorter, focused sessions",
+        label: "Fewer hard sets",
         description: "Usually 2 challenging sets per exercise",
       },
       {
-        label: "More practice and volume",
+        label: "More sets and practice",
         description: "Usually 3–4 moderate sets per exercise",
       },
     ],
   },
   Intermediate: {
-    question: "How do you prefer to balance sets and effort?",
-    hint: "“Reps left” means how many clean reps you could still do when a set ends. This is also called reps in reserve (RIR).",
+    question: "How much work per exercise feels manageable?",
+    hint: "Reps in reserve (RIR) means how many clean reps you could still do when a set ends.",
     options: [
       {
         label: "Balanced workload",
@@ -1343,8 +1439,8 @@ const EFFORT_GUIDANCE = {
     ],
   },
   Advanced: {
-    question: "How do you prefer to distribute your training effort?",
-    hint: "RIR means reps in reserve: the number of clean reps you could still perform when a set ends.",
+    question: "How much work per exercise feels manageable?",
+    hint: "RIR means reps in reserve: clean reps you could still perform when a set ends.",
     options: [
       { label: "Balanced workload", description: "Usually 3 sets · 1–2 RIR" },
       { label: "Fewer hard sets", description: "2 sets · 0–1 RIR" },
@@ -1583,36 +1679,73 @@ function PhysiqueReview({ profile, onUse, onClose }) {
   );
 }
 function EntryLanding({ personalize, importPlan, startFromScratch }) {
+  const exampleWeek = [
+    ["MON", "Upper"],
+    ["TUE", "Lower"],
+    ["THU", "Upper"],
+    ["SAT", "Lower"],
+  ];
+
   return (
-    <main className="onboarding entry-screen">
-      <div className="brand">ROOK</div>
+    <main className="onboarding entry-screen entry-v2">
+      <header className="entry-top">
+        <div className="brand">ROOK</div>
+        <span className="entry-eyebrow">Training, built around you</span>
+      </header>
       <div className="entry-content">
-        <Eyebrow>TRAINING, BUILT AROUND YOU</Eyebrow>
-        <h1>A plan that fits—and keeps up.</h1>
+        <h1>A plan that fits and keeps up.</h1>
         <p>
-          Build a weekly program around your schedule, equipment and experience.
-          As you log workouts, Rook uses your real training history to guide
-          what comes next.
+          Tell Rook when you can train, your equipment, and your experience.
+          Get a week built around you — then adjusted as you log.
         </p>
-        <div className="entry-actions">
+        <div className="entry-primary-action">
           <Button onClick={personalize}>BUILD MY PLAN</Button>
-          <button className="existing-plan-action" onClick={importPlan}>
-            <strong>I ALREADY HAVE A PLAN</strong>
-            <small>Bring your current routine into Rook</small>
-            <span>›</span>
-          </button>
-          <button className="scratch-plan-action" onClick={startFromScratch}>
-            <strong>START FROM SCRATCH</strong>
-            <small>Create your workouts manually</small>
-            <span>›</span>
-          </button>
+          <p className="entry-primary-note">
+            About 2 minutes · No account needed
+          </p>
         </div>
+        <section className="entry-week" aria-labelledby="entry-week-title">
+          <div className="entry-week-header">
+            <span id="entry-week-title">EXAMPLE WEEK</span>
+            <small>Built around 4 available days</small>
+          </div>
+          <ul>
+            {exampleWeek.map(([day, workout]) => (
+              <li key={day}>
+                <i aria-hidden="true" />
+                <strong>{day}</strong>
+                <small>{workout}</small>
+              </li>
+            ))}
+          </ul>
+        </section>
+      </div>
+      <div className="entry-actions">
+        <button className="existing-plan-action" onClick={importPlan}>
+          <strong>Already have a plan</strong>
+          <small>Bring your current routine into Rook</small>
+          <span aria-hidden="true">›</span>
+        </button>
+        <button className="scratch-plan-action" onClick={startFromScratch}>
+          <strong>Start from scratch</strong>
+          <small>Create your workouts manually</small>
+          <span aria-hidden="true">›</span>
+        </button>
       </div>
     </main>
   );
 }
 function Onboarding({ update, exit, onPlanAccepted }) {
   const [step, setStep] = useState(0);
+  const [ageMenuOpen, setAgeMenuOpen] = useState(false);
+  const [activeAgeIndex, setActiveAgeIndex] = useState(0);
+  const [ageMenuLayout, setAgeMenuLayout] = useState({
+    opensAbove: false,
+    maxHeight: 264,
+  });
+  const agePickerRef = useRef(null);
+  const ageTriggerRef = useRef(null);
+  const ageOptionRefs = useRef([]);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState("");
   const [physiqueOpen, setPhysiqueOpen] = useState(false);
@@ -1652,7 +1785,59 @@ function Onboarding({ update, exit, onPlanAccepted }) {
   const [followIndex, setFollowIndex] = useState(0);
   const [followText, setFollowText] = useState("");
   const effortGuidance = effortGuidanceFor(answers.experience);
+  const ageRangeOptions = ["Under 18", "18–29", "30–39", "40–49", "50–59", "60+"];
   useEffect(() => {
+    if (!ageMenuOpen) return undefined;
+    const selectedIndex = Math.max(0, ageRangeOptions.indexOf(answers.ageRange));
+    setActiveAgeIndex(selectedIndex);
+    const outsidePointer = (event) => {
+      if (!agePickerRef.current?.contains(event.target)) setAgeMenuOpen(false);
+    };
+    document.addEventListener("pointerdown", outsidePointer);
+    return () => {
+      document.removeEventListener("pointerdown", outsidePointer);
+    };
+  }, [ageMenuOpen, answers.ageRange]);
+  useLayoutEffect(() => {
+    if (!ageMenuOpen) return undefined;
+    const updateAgeMenuLayout = () => {
+      const rect = ageTriggerRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      const viewportHeight = window.visualViewport?.height || window.innerHeight;
+      const spaceBelow = viewportHeight - rect.bottom - 10;
+      const spaceAbove = rect.top - 10;
+      const nextAction = agePickerRef.current
+        ?.closest(".onboarding")
+        ?.querySelector(".primary");
+      const nextActionTop = nextAction?.getBoundingClientRect().top;
+      const clearSpaceBelow = nextActionTop
+        ? Math.min(spaceBelow, nextActionTop - rect.bottom - 12)
+        : spaceBelow;
+      const opensAbove = clearSpaceBelow < 176 && spaceAbove > clearSpaceBelow;
+      const availableSpace = opensAbove ? spaceAbove : clearSpaceBelow;
+      setAgeMenuLayout({
+        opensAbove,
+        maxHeight: Math.min(264, Math.max(132, availableSpace - 6)),
+      });
+    };
+    updateAgeMenuLayout();
+    window.addEventListener("resize", updateAgeMenuLayout);
+    window.visualViewport?.addEventListener("resize", updateAgeMenuLayout);
+    return () => {
+      window.removeEventListener("resize", updateAgeMenuLayout);
+      window.visualViewport?.removeEventListener("resize", updateAgeMenuLayout);
+    };
+  }, [ageMenuOpen]);
+  useEffect(() => {
+    if (!ageMenuOpen) return;
+    const frame = requestAnimationFrame(() => {
+      ageOptionRefs.current[activeAgeIndex]?.focus({ preventScroll: true });
+      ageOptionRefs.current[activeAgeIndex]?.scrollIntoView({ block: "nearest" });
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [ageMenuOpen, activeAgeIndex]);
+  useEffect(() => {
+    setAgeMenuOpen(false);
     const frame = requestAnimationFrame(() => {
       document.activeElement?.blur?.();
       window.scrollTo({ top: 0, left: 0 });
@@ -1678,7 +1863,8 @@ function Onboarding({ update, exit, onPlanAccepted }) {
     {
       key: "experience",
       label: "EXPERIENCE",
-      question: "How familiar are you with structured training?",
+      question: "What’s your training experience?",
+      hideHelper: true,
       options: EXPERIENCES,
     },
     {
@@ -1690,9 +1876,8 @@ function Onboarding({ update, exit, onPlanAccepted }) {
     {
       key: "setup",
       label: "TRAINING SETUP",
-      question: "Where and how will you train?",
-      helper:
-        "We’ll only use exercises that fit the equipment you can rely on.",
+      question: "Where will you train?",
+      helper: "ROOK will only use exercises that fit your available equipment.",
     },
     {
       key: "priorities",
@@ -1706,7 +1891,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
     },
     {
       key: "effortStyle",
-      label: "SETS & EFFORT",
+      label: "TRAINING VOLUME",
       question: effortGuidance.question,
       options: EFFORT_STYLES,
       optional: true,
@@ -1834,14 +2019,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
     answers.sessionMinutes &&
     answers.availableDays.length >= answers.daysPerWeek,
   );
-  const bodyweightOnlyPullGap =
-    answers.environment === "Home gym" && !hasBalancedPullEquipment(answers);
-  const setupValid = Boolean(
-    answers.environment &&
-    (answers.environment === "Commercial gym" ||
-      answers.equipment.some((item) => item !== "full gym")) &&
-    !bodyweightOnlyPullGap,
-  );
+  const setupValid = setupSelectionValid(answers);
   const answersWithSafety =
     safetyAnalysis.analysis && safetyAnalysis.sourceText === String(answers.avoid || "")
       ? {
@@ -2232,41 +2410,116 @@ function Onboarding({ update, exit, onPlanAccepted }) {
       <span className="step-count">
         STEP {step + 1}/{stages.length}
       </span>
-      <div className="onboarding-content">
+      <div className="onboarding-content" key={stage.key}>
         <Eyebrow>{stage.label}</Eyebrow>
         <h1>{stage.question}</h1>
-        <p>
-          {stage.personal
-            ? "Age helps Rook choose a more appropriate starting workload and recovery pattern. Your first name is optional."
-            : stage.helper ||
-              stage.optionalHint ||
-              (stage.optional
-                ? "Optional. Choose only what matters to you."
-                : "Choose the answer that best fits your routine.")}
-        </p>
+        {!stage.hideHelper && (
+          <p>
+            {stage.personal
+              ? "Age helps Rook choose a more appropriate starting workload and recovery pattern. Your first name is optional."
+              : stage.helper ||
+                stage.optionalHint ||
+                (stage.optional
+                  ? "Optional. Choose only what matters to you."
+                  : "Choose the answer that best fits your routine.")}
+          </p>
+        )}
         {stage.personal ? (
           <div className="personal-fields">
             <label>
               <span>Age range</span>
-              <select
-                aria-label="Age range"
-                value={answers.ageRange || ""}
-                onChange={(event) =>
-                  setAnswers((current) => ({
-                    ...current,
-                    ageRange: event.target.value,
-                  }))
-                }
-              >
-                <option value="" disabled>
-                  Select age range
-                </option>
-                {["Under 18", "18–29", "30–39", "40–49", "50–59", "60+"].map(
-                  (option) => (
-                    <option key={option}>{option}</option>
-                  ),
+              <div className="age-range-picker" ref={agePickerRef}>
+                <button
+                  ref={ageTriggerRef}
+                  type="button"
+                  className="age-range-trigger"
+                  role="combobox"
+                  aria-label="Age range"
+                  aria-expanded={ageMenuOpen}
+                  aria-controls="age-range-options"
+                  aria-haspopup="listbox"
+                  onClick={() => setAgeMenuOpen((open) => !open)}
+                  onKeyDown={(event) => {
+                    if (["ArrowDown", "ArrowUp"].includes(event.key)) {
+                      event.preventDefault();
+                      const selectedIndex = Math.max(
+                        0,
+                        ageRangeOptions.indexOf(answers.ageRange),
+                      );
+                      setActiveAgeIndex(selectedIndex);
+                      setAgeMenuOpen(true);
+                    }
+                    if (event.key === "Escape") setAgeMenuOpen(false);
+                  }}
+                >
+                  <span className={answers.ageRange ? "" : "placeholder"}>
+                    {answers.ageRange || "Select age range"}
+                  </span>
+                  <i className="disclosure-chevron" aria-hidden="true" />
+                </button>
+                {ageMenuOpen && (
+                  <div
+                    id="age-range-options"
+                    className={`age-range-options${ageMenuLayout.opensAbove ? " opens-above" : ""}`}
+                    role="listbox"
+                    aria-label="Age range options"
+                    style={{ maxHeight: `${ageMenuLayout.maxHeight}px` }}
+                  >
+                    {ageRangeOptions.map((option, index) => (
+                      <button
+                        ref={(element) => {
+                          ageOptionRefs.current[index] = element;
+                        }}
+                        type="button"
+                        key={option}
+                        role="option"
+                        tabIndex={index === activeAgeIndex ? 0 : -1}
+                        aria-selected={answers.ageRange === option}
+                        className={index === activeAgeIndex ? "is-active" : ""}
+                        onPointerMove={() => setActiveAgeIndex(index)}
+                        onClick={() => {
+                          setAnswers((current) => ({
+                            ...current,
+                            ageRange: option,
+                          }));
+                          setAgeMenuOpen(false);
+                          requestAnimationFrame(() =>
+                            ageTriggerRef.current?.focus({ preventScroll: true }),
+                          );
+                        }}
+                        onKeyDown={(event) => {
+                          if (["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) {
+                            event.preventDefault();
+                            const nextIndex =
+                              event.key === "Home"
+                                ? 0
+                                : event.key === "End"
+                                  ? ageRangeOptions.length - 1
+                                  : (index + (event.key === "ArrowDown" ? 1 : -1) + ageRangeOptions.length) % ageRangeOptions.length;
+                            setActiveAgeIndex(nextIndex);
+                            ageOptionRefs.current[nextIndex]?.focus({
+                              preventScroll: true,
+                            });
+                          } else if (event.key === "Escape") {
+                            event.preventDefault();
+                            setAgeMenuOpen(false);
+                            requestAnimationFrame(() =>
+                              ageTriggerRef.current?.focus({ preventScroll: true }),
+                            );
+                          } else if (event.key === "Tab") {
+                            setAgeMenuOpen(false);
+                          }
+                        }}
+                      >
+                        <span>{option}</span>
+                        {answers.ageRange === option ? (
+                          <i aria-hidden="true">✓</i>
+                        ) : null}
+                      </button>
+                    ))}
+                  </div>
                 )}
-              </select>
+              </div>
             </label>
             <label>
               <span>
@@ -2310,11 +2563,11 @@ function Onboarding({ update, exit, onPlanAccepted }) {
             </section>
             <section className="onboarding-question-group schedule-days">
               <div className="onboarding-group-heading">
-                <strong>Days that could work</strong>
+                <strong>Days you can train</strong>
                 <label className="select-all-check">
                   <input
                     type="checkbox"
-                    aria-label="Select all days"
+                    aria-label="Make any day available"
                     checked={answers.availableDays.length === WEEKDAYS.length}
                     onChange={() =>
                       setAnswers((current) => ({
@@ -2326,19 +2579,24 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                       }))
                     }
                   />
-                  <span>All</span>
+                  <span>Any day</span>
                 </label>
               </div>
               <div className="option-list day-options">
                 {WEEKDAYS.map((option) => (
                   <OnboardingOptionCard
                     key={option}
-                    label={option}
+                    label={localizedWeekdayLabel(option, "short")}
+                    ariaLabel={localizedWeekdayLabel(option, "long")}
                     selected={answers.availableDays.includes(option)}
                     onClick={() => chooseAvailableDay(option)}
                   />
                 ))}
               </div>
+              <small className="schedule-selection-count" aria-live="polite">
+                {answers.availableDays.length}{" "}
+                {answers.availableDays.length === 1 ? "day" : "days"} selected
+              </small>
               {answers.daysPerWeek &&
                 answers.availableDays.length < answers.daysPerWeek && (
                   <small className="schedule-hint">
@@ -2412,13 +2670,6 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                       ),
                     )}
                   </div>
-                  {bodyweightOnlyPullGap && (
-                    <small className="schedule-hint" role="alert">
-                      Add resistance bands, dumbbells, a pull-up bar, or a
-                      barbell setup so Rook can include progressively loadable
-                      back training.
-                    </small>
-                  )}
                 </section>
               )}
           </div>
@@ -2573,18 +2824,6 @@ function Onboarding({ update, exit, onPlanAccepted }) {
             <p>{goalPlanPreview.detail}</p>
           </section>
         )}
-        {stage.key === "priorities" && (
-          <button
-            className="physique-review-entry"
-            onClick={() => setPhysiqueOpen(true)}
-          >
-            <span>
-              <strong>Not sure what to prioritize?</strong>
-              <small>Get an optional physique review</small>
-            </span>
-            <i>›</i>
-          </button>
-        )}
         {notice && <p className="offline-banner">{notice}</p>}
       </div>
       <div className="onboarding-footer">
@@ -2641,13 +2880,20 @@ function Onboarding({ update, exit, onPlanAccepted }) {
           (step > 0 ? (
             <Button
               variant="quiet"
+              className="bottom-back"
+              aria-label="Back"
               onClick={() => setStep((index) => index - 1)}
             >
-              Back
+              <BackLabel />
             </Button>
           ) : (
-            <Button variant="quiet" onClick={exit}>
-              Back
+            <Button
+              variant="quiet"
+              className="bottom-back"
+              aria-label="Back"
+              onClick={exit}
+            >
+              <BackLabel />
             </Button>
           ))}
       </div>
@@ -2696,6 +2942,9 @@ function WeekNavigation({ date, canGoBack, canGoForward, move }) {
   );
 }
 function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
+  const [tracedDate, setTracedDate] = useState(null);
+  const traceTimerRef = useRef(null);
+  useEffect(() => () => clearTimeout(traceTimerRef.current), []);
   const schedule = new Map(
     currentWeekSchedule(state, referenceDate).map((item) => [
       item.scheduledDate,
@@ -2725,14 +2974,22 @@ function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
           : planned
             ? ", planned workout"
             : ", rest day";
+        const dateKey = isoDay(date);
+        const selectDay = () => {
+          if (isSelected) return;
+          selectDate(day, date);
+          setTracedDate(dateKey);
+          clearTimeout(traceTimerRef.current);
+          traceTimerRef.current = setTimeout(() => setTracedDate(null), 520);
+        };
         return (
           <button
             key={day}
             aria-label={`${day} ${date.getDate()}${isToday ? ", today" : ""}${statusLabel}`}
             aria-current={isToday ? "date" : undefined}
             aria-pressed={isSelected}
-            className={`${isSelected ? "selected-day" : isToday ? "today-date" : ""} ${workoutState}`}
-            onClick={() => selectDate(day, date)}
+            className={`${isSelected ? "selected-day" : isToday ? "today-date" : ""} ${workoutState}${isSelected && tracedDate === dateKey ? " day-selection-trace" : ""}`}
+            onClick={selectDay}
           >
             <small>{day[0]}</small>
             {(complete || planned) && (
@@ -2784,6 +3041,45 @@ export function formatActiveWorkoutDuration(seconds) {
   if (hours >= 100) return "99+ h";
   return `${hours}:${String(totalMinutes % 60).padStart(2, "0")} h`;
 }
+function TodayExerciseRow({ exercise, detail, profile, setDetail }) {
+  return (
+    <button
+      onClick={() => setDetail({ exercise })}
+      className={`list-row exercise-list-row${detail ? " has-secondary" : ""}`}
+    >
+      <span className="exercise-row-main">
+        <span>
+          <strong>{exerciseName(exercise)}</strong>
+          {detail && <small>{detail}</small>}
+        </span>
+      </span>
+      <span className="navigation-row-end">
+        <span>{targetLabel(exercise, profile.rirEnabled)}</span>
+        <span className="navigation-chevron" aria-hidden="true">
+          ›
+        </span>
+      </span>
+    </button>
+  );
+}
+function ActiveWorkoutNotice({ workout, dateKey, onResume }) {
+  return (
+    <aside className="active-workout-notice" aria-label="Workout in progress">
+      <span>
+        <Eyebrow>WORKOUT IN PROGRESS</Eyebrow>
+        <strong>{workout.name}</strong>
+        <small>{displayDate(localDate(dateKey))}</small>
+      </span>
+      <button
+        className="text-button"
+        aria-label={`Resume ${workout.name} workout`}
+        onClick={onResume}
+      >
+        RESUME
+      </button>
+    </aside>
+  );
+}
 function Today({
   state,
   update,
@@ -2793,6 +3089,9 @@ function Today({
   dismissPlanReady,
 }) {
   const active = state.activeWorkout;
+  const startLock = useRef(false);
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState("");
   const selectedDate = state.selectedDate
     ? localDate(state.selectedDate)
     : weekDate(state.selectedDay || weekday());
@@ -2805,6 +3104,10 @@ function Today({
   }, [active?.id]);
   const selectedIso = isoDay(selectedDate);
   const selectedDay = weekday(selectedDate);
+  const activeDateKey = active
+    ? active.workoutDateKey || isoDay(active.startedAt || new Date())
+    : null;
+  const selectedActiveWorkout = Boolean(active && selectedIso === activeDateKey);
   const recurringTemplate = plannedWorkoutForDate(state, selectedDate);
   const adaptedTemplate = recurringTemplate
     ? adaptedTemplateForToday(state, selectedDate)
@@ -2897,7 +3200,14 @@ function Today({
       )}
     </>
   );
-  if (active) {
+  const activeNotice = active && !selectedActiveWorkout && (
+    <ActiveWorkoutNotice
+      workout={active}
+      dateKey={activeDateKey}
+      onResume={() => setPage("workout")}
+    />
+  );
+  if (selectedActiveWorkout) {
     const sets = active.exercises.flatMap((exercise) => exercise.sets);
     const completedSets = sets.filter((set) => set.completed).length;
     const elapsed = Math.max(0, now - Number(active.startedAt || now)) / 1000;
@@ -2905,41 +3215,33 @@ function Today({
       <main className="screen today-screen">
         {calendar}
         <section className="today-hero active-workout-hero">
-          <Eyebrow>ACTIVE WORKOUT</Eyebrow>
-          <WorkoutTitle name={active.name} day={active.templateId} />
+          <Eyebrow>{displayDate(selectedDate)}</Eyebrow>
+          <WorkoutTitle workout={active} day={selectedDay} />
           <p>
-            {completedSets} of {pluralize(sets.length, "set")} ·{" "}
+            {completedSets} / {pluralize(sets.length, "set")} ·{" "}
             {formatActiveWorkoutDuration(elapsed)}
           </p>
-          <Button onClick={() => setPage("workout")}>RESUME WORKOUT</Button>
+          <Button onClick={() => setPage("workout")}>
+            RESUME WORKOUT
+          </Button>
         </section>
         <section className="exercise-preview">
           <Eyebrow>WORKOUT EXERCISES</Eyebrow>
           {active.exercises.map((exercise, index) => {
             const done = exercise.sets.filter((set) => set.completed).length;
             const current = index === active.exerciseIndex;
+            const detail =
+              done > 0 || current
+                ? `${done} of ${pluralize(exercise.sets.length, "set")}${current ? " · current" : ""}`
+                : null;
             return (
-              <button
+              <TodayExerciseRow
                 key={exercise.id}
-                onClick={() => setDetail({ exercise })}
-                className="list-row"
-              >
-                <span>
-                  <strong>{exerciseName(exercise)}</strong>
-                  {(done > 0 || current) && (
-                    <small>
-                      {done} of {pluralize(exercise.sets.length, "set")}
-                      {current ? " · current" : ""}
-                    </small>
-                  )}
-                </span>
-                <span className="navigation-row-end">
-                  <span>{targetLabel(exercise, state.profile.rirEnabled)}</span>
-                  <span className="navigation-chevron" aria-hidden="true">
-                    ›
-                  </span>
-                </span>
-              </button>
+                exercise={exercise}
+                detail={detail}
+                profile={state.profile}
+                setDetail={setDetail}
+              />
             );
           })}
         </section>
@@ -2952,6 +3254,9 @@ function Today({
   const isHistoricalWeek = selectedMonday < currentMonday;
   if (!template && !completed) {
     const upcoming = nextScheduledWorkout(state, selectedDate);
+    const upcomingTitle = upcoming
+      ? workoutDisplayParts(upcoming.workout, upcoming.workout.weekday)
+      : null;
     const optional = (state.optionalSessions || []).find(
       (item) => item.date === selectedIso,
     );
@@ -2959,6 +3264,7 @@ function Today({
     return (
       <main className="screen today-screen">
         {calendar}
+        {activeNotice}
         <section className="rest-day-state">
           <Eyebrow>REST DAY</Eyebrow>
           <h1>Rest day</h1>
@@ -2975,12 +3281,12 @@ function Today({
               <time dateTime={upcoming.scheduledDate}>
                 {displayDate(localDate(upcoming.scheduledDate))}
               </time>
-              <h2>
-                {normalizeWorkoutName(
-                  upcoming.workout.name,
-                  upcoming.workout.weekday,
-                )}
-              </h2>
+              <h2>{upcomingTitle.primary}</h2>
+              {upcomingTitle.detail && (
+                <small className="rest-up-next-descriptor">
+                  {upcomingTitle.detail}
+                </small>
+              )}
               <span>
                 {pluralize(upcoming.workout.exercises.length, "exercise")} · ~
                 {roundedEstimate(upcoming.workout.estimatedMinutes)} min
@@ -2999,7 +3305,7 @@ function Today({
               </Button>
             </div>
           )}
-          {isToday && (
+          {isToday && !active && (
             <button
               className="text-button train-anyway"
               onClick={() => setDetail({ restTraining: selectedIso })}
@@ -3043,18 +3349,30 @@ function Today({
       setDetail("training-restrictions");
       return;
     }
-    dismissPlanReady?.();
-    if (state.workouts.length === 0)
-      trackFunnelEventOnce("first_workout_started", {
-        source: template.optionalSessionId ? "optional" : "plan",
-        exerciseCount: template.exercises.length,
+    if (startLock.current) return;
+    startLock.current = true;
+    setStarting(true);
+    setStartError("");
+    triggerHaptic("tap");
+    try {
+      dismissPlanReady?.();
+      if (state.workouts.length === 0)
+        trackFunnelEventOnce("first_workout_started", {
+          source: template.optionalSessionId ? "optional" : "plan",
+          exerciseCount: template.exercises.length,
+        });
+      update((current) => {
+        current.activeWorkout = startWorkout(current, template);
+        if (template.adapted) current.todayAdaptation = null;
+        return current;
       });
-    update((current) => {
-      current.activeWorkout = startWorkout(current, template);
-      if (template.adapted) current.todayAdaptation = null;
-      return current;
-    });
-    setPage("workout");
+      setPage("workout");
+    } catch (error) {
+      startLock.current = false;
+      setStarting(false);
+      setStartError("Couldn’t start this workout. Please try again.");
+      console.error("Unable to start workout", error);
+    }
   };
   const duration = completed?.durationSeconds
     ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min logged`
@@ -3062,9 +3380,10 @@ function Today({
   return (
     <main className="screen today-screen">
       {calendar}
+      {activeNotice}
       <section className="today-hero">
         <Eyebrow>{displayDate(selectedDate)}</Eyebrow>
-        <WorkoutTitle name={session.name} day={selectedDay} />
+        <WorkoutTitle workout={session} day={selectedDay} />
         <p>
           {session.exercises.length} exercises · {duration}
           {completed
@@ -3091,6 +3410,10 @@ function Today({
           <Button variant="secondary" disabled>
             WORKOUT NOT LOGGED
           </Button>
+        ) : active ? (
+          <p className="active-workout-start-lock">
+            Finish the active workout before starting this one.
+          </p>
         ) : trainingPaused ? (
           <Button
             variant="secondary"
@@ -3099,7 +3422,23 @@ function Today({
             REVIEW RESTRICTIONS
           </Button>
         ) : (
-          <Button onClick={start}>START WORKOUT</Button>
+          <>
+            <Button
+              className="today-start-button"
+              onClick={start}
+              disabled={starting}
+              aria-busy={starting}
+            >
+              <span aria-live="polite">
+                {starting ? "STARTING…" : "START WORKOUT"}
+              </span>
+            </Button>
+            {startError && (
+              <p className="today-start-error" role="alert">
+                {startError}
+              </p>
+            )}
+          </>
         )}
       </section>
       <section className="exercise-preview">
@@ -3130,22 +3469,13 @@ function Today({
               ? "Not logged"
               : previousResult || (!isFirstSession ? "First session" : null);
           return (
-            <button
+            <TodayExerciseRow
               key={exercise.id}
-              onClick={() => setDetail({ exercise })}
-              className="list-row"
-            >
-              <span>
-                <strong>{exerciseName(exercise)}</strong>
-                {detail && <small>{detail}</small>}
-              </span>
-              <span className="navigation-row-end">
-                <span>{targetLabel(exercise, state.profile.rirEnabled)}</span>
-                <span className="navigation-chevron" aria-hidden="true">
-                  ›
-                </span>
-              </span>
-            </button>
+              exercise={exercise}
+              detail={detail}
+              profile={state.profile}
+              setDetail={setDetail}
+            />
           );
         })}
       </section>
@@ -3159,6 +3489,10 @@ export function normalizeStepperValue(raw, { min = 0, integer = false } = {}) {
   if (!Number.isFinite(numeric)) return undefined;
   return Math.max(min, integer ? Math.trunc(numeric) : numeric);
 }
+export function validStepperDraft(raw, { integer = false } = {}) {
+  const value = String(raw);
+  return integer ? /^\d*$/.test(value) : /^\d*(?:[.,]\d*)?$/.test(value);
+}
 function Stepper({
   label,
   value,
@@ -3169,8 +3503,15 @@ function Stepper({
   emptyLabel,
   integer = false,
 }) {
+  const [draft, setDraft] = useState(null);
   const numeric = Number(value || 0);
-  const empty = value === "" || value === null;
+  const shownValue = draft ?? value ?? "";
+  const empty = shownValue === "";
+  const shownNumeric = normalizeStepperValue(shownValue, { min, integer });
+  const commit = (raw) => {
+    const next = normalizeStepperValue(raw, { min, integer });
+    if (next !== undefined) onChange(next);
+  };
   return (
     <div className={`stepper ${empty ? "unset" : ""}`}>
       <button
@@ -3184,18 +3525,30 @@ function Stepper({
       </button>
       <input
         aria-label={label}
+        role="spinbutton"
+        aria-valuemin={min}
+        aria-valuenow={
+          typeof shownNumeric === "number" ? shownNumeric : undefined
+        }
+        aria-valuetext={empty ? undefined : String(shownValue)}
         placeholder={emptyLabel}
         inputMode={integer ? "numeric" : "decimal"}
-        type="number"
-        step={step}
-        value={value ?? ""}
+        type="text"
+        value={shownValue}
         disabled={disabled}
+        onFocus={() => setDraft(String(value ?? ""))}
         onChange={(event) => {
-          const next = normalizeStepperValue(event.target.value, {
-            min,
-            integer,
-          });
-          if (next !== undefined) onChange(next);
+          const nextDraft = event.target.value;
+          if (!validStepperDraft(nextDraft, { integer })) return;
+          setDraft(nextDraft);
+          commit(nextDraft);
+        }}
+        onBlur={() => {
+          if (draft !== null) commit(draft);
+          setDraft(null);
+        }}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
         }}
       />
       <button
@@ -3253,12 +3606,65 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   const [now, setNow] = useState(Date.now());
   const [confirmation, setConfirmation] = useState(null);
   const [warmupOpen, setWarmupOpen] = useState(false);
+  const [recentlyCompletedSetId, setRecentlyCompletedSetId] = useState(null);
+  const [restCompleteVisible, setRestCompleteVisible] = useState(false);
   const screenRef = useRef(null);
+  const completionFeedbackTimerRef = useRef(null);
+  const restCompleteTimerRef = useRef(null);
+  const latestCompletedSet = active?.exercises
+    ?.flatMap((entry) => entry.sets)
+    .filter((set) => Number(set.completedAt) > 0)
+    .sort((a, b) => Number(b.completedAt) - Number(a.completedAt))[0];
+  const latestCompletedAt = Number(latestCompletedSet?.completedAt || 0);
+  const seenCompletionRef = useRef(latestCompletedAt);
+  const restLeft =
+    state.profile.restTimerEnabled && Number.isFinite(active?.rest?.endsAt)
+      ? Math.max(0, Math.ceil((active.rest.endsAt - now) / 1000))
+      : 0;
+  const restReady =
+    state.profile.restTimerEnabled && active?.rest?.pending === true;
+  const previousRestLeftRef = useRef(restLeft);
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
-  useEffect(() => setWarmupOpen(false), [active?.id]);
+  useEffect(() => {
+    if (latestCompletedAt > seenCompletionRef.current) {
+      seenCompletionRef.current = latestCompletedAt;
+      setRecentlyCompletedSetId(latestCompletedSet.id);
+      triggerHaptic("success");
+      clearTimeout(completionFeedbackTimerRef.current);
+      completionFeedbackTimerRef.current = setTimeout(
+        () => setRecentlyCompletedSetId(null),
+        260,
+      );
+    }
+  }, [latestCompletedAt, latestCompletedSet?.id]);
+  useEffect(() => {
+    const previous = previousRestLeftRef.current;
+    if (restLeft > 0) setRestCompleteVisible(false);
+    if (previous > 0 && restLeft === 0 && active?.rest?.endsAt) {
+      setRestCompleteVisible(true);
+      triggerHaptic("complete");
+      clearTimeout(restCompleteTimerRef.current);
+      restCompleteTimerRef.current = setTimeout(
+        () => setRestCompleteVisible(false),
+        1400,
+      );
+    }
+    previousRestLeftRef.current = restLeft;
+  }, [restLeft, active?.rest?.endsAt]);
+  useEffect(
+    () => () => {
+      clearTimeout(completionFeedbackTimerRef.current);
+      clearTimeout(restCompleteTimerRef.current);
+    },
+    [],
+  );
+  useEffect(
+    () => setWarmupOpen(false),
+    [active?.id, active?.exerciseIndex],
+  );
   if (!active)
     return (
       <main className="screen">
@@ -3270,18 +3676,14 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       </main>
     );
   const exercise = active.exercises[active.exerciseIndex];
+  const exerciseIllustration =
+    state.profile.showExerciseImages !== false ? exerciseArt(exercise) : null;
   const superset = supersetMeta(active.exercises, active.exerciseIndex);
   const canonicalSupersetStep = superset
     ? nextSupersetStep(active.exercises, superset.id)
     : null;
   const prior = previousExercise(state.workouts, exercise.exerciseId);
   const elapsed = Math.floor((now - active.startedAt) / 1000);
-  const restLeft =
-    state.profile.restTimerEnabled && Number.isFinite(active.rest?.endsAt)
-      ? Math.max(0, Math.ceil((active.rest.endsAt - now) / 1000))
-      : 0;
-  const restReady =
-    state.profile.restTimerEnabled && active.rest?.pending === true;
   const item = exerciseCatalog[exercise.exerciseId];
   const increment =
     state.profile.increments[item?.equipment?.[0]] ?? exercise.defaultIncrement;
@@ -3313,9 +3715,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   const hasPreviousExercise = previousIndex >= 0;
   const nextIndex = active.exerciseIndex + 1;
   const nextExercise = active.exercises[nextIndex] || null;
-  const incompleteCurrent = exercise.sets.filter(
-    (set) => set.planned !== false && !set.added && !set.completed,
-  ).length;
+  const incompleteCurrent = exercise.sets.filter((set) => !set.completed).length;
   const supersetRoundIndex = superset
     ? Math.max(
         0,
@@ -3329,8 +3729,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     ? superset.role === "A1" &&
       superset.partner.exercise.sets[supersetRoundIndex] &&
       !superset.partner.exercise.sets[supersetRoundIndex].completed
-      ? `Next: A2 · ${exerciseName(superset.partner.exercise)}`
-      : `Next: Rest · ${formatDuration(superset.restSeconds)}`
+      ? `Next: ${exerciseName(superset.partner.exercise)}`
+      : `Rest after both · ${formatDuration(superset.restSeconds)}`
     : null;
   const mutate = (fn) =>
     update((current) => {
@@ -3340,7 +3740,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     });
   const updateSet = (index, field, value) =>
     mutate((workout) => {
-      workout.exercises[workout.exerciseIndex].sets[index][field] = value;
+      const set = workout.exercises[workout.exerciseIndex].sets[index];
+      set[field] = value;
+      set.touched = true;
     });
   const updateWeight = (index, value) =>
     mutate((workout) => {
@@ -3354,6 +3756,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         (!empty(a) && !empty(b) && Number(a) === Number(b));
       let previousOldWeight = target.weight;
       target.weight = value;
+      target.touched = true;
       target.weightEntryMode = "manual";
       delete target.weightSourceSetId;
       for (let setIndex = index + 1; setIndex < sets.length; setIndex++) {
@@ -3382,6 +3785,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       if (!target) return;
       let previousOldReps = target.reps;
       target.reps = value;
+      target.touched = true;
       target.repsEntryMode = "manual";
       delete target.repsSourceSetId;
       for (let setIndex = index + 1; setIndex < sets.length; setIndex++) {
@@ -3414,6 +3818,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       const nextIncomplete = current.sets.findIndex((set) => !set.completed);
       const set = current.sets[index];
       const timestamp = Date.now();
+      if (!set.completed && !workingSetCanComplete(current, set)) return;
       if (
         !set.completed &&
         (group
@@ -3484,6 +3889,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         planned: false,
         completed: false,
         added: true,
+        touched: false,
         rir: null,
         weight: previous?.weight ?? null,
         weightEntryMode: "auto",
@@ -3491,6 +3897,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         repsEntryMode: "auto",
         repsSourceSetId: previous?.id || null,
       });
+      delete sets.at(-1).completedAt;
     });
   const removeExtraSet = (index) => {
     const set = exercise.sets[index];
@@ -3521,7 +3928,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     if (state.workouts.length === 0)
       trackFunnelEventOnce("first_workout_completed", {
         setCount: summary.completed,
-        endedEarly: summary.completedPlanned < summary.planned,
+        endedEarly: summary.completed < summary.total,
       });
     update(completeWorkout);
     setConfirmation(null);
@@ -3533,11 +3940,11 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     else moveToExercise(nextIndex);
   };
   const requestFinish = () => {
-    if (summary.completedPlanned < summary.planned)
+    if (summary.completed < summary.total)
       setConfirmation({
         type: "finish",
-        completed: summary.completedPlanned,
-        planned: summary.planned,
+        completed: summary.completed,
+        planned: summary.total,
       });
     else finishWorkout();
   };
@@ -3545,17 +3952,21 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     confirmation?.type === "next" ? moveToExercise(nextIndex) : finishWorkout();
   const timed = exerciseMeasure(exercise) === "seconds";
   const addedBodyweightLoad = Boolean(item?.bodyweight && !timed);
-  const timerVisible = !confirmation && (restReady || restLeft > 0);
-  const warmup =
-    active.exerciseIndex === 0 && !active.warmup?.skipped
-      ? active.warmup
-      : null;
+  const timerVisible =
+    !confirmation && (restReady || restLeft > 0 || restCompleteVisible);
+  const warmup = (active.warmup?.stages || []).find(
+    (stage) =>
+      stage.exerciseIndex === active.exerciseIndex &&
+      stage.exerciseId === exercise.exerciseId &&
+      !stage.skipped,
+  );
   const warmupCompleted = Boolean(warmup?.completed);
+  const initialWarmup = warmup?.exerciseIndex === 0;
   const upNextBlocks = [];
   const seenUpNextSupersets = new Set();
   active.exercises.forEach((entry, index) => {
     if (index <= active.exerciseIndex) return;
-    if (entry.supersetId === superset?.id) return;
+    if (superset && entry.supersetId === superset.id) return;
     if (!entry.supersetId) {
       upNextBlocks.push({ index, entries: [entry] });
       return;
@@ -3574,14 +3985,19 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   });
   const completeWarmup = () => {
     mutate((workout) => {
-      if (workout.warmup) workout.warmup.completed = true;
+      const stage = workout.warmup?.stages?.find(
+        (item) => item.id === warmup?.id,
+      );
+      if (stage) stage.completed = true;
     });
     setWarmupOpen(false);
   };
-  const toggleRampSet = (exerciseId, setId) =>
+  const toggleRampSet = (stageId, exerciseId, setId) =>
     mutate((workout) => {
-      const set = workout.warmup?.rampUpSets
-        .find((entry) => entry.exerciseId === exerciseId)
+      const set = workout.warmup?.stages
+        ?.find((stage) => stage.id === stageId)
+        ?.rampUpSets
+        ?.find((entry) => entry.exerciseId === exerciseId)
         ?.sets.find((entry) => entry.id === setId);
       if (set) set.completed = !set.completed;
     });
@@ -3616,9 +4032,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         </button>
         <div>
           <strong>{active.name}</strong>
-          <small>
-            {formatDuration(elapsed)} · {summary.completed} of{" "}
-            {pluralize(totalSets, "set")}
+          <small aria-live="polite">
+            {formatDuration(elapsed)} · {summary.completed} /{" "}
+            {pluralize(totalSets, "set")} completed
           </small>
         </div>
         <button className="text-button" onClick={requestFinish}>
@@ -3634,7 +4050,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               <span aria-hidden="true">✓</span>
               <div>
                 <strong>Warm-up complete</strong>
-                <small>Ready for your working sets</small>
+                <small>Ready for {warmup.exerciseName}</small>
               </div>
             </div>
           ) : (
@@ -3650,7 +4066,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                     <small>
                       {warmupOpen
                         ? "Hide recommendations"
-                        : "View recommendations"}
+                        : `For ${warmup.exerciseName}`}
                     </small>
                   </span>
                   <i className="disclosure-chevron" aria-hidden="true" />
@@ -3659,16 +4075,19 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   className="text-button warmup-skip"
                   onClick={() =>
                     mutate((workout) => {
-                      workout.warmup.skipped = true;
+                      const stage = workout.warmup?.stages?.find(
+                        (item) => item.id === warmup.id,
+                      );
+                      if (stage) stage.skipped = true;
                     })
                   }
                 >
                   Skip
                 </button>
               </div>
-              {warmup.safetyMessage && (
+              {active.warmup?.safetyMessage && (
                 <p className="warmup-safety" role="status">
-                  {warmup.safetyMessage}
+                  {active.warmup.safetyMessage}
                 </p>
               )}
               {warmupOpen && (
@@ -3702,7 +4121,11 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                           className={set.completed ? "completed" : ""}
                           key={set.id}
                           onClick={() =>
-                            toggleRampSet(entry.exerciseId, set.id)
+                            toggleRampSet(
+                              warmup.id,
+                              entry.exerciseId,
+                              set.id,
+                            )
                           }
                         >
                           <span>{rampLabel(entry, set)}</span>
@@ -3716,7 +4139,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                     className="warmup-finish"
                     onClick={completeWarmup}
                   >
-                    FINISH WARM-UP
+                    {initialWarmup ? "FINISH WARM-UP" : "FINISH RAMP-UP"}
                   </button>
                 </div>
               )}
@@ -3724,40 +4147,74 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           )}
         </section>
       )}
-      <section className="exercise-heading">
-        <div>
-          <Eyebrow>
-            {superset
-              ? `SUPERSET · ${superset.role} · ROUND ${supersetRoundIndex + 1} OF ${superset.roundCount}`
-              : `EXERCISE ${active.exerciseIndex + 1} OF ${active.exercises.length}`}
-          </Eyebrow>
+      <section
+        key={`exercise-heading-${exercise.id}`}
+        className={`exercise-heading${exerciseIllustration ? " has-illustration" : ""}${exerciseName(exercise).length > 36 ? " long-title" : ""}`}
+      >
+        {exerciseIllustration && (
+          <button
+            type="button"
+            className="exercise-heading-art-button"
+            aria-label={`View ${exerciseName(exercise)} illustration`}
+            onClick={() => setDetail({ visual: exercise })}
+          >
+            <img
+              className="exercise-heading-art"
+              src={exerciseIllustration}
+              alt=""
+              aria-hidden="true"
+            />
+          </button>
+        )}
+        <div className="exercise-heading-content">
+          <div className="exercise-heading-topline">
+            <Eyebrow>
+              {superset
+                ? `SUPERSET · ROUND ${supersetRoundIndex + 1} OF ${superset.roundCount}`
+                : `EXERCISE ${active.exerciseIndex + 1} OF ${active.exercises.length}`}
+            </Eyebrow>
+            <div className="workout-exercise-actions">
+              <button
+                className="text-button"
+                disabled={exercise.sets.some((set) => set.completed)}
+                title={
+                  exercise.sets.some((set) => set.completed)
+                    ? "Replacement is locked after work is logged."
+                    : "Replace this exercise for today"
+                }
+                onClick={() => setDetail({ replace: exercise })}
+              >
+                Replace
+              </button>
+              <button
+                className="exercise-options-button"
+                aria-label="Exercise options"
+                title="Exercise options"
+                onClick={() => setDetail({ options: exercise })}
+              >
+                <span aria-hidden="true">•••</span>
+              </button>
+            </div>
+          </div>
           <h1>{exerciseName(exercise)}</h1>
+          <p className="exercise-meta">
+            Target {targetLabel(exercise, state.profile.rirEnabled)}
+          </p>
+          <small className="exercise-history-meta">
+            {prior
+              ? `Last ${prior.sets
+                .filter((set) => set.completed)
+                .map((set) => exerciseValueLabel(exercise, set.reps))
+                .join(" / ")}`
+              : "First session"}
+          </small>
+          {exerciseNote(exercise) && (
+            <small className="exercise-user-note">{exerciseNote(exercise)}</small>
+          )}
           {superset && (
             <small className="superset-next-step">{supersetNextLabel}</small>
           )}
-          <p>
-            Target {targetLabel(exercise, state.profile.rirEnabled)}{" "}
-            <span>│</span>{" "}
-            {prior
-              ? `Last ${prior.sets
-                  .filter((set) => set.completed)
-                  .map((set) => exerciseValueLabel(exercise, set.reps))
-                  .join(" / ")}`
-              : "First session"}
-          </p>
         </div>
-        <button
-          className="text-button"
-          disabled={exercise.sets.some((set) => set.completed)}
-          title={
-            exercise.sets.some((set) => set.completed)
-              ? "Replacement is locked after work is logged."
-              : "Replace this exercise for today"
-          }
-          onClick={() => setDetail({ replace: exercise })}
-        >
-          Replace ›
-        </button>
       </section>
       {recommendation && (
         <section
@@ -3791,6 +4248,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                       return;
                     }
                     set.weight = recommendation.weight;
+                    set.touched = true;
                     set.weightEntryMode =
                       previous && !previous.completed ? "auto" : "manual";
                     if (set.weightEntryMode === "auto")
@@ -3806,7 +4264,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           )}
         </section>
       )}
-      <section className="sets">
+      <section key={`exercise-sets-${exercise.id}`} className="sets exercise-transition-content">
         <div
           className={`set-labels ${state.profile.rirEnabled && !timed ? "with-rir" : ""}`}
         >
@@ -3822,10 +4280,16 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         {exercise.sets.map((set, index) => {
           const activeSet = index === activeSetIndex;
           const future = !set.completed && !activeSet;
+          const canComplete = workingSetCanComplete(exercise, set);
+          const ready = activeSet && canComplete;
+          const edited = activeSet && Boolean(set.touched);
+          const checkDisabled = !set.completed && (!activeSet || !canComplete);
           return (
             <div
               key={set.id}
-              className={`set-row ${state.profile.rirEnabled && !timed ? "with-rir" : ""} ${set.completed ? "set-done" : ""} ${activeSet ? "set-active" : ""} ${future ? "set-future" : ""} ${set.added ? "set-extra" : ""}`}
+              className={`set-row ${state.profile.rirEnabled && !timed ? "with-rir" : ""} ${set.completed ? "set-done" : ""} ${activeSet ? "set-active" : ""} ${ready ? "set-ready" : ""} ${edited ? "set-edited" : ""} ${future ? "set-future" : ""} ${set.added ? "set-extra" : ""}${recentlyCompletedSetId === set.id ? " set-completing" : ""}`}
+              data-set-state={set.completed ? "completed" : ready ? "ready" : activeSet ? "current" : "untouched"}
+              aria-current={activeSet ? "step" : undefined}
             >
               {set.added ? (
                 <button
@@ -3837,13 +4301,15 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   <small>EXTRA</small>
                 </button>
               ) : (
-                <span>{index + 1}</span>
+                <span className="set-index-label">
+                  <b>{index + 1}</b>
+                </span>
               )}
               <Stepper
                 label={`${addedBodyweightLoad ? "Added load" : "Weight"} in ${unit} for set ${index + 1}`}
                 value={displayWeight(set.weight, state.profile.units)}
                 step={displayWeight(increment, state.profile.units)}
-                emptyLabel={addedBodyweightLoad ? "Bodyweight" : "Tap to enter"}
+                emptyLabel={addedBodyweightLoad ? "Bodyweight" : "Enter weight"}
                 onChange={(value) =>
                   updateWeight(index, storedWeight(value, state.profile.units))
                 }
@@ -3880,11 +4346,17 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               )}
               <button
                 className="check"
-                disabled={future}
+                data-check-state={set.completed ? "completed" : ready ? "ready" : activeSet ? "current" : "disabled"}
+                disabled={checkDisabled}
+                aria-pressed={set.completed}
                 aria-label={`${set.completed ? "Reopen" : "Complete"} set ${index + 1}`}
                 onClick={() => toggleSet(index)}
               >
-                ✓
+                {set.completed || ready ? (
+                  <span aria-hidden="true">✓</span>
+                ) : (
+                  <span className="check-pending" aria-hidden="true" />
+                )}
               </button>
             </div>
           );
@@ -3939,13 +4411,19 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               key={block.entries.map((entry) => entry.id).join("-")}
               onClick={() => moveToExercise(block.index)}
             >
-              <span>
-                <i />
-                {block.entries.length === 2
-                  ? `SUPERSET · A1 ${exerciseName(block.entries[0])} · A2 ${exerciseName(block.entries[1])}`
-                  : exerciseName(block.entries[0])}
+              <span className="up-next-main">
+                <strong className="up-next-title">
+                  {block.entries.length === 2
+                    ? `SUPERSET · A1 ${exerciseName(block.entries[0])} · A2 ${exerciseName(block.entries[1])}`
+                    : exerciseName(block.entries[0])}
+                </strong>
+                {block.entries.length === 1 && exerciseNote(block.entries[0]) && (
+                  <small className="up-next-note">
+                    {exerciseNote(block.entries[0])}
+                  </small>
+                )}
               </span>
-              <small>
+              <small className="up-next-prescription">
                 {block.entries.length === 2
                   ? pluralize(
                       block.entries.reduce(
@@ -4014,6 +4492,17 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           </Button>
         </aside>
       )}
+      {restCompleteVisible && restLeft === 0 && !confirmation && (
+        <aside className="rest-timer rest-complete" role="status">
+          <span>
+            <Eyebrow>REST</Eyebrow>
+            <strong>REST COMPLETE</strong>
+          </span>
+          <div>
+            <i style={{ width: "100%" }} />
+          </div>
+        </aside>
+      )}
     </main>
   );
 }
@@ -4027,9 +4516,9 @@ function Complete({ state, setPage, setDetail }) {
   const summary = workoutSetSummary(session);
   const endedEarly =
     session.status === "ended-early" ||
-    summary.completedPlanned < summary.planned;
+    summary.completed < summary.total;
   const setResult = endedEarly
-    ? `${summary.completedPlanned} of ${pluralize(summary.planned, "set")}`
+    ? `${summary.completed} of ${pluralize(summary.total, "set")}`
     : pluralize(summary.completed, "set");
   const visibleExercises = endedEarly ? session.exercises : completedExercises;
   return (
@@ -4056,9 +4545,7 @@ function Complete({ state, setPage, setDetail }) {
         <Eyebrow>{endedEarly ? "SESSION LOG" : "LOGGED"}</Eyebrow>
         {visibleExercises.length ? (
           visibleExercises.map((item) => {
-            const planned = item.sets.filter(
-              (set) => set.planned !== false && !set.added,
-            ).length;
+            const planned = item.sets.length;
             const logged = item.sets.filter((set) => set.completed).length;
             return (
               <button
@@ -5402,14 +5889,55 @@ export function exerciseHistoryWeightLabel({
   return `${displayWeight(Number(weight), units)} ${weightUnit(units)}`;
 }
 export function exerciseHistoryPerformanceLabel(exercise, sets = []) {
-  return sets
+  const completed = sets
     .filter((set) => set.completed && Number.isFinite(Number(set.reps)))
-    .map((set) =>
-      exerciseMeasure(exercise) === "seconds"
-        ? `${Number(set.reps)} sec`
-        : `${Number(set.reps)} reps`,
+  const values = completed.map((set) => Number(set.reps));
+  if (!values.length) return "";
+  const timed = exerciseMeasure(exercise) === "seconds";
+  const effort = completed.map((set) =>
+    set.rir === null || set.rir === undefined || set.rir === ""
+      ? null
+      : Number(set.rir),
+  );
+  const commonRir =
+    !timed &&
+    effort.length === completed.length &&
+    effort.every((value) => Number.isFinite(value)) &&
+    effort.every((value) => value === effort[0])
+      ? ` · ${effort[0]} RIR`
+      : "";
+  return `${values.join(" / ")} ${timed ? "sec" : "reps"}${commonRir}`;
+}
+export function exerciseHistoryEntries(workouts = [], exerciseId, limit = 8) {
+  return workouts
+    .flatMap((workout) =>
+      (workout.exercises || [])
+        .filter(
+          (item) =>
+            item.exerciseId === exerciseId &&
+            (item.sets || []).some((set) => set.completed),
+        )
+        .map((item) => ({
+          ...item,
+          date: workout.completedAt || workout.endedAt || workout.startedAt,
+        })),
     )
-    .join(" / ");
+    .sort((left, right) => new Date(left.date || 0) - new Date(right.date || 0))
+    .slice(-limit);
+}
+export function latestLoggedWeightSet(history = []) {
+  return [...history]
+    .reverse()
+    .flatMap((item) => [...(item.sets || [])].reverse())
+    .find(
+      (set) =>
+        set.completed &&
+        set.weight !== null &&
+        set.weight !== undefined &&
+        set.weight !== "" &&
+        Number.isFinite(Number(set.weight)) &&
+        Number(set.weight) > 0,
+    );
 }
 export function adaptationDurationLabel(requestedMinutes, estimatedMinutes) {
   const requested = Number(requestedMinutes);
@@ -5472,6 +6000,10 @@ export function splitAdaptationCopy(program) {
   const preference = program?.splitPreference;
   if (!preference) return "";
   const schedule = `${program.days?.length || 0}-day schedule`;
+  if (preference.fallbackReason === "split-needs-pull-equipment")
+    return `${preference.label} needs pulling equipment for dedicated pull sessions, so Rook used a structure that fits your available equipment.`;
+  if (preference.fallbackReason === "bodyweight-high-frequency-volume")
+    return `Rook adapted your ${preference.label} preference to keep a high-frequency bodyweight plan within recoverable weekly volume.`;
   if (!preference.honored)
     return `${preference.label} does not fit this ${schedule}, so Rook used the closest sensible structure.`;
   if (["adapted", "inspired"].includes(preference.fidelity))
@@ -5694,7 +6226,7 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         </button>
       </section>
       <section>
-        <Eyebrow>PREFERENCES</Eyebrow>
+        <Eyebrow>SETTINGS</Eyebrow>
         <button
           className="list-row"
           onClick={() => setDetail("training-restrictions")}
@@ -5724,6 +6256,16 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
                   ? formatDuration(p.restTimerSeconds)
                   : "on"
                 : "off"}
+            </small>
+          </span>
+          <span>›</span>
+        </button>
+        <button className="list-row" onClick={() => setDetail("appearance")}>
+          <span>
+            <strong>Appearance</strong>
+            <small>
+              {titleCase(p.themePreference || "light")} theme · Illustrations{" "}
+              {p.showExerciseImages === false ? "off" : "on"}
             </small>
           </span>
           <span>›</span>
@@ -5962,7 +6504,10 @@ function TrainingRestrictions({ state, update, close }) {
 
 export function displayImportedPlanName(name) {
   const withoutSchedule = cleanProgramName(name);
-  const meaningful = withoutSchedule;
+  const importedGoal = withoutSchedule.match(
+    /^imported\s+plan\s*[:\-–—]\s*(.+)$/i,
+  )?.[1];
+  const meaningful = importedGoal ? titleCase(importedGoal) : withoutSchedule;
   return meaningful || "Imported plan";
 }
 function TrainingPriorities({ state, update, close }) {
@@ -6236,12 +6781,21 @@ function ScratchPlan({ state, update, close, onPlanAccepted }) {
       <Button disabled={!name.trim() || !days.length} onClick={begin}>
         CONTINUE
       </Button>
-      <Button variant="quiet" onClick={close}>
-        BACK
+      <Button
+        variant="quiet"
+        className="bottom-back"
+        aria-label="Back"
+        onClick={close}
+      >
+        <BackLabel />
       </Button>
     </main>
   );
 }
+export function planEditorAllowsSupersets(mode = "review") {
+  return mode === "edit";
+}
+
 function PlanEditor({
   source,
   profile,
@@ -6261,12 +6815,16 @@ function PlanEditor({
   const firstUnresolvedExercise = (value) =>
     value.days
       .flatMap((day) => day.exercises)
-      .find((exercise) => exercise.matchStatus === "unresolved")?.id ?? null;
+      .find((exercise) =>
+        ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
+      )?.id ?? null;
   const [expandedExerciseId, setExpandedExerciseId] = useState(() =>
     firstUnresolvedExercise(source),
   );
   const [exercisePickerId, setExercisePickerId] = useState(null);
   const [exerciseQuery, setExerciseQuery] = useState("");
+  const [prescriptionEditorId, setPrescriptionEditorId] = useState(null);
+  const [weightEditorId, setWeightEditorId] = useState(null);
   const [addingToDayId, setAddingToDayId] = useState(null);
   const [copyingDayId, setCopyingDayId] = useState(null);
   const [pairingExerciseId, setPairingExerciseId] = useState(null);
@@ -6278,6 +6836,8 @@ function PlanEditor({
     setExpandedExerciseId(firstUnresolvedExercise(next));
     setExercisePickerId(null);
     setExerciseQuery("");
+    setPrescriptionEditorId(null);
+    setWeightEditorId(null);
     setAddingToDayId(null);
     setCopyingDayId(null);
     setPairingExerciseId(null);
@@ -6285,9 +6845,24 @@ function PlanEditor({
   }, [source.id]);
   const imported = program.source === "ai-import";
   const scratch = mode === "scratch";
+  const preview = ["review", "import", "expert"].includes(mode);
+  const importReview = imported && mode === "import";
+  const allowSupersets = planEditorAllowsSupersets(mode);
   const unresolved = program.days
     .flatMap((day) => day.exercises)
-    .filter((exercise) => exercise.matchStatus === "unresolved").length;
+    .filter((exercise) =>
+      ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
+    ).length;
+  const totalExercises = program.days.reduce(
+    (total, day) => total + day.exercises.length,
+    0,
+  );
+  const readyExercises = totalExercises - unresolved;
+  const keepableUnresolved = program.days
+    .flatMap((day) => day.exercises)
+    .filter((exercise) =>
+      ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
+    ).length;
   const catalog = Object.values(exerciseCatalog)
     .filter((item) => isExerciseAllowed(item, profile))
     .sort((a, b) => a.name.localeCompare(b.name));
@@ -6474,6 +7049,9 @@ function PlanEditor({
     mutateExercise(dayId, exerciseId, (exercise) => {
       const item = exerciseCatalog[catalogId];
       if (!item) return;
+      if (importReview)
+        exercise.importedSourceName ??=
+          exercise.originalImportedName || exercise.importedName || null;
       exercise.exerciseId = item.id;
       exercise.defaultIncrement = item.increment;
       exercise.restSeconds = item.restSeconds;
@@ -6481,12 +7059,14 @@ function PlanEditor({
       exercise.originalImportedName = item.name;
       exercise.matchStatus = "confirmed-match";
       delete exercise.importedExercise;
-      exercise.sets.forEach((set) => {
-        set.weight = null;
-      });
+      if (!importReview)
+        exercise.sets.forEach((set) => {
+          set.weight = null;
+        });
     });
     setExercisePickerId(null);
     setExerciseQuery("");
+    if (importReview) setExpandedExerciseId(null);
   };
   const setImportedName = (dayId, exerciseId, value) =>
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -6533,6 +7113,7 @@ function PlanEditor({
   const confirmCustom = (dayId, exerciseId) => {
     mutateExercise(dayId, exerciseId, confirmImportedName);
     setExpandedExerciseId(null);
+    setExercisePickerId(null);
   };
   const confirmAllCustom = () => {
     setDirty(true);
@@ -6541,29 +7122,52 @@ function PlanEditor({
       const next = clone(current);
       next.days.forEach((day) =>
         day.exercises
-          .filter((exercise) => exercise.matchStatus === "unresolved")
+          .filter((exercise) =>
+            ["unresolved", "needs-name-review"].includes(
+              exercise.matchStatus,
+            ),
+          )
           .forEach(confirmImportedName),
       );
       return next;
     });
   };
-  const setCount = (dayId, exerciseId, count) =>
-    mutateExercise(dayId, exerciseId, (exercise) => {
+  const setCount = (dayId, exerciseId, count) => {
+    setDirty(true);
+    setProgram((current) => {
+      const next = clone(current);
+      const day = next.days.find((item) => item.id === dayId);
+      const exercise = day?.exercises.find((item) => item.id === exerciseId);
+      if (!day || !exercise) return current;
       const total = Math.max(
         1,
         Math.min(imported ? 20 : 6, Number(count) || 1),
       );
-      if (total < exercise.sets.length)
-        exercise.sets = exercise.sets.slice(0, total);
-      else
-        while (exercise.sets.length < total)
-          exercise.sets.push({
-            id: `edited-set-${Date.now()}-${exercise.sets.length}`,
-            weight: scratch ? (exercise.sets[0]?.weight ?? null) : null,
-            reps: exercise.repMin,
-            completed: false,
-          });
+      const resize = (target) => {
+        if (total < target.sets.length)
+          target.sets = target.sets.slice(0, total);
+        else
+          while (target.sets.length < total)
+            target.sets.push({
+              id: `edited-set-${Date.now()}-${target.id}-${target.sets.length}`,
+              weight: scratch ? (target.sets[0]?.weight ?? null) : null,
+              reps: target.repMin,
+              completed: false,
+            });
+      };
+      resize(exercise);
+      if (exercise.supersetId)
+        day.exercises
+          .filter(
+            (candidate) =>
+              candidate.id !== exercise.id &&
+              candidate.supersetId === exercise.supersetId,
+          )
+          .forEach(resize);
+      day.estimatedMinutes = estimateSessionMinutes(day.exercises);
+      return next;
     });
+  };
   const setRep = (dayId, exerciseId, key, value) =>
     mutateExercise(dayId, exerciseId, (exercise) => {
       const numeric = Math.max(1, Math.min(100, Number(value) || 1));
@@ -6597,9 +7201,35 @@ function PlanEditor({
     setDirty(true);
     setProgram((current) => ({
       ...current,
-      days: current.days.map((day) =>
-        day.id === dayId ? { ...day, name: value, nameEdited: true } : day,
-      ),
+      days: current.days.map((day) => {
+        if (day.id !== dayId) return day;
+        const parts = workoutDisplayParts(day, day.weekday);
+        const descriptor = day.workoutDescriptor ?? parts.detail;
+        return {
+          ...day,
+          name: descriptor ? `${value} · ${descriptor}` : value,
+          workoutName: value,
+          workoutDescriptor: descriptor || undefined,
+          nameEdited: true,
+        };
+      }),
+    }));
+  };
+  const setWorkoutDescriptor = (dayId, value) => {
+    setDirty(true);
+    setProgram((current) => ({
+      ...current,
+      days: current.days.map((day) => {
+        if (day.id !== dayId) return day;
+        const primary = workoutDisplayParts(day, day.weekday).primary;
+        return {
+          ...day,
+          name: value.trim() ? `${primary} · ${value}` : primary,
+          workoutName: primary,
+          workoutDescriptor: value,
+          nameEdited: true,
+        };
+      }),
     }));
   };
   const setWarmups = (value) => {
@@ -6652,11 +7282,39 @@ function PlanEditor({
         ? exercise.repMin
         : `${exercise.repMin}\u2013${exercise.repMax}`;
     const reps = `${value}${exercise.failureTarget ? "" : timed ? " sec" : " reps"}`;
-    const weights = exercise.sets.filter(
+    const weights = exercise.sets
+      .map((set) => set.weight)
+      .filter(
       (set) =>
-        set.weight !== null && set.weight !== undefined && set.weight !== "",
-    ).length;
-    return `${pluralize(exercise.sets.length, "set")} \u00b7 ${reps}${imported && weights ? ` \u00b7 ${weights === exercise.sets.length ? "Weights added" : `${weights}/${exercise.sets.length} weights`}` : ""}`;
+        set !== null && set !== undefined && set !== "",
+      );
+    const weightSummary = weights.length
+      ? ` \u00b7 ${weights.map((weight) => Number(weight)).join(" / ")} kg`
+      : "";
+    return `${pluralize(exercise.sets.length, "set")} \u00b7 ${reps}${imported ? weightSummary : ""}`;
+  };
+  const importedSourceLabel = (exercise) =>
+    String(
+      exercise.importedSourceName ||
+        exercise.originalImportedName ||
+        exercise.importedName ||
+        exerciseName(exercise),
+    ).trim();
+  const likelyImportedMatches = (exercise, choices) => {
+    const sourceName = importedSourceLabel(exercise);
+    const direct = choices.filter((item) =>
+      exerciseMatchesQuery(item, sourceName),
+    );
+    if (direct.length) return direct.slice(0, 3);
+    return compatibleReplacementCandidates(
+      exercise,
+      profile,
+      program.days.flatMap((day) =>
+        day.exercises.map((item) => item.exerciseId),
+      ),
+    )
+      .filter((item) => choices.some((choice) => choice.id === item.id))
+      .slice(0, 3);
   };
   const copy =
     mode === "edit"
@@ -6677,7 +7335,7 @@ function PlanEditor({
           ? {
               eyebrow: "IMPORT PLAN",
               title: "Review your plan",
-              body: "Check the exercises, sets, days and imported weights before saving.",
+              body: "Rook matched what it could. Fix only the highlighted items, then save.",
               action: "USE THIS PLAN",
             }
           : mode === "expert"
@@ -6690,14 +7348,17 @@ function PlanEditor({
             : {
                 eyebrow: "PERSONALIZED PLAN",
                 title: "Your week is ready.",
-                body: "See how your answers shaped the plan, then review any workout before you start.",
+                body:
+                  program.source === "personalized-replacement"
+                    ? "Updated exercise variations while keeping your goals, schedule and training settings."
+                    : "See how your answers shaped the plan, then review any workout before you start.",
                 action: "USE THIS PLAN",
               };
   const namesValid =
     String(program.name || "").trim() &&
     program.days.every(
       (day) =>
-        String(day.name || "").trim() &&
+        String(workoutDisplayParts(day, day.weekday).primary || "").trim() &&
         (!scratch || day.exercises.length >= 2),
     );
   const saveProgram = () =>
@@ -6707,6 +7368,12 @@ function PlanEditor({
       days: program.days.map((day) => ({
         ...day,
         name: String(day.name).trim(),
+        workoutName: day.workoutName
+          ? String(day.workoutName).trim()
+          : undefined,
+        workoutDescriptor: day.workoutDescriptor
+          ? String(day.workoutDescriptor).trim()
+          : undefined,
       })),
       userEdited: Boolean(program.userEdited || dirty),
       version: Number(program.version || 1) + (mode === "edit" ? 1 : 0),
@@ -6731,7 +7398,9 @@ function PlanEditor({
           separately.
         </small>
       </div>
-      <section className="import-preview plan-editor">
+      <section
+        className={`import-preview plan-editor${importReview ? " is-import-review" : ""}`}
+      >
         <div className="import-plan-meta">
           {mode === "edit" || scratch ? (
             <label className="plan-name-field">
@@ -6757,13 +7426,49 @@ function PlanEditor({
               : `${pluralize(program.days.length, "day")}/week`}
           </small>
         </div>
+        {importReview && (
+          <button
+            type="button"
+            className={`import-review-summary${unresolved ? " has-issues" : " is-ready"}`}
+            onClick={() => {
+              const nextId = firstUnresolvedExercise(program);
+              if (!nextId) return;
+              setExpandedExerciseId(nextId);
+              setExercisePickerId(null);
+              requestAnimationFrame(() =>
+                document
+                  .getElementById(`import-exercise-${nextId}`)
+                  ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+              );
+            }}
+          >
+            <span>
+              <strong>
+                {unresolved
+                  ? `${pluralize(unresolved, "exercise")} ${unresolved === 1 ? "needs" : "need"} review`
+                  : "All exercises ready"}
+              </strong>
+              <small>
+                {unresolved
+                  ? "Choose an exercise or keep the imported name as custom."
+                  : `${readyExercises} of ${totalExercises} exercises ready`}
+              </small>
+            </span>
+            {unresolved ? <b>REVIEW NEXT</b> : <i aria-hidden="true">✓</i>}
+          </button>
+        )}
         {program.conditioning && (
           <ConditioningCard conditioning={program.conditioning} />
         )}
         {program.days.map((day) => {
           const exerciseCount = day.exercises.length;
           const exercisesNeeded = Math.max(0, 2 - exerciseCount);
-          const ready = exerciseCount >= 2 && String(day.name || "").trim();
+          const dayTitleParts = workoutDisplayParts(day, day.weekday);
+          const editableDescriptor = Boolean(
+            imported || day.workoutDescriptor || day.originalImportedWorkoutName,
+          );
+          const ready =
+            exerciseCount >= 2 && String(dayTitleParts.primary || "").trim();
           const collapsed = scratch && collapsedDayIds.includes(day.id);
           const emptyCopyTargets = scratch
             ? program.days.filter(
@@ -6776,22 +7481,40 @@ function PlanEditor({
             key={day.id}
           >
             {mode === "edit" || scratch ? (
-              <label className="workout-name-field">
-                <span>{day.weekday.toUpperCase()} WORKOUT NAME</span>
-                <input
-                  aria-label={`${day.weekday} workout name`}
-                  type="text"
-                  maxLength={60}
-                  value={day.name || ""}
-                  placeholder="e.g. Upper, Lower or Push"
-                  onChange={(event) =>
-                    setWorkoutName(day.id, event.target.value)
-                  }
-                />
-              </label>
+              <div className="workout-name-fields">
+                <label className="workout-name-field">
+                  <span>{day.weekday.toUpperCase()} WORKOUT NAME</span>
+                  <input
+                    aria-label={`${day.weekday} workout name`}
+                    type="text"
+                    maxLength={60}
+                    value={editableDescriptor ? dayTitleParts.primary : day.name || ""}
+                    placeholder="e.g. Upper, Lower or Push"
+                    onChange={(event) =>
+                      setWorkoutName(day.id, event.target.value)
+                    }
+                  />
+                </label>
+                {editableDescriptor && (
+                  <label className="workout-name-field workout-descriptor-field">
+                    <span>FOCUS / STYLE · OPTIONAL</span>
+                    <input
+                      aria-label={`${day.weekday} workout descriptor`}
+                      type="text"
+                      maxLength={48}
+                      value={day.workoutDescriptor ?? dayTitleParts.detail}
+                      placeholder="e.g. Chest focus, Moč or Hypertrophy"
+                      onChange={(event) =>
+                        setWorkoutDescriptor(day.id, event.target.value)
+                      }
+                    />
+                  </label>
+                )}
+              </div>
             ) : (
-              <strong>
-                {day.weekday} · {normalizeWorkoutName(day.name, day.weekday)}
+              <strong className="plan-editor-workout-title">
+                <span>{day.weekday} · {dayTitleParts.primary}</span>
+                {dayTitleParts.detail && <small>{dayTitleParts.detail}</small>}
               </strong>
             )}
             {scratch && (
@@ -6800,12 +7523,12 @@ function PlanEditor({
                   className={
                     ready
                       ? "ready"
-                      : !String(day.name || "").trim()
+                      : !String(dayTitleParts.primary || "").trim()
                         ? "validation-error"
                         : ""
                   }
                 >
-                  {!String(day.name || "").trim()
+                  {!String(dayTitleParts.primary || "").trim()
                     ? `${exerciseCount} ${exerciseCount === 1 ? "exercise" : "exercises"} · Workout name required`
                     : exercisesNeeded
                       ? `${exerciseCount} ${exerciseCount === 1 ? "exercise" : "exercises"} · ${exercisesNeeded} more needed`
@@ -6816,7 +7539,14 @@ function PlanEditor({
             {!collapsed && <div className="plan-editor-cards">
               {day.exercises.map((exercise, exerciseIndex) => {
                 const expanded = expandedExerciseId === exercise.id;
-                const needsReview = exercise.matchStatus === "unresolved";
+                const needsReview = ["unresolved", "needs-name-review"].includes(
+                  exercise.matchStatus,
+                );
+                const needsSpecificName =
+                  exercise.matchStatus === "needs-name-review" ||
+                  importedExerciseNameNeedsReview(
+                    exercise.originalImportedName || exercise.importedName,
+                  );
                 const pickerOpen = exercisePickerId === exercise.id;
                 const timed = exerciseMeasure(exercise) === "seconds";
                 const catalogExercise = exerciseCatalog[exercise.exerciseId];
@@ -6825,13 +7555,21 @@ function PlanEditor({
                 const startingWeight = exercise.sets.length
                   ? exercise.sets[0].weight
                   : null;
+                const importedWeights = exercise.sets
+                  .map((set, index) => ({ index, value: set.weight }))
+                  .filter(
+                    ({ value }) =>
+                      value !== null && value !== undefined && value !== "",
+                  );
                 const pair = exercise.supersetId
                   ? supersetMeta(day.exercises, exerciseIndex)
                   : null;
                 const pairRole = pair?.role || null;
                 const eligiblePartners = day.exercises.filter(
                   (candidate) =>
-                    candidate.id !== exercise.id && !candidate.supersetId,
+                    candidate.id !== exercise.id &&
+                    !candidate.supersetId &&
+                    candidate.sets.length === exercise.sets.length,
                 );
                 const availableExercises = catalog.filter(
                   (item) =>
@@ -6842,8 +7580,35 @@ function PlanEditor({
                     ) &&
                     exerciseMatchesQuery(item, exerciseQuery),
                 );
+                const likelyMatches = needsReview
+                  ? likelyImportedMatches(exercise, availableExercises)
+                  : [];
+                const likelyMatchIds = new Set(
+                  likelyMatches.map((item) => item.id),
+                );
+                const otherAvailableExercises = exerciseQuery.trim()
+                  ? availableExercises
+                  : availableExercises.filter(
+                      (item) => !likelyMatchIds.has(item.id),
+                    );
+                const similarExercises = compatibleReplacementCandidates(
+                  exercise,
+                  profile,
+                  day.exercises.map((item) => item.exerciseId),
+                ).filter(
+                  (item) =>
+                    !day.exercises.some(
+                      (other) =>
+                        other.id !== exercise.id &&
+                        other.exerciseId === item.id,
+                    ) && exerciseMatchesQuery(item, exerciseQuery),
+                );
+                const pickerExercises = preview
+                  ? similarExercises
+                  : availableExercises;
                 return (
                   <article
+                    id={`import-exercise-${exercise.id}`}
                     className={`import-exercise plan-editor-exercise${expanded ? " is-expanded" : ""}${needsReview ? " needs-review" : ""}${pairRole ? ` is-superset superset-${pairRole.toLowerCase()}` : ""}`}
                     key={exercise.id}
                   >
@@ -6861,27 +7626,137 @@ function PlanEditor({
                       <span className="plan-editor-heading">
                         <strong>
                           {pairRole && (
-                            <i className="superset-role">{pairRole}</i>
+                            <i className="superset-role">PAIR</i>
                           )}
                           {exerciseName(exercise)}
                         </strong>
                         <small>{exerciseSummary(exercise)}</small>
-                        {pairRole === "A2" && (
+                        {pair && (
                           <small className="superset-round-rest">
-                            Rest after round · {pair.restSeconds} sec
+                            Paired with {exerciseName(pair.partner.exercise)}
+                            {pairRole === "A2"
+                              ? ` · rest ${pair.restSeconds} sec after both`
+                              : ""}
                           </small>
                         )}
                       </span>
                       <span className="plan-editor-summary-action">
                         <b>
-                          {needsReview ? "REVIEW" : expanded ? "CLOSE" : "EDIT"}
+                          {expanded
+                            ? "CLOSE"
+                            : needsReview
+                              ? "NEEDS REVIEW"
+                              : "EDIT"}
                         </b>
                         <i aria-hidden="true" />
                       </span>
                     </button>
                     {expanded && (
                       <div className="plan-editor-fields">
-                        {needsReview ? (
+                        {needsReview && importReview ? (
+                          <div className="import-review-resolution">
+                            <span className="import-review-status">
+                              EXERCISE NOT RECOGNIZED
+                            </span>
+                            <p>
+                              “{importedSourceLabel(exercise)}” {needsSpecificName
+                                ? "doesn't identify a specific exercise. Choose an exercise, or keep this name as a custom exercise."
+                                : "couldn't be matched confidently. Choose an exercise, or keep this name as a custom exercise."}
+                            </p>
+                            <button
+                              type="button"
+                              className="plan-editor-picker-trigger import-review-primary"
+                              aria-expanded={pickerOpen}
+                              aria-controls={`exercise-picker-${exercise.id}`}
+                              onClick={() => {
+                                setExercisePickerId(
+                                  pickerOpen ? null : exercise.id,
+                                );
+                                setExerciseQuery("");
+                              }}
+                            >
+                              <strong>CHOOSE EXERCISE</strong>
+                              <i aria-hidden="true" />
+                            </button>
+                            {pickerOpen && (
+                              <div
+                                className="plan-editor-picker import-review-picker"
+                                id={`exercise-picker-${exercise.id}`}
+                              >
+                                <input
+                                  autoFocus
+                                  type="search"
+                                  aria-label={`Search replacement for ${exerciseName(exercise)}`}
+                                  placeholder="Search exercises"
+                                  value={exerciseQuery}
+                                  onChange={(event) =>
+                                    setExerciseQuery(event.target.value)
+                                  }
+                                />
+                                <div role="listbox" aria-label="Available exercises">
+                                  {!exerciseQuery.trim() && likelyMatches.length > 0 && (
+                                    <small className="import-review-picker-label">
+                                      Possible matches
+                                    </small>
+                                  )}
+                                  {!exerciseQuery.trim() &&
+                                    likelyMatches.map((item) => (
+                                      <button
+                                        type="button"
+                                        role="option"
+                                        aria-selected="false"
+                                        key={item.id}
+                                        onClick={() =>
+                                          replaceExercise(
+                                            day.id,
+                                            exercise.id,
+                                            item.id,
+                                          )
+                                        }
+                                      >
+                                        {item.name}
+                                      </button>
+                                    ))}
+                                  {!exerciseQuery.trim() && (
+                                    <small className="import-review-picker-label">
+                                      Other exercises
+                                    </small>
+                                  )}
+                                  {otherAvailableExercises.map((item) => (
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected="false"
+                                      key={item.id}
+                                      onClick={() =>
+                                        replaceExercise(
+                                          day.id,
+                                          exercise.id,
+                                          item.id,
+                                        )
+                                      }
+                                    >
+                                      {item.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                            <button
+                              type="button"
+                              className="import-review-custom-trigger"
+                              disabled={!importedSourceLabel(exercise)}
+                              onClick={() =>
+                                confirmCustom(day.id, exercise.id)
+                              }
+                            >
+                              <strong>KEEP AS CUSTOM</strong>
+                              <small>
+                                Use “{importedSourceLabel(exercise)}” exactly as written
+                              </small>
+                            </button>
+                          </div>
+                        ) : needsReview ? (
                           <label className="plan-editor-select plan-editor-custom-name">
                             <span>Exercise name</span>
                             <input
@@ -6901,14 +7776,12 @@ function PlanEditor({
                               }
                             />
                             <small>
-                              Type the correct name. Known Rook exercises match
-                              automatically; any other name is kept as your
-                              custom exercise.
+                              Type the correct name or keep it as a custom exercise.
                             </small>
                           </label>
                         ) : (
                           <div className="plan-editor-select">
-                            <span>Exercise</span>
+                            <span>{preview ? "Change exercise" : "Exercise"}</span>
                             <button
                               type="button"
                               className="plan-editor-picker-trigger"
@@ -6922,7 +7795,7 @@ function PlanEditor({
                               }}
                             >
                               <strong>{exerciseName(exercise)}</strong>
-                              <i aria-hidden="true">⌄</i>
+                              <i aria-hidden="true" />
                             </button>
                             {pickerOpen && (
                               <div
@@ -6943,8 +7816,8 @@ function PlanEditor({
                                   role="listbox"
                                   aria-label="Available exercises"
                                 >
-                                  {availableExercises.length ? (
-                                    availableExercises.map((item) => (
+                                  {pickerExercises.length ? (
+                                    pickerExercises.map((item) => (
                                       <button
                                         type="button"
                                         role="option"
@@ -6968,7 +7841,9 @@ function PlanEditor({
                                     ))
                                   ) : (
                                     <small>
-                                      No exercises match your search.
+                                      {preview
+                                        ? "No similar exercises match your search."
+                                        : "No exercises match your search."}
                                     </small>
                                   )}
                                 </div>
@@ -6976,6 +7851,30 @@ function PlanEditor({
                             )}
                           </div>
                         )}
+                        {importReview && (
+                          <div className="import-review-compact-editor">
+                            <span>
+                              <small>PRESCRIPTION</small>
+                              <strong>{exerciseSummary(exercise).split(" · ").slice(0, 2).join(" · ")}</strong>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setPrescriptionEditorId(
+                                  prescriptionEditorId === exercise.id
+                                    ? null
+                                    : exercise.id,
+                                )
+                              }
+                            >
+                              {prescriptionEditorId === exercise.id
+                                ? "CLOSE"
+                                : "EDIT PRESCRIPTION"}
+                            </button>
+                          </div>
+                        )}
+                        {(!importReview ||
+                          prescriptionEditorId === exercise.id) && (
                         <div className="plan-editor-prescription">
                           <label>
                             <span>Sets</span>
@@ -7031,6 +7930,7 @@ function PlanEditor({
                             />
                           </label>
                         </div>
+                        )}
                         {acceptsStartingWeight && (
                           <label className="plan-editor-starting-weight">
                             <span>Starting weight · optional</span>
@@ -7061,7 +7961,7 @@ function PlanEditor({
                             </small>
                           </label>
                         )}
-                        {imported && (
+                        {imported && !importReview && (
                           <div className="plan-editor-weights">
                             <span>Imported weight · kg</span>
                             <div>
@@ -7089,14 +7989,77 @@ function PlanEditor({
                             </div>
                           </div>
                         )}
+                        {importReview && (
+                          <div className="import-review-weights">
+                            <div className="import-review-compact-editor">
+                              <span>
+                                <small>IMPORTED WEIGHTS</small>
+                                {importedWeights.length > 0 && (
+                                  <strong>
+                                    {importedWeights
+                                      .map(({ value }) => Number(value))
+                                      .join(" / ")} kg
+                                  </strong>
+                                )}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setWeightEditorId(
+                                    weightEditorId === exercise.id
+                                      ? null
+                                      : exercise.id,
+                                  )
+                                }
+                              >
+                                {weightEditorId === exercise.id
+                                  ? "CLOSE"
+                                  : importedWeights.length
+                                    ? "EDIT"
+                                    : "ADD IMPORTED WEIGHTS"}
+                              </button>
+                            </div>
+                            {weightEditorId === exercise.id && (
+                              <div className="plan-editor-weights is-on-demand">
+                                <div>
+                                  {exercise.sets.map((set, index) => (
+                                    <label key={set.id}>
+                                      <small>Set {index + 1}</small>
+                                      <input
+                                        aria-label={`Kilograms for ${exerciseName(exercise)} set ${index + 1}`}
+                                        type="number"
+                                        min="0"
+                                        step="0.5"
+                                        value={set.weight ?? ""}
+                                        placeholder="—"
+                                        onChange={(event) =>
+                                          setWeight(
+                                            day.id,
+                                            exercise.id,
+                                            index,
+                                            event.target.value,
+                                          )
+                                        }
+                                      />
+                                    </label>
+                                  ))}
+                                </div>
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {exercise.notes && (
                           <small className="imported-note">
                             {exercise.notes}
                           </small>
                         )}
-                        {needsReview && (
+                        {needsReview && !importReview && (
                           <div className="match-review">
-                            <small>Check exercise name</small>
+                            <small>
+                              {needsSpecificName
+                                ? "Review exercise name"
+                                : "Check exercise name"}
+                            </small>
                             <div>
                               <button
                                 type="button"
@@ -7111,12 +8074,36 @@ function PlanEditor({
                                   confirmCustom(day.id, exercise.id)
                                 }
                               >
-                                KEEP THIS NAME
+                                KEEP AS CUSTOM
                               </button>
-                              <span>You can edit it above first.</span>
+                              <span>Keep this exercise even if it is not in Rook.</span>
                             </div>
                           </div>
                         )}
+                        {importReview ? (
+                          <div className="plan-editor-actions import-review-footer-actions">
+                            <button
+                              type="button"
+                              className="import-review-remove"
+                              disabled={!scratch && day.exercises.length <= 1}
+                              onClick={() => removeExercise(day.id, exercise.id)}
+                            >
+                              REMOVE EXERCISE
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setExpandedExerciseId(null);
+                                setExercisePickerId(null);
+                                setExerciseQuery("");
+                                setPrescriptionEditorId(null);
+                                setWeightEditorId(null);
+                              }}
+                            >
+                              CLOSE
+                            </button>
+                          </div>
+                        ) : (
                         <div className="plan-editor-actions">
                           <button
                             type="button"
@@ -7125,7 +8112,7 @@ function PlanEditor({
                           >
                             REMOVE
                           </button>
-                          {scratch && pair && (
+                          {allowSupersets && pair && (
                             <button
                               type="button"
                               onClick={() =>
@@ -7135,7 +8122,7 @@ function PlanEditor({
                               REMOVE SUPERSET
                             </button>
                           )}
-                          {scratch && !pair && eligiblePartners.length > 0 && (
+                          {allowSupersets && !pair && eligiblePartners.length > 0 && (
                             <button
                               type="button"
                               aria-expanded={
@@ -7163,14 +8150,15 @@ function PlanEditor({
                             DONE
                           </button>
                         </div>
-                        {scratch &&
+                        )}
+                        {allowSupersets &&
                           !pair &&
                           pairingExerciseId === exercise.id && (
                             <div className="superset-picker">
                               <strong>Create superset</strong>
                               <small>
-                                Choose A2. It will move directly after this
-                                exercise. Sets alternate A1 → A2, then rest.
+                                Choose the exercise to perform immediately after
+                                this one. Complete one set of each, then rest.
                               </small>
                               <div>
                                 {eligiblePartners.map((candidate) => (
@@ -7338,14 +8326,14 @@ function PlanEditor({
           );
         })}
       </section>
-      {unresolved > 0 && (
+      {keepableUnresolved > 0 && (
         <section className="bulk-match-review">
           <Eyebrow>REVIEW ALL</Eyebrow>
           <button type="button" onClick={confirmAllCustom}>
             <i aria-hidden="true">✓</i>
             <span>
-              <strong>KEEP ALL {unresolved} AS WRITTEN</strong>
-              <small>Accept every remaining name as a custom exercise.</small>
+              <strong>KEEP ALL {keepableUnresolved} AS CUSTOM</strong>
+              <small>Preserve the imported names exactly as written.</small>
             </span>
           </button>
         </section>
@@ -7356,8 +8344,14 @@ function PlanEditor({
       >
         {saving ? "SAVING…" : copy.action}
       </Button>
-      <Button variant="quiet" disabled={saving} onClick={onCancel}>
-        {mode === "import" ? "EDIT NOTES" : "BACK"}
+      <Button
+        variant="quiet"
+        className={mode === "import" ? "" : "bottom-back"}
+        aria-label={mode === "import" ? undefined : "Back"}
+        disabled={saving}
+        onClick={onCancel}
+      >
+        {mode === "import" ? "EDIT NOTES" : <BackLabel />}
       </Button>
     </>
   );
@@ -7677,7 +8671,13 @@ function ExpertLab({ state, close, initialCount = 0, onSaved }) {
   );
 }
 
-function ImportPlan({ state, update, close, initial = false }) {
+function ImportPlan({
+  state,
+  update,
+  close,
+  onPlanAccepted,
+  initial = false,
+}) {
   const [text, setText] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -7705,6 +8705,9 @@ function ImportPlan({ state, update, close, initial = false }) {
         state.profile,
         text.trim(),
       );
+      const remainingTransition =
+        MINIMUM_PLAN_TRANSITION_MS - (performance.now() - startedAt);
+      if (remainingTransition > 0) await waitFor(remainingTransition);
       if (run === importRun.current) {
         trackFunnelEvent("plan_generation_completed", {
           path: "import",
@@ -7781,6 +8784,7 @@ function ImportPlan({ state, update, close, initial = false }) {
       return current;
     });
     close();
+    onPlanAccepted?.();
   };
   return (
     <main
@@ -7848,7 +8852,7 @@ function ImportPlan({ state, update, close, initial = false }) {
           onCancel={() => setPreview(null)}
         />
       )}
-      {busy && <BuildingOverlay kind="import" onCancel={cancelImport} />}
+      {busy && <BuildingOverlay onCancel={cancelImport} />}
     </main>
   );
 }
@@ -8256,7 +9260,9 @@ function SheetDragHandle({
   const dismissTimer = useRef(null);
   useEffect(() => () => clearTimeout(dismissTimer.current), []);
   const layer = () =>
-    sheetRef.current?.closest(".modal-layer, .workout-confirm-layer");
+    sheetRef.current?.closest(
+      ".modal-layer, .workout-confirm-layer",
+    );
   const setPosition = (distance) => {
     if (!sheetRef.current) return;
     const value = Math.max(0, distance);
@@ -8604,6 +9610,7 @@ function Detail({
   setPage,
   setDetail,
   onPlanAccepted,
+  onPlanImported,
 }) {
   const panelRef = useRef(null);
   useEffect(() => {
@@ -8665,7 +9672,14 @@ function Detail({
     );
   }
   if (detail === "import-plan")
-    return <ImportPlan state={state} update={update} close={close} />;
+    return (
+      <ImportPlan
+        state={state}
+        update={update}
+        close={close}
+        onPlanAccepted={onPlanImported}
+      />
+    );
   if (detail === "edit-plan")
     return <EditPlan state={state} update={update} close={close} />;
   if (detail === "training-priorities")
@@ -8686,6 +9700,30 @@ function Detail({
     );
   if (detail === "logging")
     return <Logging state={state} update={update} close={close} />;
+  if (detail === "appearance")
+    return <Appearance state={state} update={update} close={close} />;
+  if (detail?.visual)
+    return (
+      <ExerciseVisualViewer exercise={detail.visual} close={close} />
+    );
+  if (detail?.options)
+    return (
+      <ActiveExerciseOptions
+        exercise={detail.options}
+        state={state}
+        close={close}
+        setDetail={setDetail}
+      />
+    );
+  if (detail?.superset)
+    return (
+      <ActiveSuperset
+        exercise={detail.superset}
+        state={state}
+        update={update}
+        close={close}
+      />
+    );
   if (detail?.replace)
     return (
       <Replace
@@ -8697,20 +9735,11 @@ function Detail({
     );
   const exercise = detail?.exercise;
   if (!exercise) return null;
-  const history = state.workouts
-    .flatMap((workout) =>
-      workout.exercises
-        .filter(
-          (item) =>
-            item.exerciseId === exercise.exerciseId &&
-            item.sets.some((set) => set.completed),
-        )
-        .map((item) => ({ ...item, date: workout.completedAt })),
-    )
-    .slice(-8);
-  const latestSet = history
-    .at(-1)
-    ?.sets.find((set) => set.completed && set.weight !== null);
+  const history = exerciseHistoryEntries(
+    state.workouts,
+    exercise.exerciseId,
+  );
+  const latestSet = latestLoggedWeightSet(history);
   const unit = weightUnit(state.profile.units);
   const timed = exerciseMeasure(exercise) === "seconds";
   const bodyweight = Boolean(exerciseCatalog[exercise.exerciseId]?.bodyweight);
@@ -8723,6 +9752,8 @@ function Detail({
       )
     : null;
   const progression = progressionFor(exercise, state.workouts, state.profile);
+  const detailIllustration =
+    state.profile.showExerciseImages !== false ? exerciseArt(exercise) : null;
   return (
     <main ref={panelRef} className="screen detail-screen">
       <header className="detail-header">
@@ -8732,40 +9763,53 @@ function Detail({
         <strong>{exerciseName(exercise)}</strong>
         <span />
       </header>
-      {history.length ? (
-        <>
-          <Eyebrow>
-            {timed ? "CURRENT HOLD TIME" : "CURRENT WORKING WEIGHT"}
-          </Eyebrow>
-          <h1
-            className={
-              !timed && !bodyweight && !latestSet ? "history-weight-empty" : ""
-            }
-          >
-            {timed
-              ? latestHold
-              : bodyweight
-                ? "Bodyweight"
-                : latestSet
-                  ? displayWeight(latestSet.weight, state.profile.units)
-                  : "Not set yet"}{" "}
-            <small>{timed ? "sec" : latestSet ? unit : ""}</small>
-          </h1>
-          <p>{targetLabel(exercise, state.profile.rirEnabled)}</p>
-        </>
-      ) : (
-        <>
-          <Eyebrow>FIRST SESSION</Eyebrow>
-          <h1>No history yet.</h1>
-          <p>
-            {timed
-              ? "Log the number of seconds held for each set."
-              : bodyweight
-                ? "Log the repetitions you complete with controlled form."
-                : "Choose a comfortable starting load when you begin the first set."}
+      <div className={`exercise-detail-overview${detailIllustration ? " has-illustration" : ""}`}>
+        <div>
+          {history.length ? (
+            <>
+              <Eyebrow>
+                {timed
+                  ? "CURRENT HOLD TIME"
+                  : bodyweight
+                    ? "CURRENT LOAD"
+                    : latestSet
+                      ? "CURRENT WORKING WEIGHT"
+                      : "TRAINING HISTORY"}
+              </Eyebrow>
+              <h1>
+                {timed
+                  ? latestHold
+                  : bodyweight
+                    ? "Bodyweight"
+                    : latestSet
+                      ? displayWeight(latestSet.weight, state.profile.units)
+                      : "Weight not logged"}{" "}
+                <small>{timed ? "sec" : latestSet ? unit : ""}</small>
+              </h1>
+              {!timed && !bodyweight && !latestSet && (
+                <p>Completed reps are saved in your history.</p>
+              )}
+            </>
+          ) : (
+            <>
+              <Eyebrow>FIRST SESSION</Eyebrow>
+              <h1>No history yet.</h1>
+              <p>Choose a comfortable starting load when you begin your first set.</p>
+            </>
+          )}
+          <p className="exercise-detail-target">
+            Target · {targetLabel(exercise, state.profile.rirEnabled)}
           </p>
-        </>
-      )}
+        </div>
+        {detailIllustration && (
+          <img
+            className="exercise-detail-art"
+            src={detailIllustration}
+            alt=""
+            aria-hidden="true"
+          />
+        )}
+      </div>
       {progression && (
         <section className={`exercise-progression progression-${progression.type}`}>
           <Eyebrow>PROGRESSION</Eyebrow>
@@ -8781,7 +9825,18 @@ function Detail({
         <Eyebrow>HISTORY</Eyebrow>
         {history.length ? (
           [...history].reverse().map((item, index) => {
-            const set = item.sets.find((value) => value.completed);
+            const completedSets = item.sets.filter((value) => value.completed);
+            const set =
+              [...completedSets]
+                .reverse()
+                .find(
+                  (value) =>
+                    value.weight !== null &&
+                    value.weight !== undefined &&
+                    value.weight !== "" &&
+                    Number.isFinite(Number(value.weight)) &&
+                    Number(value.weight) > 0,
+                ) || completedSets[0];
             return (
               <div className="list-row" key={index}>
                 <span>
@@ -8833,11 +9888,11 @@ function Logging({ state, update, close }) {
   return (
     <main className="screen detail-screen logging-screen">
       <header className="detail-header">
-        <button aria-label="Close" onClick={close}>
-          ‹
-        </button>
-        <strong>Logging</strong>
         <span />
+        <strong>Logging</strong>
+        <button className="logging-close" aria-label="Close" onClick={close}>
+          ×
+        </button>
       </header>
       <section className="logging-group">
         <Eyebrow>UNITS</Eyebrow>
@@ -8944,18 +9999,386 @@ function Logging({ state, update, close }) {
     </main>
   );
 }
+function Appearance({ state, update, close }) {
+  const showExerciseImages = state.profile.showExerciseImages !== false;
+  const [themePickerOpen, setThemePickerOpen] = useState(false);
+  const themePreference = ["system", "light", "dark", "premium"].includes(
+    state.profile.themePreference,
+  )
+    ? state.profile.themePreference
+    : "light";
+  return (
+    <main className="screen detail-screen logging-screen appearance-screen">
+      <header className="detail-header">
+        <button aria-label="Close" onClick={close}>
+          ‹
+        </button>
+        <strong>Appearance</strong>
+        <span />
+      </header>
+      <section className="logging-group appearance-theme-group">
+        <Eyebrow>THEME</Eyebrow>
+        <button
+          type="button"
+          className="appearance-theme-row"
+          onClick={() => setThemePickerOpen(true)}
+        >
+          <span>
+            <strong>Theme</strong>
+            <small>{titleCase(themePreference)}</small>
+          </span>
+          <span aria-hidden="true">›</span>
+        </button>
+      </section>
+      <section className="logging-group">
+        <Eyebrow>EXERCISES</Eyebrow>
+        <SettingSwitch
+          label="Exercise illustrations"
+          checked={showExerciseImages}
+          onChange={(value) =>
+            update((current) => {
+              current.profile.showExerciseImages = value;
+              return current;
+            })
+          }
+        />
+        <p className="setting-help">
+          Show exercise images while training and in exercise details.
+        </p>
+      </section>
+      <section className="appearance-credits">
+        <Eyebrow>ILLUSTRATION CREDITS</Eyebrow>
+        <p>
+          Exercise illustrations by{" "}
+          <a
+            href="https://bryllim.github.io/workout-guide/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            Bryl Lim / Everkinetic
+          </a>
+          , color-adapted for ROOK. Licensed under{" "}
+          <a
+            href="https://creativecommons.org/licenses/by-sa/4.0/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            CC BY-SA 4.0
+          </a>
+          .
+        </p>
+      </section>
+      {themePickerOpen && (
+        <div
+          className="theme-choice-layer"
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setThemePickerOpen(false);
+          }}
+        >
+          <section
+            className="theme-choice-sheet"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="theme-choice-title"
+          >
+            <div className="sheet-grab-zone" aria-hidden="true">
+              <span />
+            </div>
+            <header>
+              <h2 id="theme-choice-title">Theme</h2>
+              <button
+                type="button"
+                aria-label="Close theme choices"
+                onClick={() => setThemePickerOpen(false)}
+              >
+                ×
+              </button>
+            </header>
+            <div className="theme-choice-list">
+              {[
+                ["system", "System", "Follows your device appearance."],
+                ["light", "Light", "Always use ROOK’s light appearance."],
+                ["dark", "Dark", "Always use ROOK’s dark appearance."],
+                [
+                  "premium",
+                  "Premium",
+                  "Warm gold accents adapted to your device appearance.",
+                ],
+              ].map(([value, label, help]) => (
+                <button
+                  type="button"
+                  key={value}
+                  className={themePreference === value ? "selected" : ""}
+                  aria-pressed={themePreference === value}
+                  onClick={() => {
+                    update((current) => {
+                      current.profile.themePreference = value;
+                      return current;
+                    });
+                    setThemePickerOpen(false);
+                  }}
+                >
+                  <span>
+                    <strong>{label}</strong>
+                    <small>{help}</small>
+                  </span>
+                  {themePreference === value && <i aria-hidden="true">✓</i>}
+                </button>
+              ))}
+            </div>
+          </section>
+        </div>
+      )}
+    </main>
+  );
+}
+function ExerciseVisualViewer({ exercise, close }) {
+  const artwork = exerciseArt(exercise);
+  if (!artwork) return null;
+  return (
+    <main
+      className="sheet exercise-visual-viewer"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="exercise-visual-viewer-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <header className="exercise-visual-viewer-header">
+        <h2 id="exercise-visual-viewer-title">{exerciseName(exercise)}</h2>
+        <button
+          type="button"
+          className="exercise-visual-viewer-close"
+          aria-label="Close visual viewer"
+          onClick={close}
+        >
+          ×
+        </button>
+      </header>
+      <div className="exercise-visual-stage">
+        <img src={artwork} alt="" aria-hidden="true" />
+      </div>
+    </main>
+  );
+}
+function ActiveExerciseOptions({ exercise, state, close, setDetail }) {
+  const active = state.activeWorkout;
+  const exerciseIndex = active?.exercises.findIndex(
+    (item) => item.id === exercise.id,
+  );
+  const current = active?.exercises[exerciseIndex] || exercise;
+  const pair =
+    active && exerciseIndex >= 0
+      ? supersetMeta(active.exercises, exerciseIndex)
+      : null;
+  const locked = Boolean(
+    pair
+      ? pair.members.some(({ exercise: member }) =>
+          member.sets.some((set) => set.completed),
+        )
+      : current?.sets.some((set) => set.completed),
+  );
+  const canCreateSuperset = Boolean(
+    active &&
+      exerciseIndex >= 0 &&
+      !pair &&
+      active.exercises.some(
+        (candidate, index) =>
+          index > exerciseIndex &&
+          !candidate.supersetId &&
+          candidate.sets.length === current?.sets.length &&
+          !candidate.sets.some((set) => set.completed),
+      ),
+  );
+  return (
+    <main
+      className="sheet active-exercise-options-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="active-exercise-options-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button className="sheet-close" aria-label="Close" onClick={close}>
+        ×
+      </button>
+      <Eyebrow>EXERCISE</Eyebrow>
+      <h2 id="active-exercise-options-title">Exercise options</h2>
+      <button
+        className="choice-row"
+        onClick={() => setDetail({ exercise: current })}
+      >
+        <strong>View exercise details</strong>
+        <small>See history and progression guidance.</small>
+      </button>
+      {(pair || canCreateSuperset) && (
+        <button
+          className="choice-row"
+          disabled={locked}
+          onClick={() => setDetail({ superset: current })}
+        >
+          <strong>{pair ? "Manage superset" : "Create superset"}</strong>
+          <small>
+            {locked
+              ? "Locked because work has already been logged."
+              : pair
+                ? "Review or remove the current exercise pair."
+                : "Pair this with an upcoming exercise."}
+          </small>
+        </button>
+      )}
+    </main>
+  );
+}
+
+function ActiveSuperset({ exercise, state, update, close }) {
+  const active = state.activeWorkout;
+  const exerciseIndex = active?.exercises.findIndex(
+    (item) => item.id === exercise.id,
+  );
+  const current = active?.exercises[exerciseIndex] || null;
+  const pair =
+    active && exerciseIndex >= 0
+      ? supersetMeta(active.exercises, exerciseIndex)
+      : null;
+  const locked = Boolean(
+    pair
+      ? pair.members.some(({ exercise: member }) =>
+          member.sets.some((set) => set.completed),
+        )
+      : current?.sets.some((set) => set.completed),
+  );
+  const candidates = active
+    ? active.exercises.filter(
+        (candidate, index) =>
+          index > exerciseIndex &&
+          candidate.id !== current?.id &&
+          !candidate.supersetId &&
+          candidate.sets.length === current?.sets.length &&
+          !candidate.sets.some((set) => set.completed),
+      )
+    : [];
+  const createPair = (partnerId) => {
+    update((state) => {
+      const workout = state.activeWorkout;
+      if (!workout) return state;
+      const paired = pairActiveWorkoutExercises(
+        workout.exercises,
+        exercise.id,
+        partnerId,
+        `active-superset-${Date.now()}`,
+      );
+      if (!paired) return state;
+      workout.exerciseIndex = workout.exercises.findIndex(
+        (item) => item.id === exercise.id,
+      );
+      workout.rest = null;
+      workout.updatedAt = Date.now();
+      return state;
+    });
+    close();
+  };
+  const removePair = () => {
+    update((state) => {
+      const workout = state.activeWorkout;
+      if (!workout || !pair) return state;
+      if (!unpairActiveWorkoutExercises(workout.exercises, pair.id)) return state;
+      workout.exerciseIndex = workout.exercises.findIndex(
+        (item) => item.id === exercise.id,
+      );
+      workout.rest = null;
+      workout.updatedAt = Date.now();
+      return state;
+    });
+    close();
+  };
+  return (
+    <main
+      className="sheet replace-sheet active-superset-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="active-superset-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button className="sheet-close" aria-label="Close" onClick={close}>
+        ×
+      </button>
+      <div className="sheet-scroll">
+        <Eyebrow>{pair ? "WORKOUT SUPERSET" : "CREATE SUPERSET"}</Eyebrow>
+        <h2 id="active-superset-title">
+          {pair ? "Manage this pair" : `Pair ${exerciseName(current || exercise)}`}
+        </h2>
+        {pair ? (
+          <>
+            <p>
+              {exerciseName(pair.members[0].exercise)} and {" "}
+              {exerciseName(pair.members[1].exercise)} alternate one set each,
+              then you rest.
+            </p>
+            <button
+              className="choice-row active-superset-remove"
+              disabled={locked}
+              onClick={removePair}
+            >
+              <strong>Remove superset</strong>
+              <small>
+                {locked
+                  ? "Locked because work has already been logged."
+                  : "Keep both exercises and return them to normal order."}
+              </small>
+            </button>
+          </>
+        ) : (
+          <>
+            <p>
+              Choose an upcoming exercise. Rook will alternate one set of each,
+              then start your rest.
+            </p>
+            {locked ? (
+              <p className="offline-banner">
+                Superset changes are locked after work is logged.
+              </p>
+            ) : candidates.length ? (
+              candidates.map((candidate) => (
+                <button
+                  className="choice-row"
+                  key={candidate.id}
+                  onClick={() => createPair(candidate.id)}
+                >
+                  <strong>{exerciseName(candidate)}</strong>
+                  <small>{targetLabel(candidate, state.profile.rirEnabled)}</small>
+                </button>
+              ))
+            ) : (
+              <p className="offline-banner">
+                No unstarted upcoming exercise is available to pair.
+              </p>
+            )}
+          </>
+        )}
+      </div>
+    </main>
+  );
+}
+
 function Replace({ exercise, state, update, close }) {
   const sheetRef = useRef(null);
   const programIds = state.program.days.flatMap((day) =>
     day.exercises.map((item) => item.exerciseId),
   );
+  const activeIds = (state.activeWorkout?.exercises || [])
+    .filter((item) => item.id !== exercise.id)
+    .map((item) => item.exerciseId);
   const compatible = useMemo(
-    () => compatibleReplacementCandidates(exercise, state.profile, programIds),
+    () =>
+      compatibleReplacementCandidates(exercise, state.profile, programIds).filter(
+        (item) => !activeIds.includes(item.id),
+      ),
     [
       exercise.exerciseId,
       exercise.importedExercise?.pattern,
       state.profile,
       programIds.join("|"),
+      activeIds.join("|"),
     ],
   );
   const [choices, setChoices] = useState(() => compatible.slice(0, 3));
@@ -8975,7 +10398,7 @@ function Replace({ exercise, state, update, close }) {
       if (!mounted) return;
       const ranked = result.exerciseIds
         .map((id) => exerciseCatalog[id])
-        .filter(Boolean);
+        .filter((item) => item && !activeIds.includes(item.id));
       const merged = [...ranked, ...compatible].filter(
         (item, index, list) =>
           list.findIndex((value) => value.id === item.id) === index,
@@ -8986,7 +10409,7 @@ function Replace({ exercise, state, update, close }) {
     return () => {
       mounted = false;
     };
-  }, [exercise.id]);
+  }, [exercise.id, activeIds.join("|")]);
   const more = async () => {
     if (loading || loadingMore) return;
     setLoadingMore(true);
@@ -8998,7 +10421,10 @@ function Replace({ exercise, state, update, close }) {
     );
     const ranked = result.exerciseIds
       .map((id) => exerciseCatalog[id])
-      .filter((item) => item && !shown.has(item.id));
+      .filter(
+        (item) =>
+          item && !shown.has(item.id) && !activeIds.includes(item.id),
+      );
     const remaining = compatible.filter((item) => !shown.has(item.id));
     const next = [...ranked, ...remaining]
       .filter(
@@ -9028,6 +10454,10 @@ function Replace({ exercise, state, update, close }) {
         index < 0 ||
         active.exercises[index].sets.some((set) => set.completed) ||
         !catalog ||
+        active.exercises.some(
+          (item, candidateIndex) =>
+            candidateIndex !== index && item.exerciseId === choice.id,
+        ) ||
         !compatibleReplacementCandidates(
           active.exercises[index],
           current.profile,
@@ -9171,6 +10601,7 @@ function Replace({ exercise, state, update, close }) {
 
 export default function App() {
   const [state, update] = useLiftState();
+  useResolvedTheme(state.profile.themePreference);
   const [page, setPage] = useState("today");
   const [detail, setDetail] = useState(null);
   const [entryMode, setEntryMode] = useState(null);
@@ -9188,9 +10619,12 @@ export default function App() {
   useEffect(() => {
     if (page !== "today") setPlanReadyNotice(null);
   }, [page]);
-  const showGeneratedPlan = () => {
+  const showToday = () => {
     setDetail(null);
     setPage("today");
+  };
+  const showGeneratedPlan = () => {
+    showToday();
     setPlanReadyNotice({ id: Date.now() });
   };
   useEffect(() => {
@@ -9305,6 +10739,7 @@ export default function App() {
           state={state}
           update={update}
           close={() => setEntryMode(null)}
+          onPlanAccepted={showToday}
           initial
         />
       );
@@ -9384,6 +10819,7 @@ export default function App() {
             setPage={setPage}
             setDetail={setDetail}
             onPlanAccepted={showGeneratedPlan}
+            onPlanImported={showToday}
           />
         </ModalLayer>
       )}

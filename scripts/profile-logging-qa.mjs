@@ -144,6 +144,46 @@ for (const environment of ['Commercial gym', 'Home gym']) {
 }
 
 {
+  const state = createReturningUserFixture(1); ensureWorkoutToday(state);
+  const { context, page, errors } = await openState(state);
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  assert.equal(await page.getByText('ILLUSTRATION CREDITS', { exact: true }).count(), 0, 'illustration attribution does not sit outside Appearance on Profile');
+  await page.getByRole('button', { name: /Appearance/ }).click();
+  assert.equal(await page.getByText('ILLUSTRATION CREDITS', { exact: true }).count(), 1, 'Appearance owns the illustration attribution');
+  assert.equal(await page.getByRole('link', { name: 'Bryl Lim / Everkinetic' }).getAttribute('href'), 'https://bryllim.github.io/workout-guide/');
+  assert.equal(await page.getByRole('link', { name: 'CC BY-SA 4.0' }).getAttribute('href'), 'https://creativecommons.org/licenses/by-sa/4.0/');
+  const illustrations = page.getByRole('switch', { name: 'Exercise illustrations' });
+  assert.equal(await illustrations.isChecked(), true, 'exercise illustrations are enabled by default');
+  await page.locator('.setting-switch').filter({ hasText: 'Exercise illustrations' }).click();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).profile.showExerciseImages), false, 'display preference persists immediately');
+  assert.equal(await page.getByText('ILLUSTRATION CREDITS', { exact: true }).count(), 1, 'credits remain visible when illustrations are turned off');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'TODAY', exact: true }).click();
+  assert.equal(await page.locator('.exercise-preview img').count(), 0, 'Today hides exercise illustrations when disabled');
+  await page.locator('.exercise-preview .list-row').first().click();
+  assert.equal(await page.locator('.exercise-detail-art').count(), 0, 'exercise detail hides its illustration when disabled');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  assert.match(await page.getByRole('button', { name: /Appearance/ }).innerText(), /illustrations off/i);
+  await page.getByRole('button', { name: /Appearance/ }).click();
+  await page.locator('.setting-switch').filter({ hasText: 'Exercise illustrations' }).click();
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'TODAY', exact: true }).click();
+  assert.ok(await page.locator('.exercise-preview img').count(), 'Today restores exercise illustrations when enabled');
+  await page.locator('.exercise-preview .list-row').filter({ has: page.locator('img') }).first().click();
+  assert.equal(await page.locator('.exercise-detail-art').count(), 1, 'exercise detail shows the same faithful library illustration');
+  assert.match(await page.locator('.exercise-detail-art').getAttribute('src'), /\/assets\/wg-.*\.svg$/, 'exercise detail only uses the bundled library');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('button', { name: 'START WORKOUT' }).click();
+  const activeArt = page.locator('.exercise-heading-art');
+  if (await activeArt.count()) {
+    assert.match(await activeArt.getAttribute('src'), /\/assets\/wg-.*\.svg$/, 'active workout only uses faithful library illustrations');
+  }
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+{
   const state = createReturningUserFixture(1); state.profile.restTimerEnabled = false; state.profile.restTimerAutoStart = false;
   ensureWorkoutToday(state);
   const { context, page, errors } = await openState(state);
@@ -155,4 +195,4 @@ for (const environment of ['Commercial gym', 'Home gym']) {
 }
 
 await browser.close();
-console.log('Profile/Logging QA passed: clean profile states, contextual plan actions, compact responsive screenshots, validated increments, unit conversion, and real rest-timer settings.');
+console.log('Profile/Logging QA passed: clean profile states, persisted illustration preference, contextual plan actions, validated increments, unit conversion, and real rest-timer settings.');

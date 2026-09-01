@@ -1,5 +1,5 @@
 import { mkdir, writeFile } from 'node:fs/promises';
-import { WEEKDAYS, buildProgram, estimateExerciseMinutes, estimateSessionMinutes, exerciseCatalog, isExerciseAllowed, validateProgram, weeklyFractionalVolume } from '../src/domain.js';
+import { WEEKDAYS, buildProgram, estimateExerciseMinutes, estimateSessionMinutes, exerciseCatalog, isExerciseAllowed, sessionStructureKey, validateProgram, weeklyFractionalVolume } from '../src/domain.js';
 
 const label = process.argv.find(value => value.startsWith('--label='))?.split('=')[1] || 'current';
 const base = { exercisePreference: 'No preference', followUpAnswers: [], units: 'kg', rirEnabled: false };
@@ -31,7 +31,12 @@ const programFor = overrides => { const profile = { ...auditBase, ...overrides }
 const exercisesFor = program => program.days.flatMap(day => day.exercises);
 const checks = []; const check = (id, expectation, passed, evidence) => checks.push({ id, expectation, passed: Boolean(passed), evidence });
 const hard = programFor({ effortStyle: 'Fewer hard sets · 2 sets · 0–1 RIR' }); const moderate = programFor({ effortStyle: 'More moderate sets · 3–4 sets · 2–3 RIR' });
-check('effort-fewer-hard', 'Every exercise uses two hard sets without required failure.', exercisesFor(hard.program).every(exercise => exercise.sets.length === 2 && exercise.targetRir === 1), { setCounts: [...new Set(exercisesFor(hard.program).map(exercise => exercise.sets.length))], rir: [...new Set(exercisesFor(hard.program).map(exercise => exercise.targetRir))] });
+const hardExercises = exercisesFor(hard.program);
+check('effort-fewer-hard', 'Every exercise uses two hard sets and the deterministic 6–8 compound / 8–12 isolation range.', hardExercises.every(exercise => {
+  const item = exerciseCatalog[exercise.exerciseId];
+  const expected = item.measure === 'seconds' ? item.durationRange : item.kind === 'power' ? [2, 5] : item.kind === 'compound' ? [6, 8] : [8, 12];
+  return exercise.sets.length === 2 && exercise.targetRir === (item.kind === 'power' ? null : 1) && exercise.repMin === expected[0] && exercise.repMax === expected[1];
+}), { setCounts: [...new Set(hardExercises.map(exercise => exercise.sets.length))], rangesByKind: Object.fromEntries(['compound', 'isolation', 'power'].map(kind => [kind, [...new Set(hardExercises.filter(exercise => exerciseCatalog[exercise.exerciseId].kind === kind).map(exercise => `${exercise.repMin}-${exercise.repMax}`))]])), rir: [...new Set(hardExercises.map(exercise => exercise.targetRir))] });
 check('effort-more-moderate', 'Every exercise preserves three to four moderate sets at 2–3 RIR.', exercisesFor(moderate.program).every(exercise => exercise.sets.length >= 3 && exercise.sets.length <= 4 && exercise.targetRir >= 2 && exercise.targetRir <= 3), { setCounts: [...new Set(exercisesFor(moderate.program).map(exercise => exercise.sets.length))], rir: [...new Set(exercisesFor(moderate.program).map(exercise => exercise.targetRir))] });
 const younger = programFor({ ageRange: '30–39' }); const older = programFor({ ageRange: '60+' }); const olderCompounds = exercisesFor(older.program).filter(exercise => exerciseCatalog[exercise.exerciseId].kind === 'compound'); const highFatigue = value => exercisesFor(value.program).filter(exercise => exerciseCatalog[exercise.exerciseId].fatigueCost === 'high').length;
 check('age-60-secondary-context', 'A 60+ starting profile uses a conservative compound RIR floor and no more high-fatigue choices.', Math.min(...olderCompounds.map(exercise => exercise.targetRir)) >= 3 && highFatigue(older) <= highFatigue(younger), { compoundMinimumRir: Math.min(...olderCompounds.map(exercise => exercise.targetRir)), youngerHighFatigue: highFatigue(younger), olderHighFatigue: highFatigue(older) });
@@ -52,7 +57,7 @@ check('exercise-preference', 'Free-weight and machine preferences materially cha
 const restricted = programFor({ avoid: 'No back squat.' }); check('restrictions', 'Explicitly avoided exercises never enter the plan.', !exercisesFor(restricted.program).some(exercise => exercise.exerciseId === 'back-squat'), { exerciseIds: exercisesFor(restricted.program).map(exercise => exercise.exerciseId) });
 const splitMatrix = [
   ['Upper / Lower', { 2: 'T2-UL', 3: 'T3-UL', 4: 'T4-UL', 5: 'T5-UL', 6: 'T6-UL3' }],
-  ['PPL', { 3: 'T3-PPL', 4: 'T4-PPL', 5: 'T5-ULPPL', 6: 'T6-PPL2' }],
+  ['PPL', { 3: 'T3-PPL', 4: 'T4-PPL', 5: 'T5-PPLUL', 6: 'T6-PPL2' }],
   ['Full Body', { 2: 'T2-FB', 3: 'T3-FB', 4: 'T4-FB', 5: 'T5-FB', 6: 'T6-FB' }],
   ['Arnold split', { 2: 'T2-ARNOLD', 3: 'T3-ARNOLD', 4: 'T4-ARNOLD', 5: 'T5-ARNOLD', 6: 'T6-ARNOLD' }],
   ['Push / Pull split', { 2: 'T2-PP', 3: 'T3-PP', 4: 'T4-PP', 5: 'T5-PP', 6: 'T6-PP' }],
@@ -70,6 +75,12 @@ const boundedFallbacks = [
   { preference: 'PPLUL', daysPerWeek: 6, expected: 'T6-PPL2' }
 ].map(item => ({ ...item, actual: programFor({ daysPerWeek: item.daysPerWeek, availableDays: WEEKDAYS, trainingPreferences: `I prefer ${item.preference}.` }).program.templateId }));
 check('split-preference', 'Recognized split preferences control every safe supported frequency; only structurally unsuitable frequencies use the recovery-safe baseline.', splitResults.every(item => item.actual === item.expected && item.valid) && boundedFallbacks.every(item => item.actual === item.expected), { supported: splitResults, boundedFallbacks });
+const calendarA = programFor({ daysPerWeek: 4, availableDays: ['Mon', 'Tue', 'Thu', 'Fri'], trainingPreferences: 'Upper / Lower' });
+const calendarB = programFor({ daysPerWeek: 4, availableDays: ['Tue', 'Wed', 'Sat', 'Sun'], trainingPreferences: 'Upper / Lower' });
+const structuralSequence = value => value.program.days.map(sessionStructureKey);
+check('split-calendar-separation', 'Changing available weekdays changes placement without changing the structural session sequence.', JSON.stringify(structuralSequence(calendarA)) === JSON.stringify(structuralSequence(calendarB)) && JSON.stringify(calendarA.program.days.map(day => day.weekday)) !== JSON.stringify(calendarB.program.days.map(day => day.weekday)), { firstCalendar: calendarA.program.days.map(day => day.weekday), secondCalendar: calendarB.program.days.map(day => day.weekday), firstSequence: structuralSequence(calendarA), secondSequence: structuralSequence(calendarB) });
+const explicitHybrid = programFor({ daysPerWeek: 5, availableDays: ['Mon', 'Tue', 'Wed', 'Fri', 'Sun'], trainingPreferences: 'Upper Lower Push Pull Legs' });
+check('explicit-session-order', 'An explicit hybrid order remains distinct from the canonical hybrid alias.', JSON.stringify(structuralSequence(explicitHybrid)) === JSON.stringify(['upper', 'lower', 'push', 'pull', 'legs']) && explicitHybrid.program.trainingStructure?.structureFamily === 'ppl-upper-lower-hybrid', { templateId: explicitHybrid.program.templateId, family: explicitHybrid.program.trainingStructure?.structureFamily, sequence: structuralSequence(explicitHybrid), weekdays: explicitHybrid.program.days.map(day => day.weekday) });
 const signature = value => JSON.stringify(value.program.days.map(day => ({ name: day.name, exercises: day.exercises.map(exercise => [exercise.exerciseId, exercise.sets.length, exercise.repMin, exercise.repMax, exercise.targetRir]) })));
 const female = programFor({ name: 'A', sex: 'Female' }); const male = programFor({ name: 'B', sex: 'Male' }); check('neutral-demographics', 'Name and sex do not stereotype exercise or workload selection.', signature(female) === signature(male), { identicalProgramming: signature(female) === signature(male) });
 lines.push('## Personalization contract checks', ''); for (const item of checks) lines.push(`- **${item.passed ? 'PASS' : 'FAIL'}** ${item.id}: ${item.expectation} Evidence: ${JSON.stringify(item.evidence)}`); lines.push('');

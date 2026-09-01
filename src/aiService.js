@@ -19,6 +19,7 @@ import {
   normalizeWorkoutName,
   optionalStrengthForDate,
   plannedWorkoutForDate,
+  splitImportedExerciseLabel,
   validateProgramExerciseChanges,
   validateWeekScheduleChanges,
   weekKey,
@@ -575,6 +576,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
     .find(
       (line) =>
         !/^goal\s*:/i.test(line) &&
+        !/^(?:schedule|frequency|days?\s+per\s+week)\s*:/i.test(line) &&
         !noteSectionMode(line) &&
         !/^(?:weekly workout plan|training plan|workout plan)$/i.test(
           foldNoteText(line),
@@ -648,7 +650,15 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
     const timed = /^(?:s|sec|secs|second|seconds|sek|sekund|sekunde)\b/i.test(
       suffix,
     );
-    const detail = suffix.replace(/^[\s\u00b7,|;]+/u, "").trim();
+    const detail = suffix
+      .replace(
+        timed
+          ? /^(?:s|sec|secs|second|seconds|sek|sekund|sekunde)\b/iu
+          : /$^/u,
+        "",
+      )
+      .replace(/^[\s\u00b7,|;]+/u, "")
+      .trim();
     const rirMatch = detail.match(/\b([0-4])\s*RIR\b/i);
     const inlineRest = parsedRestSeconds(detail);
     const note = detail
@@ -656,9 +666,15 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
       .replace(/^[\s\u00b7,|;]+|[\s\u00b7,|;]+$/gu, "")
       .trim();
     if (count < 1 || count > 20 || repMin < 1 || repMax < repMin) continue;
+    const importedLabel = splitImportedExerciseLabel(sourceName);
+    const parsedNote = prescription.failure
+      ? ["To failure", note].filter(Boolean).join(" · ")
+      : note && inlineRest === null && !/^[@\d]/.test(note)
+        ? note
+        : null;
     current.exercises.push({
       exerciseId: null,
-      sourceName: cleanImportedExerciseLabel(sourceName),
+      sourceName: importedLabel.name,
       sets: count,
       repMin,
       repMax,
@@ -666,11 +682,10 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
       restSeconds: inlineRest,
       measure: timed ? "seconds" : null,
       failureTarget: prescription.failure,
-      notes: prescription.failure
-        ? ["To failure", note].filter(Boolean).join(" · ")
-        : note && inlineRest === null && !/^[@\d]/.test(note)
-          ? note
-          : null,
+      notes:
+        [...new Set([importedLabel.note, parsedNote].filter(Boolean))].join(
+          " · ",
+        ) || null,
       weightKg: null,
       setWeightsKg: null,
     });
@@ -767,9 +782,12 @@ function finalizeImportedPlan(profile, existingPlanText, data) {
   verifiedData.days.forEach((day) =>
     day.exercises.forEach((exercise) => {
       const sourceMatch = verifiedAgainstSource[sourceIndex];
-      exercise.sourceName = cleanImportedExerciseLabel(
-        sourceMatch.name,
-      );
+      const importedLabel = splitImportedExerciseLabel(sourceMatch.name);
+      exercise.sourceName = importedLabel.name;
+      exercise.notes =
+        [...new Set([importedLabel.note, exercise.notes].filter(Boolean))].join(
+          " · ",
+        ) || null;
       exercise.sourceVerified = sourceMatch.exact;
       const weights = alignedWeights
         ? alignedWeights[sourceIndex]
@@ -961,6 +979,8 @@ export const AIService = {
     try {
       const response = await fetch("/api/ai/status", {
         signal: controller.signal,
+        cache: "no-store",
+        headers: { accept: "application/json" },
       });
       if (!response.ok) return { available: false, provider: null };
       return await response.json();

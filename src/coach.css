@@ -62,11 +62,11 @@
 .coach-screen .user-message { max-width: 86%; padding: 12px 16px; border-radius: 18px 18px 5px 18px; font-size: 14px; line-height: 1.42; }
 .coach-message { align-self: flex-start; width: min(92%, 410px); padding: 15px 16px 16px; border: 1px solid rgba(27, 26, 25, .09); border-radius: 5px 18px 18px 18px; background: #fff; box-shadow: 0 2px 10px rgba(27, 26, 25, .035); }
 .coach-message header { display: flex; align-items: center; gap: 8px; margin-bottom: 11px; }
-.coach-message header span { width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #e7f1ec; color: #1f6b4c; font-size: 10px; font-weight: 850; }
+.coach-message header span { flex: 0 0 22px; width: 22px; height: 22px; border-radius: 50%; display: grid; place-items: center; background: #e7f1ec; color: #1f6b4c; font-size: 10px; font-weight: 850; }
 .coach-message header strong { color: #1f6b4c; font-size: 9px; letter-spacing: .13em; }
 .coach-message p { margin: 0; color: #353330; font-size: 14px; line-height: 1.55; }
 .coach-message p + p { margin-top: 10px; }
-.coach-thinking { width: 92px; }
+.coach-thinking { width: 150px; }
 .thinking-dots { display: flex; gap: 4px; padding: 2px 0; }
 .thinking-dots i { width: 6px; height: 6px; border-radius: 50%; background: #8fb8a5; animation: coach-pulse 1s infinite ease-in-out; }
 .thinking-dots i:nth-child(2) { animation-delay: .15s; }

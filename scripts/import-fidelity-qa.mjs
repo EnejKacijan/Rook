@@ -30,19 +30,30 @@ const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Goog
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const page = await context.newPage(); const errors = [];
 page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+page.on('dialog', dialog => dialog.accept());
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true }) }));
 await page.route('**/api/ai', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: raw }) }));
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
-await page.getByRole('button', { name: /I ALREADY HAVE A PLAN/ }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor();
+await page.getByRole('button', { name: /Already have a plan/i }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor();
 const previewNames = await page.locator('.import-exercise .plan-editor-heading > strong').allTextContents();
 assert.deepEqual(previewNames, expected, 'preview preserves every source exercise in source order'); assert.equal(await page.getByText(/0 RIR/).count(), 0); await page.getByRole('button', { name: 'Edit Barbell Bench Press' }).click(); assert.deepEqual(await page.getByRole('spinbutton', { name: /Kilograms for Barbell Bench Press set/ }).evaluateAll(inputs => inputs.map(input => input.value)), ['80', '80', '80'], 'preview exposes the explicit common kilogram load for editing'); await page.getByRole('button', { name: /^(Edit|Review) Chest Supported Row$/ }).click(); assert.deepEqual(await page.getByRole('spinbutton', { name: /Kilograms for Chest Supported Row set/ }).evaluateAll(inputs => inputs.map(input => input.value)), ['60', '62.5', '60'], 'preview exposes explicit per-set loads for editing');
 const overheadPressCard = page.locator('.plan-editor-exercise').filter({ hasText: 'Overhead Press' }).first(); assert.equal(await overheadPressCard.evaluate(element => element.classList.contains('needs-review')), false, 'Overhead Press is a recognized catalog exercise');
-const uncertainCount = await page.locator('.plan-editor-exercise.needs-review').count(); if (uncertainCount) { await page.getByRole('button', { name: `KEEP ALL ${uncertainCount} AS WRITTEN` }).click(); assert.equal(await page.locator('.plan-editor-exercise.needs-review').count(), 0, 'one bulk action confirms every remaining source name'); }
+const uncertainCount = await page.locator('.plan-editor-exercise.needs-review').count(); if (uncertainCount) { await page.getByRole('button', { name: new RegExp(`KEEP ALL ${uncertainCount} AS CUSTOM`) }).click(); assert.equal(await page.locator('.plan-editor-exercise.needs-review').count(), 0, 'one bulk action confirms every remaining source name'); }
 await page.getByRole('button', { name: 'USE THIS PLAN' }).click(); await page.waitForFunction(() => JSON.parse(localStorage.getItem('lift-v2-state'))?.profile?.onboardingComplete);
 let persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); const persistedNames = persisted.program.days.flatMap(day => day.exercises.map(exercise => exercise.originalImportedName));
 assert.deepEqual(persistedNames, expected, 'saved program preserves source identity'); assert.deepEqual(persisted.program.days.map(day => day.weekday), sourceDays.map(([day]) => day), 'saved program preserves source day order');
 assert.equal(persisted.program.days[2].exercises.find(exercise => exercise.originalImportedName === 'Machine Shoulder Press').exerciseId, 'machine-shoulder-press');
 assert.equal(persisted.program.days[0].exercises.find(exercise => exercise.originalImportedName === 'Chest Supported Row').exerciseId, 'chest-supported-row');
+
+await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+await page.getByRole('button', { name: 'REPLACE PLAN' }).click();
+await page.getByRole('button', { name: /Import a different plan/ }).click();
+await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText);
+await page.getByRole('button', { name: 'CREATE PREVIEW' }).click();
+await page.getByRole('heading', { name: 'Review your plan' }).waitFor();
+await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
+assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getAttribute('aria-current'), 'page', 'replacement import returns to Today');
+assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'import does not show the generated-plan-only confirmation');
 
 for (const [weekday, , exercises] of sourceDays) {
   await page.getByRole('button', { name: new RegExp(`^${weekday} `) }).click();

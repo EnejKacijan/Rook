@@ -79,7 +79,12 @@ async function verifyLastRowClear(page) {
   await page.getByRole('button', { name: 'START WORKOUT' }).waitFor();
   assert.equal(await page.locator('.exercise-preview .list-row').count(), 10, 'Today renders a ten-exercise imported workout without truncating the list');
   const longRow = page.locator('.exercise-preview .list-row').first(); const [nameBox, targetBox] = await Promise.all([longRow.locator('strong').boundingBox(), longRow.locator('.navigation-row-end').boundingBox()]);
-  assert.ok(nameBox.x + nameBox.width <= targetBox.x, 'long exercise names wrap without colliding with the compact prescription');
+  const nameAndTargetOverlap =
+    nameBox.x < targetBox.x + targetBox.width &&
+    nameBox.x + nameBox.width > targetBox.x &&
+    nameBox.y < targetBox.y + targetBox.height &&
+    nameBox.y + nameBox.height > targetBox.y;
+  assert.equal(nameAndTargetOverlap, false, 'long exercise names wrap without colliding with the compact prescription');
   assert.ok((await longRow.boundingBox()).height > 48, 'long exercise name gains vertical space instead of overflowing');
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 320, 'ten exercises and long names preserve narrow-screen width');
   await verifyLastRowClear(page); await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: output('320-ten-exercises-long-name.png'), fullPage: false }); assert.deepEqual(errors, []); await context.close();

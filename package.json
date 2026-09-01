@@ -21,7 +21,21 @@
     "qa:coach-coverage": "node scripts/coach-coverage-adapt-qa.mjs",
     "qa:plan-upgrade": "node scripts/plan-upgrade-fallback-qa.mjs",
     "qa:scratch-plan": "node scripts/scratch-plan-qa.mjs",
-    "qa:active-workout-bottom": "node scripts/active-workout-bottom-qa.mjs"
+    "qa:active-workout-bottom": "node scripts/active-workout-bottom-qa.mjs",
+    "qa:active-workout-clarity": "node scripts/active-workout-clarity-qa.mjs",
+    "qa:warmup-sequencing": "node scripts/warmup-sequencing-qa.mjs",
+    "qa:exercise-history": "node scripts/exercise-history-qa.mjs",
+    "qa:today-illustrations": "node scripts/today-illustration-coverage-qa.mjs",
+    "qa:endurance-illustrations": "node scripts/endurance-illustration-qa.mjs",
+    "qa:edit-plan-supersets": "node scripts/edit-plan-superset-qa.mjs",
+    "qa:active-workout-supersets": "node scripts/active-workout-superset-qa.mjs",
+    "qa:import-review": "node scripts/import-review-ux-qa.mjs",
+    "qa:illustration-audit": "node scripts/exercise-illustration-audit.mjs",
+    "qa:dark-mode": "node scripts/dark-mode-qa.mjs",
+    "qa:premium-theme": "node scripts/premium-theme-qa.mjs",
+    "qa:motion-themes": "node scripts/motion-theme-qa.mjs",
+    "art:normalize": "node scripts/normalize-exercise-art.mjs",
+    "art:check": "node scripts/normalize-exercise-art.mjs --check"
   },
   "dependencies": {
     "react": "^18.3.1",

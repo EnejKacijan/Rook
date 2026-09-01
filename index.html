@@ -8,6 +8,33 @@
     <link rel="icon" href="/icon.svg" type="image/svg+xml" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <title>Rook</title>
+    <script>
+      (() => {
+        const light = "#f6f5f2";
+        const dark = "#111413";
+        let preference = "system";
+        try {
+          const stored = JSON.parse(localStorage.getItem("lift-v2-state"));
+          if (stored?.schemaVersion === 2)
+            preference = ["system", "light", "dark"].includes(
+              stored.profile?.themePreference,
+            )
+              ? stored.profile.themePreference
+              : "light";
+        } catch {}
+        const resolved =
+          preference === "system"
+            ? matchMedia("(prefers-color-scheme: dark)").matches
+              ? "dark"
+              : "light"
+            : preference;
+        document.documentElement.dataset.theme = resolved;
+        document.documentElement.style.colorScheme = resolved;
+        document
+          .querySelector('meta[name="theme-color"]')
+          ?.setAttribute("content", resolved === "dark" ? dark : light);
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

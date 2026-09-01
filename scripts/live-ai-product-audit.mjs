@@ -80,7 +80,7 @@ const importText = `Ponedeljek · Zgornji del\nPotisk s prsi z ročkama — 3 ×
 const importContext = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
 const importPage = await importContext.newPage();
 await importPage.goto(baseUrl, { waitUntil: 'networkidle' });
-await importPage.getByRole('button', { name: /I ALREADY HAVE A PLAN/ }).click();
+await importPage.getByRole('button', { name: /Already have a plan/i }).click();
 await importPage.getByPlaceholder(/Paste your workout notes/).fill(importText);
 await importPage.getByRole('button', { name: 'CREATE PREVIEW' }).click();
 await importPage.getByRole('heading', { name: 'Review your plan' }).waitFor({ timeout: 240_000 });

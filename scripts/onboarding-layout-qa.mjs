@@ -31,7 +31,8 @@ async function verify(name) {
 }
 
 await verify('01-personal');
-await page.getByLabel('Age range').selectOption({ index: 2 });
+await page.getByRole('combobox', { name: 'Age range' }).click();
+await page.getByRole('option', { name: '18–29' }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('02-goal');
 await page.getByRole('button', { name: 'Build muscle' }).click();
@@ -42,7 +43,7 @@ await page.getByRole('button', { name: /^Beginner/ }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('04-schedule');
 await page.getByRole('button', { name: '3 days' }).click();
-await page.getByLabel('Select all days').check();
+await page.getByLabel('Make any day available').check();
 await page.getByRole('button', { name: '60 min' }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('05-setup');
@@ -57,6 +58,28 @@ await verify('07-effort');
 await page.getByRole('button', { name: /Balanced starting point/ }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('08-preferences');
+assert.equal(await page.locator('.step-count').textContent(), 'STEP 8/8');
+assert.equal(await page.locator('.progress-line > span').evaluate(fill => fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width), 1);
+assert.equal(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).getAttribute('aria-pressed'), 'true');
+assert.match(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).textContent(), /Best fit for your goal, experience and 3-day schedule/);
+assert.equal(await page.getByRole('button', { name: /I have a specific split/ }).count(), 1);
+assert.equal(await page.getByText('EXERCISE PREFERENCE', { exact: true }).count(), 1);
+assert.equal(await page.getByPlaceholder('Knee pain, recent surgery, movements to avoid...').count(), 1);
+assert.equal(await page.getByText('Write it naturally. Rook will account for it when building your plan.', { exact: true }).count(), 1);
+
+for (const [width, height] of [[320, 568], [375, 640], [390, 700]]) {
+  await page.setViewportSize({ width, height });
+  const onboarding = page.locator('.onboarding-preferences');
+  await onboarding.evaluate(element => element.scrollTo({ top: 0, left: 0 }));
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${width}x${height} has no horizontal overflow`);
+  await page.getByRole('button', { name: 'BUILD MY PLAN' }).scrollIntoViewIfNeeded();
+  await page.getByRole('button', { name: 'Back', exact: true }).scrollIntoViewIfNeeded();
+  const footer = await page.locator('.onboarding-footer').boundingBox();
+  const back = await page.getByRole('button', { name: 'Back', exact: true }).boundingBox();
+  assert.ok(footer.y >= 0 && footer.y + footer.height <= height, `${width}x${height} footer is fully reachable`);
+  assert.ok(back.y >= 0 && back.y + back.height <= height, `${width}x${height} Back is fully visible`);
+  await page.screenshot({ path: output(`08-preferences-${width}x${height}.png`) });
+}
 await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
 await page.getByRole('heading', { name: 'Your week is ready.' }).waitFor();
 assert.equal(await page.getByRole('region', { name: 'How your answers shaped this plan' }).count(), 1);
