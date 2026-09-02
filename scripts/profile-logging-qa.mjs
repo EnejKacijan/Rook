@@ -14,8 +14,8 @@ function ensureWorkoutToday(state) {
   const day = state.program.days[0]; const replaced = day.weekday; day.weekday = today; state.profile.availableDays = state.profile.availableDays.map(value => value === replaced ? today : value); state.program.rotationStartDate = null;
 }
 
-async function openState(state, viewport = { width: 390, height: 844 }) {
-  const context = await browser.newContext({ viewport });
+async function openState(state, viewport = { width: 390, height: 844 }, colorScheme = 'light') {
+  const context = await browser.newContext({ viewport, colorScheme });
   await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
   const page = await context.newPage(); const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -44,7 +44,35 @@ ensureWorkoutToday(complete);
   const text = await profileText(page);
   assert.match(text, /ABOUT YOU[\s\S]*Alex[\s\S]*30–39/);
   assert.doesNotMatch(text, /COMPLETE YOUR PROFILE/);
-  await page.getByRole('button', { name: /ASK COACH TO ADJUST/i }).click();
+  assert.equal(await page.getByRole('button', { name: /Edit plan/ }).count(), 1, 'program actions use normal title casing');
+  assert.equal(await page.getByRole('button', { name: /Ask Coach to adjust/ }).count(), 1, 'Coach action uses normal title casing');
+  assert.equal(await page.getByRole('button', { name: /Replace plan/ }).count(), 1, 'replacement action uses normal title casing');
+  assert.equal(await page.getByRole('button', { name: /^Schedule/ }).count(), 1, 'Schedule is a real interactive row');
+  assert.equal(await page.getByRole('button', { name: /^Environment/ }).count(), 1, 'Environment is a real interactive row');
+  assert.equal(await page.getByRole('button', { name: /^Equipment/ }).count(), 1, 'Equipment is a real interactive row');
+  const programBeforeProfileEdits = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('lift-v2-state')).program));
+  await page.getByRole('button', { name: /^Schedule/ }).click();
+  assert.equal(await page.locator('.day-options button:disabled').count(), new Set(complete.program.days.map(day => day.weekday)).size, 'current program days cannot be removed from availability');
+  const extraAvailableDay = page.locator('.day-options button[aria-pressed="false"]').first();
+  await extraAvailableDay.click();
+  await page.getByRole('button', { name: 'SAVE SCHEDULE' }).click();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).profile.availableDays.length), complete.profile.availableDays.length + 1, 'extra availability saves without moving current workouts');
+  await page.getByRole('button', { name: /^Environment/ }).click();
+  await page.getByRole('button', { name: 'Home gym' }).click();
+  await page.getByRole('button', { name: 'Dumbbells' }).click();
+  assert.equal(await page.getByRole('button', { name: 'SAVE SETUP' }).isDisabled(), true, 'an incompatible setup cannot strand the current plan');
+  assert.equal(await page.getByText(/current program uses equipment outside this setup/i).count(), 1, 'incompatible setup explains what must happen next');
+  await page.getByRole('button', { name: 'Both' }).click();
+  await page.getByRole('button', { name: 'SAVE SETUP' }).click();
+  assert.match(await page.getByRole('button', { name: /^Environment/ }).innerText(), /Both/);
+  await page.getByRole('button', { name: /^Equipment/ }).click();
+  await page.getByRole('button', { name: 'Resistance bands' }).click();
+  await page.getByRole('button', { name: 'SAVE SETUP' }).click();
+  assert.match(await page.getByRole('button', { name: /^Equipment/ }).innerText(), /Full gym, Dumbbells, Resistance bands/);
+  assert.equal(await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem('lift-v2-state')).program)), programBeforeProfileEdits, 'profile setup edits never silently rebuild the current program');
+  await page.reload({ waitUntil: 'networkidle' });
+  await profileText(page);
+  await page.getByRole('button', { name: /Ask Coach to adjust/i }).click();
   assert.equal(await page.getByRole('textbox', { name: 'Ask Coach' }).inputValue(), 'I want to adjust my current training plan.');
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
   for (const width of [375, 390, 430, 500]) {
@@ -54,11 +82,11 @@ ensureWorkoutToday(complete);
   }
   for (const width of [375, 390, 430, 500]) {
     await page.setViewportSize({ width, height: 844 }); await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight)); await page.waitForTimeout(40);
-    const logout = await page.getByRole('button', { name: 'LOG OUT' }).boundingBox(); const navigation = await page.locator('.bottom-nav').boundingBox(); const gap = navigation.y - (logout.y + logout.height);
+    const logout = await page.getByRole('button', { name: 'Log out' }).boundingBox(); const navigation = await page.locator('.bottom-nav').boundingBox(); const gap = navigation.y - (logout.y + logout.height);
     assert.ok(gap >= 10 && gap <= 14, `Profile keeps a compact safe gap above navigation at ${width}px: ${gap}`);
     await page.screenshot({ path: output(`${width}-profile-bottom-spacing.png`), fullPage: false });
   }
-  await page.getByRole('button', { name: 'REPLACE PLAN' }).click();
+  await page.getByRole('button', { name: 'Replace plan' }).click();
   await page.getByRole('button', { name: /Import from Notes/ }).waitFor();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: /Logging & increments/ }).click();
@@ -92,6 +120,11 @@ ensureWorkoutToday(complete);
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.rest.seconds), 120, 'fixed rest duration persists into workout timer state');
   await page.getByRole('button', { name: 'START', exact: true }).click();
   await page.getByRole('button', { name: 'SKIP', exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Back to Today' }).click();
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  const disabledEdit = page.getByRole('button', { name: /Edit plan/ });
+  assert.equal(await disabledEdit.isDisabled(), true, 'Edit plan remains unavailable during an active workout');
+  assert.match(await disabledEdit.innerText(), /Finish your active workout first\./, 'disabled Edit plan keeps a readable explanation');
   assert.deepEqual(errors, []);
   await context.close();
 }
@@ -121,11 +154,35 @@ for (const importedExtra of [false, true]) {
   assert.match(text, /Imported plan[\s\S]*4 days\/week/);
   assert.equal(await page.getByRole('heading', { name: 'Imported plan', level: 2 }).count(), 1, 'imported plan is presented as the current program, not the page title');
   assert.doesNotMatch(text, /Weekly Workout Plan|4 days\/week · 4 days/);
+  assert.match(text, /COACHING PREFERENCES/);
+  assert.match(text, /Changes don’t update this plan\./);
+  assert.equal(await page.getByText('TRAINING PRIORITIES', { exact: true }).count(), 0, 'an imported plan does not present preferences as properties of the current program');
+  await page.getByRole('button', { name: /Edit priorities/ }).click();
+  await page.getByRole('heading', { name: 'What should Coach keep in mind?' }).waitFor();
+  assert.match(await page.locator('.priority-settings').innerText(), /They don’t update this plan unless you explicitly ask Coach to adjust it\./);
+  assert.equal(await page.getByRole('button', { name: 'SAVE PREFERENCES' }).count(), 1);
+  await page.getByRole('button', { name: 'Close' }).click();
   await page.screenshot({ path: output(`390-profile-imported-${importedExtra ? 'with-details' : 'incomplete'}.png`), fullPage: false });
-  await page.getByRole('button', { name: 'REPLACE PLAN' }).click();
+  await page.getByRole('button', { name: 'Replace plan' }).click();
   await page.getByRole('button', { name: /Import a different plan/ }).waitFor();
   await page.getByRole('button', { name: /Build a personalized plan/ }).click();
   assert.match(await page.getByRole('dialog').innerText(), /Workout history will remain/);
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+{
+  const state = createReturningUserFixture(1);
+  state.program.source = 'manual';
+  state.program.name = 'My training plan';
+  const { context, page, errors } = await openState(state);
+  const text = await profileText(page);
+  assert.match(text, /COACHING PREFERENCES/);
+  assert.match(text, /Used by Coach and future generated plans\. Changes don’t update this plan\./);
+  assert.equal(await page.getByText('TRAINING PRIORITIES', { exact: true }).count(), 0, 'a scratch plan uses coaching-preference semantics');
+  await page.getByRole('button', { name: /Edit priorities/ }).click();
+  await page.getByRole('heading', { name: 'What should Coach keep in mind?' }).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'SAVE PREFERENCES' }).count(), 1);
   assert.deepEqual(errors, []);
   await context.close();
 }
@@ -169,8 +226,8 @@ for (const environment of ['Commercial gym', 'Home gym']) {
   await page.locator('.setting-switch').filter({ hasText: 'Exercise illustrations' }).click();
   await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.getByRole('button', { name: 'TODAY', exact: true }).click();
-  assert.ok(await page.locator('.exercise-preview img').count(), 'Today restores exercise illustrations when enabled');
-  await page.locator('.exercise-preview .list-row').filter({ has: page.locator('img') }).first().click();
+  assert.equal(await page.locator('.exercise-preview img').count(), 0, 'Today remains text-first even when detail illustrations are enabled');
+  await page.locator('.exercise-preview .list-row').first().click();
   assert.equal(await page.locator('.exercise-detail-art').count(), 1, 'exercise detail shows the same faithful library illustration');
   assert.match(await page.locator('.exercise-detail-art').getAttribute('src'), /\/assets\/wg-.*\.svg$/, 'exercise detail only uses the bundled library');
   await page.getByRole('button', { name: 'Close', exact: true }).click();
@@ -190,6 +247,32 @@ for (const environment of ['Commercial gym', 'Home gym']) {
   await page.getByRole('button', { name: 'START WORKOUT' }).click();
   await page.getByRole('button', { name: 'Complete set 1' }).click();
   assert.equal(await page.locator('.rest-timer').count(), 0, 'timer UI stays hidden when disabled');
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+for (const [theme, colorScheme] of [['light', 'light'], ['dark', 'dark'], ['premium', 'dark']]) {
+  const state = createReturningUserFixture(2);
+  state.profile = {
+    ...state.profile,
+    themePreference: theme,
+    availableDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'],
+  };
+  state.program = buildProgram(state.profile);
+  const { context, page, errors } = await openState(state, { width: 340, height: 700 }, colorScheme);
+  const text = await profileText(page);
+  assert.match(text, /Schedule[\s\S]*Mon–Fri/, `${theme} profile uses compact continuous schedule copy`);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${theme} profile has no overflow at 340px`);
+  await page.screenshot({ path: output(`340-profile-${theme}.png`), fullPage: true });
+  await page.getByRole('button', { name: /^Environment/ }).click();
+  await page.getByRole('button', { name: 'Both' }).click();
+  await page.getByRole('button', { name: 'Dumbbells' }).click();
+  await page.getByRole('button', { name: 'Resistance bands' }).click();
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${theme} equipment sheet has no overflow at 340px`);
+  await page.screenshot({ path: output(`340-equipment-${theme}.png`), fullPage: false });
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.evaluate(() => { document.documentElement.style.fontSize = '125%'; });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, `${theme} profile tolerates larger type without horizontal scrolling`);
   assert.deepEqual(errors, []);
   await context.close();
 }

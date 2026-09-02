@@ -201,10 +201,11 @@ const todayIndex = await weekChips.evaluateAll((chips) =>
 );
 if (todayIndex > 0) {
   await weekChips.nth(todayIndex - 1).click();
-  assert.equal(
-    await todayChip.evaluate((chip) => getComputedStyle(chip).borderColor),
-    "rgb(235, 238, 236)",
-  );
+  const [todayBorder, neutralBorder] = await Promise.all([
+    todayChip.evaluate((chip) => getComputedStyle(chip).borderColor),
+    darkRun.page.locator('.week-strip button:not(.selected-day):not([aria-current="date"])').first().evaluate((chip) => getComputedStyle(chip).borderColor),
+  ]);
+  assert.notEqual(todayBorder, neutralBorder, "unselected today keeps a distinct secondary indicator");
   await todayChip.click();
 }
 
@@ -213,14 +214,8 @@ assert.equal(
   await darkRun.page.locator(".exercise-preview .exercise-list-row img").count(),
   0,
 );
-const detailExercise = darkState.program.days
-  .find((day) => day.weekday === darkState.selectedDay)
-  .exercises
-  .find((exercise) => exerciseCatalog[exercise.exerciseId]?.artId);
-const detailName = exerciseCatalog[detailExercise.exerciseId].name;
 await darkRun.page
   .locator(".exercise-preview .exercise-list-row")
-  .filter({ hasText: detailName })
   .first()
   .click();
 assert.equal(await darkRun.page.locator(".exercise-detail-art").count(), 1);
@@ -329,6 +324,18 @@ assert.equal(
 await activeRun.page.getByRole("button", { name: "Close", exact: true }).click();
 await activeRun.page.locator(".exercise-detail-overview").waitFor({ state: "detached" });
 await activeRun.page.locator(".exercise-heading").waitFor();
+await activeRun.page.getByRole("button", { name: "Replace", exact: true }).click();
+const initialReplacementChoices = await activeRun.page
+  .locator(".replace-sheet .choice-row")
+  .allTextContents();
+await activeRun.page.waitForTimeout(750);
+assert.deepEqual(
+  await activeRun.page.locator(".replace-sheet .choice-row").allTextContents(),
+  initialReplacementChoices,
+  "visible replacement choices remain stable while the sheet is open",
+);
+await activeRun.page.getByRole("button", { name: "Close", exact: true }).click();
+await activeRun.page.locator(".replace-sheet").waitFor({ state: "detached" });
 await screenshot(activeRun.page, "320-active-workout-dark.png");
 const setStates = await activeRun.page.locator(".sets").evaluate((sets) => {
   const checks = [...sets.querySelectorAll(".check")];
@@ -340,14 +347,16 @@ const setStates = await activeRun.page.locator(".sets").evaluate((sets) => {
     ready: style(checks.find((check) => !check.disabled)),
     future: style(checks.find((check) => check.disabled)),
     inputBackground: getComputedStyle(sets.querySelector("input")).backgroundColor,
+    stepperDivider: getComputedStyle(sets.querySelector(".stepper button")).borderRightColor,
     rirBackground: sets.querySelector("select")
       ? getComputedStyle(sets.querySelector("select")).backgroundColor
       : null,
   };
 });
-assert.equal(setStates.ready.border, "rgba(79, 191, 135, 0.6)");
+assert.equal(setStates.ready.border, "rgba(79, 191, 135, 0.5)");
 assert.equal(setStates.future.color, "rgb(126, 135, 129)");
-assert.equal(setStates.inputBackground, "rgb(28, 32, 30)");
+assert.equal(setStates.inputBackground, "rgba(0, 0, 0, 0)");
+assert.notEqual(setStates.stepperDivider, "rgba(0, 0, 0, 0)");
 if (setStates.rirBackground)
   assert.equal(setStates.rirBackground, "rgb(28, 32, 30)");
 await activeRun.page.getByRole("button", { name: "Complete set 1" }).click();

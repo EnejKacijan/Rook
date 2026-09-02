@@ -37,10 +37,10 @@ const sourceByTarget = new Map([
 const cards = await Promise.all(
   files.map(async (file) => {
     const source = await readFile(path.join(artDirectory, file), "utf8");
-    const original = await readFile(
-      path.join(artDirectory, sourceByTarget.get(file)),
-      "utf8",
-    );
+    const reference = sourceByTarget.get(file);
+    const original = reference
+      ? await readFile(path.join(artDirectory, reference), "utf8")
+      : source;
     const url = `data:image/svg+xml;base64,${Buffer.from(source).toString("base64")}`;
     const originalUrl = `data:image/svg+xml;base64,${Buffer.from(original).toString("base64")}`;
     const label = file.replace(/^wg-rook-/u, "").replace(/\.svg$/u, "").replaceAll("-", " ");

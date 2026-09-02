@@ -1,0 +1,21 @@
+<svg width="512" height="512" viewBox="18.88 12.88 474.24 474.24" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Incline Smith Machine Press">
+  <g fill="#1f6b4c">
+    <rect x="68" y="52" width="21" height="388" rx="8"/>
+    <rect x="423" y="52" width="21" height="388" rx="8"/>
+    <rect x="52" y="426" width="409" height="22" rx="9"/>
+    <rect x="80" y="126" width="352" height="18" rx="8"/>
+    <circle cx="78" cy="135" r="30"/>
+    <circle cx="434" cy="135" r="30"/>
+    <rect x="178" y="294" width="30" height="139" rx="12" transform="rotate(-39 193 364)"/>
+    <rect x="190" y="405" width="181" height="24" rx="10"/>
+    <ellipse cx="248" cy="230" rx="29" ry="31" transform="rotate(35 248 230)"/>
+    <path d="M263 249c20 11 39 30 55 56l37 60-31 20-42-57c-18-24-31-48-39-72l-20-7Z"/>
+    <rect x="236" y="167" width="24" height="95" rx="12" transform="rotate(-18 248 215)"/>
+    <rect x="299" y="169" width="24" height="92" rx="12" transform="rotate(18 311 215)"/>
+    <circle cx="234" cy="151" r="13"/>
+    <circle cx="325" cy="151" r="13"/>
+    <rect x="314" y="357" width="27" height="79" rx="13" transform="rotate(-24 328 397)"/>
+    <rect x="350" y="405" width="72" height="22" rx="11"/>
+    <path d="M349 209h18l-26-36-26 36h17v55h17v-55Z"/>
+  </g>
+</svg>

@@ -1,0 +1,18 @@
+<svg width="512" height="512" viewBox="37.1 41.378 437.799 437.799" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prone Swimmer Pull">
+  <g fill="#1f6b4c">
+    <ellipse cx="256" cy="110" rx="30" ry="35"/>
+    <path d="M219 151c13-15 61-15 74 0l20 151c2 16-10 29-26 29h-62c-16 0-28-13-26-29l20-151Z"/>
+    <rect x="217" y="312" width="31" height="137" rx="15" transform="rotate(8 232 380)"/>
+    <rect x="264" y="312" width="31" height="137" rx="15" transform="rotate(-8 280 380)"/>
+    <rect x="168" y="111" width="27" height="132" rx="13" transform="rotate(43 182 177)"/>
+    <rect x="317" y="111" width="27" height="132" rx="13" transform="rotate(-43 331 177)"/>
+    <circle cx="136" cy="98" r="16"/>
+    <circle cx="376" cy="98" r="16"/>
+    <path d="M102 83c-42 44-50 107-20 160l18-10c-23-42-17-91 14-126l8 17 17-43-45-11 8 13Z"/>
+    <path d="M410 83c42 44 50 107 20 160l-18-10c23-42 17-91-14-126l-8 17-17-43 45-11-8 13Z"/>
+    <rect x="105" y="224" width="27" height="119" rx="13" transform="rotate(-13 119 284)"/>
+    <rect x="380" y="224" width="27" height="119" rx="13" transform="rotate(13 394 284)"/>
+    <circle cx="105" cy="344" r="16"/>
+    <circle cx="407" cy="344" r="16"/>
+  </g>
+</svg>

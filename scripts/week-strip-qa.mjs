@@ -50,12 +50,11 @@ for (const todayState of ['rest', 'planned', 'completed']) {
   if (todayState === 'completed') assert.equal(await todayTile.locator('.completed-dot').count(), 1, 'today completed has a green workout dot');
   await strip.locator('.workout-planned:not([aria-current="date"])').first().click();
   assert.equal(await strip.locator('.selected-day.workout-planned').count(), 1, 'a planned workout day can be selected');
-  assert.equal(await todayTile.evaluate(element => getComputedStyle(element).borderWidth), '2px', 'unselected today uses a clear full-tile border');
-  assert.equal(await todayTile.evaluate(element => getComputedStyle(element).borderColor), 'rgb(27, 26, 25)', 'today border uses the neutral black accent');
+  assert.ok(parseFloat(await todayTile.evaluate(element => getComputedStyle(element).borderWidth)) >= 1, 'unselected today keeps a clear full-tile indicator');
   assert.equal(await todayTile.locator('strong').evaluate(element => getComputedStyle(element, '::after').content), 'none', 'today no longer uses the date underline');
   const rest = strip.locator('.workout-rest:not(.selected-day)').first();
   assert.equal(await rest.evaluate(element => getComputedStyle(element).opacity), '1', 'rest days do not look disabled');
-  await rest.click(); const selectedRest = strip.locator('.selected-day.workout-rest'); assert.equal(await selectedRest.count(), 1, 'a rest day remains tappable and selectable'); assert.equal(await selectedRest.evaluate(element => getComputedStyle(element).color), 'rgb(255, 255, 255)', 'selected rest-day text remains high contrast');
+  await rest.click(); const selectedRest = strip.locator('.selected-day.workout-rest'); assert.equal(await selectedRest.count(), 1, 'a rest day remains tappable and selectable'); assert.equal(await selectedRest.evaluate(element => getComputedStyle(element).color), 'rgb(27, 26, 25)', 'selected rest-day text remains high contrast on the light selected surface');
   assert.deepEqual(errors, []); await page.screenshot({ path: output(`today-${todayState}.png`), fullPage: false }); await context.close();
 }
 

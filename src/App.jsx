@@ -43,6 +43,7 @@ import {
   PHYSIQUE_PRIORITY_OPTIONS,
   WEEKDAYS,
   adaptedTemplateForToday,
+  activeWorkoutCanRestart,
   applyCoachAction,
   applyWeekScheduleChanges,
   blankState,
@@ -72,6 +73,7 @@ import {
   matchImportedExerciseName,
   nextScheduledWorkout,
   normalizeWorkoutName,
+  normalizeSessionNote,
   optionalStrengthForDate,
   plannedWorkoutForDate,
   pluralize,
@@ -79,11 +81,17 @@ import {
   progressionFor,
   recentExerciseProgress,
   refreshWorkoutWarmup,
+  removeExerciseFromOccurrence,
+  removeExerciseFromWeeklyPlan,
+  restartActiveWorkout,
+  restoreOccurrenceOverride,
+  restoreWeeklyPlanWorkout,
   roundedEstimate,
   saveState,
   splitImportedExerciseLabel,
   startWorkout,
   storedWeight,
+  SESSION_NOTE_MAX_LENGTH,
   targetLabel,
   templateForToday,
   validateProgram,
@@ -94,10 +102,17 @@ import {
   weekday,
   weightUnit,
   workoutSetSummary,
+  workoutPlanDate,
   workoutDisplayParts,
   workingSetCanComplete,
 } from "./domain.js";
 import { EXPERT_ISSUES } from "./expertFeedback.js";
+import {
+  buildExerciseReorderBlocks,
+  chronologicalProgramDays,
+  moveExerciseReorderBlock,
+  moveWorkoutThroughWeek,
+} from "./planReorder.js";
 const navItems = [
   ["today", "TODAY"],
   ["coach", "COACH"],
@@ -140,7 +155,9 @@ function useLiftState() {
   const [state, setState] = useState(() => {
     const initial = loadState();
     if (initial.profile.onboardingComplete) {
-      const landingDate = initial.activeWorkout?.workoutDateKey || isoDay();
+      const landingDate = initial.activeWorkout
+        ? initial.selectedDate || initial.activeWorkout.workoutDateKey || isoDay()
+        : isoDay();
       initial.selectedDay = weekday(`${landingDate}T12:00:00`);
       initial.selectedDate = landingDate;
     }
@@ -571,6 +588,7 @@ function OnboardingOptionCard({
   ariaLabel,
   description,
   selected,
+  disabled = false,
   onClick,
 }) {
   return (
@@ -579,6 +597,7 @@ function OnboardingOptionCard({
       className={`onboarding-option ${selected ? "selected-option" : ""}`}
       aria-pressed={selected}
       aria-label={ariaLabel}
+      disabled={disabled}
       onPointerUp={(event) => event.currentTarget.blur()}
       onClick={onClick}
     >
@@ -715,10 +734,11 @@ function TrainingPreferencesStep({
               trainingSafetySupplementalLimits: null,
             }))
           }
-          placeholder="Knee pain, recent surgery, movements to avoid..."
+          placeholder="Pain, recent surgery, or movements you've been told to avoid..."
         />
         <small className="restriction-helper">
-          Write it naturally. Rook will account for it when building your plan.
+          Write it naturally. Rook will adapt the plan where possible and ask if
+          anything needs clarification.
         </small>
         {safetyAnalysisStatus === "checking" && (
           <div className="restriction-checking" role="status" aria-live="polite">
@@ -787,8 +807,8 @@ function TrainingPreferencesStep({
     </div>
   );
 }
-function Eyebrow({ children }) {
-  return <div className="eyebrow">{children}</div>;
+function Eyebrow({ children, className = "" }) {
+  return <div className={`eyebrow${className ? ` ${className}` : ""}`}>{children}</div>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
   return (
@@ -1063,6 +1083,68 @@ function ModalLayer({ children, close, backgroundRef }) {
   const closing = useRef(false);
   const closeTimer = useRef(null);
   useEffect(() => () => clearTimeout(closeTimer.current), []);
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
+    const panel = layer?.firstElementChild;
+    if (!panel) return undefined;
+    const header = Array.from(panel.children).find((child) =>
+      child.matches?.(".detail-header, .long-form-sheet-header"),
+    );
+    if (!header) return undefined;
+
+    let largeTitle = null;
+    const findLargeTitle = () => {
+      const children = Array.from(panel.children);
+      const headerIndex = children.indexOf(header);
+      largeTitle = children
+        .slice(headerIndex + 1)
+        .find((child) => child.matches?.("h1, h2")) || null;
+    };
+    const updateHeader = () => {
+      findLargeTitle();
+      const scrollable = panel.scrollHeight > panel.clientHeight + 2;
+      const scrollTop = Math.max(0, panel.scrollTop);
+      const collapsing = Boolean(largeTitle);
+      const revealAt = collapsing && scrollable
+        ? Math.max(12, largeTitle.offsetTop - header.offsetHeight + 4)
+        : Number.POSITIVE_INFINITY;
+      header.classList.toggle("is-scrollable-sheet-header", scrollable);
+      header.classList.toggle("is-static-sheet-header", !scrollable);
+      header.classList.toggle("is-collapsing-sheet-header", collapsing);
+      header.classList.toggle("has-scrolled-content", scrollable && scrollTop > 3);
+      header.classList.toggle(
+        "shows-compact-title",
+        collapsing && scrollTop >= revealAt,
+      );
+    };
+    header.classList.add("rook-sheet-header");
+    updateHeader();
+    const frame = requestAnimationFrame(() => {
+      header.classList.add("is-ready");
+      updateHeader();
+    });
+    const mutationObserver = new MutationObserver(() =>
+      requestAnimationFrame(updateHeader),
+    );
+    mutationObserver.observe(panel, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    const resizeObserver = typeof ResizeObserver === "function"
+      ? new ResizeObserver(updateHeader)
+      : null;
+    resizeObserver?.observe(panel);
+    panel.addEventListener("scroll", updateHeader, { passive: true });
+    window.addEventListener("resize", updateHeader);
+    return () => {
+      cancelAnimationFrame(frame);
+      mutationObserver.disconnect();
+      resizeObserver?.disconnect();
+      panel.removeEventListener("scroll", updateHeader);
+      window.removeEventListener("resize", updateHeader);
+    };
+  }, [children]);
   const requestClose = () => {
     if (closing.current) return;
     const layer = layerRef.current;
@@ -1163,8 +1245,7 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
       kind === "program" && cancellable
         ? setTimeout(() => setShowCancel(true), 3000)
         : null;
-    const long =
-      kind === "program" ? setTimeout(() => setWaitLevel(1), 5000) : null;
+    const long = setTimeout(() => setWaitLevel(1), 5000);
     return () => {
       if (reveal) clearTimeout(reveal);
       if (revealCancel) clearTimeout(revealCancel);
@@ -1219,14 +1300,19 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
         className="building-overlay"
         role="dialog"
         aria-modal="true"
+        aria-busy="true"
         aria-labelledby="building-title"
         aria-describedby="building-detail"
       >
         <div className="building-card" role="status" aria-live="polite">
           <Eyebrow>IMPORTING YOUR PLAN</Eyebrow>
-          <h2 id="building-title">Reading your notes…</h2>
+          <h2 id="building-title">
+            {waitLevel ? "Still structuring your plan…" : "Structuring your plan…"}
+          </h2>
           <p id="building-detail">
-            Structuring the plan for review without changing your exercises.
+            {waitLevel
+              ? "This is taking a little longer than usual. Your notes are still safe."
+              : "Matching exercises and checking your notes for review."}
           </p>
           <div className="building-spinner" aria-hidden="true" />
           {showCancel && onCancel ? (
@@ -1254,6 +1340,7 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
       className="building-overlay"
       role="dialog"
       aria-modal="true"
+      aria-busy="true"
       aria-labelledby="building-title"
       aria-describedby="building-detail"
     >
@@ -1679,13 +1766,36 @@ function PhysiqueReview({ profile, onUse, onClose }) {
   );
 }
 function EntryLanding({ personalize, importPlan, startFromScratch }) {
-  const exampleWeek = [
-    ["MON", "Upper"],
-    ["TUE", "Lower"],
-    ["THU", "Upper"],
-    ["SAT", "Lower"],
-  ];
-
+  const [previewDays, setPreviewDays] = useState(4);
+  const [previewChanged, setPreviewChanged] = useState(false);
+  const [previewEquipment, setPreviewEquipment] = useState("Full gym");
+  const weekPatterns = {
+    3: [
+      ["MON", "Full body"],
+      ["WED", "Full body"],
+      ["FRI", "Full body"],
+    ],
+    4: [
+      ["MON", "Upper"],
+      ["TUE", "Lower"],
+      ["THU", "Upper"],
+      ["SAT", "Lower"],
+    ],
+    5: [
+      ["MON", "Push"],
+      ["TUE", "Pull"],
+      ["WED", "Legs"],
+      ["FRI", "Upper"],
+      ["SAT", "Lower"],
+    ],
+  };
+  const weekdays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  const selectedPattern = new Map(weekPatterns[previewDays]);
+  const exampleWeek = weekdays.map((day) => ({
+    day,
+    workout: selectedPattern.get(day) || "Rest",
+    training: selectedPattern.has(day),
+  }));
   return (
     <main className="onboarding entry-screen entry-v2">
       <header className="entry-top">
@@ -1693,7 +1803,7 @@ function EntryLanding({ personalize, importPlan, startFromScratch }) {
         <span className="entry-eyebrow">Training, built around you</span>
       </header>
       <div className="entry-content">
-        <h1>A plan that fits and keeps up.</h1>
+        <h1>A plan that fits. And keeps up.</h1>
         <p>
           Tell Rook when you can train, your equipment, and your experience.
           Get a week built around you — then adjusted as you log.
@@ -1704,32 +1814,78 @@ function EntryLanding({ personalize, importPlan, startFromScratch }) {
             About 2 minutes · No account needed
           </p>
         </div>
-        <section className="entry-week" aria-labelledby="entry-week-title">
-          <div className="entry-week-header">
-            <span id="entry-week-title">EXAMPLE WEEK</span>
-            <small>Built around 4 available days</small>
+        <section className="entry-demo" aria-labelledby="entry-demo-title">
+          <div className="entry-demo-header">
+            <span id="entry-demo-title">SEE HOW ROOK ADAPTS</span>
           </div>
-          <ul>
-            {exampleWeek.map(([day, workout]) => (
-              <li key={day}>
-                <i aria-hidden="true" />
-                <strong>{day}</strong>
-                <small>{workout}</small>
-              </li>
-            ))}
-          </ul>
+          <div className="entry-demo-control">
+            <span id="entry-days-label">DAYS I CAN TRAIN</span>
+            <div className="entry-days" role="group" aria-labelledby="entry-days-label">
+              {[3, 4, 5].map((days) => (
+                <button
+                  type="button"
+                  key={days}
+                  aria-pressed={previewDays === days}
+                  onClick={() => {
+                    if (previewDays === days) return;
+                    setPreviewChanged(true);
+                    setPreviewDays(days);
+                  }}
+                >
+                  {days}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="entry-demo-control">
+            <span id="entry-equipment-label">EQUIPMENT</span>
+            <div
+              className="entry-equipment"
+              role="group"
+              aria-labelledby="entry-equipment-label"
+            >
+              {["Full gym", "Dumbbells", "Bodyweight"].map((equipment) => (
+                <button
+                  type="button"
+                  key={equipment}
+                  aria-pressed={previewEquipment === equipment}
+                  onClick={() => setPreviewEquipment(equipment)}
+                >
+                  {equipment}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="entry-week-result" aria-live="polite">
+            <div className="entry-week-header">
+              <span>A WEEK LIKE THIS</span>
+              <small>{previewDays} training days</small>
+            </div>
+            <ul
+              key={previewDays}
+              className={previewChanged ? "entry-week-transition" : undefined}
+              aria-label={`${previewDays}-day illustrative training week`}
+            >
+              {exampleWeek.map(({ day, workout, training }) => (
+                <li className={training ? "training-day" : "rest-day"} key={day}>
+                  <i aria-hidden="true" />
+                  <strong>{day.slice(0, 1)}</strong>
+                  <small>{workout}</small>
+                </li>
+              ))}
+            </ul>
+            <p>Example only · Rook adapts exercise selection to your equipment.</p>
+          </div>
         </section>
       </div>
       <div className="entry-actions">
         <button className="existing-plan-action" onClick={importPlan}>
-          <strong>Already have a plan</strong>
+          <strong>Already have a plan?</strong>
           <small>Bring your current routine into Rook</small>
-          <span aria-hidden="true">›</span>
         </button>
         <button className="scratch-plan-action" onClick={startFromScratch}>
           <strong>Start from scratch</strong>
           <small>Create your workouts manually</small>
-          <span aria-hidden="true">›</span>
         </button>
       </div>
     </main>
@@ -1884,7 +2040,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
       label: "TRAINING PRIORITIES",
       question: "What would you like to emphasize?",
       helper:
-        "Optional. Choose specific areas, or keep your training balanced.",
+        "Optional. Choose one or more areas to emphasize, or keep the plan balanced.",
       options: PRIORITIES,
       multi: true,
       optional: true,
@@ -2721,7 +2877,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                     trainingSafetyConfirmedHash: null,
                   }))
                 }
-                placeholder="Current pain, recent surgery, movements to avoid, or clinician limits"
+                placeholder="Pain, recent surgery, or movements you've been told to avoid"
               />
               <TrainingSafetySummary
                 safety={trainingSafetyFor(answers)}
@@ -2942,9 +3098,6 @@ function WeekNavigation({ date, canGoBack, canGoForward, move }) {
   );
 }
 function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
-  const [tracedDate, setTracedDate] = useState(null);
-  const traceTimerRef = useRef(null);
-  useEffect(() => () => clearTimeout(traceTimerRef.current), []);
   const schedule = new Map(
     currentWeekSchedule(state, referenceDate).map((item) => [
       item.scheduledDate,
@@ -2956,8 +3109,14 @@ function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
     <div className="week-strip" aria-label={weekLabel(referenceDate)}>
       {WEEKDAYS.map((day) => {
         const date = weekDate(day, referenceDate);
+        const scheduledWorkout = schedule.get(isoDay(date));
         const complete = workouts.some(
-          (workout) => isoDay(workout.completedAt) === isoDay(date),
+          (workout) =>
+            workoutPlanDate(workout) === isoDay(date) &&
+            (!scheduledWorkout ||
+              workout.programDayId === scheduledWorkout.id ||
+              (!workout.programDayId &&
+                workout.templateId === scheduledWorkout.weekday)),
         );
         const isToday = isoDay(date) === isoDay();
         const isSelected = isoDay(date) === isoDay(selectedDate);
@@ -2974,13 +3133,9 @@ function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
           : planned
             ? ", planned workout"
             : ", rest day";
-        const dateKey = isoDay(date);
         const selectDay = () => {
           if (isSelected) return;
           selectDate(day, date);
-          setTracedDate(dateKey);
-          clearTimeout(traceTimerRef.current);
-          traceTimerRef.current = setTimeout(() => setTracedDate(null), 520);
         };
         return (
           <button
@@ -2988,7 +3143,7 @@ function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
             aria-label={`${day} ${date.getDate()}${isToday ? ", today" : ""}${statusLabel}`}
             aria-current={isToday ? "date" : undefined}
             aria-pressed={isSelected}
-            className={`${isSelected ? "selected-day" : isToday ? "today-date" : ""} ${workoutState}${isSelected && tracedDate === dateKey ? " day-selection-trace" : ""}`}
+            className={`${isSelected ? "selected-day" : isToday ? "today-date" : ""} ${workoutState}`}
             onClick={selectDay}
           >
             <small>{day[0]}</small>
@@ -3041,34 +3196,155 @@ export function formatActiveWorkoutDuration(seconds) {
   if (hours >= 100) return "99+ h";
   return `${hours}:${String(totalMinutes % 60).padStart(2, "0")} h`;
 }
-function TodayExerciseRow({ exercise, detail, profile, setDetail }) {
+export function formatWorkoutElapsedDuration(seconds) {
+  const totalSeconds = Number.isFinite(Number(seconds))
+    ? Math.max(0, Math.floor(Number(seconds)))
+    : 0;
+  const secondsPart = String(totalSeconds % 60).padStart(2, "0");
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  if (totalMinutes < 60)
+    return `${String(totalMinutes).padStart(2, "0")}:${secondsPart}`;
+  return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, "0")}:${secondsPart}`;
+}
+function TodayExerciseRow({ exercise, detail, profile, setDetail, actions }) {
+  const holdTimer = useRef(null);
+  const holdOrigin = useRef(null);
+  const suppressClick = useRef(false);
+  const suppressTimer = useRef(null);
+  const keyboardContext = useRef(false);
+  const keyboardContextTimer = useRef(null);
+  useEffect(
+    () => () => {
+      clearTimeout(holdTimer.current);
+      clearTimeout(suppressTimer.current);
+      clearTimeout(keyboardContextTimer.current);
+    },
+    [],
+  );
+  const clearHold = () => {
+    clearTimeout(holdTimer.current);
+    holdTimer.current = null;
+    holdOrigin.current = null;
+  };
+  const openActions = () => {
+    if (!actions) return;
+    setDetail({ todayExerciseActions: { ...actions, exercise } });
+  };
+  const startHold = (event) => {
+    if (!actions || event.button !== 0 || event.pointerType === "mouse") return;
+    clearHold();
+    holdOrigin.current = {
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+    };
+    holdTimer.current = setTimeout(() => {
+      suppressClick.current = true;
+      suppressTimer.current = setTimeout(
+        () => (suppressClick.current = false),
+        800,
+      );
+      triggerHaptic("tap");
+      openActions();
+      clearHold();
+    }, 500);
+  };
+  const moveHold = (event) => {
+    const origin = holdOrigin.current;
+    if (!origin || origin.pointerId !== event.pointerId) return;
+    if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 10)
+      clearHold();
+  };
+  const openContextActions = (event) => {
+    if (!actions) return;
+    event.preventDefault();
+    clearHold();
+    if (keyboardContext.current) {
+      keyboardContext.current = false;
+      clearTimeout(keyboardContextTimer.current);
+      return;
+    }
+    openActions();
+  };
   return (
-    <button
-      onClick={() => setDetail({ exercise })}
-      className={`list-row exercise-list-row${detail ? " has-secondary" : ""}`}
+    <div
+      className={`exercise-list-item${detail ? " has-secondary" : ""}`}
+      onContextMenu={openContextActions}
     >
-      <span className="exercise-row-main">
-        <span>
-          <strong>{exerciseName(exercise)}</strong>
-          {detail && <small>{detail}</small>}
+      <button
+        onClick={(event) => {
+          if (suppressClick.current) {
+            event.preventDefault();
+            event.stopPropagation();
+            suppressClick.current = false;
+            return;
+          }
+          setDetail({ exercise });
+        }}
+        onPointerDown={startHold}
+        onPointerMove={moveHold}
+        onPointerUp={clearHold}
+        onPointerCancel={clearHold}
+        onPointerLeave={clearHold}
+        onKeyDown={(event) => {
+          if (
+            !actions ||
+            !(
+              (event.shiftKey && event.key === "F10") ||
+              event.key === "ContextMenu"
+            )
+          )
+            return;
+          event.preventDefault();
+          event.stopPropagation();
+          keyboardContext.current = true;
+          clearTimeout(keyboardContextTimer.current);
+          keyboardContextTimer.current = setTimeout(
+            () => (keyboardContext.current = false),
+            250,
+          );
+          openActions();
+        }}
+        aria-keyshortcuts={actions ? "Shift+F10 ContextMenu" : undefined}
+        aria-describedby={actions ? "today-exercise-actions-help" : undefined}
+        className={`list-row exercise-list-row${detail ? " has-secondary" : ""}`}
+      >
+        <span className="exercise-row-main">
+          <span>
+            <strong>{exerciseName(exercise)}</strong>
+            {detail && <small>{detail}</small>}
+          </span>
         </span>
-      </span>
-      <span className="navigation-row-end">
-        <span>{targetLabel(exercise, profile.rirEnabled)}</span>
-        <span className="navigation-chevron" aria-hidden="true">
-          ›
+        <span className="navigation-row-end">
+          <span>{targetLabel(exercise, profile.rirEnabled)}</span>
         </span>
-      </span>
-    </button>
+      </button>
+    </div>
   );
 }
-function ActiveWorkoutNotice({ workout, dateKey, onResume }) {
+export function activeWorkoutNoticeDetails(
+  workout,
+  dateKey,
+  now = Date.now(),
+) {
+  const summary = workoutSetSummary(workout);
+  const elapsed = Math.max(0, Number(now) - Number(workout?.startedAt || now)) / 1000;
+  const progress = `${summary.completed} / ${pluralize(summary.total, "set")} · ${formatActiveWorkoutDuration(elapsed)}`;
+  const startedOnAnotherDate = Boolean(
+    dateKey && dateKey !== isoDay(new Date(now)),
+  );
+  return startedOnAnotherDate
+    ? `${displayDate(localDate(dateKey))} · ${progress}`
+    : progress;
+}
+function ActiveWorkoutNotice({ workout, dateKey, now, onResume }) {
+  const details = activeWorkoutNoticeDetails(workout, dateKey, now);
   return (
     <aside className="active-workout-notice" aria-label="Workout in progress">
       <span>
         <Eyebrow>WORKOUT IN PROGRESS</Eyebrow>
         <strong>{workout.name}</strong>
-        <small>{displayDate(localDate(dateKey))}</small>
+        <small className="active-workout-notice-progress">{details}</small>
       </span>
       <button
         className="text-button"
@@ -3090,8 +3366,15 @@ function Today({
 }) {
   const active = state.activeWorkout;
   const startLock = useRef(false);
+  const undoTimer = useRef(null);
+  const weekGesture = useRef(null);
+  const weekMotionTimer = useRef(null);
+  const weekMotionFrame = useRef(null);
+  const suppressWeekClickUntil = useRef(0);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
+  const [undoNotice, setUndoNotice] = useState(null);
+  const [weekMotion, setWeekMotion] = useState("");
   const selectedDate = state.selectedDate
     ? localDate(state.selectedDate)
     : weekDate(state.selectedDay || weekday());
@@ -3102,6 +3385,35 @@ function Today({
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, [active?.id]);
+  useEffect(
+    () => () => {
+      clearTimeout(undoTimer.current);
+      clearTimeout(weekMotionTimer.current);
+      cancelAnimationFrame(weekMotionFrame.current);
+    },
+    [],
+  );
+  const showUndo = (notice) => {
+    clearTimeout(undoTimer.current);
+    setUndoNotice(notice);
+    undoTimer.current = setTimeout(() => setUndoNotice(null), 5000);
+  };
+  const undoBanner = undoNotice && (
+    <aside className="today-undo" role="status" aria-live="polite">
+      <span>{undoNotice.message}</span>
+      <button
+        type="button"
+        onClick={() => {
+          undoNotice.undo();
+          clearTimeout(undoTimer.current);
+          setUndoNotice(null);
+          triggerHaptic("tap");
+        }}
+      >
+        UNDO
+      </button>
+    </aside>
+  );
   const selectedIso = isoDay(selectedDate);
   const selectedDay = weekday(selectedDate);
   const activeDateKey = active
@@ -3134,15 +3446,13 @@ function Today({
   const selectedMonday = weekDate("Mon", selectedDate);
   const currentMonday = weekDate("Mon");
   const datedWorkouts = state.workouts.filter(
-    (workout) =>
-      workout.completedAt &&
-      !Number.isNaN(new Date(workout.completedAt).getTime()),
+    (workout) => workout.completedAt && workoutPlanDate(workout),
   );
   const earliestDate = datedWorkouts.length
     ? new Date(
         Math.min(
           ...datedWorkouts.map((workout) =>
-            new Date(workout.completedAt).getTime(),
+            localDate(workoutPlanDate(workout)).getTime(),
           ),
         ),
       )
@@ -3158,9 +3468,71 @@ function Today({
     });
   };
   const moveWeek = (direction) => {
+    if ((direction < 0 && !canGoBack) || (direction > 0 && !canGoForward))
+      return false;
     const target = new Date(selectedDate);
     target.setDate(target.getDate() + direction * 7);
     selectDate(weekday(target), target);
+    clearTimeout(weekMotionTimer.current);
+    cancelAnimationFrame(weekMotionFrame.current);
+    setWeekMotion("");
+    weekMotionFrame.current = requestAnimationFrame(() => {
+      setWeekMotion(direction > 0 ? "next" : "previous");
+      weekMotionTimer.current = setTimeout(() => setWeekMotion(""), 220);
+    });
+    triggerHaptic("tap");
+    return true;
+  };
+  const beginWeekGesture = (event) => {
+    if (event.button !== 0) return;
+    weekGesture.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      startedAt: performance.now(),
+      intent: null,
+    };
+  };
+  const trackWeekGesture = (event) => {
+    const gesture = weekGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    const horizontal = Math.abs(deltaX);
+    const vertical = Math.abs(deltaY);
+    if (!gesture.intent && Math.max(horizontal, vertical) >= 10) {
+      gesture.intent =
+        horizontal > vertical * 1.35 ? "horizontal" : "vertical";
+    }
+    if (gesture.intent === "horizontal") event.preventDefault();
+  };
+  const endWeekGesture = (event) => {
+    const gesture = weekGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    weekGesture.current = null;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    const distance = Math.abs(deltaX);
+    const elapsed = Math.max(1, performance.now() - gesture.startedAt);
+    const velocity = distance / elapsed;
+    const hasHorizontalIntent =
+      gesture.intent === "horizontal" ||
+      (distance >= 10 && distance > Math.abs(deltaY) * 1.35);
+    if (!hasHorizontalIntent) return;
+
+    // A horizontal drag should never also select the day beneath the finger.
+    suppressWeekClickUntil.current = performance.now() + 180;
+    if (distance >= 44 || (distance >= 24 && velocity >= 0.45)) {
+      moveWeek(deltaX < 0 ? 1 : -1);
+    }
+  };
+  const cancelWeekGesture = () => {
+    weekGesture.current = null;
+  };
+  const suppressWeekClick = (event) => {
+    if (performance.now() >= suppressWeekClickUntil.current) return;
+    event.preventDefault();
+    event.stopPropagation();
   };
   const nextWeek = new Date();
   nextWeek.setDate(nextWeek.getDate() + 7);
@@ -3173,24 +3545,33 @@ function Today({
     planReady && Boolean(plannedWorkoutForDate(state, new Date()));
   const calendar = (
     <>
-      <div className="screen-top">
-        <Eyebrow>WEEKLY WORKOUT PLAN</Eyebrow>
-        <WeekNavigation
-          date={selectedDate}
-          canGoBack={canGoBack}
-          canGoForward={canGoForward}
-          move={moveWeek}
+      <div
+        className={`week-selector${weekMotion ? ` week-transition-${weekMotion}` : ""}`}
+        onClickCapture={suppressWeekClick}
+        onPointerDown={beginWeekGesture}
+        onPointerMove={trackWeekGesture}
+        onPointerUp={endWeekGesture}
+        onPointerCancel={cancelWeekGesture}
+      >
+        <div className="screen-top">
+          <Eyebrow>WEEKLY WORKOUT PLAN</Eyebrow>
+          <WeekNavigation
+            date={selectedDate}
+            canGoBack={canGoBack}
+            canGoForward={canGoForward}
+            move={moveWeek}
+          />
+          <strong className="today-program-name">
+            {displayProgramName(state.program)}
+          </strong>
+        </div>
+        <WeekStrip
+          state={state}
+          referenceDate={selectedDate}
+          selectedDate={selectedDate}
+          selectDate={selectDate}
         />
-        <strong className="today-program-name">
-          {displayProgramName(state.program)}
-        </strong>
       </div>
-      <WeekStrip
-        state={state}
-        referenceDate={selectedDate}
-        selectedDate={selectedDate}
-        selectDate={selectDate}
-      />
       {planReady && (
         <PlanReadyNotice
           workoutToday={workoutToday}
@@ -3204,6 +3585,7 @@ function Today({
     <ActiveWorkoutNotice
       workout={active}
       dateKey={activeDateKey}
+      now={now}
       onResume={() => setPage("workout")}
     />
   );
@@ -3245,11 +3627,16 @@ function Today({
             );
           })}
         </section>
+        {undoBanner}
       </main>
     );
   }
   const completed = datedWorkouts.find(
-    (workout) => isoDay(workout.completedAt) === selectedIso,
+    (workout) =>
+      workoutPlanDate(workout) === selectedIso &&
+      (!template ||
+        workout.programDayId === template.id ||
+        (!workout.programDayId && workout.templateId === template.weekday)),
   );
   const isHistoricalWeek = selectedMonday < currentMonday;
   if (!template && !completed) {
@@ -3262,7 +3649,7 @@ function Today({
     );
     const isToday = selectedIso === isoDay();
     return (
-      <main className="screen today-screen">
+      <main className={`screen today-screen${active ? " viewing-other-workout" : ""}`}>
         {calendar}
         {activeNotice}
         <section className="rest-day-state">
@@ -3271,9 +3658,7 @@ function Today({
           <p>
             {isHistoricalWeek
               ? "No workout was planned or logged on this date."
-              : isToday
-                ? "Use today to recover."
-                : "This is a planned recovery day."}
+              : "This is a planned recovery day."}
           </p>
           {upcoming && (
             <div className="rest-up-next">
@@ -3310,7 +3695,7 @@ function Today({
               className="text-button train-anyway"
               onClick={() => setDetail({ restTraining: selectedIso })}
             >
-              Train today anyway
+              Train today instead
             </button>
           )}
           {optional && (
@@ -3319,6 +3704,7 @@ function Today({
             </small>
           )}
         </section>
+        {undoBanner}
       </main>
     );
   }
@@ -3328,13 +3714,13 @@ function Today({
         .reverse()
         .find(
           (workout) =>
-            new Date(workout.completedAt) < selectedDate &&
+            workoutPlanDate(workout) < selectedIso &&
             (workout.programDayId === template.id ||
               workout.templateId === template.weekday),
         )
     : null;
   const historyBeforeSelectedDate = datedWorkouts.filter(
-    (workout) => new Date(workout.completedAt) < selectedDate,
+    (workout) => workoutPlanDate(workout) < selectedIso,
   );
   const exerciseHistory = new Map(
     session.exercises.map((exercise) => [
@@ -3378,7 +3764,7 @@ function Today({
     ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min logged`
     : `~${roundedEstimate(template.estimatedMinutes)} min`;
   return (
-    <main className="screen today-screen">
+    <main className={`screen today-screen${active ? " viewing-other-workout" : ""}`}>
       {calendar}
       {activeNotice}
       <section className="today-hero">
@@ -3391,7 +3777,7 @@ function Today({
             : isHistoricalWeek
               ? " · not logged"
               : prior
-                ? ` · last done ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(prior.completedAt))}`
+                ? ` · last done ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(workoutPlanDate(prior)))}`
                 : isFirstSession
                   ? " · first session"
                   : ""}
@@ -3402,7 +3788,7 @@ function Today({
         {completed ? (
           <Button
             variant="secondary"
-            onClick={() => setDetail({ exercise: completed.exercises[0] })}
+            onClick={() => setDetail({ completedWorkout: completed.id })}
           >
             WORKOUT COMPLETE · VIEW HISTORY
           </Button>
@@ -3445,6 +3831,9 @@ function Today({
         <Eyebrow>
           {completed ? "LOGGED EXERCISES" : "TODAY'S EXERCISES"}
         </Eyebrow>
+        <span id="today-exercise-actions-help" className="visually-hidden">
+          Opens exercise details. Use the context menu for exercise actions.
+        </span>
         {session.exercises.map((exercise) => {
           const previous = exerciseHistory.get(exercise.exerciseId);
           const completedSets = exercise.sets.filter(
@@ -3475,10 +3864,25 @@ function Today({
               detail={detail}
               profile={state.profile}
               setDetail={setDetail}
+              actions={
+                !completed &&
+                !isHistoricalWeek &&
+                recurringTemplate?.exercises.some(
+                  (entry) => entry.id === exercise.id,
+                )
+                  ? {
+                      planDate: selectedIso,
+                      workoutId: recurringTemplate.id,
+                      planEntryId: exercise.id,
+                      onApplied: showUndo,
+                    }
+                  : null
+              }
             />
           );
         })}
       </section>
+      {undoBanner}
     </main>
   );
 }
@@ -3493,6 +3897,33 @@ export function validStepperDraft(raw, { integer = false } = {}) {
   const value = String(raw);
   return integer ? /^\d*$/.test(value) : /^\d*(?:[.,]\d*)?$/.test(value);
 }
+export function alignedStepperValue(value, step, direction, min = 0) {
+  const numeric = Number(value);
+  const increment = Number(step);
+  if (!Number.isFinite(numeric) || !(increment > 0)) return numeric;
+  const decimalPlaces = (input) => {
+    const text = String(input).toLowerCase();
+    if (text.includes("e-")) {
+      const [coefficient, exponent] = text.split("e-");
+      return Number(exponent) + (coefficient.split(".")[1]?.length || 0);
+    }
+    return text.split(".")[1]?.length || 0;
+  };
+  const precision = Math.min(
+    6,
+    Math.max(decimalPlaces(numeric), decimalPlaces(increment), decimalPlaces(min)),
+  );
+  const scale = 10 ** precision;
+  const valueUnits = Math.round(numeric * scale);
+  const stepUnits = Math.max(1, Math.round(increment * scale));
+  const minimumUnits = Math.round(Number(min) * scale);
+  const remainder = ((valueUnits % stepUnits) + stepUnits) % stepUnits;
+  const nextUnits =
+    direction > 0
+      ? valueUnits + (remainder === 0 ? stepUnits : stepUnits - remainder)
+      : valueUnits - (remainder === 0 ? stepUnits : remainder);
+  return Number((Math.max(minimumUnits, nextUnits) / scale).toFixed(precision));
+}
 function Stepper({
   label,
   value,
@@ -3502,6 +3933,7 @@ function Stepper({
   disabled,
   emptyLabel,
   integer = false,
+  alignToStep = false,
 }) {
   const [draft, setDraft] = useState(null);
   const numeric = Number(value || 0);
@@ -3518,7 +3950,11 @@ function Stepper({
         aria-label={`Decrease ${label}`}
         disabled={disabled || empty}
         onClick={() =>
-          onChange(Math.max(min, Number((numeric - step).toFixed(2))))
+          onChange(
+            alignToStep
+              ? alignedStepperValue(numeric, step, -1, min)
+              : Math.max(min, Number((numeric - step).toFixed(2))),
+          )
         }
       >
         −
@@ -3554,7 +3990,13 @@ function Stepper({
       <button
         aria-label={`Increase ${label}`}
         disabled={disabled || empty}
-        onClick={() => onChange(Number((numeric + step).toFixed(2)))}
+        onClick={() =>
+          onChange(
+            alignToStep
+              ? alignedStepperValue(numeric, step, 1, min)
+              : Number((numeric + step).toFixed(2)),
+          )
+        }
       >
         +
       </button>
@@ -3585,7 +4027,7 @@ function WorkoutConfirmation({ confirmation, cancel, continueAction }) {
         <p id="workout-confirm-detail">
           {next
             ? `${confirmation.incomplete === 1 ? "The incomplete set won't" : "Incomplete sets won't"} be logged if you continue.`
-            : `${confirmation.completed} of ${pluralize(confirmation.planned, "set")} completed.`}
+            : `${confirmation.completed} of ${pluralize(confirmation.planned, "set")} ${confirmation.completed === 1 ? "is" : "are"} complete. Only completed sets will be logged; incomplete set entries won’t count.`}
         </p>
         <div className="workout-confirm-actions">
           <Button onClick={cancel}>
@@ -3606,11 +4048,13 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   const [now, setNow] = useState(Date.now());
   const [confirmation, setConfirmation] = useState(null);
   const [warmupOpen, setWarmupOpen] = useState(false);
+  const [dismissingWarmup, setDismissingWarmup] = useState(null);
   const [recentlyCompletedSetId, setRecentlyCompletedSetId] = useState(null);
   const [restCompleteVisible, setRestCompleteVisible] = useState(false);
   const screenRef = useRef(null);
   const completionFeedbackTimerRef = useRef(null);
   const restCompleteTimerRef = useRef(null);
+  const warmupDismissTimerRef = useRef(null);
   const latestCompletedSet = active?.exercises
     ?.flatMap((entry) => entry.sets)
     .filter((set) => Number(set.completedAt) > 0)
@@ -3625,8 +4069,18 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     state.profile.restTimerEnabled && active?.rest?.pending === true;
   const previousRestLeftRef = useRef(restLeft);
   useEffect(() => {
+    const syncNow = () => setNow(Date.now());
     const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    const syncWhenVisible = () => {
+      if (document.visibilityState === "visible") syncNow();
+    };
+    document.addEventListener("visibilitychange", syncWhenVisible);
+    window.addEventListener("pageshow", syncNow);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", syncWhenVisible);
+      window.removeEventListener("pageshow", syncNow);
+    };
   }, []);
   useEffect(() => {
     if (latestCompletedAt > seenCompletionRef.current) {
@@ -3658,11 +4112,16 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     () => () => {
       clearTimeout(completionFeedbackTimerRef.current);
       clearTimeout(restCompleteTimerRef.current);
+      clearTimeout(warmupDismissTimerRef.current);
     },
     [],
   );
   useEffect(
-    () => setWarmupOpen(false),
+    () => {
+      setWarmupOpen(false);
+      setDismissingWarmup(null);
+      clearTimeout(warmupDismissTimerRef.current);
+    },
     [active?.id, active?.exerciseIndex],
   );
   if (!active)
@@ -3950,17 +4409,37 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   };
   const confirmAction = () =>
     confirmation?.type === "next" ? moveToExercise(nextIndex) : finishWorkout();
+  const canRestartWorkout = activeWorkoutCanRestart(active);
+  const restartWorkout = () => {
+    const restartedAt = Date.now();
+    update((current) => restartActiveWorkout(current, restartedAt));
+    setNow(restartedAt);
+    setConfirmation(null);
+    setWarmupOpen(false);
+    setDismissingWarmup(null);
+    setRecentlyCompletedSetId(null);
+    setRestCompleteVisible(false);
+    clearTimeout(completionFeedbackTimerRef.current);
+    clearTimeout(restCompleteTimerRef.current);
+    clearTimeout(warmupDismissTimerRef.current);
+    setDetail(null);
+    requestAnimationFrame(() =>
+      screenRef.current?.scrollTo({ top: 0, behavior: "auto" }),
+    );
+  };
   const timed = exerciseMeasure(exercise) === "seconds";
   const addedBodyweightLoad = Boolean(item?.bodyweight && !timed);
   const timerVisible =
     !confirmation && (restReady || restLeft > 0 || restCompleteVisible);
-  const warmup = (active.warmup?.stages || []).find(
+  const currentWarmup = (active.warmup?.stages || []).find(
     (stage) =>
       stage.exerciseIndex === active.exerciseIndex &&
       stage.exerciseId === exercise.exerciseId &&
-      !stage.skipped,
+      !stage.skipped &&
+      !stage.completed,
   );
-  const warmupCompleted = Boolean(warmup?.completed);
+  const warmup = currentWarmup || dismissingWarmup;
+  const warmupDismissing = Boolean(!currentWarmup && dismissingWarmup);
   const initialWarmup = warmup?.exerciseIndex === 0;
   const upNextBlocks = [];
   const seenUpNextSupersets = new Set();
@@ -3983,15 +4462,26 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       entries,
     });
   });
-  const completeWarmup = () => {
+  const dismissCurrentWarmup = (field) => {
+    if (!currentWarmup) return;
+    const snapshot = clone(currentWarmup);
+    if (document.activeElement?.closest?.(".workout-warmup"))
+      document.activeElement.blur();
+    setWarmupOpen(false);
+    setDismissingWarmup(snapshot);
     mutate((workout) => {
       const stage = workout.warmup?.stages?.find(
-        (item) => item.id === warmup?.id,
+        (item) => item.id === currentWarmup.id,
       );
-      if (stage) stage.completed = true;
+      if (stage) stage[field] = true;
     });
-    setWarmupOpen(false);
+    clearTimeout(warmupDismissTimerRef.current);
+    warmupDismissTimerRef.current = setTimeout(
+      () => setDismissingWarmup(null),
+      200,
+    );
   };
+  const completeWarmup = () => dismissCurrentWarmup("completed");
   const toggleRampSet = (stageId, exerciseId, setId) =>
     mutate((workout) => {
       const set = workout.warmup?.stages
@@ -4030,31 +4520,38 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         <button aria-label="Back to Today" onClick={() => setPage("today")}>
           ‹
         </button>
-        <div>
+        <div className="workout-header-center">
           <strong>{active.name}</strong>
           <small aria-live="polite">
-            {formatDuration(elapsed)} · {summary.completed} /{" "}
-            {pluralize(totalSets, "set")} completed
+            {summary.completed} / {pluralize(totalSets, "set")} ·{" "}
+            {formatWorkoutElapsedDuration(elapsed)}
           </small>
         </div>
-        <button className="text-button" onClick={requestFinish}>
-          Finish
-        </button>
+        <span className="workout-header-actions">
+          <button className="text-button" onClick={requestFinish}>
+            Finish
+          </button>
+          <button
+            type="button"
+            className={`workout-options-trigger${canRestartWorkout ? "" : " unavailable"}`}
+            aria-label="Workout options"
+            aria-hidden={!canRestartWorkout}
+            tabIndex={canRestartWorkout ? 0 : -1}
+            disabled={!canRestartWorkout}
+            onClick={() =>
+              setDetail({ workoutOptions: true, onRestart: restartWorkout })
+            }
+          >
+            <span aria-hidden="true">•••</span>
+          </button>
+        </span>
       </header>
       {warmup && (
         <section
-          className={`workout-warmup ${warmupOpen ? "open" : ""}${warmupCompleted ? " completed" : ""}`}
+          className={`workout-warmup ${warmupOpen ? "open" : ""}${warmupDismissing ? " dismissing" : ""}`}
+          aria-hidden={warmupDismissing || undefined}
         >
-          {warmupCompleted ? (
-            <div className="warmup-complete-status" role="status">
-              <span aria-hidden="true">✓</span>
-              <div>
-                <strong>Warm-up complete</strong>
-                <small>Ready for {warmup.exerciseName}</small>
-              </div>
-            </div>
-          ) : (
-            <>
+          <div className="workout-warmup-content">
               <div className="workout-warmup-bar">
                 <button
                   className="workout-warmup-toggle"
@@ -4073,14 +4570,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                 </button>
                 <button
                   className="text-button warmup-skip"
-                  onClick={() =>
-                    mutate((workout) => {
-                      const stage = workout.warmup?.stages?.find(
-                        (item) => item.id === warmup.id,
-                      );
-                      if (stage) stage.skipped = true;
-                    })
-                  }
+                  onClick={() => dismissCurrentWarmup("skipped")}
                 >
                   Skip
                 </button>
@@ -4143,8 +4633,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   </button>
                 </div>
               )}
-            </>
-          )}
+          </div>
         </section>
       )}
       <section
@@ -4309,6 +4798,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                 label={`${addedBodyweightLoad ? "Added load" : "Weight"} in ${unit} for set ${index + 1}`}
                 value={displayWeight(set.weight, state.profile.units)}
                 step={displayWeight(increment, state.profile.units)}
+                alignToStep
                 emptyLabel={addedBodyweightLoad ? "Bodyweight" : "Enter weight"}
                 onChange={(value) =>
                   updateWeight(index, storedWeight(value, state.profile.units))
@@ -4507,7 +4997,98 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   );
 }
 
-function Complete({ state, setPage, setDetail }) {
+function persistSessionNote(update, workoutId, value, finish = false) {
+  const raw = String(value || "").slice(0, SESSION_NOTE_MAX_LENGTH);
+  const stored = finish ? normalizeSessionNote(raw) : raw;
+  update((current) => {
+    const workout = current.workouts.find((item) => item.id === workoutId);
+    if (!workout) return current;
+    if (stored) workout.sessionNote = stored;
+    else delete workout.sessionNote;
+    return current;
+  });
+  return stored || "";
+}
+
+function SessionNoteEditor({ workout, update, optional = true }) {
+  const draft = workout.sessionNote || "";
+  const helperId = `session-note-helper-${workout.id}`;
+  const commit = (value = draft) =>
+    persistSessionNote(update, workout.id, value, true);
+  return (
+    <section className="session-note-editor">
+      <div className="session-note-heading">
+        <Eyebrow>SESSION NOTE{optional ? " · OPTIONAL" : ""}</Eyebrow>
+        {draft.length >= 450 && (
+          <small aria-live="polite">
+            {draft.length} / {SESSION_NOTE_MAX_LENGTH}
+          </small>
+        )}
+      </div>
+      <textarea
+        aria-label="Session note"
+        aria-describedby={helperId}
+        maxLength={SESSION_NOTE_MAX_LENGTH}
+        placeholder="Anything worth remembering?"
+        rows={2}
+        value={draft}
+        onChange={(event) => {
+          const next = event.target.value.slice(0, SESSION_NOTE_MAX_LENGTH);
+          persistSessionNote(update, workout.id, next);
+        }}
+        onBlur={(event) => commit(event.currentTarget.value)}
+      />
+      <small id={helperId}>Saved automatically with this workout.</small>
+    </section>
+  );
+}
+
+function CompletedWorkoutDetail({ workoutId, state, update, close, setDetail }) {
+  const workout = state.workouts.find((item) => item.id === workoutId);
+  if (!workout) return null;
+  const summary = workoutSetSummary(workout);
+  const date = workoutPlanDate(workout);
+  return (
+    <main className="screen detail-screen completed-workout-detail">
+      <header className="detail-header">
+        <button aria-label="Back" onClick={close}>‹</button>
+        <strong>Workout details</strong>
+        <span />
+      </header>
+      <Eyebrow>{date ? displayDate(localDate(date)) : "COMPLETED WORKOUT"}</Eyebrow>
+      <h1>{workout.name}</h1>
+      <div className="completed-workout-summary">
+        <span>
+          <strong>{formatDuration(workout.durationSeconds)}</strong>
+          <small>DURATION</small>
+        </span>
+        <span>
+          <strong>{summary.completed} / {summary.total}</strong>
+          <small>SETS</small>
+        </span>
+      </div>
+      <SessionNoteEditor workout={workout} update={update} />
+      <section className="completed-workout-log">
+        <Eyebrow>SESSION LOG</Eyebrow>
+        {workout.exercises.map((exercise) => {
+          const logged = exercise.sets.filter((set) => set.completed).length;
+          return (
+            <button
+              className="list-row"
+              key={exercise.id}
+              onClick={() => setDetail({ exercise })}
+            >
+              <strong>{exerciseName(exercise)}</strong>
+              <span>{logged} / {exercise.sets.length} sets</span>
+            </button>
+          );
+        })}
+      </section>
+    </main>
+  );
+}
+
+function Complete({ state, update, setPage, setDetail }) {
   const session = state.workouts.at(-1);
   if (!session) return null;
   const completedExercises = session.exercises.filter((item) =>
@@ -4541,6 +5122,7 @@ function Complete({ state, setPage, setDetail }) {
           <small>{endedEarly ? "COMPLETED" : "LOGGED"}</small>
         </div>
       </div>
+      <SessionNoteEditor workout={session} update={update} />
       <section>
         <Eyebrow>{endedEarly ? "SESSION LOG" : "LOGGED"}</Eyebrow>
         {visibleExercises.length ? (
@@ -4572,7 +5154,18 @@ function Complete({ state, setPage, setDetail }) {
             : "Completed values are saved. They will appear as real previous-session data the next time this exercise is programmed."}
         </p>
       </section>
-      <Button variant="dark" onClick={() => setPage("today")}>
+      <Button
+        variant="dark"
+        onClick={() => {
+          if (workoutPlanDate(session) !== isoDay())
+            update((current) => {
+              current.selectedDate = isoDay();
+              current.selectedDay = weekday();
+              return current;
+            });
+          setPage("today");
+        }}
+      >
         DONE
       </Button>
     </main>
@@ -4715,7 +5308,14 @@ function OptionalWorkoutActionCard({ action, result, onAccept, onViewToday }) {
     </div>
   );
 }
-function AdaptActionCard({ action, result, state, onAccept, onViewToday }) {
+function AdaptActionCard({
+  action,
+  result,
+  state,
+  onAccept,
+  onUndo,
+  onViewToday,
+}) {
   const target = localDate(action.targetDate || result?.targetDate || isoDay());
   const isToday = isoDay(target) === isoDay();
   const dayName = new Intl.DateTimeFormat("en", { weekday: "long" }).format(
@@ -4842,6 +5442,10 @@ function AdaptActionCard({ action, result, state, onAccept, onViewToday }) {
       ? exerciseName(exercise)
       : exerciseCatalog[id]?.name || "Exercise";
   };
+  const skippedIds = (action.skippedExerciseIds || []).length
+    ? action.skippedExerciseIds
+    : sourceIds.filter((id) => !validSuggestedIds.includes(id));
+  const skippedNames = skippedIds.map(nameFor);
   const suggestionRow = (id) => {
     const original = sourceExercises.find((item) => item.exerciseId === id)
       ?.sets.length;
@@ -4870,6 +5474,23 @@ function AdaptActionCard({ action, result, state, onAccept, onViewToday }) {
         <small>Your newer workout entries were kept.</small>
       </div>
     );
+  if (result?.status === "undo-conflict")
+    return (
+      <div className="action-card action-card-conflict" role="status">
+        <h3>Workout changed since this update</h3>
+        <p>Undo is no longer available because newer workout changes were kept.</p>
+      </div>
+    );
+  if (result?.status === "undone")
+    return (
+      <div className="action-card action-card-applied" role="status">
+        <h3>Changes undone</h3>
+        <small>Your previous workout structure is restored.</small>
+        <button className="text-button action-view-today" onClick={onViewToday}>
+          View workout →
+        </button>
+      </div>
+    );
   if (result?.status === "applied")
     return (
       <div
@@ -4892,6 +5513,11 @@ function AdaptActionCard({ action, result, state, onAccept, onViewToday }) {
           >
             View workout →
           </button>
+          {result.undoSnapshot && (
+            <button className="text-button action-undo" onClick={onUndo}>
+              Undo
+            </button>
+          )}
         </div>
       </div>
     );
@@ -4995,13 +5621,9 @@ function AdaptActionCard({ action, result, state, onAccept, onViewToday }) {
           <div className="adapt-suggestion-list">
             {validSuggestedIds.map(suggestionRow)}
           </div>
-          {(action.skippedExerciseIds || []).length > 0 && (
+          {skippedNames.length > 0 && (
             <p className="adapt-skip-summary">
-              Skip {action.skippedExerciseIds.length}{" "}
-              {action.skippedExerciseIds.length === 1
-                ? "exercise"
-                : "exercises"}{" "}
-              today
+              Skip today: {skippedNames.join(", ")}
             </p>
           )}
         </>
@@ -5084,30 +5706,66 @@ function CoachReply({ text, thinking = false }) {
     </div>
   );
 }
-function contextualCoachPrompts(state) {
-  const prompts = [];
+export function coachContextSummary(state) {
   const today = state.activeWorkout || adaptedTemplateForToday(state);
-  const hasHistory = state.workouts.some((workout) =>
+  const loggedWorkouts = state.workouts.filter(
+    (workout) => workoutSetSummary(workout).completed > 0,
+  );
+  const hasWorkingWeights = loggedWorkouts.some((workout) =>
     workout.exercises.some((exercise) =>
-      exercise.sets.some((set) => set.completed),
+      exercise.sets.some(
+        (set) => set.completed && Number.isFinite(Number(set.weight)),
+      ),
     ),
   );
-  if (today) prompts.push("Adapt today to 35 minutes.");
-  if (hasHistory)
-    prompts.push(
-      "Am I ready to increase a lift?",
-      "Help me understand my recent progress.",
-    );
-  else {
-    if (today) prompts.push("How should I approach my first workout?");
-    prompts.push("Explain how this program fits my goals.");
+  const primary = today
+    ? `${today.name} today · ${today.exercises.length} exercises`
+    : "Rest day today";
+  if (!loggedWorkouts.length) {
+    return {
+      primary,
+      secondary: today
+        ? "Your current plan and today’s workout are in context."
+        : "Your current plan and weekly schedule are in context.",
+    };
   }
-  return prompts.slice(0, 3);
+  return {
+    primary,
+    secondary: `${loggedWorkouts.length} ${loggedWorkouts.length === 1 ? "workout" : "workouts"} logged${hasWorkingWeights ? " · recent working weights available" : " · completed training history available"}`,
+  };
+}
+export function contextualCoachPrompts(state) {
+  const today = state.activeWorkout || adaptedTemplateForToday(state);
+  const hasHistory = state.workouts.some(
+    (workout) => workoutSetSummary(workout).completed > 0,
+  );
+  if (!today) {
+    return [
+      "Should I train today anyway?",
+      "How am I recovering this week?",
+      hasHistory
+        ? "Am I progressing on this program?"
+        : "Explain how this program fits my goals.",
+    ];
+  }
+  if (hasHistory) {
+    return [
+      "Why did my working weight change?",
+      "Adjust today based on my last workout.",
+      "Am I progressing on this program?",
+    ];
+  }
+  return [
+    "Adapt today to 35 minutes.",
+    "How should I approach my first workout?",
+    "Explain how this program fits my goals.",
+  ];
 }
 function Coach({ state, update, setPage }) {
   const [message, setMessage] = useState(state.coachDraft || "");
   const [sending, setSending] = useState(false);
   const [online, setOnline] = useState(navigator.onLine);
+  const coachAvailable = online && state.ai.available !== false;
   const [menuOpen, setMenuOpen] = useState(false);
   const scrollRef = useRef(null);
   const historyScrollRef = useRef(null);
@@ -5248,7 +5906,7 @@ function Coach({ state, update, setPage }) {
   ]);
   const send = async (value) => {
     const text = value.trim();
-    if (!text || sending) return;
+    if (!text || sending || !coachAvailable) return;
     const conversationId = activeId || `thread-${Date.now()}`;
     const entryId = `msg-${Date.now()}`;
     setSending(true);
@@ -5282,6 +5940,13 @@ function Coach({ state, update, setPage }) {
       if (!stored?.reply?.action || stored.actionResult?.status === "applied")
         return current;
       const acceptedAction = reviewedAction || stored.reply.action;
+      const undoSnapshot =
+        acceptedAction.type === "adapt-today"
+          ? {
+              activeWorkout: structuredClone(current.activeWorkout),
+              todayAdaptation: structuredClone(current.todayAdaptation),
+            }
+          : null;
       const workoutName =
         current.activeWorkout?.name ||
         adaptedTemplateForToday(current)?.name ||
@@ -5370,6 +6035,13 @@ function Coach({ state, update, setPage }) {
             workoutName: targetWorkoutName,
             targetDate,
             exerciseIds: expected,
+            undoSnapshot,
+            appliedSnapshot: undoSnapshot
+              ? {
+                  activeWorkout: structuredClone(current.activeWorkout),
+                  todayAdaptation: structuredClone(current.todayAdaptation),
+                }
+              : null,
           };
           const actualMinutes =
             (targetDate === isoDay() &&
@@ -5382,8 +6054,44 @@ function Coach({ state, update, setPage }) {
       }
       return current;
     });
+  const undoEntryAction = (entry) =>
+    update((current) => {
+      const stored = current.conversations.find((item) => item.id === entry.id);
+      const result = stored?.actionResult;
+      if (
+        result?.status !== "applied" ||
+        !result.undoSnapshot ||
+        !result.appliedSnapshot
+      )
+        return current;
+      const currentSnapshot = {
+        activeWorkout: current.activeWorkout,
+        todayAdaptation: current.todayAdaptation,
+      };
+      if (JSON.stringify(currentSnapshot) !== JSON.stringify(result.appliedSnapshot)) {
+        stored.actionResult = {
+          ...result,
+          status: "undo-conflict",
+          reason: "workout-changed",
+        };
+        return current;
+      }
+      current.activeWorkout = structuredClone(result.undoSnapshot.activeWorkout);
+      current.todayAdaptation = structuredClone(result.undoSnapshot.todayAdaptation);
+      stored.actionResult = { ...result, status: "undone", undoneAt: Date.now() };
+      return current;
+    });
   const hasConversation = currentMessages.length > 0;
   const prompts = contextualCoachPrompts(state);
+  const contextSummary = coachContextSummary(state);
+  const choosePrompt = (prompt) => {
+    setMessage(prompt);
+    requestAnimationFrame(() => {
+      const composer = composerRef.current;
+      composer?.focus({ preventScroll: true });
+      composer?.setSelectionRange(prompt.length, prompt.length);
+    });
+  };
   const newConversation = () => {
     update((current) => {
       current.activeCoachConversationId = null;
@@ -5428,7 +6136,7 @@ function Coach({ state, update, setPage }) {
             <h1>Your plan and real training data, in context.</h1>
           </header>
         )}
-        {(!online || state.ai.available === false) && (
+        {!coachAvailable && (
           <div className="offline-banner">
             AI Coach is unavailable. Logging and data-based progression still
             work locally.
@@ -5438,19 +6146,18 @@ function Coach({ state, update, setPage }) {
           <>
             <aside className="coach-empty" role="note">
               <Eyebrow>WHAT COACH KNOWS</Eyebrow>
-              <p>
-                Your plan, today’s workout, and completed lifts are already in
-                context.
-              </p>
+              <strong>{contextSummary.primary}</strong>
+              <p>{contextSummary.secondary}</p>
             </aside>
             <section className="prompt-list">
               <Eyebrow>SHORTCUTS</Eyebrow>
               <div>
                 {prompts.map((prompt) => (
                   <button
+                    type="button"
                     key={prompt}
-                    disabled={sending}
-                    onClick={() => send(prompt)}
+                    disabled={sending || !coachAvailable}
+                    onClick={() => choosePrompt(prompt)}
                   >
                     {prompt}
                   </button>
@@ -5472,6 +6179,7 @@ function Coach({ state, update, setPage }) {
                       result={entry.actionResult}
                       state={state}
                       onAccept={(accepted) => applyEntryAction(entry, accepted)}
+                      onUndo={() => undoEntryAction(entry)}
                       onViewToday={() => setPage("today")}
                     />
                   )}
@@ -5495,7 +6203,14 @@ function Coach({ state, update, setPage }) {
           aria-label="Ask Coach"
           disabled={sending}
           value={message}
-          onChange={(event) => setMessage(event.target.value)}
+          onChange={(event) => {
+            const draft = event.target.value;
+            setMessage(draft);
+            update((current) => {
+              current.coachDraft = draft;
+              return current;
+            });
+          }}
           onKeyDown={(event) => {
             if (
               event.key === "Enter" &&
@@ -5503,13 +6218,18 @@ function Coach({ state, update, setPage }) {
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault();
-              if (!sending && message.trim()) send(message);
+              if (!sending && coachAvailable && message.trim()) send(message);
             }
           }}
-          placeholder="Ask anything…"
+          placeholder={coachAvailable ? "Ask anything…" : "Coach unavailable"}
         />
-        <Button disabled={sending || !message.trim()} aria-label="Send message">
-          {sending ? "…" : "↑"}
+        <Button
+          className={`coach-send ${sending ? "is-sending" : message.trim() ? "is-ready" : "is-empty"}`}
+          disabled={sending || !coachAvailable || !message.trim()}
+          aria-label={sending ? "Sending message" : "Send message"}
+          aria-busy={sending}
+        >
+          <span aria-hidden="true">{sending ? "…" : "↑"}</span>
         </Button>
       </form>
       {menuOpen && (
@@ -5591,11 +6311,8 @@ function Coach({ state, update, setPage }) {
               ))
             ) : (
               <div className="coach-history-empty">
-                <h3>No conversations yet.</h3>
-                <p>
-                  Your Coach conversations will appear here after you send a
-                  message.
-                </p>
+                <h3>No conversations yet</h3>
+                <p>Your Coach conversations will appear here.</p>
                 <Button onClick={newConversation}>START A CONVERSATION</Button>
               </div>
             )}
@@ -5672,7 +6389,9 @@ function Progress({ state, setDetail }) {
         ? "Your first logged session gives you a real starting point."
         : "See what is ready to progress, what to hold and what improved.";
   const dateLabel = (value) => {
-    const date = new Date(value);
+    const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))
+      ? localDate(value)
+      : new Date(value);
     const days = Math.round(
       (new Date(isoDay()).getTime() - new Date(isoDay(date)).getTime()) /
         86400000,
@@ -5722,10 +6441,13 @@ function Progress({ state, setDetail }) {
         )}
       </section>
       <section>
-        <Eyebrow>TRAINING CONSISTENCY</Eyebrow>
+        <Eyebrow>THIS WEEK</Eyebrow>
         {consistency.planned > 0 ? (
           <>
-            <div className="consistency">
+            <div
+              className="consistency"
+              aria-label={`${consistency.completed} of ${consistency.planned} planned sessions completed this week`}
+            >
               <strong>
                 {consistency.completed} / {consistency.planned}
               </strong>
@@ -5776,15 +6498,19 @@ function Progress({ state, setDetail }) {
             .map((workout) => {
               const sets = workoutSetSummary(workout).completed;
               return (
-                <div className="list-row recent-session-row" key={workout.id}>
+                <button
+                  className="list-row recent-session-row"
+                  key={workout.id}
+                  onClick={() => setDetail({ completedWorkout: workout.id })}
+                >
                   <span>
                     <strong>{workout.name}</strong>
                     <small>
-                      {dateLabel(workout.completedAt)} ·{" "}
+                      {dateLabel(workoutPlanDate(workout))} ·{" "}
                       {pluralize(sets, "set")}
                     </small>
                   </span>
-                </div>
+                </button>
               );
             })}
         </section>
@@ -5818,7 +6544,9 @@ function Progress({ state, setDetail }) {
                       ? `${displayWeight(set.weight, state.profile.units)} ${unit}`
                       : isBodyweight && completed.length
                         ? "Bodyweight"
-                        : "Not enough data"}
+                        : completed.length
+                          ? "No weight logged"
+                          : "Not enough data"}
                   </b>
                   <i aria-hidden="true">›</i>
                 </span>
@@ -5919,7 +6647,11 @@ export function exerciseHistoryEntries(workouts = [], exerciseId, limit = 8) {
         )
         .map((item) => ({
           ...item,
-          date: workout.completedAt || workout.endedAt || workout.startedAt,
+          date:
+            workoutPlanDate(workout) ||
+            workout.completedAt ||
+            workout.endedAt ||
+            workout.startedAt,
         })),
     )
     .sort((left, right) => new Date(left.date || 0) - new Date(right.date || 0))
@@ -5959,7 +6691,7 @@ export function profileTrainingRows(profile) {
   return [
     ["Goal", profile?.goal],
     ["Experience", profile?.experience],
-    ["Schedule", (profile?.availableDays || []).filter(present).join(", ")],
+    ["Schedule", formatScheduleDays(profile?.availableDays)],
     [
       "Session length",
       Number.isFinite(Number(profile?.sessionMinutes)) &&
@@ -5971,7 +6703,29 @@ export function profileTrainingRows(profile) {
     ["Equipment", equipment],
   ].filter(([, value]) => present(value));
 }
-function InfoRow({ label, value }) {
+export function formatScheduleDays(days = []) {
+  const selected = new Set((days || []).filter((day) => WEEKDAYS.includes(day)));
+  const ordered = WEEKDAYS.filter((day) => selected.has(day));
+  if (!ordered.length) return "";
+  const indexes = ordered.map((day) => WEEKDAYS.indexOf(day));
+  const continuous = indexes.every(
+    (index, position) => position === 0 || index === indexes[position - 1] + 1,
+  );
+  return continuous && ordered.length > 1
+    ? `${ordered[0]}–${ordered.at(-1)}`
+    : ordered.join(", ");
+}
+function InfoRow({ label, value, onClick }) {
+  if (onClick)
+    return (
+      <button className="info-row info-row-action" onClick={onClick}>
+        <span>{label}</span>
+        <span className="info-row-end">
+          <strong>{value}</strong>
+          <i aria-hidden="true">›</i>
+        </span>
+      </button>
+    );
   return (
     <div className="info-row">
       <span>{label}</span>
@@ -6063,7 +6817,10 @@ function PersonalizationSummary({ profile, program }) {
 function Profile({ state, update, setDetail, setPage, onLogout }) {
   const p = state.profile;
   const profileSafety = trainingSafetyFor(p);
-  const imported = state.program.source === "ai-import";
+  const imported = ["ai-import", "imported"].includes(state.program.source);
+  const preferencesOnly = ["ai-import", "imported", "manual", "scratch"].includes(
+    state.program.source,
+  );
   const personal = [
     ["Name", p.name],
     ["Age", p.ageRange],
@@ -6071,6 +6828,11 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
   ].filter(([, value]) => present(value));
   const personalIncomplete = !p.ageRange;
   const training = profileTrainingRows(p);
+  const trainingSettingDetails = {
+    Schedule: { profileTrainingSetting: "schedule" },
+    Environment: { profileTrainingSetting: "setup", focus: "environment" },
+    Equipment: { profileTrainingSetting: "setup", focus: "equipment" },
+  };
   const confirmedPriorities = (p.prioritySources?.physiqueConfirmed || [])
     .map((item) => ({
       label: PHYSIQUE_PRIORITY_OPTIONS[item.priorityId]?.label || item.label,
@@ -6152,7 +6914,16 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         <section>
           <Eyebrow>TRAINING</Eyebrow>
           {training.map(([label, value]) => (
-            <InfoRow key={label} label={label} value={value} />
+            <InfoRow
+              key={label}
+              label={label}
+              value={value}
+              onClick={
+                trainingSettingDetails[label]
+                  ? () => setDetail(trainingSettingDetails[label])
+                  : undefined
+              }
+            />
           ))}
         </section>
       )}
@@ -6163,11 +6934,19 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         </section>
       )}
       <section>
-        <Eyebrow>TRAINING PRIORITIES</Eyebrow>
+        <Eyebrow>
+          {preferencesOnly ? "COACHING PREFERENCES" : "TRAINING PRIORITIES"}
+        </Eyebrow>
         {manualPriorities.length > 0 && (
           <InfoRow
             label={
-              manualPriorities.length === 1 ? "Selected area" : "Selected areas"
+              preferencesOnly
+                ? manualPriorities.length === 1
+                  ? "Priority area"
+                  : "Priority areas"
+                : manualPriorities.length === 1
+                  ? "Selected area"
+                  : "Selected areas"
             }
             value={manualPriorities.join(", ")}
           />
@@ -6177,7 +6956,9 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         ))}
         {!hasPriorities && (
           <p className="muted profile-priority-empty">
-            Balanced across muscle groups.
+            {preferencesOnly
+              ? "No priority areas selected."
+              : "Balanced across muscle groups."}
           </p>
         )}
         <button
@@ -6185,9 +6966,13 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           onClick={() => setDetail("training-priorities")}
         >
           <span>
-            <strong>Review priorities</strong>
+            <strong>
+              {preferencesOnly ? "Edit priorities" : "Review priorities"}
+            </strong>
             <small>
-              Edit them manually or run an optional physique review.
+              {preferencesOnly
+                ? "Used by Coach and future generated plans. Changes don’t update this plan."
+                : "Used to build your plan and guide Coach. Changes apply when you adjust or rebuild it."}
             </small>
           </span>
           <span>›</span>
@@ -6201,7 +6986,7 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           onClick={() => setDetail("edit-plan")}
         >
           <span>
-            <strong>EDIT PLAN</strong>
+            <strong>Edit plan</strong>
             <small>
               {state.activeWorkout
                 ? "Finish your active workout first."
@@ -6212,14 +6997,14 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         </button>
         <button className="list-row" onClick={adjust}>
           <span>
-            <strong>ASK COACH TO ADJUST</strong>
+            <strong>Ask Coach to adjust</strong>
             <small>Make a reviewed AI change</small>
           </span>
           <span>›</span>
         </button>
         <button className="list-row" onClick={() => setDetail("change-plan")}>
           <span>
-            <strong>REPLACE PLAN</strong>
+            <strong>Replace plan</strong>
             <small>Build or import a different program</small>
           </span>
           <span>›</span>
@@ -6272,7 +7057,7 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         </button>
       </section>
       <Button variant="quiet" className="logout-button" onClick={logOut}>
-        LOG OUT
+        Log out
       </Button>
     </main>
   );
@@ -6511,6 +7296,9 @@ export function displayImportedPlanName(name) {
   return meaningful || "Imported plan";
 }
 function TrainingPriorities({ state, update, close }) {
+  const preferencesOnly = ["ai-import", "manual"].includes(
+    state.program.source,
+  );
   const [sources, setSources] = useState(() =>
     clone(
       state.profile.prioritySources || {
@@ -6565,14 +7353,23 @@ function TrainingPriorities({ state, update, close }) {
         <button aria-label="Close" onClick={close}>
           ‹
         </button>
-        <strong>Training priorities</strong>
+        <strong>
+          {preferencesOnly ? "Coaching preferences" : "Training priorities"}
+        </strong>
         <span />
       </header>
-      <Eyebrow>TRAINING PRIORITIES</Eyebrow>
-      <h1>What would you like to emphasize?</h1>
+      <Eyebrow>
+        {preferencesOnly ? "COACHING PREFERENCES" : "TRAINING PRIORITIES"}
+      </Eyebrow>
+      <h1>
+        {preferencesOnly
+          ? "What should Coach keep in mind?"
+          : "What would you like to emphasize?"}
+      </h1>
       <p>
-        Edit your choices at any time. They guide Coach and future program
-        generation; they do not silently rewrite your current plan.
+        {preferencesOnly
+          ? "These choices guide Coach and future generated plans. They don’t update this plan unless you explicitly ask Coach to adjust it."
+          : "Edit your choices at any time. They guide Coach and future program generation; changes apply when you adjust or rebuild your plan."}
       </p>
       <div className="option-list option-grid">
         {PRIORITIES.map((option) => (
@@ -6624,7 +7421,9 @@ function TrainingPriorities({ state, update, close }) {
         </span>
         <i>›</i>
       </button>
-      <Button onClick={save}>SAVE PRIORITIES</Button>
+      <Button onClick={save}>
+        {preferencesOnly ? "SAVE PREFERENCES" : "SAVE PRIORITIES"}
+      </Button>
     </main>
   );
 }
@@ -6829,6 +7628,24 @@ function PlanEditor({
   const [copyingDayId, setCopyingDayId] = useState(null);
   const [pairingExerciseId, setPairingExerciseId] = useState(null);
   const [collapsedDayIds, setCollapsedDayIds] = useState([]);
+  const reorderRootRef = useRef(null);
+  const reorderGestureRef = useRef(null);
+  const reorderPreviewRef = useRef(null);
+  const reorderFrameRef = useRef(null);
+  const programRef = useRef(program);
+  const commitReorderRef = useRef(null);
+  const suppressReorderClickUntil = useRef(0);
+  const [reorderView, setReorderView] = useState(null);
+  const [reorderAnnouncement, setReorderAnnouncement] = useState("");
+  programRef.current = program;
+  useLayoutEffect(() => {
+    const gesture = reorderGestureRef.current;
+    if (!reorderView || !gesture?.active || !reorderPreviewRef.current) return;
+    reorderPreviewRef.current.style.setProperty(
+      "--reorder-drag-y",
+      `${gesture.clientY - gesture.startY}px`,
+    );
+  }, [reorderView]);
   useEffect(() => {
     const next = withWarmupPreference(source);
     setProgram(next);
@@ -6848,6 +7665,11 @@ function PlanEditor({
   const preview = ["review", "import", "expert"].includes(mode);
   const importReview = imported && mode === "import";
   const allowSupersets = planEditorAllowsSupersets(mode);
+  const allowReorder = mode === "edit";
+  const orderedProgramDays = useMemo(
+    () => chronologicalProgramDays(program.days),
+    [program.days],
+  );
   const unresolved = program.days
     .flatMap((day) => day.exercises)
     .filter((exercise) =>
@@ -6866,6 +7688,484 @@ function PlanEditor({
   const catalog = Object.values(exerciseCatalog)
     .filter((item) => isExerciseAllowed(item, profile))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const commitReorder = (gesture) => {
+    const current = programRef.current;
+    if (!current || !gesture || gesture.targetIndex === null) return false;
+    if (gesture.kind === "exercise") {
+      const sourceDay = current.days.find((day) => day.id === gesture.dayId);
+      if (!sourceDay) return false;
+      const moved = moveExerciseReorderBlock(
+        sourceDay.exercises,
+        gesture.exerciseId,
+        gesture.targetIndex,
+      );
+      if (moved === sourceDay.exercises) return false;
+      const next = clone(current);
+      const targetDay = next.days.find((day) => day.id === gesture.dayId);
+      targetDay.exercises = moved.map((exercise) => clone(exercise));
+      targetDay.estimatedMinutes = estimateSessionMinutes(targetDay.exercises);
+      setProgram(next);
+      setDirty(true);
+      setReorderAnnouncement(`${gesture.label} moved in ${targetDay.weekday}.`);
+      return true;
+    }
+    const moved = moveWorkoutThroughWeek(
+      current.days,
+      gesture.dayId,
+      gesture.targetIndex,
+    );
+    if (moved === current.days) return false;
+    const destination = moved.find((day) => day.id === gesture.dayId);
+    setProgram({ ...current, days: moved });
+    setDirty(true);
+    setReorderAnnouncement(
+      `${gesture.label} moved to ${destination?.weekday || "the selected day"}.`,
+    );
+    return true;
+  };
+  commitReorderRef.current = commitReorder;
+
+  const moveExerciseWithControls = (dayId, exerciseId, destination) => {
+    const day = programRef.current.days.find((item) => item.id === dayId);
+    const blocks = buildExerciseReorderBlocks(day?.exercises || []);
+    const sourceIndex = blocks.findIndex((block) =>
+      block.exercises.some((exercise) => exercise.id === exerciseId),
+    );
+    if (sourceIndex < 0 || blocks[sourceIndex].locked) return;
+    const targetIndex =
+      destination === "first"
+        ? 0
+        : destination === "last"
+          ? blocks.length - 1
+          : sourceIndex + destination;
+    commitReorder({
+      kind: "exercise",
+      dayId,
+      exerciseId,
+      label: exerciseName(blocks[sourceIndex].exercises[0]),
+      targetIndex,
+    });
+  };
+  const moveWorkoutWithControls = (dayId, destination) => {
+    const days = chronologicalProgramDays(programRef.current.days);
+    const sourceIndex = days.findIndex((day) => day.id === dayId);
+    if (sourceIndex < 0) return;
+    const targetIndex =
+      destination === "first"
+        ? 0
+        : destination === "last"
+          ? days.length - 1
+          : sourceIndex + destination;
+    commitReorder({
+      kind: "workout",
+      dayId,
+      label: workoutDisplayParts(days[sourceIndex], days[sourceIndex].weekday)
+        .primary,
+      targetIndex,
+    });
+  };
+
+  useEffect(() => {
+    if (!allowReorder) return undefined;
+    const root = reorderRootRef.current;
+    if (!root) return undefined;
+    const clearFrame = () => {
+      if (reorderFrameRef.current)
+        cancelAnimationFrame(reorderFrameRef.current);
+      reorderFrameRef.current = null;
+    };
+    const resetDisplacement = (gesture) => {
+      gesture?.units?.forEach((unit) =>
+        unit.elements.forEach((element) => {
+          element.style.removeProperty("transform");
+          element.classList.remove("reorder-live-source");
+        }),
+      );
+    };
+    const clearCandidate = () => {
+      const gesture = reorderGestureRef.current;
+      if (gesture?.holdTimer) clearTimeout(gesture.holdTimer);
+      resetDisplacement(gesture);
+      reorderGestureRef.current = null;
+      clearFrame();
+      setReorderView(null);
+    };
+    const activatorFor = (target) => {
+      const activator = target.closest?.("[data-reorder-kind]");
+      if (!activator || !root.contains(activator)) return null;
+      const blocked = target.closest?.(
+        "input, textarea, select, a, [contenteditable='true'], [data-no-reorder]",
+      );
+      return blocked ? null : activator;
+    };
+    const scrollContainerFor = (element) => {
+      let current = element.parentElement;
+      while (current && current !== document.body) {
+        const overflow = getComputedStyle(current).overflowY;
+        if (
+          /(auto|scroll)/.test(overflow) &&
+          current.scrollHeight > current.clientHeight
+        )
+          return current;
+        current = current.parentElement;
+      }
+      return document.scrollingElement || document.documentElement;
+    };
+    const measureUnits = (gesture) => {
+      let groups;
+      if (gesture.kind === "workout") {
+        groups = Array.from(
+          root.querySelectorAll("[data-reorder-workout-section]"),
+        ).map((element) => ({
+          index: Number(element.dataset.reorderIndex),
+          elements: [element],
+        }));
+      } else {
+        const cards = Array.from(
+          root.querySelectorAll("[data-reorder-block-index]"),
+        ).filter(
+          (card) =>
+            card.closest("[data-day-id]")?.dataset.dayId === gesture.dayId,
+        );
+        const grouped = new Map();
+        cards.forEach((card) => {
+          const index = Number(card.dataset.reorderBlockIndex);
+          const entry = grouped.get(index) || { index, elements: [] };
+          entry.elements.push(card);
+          grouped.set(index, entry);
+        });
+        groups = [...grouped.values()];
+      }
+      const units = groups
+        .sort((first, second) => first.index - second.index)
+        .map((unit) => {
+          const rects = unit.elements.map((element) =>
+            element.getBoundingClientRect(),
+          );
+          const top = Math.min(...rects.map((rect) => rect.top));
+          const bottom = Math.max(...rects.map((rect) => rect.bottom));
+          return {
+            ...unit,
+            top,
+            bottom,
+            height: bottom - top,
+            center: (top + bottom) / 2,
+          };
+        });
+      const sourceUnit = units.find((unit) => unit.index === gesture.sourceIndex);
+      if (!sourceUnit) return null;
+      const parent = sourceUnit.elements[0]?.parentElement;
+      const parentStyle = parent ? getComputedStyle(parent) : null;
+      const gap = Number.parseFloat(parentStyle?.rowGap || parentStyle?.gap || "0") || 0;
+      return { units, sourceUnit, sourceSpan: sourceUnit.height + gap };
+    };
+    const targetForPosition = (gesture, clientY) => {
+      const scrollDelta = gesture.scroller.scrollTop - gesture.scrollTopAtActivation;
+      const activeCenter =
+        gesture.sourceUnit.top + clientY - gesture.startY + gesture.sourceUnit.height / 2;
+      const remainingCenters = gesture.units
+        .filter((unit) => unit.index !== gesture.sourceIndex)
+        .map((unit) =>
+          unit.center -
+          scrollDelta -
+          (unit.index > gesture.sourceIndex ? gesture.sourceSpan : 0),
+        );
+      let targetIndex = remainingCenters.filter((center) => activeCenter >= center).length;
+      const previous = gesture.lastTargetIndex;
+      if (previous !== undefined && targetIndex !== previous) {
+        const hysteresis = gesture.pointerType === "mouse" ? 3 : 6;
+        if (
+          targetIndex > previous &&
+          activeCenter < remainingCenters[targetIndex - 1] + hysteresis
+        )
+          targetIndex = previous;
+        if (
+          targetIndex < previous &&
+          activeCenter > remainingCenters[targetIndex] - hysteresis
+        )
+          targetIndex = previous;
+      }
+      return targetIndex;
+    };
+    const applyDisplacement = (gesture, targetIndex) => {
+      gesture.units.forEach((unit) => {
+        let offset = 0;
+        if (
+          targetIndex > gesture.sourceIndex &&
+          unit.index > gesture.sourceIndex &&
+          unit.index <= targetIndex
+        )
+          offset = -gesture.sourceSpan;
+        if (
+          targetIndex < gesture.sourceIndex &&
+          unit.index >= targetIndex &&
+          unit.index < gesture.sourceIndex
+        )
+          offset = gesture.sourceSpan;
+        unit.elements.forEach((element) => {
+          if (unit.index === gesture.sourceIndex)
+            element.classList.add("reorder-live-source");
+          element.style.transform = offset
+            ? `translate3d(0, ${offset}px, 0)`
+            : "translate3d(0, 0, 0)";
+        });
+      });
+    };
+    const publish = (gesture) => {
+      const targetIndex = targetForPosition(gesture, gesture.clientY);
+      if (
+        gesture.lastTargetIndex !== undefined &&
+        gesture.lastTargetIndex !== targetIndex &&
+        performance.now() - (gesture.lastTargetHapticAt || 0) >= 100
+      ) {
+        triggerHaptic("tap");
+        gesture.lastTargetHapticAt = performance.now();
+      }
+      const targetChanged = gesture.lastTargetIndex !== targetIndex;
+      gesture.lastTargetIndex = targetIndex;
+      gesture.targetIndex = targetIndex;
+      applyDisplacement(gesture, targetIndex);
+      if (!gesture.viewPublished || targetChanged) {
+        gesture.viewPublished = true;
+        setReorderView({
+          kind: gesture.kind,
+          dayId: gesture.dayId,
+          exerciseId: gesture.exerciseId,
+          sourceIndex: gesture.sourceIndex,
+          targetIndex,
+          label: gesture.label,
+          meta: gesture.meta,
+          left: gesture.sourceUnit.left,
+          width: gesture.sourceUnit.width,
+          top: gesture.sourceUnit.top,
+        });
+      }
+      reorderPreviewRef.current?.style.setProperty(
+        "--reorder-drag-y",
+        `${gesture.clientY - gesture.startY}px`,
+      );
+    };
+    const autoScroll = (time) => {
+      const gesture = reorderGestureRef.current;
+      if (!gesture?.active) return;
+      const scroller = gesture.scroller;
+      const viewport = scroller === document.scrollingElement
+        ? { top: 0, bottom: window.innerHeight }
+        : scroller.getBoundingClientRect();
+      const zone = 56;
+      let direction = 0;
+      let depth = 0;
+      if (gesture.clientY < viewport.top + zone) {
+        direction = -1;
+        depth = (viewport.top + zone - gesture.clientY) / zone;
+      } else if (gesture.clientY > viewport.bottom - zone - 16) {
+        direction = 1;
+        depth = (gesture.clientY - (viewport.bottom - zone - 16)) / zone;
+      }
+      const elapsed = Math.min(32, time - (gesture.frameTime || time));
+      gesture.frameTime = time;
+      if (direction) {
+        const distance = direction * (180 + 720 * Math.min(1, depth)) * elapsed / 1000;
+        const before = scroller.scrollTop;
+        scroller.scrollTop += distance;
+        if (scroller.scrollTop !== before) publish(gesture);
+      }
+      reorderFrameRef.current = requestAnimationFrame(autoScroll);
+    };
+    const activate = (gesture) => {
+      if (!gesture || reorderGestureRef.current !== gesture) return;
+      gesture.active = true;
+      gesture.holdTimer = null;
+      gesture.scroller = scrollContainerFor(gesture.activator);
+      const measured = measureUnits(gesture);
+      if (!measured) {
+        clearCandidate();
+        return;
+      }
+      gesture.units = measured.units;
+      gesture.sourceUnit = measured.sourceUnit;
+      gesture.sourceSpan = measured.sourceSpan;
+      gesture.sourceUnit.left = Math.min(
+        ...gesture.sourceUnit.elements.map(
+          (element) => element.getBoundingClientRect().left,
+        ),
+      );
+      gesture.sourceUnit.width = Math.max(
+        ...gesture.sourceUnit.elements.map(
+          (element) => element.getBoundingClientRect().right,
+        ),
+      ) - gesture.sourceUnit.left;
+      gesture.scrollTopAtActivation = gesture.scroller.scrollTop;
+      setExpandedExerciseId(null);
+      setExercisePickerId(null);
+      triggerHaptic("tap");
+      publish(gesture);
+      reorderFrameRef.current = requestAnimationFrame(autoScroll);
+    };
+    const buildCandidate = (activator, clientY, pointerType) => {
+      const kind = activator.dataset.reorderKind;
+      const dayId = activator.dataset.dayId;
+      const exerciseId = activator.dataset.exerciseId || null;
+      const sourceIndex = Number(
+        kind === "workout"
+          ? activator.closest("[data-reorder-workout-section]")?.dataset.reorderIndex
+          : activator.closest("[data-reorder-block-index]")?.dataset.reorderBlockIndex,
+      );
+      const day = programRef.current.days.find((item) => item.id === dayId);
+      const exercise = day?.exercises.find((item) => item.id === exerciseId);
+      const exerciseBlock = kind === "exercise"
+        ? buildExerciseReorderBlocks(day?.exercises || [])[sourceIndex]
+        : null;
+      const label = kind === "workout"
+        ? workoutDisplayParts(day, day?.weekday).primary
+        : exerciseName(exercise);
+      return {
+        kind,
+        dayId,
+        exerciseId,
+        sourceIndex,
+        label,
+        meta: kind === "workout"
+          ? `${day?.exercises.length || 0} exercises · ~${roundedEstimate(day?.estimatedMinutes)} min`
+          : exerciseBlock?.exercises.length === 2
+            ? `Superset · ${exerciseName(exerciseBlock.exercises[0])} + ${exerciseName(exerciseBlock.exercises[1])}`
+            : null,
+        pointerType,
+        activator,
+        startY: clientY,
+        clientY,
+        targetIndex: sourceIndex,
+        active: false,
+      };
+    };
+    const finish = (commit = true) => {
+      const gesture = reorderGestureRef.current;
+      if (!gesture) return;
+      if (gesture.holdTimer) clearTimeout(gesture.holdTimer);
+      if (gesture.active) {
+        suppressReorderClickUntil.current = performance.now() + 500;
+        if (commit && commitReorderRef.current?.(gesture)) triggerHaptic("tap");
+      }
+      clearCandidate();
+    };
+    const touchStart = (event) => {
+      if (event.touches.length !== 1) {
+        finish(false);
+        return;
+      }
+      const activator = activatorFor(event.target);
+      if (!activator) return;
+      const touch = event.touches[0];
+      const gesture = buildCandidate(activator, touch.clientY, "touch");
+      gesture.touchId = touch.identifier;
+      gesture.startX = touch.clientX;
+      gesture.holdTimer = setTimeout(() => activate(gesture), 350);
+      reorderGestureRef.current = gesture;
+    };
+    const touchMove = (event) => {
+      const gesture = reorderGestureRef.current;
+      if (!gesture || gesture.pointerType !== "touch") return;
+      const touch = Array.from(event.touches).find(
+        (item) => item.identifier === gesture.touchId,
+      );
+      if (!touch) return;
+      if (!gesture.active) {
+        const distance = Math.hypot(
+          touch.clientX - gesture.startX,
+          touch.clientY - gesture.startY,
+        );
+        if (distance > 8) clearCandidate();
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      gesture.clientY = touch.clientY;
+      publish(gesture);
+    };
+    const touchEnd = (event) => {
+      const gesture = reorderGestureRef.current;
+      if (!gesture || gesture.pointerType !== "touch") return;
+      const ended = Array.from(event.changedTouches).some(
+        (item) => item.identifier === gesture.touchId,
+      );
+      if (ended) finish(true);
+    };
+    const touchCancel = () => finish(false);
+    const pointerDown = (event) => {
+      if (event.pointerType === "touch" || event.button !== 0) return;
+      const activator = activatorFor(event.target);
+      if (!activator) return;
+      const gesture = buildCandidate(activator, event.clientY, event.pointerType);
+      gesture.pointerId = event.pointerId;
+      gesture.startX = event.clientX;
+      if (event.pointerType === "pen")
+        gesture.holdTimer = setTimeout(() => activate(gesture), 250);
+      reorderGestureRef.current = gesture;
+    };
+    const pointerMove = (event) => {
+      const gesture = reorderGestureRef.current;
+      if (!gesture || gesture.pointerType === "touch" || gesture.pointerId !== event.pointerId)
+        return;
+      const distance = Math.hypot(
+        event.clientX - gesture.startX,
+        event.clientY - gesture.startY,
+      );
+      if (!gesture.active && gesture.pointerType === "pen") {
+        if (distance > 6) clearCandidate();
+        return;
+      }
+      if (!gesture.active && distance >= 4) {
+        activate(gesture);
+        gesture.activator.setPointerCapture?.(event.pointerId);
+      }
+      if (!gesture.active) return;
+      event.preventDefault();
+      gesture.clientY = event.clientY;
+      publish(gesture);
+    };
+    const pointerEnd = (event) => {
+      const gesture = reorderGestureRef.current;
+      if (!gesture || gesture.pointerType === "touch" || gesture.pointerId !== event.pointerId)
+        return;
+      finish(event.type === "pointerup");
+    };
+    const clickCapture = (event) => {
+      if (performance.now() < suppressReorderClickUntil.current) {
+        event.preventDefault();
+        event.stopPropagation();
+      }
+    };
+    const cancelOnEscape = (event) => {
+      if (event.key === "Escape" && reorderGestureRef.current) finish(false);
+    };
+    root.addEventListener("touchstart", touchStart, { passive: true });
+    root.addEventListener("touchmove", touchMove, { passive: false });
+    root.addEventListener("touchend", touchEnd);
+    root.addEventListener("touchcancel", touchCancel);
+    root.addEventListener("pointerdown", pointerDown);
+    root.addEventListener("pointermove", pointerMove);
+    root.addEventListener("pointerup", pointerEnd);
+    root.addEventListener("pointercancel", pointerEnd);
+    root.addEventListener("click", clickCapture, true);
+    window.addEventListener("keydown", cancelOnEscape);
+    window.addEventListener("blur", clearCandidate);
+    document.addEventListener("visibilitychange", clearCandidate);
+    return () => {
+      clearCandidate();
+      root.removeEventListener("touchstart", touchStart);
+      root.removeEventListener("touchmove", touchMove);
+      root.removeEventListener("touchend", touchEnd);
+      root.removeEventListener("touchcancel", touchCancel);
+      root.removeEventListener("pointerdown", pointerDown);
+      root.removeEventListener("pointermove", pointerMove);
+      root.removeEventListener("pointerup", pointerEnd);
+      root.removeEventListener("pointercancel", pointerEnd);
+      root.removeEventListener("click", clickCapture, true);
+      window.removeEventListener("keydown", cancelOnEscape);
+      window.removeEventListener("blur", clearCandidate);
+      document.removeEventListener("visibilitychange", clearCandidate);
+    };
+  }, [allowReorder]);
   const mutateExercise = (dayId, exerciseId, mutate) => {
     setDirty(true);
     setProgram((current) => {
@@ -7066,7 +8366,11 @@ function PlanEditor({
     });
     setExercisePickerId(null);
     setExerciseQuery("");
-    if (importReview) setExpandedExerciseId(null);
+    if (importReview) {
+      setExpandedExerciseId(null);
+      setPrescriptionEditorId(null);
+      setWeightEditorId(null);
+    }
   };
   const setImportedName = (dayId, exerciseId, value) =>
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -7114,6 +8418,9 @@ function PlanEditor({
     mutateExercise(dayId, exerciseId, confirmImportedName);
     setExpandedExerciseId(null);
     setExercisePickerId(null);
+    setExerciseQuery("");
+    setPrescriptionEditorId(null);
+    setWeightEditorId(null);
   };
   const confirmAllCustom = () => {
     setDirty(true);
@@ -7328,14 +8635,14 @@ function PlanEditor({
         ? {
             eyebrow: "MANUAL PLAN",
             title: "Build every workout.",
-            body: "Add at least two exercises to each day, then adjust sets and rep targets.",
+            body: "Add at least one exercise to each training day, then adjust sets and rep targets.",
             action: "USE THIS PLAN",
           }
         : mode === "import"
           ? {
               eyebrow: "IMPORT PLAN",
               title: "Review your plan",
-              body: "Rook matched what it could. Fix only the highlighted items, then save.",
+              body: "Rook matched the exercises it could. Review only the highlighted items, then use your plan.",
               action: "USE THIS PLAN",
             }
           : mode === "expert"
@@ -7358,8 +8665,12 @@ function PlanEditor({
     String(program.name || "").trim() &&
     program.days.every(
       (day) =>
-        String(workoutDisplayParts(day, day.weekday).primary || "").trim() &&
-        (!scratch || day.exercises.length >= 2),
+        String(
+          day.workoutName !== undefined
+            ? day.workoutName
+            : workoutDisplayParts(day, day.weekday).primary || "",
+        ).trim() &&
+        (!scratch || day.exercises.length >= 1),
     );
   const saveProgram = () =>
     onSave({
@@ -7399,7 +8710,8 @@ function PlanEditor({
         </small>
       </div>
       <section
-        className={`import-preview plan-editor${importReview ? " is-import-review" : ""}`}
+        ref={reorderRootRef}
+        className={`import-preview plan-editor${importReview ? " is-import-review" : ""}${reorderView ? " is-reordering" : ""}`}
       >
         <div className="import-plan-meta">
           {mode === "edit" || scratch ? (
@@ -7422,10 +8734,15 @@ function PlanEditor({
           )}
           <small>
             {scratch
-              ? `${program.days.filter((day) => day.exercises.length >= 2 && String(day.name || "").trim()).length} of ${program.days.length} days ready`
+              ? `${program.days.filter((day) => day.exercises.length >= 1 && String(day.name || "").trim()).length} of ${program.days.length} days ready`
               : `${pluralize(program.days.length, "day")}/week`}
           </small>
         </div>
+        {allowReorder && (
+          <p className="plan-reorder-help" id="plan-reorder-help">
+            Press and hold a workout or exercise to reorder.
+          </p>
+        )}
         {importReview && (
           <button
             type="button"
@@ -7451,7 +8768,7 @@ function PlanEditor({
               <small>
                 {unresolved
                   ? "Choose an exercise or keep the imported name as custom."
-                  : `${readyExercises} of ${totalExercises} exercises ready`}
+                  : `${readyExercises} of ${totalExercises} matched or kept as custom`}
               </small>
             </span>
             {unresolved ? <b>REVIEW NEXT</b> : <i aria-hidden="true">✓</i>}
@@ -7460,30 +8777,99 @@ function PlanEditor({
         {program.conditioning && (
           <ConditioningCard conditioning={program.conditioning} />
         )}
-        {program.days.map((day) => {
+        {orderedProgramDays.map((day, dayIndex) => {
           const exerciseCount = day.exercises.length;
-          const exercisesNeeded = Math.max(0, 2 - exerciseCount);
+          const exercisesNeeded = Math.max(0, 1 - exerciseCount);
           const dayTitleParts = workoutDisplayParts(day, day.weekday);
+          const dayNameValid = Boolean(
+            String(
+              day.workoutName !== undefined
+                ? day.workoutName
+                : dayTitleParts.primary || "",
+            ).trim(),
+          );
           const editableDescriptor = Boolean(
             imported || day.workoutDescriptor || day.originalImportedWorkoutName,
           );
-          const ready =
-            exerciseCount >= 2 && String(dayTitleParts.primary || "").trim();
+          const ready = exerciseCount >= 1 && dayNameValid;
           const collapsed = scratch && collapsedDayIds.includes(day.id);
           const emptyCopyTargets = scratch
             ? program.days.filter(
                 (target) => target.id !== day.id && target.exercises.length === 0,
               )
             : [];
+          const exerciseBlocks = buildExerciseReorderBlocks(day.exercises);
+          const workoutRemainingIndexes = orderedProgramDays
+            .map((_, index) => index)
+            .filter((index) => index !== reorderView?.sourceIndex);
+          const workoutDropBefore =
+            reorderView?.kind === "workout" &&
+            workoutRemainingIndexes[reorderView.targetIndex] === dayIndex;
+          const workoutDropAfter =
+            reorderView?.kind === "workout" &&
+            reorderView.targetIndex === workoutRemainingIndexes.length &&
+            workoutRemainingIndexes.at(-1) === dayIndex;
           return (
           <div
-            className={`import-day${scratch ? " scratch-workout-day" : ""}${ready ? " is-ready" : " is-incomplete"}${collapsed ? " is-collapsed" : ""}`}
+            className={`import-day${scratch ? " scratch-workout-day" : ""}${ready ? " is-ready" : " is-incomplete"}${collapsed ? " is-collapsed" : ""}${reorderView?.kind === "workout" && reorderView.dayId === day.id ? " reorder-placeholder" : ""}${workoutDropBefore ? " reorder-drop-before" : ""}${workoutDropAfter ? " reorder-drop-after" : ""}`}
             key={day.id}
+            data-day-id={day.id}
+            data-reorder-workout-section={allowReorder ? "true" : undefined}
+            data-reorder-index={allowReorder ? dayIndex : undefined}
           >
+            {allowReorder && (
+              <div className="plan-workout-reorder-bar">
+                <div
+                  className="plan-workout-drag-surface"
+                  role="button"
+                  tabIndex="0"
+                  aria-describedby="plan-reorder-help"
+                  aria-label={`Hold and drag ${dayTitleParts.primary} to another training day`}
+                  aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
+                  data-reorder-kind="workout"
+                  data-day-id={day.id}
+                  onKeyDown={(event) => {
+                    if (!event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key))
+                      return;
+                    event.preventDefault();
+                    moveWorkoutWithControls(
+                      day.id,
+                      event.key === "ArrowUp" ? -1 : 1,
+                    );
+                  }}
+                >
+                  <i aria-hidden="true" />
+                  <span>{day.weekday.toUpperCase()} WORKOUT</span>
+                  <small>HOLD TO MOVE</small>
+                </div>
+                <div className="plan-reorder-a11y" data-no-reorder>
+                  <button
+                    type="button"
+                    disabled={dayIndex === 0}
+                    onClick={() => moveWorkoutWithControls(day.id, -1)}
+                  >MOVE EARLIER</button>
+                  <button
+                    type="button"
+                    disabled={dayIndex === orderedProgramDays.length - 1}
+                    onClick={() => moveWorkoutWithControls(day.id, 1)}
+                  >MOVE LATER</button>
+                  <button
+                    type="button"
+                    disabled={dayIndex === 0}
+                    onClick={() => moveWorkoutWithControls(day.id, "first")}
+                  >MOVE FIRST</button>
+                  <button
+                    type="button"
+                    disabled={dayIndex === orderedProgramDays.length - 1}
+                    onClick={() => moveWorkoutWithControls(day.id, "last")}
+                  >MOVE LAST</button>
+                </div>
+              </div>
+            )}
             {mode === "edit" || scratch ? (
               <div className="workout-name-fields">
                 <label className="workout-name-field">
-                  <span>{day.weekday.toUpperCase()} WORKOUT NAME</span>
+                  <span>{allowReorder ? "WORKOUT NAME" : `${day.weekday.toUpperCase()} WORKOUT NAME`}</span>
                   <input
                     aria-label={`${day.weekday} workout name`}
                     type="text"
@@ -7523,16 +8909,16 @@ function PlanEditor({
                   className={
                     ready
                       ? "ready"
-                      : !String(dayTitleParts.primary || "").trim()
+                      : !dayNameValid
                         ? "validation-error"
                         : ""
                   }
                 >
-                  {!String(dayTitleParts.primary || "").trim()
+                  {!dayNameValid
                     ? `${exerciseCount} ${exerciseCount === 1 ? "exercise" : "exercises"} · Workout name required`
                     : exercisesNeeded
                       ? `${exerciseCount} ${exerciseCount === 1 ? "exercise" : "exercises"} · ${exercisesNeeded} more needed`
-                      : `${exerciseCount} exercises · Ready`}
+                      : `${pluralize(exerciseCount, "exercise")} · Ready`}
                 </small>
               </div>
             )}
@@ -7561,9 +8947,36 @@ function PlanEditor({
                     ({ value }) =>
                       value !== null && value !== undefined && value !== "",
                   );
+                const externalLoadRelevant =
+                  importedWeights.length > 0 ||
+                  Boolean(
+                    catalogExercise && !catalogExercise.bodyweight && !timed,
+                  );
                 const pair = exercise.supersetId
                   ? supersetMeta(day.exercises, exerciseIndex)
                   : null;
+                const reorderBlockIndex = exerciseBlocks.findIndex((block) =>
+                  block.exercises.some((item) => item.id === exercise.id),
+                );
+                const reorderBlock = exerciseBlocks[reorderBlockIndex];
+                const firstInReorderBlock =
+                  reorderBlock?.exercises[0]?.id === exercise.id;
+                const lastInReorderBlock =
+                  reorderBlock?.exercises.at(-1)?.id === exercise.id;
+                const exerciseRemainingIndexes = exerciseBlocks
+                  .map((_, index) => index)
+                  .filter((index) => index !== reorderView?.sourceIndex);
+                const exerciseDropBefore =
+                  reorderView?.kind === "exercise" &&
+                  reorderView.dayId === day.id &&
+                  exerciseRemainingIndexes[reorderView.targetIndex] === reorderBlockIndex &&
+                  firstInReorderBlock;
+                const exerciseDropAfter =
+                  reorderView?.kind === "exercise" &&
+                  reorderView.dayId === day.id &&
+                  reorderView.targetIndex === exerciseRemainingIndexes.length &&
+                  exerciseRemainingIndexes.at(-1) === reorderBlockIndex &&
+                  lastInReorderBlock;
                 const pairRole = pair?.role || null;
                 const eligiblePartners = day.exercises.filter(
                   (candidate) =>
@@ -7609,14 +9022,30 @@ function PlanEditor({
                 return (
                   <article
                     id={`import-exercise-${exercise.id}`}
-                    className={`import-exercise plan-editor-exercise${expanded ? " is-expanded" : ""}${needsReview ? " needs-review" : ""}${pairRole ? ` is-superset superset-${pairRole.toLowerCase()}` : ""}`}
+                    className={`import-exercise plan-editor-exercise${expanded ? " is-expanded" : ""}${needsReview ? " needs-review" : ""}${pairRole ? ` is-superset superset-${pairRole.toLowerCase()}` : ""}${reorderView?.kind === "exercise" && reorderView.dayId === day.id && reorderView.sourceIndex === reorderBlockIndex ? " reorder-placeholder" : ""}${exerciseDropBefore ? " reorder-drop-before" : ""}${exerciseDropAfter ? " reorder-drop-after" : ""}`}
                     key={exercise.id}
+                    data-reorder-block-index={allowReorder ? reorderBlockIndex : undefined}
                   >
                     <button
                       type="button"
                       className="plan-editor-summary"
                       aria-expanded={expanded}
                       aria-label={`${expanded ? "Collapse" : needsReview ? "Review" : "Edit"} ${exerciseName(exercise)}`}
+                      aria-describedby={allowReorder ? "plan-reorder-help" : undefined}
+                      aria-keyshortcuts={allowReorder ? "Alt+ArrowUp Alt+ArrowDown" : undefined}
+                      data-reorder-kind={allowReorder && !reorderBlock?.locked ? "exercise" : undefined}
+                      data-day-id={allowReorder ? day.id : undefined}
+                      data-exercise-id={allowReorder ? exercise.id : undefined}
+                      onKeyDown={(event) => {
+                        if (!allowReorder || !event.altKey || !["ArrowUp", "ArrowDown"].includes(event.key))
+                          return;
+                        event.preventDefault();
+                        moveExerciseWithControls(
+                          day.id,
+                          exercise.id,
+                          event.key === "ArrowUp" ? -1 : 1,
+                        );
+                      }}
                       onClick={() => {
                         setExpandedExerciseId(expanded ? null : exercise.id);
                         setExercisePickerId(null);
@@ -7651,17 +9080,41 @@ function PlanEditor({
                         <i aria-hidden="true" />
                       </span>
                     </button>
+                    {allowReorder && !reorderBlock?.locked && (
+                      <div className="plan-reorder-a11y exercise-reorder-a11y" data-no-reorder>
+                        <button
+                          type="button"
+                          disabled={reorderBlockIndex === 0}
+                          onClick={() => moveExerciseWithControls(day.id, exercise.id, -1)}
+                        >MOVE EARLIER</button>
+                        <button
+                          type="button"
+                          disabled={reorderBlockIndex === exerciseBlocks.length - 1}
+                          onClick={() => moveExerciseWithControls(day.id, exercise.id, 1)}
+                        >MOVE LATER</button>
+                        <button
+                          type="button"
+                          disabled={reorderBlockIndex === 0}
+                          onClick={() => moveExerciseWithControls(day.id, exercise.id, "first")}
+                        >MOVE FIRST</button>
+                        <button
+                          type="button"
+                          disabled={reorderBlockIndex === exerciseBlocks.length - 1}
+                          onClick={() => moveExerciseWithControls(day.id, exercise.id, "last")}
+                        >MOVE LAST</button>
+                      </div>
+                    )}
                     {expanded && (
                       <div className="plan-editor-fields">
                         {needsReview && importReview ? (
                           <div className="import-review-resolution">
                             <span className="import-review-status">
-                              EXERCISE NOT RECOGNIZED
+                              NEEDS REVIEW
                             </span>
                             <p>
-                              “{importedSourceLabel(exercise)}” {needsSpecificName
-                                ? "doesn't identify a specific exercise. Choose an exercise, or keep this name as a custom exercise."
-                                : "couldn't be matched confidently. Choose an exercise, or keep this name as a custom exercise."}
+                              “{importedSourceLabel(exercise)}” doesn’t match a
+                              specific exercise. Choose the movement you meant,
+                              or keep it as a custom exercise.
                             </p>
                             <button
                               type="button"
@@ -7989,7 +9442,7 @@ function PlanEditor({
                             </div>
                           </div>
                         )}
-                        {importReview && (
+                        {importReview && externalLoadRelevant && (
                           <div className="import-review-weights">
                             <div className="import-review-compact-editor">
                               <span>
@@ -8089,18 +9542,6 @@ function PlanEditor({
                               onClick={() => removeExercise(day.id, exercise.id)}
                             >
                               REMOVE EXERCISE
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setExpandedExerciseId(null);
-                                setExercisePickerId(null);
-                                setExerciseQuery("");
-                                setPrescriptionEditorId(null);
-                                setWeightEditorId(null);
-                              }}
-                            >
-                              CLOSE
                             </button>
                           </div>
                         ) : (
@@ -8325,17 +9766,51 @@ function PlanEditor({
           </div>
           );
         })}
+        {reorderView && (
+          <div
+            ref={reorderPreviewRef}
+            className={`plan-reorder-preview ${reorderView.kind}`}
+            aria-hidden="true"
+            style={{
+              left: `${reorderView.left}px`,
+              top: `${reorderView.top}px`,
+              width: `${reorderView.width}px`,
+            }}
+          >
+            <strong>{reorderView.label}</strong>
+            {reorderView.meta && <small>{reorderView.meta}</small>}
+          </div>
+        )}
+        <p className="visually-hidden" aria-live="polite" aria-atomic="true">
+          {reorderAnnouncement}
+        </p>
       </section>
-      {keepableUnresolved > 0 && (
-        <section className="bulk-match-review">
-          <Eyebrow>REVIEW ALL</Eyebrow>
-          <button type="button" onClick={confirmAllCustom}>
-            <i aria-hidden="true">✓</i>
-            <span>
-              <strong>KEEP ALL {keepableUnresolved} AS CUSTOM</strong>
-              <small>Preserve the imported names exactly as written.</small>
-            </span>
-          </button>
+      {importReview && (
+        <section
+          className={`bulk-match-review${keepableUnresolved ? "" : " is-complete"}`}
+          role={keepableUnresolved ? undefined : "status"}
+          aria-live={keepableUnresolved ? undefined : "polite"}
+        >
+          {keepableUnresolved ? (
+            <>
+              <Eyebrow>REVIEW ALL</Eyebrow>
+              <button type="button" onClick={confirmAllCustom}>
+                <i aria-hidden="true">✓</i>
+                <span>
+                  <strong>KEEP ALL AS CUSTOM</strong>
+                  <small>Preserve the imported names exactly as written.</small>
+                </span>
+              </button>
+            </>
+          ) : (
+            <div className="bulk-match-review-complete">
+              <i aria-hidden="true">✓</i>
+              <span>
+                <strong>REVIEW COMPLETE</strong>
+                <small>All imported exercises are ready.</small>
+              </span>
+            </div>
+          )}
         </section>
       )}
       <Button
@@ -8836,7 +10311,8 @@ function ImportPlan({
             </button>
           </div>
           <small className="import-plan-helper">
-            Any format works — Rook will structure it for you.
+            Plain-text workout notes work best. You’ll review anything Rook can’t
+            match.
           </small>
           {error && <p className="offline-banner">{error}</p>}
           <Button disabled={busy || text.trim().length === 0} onClick={generate}>
@@ -8852,7 +10328,7 @@ function ImportPlan({
           onCancel={() => setPreview(null)}
         />
       )}
-      {busy && <BuildingOverlay onCancel={cancelImport} />}
+      {busy && <BuildingOverlay kind="import" onCancel={cancelImport} />}
     </main>
   );
 }
@@ -8871,7 +10347,7 @@ function RestTrainingSheet({ date, state, update, close, setPage }) {
         (workout) =>
           workout.completedAt &&
           workout.programDayId === item.workoutId &&
-          weekKey(workout.completedAt) === weekKey(date),
+          weekKey(workoutPlanDate(workout)) === weekKey(date),
       ) &&
       state.activeWorkout?.programDayId !== item.workoutId,
   );
@@ -9211,6 +10687,189 @@ function ProfileDetails({ state, update, close }) {
     </main>
   );
 }
+function ProfileTrainingSetting({ state, update, close, setting, focus }) {
+  const profile = state.profile;
+  const scheduledDays = new Set(
+    (state.program.days || []).map((day) => day.weekday).filter(Boolean),
+  );
+  const minimumDays = Math.max(
+    1,
+    Number(profile.daysPerWeek) || state.program.days?.length || 1,
+  );
+  const [availableDays, setAvailableDays] = useState(() =>
+    WEEKDAYS.filter(
+      (day) =>
+        (profile.availableDays || []).includes(day) || scheduledDays.has(day),
+    ),
+  );
+  const [environment, setEnvironment] = useState(
+    profile.environment || "Commercial gym",
+  );
+  const [equipment, setEquipment] = useState(() => [
+    ...(profile.equipment || []),
+  ]);
+  const toggleDay = (day) =>
+    !scheduledDays.has(day) &&
+    setAvailableDays((current) =>
+      current.includes(day)
+        ? current.filter((item) => item !== day)
+        : WEEKDAYS.filter((item) => item === day || current.includes(item)),
+    );
+  const chooseEnvironment = (next) => {
+    setEnvironment(next);
+    setEquipment((current) => {
+      const home = current.filter((item) => item !== "full gym");
+      if (next === "Commercial gym") return ["full gym"];
+      if (next === "Both") return ["full gym", ...home];
+      return home;
+    });
+  };
+  const toggleEquipment = (option) =>
+    setEquipment((current) => {
+      const implicit = environment === "Both" ? ["full gym"] : [];
+      const home = current.filter((item) => item !== "full gym");
+      let next = home.includes(option)
+        ? home.filter((item) => item !== option)
+        : [...home, option];
+      if (option === "bodyweight only") next = ["bodyweight only"];
+      else next = next.filter((item) => item !== "bodyweight only");
+      return [...implicit, ...next];
+    });
+  const setupValid = setupSelectionValid({ environment, equipment });
+  const setupProgramCompatible = setupValid
+    ? validateProgram(
+        state.program,
+        { ...profile, environment, equipment },
+        { preserveSchedule: true },
+      ).valid
+    : false;
+  const scheduleValid = availableDays.length >= minimumDays;
+  const save = () => {
+    update((current) => {
+      if (setting === "schedule")
+        current.profile.availableDays = WEEKDAYS.filter((day) =>
+          availableDays.includes(day),
+        );
+      else {
+        current.profile.environment = environment;
+        current.profile.equipment = equipment;
+      }
+      return current;
+    });
+    close();
+  };
+  const setupTitle = focus === "equipment" ? "Equipment" : "Training environment";
+  return (
+    <main className="screen detail-screen profile-training-setting-screen">
+      <header className="detail-header">
+        <button aria-label="Close" onClick={close}>‹</button>
+        <strong>{setting === "schedule" ? "Schedule" : setupTitle}</strong>
+        <span />
+      </header>
+      <div className="profile-setting-scroll">
+      {setting === "schedule" ? (
+        <>
+          <Eyebrow>TRAINING AVAILABILITY</Eyebrow>
+          <h1>When can you train?</h1>
+          <p>
+            Choose at least {minimumDays} available {minimumDays === 1 ? "day" : "days"}.
+            Current workout days stay selected so your program is not changed.
+          </p>
+          <section className="profile-setting-options schedule-days">
+            <div className="option-list day-options">
+              {WEEKDAYS.map((day) => (
+                <OnboardingOptionCard
+                  key={day}
+                  label={localizedWeekdayLabel(day, "short")}
+                  ariaLabel={`${localizedWeekdayLabel(day, "long")}${scheduledDays.has(day) ? ", current program day" : ""}`}
+                  selected={availableDays.includes(day)}
+                  disabled={scheduledDays.has(day)}
+                  onClick={() => toggleDay(day)}
+                />
+              ))}
+            </div>
+            <small className="schedule-selection-count" aria-live="polite">
+              {availableDays.length} {availableDays.length === 1 ? "day" : "days"} selected
+            </small>
+            {!scheduleValid && (
+              <small className="profile-setting-error">
+                Keep at least {minimumDays} days available for this program.
+              </small>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          <Eyebrow>TRAINING SETUP</Eyebrow>
+          <h1>{setupTitle}</h1>
+          <p>
+            Used for Coach recommendations and future plan changes. Your current
+            program stays unchanged.
+          </p>
+          <section className="profile-setting-options setup-environment">
+            <div className="option-list">
+              {["Commercial gym", "Home gym", "Both"].map((option) => (
+                <OnboardingOptionCard
+                  key={option}
+                  label={option}
+                  selected={environment === option}
+                  onClick={() => chooseEnvironment(option)}
+                />
+              ))}
+            </div>
+          </section>
+          {environment === "Commercial gym" ? (
+            <div className="setup-confirmation profile-setup-confirmation">
+              <strong>Full gym access</strong>
+              <small>Standard commercial-gym equipment is included.</small>
+            </div>
+          ) : (
+            <section className="profile-setting-options setup-equipment">
+              <div className="onboarding-group-heading">
+                <strong>
+                  {environment === "Both"
+                    ? "Equipment available at home"
+                    : "Available equipment"}
+                </strong>
+                <small>Select all that apply</small>
+              </div>
+              <div className="option-list option-grid">
+                {(EQUIPMENT_BY_ENVIRONMENT[environment] || []).map((option) => (
+                  <OnboardingOptionCard
+                    key={option}
+                    label={EQUIPMENT_LABELS[option] || option}
+                    selected={equipment.includes(option)}
+                    onClick={() => toggleEquipment(option)}
+                  />
+                ))}
+              </div>
+              {!setupValid && (
+                <small className="profile-setting-error">
+                  Select at least one available equipment option.
+                </small>
+              )}
+              {setupValid && !setupProgramCompatible && (
+                <small className="profile-setting-error">
+                  Your current program uses equipment outside this setup. Adjust
+                  or replace the plan before saving it.
+                </small>
+              )}
+            </section>
+          )}
+        </>
+      )}
+      </div>
+      <div className="profile-setting-footer">
+        <Button
+          disabled={setting === "schedule" ? !scheduleValid : !setupValid || !setupProgramCompatible}
+          onClick={save}
+        >
+          {setting === "schedule" ? "SAVE SCHEDULE" : "SAVE SETUP"}
+        </Button>
+      </div>
+    </main>
+  );
+}
 function EditPlan({ state, update, close }) {
   const save = (program) => {
     update((current) => {
@@ -9454,14 +11113,18 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
         aria-labelledby="change-plan-title"
       >
         <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
-        <button
-          className="sheet-close"
-          aria-label="Close"
-          disabled={busy}
-          onClick={close}
-        >
-          ×
-        </button>
+        <header className="long-form-sheet-header">
+          <span />
+          <strong id="change-plan-title">Plan preview</strong>
+          <button
+            className="sheet-close"
+            aria-label="Close"
+            disabled={busy}
+            onClick={close}
+          >
+            ×
+          </button>
+        </header>
         <PlanEditor
           source={preview.program}
           profile={state.profile}
@@ -9688,6 +11351,16 @@ function Detail({
     return <TrainingRestrictions state={state} update={update} close={close} />;
   if (detail === "profile-details")
     return <ProfileDetails state={state} update={update} close={close} />;
+  if (detail?.profileTrainingSetting)
+    return (
+      <ProfileTrainingSetting
+        state={state}
+        update={update}
+        close={close}
+        setting={detail.profileTrainingSetting}
+        focus={detail.focus}
+      />
+    );
   if (detail === "change-plan")
     return (
       <ChangePlanSheet
@@ -9702,9 +11375,35 @@ function Detail({
     return <Logging state={state} update={update} close={close} />;
   if (detail === "appearance")
     return <Appearance state={state} update={update} close={close} />;
+  if (detail?.completedWorkout)
+    return (
+      <CompletedWorkoutDetail
+        workoutId={detail.completedWorkout}
+        state={state}
+        update={update}
+        close={close}
+        setDetail={setDetail}
+      />
+    );
+  if (detail?.todayExerciseActions)
+    return (
+      <TodayExerciseActions
+        request={detail.todayExerciseActions}
+        state={state}
+        update={update}
+        close={close}
+      />
+    );
   if (detail?.visual)
     return (
       <ExerciseVisualViewer exercise={detail.visual} close={close} />
+    );
+  if (detail?.workoutOptions)
+    return (
+      <ActiveWorkoutOptions
+        close={close}
+        onRestart={detail.onRestart}
+      />
     );
   if (detail?.options)
     return (
@@ -9783,11 +11482,11 @@ function Detail({
                     ? "Bodyweight"
                     : latestSet
                       ? displayWeight(latestSet.weight, state.profile.units)
-                      : "Weight not logged"}{" "}
+                      : "Not set yet"}{" "}
                 <small>{timed ? "sec" : latestSet ? unit : ""}</small>
               </h1>
               {!timed && !bodyweight && !latestSet && (
-                <p>Completed reps are saved in your history.</p>
+                <p>Log a weight on a completed working set to establish this.</p>
               )}
             </>
           ) : (
@@ -9895,23 +11594,7 @@ function Logging({ state, update, close }) {
         </button>
       </header>
       <section className="logging-group">
-        <Eyebrow>UNITS</Eyebrow>
-        <div className="segmented">
-          {["kg", "lb"].map((unit) => (
-            <button
-              key={unit}
-              className={p.units === unit ? "active" : ""}
-              onClick={() =>
-                update((current) => {
-                  current.profile.units = unit;
-                  return current;
-                })
-              }
-            >
-              {unit}
-            </button>
-          ))}
-        </div>
+        <Eyebrow>EFFORT</Eyebrow>
         <SettingSwitch
           label="Track reps in reserve (RIR)"
           checked={p.rirEnabled}
@@ -9975,7 +11658,25 @@ function Logging({ state, update, close }) {
         />
       </section>
       <section className="logging-group increments-group">
-        <Eyebrow>
+        <Eyebrow>UNITS</Eyebrow>
+        <div className="segmented" aria-label="Weight units">
+          {["kg", "lb"].map((unit) => (
+            <button
+              key={unit}
+              className={p.units === unit ? "active" : ""}
+              aria-pressed={p.units === unit}
+              onClick={() =>
+                update((current) => {
+                  current.profile.units = unit;
+                  return current;
+                })
+              }
+            >
+              {unit}
+            </button>
+          ))}
+        </div>
+        <Eyebrow className="increments-heading">
           DEFAULT INCREMENTS · {weightUnit(p.units).toUpperCase()}
         </Eyebrow>
         {Object.entries(p.increments).map(([key, value]) => (
@@ -10158,6 +11859,234 @@ function ExerciseVisualViewer({ exercise, close }) {
       <div className="exercise-visual-stage">
         <img src={artwork} alt="" aria-hidden="true" />
       </div>
+    </main>
+  );
+}
+function TodayExerciseActions({ request, state, update, close }) {
+  const [confirming, setConfirming] = useState(null);
+  const liveSourceWorkout = state.program?.days.find(
+    (day) => day.id === request.workoutId,
+  );
+  const sourceSnapshot = useRef(
+    liveSourceWorkout ? clone(liveSourceWorkout) : null,
+  );
+  const sourceWorkout = liveSourceWorkout || sourceSnapshot.current;
+  const sourceEntry = sourceWorkout?.exercises.find(
+    (entry) => entry.id === request.planEntryId,
+  );
+  const name = exerciseName(sourceEntry || request.exercise);
+  const planDate = request.planDate;
+  const occurrence = plannedWorkoutForDate(state, localDate(planDate));
+  const occurrenceIsLast = (occurrence?.exercises.length || 0) <= 1;
+  const recurringIsLast = (sourceWorkout?.exercises.length || 0) <= 1;
+  const wouldEmptyProgram = recurringIsLast && state.program.days.length <= 1;
+  const activeSource = state.activeWorkout?.programDayId === request.workoutId;
+  const isToday = planDate === isoDay();
+  const dateLabel = isToday
+    ? "today"
+    : new Intl.DateTimeFormat("en", {
+        month: "short",
+        day: "numeric",
+      }).format(localDate(planDate));
+  const previousOverride = clone(
+    state.workoutOccurrenceOverrides?.[planDate]?.[request.workoutId] || null,
+  );
+  const weeklySnapshot = sourceWorkout
+    ? {
+        workout: clone(sourceWorkout),
+        index: state.program.days.findIndex(
+          (day) => day.id === request.workoutId,
+        ),
+        availableDays: clone(state.profile.availableDays || []),
+        daysPerWeek: state.profile.daysPerWeek,
+      }
+    : null;
+  const finishAction = (notice) => {
+    triggerHaptic("success");
+    close();
+    request.onApplied?.(notice);
+  };
+  const removeOccurrence = () => {
+    update((current) =>
+      removeExerciseFromOccurrence(current, {
+        planDate,
+        workoutId: request.workoutId,
+        planEntryId: request.planEntryId,
+      }),
+    );
+    finishAction({
+      message: occurrenceIsLast
+        ? `${isToday ? "Today’s" : dateLabel} workout skipped`
+        : `Removed from ${dateLabel}`,
+      undo: () =>
+        update((current) =>
+          restoreOccurrenceOverride(current, {
+            planDate,
+            workoutId: request.workoutId,
+            previousOverride,
+          }),
+        ),
+    });
+  };
+  const removeWeekly = () => {
+    if (!weeklySnapshot || wouldEmptyProgram) return;
+    update((current) =>
+      removeExerciseFromWeeklyPlan(
+        current,
+        request.workoutId,
+        request.planEntryId,
+      ),
+    );
+    finishAction({
+      message: recurringIsLast
+        ? `${sourceWorkout.weekday} is now a rest day`
+        : "Removed from weekly plan",
+      undo: () =>
+        update((current) =>
+          restoreWeeklyPlanWorkout(current, weeklySnapshot),
+        ),
+    });
+  };
+  const confirmOccurrence = confirming === "occurrence";
+  const confirmWeekly = confirming === "weekly";
+  const titleId = "today-exercise-actions-title";
+  if (confirming)
+    return (
+      <main
+        className="sheet today-exercise-actions-sheet confirming"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <button className="sheet-close" aria-label="Close" onClick={close}>
+          ×
+        </button>
+        <Eyebrow>{confirmOccurrence ? "SKIP WORKOUT" : "WEEKLY PLAN"}</Eyebrow>
+        <h2 id={titleId}>
+          {confirmOccurrence
+            ? `Skip ${isToday ? "today’s" : `${dateLabel}’s`} workout?`
+            : recurringIsLast
+              ? `Make ${sourceWorkout.weekday} a rest day?`
+              : `Remove ${name} from ${activeSource ? "future workouts" : "weekly plan"}?`}
+        </h2>
+        <p>
+          {confirmOccurrence
+            ? `${name} is the only exercise left. Your weekly plan won’t change.`
+            : recurringIsLast
+              ? `${name} is the only exercise in ${sourceWorkout.name}. The current workout and past history won’t change.`
+              : `It will be removed from ${sourceWorkout.name} going forward. ${activeSource ? "Your current workout " : "Past workouts and history "}won’t change.`}
+        </p>
+        <div className="today-exercise-confirm-actions">
+          <Button variant="secondary" onClick={() => setConfirming(null)}>
+            CANCEL
+          </Button>
+          <Button
+            className="today-exercise-danger"
+            onClick={confirmOccurrence ? removeOccurrence : removeWeekly}
+          >
+            {confirmOccurrence
+              ? "SKIP WORKOUT"
+              : recurringIsLast
+                ? "MAKE REST DAY"
+                : activeSource
+                  ? "REMOVE FROM FUTURE"
+                  : "REMOVE FROM PLAN"}
+          </Button>
+        </div>
+      </main>
+    );
+  return (
+    <main
+      className="sheet today-exercise-actions-sheet"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby={titleId}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button className="sheet-close" aria-label="Close" onClick={close}>
+        ×
+      </button>
+      <Eyebrow>EXERCISE</Eyebrow>
+      <h2 id={titleId}>{name}</h2>
+      <button
+        type="button"
+        className="choice-row today-exercise-remove-occurrence"
+        onClick={() =>
+          occurrenceIsLast ? setConfirming("occurrence") : removeOccurrence()
+        }
+      >
+        <strong>{`Remove from ${dateLabel}`}</strong>
+        <small>Keeps it in your weekly plan.</small>
+      </button>
+      <button
+        type="button"
+        className="choice-row today-exercise-remove-weekly"
+        disabled={wouldEmptyProgram}
+        onClick={() => setConfirming("weekly")}
+      >
+        <strong>
+          {activeSource
+            ? "Remove from future weekly plan"
+            : "Remove from weekly plan"}
+        </strong>
+        <small>
+          {wouldEmptyProgram
+            ? "Keep at least one workout in your plan."
+            : activeSource
+              ? "Your current workout stays unchanged."
+              : `Removes this entry from ${sourceWorkout?.name || "this workout"} going forward.`}
+        </small>
+      </button>
+    </main>
+  );
+}
+function ActiveWorkoutOptions({ close, onRestart }) {
+  const [confirming, setConfirming] = useState(false);
+  return (
+    <main
+      className={`sheet active-workout-options-sheet${confirming ? " confirming-restart" : ""}`}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="active-workout-options-title"
+      aria-describedby={confirming ? "restart-workout-detail" : undefined}
+      onClick={(event) => event.stopPropagation()}
+    >
+      <button className="sheet-close" aria-label="Close" onClick={close}>
+        ×
+      </button>
+      {confirming ? (
+        <>
+          <Eyebrow>RESTART SESSION</Eyebrow>
+          <h2 id="active-workout-options-title">Restart workout?</h2>
+          <p id="restart-workout-detail">
+            This will clear all progress from this workout and start it again
+            from the beginning. This can’t be undone.
+          </p>
+          <div className="workout-restart-confirm-actions">
+            <Button variant="secondary" onClick={() => setConfirming(false)}>
+              CANCEL
+            </Button>
+            <Button className="workout-restart-danger" onClick={onRestart}>
+              RESTART WORKOUT
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <Eyebrow>WORKOUT</Eyebrow>
+          <h2 id="active-workout-options-title">Workout options</h2>
+          <p>Your progress is saved automatically.</p>
+          <button
+            type="button"
+            className="choice-row workout-restart-option"
+            onClick={() => setConfirming(true)}
+          >
+            <strong>Restart workout</strong>
+            <small>Clear this session and begin again.</small>
+          </button>
+        </>
+      )}
     </main>
   );
 }
@@ -10381,66 +12310,58 @@ function Replace({ exercise, state, update, close }) {
       activeIds.join("|"),
     ],
   );
+  const compatibleKey = compatible.map((item) => item.id).join("|");
   const [choices, setChoices] = useState(() => compatible.slice(0, 3));
-  const [loading, setLoading] = useState(() => compatible.length === 0);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [noMore, setNoMore] = useState(false);
+  const [noMore, setNoMore] = useState(() => compatible.length <= 3);
   const [picker, setPicker] = useState(false);
   const [query, setQuery] = useState("");
   useEffect(() => {
-    let mounted = true;
+    // Keep the first suggestions stable. Previously these local choices were
+    // replaced when the asynchronous AI ranking arrived, which made options
+    // move underneath the user. AI ranking is now reserved for the explicit
+    // "More suggestions" action below.
     setChoices(compatible.slice(0, 3));
-    setLoading(compatible.length === 0);
-    setNoMore(false);
+    setLoadingMore(false);
+    setNoMore(compatible.length <= 3);
     setPicker(false);
     setQuery("");
-    AIService.suggestExerciseReplacements(state, exercise).then((result) => {
-      if (!mounted) return;
-      const ranked = result.exerciseIds
-        .map((id) => exerciseCatalog[id])
-        .filter((item) => item && !activeIds.includes(item.id));
-      const merged = [...ranked, ...compatible].filter(
-        (item, index, list) =>
-          list.findIndex((value) => value.id === item.id) === index,
-      );
-      setChoices(merged.slice(0, 3));
-      setLoading(false);
-    });
-    return () => {
-      mounted = false;
-    };
-  }, [exercise.id, activeIds.join("|")]);
+  }, [exercise.id, compatibleKey]);
   const more = async () => {
-    if (loading || loadingMore) return;
+    if (loadingMore || noMore) return;
     setLoadingMore(true);
     const shown = new Set(choices.map((item) => item.id));
-    const result = await AIService.suggestExerciseReplacements(
-      state,
-      exercise,
-      { excludeIds: [...shown] },
-    );
-    const ranked = result.exerciseIds
-      .map((id) => exerciseCatalog[id])
-      .filter(
-        (item) =>
-          item && !shown.has(item.id) && !activeIds.includes(item.id),
+    try {
+      const result = await AIService.suggestExerciseReplacements(
+        state,
+        exercise,
+        { excludeIds: [...shown] },
       );
-    const remaining = compatible.filter((item) => !shown.has(item.id));
-    const next = [...ranked, ...remaining]
-      .filter(
-        (item, index, list) =>
-          list.findIndex((value) => value.id === item.id) === index,
-      )
-      .slice(0, 3);
-    if (next.length)
-      setChoices((current) =>
-        [...current, ...next].filter(
+      const ranked = result.exerciseIds
+        .map((id) => exerciseCatalog[id])
+        .filter(
+          (item) =>
+            item && !shown.has(item.id) && !activeIds.includes(item.id),
+        );
+      const remaining = compatible.filter((item) => !shown.has(item.id));
+      const next = [...ranked, ...remaining]
+        .filter(
           (item, index, list) =>
             list.findIndex((value) => value.id === item.id) === index,
-        ),
-      );
-    else setNoMore(true);
-    setLoadingMore(false);
+        )
+        .slice(0, 3);
+      if (next.length) {
+        setChoices((current) =>
+          [...current, ...next].filter(
+            (item, index, list) =>
+              list.findIndex((value) => value.id === item.id) === index,
+          ),
+        );
+        if (shown.size + next.length >= compatible.length) setNoMore(true);
+      } else setNoMore(true);
+    } finally {
+      setLoadingMore(false);
+    }
   };
   const replace = (choice) => {
     update((current) => {
@@ -10565,14 +12486,9 @@ function Replace({ exercise, state, update, close }) {
               Candidates match the same movement purpose, target muscles, your
               equipment and restrictions.
             </p>
-            {loading && (
-              <p className="muted replacement-loading">
-                Checking compatible options…
-              </p>
-            )}
             {choices.length
               ? choices.map(choiceButton)
-              : !loading && (
+              : (
                   <p className="offline-banner">
                     There is not enough compatible exercise metadata for a safe
                     replacement.
@@ -10581,7 +12497,7 @@ function Replace({ exercise, state, update, close }) {
             <div className="replacement-secondary">
               <button
                 onClick={more}
-                disabled={loading || loadingMore || noMore}
+                disabled={loadingMore || noMore}
               >
                 {loadingMore ? "Checking…" : "More suggestions"}
               </button>
@@ -10787,7 +12703,12 @@ export default function App() {
         setDetail={setDetail}
       />
     ) : page === "complete" ? (
-      <Complete state={state} setPage={setPage} setDetail={setDetail} />
+      <Complete
+        state={state}
+        update={update}
+        setPage={setPage}
+        setDetail={setDetail}
+      />
     ) : page === "coach" ? (
       <Coach state={state} update={update} setPage={setPage} />
     ) : page === "progress" ? (

@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="30.037 29.25 451.925 451.925" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Floor Lat Pulldown">
+  <g fill="#1f6b4c">
+    <ellipse cx="256" cy="92" rx="31" ry="35"/>
+    <path d="M217 133c14-14 64-14 78 0l20 171c2 16-11 29-27 29h-64c-16 0-29-13-27-29l20-171Z"/>
+    <rect x="216" y="315" width="31" height="137" rx="15" transform="rotate(8 232 384)"/>
+    <rect x="265" y="315" width="31" height="137" rx="15" transform="rotate(-8 280 384)"/>
+    <rect x="139" y="157" width="29" height="117" rx="14" transform="rotate(73 154 216)"/>
+    <rect x="344" y="157" width="29" height="117" rx="14" transform="rotate(-73 359 216)"/>
+    <rect x="104" y="101" width="27" height="107" rx="13" transform="rotate(-5 118 155)"/>
+    <rect x="381" y="101" width="27" height="107" rx="13" transform="rotate(5 395 155)"/>
+    <circle cx="116" cy="91" r="16"/>
+    <circle cx="396" cy="91" r="16"/>
+    <path d="M85 122c-8 45 3 86 33 119l14-13c-23-26-32-58-27-92l13 11-10-45-43 17 20 3Z"/>
+    <path d="M427 122c8 45-3 86-33 119l-14-13c23-26 32-58 27-92l-13 11 10-45 43 17-20 3Z"/>
+  </g>
+</svg>

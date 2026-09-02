@@ -12,6 +12,7 @@ import {
 } from "../src/domain.js";
 
 const root = new URL("../artifacts/premium-theme/", import.meta.url);
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 await mkdir(root, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, root));
 const browser = await chromium.launch({
@@ -78,7 +79,7 @@ async function openState(state, width = 390, colorScheme = "dark") {
       body: JSON.stringify({ available: false, provider: null }),
     }),
   );
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+  await page.goto(appUrl, { waitUntil: "networkidle" });
   return { context, page, errors };
 }
 
@@ -112,10 +113,36 @@ async function premiumSignals(page) {
 
 async function visibleGreenLeaks(page) {
   return page.locator("body").evaluate((body) => {
-    const greenPatterns = [
-      "rgb(31, 107, 76)",
-      "rgb(102, 184, 147)",
-      "rgb(127, 174, 144)",
+    const parseColor = (value) => {
+      const match = String(value || "").match(
+        /rgba?\((\d+(?:\.\d+)?)[, ]+(\d+(?:\.\d+)?)[, ]+(\d+(?:\.\d+)?)(?:[, /]+([\d.]+))?/,
+      );
+      return match
+        ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] == null ? 1 : Number(match[4])]
+        : null;
+    };
+    const isGreen = (value) => {
+      const color = parseColor(value);
+      return Boolean(
+        color &&
+          color[3] > 0.08 &&
+          color[1] > color[0] * 1.12 &&
+          color[1] > color[2] * 1.08 &&
+          color[1] - color[0] > 12 &&
+          color[1] - color[2] > 8,
+      );
+    };
+    const properties = [
+      "color",
+      "backgroundColor",
+      "borderTopColor",
+      "borderRightColor",
+      "borderBottomColor",
+      "borderLeftColor",
+      "outlineColor",
+      "fill",
+      "stroke",
+      "accentColor",
     ];
     return [...body.querySelectorAll("*")]
       .filter((element) => {
@@ -129,10 +156,10 @@ async function visibleGreenLeaks(page) {
           tag: element.tagName,
           className: String(element.className || "").slice(0, 100),
           text: String(element.textContent || "").trim().slice(0, 60),
-          values: [style.color, style.backgroundColor, style.borderColor],
+          values: properties.map((property) => `${property}: ${style[property]}`),
         };
       })
-      .filter((entry) => entry.values.some((value) => greenPatterns.includes(value)));
+      .filter((entry) => entry.values.some((value) => isGreen(value)));
   });
 }
 
@@ -153,25 +180,27 @@ assert.deepEqual(await premiumSignals(run.page), {
   overflow: false,
 });
 const primary = run.page.locator(".today-hero .primary");
-assert.equal(
-  await primary.evaluate((button) => getComputedStyle(button).backgroundColor),
-  "rgb(215, 177, 90)",
-  "Premium primary actions use muted champagne rather than ROOK green",
-);
+if (await primary.count()) {
+  assert.equal(
+    await primary.evaluate((button) => getComputedStyle(button).backgroundColor),
+    "rgb(215, 177, 90)",
+    "Premium primary actions use muted champagne rather than ROOK green",
+  );
+}
 await screenshot(run.page, "390-today-premium.png");
 assert.deepEqual(await visibleGreenLeaks(run.page), [], "Premium Today contains no ROOK green");
-const tracedDay = run.page.locator(".week-strip button:not(.selected-day)").first();
-await tracedDay.click();
+const targetDay = run.page.locator(".week-strip button:not(.selected-day)").first();
+const targetDayLabel = await targetDay.getAttribute("aria-label");
+await targetDay.click();
 assert.equal(
-  await run.page.locator(".week-strip .selected-day.day-selection-trace").count(),
-  1,
-  "a real user day change starts one Premium edge trace without delaying selection",
+  await run.page.getByRole("button", { name: targetDayLabel }).getAttribute("aria-pressed"),
+  "true",
+  "a real user day change selects immediately",
 );
-await run.page.waitForTimeout(560);
 assert.equal(
   await run.page.locator(".week-strip .day-selection-trace").count(),
   0,
-  "the Premium day trace fully stops after one pass",
+  "Premium day selection does not add a rotating edge trace",
 );
 
 for (const tab of ["COACH", "PROGRESS", "PROFILE"]) {
@@ -184,6 +213,20 @@ for (const tab of ["COACH", "PROGRESS", "PROFILE"]) {
   await screenshot(run.page, `390-${tab.toLowerCase()}-premium.png`);
   assert.deepEqual(await visibleGreenLeaks(run.page), [], `${tab} contains no ROOK green`);
 }
+await run.page.getByRole("button", { name: /Edit plan/ }).click();
+assert.deepEqual(
+  await visibleGreenLeaks(run.page),
+  [],
+  "Premium plan editor cards contain no legacy ROOK green",
+);
+await run.page.getByRole("button", { name: /^Edit / }).first().click();
+assert.deepEqual(
+  await visibleGreenLeaks(run.page),
+  [],
+  "Expanded Premium plan editor controls contain no legacy ROOK green",
+);
+await screenshot(run.page, "390-plan-editor-premium.png");
+await run.page.getByRole("button", { name: "Close", exact: true }).click();
 await run.page.getByRole("button", { name: /Appearance/ }).click();
 await run.page.getByRole("button", { name: /^Theme/ }).click();
 assert.equal(

@@ -5,6 +5,7 @@ import {
   EXERCISE_ILLUSTRATION_EQUIVALENTS,
   EXERCISE_THUMBNAIL_NORMALIZATION,
   ROOK_ADAPTED_ILLUSTRATIONS,
+  ROOK_ORIGINAL_ILLUSTRATIONS,
   exerciseCatalog,
   isExerciseAutoGenerationBlocked,
   isExerciseGloballyBlocked,
@@ -77,6 +78,9 @@ const report = {
     ([exerciseId, sourceSlug]) => ({ exerciseId, sourceSlug }),
   ),
   rookAdaptedFamilies: Object.entries(ROOK_ADAPTED_ILLUSTRATIONS).map(
+    ([exerciseId, assetSlug]) => ({ exerciseId, assetSlug }),
+  ),
+  rookOriginalFamilies: Object.entries(ROOK_ORIGINAL_ILLUSTRATIONS).map(
     ([exerciseId, assetSlug]) => ({ exerciseId, assetSlug }),
   ),
   thumbnailNormalization: Object.entries(EXERCISE_THUMBNAIL_NORMALIZATION).map(

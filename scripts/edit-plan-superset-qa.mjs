@@ -34,8 +34,8 @@ async function verifyEditableSuperset(source) {
   );
   await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /^EDIT PLAN/ }).click();
-  await page.getByText("Edit plan", { exact: true }).waitFor();
+  await page.getByRole("button", { name: /^Edit plan/i }).click();
+  await page.getByRole("heading", { name: "Edit your plan", exact: true }).waitFor();
 
   const daySection = page.locator(".import-day").filter({
     has: page.getByLabel(`${day.weekday} workout name`),

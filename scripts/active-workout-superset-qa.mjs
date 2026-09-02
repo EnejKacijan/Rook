@@ -43,12 +43,15 @@ await page.route("**/api/ai/status", (route) =>
 );
 await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
 await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
-await page.getByRole("button", { name: "Create superset ›" }).click();
+await page.getByRole("button", { name: "Exercise options" }).click();
+await page.getByRole("button", { name: "Create superset" }).click();
 await page.getByText("Pair", { exact: false }).first().waitFor();
 const choice = page.locator(".active-superset-sheet .choice-row").first();
 const partnerName = await choice.locator("strong").innerText();
 await choice.click();
-await page.getByRole("button", { name: "Manage pair ›" }).waitFor();
+await page.getByRole("button", { name: "Exercise options" }).click();
+await page.getByRole("button", { name: "Manage superset" }).waitFor();
+await page.getByRole("button", { name: "Close", exact: true }).click();
 assert.equal(await page.getByText("A1", { exact: true }).count(), 0);
 assert.equal(await page.getByText("A2", { exact: true }).count(), 0);
 let stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
@@ -73,19 +76,19 @@ assert.equal(
   JSON.stringify(stored.activeWorkout.exercises.slice(firstIndex, firstIndex + 2)),
 );
 await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
-const reloadedBody = await page.locator("body").innerText();
-assert.ok(reloadedBody.includes("Manage pair"), reloadedBody);
+await page.getByRole("button", { name: "Exercise options" }).click();
+assert.equal(await page.getByRole("button", { name: "Manage superset" }).count(), 1);
 stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 firstIndex = stored.activeWorkout.exercises.findIndex((item) => item.id === firstId);
 assert.equal(stored.activeWorkout.exercises[firstIndex].supersetId, pairId);
 assert.equal(JSON.stringify(stored.program), originalProgram);
 
 await context.setOffline(true);
-await page.getByRole("button", { name: "Manage pair ›" }).click();
+await page.getByRole("button", { name: "Manage superset" }).click();
 await page.getByRole("button", { name: "Close" }).click();
 await context.setOffline(false);
 
-await page.getByRole("button", { name: "Replace ›" }).click();
+await page.getByRole("button", { name: "Replace" }).click();
 const replacementChoices = page.locator(".replace-sheet .choice-row");
 await replacementChoices.first().waitFor();
 const activeNames = new Set(
@@ -104,7 +107,8 @@ assert.equal(JSON.stringify(stored.program), originalProgram);
 assert.ok(replacementName);
 assert.equal(activeNames.has(paired[0].exerciseId), false);
 
-await page.getByRole("button", { name: "Manage pair ›" }).click();
+await page.getByRole("button", { name: "Exercise options" }).click();
+await page.getByRole("button", { name: "Manage superset" }).click();
 await page.getByRole("button", { name: "Remove superset" }).click();
 stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 firstIndex = stored.activeWorkout.exercises.findIndex((item) => item.id === firstId);

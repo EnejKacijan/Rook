@@ -24,11 +24,12 @@
 .coach-history-trigger > svg { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .coach-history-trigger > span { flex: 0 0 auto; font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .1em; white-space: nowrap; }
 .coach-history-trigger:hover, .coach-history-trigger:focus-visible { color: #1f6b4c; }
-.coach-intro { margin-top: 16px; }
-.coach-intro h1 { font-size: 30px; max-width: 420px; }
-.coach-empty { margin-top: 18px; padding: 2px 0 2px 14px; border-left: 2px solid rgba(31, 107, 76, .42); background: transparent; }
+.coach-intro { margin-top: 14px; }
+.coach-intro h1 { font-size: 28px; max-width: 420px; }
+.coach-empty { margin-top: 16px; padding: 13px 15px; border: 1px solid rgba(27, 26, 25, .075); border-left: 2px solid rgba(31, 107, 76, .42); border-radius: 12px; background: rgba(255, 255, 255, .42); box-shadow: none; }
 .coach-empty .eyebrow { color: #1f6b4c; }
-.coach-empty p { margin: 7px 0 0; max-width: 390px; }
+.coach-empty strong { display: block; margin-top: 8px; font-size: 13px; line-height: 1.35; overflow-wrap: anywhere; }
+.coach-empty p { margin: 3px 0 0; max-width: 390px; font-size: 12px; line-height: 1.42; }
 .coach-screen > .coach-history-surface { position: fixed; z-index: 60; inset: 0; width: min(100%, 500px); margin: 0 auto; padding: env(safe-area-inset-top) 0 env(safe-area-inset-bottom); display: flex; flex-direction: column; overflow: hidden; background: #f6f5f2; box-shadow: 0 0 40px rgba(27, 26, 25, .16); animation: coach-history-enter .18s ease-out; }
 .coach-history-header { min-height: 68px; flex: 0 0 auto; padding: 10px 18px 8px; border-bottom: 1px solid rgba(27, 26, 25, .08); display: grid; grid-template-columns: 56px minmax(0, 1fr) 56px; align-items: center; }
 .coach-history-header h2 { min-width: 0; margin: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: center; font-size: 15px; line-height: 1.2; }
@@ -53,8 +54,10 @@
 .coach-history-empty .button { width: auto; min-width: 210px; margin-top: 24px; }
 @keyframes coach-history-enter { from { transform: translateX(12px); } to { transform: translateX(0); } }
 
-.coach-screen .prompt-list { margin-top: 24px; }
+.coach-screen .prompt-list { margin-top: 22px; }
 .coach-screen .prompt-list > div { display: flex; flex-direction: column; }
+.coach-screen .prompt-list button { min-height: 48px; }
+.coach-screen .prompt-list button:disabled { opacity: .48; cursor: default; }
 
 .coach-screen .conversation { margin-top: 24px; padding-bottom: 0; gap: 24px; }
 .coach-active .conversation { margin-top: 8px; }
@@ -78,16 +81,21 @@
 .coach-screen .coach-input textarea:focus { border-color: rgba(31, 107, 76, .5); box-shadow: 0 0 0 3px rgba(31, 107, 76, .14); }
 .coach-screen .coach-input textarea:disabled { color: #8a8783; background: #f1f0ec; }
 .coach-screen .coach-input .button { width: 54px; min-height: 54px; flex: 0 0 54px; border-radius: 14px; }
+.coach-screen .coach-input .coach-send:disabled { opacity: 1; }
+.coach-screen .coach-input .coach-send.is-empty { border: 1px solid rgba(27, 26, 25, .08); background: #e8e6e2; color: #9b9893; }
+.coach-screen .coach-input .coach-send.is-sending { border: 1px solid rgba(31, 107, 76, .14); background: #e2ece7; color: #1f6b4c; }
+.coach-screen .coach-input .coach-send > span { display: grid; place-items: center; min-width: 18px; min-height: 18px; }
 .coach-screen .action-card-applied { border-color: rgba(31, 107, 76, .2); background: #fbfdfc; }
 .coach-screen .action-applied { margin-top: 18px; padding: 14px 16px; border: 1px solid rgba(31, 107, 76, .18); border-radius: 14px; background: #eaf2ee; color: #1f6b4c; text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
 .coach-screen .action-card-applied > small { color: #4f6b5e; }
 .coach-screen .action-view-today { display: block; margin: 10px auto 0; min-height: 38px; }
 .coach-screen .today-update-confirmation { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 10px; padding: 14px 15px; }
 .coach-screen .today-update-check { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: #1f6b4c; color: #fff; font-size: 14px; font-weight: 800; }
-.coach-screen .today-update-confirmation > .today-update-copy { min-width: 0; padding: 0; border: 0; }
-.coach-screen .today-update-copy h3 { margin: 1px 0 0; font-size: 16px; line-height: 1.25; }
-.coach-screen .today-update-copy > small { margin: 3px 0 0; color: #4f6b5e; text-align: left; font-size: 11px; line-height: 1.35; }
-.coach-screen .today-update-copy > .action-view-today { width: fit-content; min-height: 32px; margin: 3px 0 -5px; padding: 0; font-size: 12px; text-align: left; }
+.coach-screen .today-update-confirmation > .today-update-copy { min-width: 0; padding: 0; border: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); }
+.coach-screen .today-update-copy h3 { grid-column: 1 / -1; margin: 1px 0 0; font-size: 16px; line-height: 1.25; }
+.coach-screen .today-update-copy > small { grid-column: 1 / -1; margin: 3px 0 0; color: #4f6b5e; text-align: left; font-size: 11px; line-height: 1.35; }
+.coach-screen .today-update-copy > .action-view-today { grid-column: 1; width: fit-content; min-height: 32px; margin: 3px 0 -5px; padding: 0; font-size: 12px; text-align: left; }
+.coach-screen .today-update-copy > .action-undo { grid-column: 2; width: fit-content; min-height: 32px; margin: 3px 0 -5px auto; padding: 0; color: #6f6c68; font-size: 12px; text-align: right; }
 .coach-screen .action-card-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; padding: 0; border: 0; }
 .coach-screen .action-card-buttons .button { min-width: 0; margin: 0; padding-inline: 10px; font-size: 10px; }
 .coach-screen .action-card-reviewing .action-card-buttons { position: sticky; z-index: 2; bottom: 0; margin: 10px -18px -8px; padding: 10px 18px 8px; border-top: 1px solid rgba(27, 26, 25, .07); background: #fff; }
@@ -129,6 +137,7 @@
 }
 @media (max-width: 374px) {
   .coach-header { width: calc(100% + 34px); margin-inline: -17px; padding-inline: 17px; }
+  .coach-intro h1 { font-size: 27px; }
 }
 .action-card-conflict { border-color: #dbcaa8; background: #fbf7ee; }
 .action-card-conflict h3 { color: #6b531e; }

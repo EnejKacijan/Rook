@@ -20,7 +20,7 @@ async function openScreen(buttonName) {
 }
 
 {
-  const { panel, handle } = await openScreen('EDIT PLAN'); const box = await handle.boundingBox(); const startX = box.x + 24; const startY = box.y + 8;
+  const { panel, handle } = await openScreen('Edit plan'); const box = await handle.boundingBox(); const startX = box.x + 24; const startY = box.y + 8;
   assert.ok(box.width >= 350 && box.height >= 44, 'the whole top edge is a wide Spotify-style drag surface, not just the visible indicator');
   assert.equal(await handle.evaluate(element => getComputedStyle(element).cursor), 'default', 'desktop does not show a hand/grab cursor');
   await page.screenshot({ path: output('390-edit-plan-handle.png'), fullPage: false });
@@ -32,7 +32,7 @@ async function openScreen(buttonName) {
 }
 
 {
-  const { panel } = await openScreen('EDIT PLAN'); await page.mouse.click(8, 8); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the backdrop starts the same downward sheet animation before close'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const { panel } = await openScreen('Edit plan'); await page.mouse.click(8, 8); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the backdrop starts the same downward sheet animation before close'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
 
 {
@@ -43,7 +43,7 @@ for (const name of ['Logging & increments', 'Review priorities', 'Add a few deta
   const { handle } = await openScreen(name); if (name === 'Logging & increments') { await page.screenshot({ path: output('390-logging-handle.png'), fullPage: false }); const box = await handle.boundingBox(); const x = box.x + 18; const y = box.y + 24; await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' }); } else { await handle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' }); }
 }
 
-await page.getByRole('button', { name: 'REPLACE PLAN' }).click(); const compactGrabZone = page.locator('.sheet-grab-zone'); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); const compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
+await page.getByRole('button', { name: 'Replace plan' }).click(); const compactGrabZone = page.locator('.sheet-grab-zone'); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); const compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
 const importHandle = page.getByRole('button', { name: 'Drag down to close' }); await importHandle.waitFor(); assert.equal(await page.locator('.modal-layer > .import-plan-screen').count(), 1); await importHandle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
 assert.deepEqual(errors, []); await browser.close();

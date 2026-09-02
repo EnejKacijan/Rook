@@ -1,0 +1,16 @@
+<svg width="512" height="512" viewBox="38.525 39.292 434.951 434.951" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Prone W Raise">
+  <g fill="#1f6b4c">
+    <ellipse cx="256" cy="102" rx="31" ry="36"/>
+    <path d="M221 142c10-13 60-13 70 0l25 154c2 15-10 28-25 28h-70c-15 0-27-13-25-28l25-154Z"/>
+    <rect x="217" y="304" width="31" height="142" rx="15" transform="rotate(8 232 375)"/>
+    <rect x="264" y="304" width="31" height="142" rx="15" transform="rotate(-8 280 375)"/>
+    <rect x="160" y="155" width="29" height="112" rx="14" transform="rotate(48 175 211)"/>
+    <rect x="323" y="155" width="29" height="112" rx="14" transform="rotate(-48 338 211)"/>
+    <rect x="121" y="113" width="27" height="92" rx="13" transform="rotate(-29 135 159)"/>
+    <rect x="364" y="113" width="27" height="92" rx="13" transform="rotate(29 378 159)"/>
+    <circle cx="118" cy="112" r="17"/>
+    <circle cx="394" cy="112" r="17"/>
+    <path d="M92 183c13-24 30-38 50-44l8 17c-14 5-26 15-35 31l14 1-29 27-14-37 6 5Z"/>
+    <path d="M420 183c-13-24-30-38-50-44l-8 17c14 5 26 15 35 31l-14 1 29 27 14-37-6 5Z"/>
+  </g>
+</svg>

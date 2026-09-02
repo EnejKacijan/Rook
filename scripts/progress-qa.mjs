@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { blankState, buildProgram, completeWorkout, exerciseCatalog, isoDay, startWorkout, weekDate, weekday, WEEKDAYS } from '../src/domain.js';
+import { blankState, buildProgram, completeWorkout, consistencyForCurrentWeek, exerciseCatalog, isoDay, startWorkout, weekDate, weekday, WEEKDAYS } from '../src/domain.js';
 import { createReturningUserFixture } from '../src/demoFixture.js';
 
 const outputRoot = new URL('../artifacts/progress/', import.meta.url); await mkdir(outputRoot, { recursive: true });
@@ -41,19 +41,19 @@ async function openProgress(state, name) {
 }
 
 {
-  const { context, page, errors } = await openProgress(zero, 'a-zero-workouts'); assert.equal(await page.getByRole('heading', { name: 'Your progress starts here.' }).count(), 1); assert.equal(await page.getByText('PROGRESSION', { exact: true }).count(), 1); assert.equal(await page.getByText(/More comparable sessions are needed/).count(), 1); assert.equal(await page.getByText('WORKING WEIGHTS', { exact: true }).count(), 1); assert.equal(await page.getByText('Not enough data', { exact: true }).count() > 0, true); assert.equal(await page.getByText(/RECENT TRAINING/, { exact: false }).count(), 0); assert.match(await page.locator('.consistency').textContent(), /0 \/ 4/); assert.deepEqual(errors, []); await context.close();
+  const { context, page, errors } = await openProgress(zero, 'a-zero-workouts'); assert.equal(await page.getByRole('heading', { name: 'Your progress starts here.' }).count(), 1); assert.equal(await page.getByText('PROGRESSION', { exact: true }).count(), 1); assert.equal(await page.getByText(/More comparable sessions are needed/).count(), 1); assert.equal(await page.getByText('WORKING WEIGHTS', { exact: true }).count(), 1); assert.equal(await page.getByText('Not enough data', { exact: true }).count() > 0, true); assert.equal(await page.getByText(/RECENT TRAINING/, { exact: false }).count(), 0); assert.equal(await page.getByText('THIS WEEK', { exact: true }).count(), 1); assert.match(await page.locator('.consistency').textContent(), /0 \/ 4/); assert.deepEqual(errors, []); await context.close();
 }
 {
   const { context, page, errors } = await openProgress(one, 'b-one-workout'); assert.equal(await page.getByRole('heading', { name: 'Your baseline is set.' }).count(), 1); assert.match(await page.locator('.working-weight-row').first().textContent(), /30 kg.*›/); assert.equal(await page.getByText('RECENT TRAINING', { exact: true }).count(), 1); assert.match(await page.locator('.recent-session-row').textContent(), /Upper A.*Today.*1 set/); assert.equal(await page.getByText('RECENT IMPROVEMENTS', { exact: true }).count(), 0); await page.locator('.working-weight-row').first().click(); assert.equal(await page.locator('.chart').count(), 0, 'exercise detail has no misleading weight-only chart'); assert.deepEqual(errors, []); await context.close();
 }
 {
-  const { context, page, errors } = await openProgress(missingWeight, 'b2-missing-weight'); await page.locator('.working-weight-row').first().click(); assert.equal(await page.getByRole('heading', { name: 'Not set yet' }).count(), 1); assert.equal(await page.getByText('Weight unset', { exact: true }).count(), 0); assert.equal(await page.getByText('Weight not logged', { exact: true }).count(), 1); assert.match(await page.locator('.detail-screen .list-row').last().textContent(), /8 reps/); await page.screenshot({ path: output('b2-missing-weight-detail.png'), fullPage: false }); assert.deepEqual(errors, []); await context.close();
+  const { context, page, errors } = await openProgress(missingWeight, 'b2-missing-weight'); assert.equal(await page.getByText('No weight logged', { exact: true }).count(), 1); await page.locator('.working-weight-row').first().click(); assert.equal(await page.getByRole('heading', { name: 'Not set yet' }).count(), 1); assert.equal(await page.getByText('Weight unset', { exact: true }).count(), 0); assert.equal(await page.getByText('Weight not logged', { exact: true }).count(), 1); assert.equal(await page.getByText('Log a weight on a completed working set to establish this.', { exact: true }).count(), 1); assert.match(await page.locator('.detail-screen .list-row').last().textContent(), /8 reps/); await page.screenshot({ path: output('b2-missing-weight-detail.png'), fullPage: false }); assert.deepEqual(errors, []); await context.close();
 }
 {
   const { context, page, errors } = await openProgress(three, 'c-three-workouts'); assert.equal(await page.getByRole('heading', { name: 'Your training is building a baseline.' }).count(), 1); assert.equal(await page.getByText('RECENT TRAINING', { exact: true }).count(), 1); assert.equal(await page.getByText('RECENT IMPROVEMENTS', { exact: true }).count(), 0); assert.match(await page.locator('.consistency').textContent(), /3 \/ 4/); assert.deepEqual(errors, []); await context.close();
 }
 {
-  const { context, page, errors } = await openProgress(longTerm, 'd-five-weeks'); assert.equal(await page.locator('.working-weight-row').count() > 1, true); assert.equal(await page.getByText('RECENT IMPROVEMENTS', { exact: true }).count(), 1); assert.match(await page.locator('.consistency').textContent(), /0 \/ 4/); assert.deepEqual(errors, []); await context.close();
+  const { context, page, errors } = await openProgress(longTerm, 'd-five-weeks'); assert.equal(await page.locator('.working-weight-row').count() > 1, true); assert.equal(await page.getByText('RECENT IMPROVEMENTS', { exact: true }).count(), 1); const currentWeek = consistencyForCurrentWeek(longTerm); assert.match(await page.locator('.consistency').textContent(), new RegExp(`${currentWeek.completed} \\/ ${currentWeek.planned}`)); assert.equal(await page.getByText('THIS WEEK', { exact: true }).count(), 1, 'weekly completion is not mislabeled as longitudinal consistency'); assert.deepEqual(errors, []); await context.close();
 }
 {
   const { context, page, errors } = await openProgress(noProgress, 'e-history-no-progression'); assert.equal(await page.getByText('RECENT IMPROVEMENTS', { exact: true }).count(), 0); assert.equal(await page.getByText('RECENT TRAINING', { exact: true }).count(), 1); assert.deepEqual(errors, []); await context.close();

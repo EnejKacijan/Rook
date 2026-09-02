@@ -72,7 +72,7 @@ async function importHeaderMetrics(eyebrow) {
 const composeHeader = await importHeaderMetrics(page.locator('.import-plan-compose > .eyebrow'));
 const importScreenText = await page.locator('.import-plan-screen').innerText();
 assert.match(importScreenText, /Paste your workout notes[\s\S]*EXAMPLES[\s\S]*Monday: Push[\s\S]*Bench Press 3×8–10[\s\S]*Squat 4×5 @ 2 RIR/);
-assert.match(importScreenText, /Any format works — Rook will structure it for you\./);
+assert.match(importScreenText, /Plain-text workout notes work best\. You’ll review anything Rook can’t match\./);
 assert.doesNotMatch(importScreenText, /No special format is required|FAST FORMAT EXAMPLES|Monday - Push|MONDAY — PUSH/);
 assert.equal(await page.getByPlaceholder('Paste your workout notes here...').count(), 1);
 const createPreview = page.getByRole('button', { name: 'CREATE PREVIEW' });
@@ -95,10 +95,10 @@ const buildingOverlay = page.locator('.building-overlay');
 await buildingOverlay.waitFor();
 assert.match(
   await buildingOverlay.innerText(),
-  /BUILDING YOUR PROGRAM[\s\S]*Building your training week[\s\S]*Applying your preferences and checking the plan/i,
-  'imports reuse the personalized plan-building transition',
+  /IMPORTING YOUR PLAN[\s\S]*Structuring your plan[\s\S]*Matching exercises and checking your notes for review/i,
+  'imports use distinct, honest import progress language',
 );
-assert.doesNotMatch(await buildingOverlay.innerText(), /Reading your notes/i);
+assert.doesNotMatch(await buildingOverlay.innerText(), /Building your training week|Applying your preferences/i);
 await page.screenshot({ path: output('390-import-building.png'), fullPage: false });
 await page.getByRole('heading', { name: 'Review your plan' }).waitFor();
 const reviewHeader = await importHeaderMetrics(page.locator('.import-plan-screen > .eyebrow'));
@@ -114,8 +114,8 @@ assert.equal(await page.getByRole('heading', { name: 'Bring your existing workou
 assert.equal(await page.getByText(/Paste it from Notes/).count(), 0);
 assert.equal(
   await page.locator('.import-plan-meta h2').innerText(),
-  'Build Muscle',
-  'the imported plan name stays normalized',
+  'Imported plan',
+  'a goal line is not misrepresented as an explicit imported plan title',
 );
 assert.equal(await page.getByText('4 days/week', { exact: true }).count(), 1);
 assert.equal(await page.getByText(/0 RIR/).count(), 0);
@@ -136,7 +136,7 @@ await page.waitForFunction(() => JSON.parse(localStorage.getItem('lift-v2-state'
 assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getAttribute('aria-current'), 'page', 'first-time import keeps its intended Today destination');
 assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'import does not show the generated-plan-only confirmation');
 assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program.source), 'ai-import');
-await page.getByRole('button', { name: 'PROFILE', exact: true }).click(); await page.getByRole('button', { name: 'REPLACE PLAN' }).click(); await page.getByRole('button', { name: /Import a different plan/ }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor(); await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
+await page.getByRole('button', { name: 'PROFILE', exact: true }).click(); await page.getByRole('button', { name: 'Replace plan' }).click(); await page.getByRole('button', { name: /Import a different plan/ }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor(); await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
 assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getAttribute('aria-current'), 'page', 'replacement import returns to Today');
 assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'replacement import does not borrow the generated-plan success state');
 assert.deepEqual(errors, [], `preview console remains clean: ${errors.join('; ')}`);

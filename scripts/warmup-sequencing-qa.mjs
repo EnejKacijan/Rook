@@ -106,7 +106,7 @@ assert.equal(await warmup.getByText("Machine Chest Press", { exact: true }).coun
 assert.equal(await warmup.getByText("Chest Supported Row", { exact: true }).count(), 0);
 assert.ok(await warmup.locator(".warmup-layer").count() > 0);
 await warmup.getByRole("button", { name: "FINISH WARM-UP" }).click();
-await warmup.getByText("Ready for Machine Chest Press").waitFor();
+await warmup.waitFor({ state: "detached" });
 await page.screenshot({ path: output("01-first-exercise-complete-dark.png") });
 
 await page
@@ -156,7 +156,7 @@ await skipPage.route("**/api/ai/status", (route) =>
 );
 await openActive(skipPage);
 await skipPage.locator(".workout-warmup").getByRole("button", { name: "Skip" }).click();
-assert.equal(await skipPage.locator(".workout-warmup").count(), 0);
+await skipPage.locator(".workout-warmup").waitFor({ state: "detached" });
 assert.equal(await skipPage.locator(".exercise-heading-art-button").count(), 1);
 await skipPage.screenshot({ path: output("03-warmup-skipped-light-320.png") });
 assert.deepEqual(skipErrors, []);

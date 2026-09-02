@@ -32,7 +32,7 @@ const paste = page.getByRole('button', { name: 'Paste workout notes from clipboa
 const create = page.getByRole('button', { name: 'CREATE PREVIEW' });
 const screenText = await screen.innerText();
 assert.match(screenText, /EXAMPLES[\s\S]*Monday: Push[\s\S]*Bench Press 3×8–10[\s\S]*Squat 4×5 @ 2 RIR/);
-assert.match(screenText, /Any format works — Rook will structure it for you\./);
+assert.match(screenText, /Plain-text workout notes work best\. You’ll review anything Rook can’t match\./);
 assert.doesNotMatch(screenText, /FAST FORMAT EXAMPLES|No special format is required|Monday - Push|MONDAY — PUSH/);
 assert.equal(await create.isDisabled(), true, 'Create Preview starts disabled');
 

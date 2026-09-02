@@ -2,12 +2,14 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   EXERCISE_ILLUSTRATION_EQUIVALENTS,
   ROOK_ADAPTED_ILLUSTRATIONS,
+  ROOK_ORIGINAL_ILLUSTRATIONS,
   PROGRAM_TEMPLATES,
   PHYSIQUE_PRIORITY_OPTIONS,
   STORAGE_KEY,
   WEEKDAYS,
   adaptTodayProposal,
   adaptedTemplateForToday,
+  activeWorkoutCanRestart,
   applyCoachAction,
   applyWeekScheduleChanges,
   authoritativeImportedExerciseNames,
@@ -45,6 +47,7 @@ import {
   missedPlannedWorkouts,
   nextScheduledWorkout,
   normalizeGeneratedProgram,
+  normalizeSessionNote,
   normalizeWorkoutName,
   optionalStrengthForDate,
   plannedWorkoutForDate,
@@ -58,7 +61,12 @@ import {
   recentExerciseProgress,
   replacementCandidates,
   replacementProgramDifference,
+  removeExerciseFromOccurrence,
+  removeExerciseFromWeeklyPlan,
   roundedEstimate,
+  restartActiveWorkout,
+  restoreOccurrenceOverride,
+  restoreWeeklyPlanWorkout,
   saveState,
   sessionStructureKey,
   splitImportedExerciseLabel,
@@ -76,6 +84,7 @@ import {
   weeklyFractionalVolume,
   weeklyStimulusVolume,
   workoutSetSummary,
+  workoutPlanDate,
   workingSetCanComplete,
 } from "./domain.js";
 
@@ -194,6 +203,21 @@ describe("personalized training domain", () => {
       ROOK_ADAPTED_ILLUSTRATIONS,
     ))
       expect(exerciseCatalog[exerciseId].artId).toBe(`wg-${assetSlug}`);
+    for (const [exerciseId, assetSlug] of Object.entries(
+      ROOK_ORIGINAL_ILLUSTRATIONS,
+    ))
+      expect(exerciseCatalog[exerciseId].artId).toBe(`wg-${assetSlug}`);
+    for (const [label, exerciseId] of [
+      ["W Raise", "prone-w-raise"],
+      ["Prone Floor Swimmer", "prone-swimmer-pull"],
+      ["Floor Pulldown", "floor-lat-pulldown"],
+      ["TRX veslanje", "suspension-row"],
+      ["Smith Incline Bench Press", "incline-smith-machine-press"],
+      ["Potisk na škripcu stoje", "cable-chest-press"],
+    ]) {
+      expect(matchImportedExerciseName(label).exerciseId, label).toBe(exerciseId);
+      expect(exerciseCatalog[exerciseId].artId, label).toMatch(/^wg-rook-/u);
+    }
     expect(exerciseCatalog["low-row"].artId).toBe("wg-machine-row");
     expect(exerciseCatalog["machine-row"].artId).toBe("wg-machine-row");
     expect(exerciseCatalog["machine-row"].artId).not.toBe("wg-barbell-row");
@@ -1746,9 +1770,114 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     state.selectedDate = "2026-08-27";
     state.activeWorkout = startWorkout(state, state.program.days[0]);
     expect(state.activeWorkout.workoutDateKey).toBe("2026-08-27");
+    expect(state.activeWorkout.canonicalPlanDate).toBe("2026-08-27");
     expect(() => startWorkout(state, state.program.days[1])).toThrow(
       /already in progress/i,
     );
+  });
+  it("keeps a planned workout on its start slot when completion crosses midnight", () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date(2026, 8, 1, 23, 0));
+      const state = stateFor({
+        daysPerWeek: 2,
+        availableDays: ["Tue", "Wed"],
+      });
+      state.selectedDate = "2026-09-01";
+      state.selectedDay = "Tue";
+      const tuesday = plannedWorkoutForDate(state, new Date(2026, 8, 1, 12));
+      state.activeWorkout = startWorkout(state, tuesday);
+      state.activeWorkout.exercises[0].sets[0].completed = true;
+      vi.setSystemTime(new Date(2026, 8, 2, 0, 25));
+      const completed = completeWorkout(state);
+      const session = completed.workouts.at(-1);
+      expect(workoutPlanDate(session)).toBe("2026-09-01");
+      expect(isoDay(session.completedAt)).toBe("2026-09-02");
+      expect(
+        plannedWorkoutForDate(completed, new Date(2026, 8, 2, 12)),
+      ).not.toBeNull();
+      expect(missedPlannedWorkouts(completed, new Date(2026, 8, 3, 12))).toEqual(
+        expect.arrayContaining([expect.objectContaining({ date: "2026-09-02" })]),
+      );
+      expect(missedPlannedWorkouts(completed, new Date(2026, 8, 3, 12))).not.toEqual(
+        expect.arrayContaining([expect.objectContaining({ date: "2026-09-01" })]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("migrates legacy midnight workouts from their start time idempotently", () => {
+    const state = stateFor();
+    const day = state.program.days[0];
+    state.workouts = [
+      {
+        id: "legacy-midnight",
+        programDayId: day.id,
+        templateId: day.weekday,
+        startedAt: new Date(2026, 8, 1, 23, 0).getTime(),
+        completedAt: new Date(2026, 8, 2, 0, 25).toISOString(),
+        exercises: structuredClone(day.exercises),
+      },
+    ];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const migrated = loadState();
+    expect(migrated.workouts[0].canonicalPlanDate).toBe("2026-09-01");
+    expect(migrated.workouts[0].workoutDateKey).toBe("2026-09-01");
+    expect(migrated.workouts[0].sourcePlanSlotId).toBe(
+      `${day.id}:2026-09-01`,
+    );
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(migrated));
+    expect(loadState().workouts[0].canonicalPlanDate).toBe("2026-09-01");
+    expect(loadState().workouts).toHaveLength(1);
+  });
+  it("restarts a changed workout from its immutable session snapshot", () => {
+    const state = stateFor();
+    const recurringProgram = structuredClone(state.program);
+    const active = startWorkout(state, state.program.days[0]);
+    expect(activeWorkoutCanRestart(active)).toBe(false);
+    const initial = structuredClone(active.restartSnapshot);
+    active.exerciseIndex = 1;
+    active.exercises[0].exerciseId = active.exercises[1].exerciseId;
+    active.exercises[0].sets[0] = {
+      ...active.exercises[0].sets[0],
+      weight: 42.5,
+      reps: 11,
+      rir: 1,
+      touched: true,
+      completed: true,
+      completedAt: 1000,
+    };
+    active.rest = { endsAt: 9000, seconds: 90 };
+    active.handledSupersetRestRounds = ["pair-1-round-1"];
+    state.activeWorkout = active;
+    expect(activeWorkoutCanRestart(active)).toBe(true);
+
+    const restarted = restartActiveWorkout(state, 5000);
+    expect(restarted.activeWorkout).toMatchObject({
+      startedAt: 5000,
+      updatedAt: 5000,
+      exerciseIndex: 0,
+      rest: null,
+      handledSupersetRestRounds: [],
+    });
+    expect(restarted.activeWorkout.exercises).toEqual(initial.exercises);
+    expect(restarted.activeWorkout.warmup).toEqual(initial.warmup);
+    expect(restarted.activeWorkout.restartSnapshot).toEqual(initial);
+    expect(restarted.program).toEqual(recurringProgram);
+    expect(restarted.workouts).toHaveLength(0);
+    expect(activeWorkoutCanRestart(restarted.activeWorkout)).toBe(false);
+
+    restarted.activeWorkout.exercises[0].sets[0].completed = true;
+    const completed = completeWorkout(restarted);
+    expect(completed.workouts.at(-1).restartSnapshot).toBeUndefined();
+  });
+  it("does not expose restart for a legacy workout without a safe snapshot", () => {
+    const state = stateFor();
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    delete state.activeWorkout.restartSnapshot;
+    state.activeWorkout.exercises[0].sets[0].touched = true;
+    expect(activeWorkoutCanRestart(state.activeWorkout)).toBe(false);
+    expect(restartActiveWorkout(state, 5000)).toBe(state);
   });
   it("migrates a legacy active workout to the date on which it started", () => {
     const state = stateFor();
@@ -2388,6 +2517,122 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       vi.useRealTimers();
     }
   });
+  it("removes one stable exercise entry from one occurrence and restores it exactly", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 17, 12));
+    try {
+      const state = stateFor({ daysPerWeek: 2, availableDays: ["Thu", "Sat"] });
+      const workout = state.program.days.find((day) => day.weekday === "Thu");
+      const first = workout.exercises[0];
+      const duplicate = {
+        ...structuredClone(first),
+        id: `${first.id}-duplicate-slot`,
+      };
+      workout.exercises.splice(1, 0, duplicate);
+      const original = structuredClone(workout.exercises);
+      removeExerciseFromOccurrence(state, {
+        planDate: "2026-08-20",
+        workoutId: workout.id,
+        planEntryId: first.id,
+      });
+      expect(
+        plannedWorkoutForDate(state, new Date(2026, 7, 20, 12)).exercises.map(
+          (entry) => entry.id,
+        ),
+      ).not.toContain(first.id);
+      expect(
+        plannedWorkoutForDate(state, new Date(2026, 7, 20, 12)).exercises.map(
+          (entry) => entry.id,
+        ),
+      ).toContain(duplicate.id);
+      expect(workout.exercises).toEqual(original);
+      expect(
+        plannedWorkoutForDate(state, new Date(2026, 7, 27, 12)).exercises.map(
+          (entry) => entry.id,
+        ),
+      ).toContain(first.id);
+      restoreOccurrenceOverride(state, {
+        planDate: "2026-08-20",
+        workoutId: workout.id,
+        previousOverride: null,
+      });
+      expect(
+        plannedWorkoutForDate(state, new Date(2026, 7, 20, 12)).exercises,
+      ).toEqual(original);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("turns a one-exercise occurrence into a rest day without completion credit", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 17, 12));
+    try {
+      const state = stateFor({ daysPerWeek: 2, availableDays: ["Thu", "Sat"] });
+      const workout = state.program.days.find((day) => day.weekday === "Thu");
+      workout.exercises = [workout.exercises[0]];
+      removeExerciseFromOccurrence(state, {
+        planDate: "2026-08-20",
+        workoutId: workout.id,
+        planEntryId: workout.exercises[0].id,
+      });
+      expect(plannedWorkoutForDate(state, new Date(2026, 7, 20, 12))).toBeNull();
+      expect(state.workouts).toHaveLength(0);
+      expect(consistencyForCurrentWeek(state, new Date(2026, 7, 20, 12))).toEqual({
+        completed: 0,
+        planned: 1,
+      });
+      expect(state.program.days.find((day) => day.id === workout.id)).toBe(
+        workout,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("removes an exact weekly entry without mutating a started snapshot and supports undo", () => {
+    const state = stateFor({ daysPerWeek: 2, availableDays: ["Mon", "Wed"] });
+    const workout = state.program.days[0];
+    const removed = workout.exercises[0];
+    const duplicate = {
+      ...structuredClone(removed),
+      id: `${removed.id}-other-slot`,
+    };
+    workout.exercises.splice(1, 0, duplicate);
+    state.selectedDate = isoDay();
+    state.activeWorkout = startWorkout(state, workout);
+    const activeSnapshot = structuredClone(state.activeWorkout);
+    const weeklySnapshot = {
+      workout: structuredClone(workout),
+      index: 0,
+      availableDays: structuredClone(state.profile.availableDays),
+      daysPerWeek: state.profile.daysPerWeek,
+    };
+    removeExerciseFromWeeklyPlan(state, workout.id, removed.id);
+    expect(state.activeWorkout).toEqual(activeSnapshot);
+    expect(workout.exercises.map((entry) => entry.id)).not.toContain(removed.id);
+    expect(workout.exercises.map((entry) => entry.id)).toContain(duplicate.id);
+    restoreWeeklyPlanWorkout(state, weeklySnapshot);
+    expect(state.program.days[0]).toEqual(weeklySnapshot.workout);
+  });
+  it("converts a final weekly exercise to a rest day and undo restores the day", () => {
+    const state = stateFor({ daysPerWeek: 2, availableDays: ["Mon", "Wed"] });
+    const workout = state.program.days[0];
+    workout.exercises = [workout.exercises[0]];
+    const snapshot = {
+      workout: structuredClone(workout),
+      index: 0,
+      availableDays: structuredClone(state.profile.availableDays),
+      daysPerWeek: state.profile.daysPerWeek,
+    };
+    removeExerciseFromWeeklyPlan(state, workout.id, workout.exercises[0].id);
+    expect(state.program.days).toHaveLength(1);
+    expect(state.profile.availableDays).not.toContain(workout.weekday);
+    expect(state.profile.daysPerWeek).toBe(1);
+    restoreWeeklyPlanWorkout(state, snapshot);
+    expect(state.program.days).toHaveLength(2);
+    expect(state.program.days[0]).toEqual(snapshot.workout);
+    expect(state.profile.availableDays).toEqual(snapshot.availableDays);
+    expect(state.profile.daysPerWeek).toBe(2);
+  });
   it("starts a newly accepted A/B/C plan with A at the first available slot, without changing legacy weekday plans", () => {
     const state = stateFor({
       daysPerWeek: 3,
@@ -2556,6 +2801,28 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(context.profile.priorities).toEqual(["Back"]);
     expect(context.recentWorkouts).toEqual([]);
     expect(context.today.exercises[0].exerciseId).toBeTruthy();
+  });
+  it("keeps workout notes optional, bounded, and explicitly subjective in Coach context", () => {
+    expect(normalizeSessionNote("  Left shoulder felt tight.  ")).toBe(
+      "Left shoulder felt tight.",
+    );
+    expect(normalizeSessionNote("   ")).toBeNull();
+    expect(normalizeSessionNote("x".repeat(600))).toHaveLength(500);
+
+    const state = stateFor();
+    state.workouts.push({
+      id: "workout-with-note",
+      name: "Upper",
+      completedAt: new Date().toISOString(),
+      workoutDateKey: isoDay(),
+      sessionNote: "Gym was busy, so I replaced two exercises.",
+      exercises: [],
+    });
+    expect(coachContext(state).recentWorkouts.at(-1).sessionNote).toEqual({
+      text: "Gym was busy, so I replaced two exercises.",
+      source: "user-authored-session-note",
+      reliability: "subjective-context-only",
+    });
   });
   it("gives Coach authoritative memory of an applied action and does not reconfirm it after thanks", () => {
     const state = stateFor();

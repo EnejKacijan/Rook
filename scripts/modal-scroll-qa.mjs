@@ -54,7 +54,7 @@ async function verifyScroller(page, locator, label) {
   }
   await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
-  await page.getByRole('button', { name: 'REPLACE PLAN' }).click();
+  await page.getByRole('button', { name: 'Replace plan' }).click();
   await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
   await verifyScroller(page, page.locator('.modal-layer > .import-plan-screen'), 'Import Plan');
   await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
@@ -76,7 +76,7 @@ async function verifyScroller(page, locator, label) {
   state.selectedDay = today;
   state.selectedDate = isoDay();
   const { context, page } = await openApp(state, { width: 390, height: 430 });
-  await page.getByRole('button', { name: 'Train today anyway' }).click();
+  await page.getByRole('button', { name: 'Train today instead' }).click();
   await verifyScroller(page, page.locator('.modal-layer > .rest-training-sheet'), 'Rest-day menu');
   await page.screenshot({ path: output('390-rest-menu-short-height.png') });
   await context.close();

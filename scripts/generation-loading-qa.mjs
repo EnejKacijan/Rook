@@ -24,7 +24,7 @@ await page.evaluate(() => {
   new MutationObserver(record).observe(document.body, { subtree: true, childList: true, characterData: true });
 });
 await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-await page.getByRole('button', { name: 'REPLACE PLAN' }).click();
+await page.getByRole('button', { name: 'Replace plan' }).click();
 await page.getByRole('button', { name: /Build a personalized plan/ }).click();
 await page.getByRole('button', { name: 'BUILD NEW PLAN' }).click();
 await page.getByRole('heading', { name: 'Building your training week…' }).waitFor();

@@ -43,13 +43,24 @@ async function verifyLastRowClear(page) {
   assert.ok(lastRow.y + lastRow.height <= navigation.y + .5, `last exercise clears fixed navigation without extra spacer (allowing subpixel rounding): ${JSON.stringify({ lastRow, navigation })}`);
 }
 
+async function swipeWeek(page, { fromX, toX, fromY = 110, toY = fromY }) {
+  await page.mouse.move(fromX, fromY);
+  await page.mouse.down();
+  await page.mouse.move(toX, toY, { steps: 4 });
+  await page.mouse.up();
+}
+
 {
   const { context, page, errors } = await open(fixture(), { width: 390, height: 844 });
   await page.getByRole('button', { name: 'START WORKOUT' }).waitFor(); const plannedHeader = await headerMetrics(page);
   assert.equal(await page.locator('.workout-title-primary').innerText(), 'Full Body A'); assert.equal(await lineCount(page.locator('.workout-title-primary')), 1, 'Full Body A remains on one line');
-  assert.equal(await page.locator('.exercise-preview .navigation-chevron').count(), await page.locator('.exercise-preview .list-row').count(), 'every exercise-detail navigation row has a trailing chevron');
+  assert.equal(await page.locator('.exercise-preview .navigation-chevron').count(), 0, 'Today rows stay text-first without repeated chevrons');
   assert.equal(await page.locator('.week-strip .selected-day.workout-planned').count(), 1); await verifyLastRowClear(page); await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: output('390-planned-workout.png'), fullPage: false });
   const restDay = offsetDay(2); await page.locator(`.week-strip button[aria-label^="${restDay} "]`).click(); await page.getByRole('heading', { name: 'Rest day' }).waitFor(); const restHeader = await headerMetrics(page);
+  const todayChip = page.locator('.week-strip [aria-current="date"]'); const plannedDot = todayChip.locator('.workout-dot');
+  assert.equal(await plannedDot.count(), 1, 'today keeps its planned-workout marker when another day is selected');
+  const [dotColor, chipColor] = await Promise.all([plannedDot.evaluate(node => getComputedStyle(node).backgroundColor), todayChip.evaluate(node => getComputedStyle(node).backgroundColor)]);
+  assert.notEqual(dotColor, chipColor, 'the planned marker remains visible against the unselected today chip');
   assert.deepEqual({ x: restHeader.x, width: restHeader.width }, { x: plannedHeader.x, width: plannedHeader.width }, 'header does not jump when switching between planned and rest days'); assert.deepEqual(errors, []); await context.close();
 }
 {
@@ -89,6 +100,31 @@ async function verifyLastRowClear(page) {
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth), 320, 'ten exercises and long names preserve narrow-screen width');
   await verifyLastRowClear(page); await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: output('320-ten-exercises-long-name.png'), fullPage: false }); assert.deepEqual(errors, []); await context.close();
 }
+{
+  const state = fixture();
+  const programStart = new Date(); programStart.setDate(programStart.getDate() - 21);
+  state.program.createdAt = programStart.toISOString();
+  const { context, page, errors } = await open(state, { width: 390, height: 844 });
+  const range = page.locator('.week-navigation span'); await range.waitFor();
+  const currentRangeAtOpen = await range.innerText();
+  await page.getByRole('button', { name: 'Previous week' }).click();
+  await page.waitForFunction(value => document.querySelector('.week-navigation span')?.textContent !== value, currentRangeAtOpen);
+  const previousRange = await range.innerText();
+  await swipeWeek(page, { fromX: 320, toX: 250 });
+  await page.waitForFunction(value => document.querySelector('.week-navigation span')?.textContent !== value, previousRange);
+  const currentRange = await range.innerText();
+  assert.notEqual(currentRange, previousRange, 'left swipe advances exactly one week');
+  assert.equal(await page.getByRole('button', { name: 'Next week' }).isDisabled(), true, 'swipe respects the current-week forward boundary');
+  await swipeWeek(page, { fromX: 70, toX: 140 });
+  await page.waitForFunction(value => document.querySelector('.week-navigation span')?.textContent !== value, currentRange);
+  assert.equal(await range.innerText(), previousRange, 'right swipe returns to the previous week');
+  await swipeWeek(page, { fromX: 190, toX: 198, fromY: 85, toY: 165 });
+  assert.equal(await range.innerText(), previousRange, 'vertical scrolling intent never changes the week');
+  await page.emulateMedia({ reducedMotion: 'reduce' });
+  await swipeWeek(page, { fromX: 320, toX: 250 });
+  assert.equal(await page.locator('.week-strip').evaluate(element => getComputedStyle(element).animationName), 'none', 'reduced motion keeps swipe navigation without spatial animation');
+  assert.deepEqual(errors, []); await context.close();
+}
 
 await browser.close();
-console.log('Planned Today QA passed: title wrapping, shared header placement, state semantics, bottom-nav clearance, completed state, and narrow mobile layout are correct.');
+console.log('Planned Today QA passed: title wrapping, shared header placement, state semantics, swipe week navigation, bottom-nav clearance, completed state, and narrow mobile layout are correct.');

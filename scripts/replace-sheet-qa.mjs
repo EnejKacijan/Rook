@@ -25,7 +25,7 @@ page.on('pageerror', error => errors.push(error.message)); page.on('console', me
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) }));
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
 
-const openSheet = async () => { await page.getByRole('button', { name: 'Replace ›' }).click(); await page.getByRole('dialog', { name: /Replace Back Squat/ }).waitFor(); };
+const openSheet = async () => { await page.getByRole('button', { name: 'Replace', exact: true }).click(); await page.getByRole('dialog', { name: /Replace Back Squat/ }).waitFor(); };
 await page.evaluate(() => window.scrollTo(0, Math.min(320, document.documentElement.scrollHeight - innerHeight))); await openSheet(); const originalScroll = await page.evaluate(() => Math.abs(Number.parseInt(document.body.style.top || '0', 10)));
 assert.equal(await page.locator('.app-content').getAttribute('inert'), '', 'background is inert');
 assert.equal(await page.evaluate(() => document.body.style.position), 'fixed', 'page scroll is locked');

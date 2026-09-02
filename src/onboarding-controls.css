@@ -126,7 +126,7 @@
 .setup-environment .option-card-check { display: none; }
 .setup-confirmation { min-height: 58px; padding: 11px 13px; border: 1px solid rgba(31,107,76,.16); border-radius: 13px; background: #edf5f1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
 .setup-confirmation strong { color: #1f6b4c; font-size: 12px; }
-.setup-confirmation small { color: #527363; font-size: 11px; line-height: 1.35; }
+.setup-confirmation small { color: var(--rook-secondary, #527363); font-size: 11px; line-height: 1.35; }
 .setup-equipment .option-list { gap: 7px; margin-top: 8px; }
 .setup-equipment .onboarding-option { min-height: 50px; padding-block: 8px; }
 
@@ -162,7 +162,7 @@
 .onboarding-preferences .compact-options .option-card-check { display: none; }
 
 @media (max-height: 760px) {
-  .onboarding-preferences .onboarding-content { padding-top: 12px !important; }
+  .onboarding-preferences .onboarding-content { padding-top: 12px !important; padding-bottom: 8px !important; }
   .onboarding-preferences .onboarding-content > p { margin-block: 8px; font-size: 12px; }
   .onboarding-preferences h1 { font-size: 27px !important; }
   .onboarding-preferences .preference-fields { gap: 10px; margin-top: 8px; }
@@ -172,6 +172,11 @@
   .onboarding-preferences .text-answer.compact-answer { min-height: 50px; }
   .onboarding-preferences .compact-options { margin-top: 6px !important; }
   .onboarding-preferences .compact-options .onboarding-option { min-height: 45px; }
+}
+
+@media (max-height: 720px) {
+  .onboarding-schedule .onboarding-content { padding-top: 20px !important; padding-bottom: 9px !important; }
+  .onboarding-schedule .schedule-fields { gap: 10px; margin-top: 12px; }
 }
 
 .physique-review-entry { width: 100%; min-height: 58px; margin-top: 18px; padding: 10px 2px; display: flex; align-items: center; justify-content: space-between; gap: 14px; border: 0; border-top: 1px solid rgba(27, 26, 25, .08); background: transparent; color: #1f6b4c; text-align: left; }

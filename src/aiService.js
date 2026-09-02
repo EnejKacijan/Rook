@@ -708,9 +708,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
   return {
     name: explicitTitle
       ? String(explicitTitle).trim().slice(0, 80)
-      : goal
-        ? `Imported plan: ${goal}`
-        : "Imported plan",
+      : "Imported plan",
     days: trainingDays,
   };
 }

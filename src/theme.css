@@ -36,11 +36,13 @@
   --rook-success-line: rgba(31, 107, 76, .18);
   --rook-focus-ring: rgba(31, 107, 76, .35);
   --rook-selected-line: #191918;
+  --rook-today-line: #6f6c68;
   --rook-on-success: #ffffff;
   --rook-nav-active: #171715;
   --rook-progress: #191918;
   --rook-accent-strong: #17553c;
   --rook-set-wash: rgba(31, 107, 76, .075);
+  --rook-stepper-divider: rgba(27, 26, 25, .065);
   --rook-motion-press-in: 80ms;
   --rook-motion-press-out: 120ms;
   --rook-motion-state: 200ms;
@@ -66,6 +68,7 @@
   --rook-border: #262b28;
   --rook-border-strong: #363d39;
   --rook-control-border: #626c66;
+  --rook-workout-secondary-action: #b5bdb8;
 
   --rook-accent: #4fbf87;
   --rook-accent-fill: #4fbf87;
@@ -83,6 +86,7 @@
 
   --rook-selected: #ebeeec;
   --rook-selected-line: #ebeeec;
+  --rook-today-line: #89918c;
   --rook-on-selected: #111413;
 
   --rook-success: #2f9e6b;
@@ -90,15 +94,16 @@
   --rook-success-line: rgba(47, 158, 107, .32);
   --rook-on-success: #ecf5f0;
 
-  --rook-set-active: #171b19;
-  --rook-set-active-line: rgba(79, 191, 135, .16);
-  --rook-set-edited: #1a201d;
-  --rook-set-edited-line: rgba(79, 191, 135, .4);
-  --rook-set-ready: #16241c;
-  --rook-set-ready-line: rgba(79, 191, 135, .36);
-  --rook-set-done: #161d19;
-  --rook-set-done-line: rgba(47, 158, 107, .26);
-  --rook-set-wash: rgba(79, 191, 135, .08);
+  --rook-set-active: rgba(79, 191, 135, .015);
+  --rook-set-active-line: rgba(79, 191, 135, .12);
+  --rook-set-edited: rgba(79, 191, 135, .02);
+  --rook-set-edited-line: rgba(79, 191, 135, .22);
+  --rook-set-ready: rgba(79, 191, 135, .025);
+  --rook-set-ready-line: rgba(79, 191, 135, .3);
+  --rook-set-done: transparent;
+  --rook-set-done-line: transparent;
+  --rook-set-wash: rgba(79, 191, 135, .065);
+  --rook-stepper-divider: rgba(235, 238, 236, .055);
 
   --rook-warning-surface: #2a2113;
   --rook-warning-text: #e6b76c;
@@ -149,6 +154,7 @@
   --rook-border: var(--rook-premium-border);
   --rook-border-strong: #48443a;
   --rook-control-border: #686154;
+  --rook-workout-secondary-action: #c5c0b5;
 
   --rook-accent: var(--rook-premium-accent);
   --rook-accent-fill: var(--rook-premium-accent);
@@ -166,6 +172,7 @@
 
   --rook-selected: #242016;
   --rook-selected-line: #9b7d38;
+  --rook-today-line: #7a6c43;
   --rook-on-selected: #f0d589;
 
   --rook-success: var(--rook-premium-accent-muted);
@@ -182,6 +189,7 @@
   --rook-set-done: transparent;
   --rook-set-done-line: transparent;
   --rook-set-wash: rgba(215, 177, 90, .075);
+  --rook-stepper-divider: rgba(244, 241, 232, .06);
 
   --rook-warning-surface: #2c2010;
   --rook-warning-text: #edb266;
@@ -243,6 +251,7 @@
   --rook-border: var(--rook-premium-border);
   --rook-border-strong: #beb5a7;
   --rook-control-border: #a89e8f;
+  --rook-workout-secondary-action: #514c45;
 
   --rook-accent: var(--rook-premium-accent);
   --rook-accent-fill: #b8891e;
@@ -260,6 +269,7 @@
 
   --rook-selected: #f1e8cf;
   --rook-selected-line: #8a670f;
+  --rook-today-line: #8d8060;
   --rook-on-selected: #5e4507;
 
   --rook-success: var(--rook-premium-accent-muted);
@@ -276,6 +286,7 @@
   --rook-set-done: transparent;
   --rook-set-done-line: transparent;
   --rook-set-wash: rgba(138, 103, 15, .065);
+  --rook-stepper-divider: rgba(29, 27, 24, .07);
 
   --rook-warning-surface: #f4ebdd;
   --rook-warning-text: #7a521c;
@@ -390,7 +401,16 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.screen p, .onboarding p, .sheet p, .setting-help, .selection-note, .exercise-meta, .consistency span, .info-row span, .choice-row small, .workout-warmup-toggle small, .appearance-credits p) { color: var(--rook-secondary); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.eyebrow, .step-count, .list-row small, .workout-header small, .set-labels span, .set-row > span, .muted, .week-row small, .up-next small, .stat-grid small, .theme-choice-list small, .workout-title-detail, .workout-title-context, .rest-up-next time, .rest-up-next-descriptor, .rest-up-next > span, .active-workout-notice small, .active-workout-start-lock, .restriction-helper, .profile-current-program p, .change-plan-sheet .plan-choice small, .sheet-footnote, .personal-fields label, .personal-fields label small, .option-card-copy small, .onboarding-group-heading > strong, .onboarding-group-heading > small, .specific-split-toggle small, .physique-review-entry strong, .warmup-layer small, .warmup-ramp > small, .warmup-complete-status small, .action-card small, .scratch-day-status small) { color: var(--rook-muted); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-row > .navigation-row-end { color: var(--rook-secondary); }
-:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-row .navigation-chevron { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-item { border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-row:active { background: var(--rook-surface-elevated); }
+@media (hover: hover) and (pointer: fine) {
+  :root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .exercise-list-row:hover { background: var(--rook-surface-elevated); }
+}
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-exercise-remove-occurrence strong { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-exercise-remove-weekly strong { color: #d97770; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-exercise-danger { background: #873a34; color: #fff; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-undo { background: var(--rook-surface-raised); color: var(--rook-text); border: 1px solid var(--rook-border); }
+:root[data-theme="premium"] .today-undo button { color: var(--rook-premium-accent); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .exercise-heading .exercise-user-note,
 :root:is([data-theme="dark"],[data-theme="premium"]) .up-next .up-next-note,
 :root:is([data-theme="dark"],[data-theme="premium"]) .up-next .up-next-prescription { color: var(--rook-muted); }
@@ -438,11 +458,13 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.dark, .option-list .selected-option, .week-strip .selected-day, .onboarding-option.selected-option, .physique-suggestions button.selected) { background: var(--rook-selected); color: var(--rook-on-selected); border-color: var(--rook-selected-line); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.week-strip .selected-day small, .week-strip .selected-day strong, .onboarding-option.selected-option .option-card-copy small) { color: var(--rook-on-selected); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .onboarding-option.selected-option .option-card-copy small { opacity: .7; }
-:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .today-date:not(.selected-day) { border-color: var(--rook-selected-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .today-date:not(.selected-day) { border-color: var(--rook-today-line); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.secondary, .option-list button:not(.selected-option), .choice-row, .week-strip button:not(.selected-day), .prompt-list button, .action-card, .coach-message, .stepper, .check, .warmup-ramp button, .segmented .active, .move-preview span, .optional-field select, .optional-duration button, .existing-plan-action, .scratch-day-options button, .scratch-workout-day input, .scratch-exercise-results, .scratch-exercise-results button, .plan-editor-exercise, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger, .plan-editor-picker > div, .plan-editor-picker > div > button, .superset-picker > div > button, .photo-inputs label, .physique-suggestions button, .exercise-search, .training-safety-actions.clearance-reasons button + button) { background-color: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-border); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .week-strip button:not(.selected-day) { background-color: var(--rook-surface-muted); border-color: var(--rook-week-surface-line); }
-:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .week-strip .today-date:not(.selected-day) { border-color: var(--rook-selected-line); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .today-screen .week-strip .today-date:not(.selected-day) { border-color: var(--rook-today-line); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .workout-planned .workout-dot { background: var(--rook-dot); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .today-date.workout-planned:not(.selected-day) .workout-dot { background: var(--rook-secondary); }
+:root[data-theme="premium"] .week-strip .today-date.workout-planned:not(.selected-day) .workout-dot { background: var(--rook-accent); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .selected-day.workout-planned .workout-dot { background: var(--rook-on-selected); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .week-strip .selected-day.workout-completed .completed-dot { background: var(--rook-success); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-format-examples code { background: var(--rook-surface); color: var(--rook-secondary); border-color: var(--rook-border); }
@@ -472,6 +494,11 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) .bottom-nav .nav-active::after { background: var(--rook-nav-active); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.list-row, .info-row, .toggle-row, .increment-row, .workout-header, .workout-warmup, .warmup-layer, .warmup-ramp, .up-next, .up-next button, .week-row, .coach-history-header, .coach-history-group button, .coach-screen .adapt-review-list > button, .coach-screen .action-card-reviewing .action-card-buttons, .plan-editor-summary, .appearance-theme-row, .appearance-credits, .scratch-plan-action, .rest-training-option, .move-workout-row) { border-color: var(--rook-border); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.list-row, .workout-warmup-toggle, .up-next button, .plan-editor-summary, .scratch-plan-action, .rest-training-option, .move-workout-row, .coach-history-group button, .coach-screen .adapt-review-list > button) { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .profile-screen button.info-row { color: var(--rook-text); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .profile-screen .info-row-end i { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .program-actions .list-row:disabled strong { color: var(--rook-disabled-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .program-actions .list-row:disabled small { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .profile-training-setting-screen .profile-setting-error { color: var(--rook-warning-text); }
 
 /* Informational / accent-tinted surfaces. */
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.recommendation, .recommendation.applied, .active-workout-notice, .plan-ready-notice, .goal-plan-preview.has-selection, .setup-confirmation, .plan-conditioning-card, .personalization-summary, .superset-role, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); color: var(--rook-accent); border-color: var(--rook-accent-hairline); }
@@ -481,15 +508,19 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.warmup-complete-status, .warmup-ramp button.completed, .coach-screen .action-applied) { color: var(--rook-success); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.offline-banner, .warmup-safety, .recommendation.hold, .training-safety-summary.needs-confirmation, .action-card-conflict) { background: var(--rook-warning-surface); color: var(--rook-warning-text) !important; border-color: var(--rook-warning-line); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.offline-banner *, .warmup-safety *, .recommendation.hold strong, .recommendation.hold p, .training-safety-summary.needs-confirmation *, .action-card-conflict *) { color: inherit; }
-:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-summary { background: var(--rook-surface-muted); color: var(--rook-text); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-summary { background: transparent; color: var(--rook-text); border-block-color: var(--rook-border); border-left-color: var(--rook-accent); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-exercise.needs-review,
-:root:is([data-theme="dark"],[data-theme="premium"]) .import-review-summary.has-issues,
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution,
 :root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review { border-color: var(--rook-accent-hairline); }
-:root:is([data-theme="dark"],[data-theme="premium"]) :is(.import-review-summary.has-issues, .import-review-resolution, .bulk-match-review) { background: var(--rook-surface-muted); color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.import-review-resolution, .bulk-match-review) { background: var(--rook-surface-muted); color: var(--rook-text); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(.import-review-summary.has-issues b, .needs-review .plan-editor-summary-action, .bulk-match-review .eyebrow) { color: var(--rook-accent); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution > p { color: var(--rook-secondary); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-status { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root[data-theme="premium"] .plan-editor-exercise.needs-review { border-color: var(--rook-border-strong); }
+:root[data-theme="premium"] .import-review-resolution { border-color: var(--rook-border); }
+:root[data-theme="premium"] .import-review-status { background: var(--rook-surface-raised); color: var(--rook-secondary); }
+:root[data-theme="premium"] .import-review-summary { border-left-color: var(--rook-border-strong); }
+:root[data-theme="premium"] .plan-editor-exercise.needs-review .plan-editor-summary-action { color: var(--rook-secondary); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution .import-review-primary { background: var(--rook-accent-fill) !important; border-color: var(--rook-accent-fill) !important; color: var(--rook-on-accent-fill) !important; }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-resolution .import-review-primary :is(strong, i) { color: inherit; }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-custom-trigger { background: transparent; border-color: var(--rook-accent-hairline); color: var(--rook-accent); }
@@ -497,6 +528,10 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review > button { color: var(--rook-text); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review > button > i { background: var(--rook-surface); border-color: var(--rook-accent-hairline); color: var(--rook-accent); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review small { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review.is-complete { background: var(--rook-surface-muted); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review-complete > i { border-color: var(--rook-border-strong); color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .bulk-match-review-complete strong { color: var(--rook-secondary); }
+:root[data-theme="premium"] .bulk-match-review-complete > i { color: var(--rook-premium-accent-muted); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-compact-editor { border-color: var(--rook-border); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .import-review-compact-editor strong { color: var(--rook-secondary); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .is-import-review .import-day > strong { color: var(--rook-secondary); }
@@ -527,7 +562,12 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) .plan-editor-picker .import-review-picker-label {
   color: var(--rook-muted);
 }
-:root:is([data-theme="dark"],[data-theme="premium"]) :is(.coach-note, .coach-empty, .goal-plan-preview, .physique-caution, .photo-guidance, .training-safety-summary, .clearance-limits-block, .set-row.set-future .check) { background: var(--rook-disabled-surface); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) :is(.coach-note, .goal-plan-preview, .physique-caution, .photo-guidance, .training-safety-summary, .clearance-limits-block, .set-row.set-future .check) { background: var(--rook-disabled-surface); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-empty { background: var(--rook-surface-muted); border-color: var(--rook-border); border-left-color: var(--rook-accent-hairline); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-empty strong { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-empty p { color: var(--rook-secondary); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-input .coach-send.is-empty { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border-color: var(--rook-border); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .coach-screen .coach-input .coach-send.is-sending { background: var(--rook-accent-soft); color: var(--rook-accent); border-color: var(--rook-accent-hairline); }
 :root:is([data-theme="dark"],[data-theme="premium"]) :is(button:disabled, .setting-switch.disabled, .rest-duration-setting.disabled, .set-row.set-future .check) { color: var(--rook-disabled-text); }
 :root:is([data-theme="dark"],[data-theme="premium"]) button.secondary:disabled { background: var(--rook-disabled-surface); border-color: var(--rook-border); opacity: 1; }
 :root:is([data-theme="dark"],[data-theme="premium"]) button.button:is(.primary, .dark):disabled {
@@ -546,11 +586,16 @@
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-ready .check:not(:disabled) { background: var(--rook-surface); color: var(--rook-accent); border-color: var(--rook-accent-ring); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-done .check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); box-shadow: none; }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row :is(.stepper input, select) { color: var(--rook-text); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .stepper > :is(button, input) { background-color: transparent; }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.with-rir select { background: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-control-border); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-meta { color: var(--rook-text); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-history-meta { color: var(--rook-muted); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-options-button { color: var(--rook-muted); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-options-button:is(:hover, :focus-visible) { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .workout-options-trigger { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .workout-options-trigger:is(:hover, :focus-visible) { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .active-workout-options-sheet .button.workout-restart-danger { background: #873a34; color: #fff; border-color: #873a34; }
+:root:is([data-theme="dark"],[data-theme="premium"]) .active-workout-options-sheet .button.workout-restart-danger:is(:hover, :focus-visible) { background: #73302b; border-color: #73302b; }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .workout-exercise-actions .text-button:not(:disabled) { color: var(--rook-secondary); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .set-row.set-active .set-index-label > b { color: var(--rook-accent); }
 :root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .exercise-heading > .text-button:disabled { color: var(--rook-muted); opacity: .76; }
@@ -596,20 +641,22 @@
   background: var(--rook-week-selected-surface);
   color: var(--rook-week-selected-text);
   border-color: var(--rook-week-selected-line);
+  border-width: 2px;
 }
-.today-screen .week-strip button { position: relative; }
-.today-screen .week-strip .selected-day.day-selection-trace::after {
-  content: '';
-  position: absolute;
-  pointer-events: none;
-  inset: -2px;
-  padding: 2px;
-  border-radius: inherit;
-  background: conic-gradient(from 0deg, transparent 0 72%, var(--rook-accent) 82%, transparent 94%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  animation: rook-day-selection-trace 460ms var(--rook-ease-standard) both;
+.today-screen .week-strip button {
+  position: relative;
+  transform-origin: center;
+  transition:
+    transform var(--rook-motion-press-out) var(--rook-ease-release),
+    background-color var(--rook-motion-state) var(--rook-ease-standard),
+    border-color var(--rook-motion-state) var(--rook-ease-standard),
+    color var(--rook-motion-state) var(--rook-ease-standard),
+    filter var(--rook-motion-press-out) var(--rook-ease-standard);
+}
+.today-screen .week-strip button:not(:disabled):active {
+  transform: translateY(1px) scale(.965);
+  filter: brightness(.94);
+  transition-duration: var(--rook-motion-press-in);
 }
 :root[data-theme="premium"]
   .today-screen
@@ -667,6 +714,9 @@
 }
 :root[data-theme="premium"] .workout-screen .workout-header > .text-button { color: var(--rook-accent); }
 :root[data-theme="premium"] .workout-screen :is(.warmup-skip, .workout-exercise-actions .text-button, .exercise-options-button) { color: var(--rook-muted); }
+:root:is([data-theme="dark"],[data-theme="premium"]) .workout-screen .workout-exercise-actions .text-button:not(:disabled) {
+  color: var(--rook-workout-secondary-action);
+}
 :root[data-theme="premium"] .workout-screen :is(.warmup-skip, .workout-exercise-actions .text-button):is(:hover, :focus-visible) { color: var(--rook-secondary); }
 :root[data-theme="premium"] .workout-screen .set-row.set-done { background: transparent; border-color: transparent; }
 :root[data-theme="premium"] .workout-screen .set-row.set-done .check { background: var(--rook-premium-accent-muted); border-color: var(--rook-premium-accent-muted); color: var(--rook-on-success); }
@@ -676,24 +726,23 @@
   color: var(--rook-timer-button-text);
   border-color: transparent;
 }
-@keyframes rook-day-selection-trace {
-  from { opacity: 0; transform: rotate(-30deg); }
-  18% { opacity: 1; }
-  82% { opacity: 1; }
-  to { opacity: 0; transform: rotate(330deg); }
-}
 @media (prefers-reduced-motion: reduce) {
   :is(.button, .warmup-finish, .text-button) {
     transition: background-color 100ms linear, color 100ms linear, border-color 100ms linear;
   }
   :is(.button, .warmup-finish, .text-button):not(:disabled):active { transform: none; filter: none; }
-  .today-screen .week-strip .selected-day.day-selection-trace::after { display: none; animation: none; }
+  .today-screen .week-strip button {
+    transition: background-color 100ms linear, border-color 100ms linear, color 100ms linear;
+  }
+  .today-screen .week-strip button:not(:disabled):active { transform: none; filter: none; }
+  .workout-screen .workout-warmup { transition-duration: 100ms; }
 }
 :root[data-theme="premium"] .brand { color: var(--rook-accent); }
 :root[data-theme="premium"] .today-screen .today-hero > .eyebrow:first-child { color: var(--rook-accent); }
+:root[data-theme="premium"] .today-screen.viewing-other-workout :is(.today-hero, .rest-day-state) > .eyebrow:first-child { color: var(--rook-muted); }
 
 /* Graphite relies on tonal elevation instead of outlining every card. */
-:root[data-theme="dark"] :is(.action-card, .coach-message, .recommendation, .plan-conditioning-card, .personalization-summary, .setup-confirmation, .goal-plan-preview, .coach-note, .coach-empty, .import-review-summary, .plan-editor-summary) { border-color: transparent; }
+:root[data-theme="dark"] :is(.action-card, .coach-message, .recommendation, .plan-conditioning-card, .personalization-summary, .setup-confirmation, .goal-plan-preview, .coach-note, .plan-editor-summary) { border-color: transparent; }
 :root[data-theme="dark"]
   .initial-import-screen
   .plan-editor-cards
@@ -705,17 +754,261 @@
 :root[data-theme="dark"] .coach-screen .coach-message { border-color: transparent; }
 :root[data-theme="dark"] :is(.primary, .warmup-finish):active { background: var(--rook-accent-strong); border-color: var(--rook-accent-strong); }
 
-/* Remap component-level legacy green so Dark consistently uses its new accent. */
-:root[data-theme="dark"] :is(.brand, .goal-plan-preview.has-selection > span, .goal-plan-preview.has-selection > strong, .building-card .eyebrow, .building-cancel, .coach-empty .eyebrow, .coach-history-header button:last-child, .coach-screen .adapt-duration-contract, .coach-screen .optional-workout-list > div > span, .setup-confirmation strong, .progression-next, .progression-row.progression-progress > span:first-child > small:first-of-type, .exercise-progression.progression-progress > strong, .training-safety-summary.constraints-active .eyebrow, .training-safety-summary > button, .complete-profile > .eyebrow, .change-plan-sheet .plan-choice i, .superset-next-step, .age-range-options > button > i, .select-all-check input:checked, .import-plan-paste, .coach-history-trigger:is(:hover, :focus-visible)) { color: var(--rook-accent) !important; }
-:root[data-theme="dark"] .setup-confirmation small { color: var(--rook-secondary); }
-:root[data-theme="dark"] :is(.coach-empty, .complete-profile) { border-left-color: var(--rook-accent-hairline); }
-:root[data-theme="dark"] .select-all-check input { accent-color: var(--rook-accent); }
-:root[data-theme="dark"] :is(.coach-screen .optional-workout-list > div > span, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); }
-:root[data-theme="dark"] :is(.restriction-spinner, .button-spinner, .building-spinner, .spinner) { border-color: var(--rook-accent-hairline); border-top-color: var(--rook-accent); }
-:root[data-theme="dark"] :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
-:root[data-theme="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
-:root[data-theme="dark"] .setting-switch input:focus-visible + i { outline-color: var(--rook-focus-ring-soft); }
-:root[data-theme="dark"] :is(.complete-mark, .coach-screen .today-update-check, .coach-screen .adapt-review-list > button.selected .adapt-check) { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
-:root[data-theme="dark"] .coach-screen .adapt-review-list > button:disabled .adapt-check { background: var(--rook-disabled-surface); border-color: var(--rook-border); color: var(--rook-disabled-text); }
-:root[data-theme="dark"] .coach-screen .action-card-applied { border-color: var(--rook-success-line); background: var(--rook-success-soft); }
-:root[data-theme="dark"] .coach-screen .action-card-applied > small { color: var(--rook-secondary); }
+/* Active logging stays neutral-first in Graphite: one accent signal per state. */
+:root[data-theme="dark"] .workout-screen .set-row.set-done {
+  background: transparent;
+  border-color: transparent;
+}
+:root[data-theme="dark"] .workout-screen .set-row.set-ready .check:not(:disabled) {
+  border-width: 1px;
+  border-color: rgba(79, 191, 135, .5);
+  box-shadow: none;
+}
+:root[data-theme="dark"] .workout-screen :is(.stepper, .set-row.with-rir select) {
+  background: var(--rook-surface-elevated);
+  border-color: var(--rook-border-strong);
+}
+:root[data-theme="dark"] .workout-screen .exercise-heading-art-button {
+  background: var(--rook-surface-elevated);
+}
+:root[data-theme="dark"] .workout-screen .sets > .secondary {
+  background: transparent;
+  border-color: var(--rook-border-strong);
+}
+:root[data-theme="dark"] .workout-screen .workout-primary-action > .secondary {
+  background: var(--rook-surface-elevated);
+  border-color: var(--rook-border-strong);
+}
+
+/* Remap component-level legacy green so both dark families use their own accent. */
+:root:is([data-theme="dark"], [data-theme="premium"]) :is(.brand, .goal-plan-preview.has-selection > span, .goal-plan-preview.has-selection > strong, .building-card .eyebrow, .building-cancel, .coach-empty .eyebrow, .coach-history-header button:last-child, .coach-screen .adapt-duration-contract, .coach-screen .optional-workout-list > div > span, .setup-confirmation strong, .progression-next, .progression-row.progression-progress > span:first-child > small:first-of-type, .exercise-progression.progression-progress > strong, .training-safety-summary.constraints-active .eyebrow, .training-safety-summary > button, .complete-profile > .eyebrow, .change-plan-sheet .plan-choice i, .superset-next-step, .age-range-options > button > i, .select-all-check input:checked, .import-plan-paste, .coach-history-trigger:is(:hover, :focus-visible)) { color: var(--rook-accent) !important; }
+:root:is([data-theme="dark"], [data-theme="premium"]) .setup-confirmation small { color: var(--rook-secondary); }
+:root:is([data-theme="dark"], [data-theme="premium"]) :is(.coach-empty, .complete-profile) { border-left-color: var(--rook-accent-hairline); }
+:root:is([data-theme="dark"], [data-theme="premium"]) .select-all-check input { accent-color: var(--rook-accent); }
+:root:is([data-theme="dark"], [data-theme="premium"]) :is(.coach-screen .optional-workout-list > div > span, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); }
+:root:is([data-theme="dark"], [data-theme="premium"]) :is(.restriction-spinner, .button-spinner, .building-spinner, .spinner) { border-color: var(--rook-accent-hairline); border-top-color: var(--rook-accent); }
+:root:is([data-theme="dark"], [data-theme="premium"]) :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
+:root:is([data-theme="dark"], [data-theme="premium"]) .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
+:root:is([data-theme="dark"], [data-theme="premium"]) .setting-switch input:focus-visible + i { outline-color: var(--rook-focus-ring-soft); }
+:root:is([data-theme="dark"], [data-theme="premium"]) :is(.complete-mark, .coach-screen .today-update-check, .coach-screen .adapt-review-list > button.selected .adapt-check) { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+:root:is([data-theme="dark"], [data-theme="premium"]) .coach-screen .adapt-review-list > button:disabled .adapt-check { background: var(--rook-disabled-surface); border-color: var(--rook-border); color: var(--rook-disabled-text); }
+:root:is([data-theme="dark"], [data-theme="premium"]) .coach-screen .action-card-applied { border-color: var(--rook-success-line); background: var(--rook-success-soft); }
+:root:is([data-theme="dark"], [data-theme="premium"]) .coach-screen .action-card-applied > small { color: var(--rook-secondary); }
+
+/* Premium must not inherit green-only accents from older component sheets. */
+:root[data-theme="premium"] :is(
+  .optional-session-note,
+  .plan-conditioning-card > div span,
+  .plan-conditioning-card > div strong,
+  .scratch-workout-day .scratch-day-status > small.ready,
+  .scratch-day-tools > button:first-child,
+  .scratch-custom-exercise,
+  .plan-editor-heading > .superset-round-rest,
+  .plan-editor-exercise:not(.needs-review) .plan-editor-summary-action,
+  .import-review-compact-editor > button,
+  .plan-editor-picker-trigger i,
+  .plan-editor-actions button:last-child:not(.import-review-remove),
+  .superset-picker > strong,
+  .physique-review-entry small,
+  .photo-inputs i,
+  .physique-suggestions small,
+  .coach-history-group button.active strong,
+  .workout-primary-action .workout-previous
+) { color: var(--rook-accent) !important; }
+:root[data-theme="premium"] .import-review-footer-actions button.import-review-remove { color: #d9837a !important; }
+:root[data-theme="premium"] :is(
+  .plan-conditioning-card p,
+  .personalization-summary .split-adaptation-note,
+  .personalization-summary dt,
+  .scratch-workout-day .scratch-copy-targets > small,
+  .superset-picker > small,
+  .coach-screen .action-card-applied > small,
+  .coach-screen .today-update-copy > small
+) { color: var(--rook-secondary) !important; }
+:root[data-theme="premium"] .thinking-dots i { background: var(--rook-premium-accent-muted); }
+
+/* Long-form overlays are near-full-height, opaque application surfaces.
+   Compact action/choice sheets intentionally keep their shorter sheet geometry. */
+.modal-layer > .screen.detail-screen {
+  height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+  padding-top: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--rook-border);
+  border-bottom: 0;
+  border-radius: 26px 26px 0 0;
+  background: var(--rook-bg);
+  background-clip: padding-box;
+  color: var(--rook-text);
+  isolation: isolate;
+  overscroll-behavior: contain;
+  scroll-padding-top: 104px;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header {
+  position: relative;
+  z-index: 20;
+  min-height: 96px;
+  margin: 0 -24px 26px;
+  padding: 44px 24px 8px;
+  border-bottom: 1px solid transparent;
+  background: var(--rook-bg);
+  background-clip: padding-box;
+  color: var(--rook-text);
+  transition: none;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header.is-scrollable-sheet-header {
+  position: sticky;
+  top: 0;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header.has-scrolled-content {
+  border-bottom-color: var(--rook-border);
+}
+
+.modal-layer > .screen.detail-screen > .detail-header.rook-sheet-header.is-ready {
+  transition: border-color 180ms ease;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header > :is(button, span) {
+  position: relative;
+  z-index: 1;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header > button {
+  color: var(--rook-text);
+}
+
+.modal-layer > .screen.detail-screen > .detail-header > strong {
+  font-size: 13px;
+  line-height: 1.2;
+  transition: none;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header.rook-sheet-header.is-ready > strong {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.modal-layer > .screen.detail-screen > .detail-header.is-collapsing-sheet-header > strong {
+  opacity: 0;
+  transform: translateY(2px);
+}
+
+.modal-layer > .screen.detail-screen > .detail-header.is-collapsing-sheet-header.shows-compact-title > strong {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.modal-layer > .modal-drag-handle {
+  z-index: 30;
+  top: max(12px, env(safe-area-inset-top));
+}
+
+.modal-layer > .sheet.plan-editor-sheet {
+  height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
+  padding: 0 22px calc(34px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  overflow-y: auto;
+  border: 1px solid var(--rook-border);
+  border-bottom: 0;
+  border-radius: 26px 26px 0 0;
+  background: var(--rook-bg);
+  background-clip: padding-box;
+  color: var(--rook-text);
+  isolation: isolate;
+  overscroll-behavior: contain;
+}
+
+.plan-editor-sheet > .long-form-sheet-header {
+  position: relative;
+  z-index: 20;
+  min-height: 54px;
+  margin: 0 -22px 26px;
+  padding: 5px 22px;
+  border-bottom: 1px solid transparent;
+  background: var(--rook-bg);
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: center;
+  transition: none;
+}
+
+.plan-editor-sheet > .long-form-sheet-header.is-scrollable-sheet-header {
+  position: sticky;
+  top: 0;
+}
+
+.plan-editor-sheet > .long-form-sheet-header.has-scrolled-content {
+  border-bottom-color: var(--rook-border);
+}
+
+.plan-editor-sheet > .long-form-sheet-header.rook-sheet-header.is-ready {
+  transition: border-color 180ms ease;
+}
+
+.plan-editor-sheet > .long-form-sheet-header > strong {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-align: center;
+  white-space: nowrap;
+  font-size: 13px;
+  transition: none;
+}
+
+.plan-editor-sheet > .long-form-sheet-header.rook-sheet-header.is-ready > strong {
+  transition: opacity 180ms ease, transform 180ms ease;
+}
+
+.plan-editor-sheet > .long-form-sheet-header.is-collapsing-sheet-header > strong {
+  opacity: 0;
+  transform: translateY(2px);
+}
+
+.plan-editor-sheet > .long-form-sheet-header.is-collapsing-sheet-header.shows-compact-title > strong {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.plan-editor-sheet > .long-form-sheet-header > .sheet-close {
+  position: static;
+  width: 44px;
+  height: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--rook-text);
+  display: grid;
+  place-items: center;
+  font-size: 25px;
+}
+
+@media (max-height: 640px) {
+  .modal-layer > .screen.detail-screen,
+  .modal-layer > .sheet.plan-editor-sheet {
+    height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+    max-height: calc(100dvh - max(8px, env(safe-area-inset-top)));
+  }
+
+  .modal-layer > .modal-drag-handle {
+    top: max(8px, env(safe-area-inset-top));
+  }
+
+  .modal-layer > .screen.detail-screen > .detail-header {
+    margin-bottom: 20px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-layer > .screen.detail-screen > .detail-header,
+  .modal-layer > .screen.detail-screen > .detail-header > strong,
+  .plan-editor-sheet > .long-form-sheet-header,
+  .plan-editor-sheet > .long-form-sheet-header > strong {
+    transition: none;
+  }
+}

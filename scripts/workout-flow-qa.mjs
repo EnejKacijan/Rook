@@ -74,11 +74,11 @@ async function completeCurrentExercise(page) {
   state.activeWorkout.exercises = [state.activeWorkout.exercises[0]];
   state.activeWorkout.exercises[0].sets = [state.activeWorkout.exercises[0].sets[0]];
   const { context, page, errors } = await openWorkout(state, 320);
-  assert.match(await page.locator('.workout-header small').innerText(), /0 \/ 1 set completed/);
+  assert.match(await page.locator('.workout-header small').innerText(), /0 \/ 1 set · \d{2}:\d{2}/);
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('135');
   await page.getByRole('button', { name: 'Complete set 1' }).click();
   await skipRest(page);
-  assert.match(await page.locator('.workout-header small').innerText(), /1 \/ 1 set completed/);
+  assert.match(await page.locator('.workout-header small').innerText(), /1 \/ 1 set · \d{2}:\d{2}/);
   assert.equal(await page.locator('.set-row').count(), 1, 'completing a one-set exercise does not add a set implicitly');
   assert.equal(await page.getByRole('button', { name: 'FINISH WORKOUT' }).getAttribute('class').then(value => value.includes('primary')), true);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
@@ -144,8 +144,8 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('primary')), true, 'Next Exercise becomes primary when prescribed sets are complete');
   const totalBeforeExtra = Number((await page.locator('.workout-header small').innerText()).match(/\/ (\d+) sets/)[1]);
   await page.getByRole('button', { name: '+ ADD SET' }).click();
-  assert.match(await page.locator('.workout-header small').innerText(), new RegExp(`/ ${totalBeforeExtra + 1} sets completed`), 'an added working set immediately updates the workout total');
-  assert.equal(await page.locator('.set-row').last().getAttribute('data-set-state'), 'active', 'an added set becomes active after the prescribed work is complete');
+  assert.match(await page.locator('.workout-header small').innerText(), new RegExp(`/ ${totalBeforeExtra + 1} sets ·`), 'an added working set immediately updates the workout total');
+  assert.equal(await page.locator('.set-row').last().getAttribute('data-set-state'), 'ready', 'an added set becomes the current actionable set after the prescribed work is complete');
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('secondary')), true, 'an unfinished added set makes the exercise incomplete again');
   await completeCurrentExercise(page);
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('primary')), true, 'completing the added set restores the ready exercise state');
@@ -239,7 +239,7 @@ async function completeCurrentExercise(page) {
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
   assert.equal(await page.getByRole('button', { name: 'Drag down to close' }).count(), 1, 'early-finish confirmation uses the same drag interaction');
-  assert.match(await dialog.textContent(), new RegExp(`1 of ${planned} sets completed`));
+  assert.match(await dialog.textContent(), new RegExp(`1 of ${planned} sets is complete[\\s\\S]*Only completed sets will be logged`));
   await snap(page, 'early-finish-confirmation');
   await page.getByRole('button', { name: 'FINISH ANYWAY' }).click();
   await page.getByRole('heading', { name: 'Workout ended early' }).waitFor();

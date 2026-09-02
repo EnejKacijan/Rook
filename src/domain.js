@@ -317,6 +317,7 @@ export const exerciseCatalog = {
   "prone-w-raise": {
     id: "prone-w-raise",
     name: "Prone W Raise",
+    aliases: ["Lying W Raise", "Prone W Lift", "Floor W Raise", "W Raise"],
     pattern: "horizontal-pull",
     muscles: ["Back", "Shoulders"],
     equipment: ["bodyweight"],
@@ -928,6 +929,7 @@ export const exerciseCatalog = {
   "prone-swimmer-pull": {
     id: "prone-swimmer-pull",
     name: "Prone Swimmer Pull",
+    aliases: ["Prone Swimmer", "Swimmer Pull", "Prone Floor Swimmer", "Floor Swimmer Pull"],
     pattern: "horizontal-pull",
     muscles: ["Back", "Shoulders"],
     equipment: ["bodyweight"],
@@ -939,6 +941,7 @@ export const exerciseCatalog = {
   "floor-lat-pulldown": {
     id: "floor-lat-pulldown",
     name: "Floor Lat Pulldown",
+    aliases: ["Floor Lat Pull-down", "Prone Lat Pulldown", "Prone Lat Pull-down", "Bodyweight Lat Pulldown", "Floor Pulldown"],
     pattern: "vertical-pull",
     muscles: ["Back", "Arms"],
     equipment: ["bodyweight"],
@@ -974,10 +977,10 @@ const EXPANDED_EXERCISES = [
   ["single-arm-cable-row","Single-Arm Cable Row",["One-Arm Cable Row","Single Arm Cable Row","Unilateral Cable Row"],"horizontal-pull",["Back","Arms"],["cables"],2.5,105,"compound"],
   ["face-pull","Face Pull",["Rope Face Pull","Cable Face Pull"],"rear-delt",["Back","Shoulders"],["cables"],2.5,60,"isolation"],
   ["inverted-row","Inverted Row",["Body Row","Australian Pull-up"],"horizontal-pull",["Back","Arms"],["pull-up bar"],1,90,"compound",{bodyweight:true,generation:"library-only"}],
-  ["suspension-row","Suspension Row",["TRX Row","Ring Row"],"horizontal-pull",["Back","Arms"],["bodyweight"],1,90,"compound",{bodyweight:true,generation:"library-only"}],
+  ["suspension-row","Suspension Row",["TRX Row","Ring Row","Suspension Trainer Row","Suspended Row","TRX Inverted Row","Ring Inverted Row"],"horizontal-pull",["Back","Arms"],["bodyweight"],1,90,"compound",{bodyweight:true,generation:"library-only"}],
   ["incline-barbell-bench-press","Incline Bench Press",["Incline Barbell Bench Press","Barbell Incline Bench Press","Barbell Incline Press"],"incline-push",["Chest","Shoulders","Arms"],["barbell","rack","bench"],2.5,150,"compound"],
   ["smith-machine-bench-press","Smith Machine Bench Press",["Smith Bench Press","Smith Bench"],"horizontal-push",["Chest","Arms"],["machines","bench"],5,120,"compound",{generation:"library-only"}],
-  ["incline-smith-machine-press","Incline Smith Machine Press",["Smith Incline Press","Incline Smith Press"],"incline-push",["Chest","Shoulders","Arms"],["machines","bench"],5,120,"compound",{generation:"library-only"}],
+  ["incline-smith-machine-press","Incline Smith Machine Press",["Smith Incline Press","Incline Smith Press","Smith Machine Incline Press","Smith Incline Bench Press","Incline Smith Bench Press","Smith Incline Bench"],"incline-push",["Chest","Shoulders","Arms"],["machines","bench"],5,120,"compound",{generation:"library-only"}],
   ["parallel-bar-dip","Dip",["Dips","Chest Dip","Parallel-Bar Dip","Parallel Bar Dip","Bodyweight Dip"],"horizontal-push",["Chest","Arms"],["bodyweight"],1,120,"compound",{bodyweight:true,generation:"library-only"}],
   ["assisted-dip","Assisted Dip",["Machine Assisted Dip","Assisted Parallel-Bar Dip"],"horizontal-push",["Chest","Arms"],["machines"],5,105,"compound",{generation:"library-only"}],
   ["weighted-push-up","Weighted Push-up",["Loaded Push-up","Plate-loaded Push-up"],"horizontal-push",["Chest","Arms"],["bodyweight"],2.5,120,"compound",{bodyweight:true,generation:"library-only"}],
@@ -998,7 +1001,7 @@ const EXPANDED_EXERCISES = [
   ["back-extension-45","45° Back Extension",["45-Degree Back Extension","45 Degree Back Extension","45 Degree Hyperextension","Hyperextension","Roman Chair Back Extension","Back Extension"],"hip-extension",["Hamstrings / glutes","Back"],["machines"],5,90,"compound"],
   ["machine-lateral-raise","Machine Lateral Raise",["Lateral Raise Machine","Machine Side Raise","Machine Side Lateral Raise"],"shoulder-isolation",["Shoulders"],["machines"],5,75,"isolation",{generation:"library-only"}],
   ["smith-machine-romanian-deadlift","Smith Machine Romanian Deadlift",["Smith Romanian Deadlift","Smith RDL","Smith Machine RDL"],"hinge",["Hamstrings / glutes","Back"],["machines"],5,135,"compound",{generation:"library-only"}],
-  ["cable-chest-press","Cable Chest Press",["Standing Cable Chest Press","Cable Press"],"horizontal-push",["Chest","Shoulders","Arms"],["cables"],2.5,105,"compound",{generation:"library-only"}],
+  ["cable-chest-press","Cable Chest Press",["Standing Cable Chest Press","Cable Press","Standing Cable Press","Dual Cable Chest Press","Dual Cable Press"],"horizontal-push",["Chest","Shoulders","Arms"],["cables"],2.5,105,"compound",{generation:"library-only"}],
   ["dumbbell-shrug","Dumbbell Shrug",["DB Shrug","Dumbbell Shoulder Shrug"],"shrug",["Back","Arms"],["dumbbells"],2,75,"isolation",{generation:"library-only"}],
   ["nordic-hamstring-curl","Nordic Hamstring Curl",["Nordic Curl","Nordic Leg Curl"],"knee-flexion",["Hamstrings / glutes"],["bodyweight"],1,120,"compound",{bodyweight:true,generation:"library-only"}],
   ["lying-leg-curl","Lying Leg Curl",["Prone Leg Curl","Lying Hamstring Curl"],"knee-flexion",["Hamstrings / glutes"],["machines"],5,75,"isolation"],
@@ -1123,6 +1126,12 @@ const SLOVENIAN_EXERCISE_ALIASES = Object.freeze({
   "one-arm-dumbbell-row": ["Enoročno veslanje z ročko", "Enoročno veslanje z utežjo"],
   "seated-cable-row": ["Veslanje sede na škripcu", "Veslanje na škripcu sede"],
   "lat-pulldown": ["Vleka na prsi", "Vleka na prsi na škripcu"],
+  "prone-w-raise": ["Ležeči W dvig", "W dvig leže"],
+  "prone-swimmer-pull": ["Plavalec leže", "Ležeči plavalec"],
+  "floor-lat-pulldown": ["Vleka za hrbet na tleh", "Vleka na prsi na tleh"],
+  "suspension-row": ["TRX veslanje", "Veslanje na TRX", "Veslanje na krogih"],
+  "incline-smith-machine-press": ["Poševni potisk na Smith napravi", "Smith poševni potisk"],
+  "cable-chest-press": ["Potisk s prsi na škripcu", "Potisk na škripcu stoje"],
   "barbell-overhead-press": ["Potisk nad glavo z drogom", "Ramenski potisk z drogom"],
   "dumbbell-shoulder-press": ["Potisk nad glavo z ročkami", "Ramenski potisk z ročkami"],
   "lateral-raise": ["Stranski dvig z ročkami", "Stranski dvigi z ročkami", "Stranski dvigi", "Odročenje z ročkami"],
@@ -1164,6 +1173,15 @@ for (const [exerciseId, aliases] of Object.entries(SLOVENIAN_EXERCISE_ALIASES)) 
   exercise.aliases = [...new Set([...(exercise.aliases || []), ...aliases])];
 }
 
+export const ROOK_ORIGINAL_ILLUSTRATIONS = Object.freeze({
+  "prone-w-raise": "rook-prone-w-raise",
+  "prone-swimmer-pull": "rook-prone-swimmer-pull",
+  "floor-lat-pulldown": "rook-floor-lat-pulldown",
+  "suspension-row": "rook-suspension-row",
+  "incline-smith-machine-press": "rook-incline-smith-machine-press",
+  "cable-chest-press": "rook-cable-chest-press",
+});
+
 export const ROOK_ADAPTED_ILLUSTRATIONS = Object.freeze({
   "single-leg-leg-extension": "rook-single-leg-leg-extension",
   "standing-leg-curl": "rook-standing-single-leg-leg-curl",
@@ -1204,6 +1222,13 @@ for (const [exerciseId, assetSlug] of Object.entries(ROOK_ADAPTED_ILLUSTRATIONS)
   exercise.artId = `wg-${assetSlug}`;
   exercise.visualSource = "Bryl Lim / Everkinetic · ROOK adaptation";
   exercise.visualLicense = "CC BY-SA 4.0";
+}
+for (const [exerciseId, assetSlug] of Object.entries(ROOK_ORIGINAL_ILLUSTRATIONS)) {
+  const exercise = exerciseCatalog[exerciseId];
+  if (!exercise) continue;
+  exercise.artId = `wg-${assetSlug}`;
+  exercise.visualSource = "ROOK original";
+  exercise.visualLicense = "Proprietary";
 }
 
 // Share artwork only when the visible setup and movement are equivalent.
@@ -1402,6 +1427,15 @@ export function isoDay(date = new Date()) {
   const value = new Date(date);
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
 }
+export function workoutPlanDate(workout) {
+  const explicit = workout?.canonicalPlanDate || workout?.workoutDateKey;
+  if (typeof explicit === "string" && /^\d{4}-\d{2}-\d{2}$/.test(explicit))
+    return explicit;
+  const timestamp =
+    workout?.startedAt ?? workout?.completedAt ?? workout?.endedAt ?? null;
+  if (timestamp === null || Number.isNaN(new Date(timestamp).getTime())) return null;
+  return isoDay(timestamp);
+}
 export const weekday = (date = new Date()) => dayNames[new Date(date).getDay()];
 export function normalizeWorkoutName(name, day) {
   let value = String(name || "").trim();
@@ -1593,7 +1627,7 @@ export function storedWeight(value, units = "kg") {
   return Number(kilograms.toFixed(2));
 }
 export function weekDate(day, date = new Date()) {
-  const result = new Date(date);
+  const result = calendarDate(date);
   result.setHours(12, 0, 0, 0);
   const mondayOffset = (result.getDay() + 6) % 7;
   result.setDate(result.getDate() - mondayOffset + WEEKDAYS.indexOf(day));
@@ -1720,6 +1754,7 @@ export function blankState() {
     activeWorkout: null,
     todayAdaptation: null,
     weekScheduleOverrides: {},
+    workoutOccurrenceOverrides: {},
     optionalSessions: [],
     workouts: [],
     conversations: [],
@@ -1825,12 +1860,28 @@ function migrateMissingExerciseRest(stored) {
     migrateWorkout(session?.workout);
   return stored;
 }
+function migrateWorkoutPlanDates(stored) {
+  const migrate = (workout) => {
+    if (!workout || typeof workout !== "object") return;
+    const canonicalPlanDate = workoutPlanDate(workout);
+    if (!canonicalPlanDate) return;
+    workout.canonicalPlanDate ||= canonicalPlanDate;
+    workout.workoutDateKey ||= canonicalPlanDate;
+    if (!workout.sourcePlanSlotId && workout.programDayId)
+      workout.sourcePlanSlotId = `${workout.programDayId}:${canonicalPlanDate}`;
+  };
+  migrate(stored.activeWorkout);
+  for (const workout of stored.workouts || []) migrate(workout);
+  for (const session of stored.optionalSessions || []) migrate(session?.workout);
+  return stored;
+}
 export function loadState() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
     if (!stored || stored.schemaVersion !== 2) return blankState();
     migrateBlockedExercises(stored);
     migrateMissingExerciseRest(stored);
+    migrateWorkoutPlanDates(stored);
     const base = blankState();
     stored.program?.days?.forEach((day) =>
       normalizeTimedExercises(day.exercises),
@@ -2010,18 +2061,128 @@ export function currentWeekSchedule(state, date = new Date()) {
   return state.program.days
     .map((slot) => {
       const originalDate = isoDay(weekDate(slot.weekday, date));
-      const workout =
+      const sourceWorkout =
         rotatingWorkoutForDate(state.program, originalDate) || slot;
-      const scheduledDate = overrides[workout.id] || originalDate;
+      const scheduledDate = overrides[sourceWorkout.id] || originalDate;
+      const occurrence =
+        state.workoutOccurrenceOverrides?.[scheduledDate]?.[sourceWorkout.id];
+      if (occurrence?.skipWorkout) return null;
+      const excludedEntryIds = new Set(occurrence?.excludedEntryIds || []);
+      const workout = excludedEntryIds.size
+        ? {
+            ...sourceWorkout,
+            exercises: sourceWorkout.exercises.filter(
+              (exercise) => !excludedEntryIds.has(exercise.id),
+            ),
+          }
+        : sourceWorkout;
+      if (!workout.exercises.length) return null;
+      if (workout !== sourceWorkout)
+        workout.estimatedMinutes = estimateSessionMinutes(workout.exercises);
       return {
         workout,
-        workoutId: workout.id,
+        workoutId: sourceWorkout.id,
         originalDate,
         scheduledDate,
         moved: scheduledDate !== originalDate,
       };
     })
+    .filter(Boolean)
     .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+}
+
+export function removeExerciseFromOccurrence(
+  state,
+  { planDate, workoutId, planEntryId },
+) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(planDate || ""))
+    ? String(planDate)
+    : isoDay(planDate);
+  const source = state.program?.days.find((day) => day.id === workoutId);
+  if (!source || !source.exercises.some((entry) => entry.id === planEntryId))
+    return state;
+  if (
+    state.activeWorkout?.programDayId === workoutId &&
+    workoutPlanDate(state.activeWorkout) === date
+  )
+    return state;
+  const dateOverrides = (state.workoutOccurrenceOverrides ||= {});
+  const workoutOverrides = (dateOverrides[date] ||= {});
+  const previous = workoutOverrides[workoutId] || {};
+  const excluded = new Set(previous.excludedEntryIds || []);
+  excluded.add(planEntryId);
+  const visible = source.exercises.filter((entry) => !excluded.has(entry.id));
+  workoutOverrides[workoutId] = visible.length
+    ? { ...previous, excludedEntryIds: [...excluded], skipWorkout: false }
+    : { ...previous, excludedEntryIds: [...excluded], skipWorkout: true };
+  return state;
+}
+
+export function restoreOccurrenceOverride(
+  state,
+  { planDate, workoutId, previousOverride },
+) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(planDate || ""))
+    ? String(planDate)
+    : isoDay(planDate);
+  state.workoutOccurrenceOverrides ||= {};
+  if (previousOverride)
+    (state.workoutOccurrenceOverrides[date] ||= {})[workoutId] =
+      structuredClone(previousOverride);
+  else if (state.workoutOccurrenceOverrides[date]) {
+    delete state.workoutOccurrenceOverrides[date][workoutId];
+    if (!Object.keys(state.workoutOccurrenceOverrides[date]).length)
+      delete state.workoutOccurrenceOverrides[date];
+  }
+  return state;
+}
+
+export function removeExerciseFromWeeklyPlan(state, workoutId, planEntryId) {
+  const index = state.program?.days.findIndex((day) => day.id === workoutId);
+  if (index === undefined || index < 0) return state;
+  const workout = state.program.days[index];
+  const removed = workout.exercises.find((entry) => entry.id === planEntryId);
+  if (!removed) return state;
+  if (workout.exercises.length === 1) {
+    if (state.program.days.length === 1) return state;
+    state.program.days.splice(index, 1);
+    state.profile.availableDays = (state.profile.availableDays || []).filter(
+      (day) => day !== workout.weekday,
+    );
+    state.profile.daysPerWeek = state.program.days.length;
+  } else {
+    workout.exercises = workout.exercises.filter(
+      (entry) => entry.id !== planEntryId,
+    );
+    if (removed.supersetId)
+      workout.exercises.forEach((entry) => {
+        if (entry.supersetId === removed.supersetId) delete entry.supersetId;
+      });
+    workout.estimatedMinutes = estimateSessionMinutes(workout.exercises);
+  }
+  state.program.version = Number(state.program.version || 1) + 1;
+  state.program.updatedAt = new Date().toISOString();
+  return state;
+}
+
+export function restoreWeeklyPlanWorkout(
+  state,
+  { workout, index, availableDays, daysPerWeek },
+) {
+  if (!state.program || !workout) return state;
+  const existing = state.program.days.findIndex((day) => day.id === workout.id);
+  if (existing >= 0) state.program.days[existing] = structuredClone(workout);
+  else
+    state.program.days.splice(
+      Math.min(Math.max(0, index), state.program.days.length),
+      0,
+      structuredClone(workout),
+    );
+  state.profile.availableDays = structuredClone(availableDays || []);
+  state.profile.daysPerWeek = daysPerWeek;
+  state.program.version = Number(state.program.version || 1) + 1;
+  state.program.updatedAt = new Date().toISOString();
+  return state;
 }
 export function nextScheduledWorkout(state, afterDate = new Date()) {
   if (!state?.program?.days?.length) return null;
@@ -2058,7 +2219,7 @@ export function validateWeekScheduleChanges(state, changes, date = new Date()) {
     (state.workouts || [])
       .filter(
         (workout) =>
-          workout.completedAt && weekKey(workout.completedAt) === key,
+          workout.completedAt && weekKey(workoutPlanDate(workout)) === key,
       )
       .map((workout) => workout.programDayId)
       .filter(Boolean),
@@ -5418,6 +5579,8 @@ export function validateProgram(program, profile = null, options = {}) {
   }
   const allowImportedExercises =
     options.allowImportedExercises === true || program.source === "ai-import";
+  const allowSingleExercise =
+    allowImportedExercises || program.source === "manual";
   if (
     profile?.daysPerWeek &&
     program.days.length !== Number(profile.daysPerWeek)
@@ -5442,7 +5605,7 @@ export function validateProgram(program, profile = null, options = {}) {
     )
       errors.push(`Invalid scheduled day: ${day.weekday}`);
     seenDays.add(day.weekday);
-    const minimumExercises = allowImportedExercises ? 1 : 2;
+    const minimumExercises = allowSingleExercise ? 1 : 2;
     const maximumExercises = allowImportedExercises ? 30 : 8;
     if (
       !Array.isArray(day.exercises) ||
@@ -6426,18 +6589,27 @@ export function startWorkout(state, template) {
     throw new Error(
       `${exerciseName(prohibited)} conflicts with the current training restrictions.`,
     );
+  const startedAt = Date.now();
+  const canonicalPlanDate = state.selectedDate || isoDay(startedAt);
   const workout = {
     id: uid("active"),
     templateId: template.weekday,
     programDayId: template.id,
-    workoutDateKey: state.selectedDate || isoDay(),
+    canonicalPlanDate,
+    workoutDateKey: canonicalPlanDate,
+    sourcePlanSlotId: template.id
+      ? `${template.id}:${canonicalPlanDate}`
+      : null,
     optionalSessionId: template.optionalSessionId || null,
     name: template.name,
     workoutName: template.workoutName,
     workoutDescriptor: template.workoutDescriptor,
     originalImportedWorkoutName: template.originalImportedWorkoutName,
-    startedAt: Date.now(),
-    updatedAt: Date.now(),
+    startedAt,
+    updatedAt: startedAt,
+    timeZoneAtStart:
+      Intl.DateTimeFormat().resolvedOptions().timeZone || null,
+    utcOffsetMinutesAtStart: new Date(startedAt).getTimezoneOffset(),
     exerciseIndex: 0,
     rest: null,
     handledSupersetRestRounds: [],
@@ -6461,7 +6633,40 @@ export function startWorkout(state, template) {
       };
     }),
   };
-  return refreshWorkoutWarmup(workout, state.profile, state.program);
+  const prepared = refreshWorkoutWarmup(workout, state.profile, state.program);
+  prepared.restartSnapshot = {
+    exercises: structuredClone(prepared.exercises),
+    warmup: prepared.warmup ? structuredClone(prepared.warmup) : null,
+  };
+  return prepared;
+}
+export function activeWorkoutCanRestart(workout) {
+  const snapshot = workout?.restartSnapshot;
+  if (!snapshot || !Array.isArray(snapshot.exercises)) return false;
+  if (Number(workout.exerciseIndex || 0) !== 0 || workout.rest) return true;
+  return (
+    JSON.stringify(workout.exercises) !== JSON.stringify(snapshot.exercises) ||
+    JSON.stringify(workout.warmup || null) !==
+      JSON.stringify(snapshot.warmup || null)
+  );
+}
+export function restartActiveWorkout(state, restartedAt = Date.now()) {
+  const active = state.activeWorkout;
+  if (!activeWorkoutCanRestart(active)) return state;
+  const snapshot = active.restartSnapshot;
+  return {
+    ...state,
+    activeWorkout: {
+      ...active,
+      startedAt: restartedAt,
+      updatedAt: restartedAt,
+      exerciseIndex: 0,
+      rest: null,
+      handledSupersetRestRounds: [],
+      exercises: structuredClone(snapshot.exercises),
+      warmup: snapshot.warmup ? structuredClone(snapshot.warmup) : null,
+    },
+  };
 }
 export function progressionFor(exercise, history, profile = null) {
   const min = exercise.repMin ?? exercise.repRange?.[0];
@@ -6788,13 +6993,20 @@ export function possibleFatigueSignal(workouts) {
       }
     : null;
 }
+export const SESSION_NOTE_MAX_LENGTH = 500;
+export function normalizeSessionNote(value) {
+  const note = String(value || "").trim();
+  return note ? note.slice(0, SESSION_NOTE_MAX_LENGTH) : null;
+}
 export function completeWorkout(state) {
   if (!state.activeWorkout) return state;
   const endedAt = Date.now();
   const summary = workoutSetSummary(state.activeWorkout);
   const endedEarly = summary.completed < summary.total;
+  const completedActiveWorkout = structuredClone(state.activeWorkout);
+  delete completedActiveWorkout.restartSnapshot;
   const session = {
-    ...structuredClone(state.activeWorkout),
+    ...completedActiveWorkout,
     id: uid("workout"),
     endedAt,
     durationSeconds: Math.max(
@@ -6906,7 +7118,7 @@ export function missedPlannedWorkouts(state, date = new Date()) {
       (workout) =>
         (workout.programDayId === planned.id ||
           (!workout.programDayId && workout.templateId === planned.weekday)) &&
-        isoDay(workout.completedAt) === isoDay(candidate),
+        workoutPlanDate(workout) === isoDay(candidate),
     );
     if (!completed)
       result.push({
@@ -7005,7 +7217,7 @@ export function coachContext(state) {
         (workout) =>
           workout.completedAt &&
           workout.programDayId === item.workoutId &&
-          weekKey(workout.completedAt) === weekKey(),
+          weekKey(workoutPlanDate(workout)) === weekKey(),
       ),
       active: state.activeWorkout?.programDayId === item.workoutId,
     })),
@@ -7023,8 +7235,16 @@ export function coachContext(state) {
         }
       : null,
     recentWorkouts: state.workouts.slice(-8).map((workout) => ({
+      planDate: workoutPlanDate(workout),
       completedAt: workout.completedAt,
       name: workout.name,
+      sessionNote: normalizeSessionNote(workout.sessionNote)
+        ? {
+            text: normalizeSessionNote(workout.sessionNote),
+            source: "user-authored-session-note",
+            reliability: "subjective-context-only",
+          }
+        : null,
       exercises: workout.exercises.map((item) => ({
         exerciseId: item.exerciseId,
         name: exerciseName(item),
@@ -7442,7 +7662,8 @@ export function proposeWeekScheduleChange(state, message, date = new Date()) {
     (state.workouts || [])
       .filter(
         (workout) =>
-          workout.completedAt && weekKey(workout.completedAt) === weekKey(date),
+          workout.completedAt &&
+          weekKey(workoutPlanDate(workout)) === weekKey(date),
       )
       .map((workout) => workout.programDayId),
   );
@@ -7894,13 +8115,15 @@ export function applyCoachAction(state, action) {
 export function consistencyForCurrentWeek(state, date = new Date()) {
   const start = isoDay(weekDate("Mon", date));
   const end = isoDay(weekDate("Sun", date));
-  const planned = state.program?.days.length || 0;
-  const completed = (state.workouts || []).filter(
-    (workout) =>
+  const planned = currentWeekSchedule(state, date).length;
+  const completed = (state.workouts || []).filter((workout) => {
+    const planDate = workoutPlanDate(workout);
+    return (
       workout.completedAt &&
-      isoDay(workout.completedAt) >= start &&
-      isoDay(workout.completedAt) <= end &&
-      workoutSetSummary(workout).completed > 0,
-  ).length;
+      planDate >= start &&
+      planDate <= end &&
+      workoutSetSummary(workout).completed > 0
+    );
+  }).length;
   return { completed: Math.min(planned, completed), planned };
 }

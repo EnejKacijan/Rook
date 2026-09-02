@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   adaptationDurationLabel,
+  activeWorkoutNoticeDetails,
+  alignedStepperValue,
+  coachContextSummary,
+  contextualCoachPrompts,
   bindScrollableSheetTouch,
   displayImportedPlanName,
   displayProgramName,
@@ -11,6 +15,8 @@ import {
   exerciseHistoryPerformanceLabel,
   exerciseHistoryWeightLabel,
   formatActiveWorkoutDuration,
+  formatScheduleDays,
+  formatWorkoutElapsedDuration,
   latestLoggedWeightSet,
   normalizeStepperValue,
   validStepperDraft,
@@ -25,7 +31,46 @@ import {
   weekLabel,
   workoutTitleParts,
 } from "./App.jsx";
-import { workingSetCanComplete } from "./domain.js";
+import { blankState, workingSetCanComplete } from "./domain.js";
+
+describe("context-aware Coach home", () => {
+  it("summarizes today's real workout and first-session context", () => {
+    const state = blankState();
+    state.activeWorkout = {
+      name: "Upper",
+      exercises: Array.from({ length: 5 }, () => ({ sets: [] })),
+    };
+    expect(coachContextSummary(state)).toEqual({
+      primary: "Upper today · 5 exercises",
+      secondary: "Your current plan and today’s workout are in context.",
+    });
+    expect(contextualCoachPrompts(state)).toEqual([
+      "Adapt today to 35 minutes.",
+      "How should I approach my first workout?",
+      "Explain how this program fits my goals.",
+    ]);
+  });
+
+  it("uses logged workouts and rest-day state to choose useful context", () => {
+    const state = blankState();
+    state.workouts = [
+      {
+        exercises: [
+          { sets: [{ completed: true, weight: 42.5, reps: 8 }] },
+        ],
+      },
+    ];
+    expect(coachContextSummary(state)).toEqual({
+      primary: "Rest day today",
+      secondary: "1 workout logged · recent working weights available",
+    });
+    expect(contextualCoachPrompts(state)).toEqual([
+      "Should I train today anyway?",
+      "How am I recovering this week?",
+      "Am I progressing on this program?",
+    ]);
+  });
+});
 
 describe("training setup validation", () => {
   it("keeps superset planning in Edit plan and out of previews", () => {
@@ -291,6 +336,16 @@ describe("import preview presentation", () => {
 });
 
 describe("profile presentation", () => {
+  it("compacts only continuous training-day schedules", () => {
+    expect(formatScheduleDays(["Fri", "Tue", "Thu", "Mon", "Wed"])).toBe(
+      "Mon–Fri",
+    );
+    expect(formatScheduleDays(["Mon", "Wed", "Fri", "Sat"])).toBe(
+      "Mon, Wed, Fri, Sat",
+    );
+    expect(formatScheduleDays(["Sat", "Sun"])).toBe("Sat–Sun");
+  });
+
   it("never formats a missing session length as null or undefined minutes", () => {
     const rows = profileTrainingRows({
       goal: "Build muscle",
@@ -340,6 +395,31 @@ describe("active workout duration", () => {
     expect(formatActiveWorkoutDuration(65 * 60)).toBe("1:05 h");
     expect(formatActiveWorkoutDuration(130 * 60 * 60)).toBe("99+ h");
     expect(formatActiveWorkoutDuration(Number.NaN)).toBe("0 min");
+  });
+
+  it("formats the live workout clock without ambiguous accumulated minutes", () => {
+    expect(formatWorkoutElapsedDuration(8)).toBe("00:08");
+    expect(formatWorkoutElapsedDuration(40 * 60 + 8)).toBe("40:08");
+    expect(formatWorkoutElapsedDuration(65 * 60 + 32)).toBe("1:05:32");
+    expect(formatWorkoutElapsedDuration(530 * 60 + 35)).toBe("8:50:35");
+    expect(formatWorkoutElapsedDuration(Number.NaN)).toBe("00:00");
+  });
+
+  it("summarizes live progress and only adds the date for an older active workout", () => {
+    const now = new Date("2026-09-02T12:00:00").getTime();
+    const workout = {
+      startedAt: now - 4 * 60 * 1000,
+      exercises: [
+        { sets: [{ completed: true }, { completed: false }] },
+        { sets: [{ completed: false }] },
+      ],
+    };
+    expect(activeWorkoutNoticeDetails(workout, "2026-09-02", now)).toBe(
+      "1 / 3 sets · 4 min",
+    );
+    expect(activeWorkoutNoticeDetails(workout, "2026-09-01", now)).toBe(
+      "Tuesday, Sep 1 · 1 / 3 sets · 4 min",
+    );
   });
 });
 
@@ -459,6 +539,18 @@ describe("workout input and duration contracts", () => {
     expect(validStepperDraft("52,5.5")).toBe(false);
     expect(validStepperDraft("8", { integer: true })).toBe(true);
     expect(validStepperDraft("8,5", { integer: true })).toBe(false);
+  });
+
+  it("moves manually entered weights to the next practical increment", () => {
+    expect(alignedStepperValue(141, 5, 1)).toBe(145);
+    expect(alignedStepperValue(141, 5, -1)).toBe(140);
+    expect(alignedStepperValue(140, 5, 1)).toBe(145);
+    expect(alignedStepperValue(140, 5, -1)).toBe(135);
+    expect(alignedStepperValue(36.25, 2.5, 1)).toBe(37.5);
+    expect(alignedStepperValue(36.25, 2.5, -1)).toBe(35);
+    expect(alignedStepperValue(36.4, 1.25, 1)).toBe(37.5);
+    expect(alignedStepperValue(36.4, 1.25, -1)).toBe(36.25);
+    expect(alignedStepperValue(1, 5, -1, 0)).toBe(0);
   });
 
   it("states whether the reviewed duration fits or is the closest valid option", () => {

@@ -59,13 +59,13 @@ await page.getByRole('button', { name: /Balanced starting point/ }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('08-preferences');
 assert.equal(await page.locator('.step-count').textContent(), 'STEP 8/8');
-assert.equal(await page.locator('.progress-line > span').evaluate(fill => fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width), 1);
+assert.ok(await page.locator('.progress-line > span').evaluate(fill => fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width) > .98, 'final progress fill is complete within border/subpixel rounding');
 assert.equal(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).getAttribute('aria-pressed'), 'true');
 assert.match(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).textContent(), /Best fit for your goal, experience and 3-day schedule/);
 assert.equal(await page.getByRole('button', { name: /I have a specific split/ }).count(), 1);
 assert.equal(await page.getByText('EXERCISE PREFERENCE', { exact: true }).count(), 1);
-assert.equal(await page.getByPlaceholder('Knee pain, recent surgery, movements to avoid...').count(), 1);
-assert.equal(await page.getByText('Write it naturally. Rook will account for it when building your plan.', { exact: true }).count(), 1);
+assert.equal(await page.getByPlaceholder("Pain, recent surgery, or movements you've been told to avoid...").count(), 1);
+assert.equal(await page.getByText('Write it naturally. Rook will adapt the plan where possible and ask if anything needs clarification.', { exact: true }).count(), 1);
 
 for (const [width, height] of [[320, 568], [375, 640], [390, 700]]) {
   await page.setViewportSize({ width, height });

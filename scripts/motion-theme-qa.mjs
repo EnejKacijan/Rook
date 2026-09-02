@@ -99,16 +99,15 @@ for (const theme of ["light", "dark", "premium"]) {
   const start = todayRun.page.locator(".today-hero .button");
   assert.notEqual(await activeTransform(todayRun.page, start), "none", `${theme} Start/Resume has tactile press motion`);
   const anotherDay = todayRun.page.locator(".week-strip button:not(.selected-day)").first();
-  await anotherDay.click();
-  const trace = todayRun.page.locator(".week-strip .selected-day.day-selection-trace");
-  assert.equal(await trace.count(), 1, `${theme} receives the same one-pass day trace`);
+  const anotherDayLabel = await anotherDay.getAttribute("aria-label");
+  assert.notEqual(await activeTransform(todayRun.page, anotherDay), "none", `${theme} day cards feel physically pressed`);
+  await todayRun.page.getByRole("button", { name: anotherDayLabel }).click();
   assert.equal(
-    await trace.evaluate((node) => getComputedStyle(node, "::after").animationName),
-    "rook-day-selection-trace",
-    `${theme} day trace uses the shared choreography`,
+    await todayRun.page.getByRole("button", { name: anotherDayLabel }).getAttribute("aria-pressed"),
+    "true",
+    `${theme} day selection switches immediately after the tactile press`,
   );
-  await todayRun.page.waitForTimeout(560);
-  assert.equal(await trace.count(), 0, `${theme} day trace fully stops`);
+  assert.equal(await todayRun.page.locator(".day-selection-trace").count(), 0, `${theme} avoids rotating border decoration`);
   await todayRun.context.close();
 
   const workoutRun = await openState(fixture(theme, true));
@@ -158,4 +157,4 @@ assert.equal(
 await reducedRun.context.close();
 
 await browser.close();
-console.log("Motion QA passed: Light, Dark, and Premium share tactile actions, one-pass day trace, set commit feedback, active-state advancement, and reduced-motion behavior without sharing theme colors.");
+console.log("Motion QA passed: Light, Dark, and Premium share tactile buttons and day cards, set commit feedback, active-state advancement, and reduced-motion behavior without rotating decoration or shared theme colors.");

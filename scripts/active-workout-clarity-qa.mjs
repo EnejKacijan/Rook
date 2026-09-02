@@ -14,6 +14,7 @@ import {
 } from "../src/domain.js";
 
 const root = new URL("../artifacts/active-workout-clarity/", import.meta.url);
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 await mkdir(root, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, root));
 const today = weekday();
@@ -41,6 +42,7 @@ function fixture() {
   state.selectedDate = isoDay();
   const day = state.program.days.find((item) => item.weekday === today);
   state.activeWorkout = startWorkout(state, day);
+  state.activeWorkout.name = "Single-Arm Performance Strength Workout With A Long Imported Name";
   state.activeWorkout.exercises.sort(
     (left, right) =>
       Number(Boolean(exerciseCatalog[right.exerciseId]?.artId)) -
@@ -126,7 +128,7 @@ await page.route("**/api/ai/status", (route) =>
     body: JSON.stringify({ available: false }),
   }),
 );
-await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+await page.goto(appUrl, { waitUntil: "networkidle" });
 await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 
 const heading = page.locator(".exercise-heading");
@@ -207,8 +209,33 @@ await page.getByRole("button", { name: "Close", exact: true }).click();
 const progress = page.locator(".workout-header small");
 assert.match(
   await progress.innerText(),
-  /^\d+:\d{2} · 0 \/ \d+ sets completed$/,
-  "header explicitly identifies completed-set progress",
+  /^0 \/ \d+ sets · (?:\d{2}:\d{2}|\d+:\d{2}:\d{2})$/,
+  "header prioritizes completed-set progress before elapsed time",
+);
+const workoutHeader = page.locator(".workout-header");
+const headerGeometry = await workoutHeader.evaluate((header) => {
+  const bounds = header.getBoundingClientRect();
+  const center = header.querySelector(".workout-header-center").getBoundingClientRect();
+  const back = header.querySelector('[aria-label="Back to Today"]').getBoundingClientRect();
+  const actions = header.querySelector(".workout-header-actions").getBoundingClientRect();
+  const title = header.querySelector(".workout-header-center > strong");
+  return {
+    centerDelta: Math.abs(center.left + center.width / 2 - innerWidth / 2),
+    actionVerticalDelta: Math.abs(back.top + back.height / 2 - (actions.top + actions.height / 2)),
+    titleOverflow: title.scrollWidth > title.clientWidth,
+    titleWhiteSpace: getComputedStyle(title).whiteSpace,
+    headerTop: bounds.top,
+  };
+});
+assert.ok(headerGeometry.centerDelta <= 1, JSON.stringify(headerGeometry));
+assert.ok(headerGeometry.actionVerticalDelta <= 1, JSON.stringify(headerGeometry));
+assert.equal(headerGeometry.titleOverflow, true, "long imported workout names truncate in the header");
+assert.equal(headerGeometry.titleWhiteSpace, "nowrap");
+await page.evaluate(() => scrollTo(0, document.documentElement.scrollHeight));
+await page.waitForTimeout(50);
+assert.ok(
+  Math.abs(await workoutHeader.evaluate((header) => header.getBoundingClientRect().top)) <= 1,
+  "the workout header remains pinned to the viewport while logging content scrolls",
 );
 
 const metadata = heading.locator(".exercise-meta");
@@ -276,6 +303,20 @@ assert.ok(upcomingLayout.every((row) => !row.overflow), JSON.stringify(upcomingL
 
 const weight = page.getByRole("spinbutton", { name: /Weight in kg for set 1/ });
 assert.equal(await weight.getAttribute("placeholder"), "Enter weight");
+const unifiedStepper = page.locator(".set-row .stepper:not(.unset)").first();
+const stepperSurfaces = await unifiedStepper.evaluate((node) => {
+  const [decrement, input, increment] = node.children;
+  return {
+    decrement: getComputedStyle(decrement).backgroundColor,
+    input: getComputedStyle(input).backgroundColor,
+    increment: getComputedStyle(increment).backgroundColor,
+    divider: getComputedStyle(decrement).borderRightColor,
+  };
+});
+assert.equal(stepperSurfaces.decrement, "rgba(0, 0, 0, 0)");
+assert.equal(stepperSurfaces.input, "rgba(0, 0, 0, 0)");
+assert.equal(stepperSurfaces.increment, "rgba(0, 0, 0, 0)");
+assert.notEqual(stepperSurfaces.divider, "rgba(0, 0, 0, 0)");
 const checks = page.locator(".set-row .check");
 assert.equal(await checks.nth(0).isDisabled(), true, "missing required load keeps the active set unconfirmable");
 assert.equal(await checks.nth(1).isDisabled(), true);
@@ -304,6 +345,7 @@ await weight.fill("135");
 assert.equal(await checks.nth(0).isEnabled(), true, "entering a valid load makes the active set confirmable");
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'ready');
 assert.equal(await checks.nth(0).innerText(), "✓");
+await page.waitForTimeout(220);
 const readyStyle = await checks.nth(0).evaluate((node) => ({
   border: getComputedStyle(node).borderColor,
   color: getComputedStyle(node).color,
@@ -316,6 +358,7 @@ assert.equal(
 );
 
 await page.getByRole("button", { name: "Complete set 1" }).click();
+await page.waitForTimeout(220);
 assert.equal(await checks.nth(1).isEnabled(), true);
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'completed');
 assert.equal(await page.locator('.set-row').nth(1).getAttribute('data-set-state'), 'ready');

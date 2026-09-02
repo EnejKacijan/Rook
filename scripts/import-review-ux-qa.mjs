@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
-import { exerciseCatalog } from "../src/domain.js";
+import { blankState, exerciseCatalog, STORAGE_KEY } from "../src/domain.js";
 
 const artifacts = new URL("../artifacts/import-review-ux/", import.meta.url);
 await mkdir(artifacts, { recursive: true });
@@ -16,8 +16,15 @@ async function openImport(notes, { width = 390, theme = "light" } = {}) {
   const context = await browser.newContext({
     viewport: { width, height: 844 },
     serviceWorkers: "block",
-    colorScheme: theme,
+    colorScheme: theme === "light" ? "light" : "dark",
   });
+  if (theme === "premium") {
+    const state = blankState();
+    state.profile.themePreference = "premium";
+    await context.addInitScript(({ key, value }) => {
+      localStorage.setItem(key, JSON.stringify(value));
+    }, { key: STORAGE_KEY, value: state });
+  }
   const page = await context.newPage();
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
@@ -46,6 +53,7 @@ Goal: General fitness
 
 MONDAY — FUNKCIONALNI DAN
 Step-down 2 x 8 reps @ 20 kg
+Incline Dumbbell Press 2 x 8 reps
 Ravnotežje 2 x 30 sec
 Mystery Flow 3 x 10 reps
 `;
@@ -70,7 +78,11 @@ Mystery Flow 3 x 10 reps
   assert.equal(await reviewCard.locator(".plan-editor-fields").count(), 1);
   assert.match(
     await reviewCard.innerText(),
-    /Ravnotežje[\s\S]*2 sets · 30 sec[\s\S]*doesn't identify a specific exercise/i,
+    /Ravnotežje[\s\S]*2 sets · 30 sec[\s\S]*doesn’t match a specific exercise/i,
+  );
+  assert.equal(
+    await reviewCard.getByText("NEEDS REVIEW", { exact: true }).count(),
+    1,
   );
   assert.equal(
     await reviewCard.getByLabel(/Exercise name for/).count(),
@@ -84,7 +96,18 @@ Mystery Flow 3 x 10 reps
   );
   assert.equal(
     await reviewCard.getByRole("button", { name: "ADD IMPORTED WEIGHTS" }).count(),
+    0,
+    "time-based ambiguous exercises do not expose irrelevant weight controls",
+  );
+  assert.equal(
+    await reviewCard.locator(".import-review-weights").count(),
+    0,
+    "the complete imported-weight section stays hidden when external load is not relevant",
+  );
+  assert.equal(
+    await reviewCard.getByText("CLOSE", { exact: true }).count(),
     1,
+    "the expanded card has one collapse action",
   );
   const decisionColors = await reviewCard.locator(".import-review-primary").evaluate(
     (node) => ({
@@ -132,6 +155,11 @@ Mystery Flow 3 x 10 reps
     1,
     "resolved cards collapse automatically",
   );
+  assert.match(
+    await page.getByRole("button", { name: `Edit ${chosenName}` }).innerText(),
+    /2 sets · 30 sec/,
+    "canonical resolution preserves the imported prescription",
+  );
 
   const customCard = page
     .locator(".plan-editor-exercise.needs-review")
@@ -142,6 +170,19 @@ Mystery Flow 3 x 10 reps
   await keepCustom.click();
   assert.equal(await page.getByText("All exercises ready", { exact: true }).count(), 1);
   assert.equal(await page.locator(".plan-editor-exercise.needs-review").count(), 0);
+  const completedReview = page.locator(".bulk-match-review.is-complete");
+  await completedReview.getByText("REVIEW COMPLETE", { exact: true }).waitFor();
+  assert.equal(
+    await completedReview.getByText("All imported exercises are ready.", { exact: true }).count(),
+    1,
+    "the bulk review remains as a quiet completion status",
+  );
+  assert.equal(
+    await completedReview.getByRole("button").count(),
+    0,
+    "the completed review status does not compete with the save CTA",
+  );
+  assert.equal(await completedReview.getAttribute("role"), "status");
 
   const weightedCard = page
     .locator(".plan-editor-exercise")
@@ -151,6 +192,15 @@ Mystery Flow 3 x 10 reps
   assert.equal(await weightedCard.locator('.plan-editor-weights input').count(), 0);
   await weightedCard.getByRole("button", { name: "EDIT", exact: true }).click();
   assert.equal(await weightedCard.locator('.plan-editor-weights input').count(), 2);
+  const unweightedLoadCard = page
+    .locator(".plan-editor-exercise")
+    .filter({ hasText: "Incline Dumbbell Press" });
+  await unweightedLoadCard.locator(".plan-editor-summary").click();
+  assert.equal(
+    await unweightedLoadCard.getByRole("button", { name: "ADD IMPORTED WEIGHTS" }).count(),
+    1,
+    "known externally loaded exercises retain an optional Add weights action",
+  );
   assert.equal(
     await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     true,
@@ -175,6 +225,39 @@ Mystery Flow 3 x 10 reps
   assert.equal(storedCustom.matchStatus, "confirmed-custom");
   assert.match(storedCustom.exerciseId, /^imported-custom-/);
   assert.deepEqual(errors, []);
+  await context.close();
+}
+
+{
+  const { context, page, errors } = await openImport(focusedNotes, {
+    width: 390,
+    theme: "premium",
+  });
+  const reviewCard = page
+    .locator(".plan-editor-exercise.needs-review")
+    .filter({ hasText: "Ravnotežje" });
+  const semantics = await reviewCard.evaluate((card) => {
+    const root = document.documentElement;
+    const status = card.querySelector(".import-review-status");
+    const remove = card.querySelector(".import-review-remove");
+    const primary = card.querySelector(".import-review-primary");
+    const summaryAction = card.querySelector(".plan-editor-summary-action");
+    const planSummary = document.querySelector(".import-review-summary");
+    return {
+      accent: getComputedStyle(root).getPropertyValue("--rook-accent").trim(),
+      status: getComputedStyle(status).color,
+      remove: getComputedStyle(remove).color,
+      primary: getComputedStyle(primary).backgroundColor,
+      summaryAction: getComputedStyle(summaryAction).color,
+      planSummaryLine: getComputedStyle(planSummary).borderLeftColor,
+    };
+  });
+  assert.notEqual(semantics.status, semantics.primary, "Premium review status stays neutral rather than gold");
+  assert.notEqual(semantics.summaryAction, semantics.primary, "Premium card-level review wording stays neutral rather than gold");
+  assert.notEqual(semantics.planSummaryLine, semantics.primary, "Premium plan-level review boundary stays neutral rather than gold");
+  assert.notEqual(semantics.remove, semantics.primary, "Premium destructive action stays semantically red rather than gold");
+  assert.deepEqual(errors, []);
+  await page.screenshot({ path: output("390-premium-needs-review.png"), fullPage: false });
   await context.close();
 }
 
@@ -212,5 +295,5 @@ weekdays.forEach((weekday, dayIndex) => {
 
 await browser.close();
 console.log(
-  "Import-review UX QA passed: ambiguity, custom resolution, timed/reps prescriptions, weights, live status, 30-exercise scale, dark/light and narrow mobile are correct.",
+  "Import-review UX QA passed: ambiguity, canonical/custom auto-resolution, contextual weights, live status, single-close hierarchy, Light/Dark/Premium, 30-exercise scale, and narrow mobile are correct.",
 );
