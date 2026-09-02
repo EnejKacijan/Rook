@@ -1167,6 +1167,27 @@ const SLOVENIAN_EXERCISE_ALIASES = Object.freeze({
   "wg-jump-rope": ["Kolebnica", "Skakanje s kolebnico"],
   "wg-stair-climber": ["Naprava za stopnice", "Stopnice na napravi"],
 });
+
+const LOAD_REQUIREMENTS = new Set(["required", "optional", "none"]);
+const LOAD_BEARING_EQUIPMENT = new Set([
+  "barbell",
+  "dumbbells",
+  "cables",
+  "machines",
+]);
+const LOAD_FREE_EQUIPMENT = new Set(["resistance bands", "bosu"]);
+const EXPLICIT_LOAD_REQUIREMENTS = Object.freeze({
+  "pogo-jumps": "none",
+  "forward-single-leg-hops": "none",
+  "y-balance-reach": "none",
+  "bosu-balance": "none",
+  "wg-banded-monster-walk": "none",
+  "wg-skater-hop": "none",
+  "weighted-push-up": "required",
+  "wg-weighted-pull-up": "required",
+  "wg-weighted-dip": "required",
+  "wg-weighted-chin-up": "required",
+});
 for (const [exerciseId, aliases] of Object.entries(SLOVENIAN_EXERCISE_ALIASES)) {
   const exercise = exerciseCatalog[exerciseId];
   if (!exercise) continue;
@@ -1337,6 +1358,7 @@ function globallyBlockedExerciseLabel(value) {
   );
 }
 for (const item of Object.values(exerciseCatalog)) {
+  item.loadRequirement = exerciseLoadRequirement(item);
   const barbellCompound =
     item.kind === "compound" && item.equipment.includes("barbell");
   const machineSupported = item.equipment.some((value) =>
@@ -1574,16 +1596,53 @@ export const pluralize = (count, singular, plural = `${singular}s`) =>
   `${count} ${Number(count) === 1 ? singular : plural}`;
 export const exerciseMeasure = (exercise) =>
   exerciseCatalog[exercise?.exerciseId]?.measure || exercise?.measure || "reps";
+export function exerciseLoadRequirement(exercise) {
+  const snapshot =
+    typeof exercise === "string" ? { exerciseId: exercise } : exercise || {};
+  const explicit = snapshot.loadRequirement;
+  if (LOAD_REQUIREMENTS.has(explicit)) return explicit;
+
+  const id = snapshot.exerciseId || snapshot.id;
+  const catalogItem = id ? exerciseCatalog[id] : null;
+  if (
+    catalogItem !== snapshot &&
+    LOAD_REQUIREMENTS.has(catalogItem?.loadRequirement)
+  )
+    return catalogItem.loadRequirement;
+  const explicitCatalogRequirement = EXPLICIT_LOAD_REQUIREMENTS[id];
+  if (explicitCatalogRequirement) return explicitCatalogRequirement;
+
+  const source = catalogItem || snapshot;
+  const equipment = (source.equipment || snapshot.equipment || []).map((value) =>
+    String(value).toLowerCase(),
+  );
+  if (equipment.some((value) => LOAD_BEARING_EQUIPMENT.has(value)))
+    return "required";
+  if (
+    source.isStretch ||
+    ["mobility", "balance"].includes(source.pattern) ||
+    (source.kind === "power" && source.bodyweight) ||
+    (equipment.length > 0 &&
+      equipment.every((value) => LOAD_FREE_EQUIPMENT.has(value)))
+  )
+    return "none";
+  if (
+    source.bodyweight ||
+    equipment.includes("bodyweight") ||
+    equipment.includes("pull-up bar") ||
+    source.exerciseType === "bodyweight_reps"
+  )
+    return "optional";
+  return "required";
+}
 export function workingSetCanComplete(exercise, set) {
-  const item = exerciseCatalog[exercise?.exerciseId];
   const repetitions = Number(set?.reps);
   if (!Number.isFinite(repetitions) || repetitions <= 0) return false;
-  const weightOptional =
-    exerciseMeasure(exercise) === "seconds" ||
-    Boolean(item?.bodyweight || exercise?.bodyweight) ||
-    item?.equipment?.includes("bodyweight") ||
-    exercise?.equipment?.includes?.("bodyweight");
-  if (weightOptional) return true;
+  const requirement = exerciseLoadRequirement(exercise);
+  if (requirement === "none") return true;
+  const weightMissing =
+    set?.weight === null || set?.weight === undefined || set?.weight === "";
+  if (requirement === "optional" && weightMissing) return true;
   const weight = Number(set?.weight);
   return Number.isFinite(weight) && weight > 0;
 }
@@ -6673,7 +6732,7 @@ export function progressionFor(exercise, history, profile = null) {
   const max = exercise.repMax ?? exercise.repRange?.[1];
   const timed = exerciseMeasure(exercise) === "seconds";
   const catalogItem = exerciseCatalog[exercise.exerciseId];
-  const bodyweight = Boolean(catalogItem?.bodyweight);
+  const loadRequirement = exerciseLoadRequirement(exercise);
   const appearances = (history || [])
     .map((workout, index) => ({
       workout,
@@ -6738,18 +6797,18 @@ export function progressionFor(exercise, history, profile = null) {
   const structurallyComparable = observations.filter(
     (entry) => entry.complete && entry.planned.length === latest.planned.length,
   );
-  const comparable = structurallyComparable.filter((entry) =>
-    timed || bodyweight
-      ? true
-      : entry.loadKey !== null && entry.loadKey === latest.loadKey,
-  );
+  const comparable = structurallyComparable.filter((entry) => {
+    if (loadRequirement === "none") return true;
+    if (loadRequirement === "optional" && !latest.hasLoad)
+      return !entry.hasLoad;
+    return entry.loadKey !== null && entry.loadKey === latest.loadKey;
+  });
   const previous = comparable.at(-2);
   const previousWithoutLoad = structurallyComparable
     .filter((entry) => !entry.hasLoad)
     .at(-2);
   if (
-    !timed &&
-    !bodyweight &&
+    loadRequirement === "required" &&
     !latest.hasLoad &&
     previousWithoutLoad &&
     latest.allAtTop &&
@@ -6776,6 +6835,13 @@ export function progressionFor(exercise, history, profile = null) {
     latest.effortOkay &&
     previous.effortOkay
   ) {
+    if (loadRequirement === "required" && !latest.hasLoad)
+      return {
+        type: "hold",
+        title: "Log a working load first",
+        detail:
+          "The target was reached, but no external load was logged. Keep the prescription and record the load before increasing it.",
+      };
     if (timed)
       return {
         type: "progress",
@@ -6783,11 +6849,15 @@ export function progressionFor(exercise, history, profile = null) {
         detail: `Two complete sessions reached ${max} seconds. Increase the hold gradually.`,
         evidenceExposures: 2,
       };
-    if (bodyweight && !latest.hasLoad)
+    if (loadRequirement !== "required" && !latest.hasLoad)
       return {
         type: "progress",
         title: "Ready for a harder variation",
-        detail: `Two complete sessions reached ${max} reps at the target effort. Progress the variation gradually.`,
+        detail:
+          loadRequirement === "none" &&
+          catalogItem?.equipment?.includes("resistance bands")
+            ? "Two complete sessions reached the top of the range. Increase band resistance or progress the variation gradually."
+            : `Two complete sessions reached ${max} reps at the target effort. Progress the variation gradually.`,
         evidenceExposures: 2,
       };
     if (!latest.hasLoad)

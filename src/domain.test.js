@@ -30,6 +30,7 @@ import {
   displayWeight,
   estimateSessionMinutes,
   exerciseCatalog,
+  exerciseLoadRequirement,
   exerciseMatchesQuery,
   exerciseNameWithoutExecutionModifier,
   exerciseName,
@@ -87,6 +88,117 @@ import {
   workoutPlanDate,
   workingSetCanComplete,
 } from "./domain.js";
+
+describe("exercise load requirements", () => {
+  it("classifies built-in functional, bodyweight, and externally loaded work", () => {
+    expect(
+      exerciseLoadRequirement({ exerciseId: "wg-banded-monster-walk" }),
+    ).toBe("none");
+    expect(exerciseLoadRequirement({ exerciseId: "pogo-jumps" })).toBe("none");
+    expect(exerciseLoadRequirement({ exerciseId: "wg-skater-hop" })).toBe(
+      "none",
+    );
+    expect(
+      exerciseLoadRequirement({ exerciseId: "forward-single-leg-hops" }),
+    ).toBe("none");
+    expect(exerciseLoadRequirement({ exerciseId: "pull-up" })).toBe(
+      "optional",
+    );
+    expect(exerciseLoadRequirement({ exerciseId: "barbell-bench-press" })).toBe(
+      "required",
+    );
+    expect(
+      exerciseLoadRequirement({ exerciseId: "wg-weighted-pull-up" }),
+    ).toBe("required");
+  });
+
+  it("uses explicit policy first and conservative structured legacy fallbacks", () => {
+    expect(
+      exerciseLoadRequirement({
+        loadRequirement: "none",
+        equipment: ["barbell"],
+      }),
+    ).toBe("none");
+    expect(
+      exerciseLoadRequirement({ equipment: ["resistance bands"] }),
+    ).toBe("none");
+    expect(exerciseLoadRequirement({ bodyweight: true })).toBe("optional");
+    expect(
+      exerciseLoadRequirement({ exerciseType: "bodyweight_reps" }),
+    ).toBe("optional");
+    expect(exerciseLoadRequirement({ equipment: ["dumbbells"] })).toBe(
+      "required",
+    );
+    expect(exerciseLoadRequirement({ name: "Unknown custom exercise" })).toBe(
+      "required",
+    );
+  });
+
+  it("keeps load policy independent from reps versus timed measurement", () => {
+    expect(
+      exerciseLoadRequirement({ measure: "seconds", equipment: ["dumbbells"] }),
+    ).toBe("required");
+    expect(
+      exerciseLoadRequirement({
+        measure: "reps",
+        loadRequirement: "none",
+      }),
+    ).toBe("none");
+  });
+
+  it("validates performance and load independently", () => {
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "wg-banded-monster-walk" },
+        { reps: 1, weight: null },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "pogo-jumps" },
+        { reps: 20, weight: null },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "pull-up" },
+        { reps: 8, weight: null },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "pull-up" },
+        { reps: 8, weight: 10 },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "pull-up" },
+        { reps: 8, weight: -10 },
+      ),
+    ).toBe(false);
+    expect(
+      workingSetCanComplete(
+        {
+          measure: "seconds",
+          loadRequirement: "required",
+          equipment: ["dumbbells"],
+        },
+        { reps: 30, weight: null },
+      ),
+    ).toBe(false);
+    expect(
+      workingSetCanComplete(
+        {
+          measure: "seconds",
+          loadRequirement: "required",
+          equipment: ["dumbbells"],
+        },
+        { reps: 30, weight: 24 },
+      ),
+    ).toBe(true);
+  });
+});
 
 function profile(overrides = {}) {
   return {

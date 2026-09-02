@@ -70,6 +70,20 @@ describe("context-aware Coach home", () => {
       "Am I progressing on this program?",
     ]);
   });
+
+  it("does not coerce a completed null-load set into a working weight", () => {
+    const state = blankState();
+    state.workouts = [
+      {
+        exercises: [
+          { sets: [{ completed: true, weight: null, reps: 20 }] },
+        ],
+      },
+    ];
+    expect(coachContextSummary(state).secondary).toBe(
+      "1 workout logged · completed training history available",
+    );
+  });
 });
 
 describe("training setup validation", () => {
@@ -436,6 +450,19 @@ describe("exercise history presentation", () => {
     );
     expect(exerciseHistoryWeightLabel({ bodyweight: true })).toBe("Bodyweight");
     expect(exerciseHistoryWeightLabel({ timed: true })).toBe("Timed hold");
+    expect(
+      exerciseHistoryWeightLabel({
+        loadRequirement: "none",
+        loadContext: "Band",
+      }),
+    ).toBe("Band");
+    expect(
+      exerciseHistoryWeightLabel({
+        bodyweight: true,
+        loadRequirement: "optional",
+        weight: 10,
+      }),
+    ).toBe("+10 kg");
   });
 
   it("labels every historical result with its meaning", () => {

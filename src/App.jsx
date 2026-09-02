@@ -59,6 +59,7 @@ import {
   displayWeight,
   estimateSessionMinutes,
   exerciseCatalog,
+  exerciseLoadRequirement,
   exerciseMeasure,
   exerciseMatchesQuery,
   exerciseName,
@@ -113,6 +114,11 @@ import {
   moveExerciseReorderBlock,
   moveWorkoutThroughWeek,
 } from "./planReorder.js";
+import {
+  buildWeeklyPlanExport,
+  buildWorkoutExport,
+  hasWorkoutExportNotes,
+} from "./workoutExport.js";
 const navItems = [
   ["today", "TODAY"],
   ["coach", "COACH"],
@@ -3826,6 +3832,23 @@ function Today({
             )}
           </>
         )}
+        <button
+          type="button"
+          className="text-button share-workout-button"
+          onClick={() =>
+            setDetail({
+              export: {
+                kind: "workout",
+                workoutId: completed?.id,
+                workout: completed ? undefined : session,
+                date: selectedIso,
+                completed: Boolean(completed),
+              },
+            })
+          }
+        >
+          SHARE WORKOUT
+        </button>
       </section>
       <section className="exercise-preview">
         <Eyebrow>
@@ -4428,7 +4451,19 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     );
   };
   const timed = exerciseMeasure(exercise) === "seconds";
-  const addedBodyweightLoad = Boolean(item?.bodyweight && !timed);
+  const loadRequirement = exerciseLoadRequirement(exercise);
+  const addedBodyweightLoad =
+    loadRequirement === "optional" && Boolean(item?.bodyweight);
+  const loadContext = item?.equipment?.includes("resistance bands")
+    ? "Band"
+    : item?.bodyweight || item?.equipment?.includes("bodyweight")
+      ? "Bodyweight"
+      : "No load";
+  const loadInputLabel = addedBodyweightLoad
+    ? "Added weight (optional)"
+    : loadRequirement === "optional"
+      ? "Weight (optional)"
+      : "Weight";
   const timerVisible =
     !confirmation && (restReady || restLeft > 0 || restCompleteVisible);
   const currentWarmup = (active.warmup?.stages || []).find(
@@ -4759,8 +4794,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         >
           <span />
           <span>
-            {addedBodyweightLoad ? "+ " : ""}
-            {unit.toUpperCase()}
+            {loadRequirement === "none"
+              ? "LOAD"
+              : `${addedBodyweightLoad ? "+ " : ""}${unit.toUpperCase()}`}
           </span>
           <span>{timed ? "SEC" : "REPS"}</span>
           {state.profile.rirEnabled && !timed && <span>RIR</span>}
@@ -4794,16 +4830,31 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   <b>{index + 1}</b>
                 </span>
               )}
-              <Stepper
-                label={`${addedBodyweightLoad ? "Added load" : "Weight"} in ${unit} for set ${index + 1}`}
-                value={displayWeight(set.weight, state.profile.units)}
-                step={displayWeight(increment, state.profile.units)}
-                alignToStep
-                emptyLabel={addedBodyweightLoad ? "Bodyweight" : "Enter weight"}
-                onChange={(value) =>
-                  updateWeight(index, storedWeight(value, state.profile.units))
-                }
-              />
+              {loadRequirement === "none" ? (
+                <span
+                  className="set-load-context"
+                  aria-label={`Load for set ${index + 1}: ${loadContext}`}
+                >
+                  {loadContext}
+                </span>
+              ) : (
+                <Stepper
+                  label={`${loadInputLabel} in ${unit} for set ${index + 1}`}
+                  value={displayWeight(set.weight, state.profile.units)}
+                  step={displayWeight(increment, state.profile.units)}
+                  alignToStep
+                  emptyLabel={
+                    addedBodyweightLoad
+                      ? "Bodyweight"
+                      : loadRequirement === "optional"
+                        ? "Optional"
+                        : "Enter weight"
+                  }
+                  onChange={(value) =>
+                    updateWeight(index, storedWeight(value, state.profile.units))
+                  }
+                />
+              )}
               <Stepper
                 label={`${timed ? "Seconds" : "Reps"} for set ${index + 1}`}
                 value={set.reps}
@@ -5043,6 +5094,114 @@ function SessionNoteEditor({ workout, update, optional = true }) {
   );
 }
 
+function ExportSheet({ request, state, close, setDetail }) {
+  const workout = request.workoutId
+    ? state.workouts.find((item) => item.id === request.workoutId)
+    : request.workout;
+  const safeWorkout = workout || { name: "Workout", exercises: [] };
+  const hasNotes =
+    request.kind === "workout"
+      ? hasWorkoutExportNotes(safeWorkout)
+      : state.program.days.some((day) => hasWorkoutExportNotes(day));
+  const [includeNotes, setIncludeNotes] = useState(false);
+  const [feedback, setFeedback] = useState("");
+  const artifact = useMemo(
+    () =>
+      request.kind === "plan"
+        ? buildWeeklyPlanExport({
+            state,
+            date: request.date,
+            units: state.profile.units,
+            includeNotes,
+          })
+        : buildWorkoutExport({
+            workout: safeWorkout,
+            date: request.date,
+            units: state.profile.units,
+            completed: request.completed,
+            includeNotes,
+          }),
+    [includeNotes, request, safeWorkout, state],
+  );
+  if (request.kind === "workout" && !workout) return null;
+  const shareAvailable =
+    typeof navigator !== "undefined" && typeof navigator.share === "function";
+  const goBack = () =>
+    request.returnTo ? setDetail(request.returnTo) : close();
+  const share = async () => {
+    try {
+      await navigator.share({ title: artifact.title, text: artifact.text });
+      setFeedback("Shared.");
+    } catch (error) {
+      if (error?.name !== "AbortError")
+        setFeedback("Couldn’t open sharing. Try Copy instead.");
+    }
+  };
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(artifact.text);
+      setFeedback("Copied to clipboard.");
+    } catch {
+      setFeedback("Couldn’t copy. Download the text file instead.");
+    }
+  };
+  const download = () => {
+    try {
+      const url = URL.createObjectURL(
+        new Blob([artifact.text], { type: "text/plain;charset=utf-8" }),
+      );
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = artifact.filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 0);
+      setFeedback(`Downloaded ${artifact.filename}.`);
+    } catch {
+      setFeedback("Couldn’t download the file. Try Copy instead.");
+    }
+  };
+  return (
+    <main className="screen detail-screen export-sheet">
+      <header className="detail-header">
+        <button aria-label="Back" onClick={goBack}>‹</button>
+        <strong>{request.kind === "plan" ? "Share plan" : "Share workout"}</strong>
+        <span />
+      </header>
+      <Eyebrow>READY TO EXPORT</Eyebrow>
+      <h1>{artifact.title}</h1>
+      <p className="export-helper">
+        A readable text summary generated on this device. ROOK does not upload it.
+      </p>
+      {hasNotes && (
+        <label className="toggle-row export-notes-toggle">
+          <span>
+            <strong>Include notes</strong>
+            <small>Off by default for privacy</small>
+          </span>
+          <input
+            type="checkbox"
+            checked={includeNotes}
+            onChange={(event) => setIncludeNotes(event.target.checked)}
+          />
+        </label>
+      )}
+      <pre className="export-preview">{artifact.text}</pre>
+      <div className="export-actions">
+        {shareAvailable && <Button onClick={share}>SHARE</Button>}
+        <Button variant={shareAvailable ? "secondary" : "dark"} onClick={copy}>
+          COPY
+        </Button>
+        <Button variant="quiet" onClick={download}>DOWNLOAD .TXT</Button>
+      </div>
+      <p className="export-feedback" role="status" aria-live="polite">
+        {feedback}
+      </p>
+    </main>
+  );
+}
+
 function CompletedWorkoutDetail({ workoutId, state, update, close, setDetail }) {
   const workout = state.workouts.find((item) => item.id === workoutId);
   if (!workout) return null;
@@ -5053,7 +5212,24 @@ function CompletedWorkoutDetail({ workoutId, state, update, close, setDetail }) 
       <header className="detail-header">
         <button aria-label="Back" onClick={close}>‹</button>
         <strong>Workout details</strong>
-        <span />
+        <button
+          type="button"
+          className="detail-share-button"
+          aria-label="Share workout"
+          onClick={() =>
+            setDetail({
+              export: {
+                kind: "workout",
+                workoutId: workout.id,
+                date,
+                completed: true,
+                returnTo: { completedWorkout: workout.id },
+              },
+            })
+          }
+        >
+          Share
+        </button>
       </header>
       <Eyebrow>{date ? displayDate(localDate(date)) : "COMPLETED WORKOUT"}</Eyebrow>
       <h1>{workout.name}</h1>
@@ -5714,7 +5890,13 @@ export function coachContextSummary(state) {
   const hasWorkingWeights = loggedWorkouts.some((workout) =>
     workout.exercises.some((exercise) =>
       exercise.sets.some(
-        (set) => set.completed && Number.isFinite(Number(set.weight)),
+        (set) =>
+          set.completed &&
+          set.weight !== null &&
+          set.weight !== undefined &&
+          set.weight !== "" &&
+          Number.isFinite(Number(set.weight)) &&
+          Number(set.weight) > 0,
       ),
     ),
   );
@@ -6531,6 +6713,14 @@ function Progress({ state, setDetail }) {
             const isBodyweight = Boolean(
               exerciseCatalog[item.exerciseId]?.bodyweight,
             );
+            const loadRequirement = exerciseLoadRequirement(item);
+            const loadContext = exerciseCatalog[
+              item.exerciseId
+            ]?.equipment?.includes("resistance bands")
+              ? "Band"
+              : isBodyweight
+                ? "Bodyweight"
+                : "No load";
             return (
               <button
                 key={item.exerciseId}
@@ -6542,8 +6732,8 @@ function Progress({ state, setDetail }) {
                   <b>
                     {set
                       ? `${displayWeight(set.weight, state.profile.units)} ${unit}`
-                      : isBodyweight && completed.length
-                        ? "Bodyweight"
+                      : loadRequirement !== "required" && completed.length
+                        ? loadContext
                         : completed.length
                           ? "No weight logged"
                           : "Not enough data"}
@@ -6602,19 +6792,26 @@ export function displayProgramName(program) {
 export function exerciseHistoryWeightLabel({
   timed = false,
   bodyweight = false,
+  loadRequirement,
+  loadContext,
   weight,
   units = "kg",
 } = {}) {
-  if (timed) return "Timed hold";
-  if (bodyweight) return "Bodyweight";
-  if (
+  const hasWeight = !(
     weight === null ||
     weight === undefined ||
     weight === "" ||
     !Number.isFinite(Number(weight))
-  )
-    return "Weight not logged";
-  return `${displayWeight(Number(weight), units)} ${weightUnit(units)}`;
+  );
+  if (loadRequirement === "none")
+    return timed
+      ? "Timed hold"
+      : loadContext || (bodyweight ? "Bodyweight" : "No load");
+  if (timed && !hasWeight) return "Timed hold";
+  if (bodyweight && !hasWeight) return "Bodyweight";
+  if (!hasWeight) return "Weight not logged";
+  const prefix = bodyweight && loadRequirement === "optional" ? "+" : "";
+  return `${prefix}${displayWeight(Number(weight), units)} ${weightUnit(units)}`;
 }
 export function exerciseHistoryPerformanceLabel(exercise, sets = []) {
   const completed = sets
@@ -6980,6 +7177,18 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
       </section>
       <section className="program-actions">
         <Eyebrow>PROGRAM</Eyebrow>
+        <button
+          className="list-row"
+          onClick={() =>
+            setDetail({ export: { kind: "plan", date: state.selectedDate } })
+          }
+        >
+          <span>
+            <strong>Share weekly plan</strong>
+            <small>Share, copy or download as text</small>
+          </span>
+          <span>›</span>
+        </button>
         <button
           className="list-row"
           disabled={Boolean(state.activeWorkout)}
@@ -8935,9 +9144,9 @@ function PlanEditor({
                   );
                 const pickerOpen = exercisePickerId === exercise.id;
                 const timed = exerciseMeasure(exercise) === "seconds";
-                const catalogExercise = exerciseCatalog[exercise.exerciseId];
+                const loadRequirement = exerciseLoadRequirement(exercise);
                 const acceptsStartingWeight =
-                  scratch && !timed && !catalogExercise?.bodyweight;
+                  scratch && loadRequirement !== "none";
                 const startingWeight = exercise.sets.length
                   ? exercise.sets[0].weight
                   : null;
@@ -8949,9 +9158,7 @@ function PlanEditor({
                   );
                 const externalLoadRelevant =
                   importedWeights.length > 0 ||
-                  Boolean(
-                    catalogExercise && !catalogExercise.bodyweight && !timed,
-                  );
+                  loadRequirement !== "none";
                 const pair = exercise.supersetId
                   ? supersetMeta(day.exercises, exerciseIndex)
                   : null;
@@ -11375,6 +11582,15 @@ function Detail({
     return <Logging state={state} update={update} close={close} />;
   if (detail === "appearance")
     return <Appearance state={state} update={update} close={close} />;
+  if (detail?.export)
+    return (
+      <ExportSheet
+        request={detail.export}
+        state={state}
+        close={close}
+        setDetail={setDetail}
+      />
+    );
   if (detail?.completedWorkout)
     return (
       <CompletedWorkoutDetail
@@ -11441,7 +11657,14 @@ function Detail({
   const latestSet = latestLoggedWeightSet(history);
   const unit = weightUnit(state.profile.units);
   const timed = exerciseMeasure(exercise) === "seconds";
-  const bodyweight = Boolean(exerciseCatalog[exercise.exerciseId]?.bodyweight);
+  const catalogExercise = exerciseCatalog[exercise.exerciseId];
+  const bodyweight = Boolean(catalogExercise?.bodyweight);
+  const loadRequirement = exerciseLoadRequirement(exercise);
+  const loadContext = catalogExercise?.equipment?.includes("resistance bands")
+    ? "Band"
+    : bodyweight
+      ? "Bodyweight"
+      : "No load";
   const latestHold = timed
     ? Math.max(
         0,
@@ -11450,6 +11673,16 @@ function Detail({
           .map((set) => Number(set.reps) || 0),
       )
     : null;
+  const currentLoad =
+    loadRequirement === "none"
+      ? loadContext
+      : latestSet
+        ? `${bodyweight && loadRequirement === "optional" ? "+" : ""}${displayWeight(latestSet.weight, state.profile.units)}`
+        : bodyweight
+          ? "Bodyweight"
+          : loadRequirement === "optional"
+            ? "No added weight"
+            : "Not set yet";
   const progression = progressionFor(exercise, state.workouts, state.profile);
   const detailIllustration =
     state.profile.showExerciseImages !== false ? exerciseArt(exercise) : null;
@@ -11469,23 +11702,25 @@ function Detail({
               <Eyebrow>
                 {timed
                   ? "CURRENT HOLD TIME"
-                  : bodyweight
-                    ? "CURRENT LOAD"
-                    : latestSet
+                  : loadRequirement === "none"
+                    ? "CURRENT SET TYPE"
+                    : latestSet || loadRequirement === "optional"
                       ? "CURRENT WORKING WEIGHT"
                       : "TRAINING HISTORY"}
               </Eyebrow>
               <h1>
                 {timed
                   ? latestHold
-                  : bodyweight
-                    ? "Bodyweight"
-                    : latestSet
-                      ? displayWeight(latestSet.weight, state.profile.units)
-                      : "Not set yet"}{" "}
-                <small>{timed ? "sec" : latestSet ? unit : ""}</small>
+                  : currentLoad}{" "}
+                <small>
+                  {timed
+                    ? "sec"
+                    : latestSet && loadRequirement !== "none"
+                      ? unit
+                      : ""}
+                </small>
               </h1>
-              {!timed && !bodyweight && !latestSet && (
+              {!timed && loadRequirement === "required" && !latestSet && (
                 <p>Log a weight on a completed working set to establish this.</p>
               )}
             </>
@@ -11543,6 +11778,8 @@ function Detail({
                     {exerciseHistoryWeightLabel({
                       timed,
                       bodyweight,
+                      loadRequirement,
+                      loadContext,
                       weight: set?.weight,
                       units: state.profile.units,
                     })}
