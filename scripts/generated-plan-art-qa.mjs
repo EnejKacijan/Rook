@@ -63,6 +63,8 @@ state.profile.themePreference = "dark";
 state.profile.sessionMinutes = 180;
 state.selectedDay = today;
 state.selectedDate = isoDay();
+state.activeWorkout = null;
+state.workouts = [];
 
 const browser = await chromium.launch({
   executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",

@@ -55,7 +55,10 @@ async function swipeWeek(page, { fromX, toX, fromY = 110, toY = fromY }) {
   await page.getByRole('button', { name: 'START WORKOUT' }).waitFor(); const plannedHeader = await headerMetrics(page);
   assert.equal(await page.locator('.workout-title-primary').innerText(), 'Full Body A'); assert.equal(await lineCount(page.locator('.workout-title-primary')), 1, 'Full Body A remains on one line');
   assert.equal(await page.locator('.exercise-preview .navigation-chevron').count(), 0, 'Today rows stay text-first without repeated chevrons');
+  assert.equal(await page.getByText("TODAY'S EXERCISES", { exact: true }).count(), 1, 'today keeps the date-specific exercise heading');
   assert.equal(await page.locator('.week-strip .selected-day.workout-planned').count(), 1); await verifyLastRowClear(page); await page.evaluate(() => scrollTo(0, 0)); await page.screenshot({ path: output('390-planned-workout.png'), fullPage: false });
+  await page.locator('.week-strip .workout-planned:not(.selected-day)').first().click();
+  assert.equal(await page.getByText('WORKOUT EXERCISES', { exact: true }).count(), 1, 'a different planned date uses the neutral workout heading');
   const restDay = offsetDay(2); await page.locator(`.week-strip button[aria-label^="${restDay} "]`).click(); await page.getByRole('heading', { name: 'Rest day' }).waitFor(); const restHeader = await headerMetrics(page);
   const todayChip = page.locator('.week-strip [aria-current="date"]'); const plannedDot = todayChip.locator('.workout-dot');
   assert.equal(await plannedDot.count(), 1, 'today keeps its planned-workout marker when another day is selected');

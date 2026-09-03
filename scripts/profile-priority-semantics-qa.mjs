@@ -4,7 +4,10 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
 
-const artifacts = new URL("../artifacts/profile-priority-semantics/", import.meta.url);
+const artifacts = new URL(
+  "../artifacts/profile-priority-semantics/",
+  import.meta.url,
+);
 await mkdir(artifacts, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, artifacts));
 const browser = await chromium.launch({
@@ -15,7 +18,8 @@ const browser = await chromium.launch({
 for (const source of ["fixed-template", "ai-import", "manual"]) {
   const state = createReturningUserFixture(1);
   state.program.source = source;
-  state.program.name = source === "ai-import" ? "Imported plan" : "My training plan";
+  state.program.name =
+    source === "ai-import" ? "Imported plan" : "My training plan";
   const context = await browser.newContext({
     viewport: { width: 320, height: 844 },
     colorScheme: "dark",
@@ -61,11 +65,11 @@ for (const source of ["fixed-template", "ai-import", "manual"]) {
     }
     await profile.getByRole("button", { name: /Edit priorities/ }).click();
     await page
-      .getByRole("heading", { name: "What should Coach keep in mind?" })
+      .getByRole("heading", { name: "What would you like Coach to emphasize?" })
       .waitFor();
     assert.match(
       await page.locator(".priority-settings").innerText(),
-      /They don’t update this plan unless you explicitly ask Coach to adjust it\./,
+      /Your current plan won’t change automatically\./,
     );
     assert.equal(
       await page.getByRole("button", { name: "SAVE PREFERENCES" }).count(),
@@ -87,7 +91,9 @@ for (const source of ["fixed-template", "ai-import", "manual"]) {
     );
   }
   assert.equal(
-    await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
+    await page.evaluate(
+      () => document.documentElement.scrollWidth <= innerWidth,
+    ),
     true,
     `${source} priority semantics do not create horizontal overflow`,
   );

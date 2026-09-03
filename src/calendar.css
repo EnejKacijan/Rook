@@ -91,10 +91,7 @@
 }
 .week-strip button:active { transform: scale(.98); }
 .week-strip .workout-planned .workout-dot { background: #b9b5af; }
-.week-strip .today-date.workout-planned:not(.selected-day) .workout-dot { background: #6f6c68; }
 .week-strip .workout-completed .completed-dot { background: #1f6b4c; }
-.week-strip .selected-day.workout-planned .workout-dot { background: #f6f5f2; }
-.week-strip .selected-day.workout-completed .completed-dot { background: #7fd0aa; }
 .week-strip .today-date:not(.selected-day) { border: 1px solid var(--rook-today-line); }
 @media (prefers-reduced-motion: reduce) {
   .week-transition-next :is(.week-navigation span, .week-strip),

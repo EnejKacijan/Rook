@@ -60,11 +60,13 @@ async function addExercise(day, query, name) {
 await addExercise('Mon', 'Bench Press', 'Bench Press');
 const monDay = page.locator('.scratch-workout-day').filter({ has: page.getByLabel('Mon workout name') });
 const thuDay = page.locator('.scratch-workout-day').filter({ has: page.getByLabel('Thu workout name') });
+await monDay.getByText('1 exercise · Ready', { exact: true }).waitFor();
 assert.equal(await monDay.getByText('1 exercise · Ready', { exact: true }).count(), 1);
 await page.evaluate(() => scrollTo(0, 0));
 await page.screenshot({ path: output('390-editor-one-exercise.png'), fullPage: false });
 await monDay.getByRole('button', { name: 'COPY TO DAY', exact: true }).click();
 await monDay.locator('.scratch-copy-targets').getByRole('button', { name: 'Thu', exact: true }).click();
+await thuDay.getByText('1 exercise · Ready', { exact: true }).waitFor();
 assert.equal(await thuDay.getByText('1 exercise · Ready', { exact: true }).count(), 1, 'copying a filled day populates an empty selected day');
 assert.equal(await page.locator('.plan-editor-exercise').count(), 2);
 assert.equal(await page.getByText('2 of 2 days ready', { exact: true }).count(), 1);

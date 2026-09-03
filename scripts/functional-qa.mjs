@@ -3,9 +3,9 @@ import { chromium } from 'playwright-core';
 
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' }); const page = await context.newPage(); const errors = []; let planRequests = 0;
-await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) }));
+await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true, provider: 'qa' }) }));
 await page.route('**/api/ai', route => { const operation = route.request().postDataJSON()?.operation; if (operation === 'plan') planRequests += 1; return ['plan', 'coach'].includes(operation) ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'AI disabled for deterministic local-fallback QA.' }) }) : route.continue(); });
-page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error' && !message.text().includes('the server responded with a status of 503')) errors.push(message.text()); });
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
 assert.equal(await page.getByRole('combobox', { name: 'Sex' }).count(), 0, 'onboarding does not require a demographic that does not change the plan');

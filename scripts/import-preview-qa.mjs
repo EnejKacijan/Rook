@@ -125,11 +125,26 @@ assert.equal(await page.locator('.plan-editor-fields').count(), 0, 'matched exer
 assert.ok((await page.locator('.plan-editor-exercise').first().boundingBox()).height < 90, 'collapsed exercise cards remain compact');
 for (const width of [375, 390, 430, 500]) {
   await page.setViewportSize({ width, height: 844 });
+  const readyAction = page.getByRole('button', { name: 'USE THIS PLAN' });
+  assert.equal(await readyAction.count(), 1, 'ready import has one primary completion action');
+  assert.equal(await readyAction.isVisible(), true, `${width}px ready import keeps its completion action visible`);
+  const actionBox = await readyAction.boundingBox();
+  assert.ok(actionBox.y + actionBox.height <= 830, `${width}px ready action clears the bottom safe area`);
   await page.screenshot({ path: output(`${width}-review.png`), fullPage: false });
 }
+await page.locator('.plan-editor-exercise').last().scrollIntoViewIfNeeded();
+const finalExerciseBox = await page.locator('.plan-editor-exercise').last().boundingBox();
+const readyActionBox = await page.getByRole('button', { name: 'USE THIS PLAN' }).boundingBox();
+assert.ok(finalExerciseBox.y + finalExerciseBox.height <= readyActionBox.y, 'the final imported exercise scrolls fully clear of the sticky action');
 await page.locator('.plan-editor-summary').first().click();
+await page.locator('.plan-editor-summary').first().getAttribute('aria-expanded').then(async value => {
+  if (value !== 'true') await page.locator('.plan-editor-summary[aria-expanded="true"]').first().waitFor();
+});
 assert.equal(await page.locator('.plan-editor-fields').count(), 1, 'Edit opens only one exercise form');
 await page.locator('.plan-editor-summary').nth(1).click();
+await page.locator('.plan-editor-summary').nth(1).getAttribute('aria-expanded').then(async value => {
+  if (value !== 'true') await page.locator('.plan-editor-summary[aria-expanded="true"]').first().waitFor();
+});
 assert.equal(await page.locator('.plan-editor-fields').count(), 1, 'opening another card closes the previous editor');
 await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
 await page.waitForFunction(() => JSON.parse(localStorage.getItem('lift-v2-state'))?.profile?.onboardingComplete === true);

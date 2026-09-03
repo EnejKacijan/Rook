@@ -15,7 +15,7 @@ page.on('pageerror', error => errors.push(error.message)); page.on('console', me
 await page.goto('http://127.0.0.1:4173/?bottom-sheet-drag=1', { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
 
 async function openScreen(buttonName) {
-  await page.getByRole('button', { name: buttonName }).click(); const panel = page.locator('.modal-layer > .screen'); await panel.waitFor(); const handle = page.getByRole('button', { name: 'Drag down to close' }); await handle.waitFor();
+  await page.getByRole('button', { name: buttonName }).click(); const panel = page.locator('.modal-layer > .screen'); await panel.waitFor(); const handle = page.getByRole('button', { name: 'Drag down or tap to close' }); await handle.waitFor();
   assert.equal(await handle.count(), 1, `${buttonName} receives exactly one shared drag handle`); return { panel, handle };
 }
 
@@ -36,6 +36,10 @@ async function openScreen(buttonName) {
 }
 
 {
+  const { panel, handle } = await openScreen('Logging & increments'); await handle.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the top handle starts the standard downward close animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+}
+
+{
   const { panel } = await openScreen('Logging & increments'); const close = page.getByRole('button', { name: 'Close', exact: true }); assert.equal((await close.innerText()).trim(), '×', 'Logging uses a neutral close control instead of a back arrow'); await close.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'the close button uses the same downward sheet animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
 
@@ -43,8 +47,12 @@ for (const name of ['Logging & increments', 'Review priorities', 'Add a few deta
   const { handle } = await openScreen(name); if (name === 'Logging & increments') { await page.screenshot({ path: output('390-logging-handle.png'), fullPage: false }); const box = await handle.boundingBox(); const x = box.x + 18; const y = box.y + 24; await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' }); } else { await handle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' }); }
 }
 
-await page.getByRole('button', { name: 'Replace plan' }).click(); const compactGrabZone = page.locator('.sheet-grab-zone'); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); const compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
-const importHandle = page.getByRole('button', { name: 'Drag down to close' }); await importHandle.waitFor(); assert.equal(await page.locator('.modal-layer > .import-plan-screen').count(), 1); await importHandle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); let compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await compactGrabZone.click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+
+await page.getByRole('button', { name: 'Replace plan' }).click(); compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); await compactGrabZone.waitFor(); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
+const importHandle = page.getByRole('button', { name: 'Drag down or tap to close' }); await importHandle.waitFor(); assert.equal(await page.locator('.modal-layer > .import-plan-screen').count(), 1); await importHandle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+
+await openScreen('Appearance'); assert.equal(await page.locator('.theme-choice-layer').count(), 0, 'Appearance keeps Theme and Style inline without a nested sheet'); await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
 assert.deepEqual(errors, []); await browser.close();
-console.log('Bottom-sheet drag QA passed: full-width top-edge drags follow, fade, spring back, and dismiss; compact sheets expose the same large grab zone without a grab cursor.');
+console.log('Bottom-sheet handle QA passed: full-width top-edge handles tap-close, drag, fade, spring back, and dismiss while Appearance remains a single flat sheet.');

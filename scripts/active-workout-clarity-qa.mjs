@@ -198,9 +198,9 @@ await page.getByRole("button", { name: "Close", exact: true }).click();
 await page.locator(".exercise-detail-overview").waitFor({ state: "detached" });
 await page.getByRole("button", { name: "Exercise options" }).click();
 await page.getByRole("button", { name: /Create superset/ }).click();
-await page.getByRole("heading", { name: /Pair / }).waitFor();
+await page.getByRole("heading", { name: "Choose a second exercise" }).waitFor();
 assert.equal(
-  await page.getByText("Choose an upcoming exercise.", { exact: false }).count(),
+  await page.getByText(/Pair it with .*Rook will alternate one set of each exercise/, { exact: false }).count(),
   1,
   "superset creation moved into the secondary exercise-options sheet",
 );

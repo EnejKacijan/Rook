@@ -172,6 +172,12 @@ Mystery Flow 3 x 10 reps
   assert.equal(await page.locator(".plan-editor-exercise.needs-review").count(), 0);
   const completedReview = page.locator(".bulk-match-review.is-complete");
   await completedReview.getByText("REVIEW COMPLETE", { exact: true }).waitFor();
+  const lastResolvedExerciseBox = await page.locator(".plan-editor-exercise").last().boundingBox();
+  const completedReviewBox = await completedReview.boundingBox();
+  assert.ok(
+    completedReviewBox.y - (lastResolvedExerciseBox.y + lastResolvedExerciseBox.height) <= 40,
+    `completed review follows the final exercise without a large empty gap; got ${Math.round(completedReviewBox.y - (lastResolvedExerciseBox.y + lastResolvedExerciseBox.height))}px`,
+  );
   assert.equal(
     await completedReview.getByText("All imported exercises are ready.", { exact: true }).count(),
     1,
@@ -196,6 +202,9 @@ Mystery Flow 3 x 10 reps
     .locator(".plan-editor-exercise")
     .filter({ hasText: "Incline Dumbbell Press" });
   await unweightedLoadCard.locator(".plan-editor-summary").click();
+  await unweightedLoadCard
+    .locator('.plan-editor-summary[aria-expanded="true"]')
+    .waitFor();
   assert.equal(
     await unweightedLoadCard.getByRole("button", { name: "ADD IMPORTED WEIGHTS" }).count(),
     1,

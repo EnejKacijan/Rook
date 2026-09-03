@@ -2,12 +2,13 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { blankState, buildProgram, isoDay, weekday } from '../src/domain.js';
+import { WEEKDAYS, blankState, buildProgram, isoDay, weekday } from '../src/domain.js';
 
 const outputRoot = new URL('../artifacts/coach-program-edit/', import.meta.url); await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
 const state = blankState();
-state.profile = { ...state.profile, goal: 'Build muscle', experience: 'Advanced', daysPerWeek: 4, availableDays: ['Mon', 'Tue', 'Thu', 'Fri'], sessionMinutes: 60, environment: 'Commercial gym', equipment: ['full gym'], priorities: ['Chest'], effortStyle: 'Fewer hard sets · 2 sets · 0–1 RIR', onboardingComplete: true };
+const today = weekday();
+state.profile = { ...state.profile, goal: 'Build muscle', experience: 'Advanced', daysPerWeek: 4, availableDays: WEEKDAYS.filter(day => day !== today).slice(0, 4), sessionMinutes: 60, environment: 'Commercial gym', equipment: ['full gym'], priorities: ['Chest'], effortStyle: 'Fewer hard sets · 2 sets · 0–1 RIR', onboardingComplete: true };
 state.program = buildProgram(state.profile); state.program.source = 'ai'; state.selectedDay = weekday(); state.selectedDate = isoDay();
 const upperDays = state.program.days.filter(day => /upper/i.test(day.name)); assert.equal(upperDays.length, 2);
 let changes = [];

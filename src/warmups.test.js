@@ -41,6 +41,57 @@ describe("personalized warm-ups", () => {
     expect(rampWeightForWorkingLoad(83, 70, 2.5)).toBe(57.5);
     expect(rampWeightForWorkingLoad(null, 50, 2.5)).toBeNull();
   });
+  it("uses actionable relative guidance instead of invented kilograms when load is unknown", () => {
+    const firstSession = workout(["incline-machine-press"]);
+    firstSession.exercises[0].sets[0].weight = null;
+    firstSession.exercises[0].repMin = 6;
+    firstSession.exercises[0].repMax = 8;
+    const result = generateWarmup(
+      firstSession,
+      profile({ experience: "Beginner" }),
+      exerciseCatalog,
+    );
+    const sets = result.rampUpSets[0].sets;
+    expect(sets.every((set) => set.weight === null)).toBe(true);
+    expect(sets.map((set) => set.loadInstruction)).toEqual([
+      "Very light",
+      "Moderate",
+    ]);
+    expect(sets[0]).toMatchObject({ technique: true, reps: 8 });
+    expect(result.movementPreparation).toEqual([]);
+  });
+
+  it("builds a gradual low-fatigue ramp from an established 6–8 rep load", () => {
+    const established = workout(["incline-machine-press"]);
+    established.exercises[0].sets[0].weight = 75;
+    established.exercises[0].repMin = 6;
+    established.exercises[0].repMax = 8;
+    const sets = generateWarmup(established, profile(), exerciseCatalog)
+      .rampUpSets[0].sets;
+    expect(sets.map((set) => set.weight)).toEqual([35, 50, 60]);
+    expect(sets.map((set) => set.reps)).toEqual([8, 5, 2]);
+    expect(sets.every((set) => set.weight % 5 === 0 && set.weight < 75)).toBe(
+      true,
+    );
+  });
+
+  it("uses more gradual ramps for heavy low-rep compounds and one for high-rep machines", () => {
+    const heavy = workout(["barbell-bench-press"]);
+    heavy.exercises[0].repMin = 3;
+    heavy.exercises[0].repMax = 5;
+    const heavySets = generateWarmup(heavy, profile(), exerciseCatalog)
+      .rampUpSets[0].sets;
+    expect(heavySets).toHaveLength(3);
+    expect(heavySets.map((set) => set.reps)).toEqual([8, 5, 2]);
+
+    const highRepMachine = workout(["machine-chest-press"]);
+    highRepMachine.exercises[0].repMin = 10;
+    highRepMachine.exercises[0].repMax = 15;
+    expect(
+      generateWarmup(highRepMachine, profile(), exerciseCatalog).rampUpSets[0]
+        .sets,
+    ).toHaveLength(1);
+  });
   it("keeps non-ramp preparation compact and reduces it for short sessions", () => {
     const normal = generateWarmup(workout(), profile(), exerciseCatalog);
     const short = generateWarmup(
@@ -50,7 +101,7 @@ describe("personalized warm-ups", () => {
     );
     expect(normal.nonRampMinutes).toBeGreaterThanOrEqual(3);
     expect(normal.nonRampMinutes).toBeLessThanOrEqual(8);
-    expect(short.nonRampMinutes).toBe(3);
+    expect(short.nonRampMinutes).toBe(0);
     expect(short.movementPreparation).toEqual([]);
     expect(short.rampUpSets).toHaveLength(1);
   });
@@ -100,9 +151,7 @@ describe("personalized warm-ups", () => {
       exerciseCatalog,
     );
     expect(result.conservative).toBe(true);
-    expect(result.movementPreparation[0].label).toMatch(
-      /comfortable, non-provocative/i,
-    );
+    expect(result.movementPreparation).toEqual([]);
     expect(result.safetyMessage).toBeNull();
   });
 
@@ -142,14 +191,14 @@ describe("personalized warm-ups", () => {
 
   it("sequences the first two distinct compound warm-ups just in time", () => {
     const result = generateWarmup(workout(), profile(), exerciseCatalog);
-    expect(result.generatorVersion).toBe(2);
+    expect(result.generatorVersion).toBe(3);
     expect(result.stages).toHaveLength(2);
     expect(result.stages[0]).toMatchObject({
       exerciseIndex: 0,
       exerciseId: "barbell-bench-press",
     });
     expect(result.stages[0].general.length).toBeGreaterThan(0);
-    expect(result.stages[0].movementPreparation.length).toBeGreaterThan(0);
+    expect(result.stages[0].movementPreparation).toEqual([]);
     expect(result.stages[0].rampUpSets.map((entry) => entry.exerciseId)).toEqual([
       "barbell-bench-press",
     ]);
@@ -164,7 +213,7 @@ describe("personalized warm-ups", () => {
     ]);
   });
 
-  it("does not add a redundant second stage or warm-ups after exercise two", () => {
+  it("skips overlapping compounds but prepares a later distinct movement family", () => {
     const sameFamily = generateWarmup(
       workout([
         "barbell-bench-press",
@@ -174,10 +223,13 @@ describe("personalized warm-ups", () => {
       profile(),
       exerciseCatalog,
     );
-    expect(sameFamily.stages.map((stage) => stage.exerciseIndex)).toEqual([0]);
+    expect(sameFamily.stages.map((stage) => stage.exerciseIndex)).toEqual([
+      0,
+      2,
+    ]);
     expect(
       sameFamily.rampUpSets.map((entry) => entry.exerciseId),
-    ).not.toContain("chest-supported-row");
+    ).not.toContain("incline-dumbbell-press");
 
     const isolationSecond = generateWarmup(
       workout(["barbell-bench-press", "lateral-raise", "leg-press"]),
@@ -186,7 +238,30 @@ describe("personalized warm-ups", () => {
     );
     expect(isolationSecond.stages.map((stage) => stage.exerciseIndex)).toEqual([
       0,
+      2,
     ]);
+  });
+
+  it("scales preparation breadth with available workout time", () => {
+    const threeFamilies = workout([
+      "barbell-bench-press",
+      "chest-supported-row",
+      "leg-press",
+    ]);
+    const short = generateWarmup(
+      threeFamilies,
+      profile({ sessionMinutes: 30 }),
+      exerciseCatalog,
+    );
+    const long = generateWarmup(
+      threeFamilies,
+      profile({ sessionMinutes: 90 }),
+      exerciseCatalog,
+    );
+    expect(short.general).toEqual([]);
+    expect(short.rampUpSets).toHaveLength(1);
+    expect(long.general[0].minutes).toBe(4);
+    expect(long.rampUpSets).toHaveLength(3);
   });
 
   it("keeps the general first stage for a custom exercise without inventing ramp sets", () => {
@@ -222,10 +297,12 @@ describe("personalized warm-ups", () => {
     const active = workout();
     active.warmup = generateWarmup(active, profile(), exerciseCatalog);
     active.warmup.stages[0].completed = true;
+    active.warmup.stages[0].general[0].completed = true;
     active.warmup.stages[0].rampUpSets[0].sets[0].completed = true;
     active.warmup.stages[1].skipped = true;
     refreshWorkoutWarmup(active, profile());
     expect(active.warmup.stages[0].completed).toBe(true);
+    expect(active.warmup.stages[0].general[0].completed).toBe(true);
     expect(active.warmup.stages[0].rampUpSets[0].sets[0].completed).toBe(true);
     expect(active.warmup.stages[1].skipped).toBe(true);
 

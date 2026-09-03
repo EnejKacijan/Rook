@@ -64,6 +64,7 @@ import {
   replacementProgramDifference,
   removeExerciseFromOccurrence,
   removeExerciseFromWeeklyPlan,
+  reorderExercisesForOccurrence,
   roundedEstimate,
   restartActiveWorkout,
   restoreOccurrenceOverride,
@@ -595,7 +596,9 @@ describe("personalized training domain", () => {
     expect(loaded.profile.restTimerEnabled).toBe(true);
     expect(loaded.profile.restTimerAutoStart).toBe(true);
     expect(loaded.profile.restTimerSeconds).toBeNull();
-    expect(loaded.profile.themePreference).toBe("light");
+    expect(loaded.profile.appearancePreference).toBe("system");
+    expect(loaded.profile.stylePreference).toBe("standard");
+    expect(loaded.profile.themePreference).toBe("system");
     expect(loaded.profile.prioritySources.manual).toEqual(["Back"]);
     expect(loaded.profile.increments).toMatchObject({
       barbell: 3,
@@ -619,18 +622,51 @@ describe("personalized training domain", () => {
     expect(loaded.program.days[0].exercises[0].restSeconds).toBe(expectedRest);
     expect(loaded.activeWorkout.exercises[0].restSeconds).toBe(expectedRest);
   });
-  it("uses system appearance for new profiles and preserves an explicit theme", () => {
+  it("uses two appearance dimensions and preserves legacy theme writes", () => {
     expect(blankState().profile.themePreference).toBe("system");
+    expect(blankState().profile.appearancePreference).toBe("system");
+    expect(blankState().profile.stylePreference).toBe("standard");
     const state = stateFor();
     state.profile.themePreference = "dark";
     saveState(state);
-    expect(loadState().profile.themePreference).toBe("dark");
+    expect(loadState().profile).toMatchObject({
+      appearancePreference: "dark",
+      stylePreference: "standard",
+      themePreference: "dark",
+    });
   });
-  it("persists a premium theme preference", () => {
+  it("persists legacy theme migration without mutating live state", () => {
+    const state = stateFor();
+    state.profile.appearancePreference = "system";
+    state.profile.stylePreference = "standard";
+    state.profile.themePreference = "dark";
+    const before = structuredClone(state);
+    expect(saveState(state)).toBe(true);
+    expect(state).toEqual(before);
+    expect(loadState().profile).toMatchObject({
+      appearancePreference: "dark",
+      stylePreference: "standard",
+      themePreference: "dark",
+    });
+  });
+  it("reports blocked storage without throwing or clearing live state", () => {
+    const state = stateFor();
+    const before = structuredClone(state);
+    vi.spyOn(Storage.prototype, "setItem").mockImplementationOnce(() => {
+      throw new DOMException("Storage blocked", "QuotaExceededError");
+    });
+    expect(saveState(state)).toBe(false);
+    expect(state).toEqual(before);
+  });
+  it("migrates a legacy Premium preference to System plus Premium", () => {
     const state = blankState();
     state.profile.themePreference = "premium";
     saveState(state);
-    expect(loadState().profile.themePreference).toBe("premium");
+    expect(loadState().profile).toMatchObject({
+      appearancePreference: "system",
+      stylePreference: "premium",
+      themePreference: "premium",
+    });
   });
   it("builds meaningfully different valid programs from different complete profiles", () => {
     const profiles = [
@@ -2699,6 +2735,47 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     } finally {
       vi.useRealTimers();
     }
+  });
+  it("reorders one scheduled occurrence without changing the recurring workout", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date(2026, 7, 17, 12));
+    try {
+      const state = stateFor({ daysPerWeek: 2, availableDays: ["Thu", "Sat"] });
+      const workout = state.program.days.find((day) => day.weekday === "Thu");
+      const original = workout.exercises.map((entry) => entry.id);
+      const reordered = [original[1], original[0], ...original.slice(2)];
+      reorderExercisesForOccurrence(state, {
+        planDate: "2026-08-20",
+        workoutId: workout.id,
+        orderedEntryIds: reordered,
+      });
+      expect(
+        plannedWorkoutForDate(state, new Date(2026, 7, 20, 12)).exercises.map(
+          (entry) => entry.id,
+        ),
+      ).toEqual(reordered);
+      expect(workout.exercises.map((entry) => entry.id)).toEqual(original);
+      expect(
+        plannedWorkoutForDate(state, new Date(2026, 7, 27, 12)).exercises.map(
+          (entry) => entry.id,
+        ),
+      ).toEqual(original);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+  it("does not reorder the occurrence that is already active", () => {
+    const state = stateFor({ daysPerWeek: 2, availableDays: ["Mon", "Wed"] });
+    const workout = state.program.days[0];
+    const original = workout.exercises.map((entry) => entry.id);
+    state.activeWorkout = startWorkout(state, workout);
+    reorderExercisesForOccurrence(state, {
+      planDate: isoDay(),
+      workoutId: workout.id,
+      orderedEntryIds: [original[1], original[0], ...original.slice(2)],
+    });
+    expect(state.workoutOccurrenceOverrides).toEqual({});
+    expect(state.activeWorkout.exercises.map((entry) => entry.id)).toEqual(original);
   });
   it("removes an exact weekly entry without mutating a started snapshot and supports undo", () => {
     const state = stateFor({ daysPerWeek: 2, availableDays: ["Mon", "Wed"] });
@@ -4890,10 +4967,10 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       expect(hamstrings.Glutes.target).toBe(balanced.Glutes.target);
       const manualShoulders = hypertrophyVolumeTargets(profile({ experience: "Advanced", priorities: ["Shoulders"], prioritySources: { manual: ["Shoulders"], physiqueConfirmed: [] } }));
       for (const muscle of ["AnteriorDelts", "LateralDelts", "RearDelts"])
-        expect(manualShoulders[muscle].target).toBe(balanced[muscle].target + 1);
+        expect(manualShoulders[muscle].target).toBe(balanced[muscle].target);
       const manualArms = hypertrophyVolumeTargets(profile({ experience: "Advanced", priorities: ["Arms"], prioritySources: { manual: ["Arms"], physiqueConfirmed: [] } }));
-      expect(manualArms.Biceps.target).toBe(balanced.Biceps.target + 1);
-      expect(manualArms.Triceps.target).toBe(balanced.Triceps.target + 1);
+      expect(manualArms.Biceps.target).toBe(balanced.Biceps.target);
+      expect(manualArms.Triceps.target).toBe(balanced.Triceps.target);
       expect(priorityProgrammingGroupsForProfile(confirmed("upper_chest"))[0].patterns).toEqual(["incline-push"]);
       expect(priorityProgrammingGroupsForProfile(confirmed("back_width"))[0].patterns).toEqual(["vertical-pull"]);
     });

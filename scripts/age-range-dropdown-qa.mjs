@@ -4,6 +4,7 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 
 const outputRoot = new URL("../artifacts/age-range-dropdown/", import.meta.url);
+const baseUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 await mkdir(outputRoot, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, outputRoot));
 const browser = await chromium.launch({
@@ -30,7 +31,7 @@ async function open({ width, height, theme }) {
       body: JSON.stringify({ available: false }),
     }),
   );
-  await page.goto(`http://127.0.0.1:4173/?age-dropdown=${Date.now()}`, {
+  await page.goto(`${baseUrl}/?age-dropdown=${Date.now()}`, {
     waitUntil: "networkidle",
   });
   await page.getByRole("button", { name: "BUILD MY PLAN" }).click();
@@ -72,6 +73,12 @@ for (const testCase of [
   await page.mouse.click(5, 5);
   await listbox.waitFor({ state: "hidden" });
   assert.equal(await trigger.textContent(), "Select age range");
+
+  await trigger.click();
+  await page.getByRole("option", { name: "30–39" }).click();
+  await listbox.waitFor({ state: "hidden" });
+  assert.equal(await trigger.textContent(), "30–39");
+  assert.equal(await trigger.getAttribute("aria-expanded"), "false");
 
   await trigger.focus();
   await page.keyboard.press("ArrowDown");

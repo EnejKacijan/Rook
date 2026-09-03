@@ -147,8 +147,16 @@ export function hypertrophyTargetsForProfile(profile = {}) {
   const experience = HYPERTROPHY_VOLUME_POLICY[profile.experience] ? profile.experience : "Intermediate";
   const workloadOffset = String(profile.effortStyle || "").startsWith("Fewer hard") ? -1
     : String(profile.effortStyle || "").startsWith("More moderate") ? 1 : 0;
-  const priorityMuscles = priorityStimulusMusclesForProfile(profile);
-  const prioritized = muscle => priorityMuscles.has(muscle);
+  // Manual broad priorities receive one bounded group-level budget in the
+  // generator. Only explicitly confirmed subregion priorities raise an
+  // individual muscle target here; otherwise e.g. Shoulders would silently
+  // become three separate bonuses for anterior, lateral and rear delts.
+  const confirmedPriorityMuscles = new Set();
+  for (const group of priorityProgrammingGroupsForProfile(profile)) {
+    if (group.source !== "confirmed") continue;
+    for (const muscle of group.muscles) confirmedPriorityMuscles.add(muscle);
+  }
+  const prioritized = muscle => confirmedPriorityMuscles.has(muscle);
   return Object.fromEntries(Object.entries(HYPERTROPHY_VOLUME_POLICY[experience]).map(
     ([muscle, [floor, target]]) => [muscle, {
       floor: Math.max(2, floor + workloadOffset),

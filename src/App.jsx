@@ -1,4 +1,5 @@
 import {
+  Component,
   cloneElement,
   isValidElement,
   useEffect,
@@ -7,12 +8,32 @@ import {
   useRef,
   useState,
 } from "react";
+import { flushSync } from "react-dom";
 import {
   AIService,
   normalizeCoachText,
   preparePhysiquePhoto,
 } from "./aiService.js";
 import { trackFunnelEvent, trackFunnelEventOnce } from "./analytics.js";
+
+function rookViewTransitionName(...parts) {
+  return `rook-${parts.join("-").replace(/[^a-zA-Z0-9_-]/g, "-")}`;
+}
+
+function runRookViewTransition(change) {
+  const reducedMotion =
+    typeof window !== "undefined" &&
+    window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+  if (
+    typeof document === "undefined" ||
+    typeof document.startViewTransition !== "function" ||
+    reducedMotion
+  ) {
+    change();
+    return null;
+  }
+  return document.startViewTransition(() => flushSync(change));
+}
 import { rampWeightForWorkingLoad } from "./warmups.js";
 import {
   isSupersetRoundBoundary,
@@ -37,6 +58,11 @@ import {
   detectSplitPreference,
   onboardingSplitOptions,
 } from "./splitPreferences.js";
+import {
+  MAX_MANUAL_TRAINING_PRIORITIES,
+  nextManualPrioritySelection,
+  normalizeManualPrioritySelection,
+} from "./prioritySelection.js";
 import {
   EQUIPMENT_BY_ENVIRONMENT,
   EXERCISE_THUMBNAIL_NORMALIZATION,
@@ -72,6 +98,7 @@ import {
   isoDay,
   loadState,
   matchImportedExerciseName,
+  materializeWarmupPlan,
   nextScheduledWorkout,
   normalizeWorkoutName,
   normalizeSessionNote,
@@ -84,6 +111,7 @@ import {
   refreshWorkoutWarmup,
   removeExerciseFromOccurrence,
   removeExerciseFromWeeklyPlan,
+  reorderExercisesForOccurrence,
   restartActiveWorkout,
   restoreOccurrenceOverride,
   restoreWeeklyPlanWorkout,
@@ -116,7 +144,6 @@ import {
 } from "./planReorder.js";
 import {
   buildWeeklyPlanExport,
-  buildWorkoutExport,
   hasWorkoutExportNotes,
 } from "./workoutExport.js";
 const navItems = [
@@ -169,8 +196,55 @@ function useLiftState() {
     }
     return initial;
   });
-  useLayoutEffect(() => saveState(state), [state]);
-  return [state, (fn) => setState((previous) => fn(clone(previous)))];
+  const [persistenceFailed, setPersistenceFailed] = useState(false);
+  useLayoutEffect(() => {
+    const saved = saveState(state);
+    setPersistenceFailed(!saved);
+  }, [state]);
+  return [
+    state,
+    (fn) => setState((previous) => fn(clone(previous))),
+    persistenceFailed,
+  ];
+}
+
+class RookErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { failed: false };
+  }
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  componentDidCatch(error) {
+    if (import.meta.env.DEV) console.error("ROOK render failed", error);
+  }
+  render() {
+    if (!this.state.failed) return this.props.children;
+    return (
+      <main className="fatal-error-screen" role="alert">
+        <p className="eyebrow">ROOK</p>
+        <h1>Rook hit a problem.</h1>
+        <p>Your saved plan and workout data have not been cleared.</p>
+        <button className="button primary" onClick={() => location.reload()}>
+          RELOAD APP
+        </button>
+      </main>
+    );
+  }
+}
+
+function PersistenceHost({ failed, children }) {
+  if (!failed) return children;
+  return (
+    <div className="persistence-host">
+      <aside className="persistence-warning" role="alert">
+        Changes can’t be saved on this device. Check browser storage before
+        closing Rook.
+      </aside>
+      {children}
+    </div>
+  );
 }
 export function resolvedTheme(preference, systemDark = false) {
   if (preference === "premium") return "premium";
@@ -178,34 +252,52 @@ export function resolvedTheme(preference, systemDark = false) {
     ? "dark"
     : "light";
 }
-function useResolvedTheme(preference = "system") {
+export function resolvedAppearance(preference, systemDark = false) {
+  return preference === "dark" || (preference === "system" && systemDark)
+    ? "dark"
+    : "light";
+}
+export function legacyThemePreference(appearance, style) {
+  return style === "premium" ? "premium" : appearance;
+}
+function useResolvedTheme(
+  appearancePreference = "system",
+  stylePreference = "standard",
+) {
   useLayoutEffect(() => {
     const media = window.matchMedia("(prefers-color-scheme: dark)");
     const apply = () => {
-      const theme = resolvedTheme(preference, media.matches);
-      const premiumScheme = media.matches ? "dark" : "light";
-      document.documentElement.dataset.theme = theme;
-      if (theme === "premium")
-        document.documentElement.dataset.premiumScheme = premiumScheme;
+      const appearance = resolvedAppearance(
+        appearancePreference,
+        media.matches,
+      );
+      const style = stylePreference === "premium" ? "premium" : "standard";
+      document.documentElement.dataset.appearance = appearance;
+      document.documentElement.dataset.style = style;
+      document.documentElement.dataset.theme = legacyThemePreference(
+        appearance,
+        style,
+      );
+      if (style === "premium")
+        document.documentElement.dataset.premiumScheme = appearance;
       else delete document.documentElement.dataset.premiumScheme;
-      document.documentElement.style.colorScheme =
-        theme === "premium" ? premiumScheme : theme === "light" ? "light" : "dark";
+      document.documentElement.style.colorScheme = appearance;
       document
         .querySelector('meta[name="theme-color"]')
         ?.setAttribute(
           "content",
-          theme === "premium"
-            ? premiumScheme === "dark" ? "#11110f" : "#f7f5f0"
-            : theme === "dark"
+          style === "premium"
+            ? appearance === "dark" ? "#11110f" : "#f7f5f0"
+            : appearance === "dark"
               ? "#111413"
               : "#f6f5f2",
         );
     };
     apply();
-    if (!['system', 'premium'].includes(preference)) return undefined;
+    if (appearancePreference !== "system") return undefined;
     media.addEventListener?.("change", apply);
     return () => media.removeEventListener?.("change", apply);
-  }, [preference]);
+  }, [appearancePreference, stylePreference]);
 }
 function Button({ children, variant = "primary", className = "", ...props }) {
   return (
@@ -595,17 +687,24 @@ function OnboardingOptionCard({
   description,
   selected,
   disabled = false,
+  ariaDisabled = false,
+  describedBy,
   onClick,
 }) {
   return (
     <button
       type="button"
-      className={`onboarding-option ${selected ? "selected-option" : ""}`}
+      className={`onboarding-option ${selected ? "selected-option" : ""}${ariaDisabled ? " locked-option" : ""}`}
       aria-pressed={selected}
+      aria-disabled={ariaDisabled || undefined}
+      aria-describedby={describedBy}
       aria-label={ariaLabel}
       disabled={disabled}
       onPointerUp={(event) => event.currentTarget.blur()}
-      onClick={onClick}
+      onClick={(event) => {
+        if (ariaDisabled) return;
+        onClick?.(event);
+      }}
     >
       <span className="option-card-copy">
         <strong>{label}</strong>
@@ -651,12 +750,40 @@ function TrainingPreferencesStep({
 }) {
   const restrictionInputRef = useRef(null);
   const [slowCheck, setSlowCheck] = useState(false);
+  const [restrictionsOpen, setRestrictionsOpen] = useState(false);
+  const restrictionText = String(answers.avoid || "").trim();
+  const restrictionSummary =
+    restrictionText.length > 58
+      ? `${restrictionText.slice(0, 57).trimEnd()}…`
+      : restrictionText;
+  const restrictionCount = safety?.appliedLabels?.length || 0;
+  const safetyNeedsAttention =
+    safetyAnalysisStatus === "checking" ||
+    safetyAnalysisStatus === "error" ||
+    Boolean(safety?.sourceText && trainingSafetyBlocks(safety.status));
+  const openRestrictions = (focus = true) => {
+    setRestrictionsOpen(true);
+    if (focus)
+      requestAnimationFrame(() => {
+        restrictionInputRef.current?.focus();
+      });
+  };
   useEffect(() => {
     setSlowCheck(false);
     if (safetyAnalysisStatus !== "checking") return undefined;
     const timeout = setTimeout(() => setSlowCheck(true), 8000);
     return () => clearTimeout(timeout);
   }, [safetyAnalysisStatus]);
+  useEffect(() => {
+    if (safetyNeedsAttention) setRestrictionsOpen(true);
+  }, [safetyNeedsAttention]);
+  useLayoutEffect(() => {
+    const input = restrictionInputRef.current;
+    if (!restrictionsOpen || !input) return;
+    input.style.height = "0px";
+    input.style.height = `${Math.min(144, Math.max(54, input.scrollHeight))}px`;
+    input.style.overflowY = input.scrollHeight > 144 ? "auto" : "hidden";
+  }, [answers.avoid, restrictionsOpen]);
   const specificOptions = splitOptions.filter(
     (option) => option.id !== "recommended",
   );
@@ -682,7 +809,7 @@ function TrainingPreferencesStep({
           onClick={() => setSpecificSplitOpen((open) => !open)}
         >
           <span>
-            <strong>I have a specific split</strong>
+            <strong>Have a specific split?</strong>
             {selectedSpecific && <small>{selectedSpecific.label}</small>}
           </span>
           <i className="disclosure-chevron" aria-hidden="true" />
@@ -718,91 +845,134 @@ function TrainingPreferencesStep({
           />
         )}
       </section>
-      <section className="onboarding-question-group">
+      <section className="onboarding-question-group restriction-preference">
         <div className="onboarding-group-heading">
           <strong>TRAINING RESTRICTIONS · OPTIONAL</strong>
+          {restrictionsOpen && !safetyNeedsAttention && (
+            <button
+              type="button"
+              className="restriction-collapse"
+              onClick={() => setRestrictionsOpen(false)}
+            >
+              DONE
+            </button>
+          )}
         </div>
-        <textarea
-          ref={restrictionInputRef}
-          aria-label="Restrictions or clinician limits"
-          className="text-answer compact-answer"
-          maxLength={240}
-          value={answers.avoid}
-          onChange={(event) =>
-            setAnswers((current) => ({
-              ...current,
-              avoid: event.target.value,
-              trainingSafetyConfirmedHash: null,
-              trainingSafetyClearanceAttestation: null,
-              trainingSafetyClearanceDeclinedHash: null,
-              trainingSafetyClearanceResponse: null,
-              trainingSafetyLimitsResponse: null,
-              trainingSafetySupplementalLimits: null,
-            }))
-          }
-          placeholder="Pain, recent surgery, or movements you've been told to avoid..."
-        />
-        <small className="restriction-helper">
-          Write it naturally. Rook will adapt the plan where possible and ask if
-          anything needs clarification.
-        </small>
-        {safetyAnalysisStatus === "checking" && (
-          <div className="restriction-checking" role="status" aria-live="polite">
-            <span className="restriction-spinner" aria-hidden="true" />
+        {!restrictionsOpen ? (
+          <button
+            type="button"
+            className={`restriction-disclosure${restrictionText ? " has-value" : ""}`}
+            aria-expanded="false"
+            onClick={() => openRestrictions()}
+          >
             <span>
-              <strong>{slowCheck ? "Still checking…" : "Reviewing what you entered…"}</strong>
-              <small>This can take a few seconds.</small>
+              <strong>
+                {restrictionText
+                  ? restrictionSummary
+                  : "Add injuries, pain or movements to avoid"}
+              </strong>
+              {restrictionText && (
+                <small>
+                  {restrictionCount
+                    ? pluralize(restrictionCount, "restriction")
+                    : "Restriction added"}
+                </small>
+              )}
             </span>
+            <i aria-hidden="true">{restrictionText ? "Edit ›" : "›"}</i>
+          </button>
+        ) : (
+          <div className="restriction-editor">
+            <textarea
+              ref={restrictionInputRef}
+              aria-label="Restrictions or clinician limits"
+              className="text-answer compact-answer"
+              rows="2"
+              maxLength={240}
+              value={answers.avoid}
+              onChange={(event) =>
+                setAnswers((current) => ({
+                  ...current,
+                  avoid: event.target.value,
+                  trainingSafetyConfirmedHash: null,
+                  trainingSafetyClearanceAttestation: null,
+                  trainingSafetyClearanceDeclinedHash: null,
+                  trainingSafetyClearanceResponse: null,
+                  trainingSafetyLimitsResponse: null,
+                  trainingSafetySupplementalLimits: null,
+                }))
+              }
+              placeholder="e.g. knee pain or avoid squats"
+            />
+            <small className="restriction-helper">
+              Write it naturally. Rook will account for it when building your
+              plan.
+            </small>
+            {safetyAnalysisStatus === "checking" && (
+              <div className="restriction-checking" role="status" aria-live="polite">
+                <span className="restriction-spinner" aria-hidden="true" />
+                <span>
+                  <strong>{slowCheck ? "Still checking…" : "Reviewing what you entered…"}</strong>
+                  <small>This can take a few seconds.</small>
+                </span>
+              </div>
+            )}
+            {safetyAnalysisStatus === "error" && (
+              <div className="training-safety-summary blocked" role="alert">
+                <Eyebrow>CHECK UNAVAILABLE</Eyebrow>
+                <strong>Rook couldn’t verify these restrictions.</strong>
+                <p>Try again before building your plan.</p>
+              </div>
+            )}
+            <TrainingSafetySummary
+              safety={safety}
+              confirmScope={() =>
+                setAnswers((current) => ({
+                  ...current,
+                  trainingSafetyConfirmedHash: safety.constraintHash,
+                }))
+              }
+              confirmClearance={confirmClearance}
+              setClearanceResponse={setClearanceResponse}
+              resetClearanceResponse={resetClearanceResponse}
+              setLimitsResponse={setLimitsResponse}
+              resetLimitsResponse={resetLimitsResponse}
+              supplementalLimitText={supplementalLimitText}
+              setSupplementalLimitText={setSupplementalLimitText}
+              checkSupplementalLimits={checkSupplementalLimits}
+              supplementalLimitStatus={supplementalLimitStatus}
+              editRestriction={() => {
+                openRestrictions();
+                requestAnimationFrame(() =>
+                  restrictionInputRef.current?.scrollIntoView({
+                    behavior: "smooth",
+                    block: "center",
+                  }),
+                );
+              }}
+            />
           </div>
         )}
-        {safetyAnalysisStatus === "error" && (
-          <div className="training-safety-summary blocked" role="alert">
-            <Eyebrow>CHECK UNAVAILABLE</Eyebrow>
-            <strong>Rook couldn’t verify these restrictions.</strong>
-            <p>Try again before building your plan.</p>
-          </div>
-        )}
-        <TrainingSafetySummary
-          safety={safety}
-          confirmScope={() =>
-            setAnswers((current) => ({
-              ...current,
-              trainingSafetyConfirmedHash: safety.constraintHash,
-            }))
-          }
-          confirmClearance={confirmClearance}
-          setClearanceResponse={setClearanceResponse}
-          resetClearanceResponse={resetClearanceResponse}
-          setLimitsResponse={setLimitsResponse}
-          resetLimitsResponse={resetLimitsResponse}
-          supplementalLimitText={supplementalLimitText}
-          setSupplementalLimitText={setSupplementalLimitText}
-          checkSupplementalLimits={checkSupplementalLimits}
-          supplementalLimitStatus={supplementalLimitStatus}
-          editRestriction={() => {
-            restrictionInputRef.current?.focus();
-            restrictionInputRef.current?.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-          }}
-        />
       </section>
       <section className="onboarding-question-group">
         <div className="onboarding-group-heading">
           <strong>EXERCISE PREFERENCE</strong>
         </div>
-        <div className="option-list compact-options">
-          {["Prefer free weights", "Prefer machines", "No preference"].map(
+        <div className="option-list compact-options exercise-preference-options">
+          {[
+            { value: "Prefer free weights", label: "Free weights" },
+            { value: "Prefer machines", label: "Machines" },
+            { value: "No preference", label: "No preference" },
+          ].map(
             (option) => (
               <OnboardingOptionCard
-                key={option}
-                label={option}
-                selected={answers.exercisePreference === option}
+                key={option.value}
+                label={option.label}
+                selected={answers.exercisePreference === option.value}
                 onClick={() =>
                   setAnswers((current) => ({
                     ...current,
-                    exercisePreference: option,
+                    exercisePreference: option.value,
                   }))
                 }
               />
@@ -966,6 +1136,7 @@ export function bindScrollableSheetTouch({
 function ModalDragHandle({ layerRef, close, finishClose }) {
   const [visible, setVisible] = useState(false);
   const drag = useRef(null);
+  const suppressActivation = useRef(false);
   const closeTimer = useRef(null);
   useEffect(() => {
     setVisible(
@@ -977,6 +1148,26 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
   useEffect(() => () => clearTimeout(closeTimer.current), []);
   const panel = () => layerRef.current?.firstElementChild;
   const handle = () => layerRef.current?.querySelector(".modal-drag-handle");
+  useLayoutEffect(() => {
+    if (!visible) return undefined;
+    const target = panel();
+    const control = handle();
+    if (!target || !control) return undefined;
+    const alignToPanel = () => {
+      control.style.top = `${target.offsetTop}px`;
+    };
+    alignToPanel();
+    const observer =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(alignToPanel);
+    observer?.observe(target);
+    addEventListener("resize", alignToPanel);
+    return () => {
+      observer?.disconnect();
+      removeEventListener("resize", alignToPanel);
+    };
+  }, [visible]);
   const applyDistance = (distance) => {
     const target = panel();
     const control = handle();
@@ -1011,8 +1202,12 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
     }
   };
   const start = (event) => {
-    if (event.pointerType === "touch") return;
+    if (event.pointerType === "touch") {
+      suppressActivation.current = false;
+      return;
+    }
     clearTimeout(closeTimer.current);
+    suppressActivation.current = false;
     event.stopPropagation();
     event.currentTarget.setPointerCapture(event.pointerId);
     drag.current = {
@@ -1027,6 +1222,9 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
   const move = (event) => {
     if (!drag.current) return;
     event.stopPropagation();
+    if (Math.abs(event.clientY - drag.current.startY) > 6) {
+      suppressActivation.current = true;
+    }
     const now = performance.now();
     drag.current.velocity =
       (event.clientY - drag.current.lastY) /
@@ -1063,9 +1261,17 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
   return (
     <div
       className="modal-drag-handle"
-      aria-label="Drag down to close"
+      aria-label="Drag down or tap to close"
       role="button"
       tabIndex="0"
+      onClick={(event) => {
+        if (suppressActivation.current) {
+          suppressActivation.current = false;
+          event.preventDefault();
+          return;
+        }
+        close();
+      }}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {
           event.preventDefault();
@@ -1076,6 +1282,7 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
       onPointerMove={move}
       onPointerUp={end}
       onPointerCancel={() => {
+        suppressActivation.current = true;
         drag.current = null;
         settle(false);
       }}
@@ -1093,6 +1300,16 @@ function ModalLayer({ children, close, backgroundRef }) {
     const layer = layerRef.current;
     const panel = layer?.firstElementChild;
     if (!panel) return undefined;
+    if (!panel.matches('[role="dialog"], [role="alertdialog"]')) {
+      layer.setAttribute("role", "dialog");
+      layer.setAttribute("aria-modal", "true");
+      const dialogLabel = panel
+        .querySelector(
+          "h1, h2, .detail-header strong, .long-form-sheet-header strong",
+        )
+        ?.textContent?.trim();
+      layer.setAttribute("aria-label", dialogLabel || "Rook dialog");
+    }
     const header = Array.from(panel.children).find((child) =>
       child.matches?.(".detail-header, .long-form-sheet-header"),
     );
@@ -1188,8 +1405,30 @@ function ModalLayer({ children, close, backgroundRef }) {
     body.style.top = `-${scrollY}px`;
     body.style.width = "100%";
     body.style.overflow = "hidden";
+    const focusable = () =>
+      [...layerRef.current?.querySelectorAll(
+        'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
+      ) || []].filter((element) => element.getClientRects().length > 0);
     const keydown = (event) => {
-      if (event.key === "Escape") requestClose();
+      if (event.key === "Escape") {
+        requestClose();
+        return;
+      }
+      if (event.key !== "Tab") return;
+      const controls = focusable();
+      if (!controls.length) {
+        event.preventDefault();
+        return;
+      }
+      const first = controls[0];
+      const last = controls.at(-1);
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
     addEventListener("keydown", keydown);
     const frame = requestAnimationFrame(() => {
@@ -1775,6 +2014,8 @@ function EntryLanding({ personalize, importPlan, startFromScratch }) {
   const [previewDays, setPreviewDays] = useState(4);
   const [previewChanged, setPreviewChanged] = useState(false);
   const [previewEquipment, setPreviewEquipment] = useState("Full gym");
+  const [previewEquipmentChanged, setPreviewEquipmentChanged] = useState(false);
+  const [previewAnnouncement, setPreviewAnnouncement] = useState("");
   const weekPatterns = {
     3: [
       ["MON", "Full body"],
@@ -1796,6 +2037,12 @@ function EntryLanding({ personalize, importPlan, startFromScratch }) {
     ],
   };
   const weekdays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
+  const equipmentExamples = {
+    "Full gym": "Barbell Bench Press",
+    Dumbbells: "Dumbbell Bench Press",
+    Bodyweight: "Push-Up",
+  };
+  const previewExercise = equipmentExamples[previewEquipment];
   const selectedPattern = new Map(weekPatterns[previewDays]);
   const exampleWeek = weekdays.map((day) => ({
     day,
@@ -1824,45 +2071,75 @@ function EntryLanding({ personalize, importPlan, startFromScratch }) {
           <div className="entry-demo-header">
             <span id="entry-demo-title">SEE HOW ROOK ADAPTS</span>
           </div>
-          <div className="entry-demo-control">
-            <span id="entry-days-label">DAYS I CAN TRAIN</span>
-            <div className="entry-days" role="group" aria-labelledby="entry-days-label">
+          <fieldset className="entry-demo-control">
+            <legend>DAYS I CAN TRAIN</legend>
+            <div className="entry-days">
               {[3, 4, 5].map((days) => (
-                <button
-                  type="button"
-                  key={days}
-                  aria-pressed={previewDays === days}
-                  onClick={() => {
-                    if (previewDays === days) return;
-                    setPreviewChanged(true);
-                    setPreviewDays(days);
-                  }}
-                >
-                  {days}
-                </button>
+                <label key={days}>
+                  <input
+                    type="radio"
+                    name="landing-preview-days"
+                    value={days}
+                    checked={previewDays === days}
+                    onChange={() => {
+                      setPreviewChanged(true);
+                      setPreviewDays(days);
+                      setPreviewAnnouncement(
+                        `Training days set to ${days}. Week preview updated.`,
+                      );
+                    }}
+                  />
+                  <span>{days}</span>
+                </label>
               ))}
             </div>
-          </div>
-          <div className="entry-demo-control">
-            <span id="entry-equipment-label">EQUIPMENT</span>
-            <div
-              className="entry-equipment"
-              role="group"
-              aria-labelledby="entry-equipment-label"
-            >
+          </fieldset>
+          <fieldset className="entry-demo-control">
+            <legend>EQUIPMENT</legend>
+            <div className="entry-equipment">
               {["Full gym", "Dumbbells", "Bodyweight"].map((equipment) => (
-                <button
-                  type="button"
-                  key={equipment}
-                  aria-pressed={previewEquipment === equipment}
-                  onClick={() => setPreviewEquipment(equipment)}
-                >
-                  {equipment}
-                </button>
+                <label key={equipment}>
+                  <input
+                    type="radio"
+                    name="landing-preview-equipment"
+                    value={equipment}
+                    checked={previewEquipment === equipment}
+                    onChange={() => {
+                      const exercise = equipmentExamples[equipment];
+                      setPreviewEquipmentChanged(true);
+                      setPreviewEquipment(equipment);
+                      setPreviewAnnouncement(
+                        `Equipment set to ${equipment}. Rook might choose ${exercise}.`,
+                      );
+                    }}
+                  />
+                  <span>{equipment}</span>
+                </label>
               ))}
             </div>
+          </fieldset>
+          <div className="entry-equipment-example">
+            <span>ROOK MIGHT CHOOSE</span>
+            <strong
+              key={previewEquipment}
+              className={
+                previewEquipmentChanged
+                  ? "entry-equipment-value-transition"
+                  : undefined
+              }
+            >
+              {previewExercise}
+            </strong>
           </div>
-          <div className="entry-week-result" aria-live="polite">
+          <p
+            className="visually-hidden"
+            role="status"
+            aria-live="polite"
+            aria-atomic="true"
+          >
+            {previewAnnouncement}
+          </p>
+          <div className="entry-week-result">
             <div className="entry-week-header">
               <span>A WEEK LIKE THIS</span>
               <small>{previewDays} training days</small>
@@ -1880,7 +2157,7 @@ function EntryLanding({ personalize, importPlan, startFromScratch }) {
                 </li>
               ))}
             </ul>
-            <p>Example only · Rook adapts exercise selection to your equipment.</p>
+            <p>Example only · Your plan is personalized.</p>
           </div>
         </section>
       </div>
@@ -1926,6 +2203,8 @@ function Onboarding({ update, exit, onPlanAccepted }) {
   const [supplementalLimitText, setSupplementalLimitText] = useState("");
   const [supplementalLimitStatus, setSupplementalLimitStatus] = useState("idle");
   const supplementalLimitTextRef = useRef("");
+  const generatedPreviewRootRef = useRef(null);
+  const generatedPreviewHeadingRef = useRef(null);
   const [generatedPreview, setGeneratedPreview] = useState(null);
   const [answers, setAnswers] = useState(() => blankState().profile);
   restrictionTextRef.current = String(answers.avoid || "");
@@ -2046,7 +2325,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
       label: "TRAINING PRIORITIES",
       question: "What would you like to emphasize?",
       helper:
-        "Optional. Choose one or more areas to emphasize, or keep the plan balanced.",
+        "Optional. Choose up to two areas to emphasize, or keep the plan balanced.",
       options: PRIORITIES,
       multi: true,
       optional: true,
@@ -2089,6 +2368,15 @@ function Onboarding({ update, exit, onPlanAccepted }) {
         planType: generatedPreview.program.templateId || "personalized",
       });
   }, [generatedPreview]);
+  useLayoutEffect(() => {
+    if (!generatedPreview) return;
+    const root = generatedPreviewRootRef.current;
+    const scrollingElement = document.scrollingElement;
+    if (root) root.scrollTop = 0;
+    if (scrollingElement) scrollingElement.scrollTop = 0;
+    window.scrollTo({ top: 0, left: 0, behavior: "auto" });
+    generatedPreviewHeadingRef.current?.focus({ preventScroll: true });
+  }, [generatedPreview]);
   const goalPlanPreview =
     GOAL_PLAN_PREVIEWS[answers.goal] || DEFAULT_GOAL_PLAN_PREVIEW;
   const splitOptions = onboardingSplitOptions(answers.daysPerWeek);
@@ -2099,13 +2387,12 @@ function Onboarding({ update, exit, onPlanAccepted }) {
           stage.key === "priorities"
             ? current.prioritySources?.manual || []
             : current[stage.key] || [];
-        let next = selected.includes(option)
-          ? selected.filter((item) => item !== option)
-          : [...selected, option];
-        if (stage.key === "priorities" && option === "Balanced")
-          next = ["Balanced"];
-        else if (stage.key === "priorities")
-          next = next.filter((item) => item !== "Balanced");
+        let next =
+          stage.key === "priorities"
+            ? nextManualPrioritySelection(selected, option)
+            : selected.includes(option)
+              ? selected.filter((item) => item !== option)
+              : [...selected, option];
         if (stage.key === "priorities") {
           const prioritySources = { ...current.prioritySources, manual: next };
           return {
@@ -2482,7 +2769,10 @@ function Onboarding({ update, exit, onPlanAccepted }) {
     );
   if (generatedPreview)
     return (
-      <main className="screen detail-screen generated-plan-preview initial-import-screen">
+      <main
+        ref={generatedPreviewRootRef}
+        className="screen detail-screen generated-plan-preview initial-import-screen"
+      >
         <header className="detail-header">
           <button
             aria-label="Back to onboarding"
@@ -2500,6 +2790,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
           onSave={acceptGenerated}
           onCancel={() => setGeneratedPreview(null)}
           saving={busy}
+          headingRef={generatedPreviewHeadingRef}
         />
         {busy && <BuildingOverlay stage={generationStage} />}
       </main>
@@ -2588,8 +2879,8 @@ function Onboarding({ update, exit, onPlanAccepted }) {
         )}
         {stage.personal ? (
           <div className="personal-fields">
-            <label>
-              <span>Age range</span>
+            <div className="personal-field">
+              <span id="age-range-label">Age range</span>
               <div className="age-range-picker" ref={agePickerRef}>
                 <button
                   ref={ageTriggerRef}
@@ -2597,6 +2888,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                   className="age-range-trigger"
                   role="combobox"
                   aria-label="Age range"
+                  aria-labelledby="age-range-label"
                   aria-expanded={ageMenuOpen}
                   aria-controls="age-range-options"
                   aria-haspopup="listbox"
@@ -2682,7 +2974,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                   </div>
                 )}
               </div>
-            </label>
+            </div>
             <label>
               <span>
                 First name <small>optional</small>
@@ -2756,8 +3048,11 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                 ))}
               </div>
               <small className="schedule-selection-count" aria-live="polite">
-                {answers.availableDays.length}{" "}
-                {answers.availableDays.length === 1 ? "day" : "days"} selected
+                {answers.availableDays.length === WEEKDAYS.length
+                  ? "Any day works"
+                  : `${answers.availableDays.length} ${
+                      answers.availableDays.length === 1 ? "day" : "days"
+                    } selected`}
               </small>
               {answers.daysPerWeek &&
                 answers.availableDays.length < answers.daysPerWeek && (
@@ -2818,7 +3113,9 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                         ? "Equipment available at home"
                         : "Available equipment"}
                     </strong>
-                    <small>Select all that apply</small>
+                    <small>
+                      Select all equipment you have, or choose Bodyweight only.
+                    </small>
                   </div>
                   <div className="option-list option-grid">
                     {(EQUIPMENT_BY_ENVIRONMENT[answers.environment] || []).map(
@@ -2927,6 +3224,12 @@ function Onboarding({ update, exit, onPlanAccepted }) {
               const selected = stage.multi
                 ? value.includes(option)
                 : value === option;
+              const priorityLocked =
+                stage.key === "priorities" &&
+                option !== "Balanced" &&
+                !selected &&
+                value.filter((item) => item !== "Balanced").length >=
+                  MAX_MANUAL_TRAINING_PRIORITIES;
               const effortCopy =
                 stage.key === "effortStyle"
                   ? effortGuidance.options[index]
@@ -2944,12 +3247,52 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                   label={label}
                   description={description}
                   selected={selected}
+                  ariaDisabled={priorityLocked}
+                  describedBy={
+                    priorityLocked ? "onboarding-priority-limit" : undefined
+                  }
                   onClick={() => choose(option)}
                 />
               );
             })}
           </div>
         )}
+        {stage.key === "priorities" && (
+          <>
+            <span id="onboarding-priority-limit" className="visually-hidden">
+              Maximum of two priorities selected. Deselect one to choose another.
+            </span>
+            <div
+              className="priority-selection-summary"
+              role="status"
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              <strong>
+                {value.includes("Balanced") || value.length === 0
+                  ? "Balanced plan"
+                  : `${value.length} of ${MAX_MANUAL_TRAINING_PRIORITIES} selected`}
+              </strong>
+              <small>
+                {value.includes("Balanced") || value.length === 0
+                  ? "No muscle group gets extra weekly volume."
+                  : value.length >= MAX_MANUAL_TRAINING_PRIORITIES
+                    ? "Deselect one to choose another."
+                    : value.join(" + ")}
+                </small>
+              </div>
+              <button
+                className="physique-review-entry"
+                onClick={() => setPhysiqueOpen(true)}
+              >
+                <span>
+                  <strong>Not sure what to prioritize?</strong>
+                  <small>Get an optional physique review</small>
+                </span>
+                <i aria-hidden="true">›</i>
+              </button>
+            </>
+          )}
         {stage.key === "preferences" && (
           <TrainingPreferencesStep
             answers={answers}
@@ -3149,7 +3492,7 @@ function WeekStrip({ state, referenceDate, selectedDate, selectDate }) {
             aria-label={`${day} ${date.getDate()}${isToday ? ", today" : ""}${statusLabel}`}
             aria-current={isToday ? "date" : undefined}
             aria-pressed={isSelected}
-            className={`${isSelected ? "selected-day" : isToday ? "today-date" : ""} ${workoutState}`}
+            className={`${isSelected ? "selected-day" : ""} ${isToday ? "today-date" : ""} ${workoutState}`}
             onClick={selectDay}
           >
             <small>{day[0]}</small>
@@ -3212,59 +3555,39 @@ export function formatWorkoutElapsedDuration(seconds) {
     return `${String(totalMinutes).padStart(2, "0")}:${secondsPart}`;
   return `${Math.floor(totalMinutes / 60)}:${String(totalMinutes % 60).padStart(2, "0")}:${secondsPart}`;
 }
-function TodayExerciseRow({ exercise, detail, profile, setDetail, actions }) {
-  const holdTimer = useRef(null);
-  const holdOrigin = useRef(null);
-  const suppressClick = useRef(false);
-  const suppressTimer = useRef(null);
+function TodayExerciseRow({
+  exercise,
+  detail,
+  profile,
+  setDetail,
+  actions,
+  editing = false,
+  dragging = false,
+  onRemove,
+  onMove,
+  onDragStart,
+}) {
   const keyboardContext = useRef(false);
   const keyboardContextTimer = useRef(null);
   useEffect(
     () => () => {
-      clearTimeout(holdTimer.current);
-      clearTimeout(suppressTimer.current);
       clearTimeout(keyboardContextTimer.current);
     },
     [],
   );
-  const clearHold = () => {
-    clearTimeout(holdTimer.current);
-    holdTimer.current = null;
-    holdOrigin.current = null;
-  };
   const openActions = () => {
     if (!actions) return;
     setDetail({ todayExerciseActions: { ...actions, exercise } });
   };
-  const startHold = (event) => {
-    if (!actions || event.button !== 0 || event.pointerType === "mouse") return;
-    clearHold();
-    holdOrigin.current = {
-      pointerId: event.pointerId,
-      x: event.clientX,
-      y: event.clientY,
-    };
-    holdTimer.current = setTimeout(() => {
-      suppressClick.current = true;
-      suppressTimer.current = setTimeout(
-        () => (suppressClick.current = false),
-        800,
-      );
-      triggerHaptic("tap");
-      openActions();
-      clearHold();
-    }, 500);
-  };
-  const moveHold = (event) => {
-    const origin = holdOrigin.current;
-    if (!origin || origin.pointerId !== event.pointerId) return;
-    if (Math.hypot(event.clientX - origin.x, event.clientY - origin.y) > 10)
-      clearHold();
-  };
   const openContextActions = (event) => {
     if (!actions) return;
     event.preventDefault();
-    clearHold();
+    const nativeEvent = event.nativeEvent;
+    if (
+      nativeEvent?.pointerType === "touch" ||
+      nativeEvent?.sourceCapabilities?.firesTouchEvents
+    )
+      return;
     if (keyboardContext.current) {
       keyboardContext.current = false;
       clearTimeout(keyboardContextTimer.current);
@@ -3272,26 +3595,60 @@ function TodayExerciseRow({ exercise, detail, profile, setDetail, actions }) {
     }
     openActions();
   };
+  if (editing)
+    return (
+      <div
+        className={`exercise-list-item today-exercise-edit-row${dragging ? " is-dragging" : ""}`}
+        data-entry-id={exercise.id}
+        onPointerDown={(event) => {
+          const bounds = event.currentTarget.getBoundingClientRect();
+          const inHandleColumn = event.clientX <= bounds.left + 44;
+          if (inHandleColumn) onDragStart?.(event, exercise.id);
+        }}
+        style={{
+          viewTransitionName: rookViewTransitionName("today-exercise", exercise.id),
+        }}
+      >
+        <button
+          type="button"
+          className="today-exercise-drag-handle"
+          aria-label={`Reorder ${exerciseName(exercise)}`}
+          onKeyDown={(event) => {
+            if (!['ArrowUp', 'ArrowDown'].includes(event.key)) return;
+            event.preventDefault();
+            onMove?.(exercise.id, event.key === 'ArrowUp' ? -1 : 1);
+          }}
+        >
+          <i aria-hidden="true" />
+        </button>
+        <span className="today-exercise-edit-copy">
+          <strong>{exerciseName(exercise)}</strong>
+          {detail && <small>{detail}</small>}
+        </span>
+        <span className="today-exercise-edit-target">
+          {targetLabel(exercise, profile.rirEnabled)}
+        </span>
+        <button
+          type="button"
+          className="today-exercise-remove"
+          aria-label={`Remove ${exerciseName(exercise)}`}
+          aria-haspopup="dialog"
+          onClick={() => onRemove?.(exercise)}
+        >
+          <span aria-hidden="true">×</span>
+        </button>
+      </div>
+    );
   return (
     <div
       className={`exercise-list-item${detail ? " has-secondary" : ""}`}
+      style={{
+        viewTransitionName: rookViewTransitionName("today-exercise", exercise.id),
+      }}
       onContextMenu={openContextActions}
     >
       <button
-        onClick={(event) => {
-          if (suppressClick.current) {
-            event.preventDefault();
-            event.stopPropagation();
-            suppressClick.current = false;
-            return;
-          }
-          setDetail({ exercise });
-        }}
-        onPointerDown={startHold}
-        onPointerMove={moveHold}
-        onPointerUp={clearHold}
-        onPointerCancel={clearHold}
-        onPointerLeave={clearHold}
+        onClick={() => setDetail({ exercise })}
         onKeyDown={(event) => {
           if (
             !actions ||
@@ -3312,7 +3669,6 @@ function TodayExerciseRow({ exercise, detail, profile, setDetail, actions }) {
           openActions();
         }}
         aria-keyshortcuts={actions ? "Shift+F10 ContextMenu" : undefined}
-        aria-describedby={actions ? "today-exercise-actions-help" : undefined}
         className={`list-row exercise-list-row${detail ? " has-secondary" : ""}`}
       >
         <span className="exercise-row-main">
@@ -3377,10 +3733,48 @@ function Today({
   const weekMotionTimer = useRef(null);
   const weekMotionFrame = useRef(null);
   const suppressWeekClickUntil = useRef(0);
+  const todayReorderGesture = useRef(null);
+  const todayEditOrderRef = useRef([]);
+  const todayReorderPreviewRef = useRef(null);
+  const todayReorderRectsRef = useRef(null);
+  const todayReorderAnimationsRef = useRef([]);
+  const todayReorderSettleTimer = useRef(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const [undoNotice, setUndoNotice] = useState(null);
   const [weekMotion, setWeekMotion] = useState("");
+  const [todayEditMode, setTodayEditMode] = useState(false);
+  const [todayEditOrder, setTodayEditOrder] = useState([]);
+  const [todayDraggingId, setTodayDraggingId] = useState(null);
+  const [todayReorderPreview, setTodayReorderPreview] = useState(null);
+  const [todayEditAnnouncement, setTodayEditAnnouncement] = useState("");
+  useLayoutEffect(() => {
+    const previous = todayReorderRectsRef.current;
+    todayReorderRectsRef.current = null;
+    if (!previous || window.matchMedia("(prefers-reduced-motion: reduce)").matches)
+      return;
+    todayReorderAnimationsRef.current.forEach((animation) => animation.cancel());
+    todayReorderAnimationsRef.current = [];
+    document.querySelectorAll(".today-exercise-edit-row").forEach((row) => {
+      if (row.dataset.entryId === todayReorderGesture.current?.exerciseId) return;
+      const before = previous.get(row.dataset.entryId);
+      if (!before) return;
+      const after = row.getBoundingClientRect();
+      const deltaY = before.top - after.top;
+      if (Math.abs(deltaY) < 1) return;
+      const animation = row.animate(
+        [
+          { transform: `translate3d(0, ${deltaY}px, 0)` },
+          { transform: "translate3d(0, 0, 0)" },
+        ],
+        {
+          duration: 190,
+          easing: "cubic-bezier(.2, 0, 0, 1)",
+        },
+      );
+      todayReorderAnimationsRef.current.push(animation);
+    });
+  }, [todayEditOrder]);
   const selectedDate = state.selectedDate
     ? localDate(state.selectedDate)
     : weekDate(state.selectedDay || weekday());
@@ -3396,6 +3790,9 @@ function Today({
       clearTimeout(undoTimer.current);
       clearTimeout(weekMotionTimer.current);
       cancelAnimationFrame(weekMotionFrame.current);
+      todayReorderGesture.current?.cleanup?.();
+      clearTimeout(todayReorderSettleTimer.current);
+      todayReorderAnimationsRef.current.forEach((animation) => animation.cancel());
     },
     [],
   );
@@ -3422,6 +3819,17 @@ function Today({
   );
   const selectedIso = isoDay(selectedDate);
   const selectedDay = weekday(selectedDate);
+  const viewingToday = selectedIso === isoDay();
+  useEffect(() => {
+    todayReorderGesture.current?.cleanup?.();
+    setTodayEditMode(false);
+    setTodayEditOrder([]);
+    todayEditOrderRef.current = [];
+    todayReorderGesture.current = null;
+    setTodayDraggingId(null);
+    setTodayReorderPreview(null);
+    clearTimeout(todayReorderSettleTimer.current);
+  }, [selectedIso]);
   const activeDateKey = active
     ? active.workoutDateKey || isoDay(active.startedAt || new Date())
     : null;
@@ -3433,20 +3841,23 @@ function Today({
   const template =
     adaptedTemplate || optionalStrengthForDate(state, selectedDate);
   const trainingSafety = trainingSafetyFor(state.profile);
-  const restrictedTemplateExercise = trainingSafetyBlocks(trainingSafety.status)
+  const restrictedTemplateConflict = trainingSafetyBlocks(trainingSafety.status)
     ? null
-    : (template?.exercises || []).find((exercise) => {
-        const item = exerciseCatalog[exercise.exerciseId];
-        return item && !exerciseAllowedByTrainingSafety(item, trainingSafety);
-      });
+    : plannedExerciseSafetyConflicts(
+        template ? { days: [template] } : null,
+        trainingSafety,
+      )[0] || null;
   const trainingPaused =
     trainingSafetyBlocks(trainingSafety.status) ||
-    Boolean(restrictedTemplateExercise);
-  const todaySafety = restrictedTemplateExercise
+    Boolean(restrictedTemplateConflict);
+  const todaySafety = restrictedTemplateConflict
     ? {
         ...trainingSafety,
         status: "needs_clarification",
-        message: `${exerciseName(restrictedTemplateExercise)} conflicts with the current restriction. Update the restriction or replace the exercise before starting.`,
+        message:
+          restrictedTemplateConflict.reason === "effort"
+            ? `${restrictedTemplateConflict.exerciseName} is prescribed harder than the current restriction allows. Review it before starting.`
+            : `${restrictedTemplateConflict.exerciseName} conflicts with the current restriction. Replace it before starting.`,
       }
     : trainingSafety;
   const selectedMonday = weekDate("Mon", selectedDate);
@@ -3614,7 +4025,20 @@ function Today({
           </Button>
         </section>
         <section className="exercise-preview">
-          <Eyebrow>WORKOUT EXERCISES</Eyebrow>
+          <div className="today-exercise-list-heading">
+            <Eyebrow>WORKOUT EXERCISES</Eyebrow>
+            <button
+              type="button"
+              className="text-button"
+              disabled
+              aria-describedby="active-workout-edit-lock"
+            >
+              Edit
+            </button>
+          </div>
+          <small id="active-workout-edit-lock" className="today-edit-lock-note">
+            Finish the active workout to edit exercises.
+          </small>
           {active.exercises.map((exercise, index) => {
             const done = exercise.sets.filter((set) => set.completed).length;
             const current = index === active.exerciseIndex;
@@ -3715,6 +4139,356 @@ function Today({
     );
   }
   const session = completed || template;
+  const editableTodayWorkout = Boolean(
+    !completed &&
+      !isHistoricalWeek &&
+      !active &&
+      recurringTemplate &&
+      session.exercises.every((exercise) =>
+        recurringTemplate.exercises.some((entry) => entry.id === exercise.id),
+      ),
+  );
+  const todayEditLocked = Boolean(
+    !completed && !isHistoricalWeek && active && recurringTemplate,
+  );
+  const sessionExerciseMap = new Map(
+    session.exercises.map((exercise) => [exercise.id, exercise]),
+  );
+  const effectiveTodayEditOrder = [
+    ...todayEditOrder.filter((entryId) => sessionExerciseMap.has(entryId)),
+    ...session.exercises
+      .map((exercise) => exercise.id)
+      .filter((entryId) => !todayEditOrder.includes(entryId)),
+  ];
+  const displayedExercises = todayEditMode
+    ? effectiveTodayEditOrder.map((entryId) => sessionExerciseMap.get(entryId))
+    : session.exercises;
+  const actionForExercise = (exercise) =>
+    editableTodayWorkout &&
+    recurringTemplate.exercises.some((entry) => entry.id === exercise.id)
+      ? {
+          planDate: selectedIso,
+          workoutId: recurringTemplate.id,
+          planEntryId: exercise.id,
+          onApplied: (notice) => {
+            const orderBeforeRemoval = [...effectiveTodayEditOrder];
+            showUndo({
+              ...notice,
+              undo: () => {
+                notice.undo();
+                todayEditOrderRef.current = orderBeforeRemoval;
+                setTodayEditOrder(orderBeforeRemoval);
+              },
+            });
+          },
+        }
+      : null;
+  const openTodayExerciseRemoval = (exercise) => {
+    const actions = actionForExercise(exercise);
+    if (!actions) return;
+    setDetail({ todayExerciseActions: { ...actions, exercise } });
+  };
+  const commitTodayExerciseOrder = (
+    nextOrder,
+    previousOverride,
+    previousOrder,
+  ) => {
+    if (!editableTodayWorkout) return;
+    runRookViewTransition(() =>
+      update((current) =>
+        reorderExercisesForOccurrence(current, {
+          planDate: selectedIso,
+          workoutId: recurringTemplate.id,
+          orderedEntryIds: nextOrder,
+        }),
+      ),
+    );
+    showUndo({
+      message: `${recurringTemplate.name} order updated`,
+      undo: () =>
+        runRookViewTransition(() => {
+          update((current) =>
+            restoreOccurrenceOverride(current, {
+              planDate: selectedIso,
+              workoutId: recurringTemplate.id,
+              previousOverride,
+            }),
+          );
+          todayEditOrderRef.current = previousOrder;
+          setTodayEditOrder(previousOrder);
+        }),
+    });
+  };
+  const reorderTodayExercise = (exerciseId, direction) => {
+    const orderedExercises = effectiveTodayEditOrder.map((entryId) =>
+      sessionExerciseMap.get(entryId),
+    );
+    const blocks = buildExerciseReorderBlocks(orderedExercises);
+    const sourceIndex = blocks.findIndex((block) =>
+      block.exercises.some((exercise) => exercise.id === exerciseId),
+    );
+    const targetIndex = sourceIndex + direction;
+    if (
+      sourceIndex < 0 ||
+      blocks[sourceIndex].locked ||
+      targetIndex < 0 ||
+      targetIndex >= blocks.length
+    )
+      return;
+    const moved = moveExerciseReorderBlock(
+      orderedExercises,
+      exerciseId,
+      targetIndex,
+    );
+    if (moved === orderedExercises) return;
+    const nextOrder = moved.map((exercise) => exercise.id);
+    const previousOverride = clone(
+      state.workoutOccurrenceOverrides?.[selectedIso]?.[recurringTemplate.id] ||
+        null,
+    );
+    todayEditOrderRef.current = nextOrder;
+    setTodayEditOrder(nextOrder);
+    setTodayEditAnnouncement(
+      `${exerciseName(sessionExerciseMap.get(exerciseId))} moved ${direction < 0 ? "earlier" : "later"}.`,
+    );
+    commitTodayExerciseOrder(
+      nextOrder,
+      previousOverride,
+      effectiveTodayEditOrder,
+    );
+  };
+  const captureTodayReorderRects = () => {
+    todayReorderRectsRef.current = new Map(
+      [...document.querySelectorAll(".today-exercise-edit-row")].map((row) => [
+        row.dataset.entryId,
+        row.getBoundingClientRect(),
+      ]),
+    );
+  };
+  const todayReorderScroller = (element) => {
+    let current = element?.parentElement;
+    while (current && current !== document.body) {
+      const style = getComputedStyle(current);
+      if (
+        /(auto|scroll)/.test(style.overflowY) &&
+        current.scrollHeight > current.clientHeight
+      )
+        return current;
+      current = current.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  };
+  const startTodayExerciseDrag = (event, exerciseId) => {
+    if (!editableTodayWorkout || event.button !== 0) return;
+    const orderedExercises = effectiveTodayEditOrder.map((entryId) =>
+      sessionExerciseMap.get(entryId),
+    );
+    const sourceBlock = buildExerciseReorderBlocks(orderedExercises).find(
+      (block) => block.exercises.some((exercise) => exercise.id === exerciseId),
+    );
+    if (!sourceBlock || sourceBlock.locked) return;
+    event.preventDefault();
+    event.currentTarget.setPointerCapture?.(event.pointerId);
+    const sourceRow = event.currentTarget.closest(".today-exercise-edit-row");
+    const sourceBounds = sourceRow?.getBoundingClientRect();
+    if (!sourceBounds) return;
+    const scroller = todayReorderScroller(sourceRow);
+    todayEditOrderRef.current = effectiveTodayEditOrder;
+    const finishAtWindow = (pointerEvent) =>
+      finishTodayExerciseDrag(pointerEvent);
+    const cancelAtWindow = (pointerEvent) =>
+      finishTodayExerciseDrag(pointerEvent, true);
+    const moveAtWindow = (pointerEvent) => moveTodayExerciseDrag(pointerEvent);
+    window.addEventListener("pointermove", moveAtWindow, { passive: false });
+    window.addEventListener("pointerup", finishAtWindow);
+    window.addEventListener("pointercancel", cancelAtWindow);
+    todayReorderGesture.current = {
+      pointerId: event.pointerId,
+      exerciseId,
+      originalOrder: effectiveTodayEditOrder,
+      previousOverride: clone(
+        state.workoutOccurrenceOverrides?.[selectedIso]?.[recurringTemplate.id] ||
+          null,
+      ),
+      clientY: event.clientY,
+      startY: event.clientY,
+      sourceTop: sourceBounds.top,
+      sourceHeight: sourceBounds.height,
+      scroller,
+      scrollTopAtStart: scroller.scrollTop,
+      frameTime: performance.now(),
+      moved: false,
+      cleanup: () => {
+        window.removeEventListener("pointermove", moveAtWindow);
+        window.removeEventListener("pointerup", finishAtWindow);
+        window.removeEventListener("pointercancel", cancelAtWindow);
+        cancelAnimationFrame(todayReorderGesture.current?.autoScrollFrame);
+      },
+    };
+    setTodayDraggingId(exerciseId);
+    setTodayReorderPreview({
+      exerciseId,
+      label: exerciseName(sessionExerciseMap.get(exerciseId)),
+      target: targetLabel(
+        sessionExerciseMap.get(exerciseId),
+        state.profile.rirEnabled,
+      ),
+      left: sourceBounds.left,
+      top: sourceBounds.top,
+      width: sourceBounds.width,
+      height: sourceBounds.height,
+    });
+    triggerHaptic("tap");
+    todayReorderGesture.current.autoScrollFrame = requestAnimationFrame(
+      runTodayExerciseAutoScroll,
+    );
+  };
+  const updateTodayExerciseDrag = (clientY) => {
+    const gesture = todayReorderGesture.current;
+    if (!gesture) return;
+    gesture.clientY = clientY;
+    todayReorderPreviewRef.current?.style.setProperty(
+      "--today-reorder-y",
+      `${clientY - gesture.startY}px`,
+    );
+    const scrollDelta = gesture.scroller.scrollTop - gesture.scrollTopAtStart;
+    const originalPointerY = gesture.startY - scrollDelta;
+    if (
+      gesture.moved &&
+      Math.abs(clientY - originalPointerY) <= gesture.sourceHeight / 2
+    ) {
+      const currentOrder = todayEditOrderRef.current;
+      const differsFromOriginal =
+        currentOrder.length !== gesture.originalOrder.length ||
+        currentOrder.some(
+          (entryId, index) => entryId !== gesture.originalOrder[index],
+        );
+      if (differsFromOriginal) {
+        captureTodayReorderRects();
+        todayEditOrderRef.current = gesture.originalOrder;
+        setTodayEditOrder(gesture.originalOrder);
+      }
+      return;
+    }
+    const rows = [...document.querySelectorAll(".today-exercise-edit-row")];
+    const targetRow = rows.find((row) => {
+      const bounds = row.getBoundingClientRect();
+      return clientY >= bounds.top && clientY <= bounds.bottom;
+    });
+    if (!targetRow) return;
+    const targetId = targetRow.dataset.entryId;
+    const orderedExercises = todayEditOrderRef.current
+      .map((entryId) => sessionExerciseMap.get(entryId))
+      .filter(Boolean);
+    const blocks = buildExerciseReorderBlocks(orderedExercises);
+    const sourceIndex = blocks.findIndex((block) =>
+      block.exercises.some((exercise) => exercise.id === gesture.exerciseId),
+    );
+    const targetIndex = blocks.findIndex((block) =>
+      block.exercises.some((exercise) => exercise.id === targetId),
+    );
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return;
+    const targetBounds = targetRow.getBoundingClientRect();
+    let destination = targetIndex + (clientY > targetBounds.top + targetBounds.height / 2 ? 1 : 0);
+    if (sourceIndex < destination) destination -= 1;
+    const moved = moveExerciseReorderBlock(
+      orderedExercises,
+      gesture.exerciseId,
+      destination,
+    );
+    if (moved === orderedExercises) return;
+    const nextOrder = moved.map((exercise) => exercise.id);
+    if (nextOrder.join('|') === todayEditOrderRef.current.join('|')) return;
+    gesture.moved = true;
+    captureTodayReorderRects();
+    todayEditOrderRef.current = nextOrder;
+    setTodayEditOrder(nextOrder);
+  };
+  const moveTodayExerciseDrag = (event) => {
+    const gesture = todayReorderGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    event.preventDefault();
+    updateTodayExerciseDrag(event.clientY);
+  };
+  const runTodayExerciseAutoScroll = (time) => {
+    const gesture = todayReorderGesture.current;
+    if (!gesture) return;
+    const scroller = gesture.scroller;
+    const viewport = scroller === document.scrollingElement
+      ? { top: 0, bottom: window.innerHeight }
+      : scroller.getBoundingClientRect();
+    const zone = 64;
+    let direction = 0;
+    let depth = 0;
+    if (gesture.clientY < viewport.top + zone) {
+      direction = -1;
+      depth = (viewport.top + zone - gesture.clientY) / zone;
+    } else if (gesture.clientY > viewport.bottom - zone - 72) {
+      direction = 1;
+      depth = (gesture.clientY - (viewport.bottom - zone - 72)) / zone;
+    }
+    const elapsed = Math.min(32, time - (gesture.frameTime || time));
+    gesture.frameTime = time;
+    if (direction) {
+      const before = scroller.scrollTop;
+      scroller.scrollTop +=
+        direction * (160 + 620 * Math.min(1, depth)) * elapsed / 1000;
+      if (scroller.scrollTop !== before)
+        updateTodayExerciseDrag(gesture.clientY);
+    }
+    gesture.autoScrollFrame = requestAnimationFrame(runTodayExerciseAutoScroll);
+  };
+  const finishTodayExerciseDrag = (event, cancelled = false) => {
+    const gesture = todayReorderGesture.current;
+    if (!gesture || gesture.pointerId !== event.pointerId) return;
+    gesture.cleanup?.();
+    todayReorderGesture.current = null;
+    const finalOrder = todayEditOrderRef.current;
+    const hasNetOrderChange =
+      finalOrder.length !== gesture.originalOrder.length ||
+      finalOrder.some((entryId, index) => entryId !== gesture.originalOrder[index]);
+    if (cancelled || !gesture.moved || !hasNetOrderChange) {
+      if (cancelled) {
+        captureTodayReorderRects();
+        todayEditOrderRef.current = gesture.originalOrder;
+        setTodayEditOrder(gesture.originalOrder);
+      }
+      setTodayDraggingId(null);
+      setTodayReorderPreview(null);
+      return;
+    }
+    const nextOrder = finalOrder;
+    setTodayEditAnnouncement(
+      `${exerciseName(sessionExerciseMap.get(gesture.exerciseId))} reordered.`,
+    );
+    commitTodayExerciseOrder(
+      nextOrder,
+      gesture.previousOverride,
+      gesture.originalOrder,
+    );
+    triggerHaptic("tap");
+    const finishSettle = () => {
+      setTodayDraggingId(null);
+      setTodayReorderPreview(null);
+    };
+    const reducedMotion = window.matchMedia(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const finalRow = [...document.querySelectorAll(".today-exercise-edit-row")]
+      .find((row) => row.dataset.entryId === gesture.exerciseId);
+    const preview = todayReorderPreviewRef.current;
+    if (reducedMotion || !finalRow || !preview) {
+      finishSettle();
+      return;
+    }
+    const finalBounds = finalRow.getBoundingClientRect();
+    preview.classList.add("is-settling");
+    preview.style.setProperty(
+      "--today-reorder-y",
+      `${finalBounds.top - gesture.sourceTop}px`,
+    );
+    todayReorderSettleTimer.current = setTimeout(finishSettle, 190);
+  };
   const prior = template
     ? [...datedWorkouts]
         .reverse()
@@ -3738,7 +4512,17 @@ function Today({
     !completed && !prior && ![...exerciseHistory.values()].some(Boolean);
   const start = () => {
     if (trainingPaused) {
-      setDetail("training-restrictions");
+      setDetail(
+        restrictedTemplateConflict
+          ? {
+              editPlan: {
+                reviewExerciseIds: [
+                  restrictedTemplateConflict.exerciseEntryId,
+                ],
+              },
+            }
+          : "training-restrictions",
+      );
       return;
     }
     if (startLock.current) return;
@@ -3809,55 +4593,102 @@ function Today({
         ) : trainingPaused ? (
           <Button
             variant="secondary"
-            onClick={() => setDetail("training-restrictions")}
+            onClick={() =>
+              setDetail(
+                restrictedTemplateConflict
+                  ? {
+                      editPlan: {
+                        reviewExerciseIds: [
+                          restrictedTemplateConflict.exerciseEntryId,
+                        ],
+                      },
+                    }
+                  : "training-restrictions",
+              )
+            }
           >
-            REVIEW RESTRICTIONS
+            {restrictedTemplateConflict ? "REVIEW PLAN" : "REVIEW RESTRICTIONS"}
           </Button>
         ) : (
-          <>
-            <Button
-              className="today-start-button"
-              onClick={start}
-              disabled={starting}
-              aria-busy={starting}
-            >
-              <span aria-live="polite">
-                {starting ? "STARTING…" : "START WORKOUT"}
-              </span>
-            </Button>
-            {startError && (
-              <p className="today-start-error" role="alert">
-                {startError}
-              </p>
-            )}
-          </>
+          <div
+            className={`today-start-region${todayEditMode ? " is-hidden" : ""}`}
+            aria-hidden={todayEditMode || undefined}
+            inert={todayEditMode}
+          >
+            <div>
+              <Button
+                className="today-start-button"
+                onClick={start}
+                disabled={starting || todayEditMode}
+                aria-busy={starting}
+              >
+                <span aria-live="polite">
+                  {starting ? "STARTING…" : "START WORKOUT"}
+                </span>
+              </Button>
+              {startError && (
+                <p className="today-start-error" role="alert">
+                  {startError}
+                </p>
+              )}
+            </div>
+          </div>
         )}
-        <button
-          type="button"
-          className="text-button share-workout-button"
-          onClick={() =>
-            setDetail({
-              export: {
-                kind: "workout",
-                workoutId: completed?.id,
-                workout: completed ? undefined : session,
-                date: selectedIso,
-                completed: Boolean(completed),
-              },
-            })
-          }
-        >
-          SHARE WORKOUT
-        </button>
       </section>
-      <section className="exercise-preview">
-        <Eyebrow>
-          {completed ? "LOGGED EXERCISES" : "TODAY'S EXERCISES"}
-        </Eyebrow>
-        <span id="today-exercise-actions-help" className="visually-hidden">
-          Opens exercise details. Use the context menu for exercise actions.
+      <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
+        <div className="today-exercise-edit-header">
+          <div className="today-exercise-list-heading">
+            <Eyebrow>
+              {todayEditMode
+                ? "EDIT WORKOUT"
+                : completed
+                  ? "LOGGED EXERCISES"
+                  : viewingToday
+                    ? "TODAY'S EXERCISES"
+                    : "WORKOUT EXERCISES"}
+            </Eyebrow>
+            {(editableTodayWorkout || todayEditLocked) && (
+              <button
+                type="button"
+                className="text-button today-exercise-edit-toggle"
+                aria-pressed={todayEditMode}
+                aria-describedby={todayEditLocked ? "other-active-workout-edit-lock" : undefined}
+                disabled={todayEditLocked}
+                onClick={() => {
+                  if (todayEditMode) {
+                    todayReorderGesture.current?.cleanup?.();
+                    setTodayEditMode(false);
+                    setTodayDraggingId(null);
+                    setTodayReorderPreview(null);
+                    todayReorderGesture.current = null;
+                    return;
+                  }
+                  const order = session.exercises.map((exercise) => exercise.id);
+                  todayEditOrderRef.current = order;
+                  setTodayEditOrder(order);
+                  setTodayEditMode(true);
+                  setTodayEditAnnouncement("Workout edit mode on. Changes save automatically.");
+                }}
+              >
+                {todayEditMode ? "Done" : "Edit"}
+              </button>
+            )}
+          </div>
+          {todayEditMode && (
+            <small className="today-edit-help">
+              Drag to reorder. Tap × to remove.
+            </small>
+          )}
+        </div>
+        {todayEditLocked && (
+          <small id="other-active-workout-edit-lock" className="today-edit-lock-note">
+            Finish your active workout to edit exercises.
+          </small>
+        )}
+        <span className="visually-hidden" role="status" aria-live="polite">
+          {todayEditAnnouncement}
         </span>
-        {session.exercises.map((exercise) => {
+        {displayedExercises.map((exercise) => {
           const previous = exerciseHistory.get(exercise.exerciseId);
           const completedSets = exercise.sets.filter(
             (set) => set.completed,
@@ -3887,23 +4718,32 @@ function Today({
               detail={detail}
               profile={state.profile}
               setDetail={setDetail}
-              actions={
-                !completed &&
-                !isHistoricalWeek &&
-                recurringTemplate?.exercises.some(
-                  (entry) => entry.id === exercise.id,
-                )
-                  ? {
-                      planDate: selectedIso,
-                      workoutId: recurringTemplate.id,
-                      planEntryId: exercise.id,
-                      onApplied: showUndo,
-                    }
-                  : null
-              }
+              actions={actionForExercise(exercise)}
+              editing={todayEditMode}
+              dragging={todayDraggingId === exercise.id}
+              onRemove={openTodayExerciseRemoval}
+              onMove={reorderTodayExercise}
+              onDragStart={startTodayExerciseDrag}
             />
           );
         })}
+        {todayReorderPreview && (
+          <div
+            ref={todayReorderPreviewRef}
+            className="today-reorder-preview"
+            aria-hidden="true"
+            style={{
+              left: `${todayReorderPreview.left}px`,
+              top: `${todayReorderPreview.top}px`,
+              width: `${todayReorderPreview.width}px`,
+              minHeight: `${todayReorderPreview.height}px`,
+            }}
+          >
+            <i aria-hidden="true" />
+            <strong>{todayReorderPreview.label}</strong>
+            <small>{todayReorderPreview.target}</small>
+          </div>
+        )}
       </section>
       {undoBanner}
     </main>
@@ -4078,6 +4918,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   const completionFeedbackTimerRef = useRef(null);
   const restCompleteTimerRef = useRef(null);
   const warmupDismissTimerRef = useRef(null);
+  const warmupDismissLockRef = useRef(false);
   const latestCompletedSet = active?.exercises
     ?.flatMap((entry) => entry.sets)
     .filter((set) => Number(set.completedAt) > 0)
@@ -4143,6 +4984,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     () => {
       setWarmupOpen(false);
       setDismissingWarmup(null);
+      warmupDismissLockRef.current = false;
       clearTimeout(warmupDismissTimerRef.current);
     },
     [active?.id, active?.exerciseIndex],
@@ -4240,6 +5082,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       target.weight = value;
       target.touched = true;
       target.weightEntryMode = "manual";
+      target.weightProvenance = Number(value) > 0 ? "explicit" : null;
       delete target.weightSourceSetId;
       for (let setIndex = index + 1; setIndex < sets.length; setIndex++) {
         const set = sets[setIndex];
@@ -4256,6 +5099,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           set.weight = previous.weight;
           set.weightEntryMode = "auto";
           set.weightSourceSetId = previous.id;
+          set.weightProvenance = previous.weightProvenance || null;
         }
         previousOldWeight = oldWeight;
       }
@@ -4361,7 +5205,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           : null;
     });
   const addSet = () =>
-    mutate((workout) => {
+    runRookViewTransition(() => mutate((workout) => {
       const sets = workout.exercises[workout.exerciseIndex].sets;
       if (sets.length >= 6) return;
       const previous = sets.at(-1);
@@ -4380,7 +5224,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         repsSourceSetId: previous?.id || null,
       });
       delete sets.at(-1).completedAt;
-    });
+    }));
   const removeExtraSet = (index) => {
     const set = exercise.sets[index];
     if (!set?.added) return;
@@ -4391,10 +5235,12 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       )
     )
       return;
-    mutate((workout) => {
-      workout.exercises[workout.exerciseIndex].sets.splice(index, 1);
-      workout.rest = null;
-    });
+    runRookViewTransition(() =>
+      mutate((workout) => {
+        workout.exercises[workout.exerciseIndex].sets.splice(index, 1);
+        workout.rest = null;
+      }),
+    );
   };
   const moveToExercise = (index) => {
     mutate((workout) => {
@@ -4440,6 +5286,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     setConfirmation(null);
     setWarmupOpen(false);
     setDismissingWarmup(null);
+    warmupDismissLockRef.current = false;
     setRecentlyCompletedSetId(null);
     setRestCompleteVisible(false);
     clearTimeout(completionFeedbackTimerRef.current);
@@ -4470,11 +5317,32 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     (stage) =>
       stage.exerciseIndex === active.exerciseIndex &&
       stage.exerciseId === exercise.exerciseId &&
+      (!stage.exerciseInstanceId || stage.exerciseInstanceId === exercise.id) &&
       !stage.skipped &&
       !stage.completed,
   );
   const warmup = currentWarmup || dismissingWarmup;
+  const warmupExercise = warmup
+    ? active.exercises.find(
+        (entry) =>
+          entry.id === warmup.exerciseInstanceId &&
+          entry.exerciseId === warmup.exerciseId,
+      ) ||
+      (!warmup.exerciseInstanceId &&
+      active.exercises[warmup.exerciseIndex]?.exerciseId === warmup.exerciseId
+        ? active.exercises[warmup.exerciseIndex]
+        : null)
+    : null;
+  const warmupExerciseName = warmupExercise
+    ? exerciseName(warmupExercise)
+    : null;
   const warmupDismissing = Boolean(!currentWarmup && dismissingWarmup);
+  const warmupCompleting = Boolean(
+    warmupDismissing && dismissingWarmup?._dismissal === "completed",
+  );
+  const warmupCollapsing = Boolean(
+    warmupDismissing && dismissingWarmup?._dismissPhase === "collapsing",
+  );
   const initialWarmup = warmup?.exerciseIndex === 0;
   const upNextBlocks = [];
   const seenUpNextSupersets = new Set();
@@ -4497,9 +5365,33 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       entries,
     });
   });
+  const finishWarmupDismissal = (shouldFocusWorkingSet = false) => {
+    clearTimeout(warmupDismissTimerRef.current);
+    setDismissingWarmup(null);
+    warmupDismissLockRef.current = false;
+    if (!shouldFocusWorkingSet) return;
+    requestAnimationFrame(() => {
+      screenRef.current
+        ?.querySelector(".sets .set-row:not(.set-done) .check")
+        ?.focus({ preventScroll: true });
+    });
+  };
   const dismissCurrentWarmup = (field) => {
-    if (!currentWarmup) return;
-    const snapshot = clone(currentWarmup);
+    if (!currentWarmup || warmupDismissLockRef.current) return;
+    warmupDismissLockRef.current = true;
+    const reducedMotion = window.matchMedia?.(
+      "(prefers-reduced-motion: reduce)",
+    ).matches;
+    const isCompletion = field === "completed";
+    const warmupHeight = screenRef.current
+      ?.querySelector(".workout-warmup")
+      ?.getBoundingClientRect().height;
+    const snapshot = {
+      ...clone(currentWarmup),
+      _dismissal: field,
+      _dismissPhase: isCompletion ? "acknowledging" : "collapsing",
+      _dismissHeight: warmupHeight || 0,
+    };
     if (document.activeElement?.closest?.(".workout-warmup"))
       document.activeElement.blur();
     setWarmupOpen(false);
@@ -4511,12 +5403,33 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       if (stage) stage[field] = true;
     });
     clearTimeout(warmupDismissTimerRef.current);
+    if (isCompletion && !reducedMotion) {
+      warmupDismissTimerRef.current = setTimeout(() => {
+        setDismissingWarmup((value) =>
+          value?._dismissal === "completed"
+            ? { ...value, _dismissPhase: "collapsing" }
+            : value,
+        );
+        warmupDismissTimerRef.current = setTimeout(
+          () => finishWarmupDismissal(true),
+          260,
+        );
+      }, 240);
+      return;
+    }
     warmupDismissTimerRef.current = setTimeout(
-      () => setDismissingWarmup(null),
-      200,
+      () => finishWarmupDismissal(isCompletion),
+      isCompletion ? 150 : 260,
     );
   };
-  const completeWarmup = () => dismissCurrentWarmup("completed");
+  const finishWarmup = () => dismissCurrentWarmup("completed");
+  const toggleWarmupItem = (stageId, collection, itemId) =>
+    mutate((workout) => {
+      const item = workout.warmup?.stages
+        ?.find((stage) => stage.id === stageId)
+        ?.[collection]?.find((entry) => entry.id === itemId);
+      if (item) item.completed = !item.completed;
+    });
   const toggleRampSet = (stageId, exerciseId, setId) =>
     mutate((workout) => {
       const set = workout.warmup?.stages
@@ -4542,10 +5455,37 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     const weight =
       rampWeightForWorkingLoad(workingWeight, set.loadPercent, increment) ??
       set.weight;
-    return weight !== null && weight !== undefined
-      ? `${displayWeight(weight, state.profile.units)} ${unit} × ${set.reps}`
-      : `${set.loadPercent}% of working load × ${set.reps}`;
+    if (weight !== null && weight !== undefined)
+      return `${displayWeight(weight, state.profile.units)} ${unit} × ${set.reps}`;
+    if (set.loadInstruction)
+      return `${set.technique ? "Technique · " : ""}${set.loadInstruction} × ${set.reps}`;
+    return set.loadPercent
+      ? `${set.loadPercent}% of working load × ${set.reps}`
+      : `${set.reps} controlled reps`;
   };
+  const warmupStepOrder = warmup
+    ? [
+        ...warmup.general.map((item) => ({
+          id: item.id,
+          completed: item.completed,
+        })),
+        ...warmup.movementPreparation.map((item) => ({
+          id: item.id,
+          completed: item.completed,
+        })),
+        ...warmup.rampUpSets.flatMap((entry) =>
+          entry.sets.map((set) => ({ id: set.id, completed: set.completed })),
+        ),
+      ]
+    : [];
+  const currentWarmupStepId = warmupStepOrder.find(
+    (step) => !step.completed,
+  )?.id;
+  const completedWarmupSteps = warmupStepOrder.filter(
+    (step) => step.completed,
+  ).length;
+  const warmupStepClass = (id, completed) =>
+    `warmup-check-row${completed ? " completed" : id === currentWarmupStepId ? " current" : ""}`;
   return (
     <main
       ref={screenRef}
@@ -4583,10 +5523,39 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       </header>
       {warmup && (
         <section
-          className={`workout-warmup ${warmupOpen ? "open" : ""}${warmupDismissing ? " dismissing" : ""}`}
-          aria-hidden={warmupDismissing || undefined}
+          className={`workout-warmup ${warmupOpen ? "open" : ""}${warmupCompleting ? " completing completed" : ""}${warmupCollapsing ? " dismissing" : ""}`}
+          aria-hidden={warmupCollapsing || undefined}
+          style={
+            warmupCompleting
+              ? {
+                  "--warmup-completion-height": `${dismissingWarmup?._dismissHeight || 0}px`,
+                }
+              : undefined
+          }
+          onTransitionEnd={(event) => {
+            if (
+              event.target === event.currentTarget &&
+              event.propertyName ===
+                (warmupCompleting ? "height" : "grid-template-rows") &&
+              warmupCollapsing
+            )
+              finishWarmupDismissal(warmupCompleting);
+          }}
         >
           <div className="workout-warmup-content">
+            {warmupCompleting ? (
+              <div
+                className="warmup-complete-status"
+                role="status"
+                aria-live="polite"
+              >
+                <span aria-hidden="true">✓</span>
+                <div>
+                  <strong>Warm-up complete</strong>
+                </div>
+              </div>
+            ) : (
+              <>
               <div className="workout-warmup-bar">
                 <button
                   className="workout-warmup-toggle"
@@ -4597,8 +5566,10 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                     <strong>Warm-up · ~{warmup.estimatedMinutes} min</strong>
                     <small>
                       {warmupOpen
-                        ? "Hide recommendations"
-                        : `For ${warmup.exerciseName}`}
+                        ? `${completedWarmupSteps} of ${warmupStepOrder.length} complete`
+                        : warmupExerciseName
+                          ? `For ${warmupExerciseName}`
+                          : null}
                     </small>
                   </span>
                   <i className="disclosure-chevron" aria-hidden="true" />
@@ -4617,33 +5588,60 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               )}
               {warmupOpen && (
                 <div className="warmup-details">
-                  {warmup.general.map((item) => (
-                    <div className="warmup-layer" key={item.id}>
-                      <span>
-                        <strong>{item.label}</strong>
-                        <small>General · {item.minutes} min</small>
-                      </span>
+                  {warmup.general.length > 0 && (
+                    <div className="warmup-checklist-section">
+                      <small className="warmup-section-label">GENERAL</small>
+                      {warmup.general.map((item) => (
+                        <button
+                          type="button"
+                          aria-pressed={Boolean(item.completed)}
+                          className={warmupStepClass(item.id, item.completed)}
+                          key={item.id}
+                          onClick={() =>
+                            toggleWarmupItem(warmup.id, "general", item.id)
+                          }
+                        >
+                          <span>{item.label}</span>
+                          <strong>{item.minutes} min</strong>
+                          <i aria-hidden="true">✓</i>
+                        </button>
+                      ))}
                     </div>
-                  ))}
-                  {warmup.movementPreparation.map((item) => (
-                    <div className="warmup-layer" key={item.id}>
-                      <span>
-                        <strong>{item.label}</strong>
-                        <small>
-                          Movement preparation · {item.minutes} min
-                        </small>
-                      </span>
+                  )}
+                  {warmup.movementPreparation.length > 0 && (
+                    <div className="warmup-checklist-section">
+                      <small className="warmup-section-label">PREPARATION</small>
+                      {warmup.movementPreparation.map((item) => (
+                        <button
+                          type="button"
+                          aria-pressed={Boolean(item.completed)}
+                          className={warmupStepClass(item.id, item.completed)}
+                          key={item.id}
+                          onClick={() =>
+                            toggleWarmupItem(
+                              warmup.id,
+                              "movementPreparation",
+                              item.id,
+                            )
+                          }
+                        >
+                          <span>{item.label}</span>
+                          <strong>{item.minutes} min</strong>
+                          <i aria-hidden="true">✓</i>
+                        </button>
+                      ))}
                     </div>
-                  ))}
+                  )}
                   {warmup.rampUpSets.map((entry) => (
                     <div className="warmup-ramp" key={entry.exerciseId}>
-                      <strong>{entry.exerciseName}</strong>
-                      <small>
-                        Ramp-up sets · not counted as working volume
+                      <small className="warmup-section-label">
+                        {entry.exerciseName} · RAMP-UP
                       </small>
                       {entry.sets.map((set) => (
                         <button
-                          className={set.completed ? "completed" : ""}
+                          type="button"
+                          aria-pressed={Boolean(set.completed)}
+                          className={warmupStepClass(set.id, set.completed)}
                           key={set.id}
                           onClick={() =>
                             toggleRampSet(
@@ -4659,15 +5657,22 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                       ))}
                     </div>
                   ))}
+                  {warmup.rampUpSets.length > 0 && (
+                    <small className="warmup-count-note">
+                      Ramp-up sets don’t count toward working sets.
+                    </small>
+                  )}
                   <button
                     type="button"
                     className="warmup-finish"
-                    onClick={completeWarmup}
+                    onClick={finishWarmup}
                   >
                     {initialWarmup ? "FINISH WARM-UP" : "FINISH RAMP-UP"}
                   </button>
                 </div>
               )}
+              </>
+            )}
           </div>
         </section>
       )}
@@ -4812,6 +5817,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           return (
             <div
               key={set.id}
+              style={{
+                viewTransitionName: rookViewTransitionName("set", set.id),
+              }}
               className={`set-row ${state.profile.rirEnabled && !timed ? "with-rir" : ""} ${set.completed ? "set-done" : ""} ${activeSet ? "set-active" : ""} ${ready ? "set-ready" : ""} ${edited ? "set-edited" : ""} ${future ? "set-future" : ""} ${set.added ? "set-extra" : ""}${recentlyCompletedSetId === set.id ? " set-completing" : ""}`}
               data-set-state={set.completed ? "completed" : ready ? "ready" : activeSet ? "current" : "untouched"}
               aria-current={activeSet ? "step" : undefined}
@@ -5094,40 +6102,24 @@ function SessionNoteEditor({ workout, update, optional = true }) {
   );
 }
 
-function ExportSheet({ request, state, close, setDetail }) {
-  const workout = request.workoutId
-    ? state.workouts.find((item) => item.id === request.workoutId)
-    : request.workout;
-  const safeWorkout = workout || { name: "Workout", exercises: [] };
-  const hasNotes =
-    request.kind === "workout"
-      ? hasWorkoutExportNotes(safeWorkout)
-      : state.program.days.some((day) => hasWorkoutExportNotes(day));
+function ExportSheet({ request, state, close }) {
+  const hasNotes = state.program.days.some((day) =>
+    hasWorkoutExportNotes(day),
+  );
   const [includeNotes, setIncludeNotes] = useState(false);
   const [feedback, setFeedback] = useState("");
   const artifact = useMemo(
     () =>
-      request.kind === "plan"
-        ? buildWeeklyPlanExport({
-            state,
-            date: request.date,
-            units: state.profile.units,
-            includeNotes,
-          })
-        : buildWorkoutExport({
-            workout: safeWorkout,
-            date: request.date,
-            units: state.profile.units,
-            completed: request.completed,
-            includeNotes,
-          }),
-    [includeNotes, request, safeWorkout, state],
+      buildWeeklyPlanExport({
+        state,
+        date: request.date,
+        units: state.profile.units,
+        includeNotes,
+      }),
+    [includeNotes, request.date, state],
   );
-  if (request.kind === "workout" && !workout) return null;
   const shareAvailable =
     typeof navigator !== "undefined" && typeof navigator.share === "function";
-  const goBack = () =>
-    request.returnTo ? setDetail(request.returnTo) : close();
   const share = async () => {
     try {
       await navigator.share({ title: artifact.title, text: artifact.text });
@@ -5163,10 +6155,10 @@ function ExportSheet({ request, state, close, setDetail }) {
     }
   };
   return (
-    <main className="screen detail-screen export-sheet">
+    <main className="screen detail-screen content-fit-screen export-sheet">
       <header className="detail-header">
-        <button aria-label="Back" onClick={goBack}>‹</button>
-        <strong>{request.kind === "plan" ? "Share plan" : "Share workout"}</strong>
+        <button aria-label="Back" onClick={close}>‹</button>
+        <strong>Export workout plan</strong>
         <span />
       </header>
       <Eyebrow>READY TO EXPORT</Eyebrow>
@@ -5202,7 +6194,7 @@ function ExportSheet({ request, state, close, setDetail }) {
   );
 }
 
-function CompletedWorkoutDetail({ workoutId, state, update, close, setDetail }) {
+function CompletedWorkoutDetail({ workoutId, state, update, close }) {
   const workout = state.workouts.find((item) => item.id === workoutId);
   if (!workout) return null;
   const summary = workoutSetSummary(workout);
@@ -5212,24 +6204,7 @@ function CompletedWorkoutDetail({ workoutId, state, update, close, setDetail }) 
       <header className="detail-header">
         <button aria-label="Back" onClick={close}>‹</button>
         <strong>Workout details</strong>
-        <button
-          type="button"
-          className="detail-share-button"
-          aria-label="Share workout"
-          onClick={() =>
-            setDetail({
-              export: {
-                kind: "workout",
-                workoutId: workout.id,
-                date,
-                completed: true,
-                returnTo: { completedWorkout: workout.id },
-              },
-            })
-          }
-        >
-          Share
-        </button>
+        <span />
       </header>
       <Eyebrow>{date ? displayDate(localDate(date)) : "COMPLETED WORKOUT"}</Eyebrow>
       <h1>{workout.name}</h1>
@@ -5913,7 +6888,7 @@ export function coachContextSummary(state) {
   }
   return {
     primary,
-    secondary: `${loggedWorkouts.length} ${loggedWorkouts.length === 1 ? "workout" : "workouts"} logged${hasWorkingWeights ? " · recent working weights available" : " · completed training history available"}`,
+    secondary: `${loggedWorkouts.length} ${loggedWorkouts.length === 1 ? "workout" : "workouts"} logged${hasWorkingWeights ? " · Recent working weights available" : " · Completed training history available"}`,
   };
 }
 export function contextualCoachPrompts(state) {
@@ -7014,6 +7989,10 @@ function PersonalizationSummary({ profile, program }) {
 function Profile({ state, update, setDetail, setPage, onLogout }) {
   const p = state.profile;
   const profileSafety = trainingSafetyFor(p);
+  const profileSafetyConflicts = plannedExerciseSafetyConflicts(
+    state.program,
+    profileSafety,
+  );
   const imported = ["ai-import", "imported"].includes(state.program.source);
   const preferencesOnly = ["ai-import", "imported", "manual", "scratch"].includes(
     state.program.source,
@@ -7180,12 +8159,12 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
         <button
           className="list-row"
           onClick={() =>
-            setDetail({ export: { kind: "plan", date: state.selectedDate } })
+            setDetail({ export: { date: state.selectedDate } })
           }
         >
           <span>
-            <strong>Share weekly plan</strong>
-            <small>Share, copy or download as text</small>
+            <strong>Export workout plan</strong>
+            <small>Share, copy or download the full plan</small>
           </span>
           <span>›</span>
         </button>
@@ -7229,7 +8208,9 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
             <strong>Training restrictions</strong>
             <small>
               {trainingSafetyBlocks(profileSafety.status)
-                ? "Needs review before training"
+                ? "Training paused · Needs review"
+                : profileSafetyConflicts.length
+                  ? "Plan review required"
                 : profileSafety.status === "constraints_active"
                   ? "Explicit restrictions applied"
                   : profileSafety.pastResolved
@@ -7258,7 +8239,9 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           <span>
             <strong>Appearance</strong>
             <small>
-              {titleCase(p.themePreference || "light")} theme · Illustrations{" "}
+              {titleCase(p.appearancePreference || "system")} · {titleCase(
+                p.stylePreference || "standard",
+              )} · Illustrations{" "}
               {p.showExerciseImages === false ? "off" : "on"}
             </small>
           </span>
@@ -7272,7 +8255,32 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
   );
 }
 
-function TrainingRestrictions({ state, update, close }) {
+export function plannedExerciseSafetyConflicts(program, safety) {
+  if (!program || !safety || trainingSafetyBlocks(safety.status)) return [];
+  return (program.days || []).flatMap((day) =>
+    (day.exercises || []).flatMap((exercise) => {
+      const item = exerciseCatalog[exercise.exerciseId];
+      const minimumRir =
+        safety.constraints?.minRirByExerciseId?.[exercise.exerciseId];
+      const conflictsWithMovement =
+        item && !exerciseAllowedByTrainingSafety(item, safety);
+      const conflictsWithEffort =
+        Number.isFinite(minimumRir) &&
+        Number(exercise.targetRir) < minimumRir;
+      if (!conflictsWithMovement && !conflictsWithEffort) return [];
+      return [{
+        dayId: day.id,
+        dayName: workoutDisplayParts(day, day.weekday).primary,
+        exerciseEntryId: exercise.id,
+        exerciseId: exercise.exerciseId,
+        exerciseName: exerciseName(exercise),
+        reason: conflictsWithMovement ? "movement" : "effort",
+      }];
+    }),
+  );
+}
+
+function TrainingRestrictions({ state, update, close, reviewPlan }) {
   const [sourceText, setSourceText] = useState(state.profile.avoid || "");
   const [confirmedScopeHash, setConfirmedScopeHash] = useState(
     state.profile.trainingSafetyConfirmedHash || null,
@@ -7306,6 +8314,7 @@ function TrainingRestrictions({ state, update, close }) {
     state.profile.trainingSafetySupplementalLimits?.text || "",
   );
   const [supplementalLimitStatus, setSupplementalLimitStatus] = useState("idle");
+  const [pendingImpact, setPendingImpact] = useState(null);
   const supplementalLimitTextRef = useRef(supplementalLimitText);
   supplementalLimitTextRef.current = supplementalLimitText;
   const localProfile = {
@@ -7322,7 +8331,7 @@ function TrainingRestrictions({ state, update, close }) {
     trainingSafetySupplementalLimits: supplementalLimits,
   };
   const safety = trainingSafetyFor(localProfile);
-  const commit = (semanticAnalysis) => {
+  const commit = (semanticAnalysis, { keepOpen = false } = {}) => {
     const savedText = sourceText.trim();
     update((current) => {
       current.profile.avoid = savedText;
@@ -7337,12 +8346,30 @@ function TrainingRestrictions({ state, update, close }) {
       current.profile.trainingSafetySupplementalLimits = supplementalLimits;
       return current;
     });
-    close();
+    if (!keepOpen) close();
+  };
+  const reviewImpactBeforeCommit = (semanticAnalysis, compiledSafety) => {
+    const conflicts = plannedExerciseSafetyConflicts(
+      state.program,
+      compiledSafety,
+    );
+    if (trainingSafetyBlocks(compiledSafety.status) || conflicts.length) {
+      setPendingImpact({
+        analysis: semanticAnalysis,
+        safety: compiledSafety,
+        conflicts,
+      });
+      return true;
+    }
+    return false;
   };
   const save = async () => {
     const candidateText = sourceText.trim();
     if (!candidateText) return commit(null);
-    if (analysis && analysisStatus === "ready") return commit(analysis);
+    if (analysis && analysisStatus === "ready") {
+      if (!reviewImpactBeforeCommit(analysis, safety)) commit(analysis);
+      return;
+    }
     setAnalysisStatus("checking");
     try {
       const result = await AIService.analyzeTrainingSafety(candidateText);
@@ -7361,8 +8388,9 @@ function TrainingRestrictions({ state, update, close }) {
         !["needs_confirmation", "needs_clearance_confirmation", "needs_limits_confirmation", "needs_trigger_confirmation"].includes(
           parsed.status,
         )
-      )
-        commit(result);
+      ) {
+        if (!reviewImpactBeforeCommit(result, parsed)) commit(result);
+      }
     } catch {
       setAnalysisStatus("error");
     }
@@ -7375,11 +8403,15 @@ function TrainingRestrictions({ state, update, close }) {
         <span />
       </header>
       <Eyebrow>TRAINING RESTRICTIONS</Eyebrow>
-      <h1>Apply only clear limits.</h1>
+      <h1>Set clear training limits.</h1>
       <p>
         Add current pain, recent surgery, movements you avoid, or limits a
-        clinician gave you. Rook does not diagnose or create rehabilitation
-        plans.
+        clinician gave you. Rook uses these as safety constraints. It does not
+        diagnose conditions or change your plan automatically.
+      </p>
+      <p className="restriction-plan-notice">
+        Your plan won’t be rewritten. If a restriction conflicts with it,
+        affected training will be blocked until you review it.
       </p>
       <textarea
         aria-label="Restrictions or clinician limits"
@@ -7398,6 +8430,7 @@ function TrainingRestrictions({ state, update, close }) {
           setSupplementalLimitStatus("idle");
           setAnalysis(null);
           setAnalysisStatus("idle");
+          setPendingImpact(null);
         }}
         placeholder="Example: Avoid squats, or surgeon cleared upper-body strength training only"
       />
@@ -7480,9 +8513,51 @@ function TrainingRestrictions({ state, update, close }) {
       {analysisStatus === "error" && (
         <p role="alert">Rook couldn't verify these restrictions. Try again.</p>
       )}
+      {pendingImpact && (
+        <section className="restriction-impact-review" role="alertdialog" aria-labelledby="restriction-impact-title">
+          <Eyebrow>PLAN IMPACT</Eyebrow>
+          <h2 id="restriction-impact-title">
+            {pendingImpact.conflicts.length
+              ? "This affects your current plan"
+              : "Training will be paused"}
+          </h2>
+          <p>
+            {pendingImpact.conflicts.length
+              ? `${pluralize(pendingImpact.conflicts.length, "planned exercise")} ${pendingImpact.conflicts.length === 1 ? "conflicts" : "conflict"} with this restriction. Rook won’t change ${pendingImpact.conflicts.length === 1 ? "it" : "them"} automatically. If you save, affected workouts cannot be started until reviewed.`
+              : "Rook can’t safely apply this limit without additional review. If you save, training will stay paused until the restriction is clarified."}
+          </p>
+          {pendingImpact.conflicts.length > 0 && (
+            <ul>
+              {pendingImpact.conflicts.slice(0, 4).map((conflict) => (
+                <li key={`${conflict.dayId}-${conflict.exerciseEntryId}`}>
+                  {conflict.exerciseName} · {conflict.dayName}
+                </li>
+              ))}
+            </ul>
+          )}
+          <Button
+            onClick={() => {
+              const exerciseIds = pendingImpact.conflicts.map(
+                (conflict) => conflict.exerciseEntryId,
+              );
+              commit(pendingImpact.analysis, { keepOpen: true });
+              if (exerciseIds.length) reviewPlan?.(exerciseIds);
+              else close();
+            }}
+          >
+            {pendingImpact.conflicts.length
+              ? "SAVE & REVIEW PLAN"
+              : "SAVE & PAUSE TRAINING"}
+          </Button>
+          <Button variant="quiet" onClick={() => setPendingImpact(null)}>
+            EDIT RESTRICTION
+          </Button>
+        </section>
+      )}
       <Button
         onClick={save}
         disabled={
+          Boolean(pendingImpact) ||
           analysisStatus === "checking" ||
           (analysisStatus === "ready" &&
             ["needs_confirmation", "needs_clearance_confirmation", "needs_limits_confirmation", "needs_trigger_confirmation"].includes(
@@ -7504,30 +8579,32 @@ export function displayImportedPlanName(name) {
   const meaningful = importedGoal ? titleCase(importedGoal) : withoutSchedule;
   return meaningful || "Imported plan";
 }
-function TrainingPriorities({ state, update, close }) {
-  const preferencesOnly = ["ai-import", "manual"].includes(
+function TrainingPriorities({ state, update, close, adjustPlan }) {
+  const preferencesOnly = ["ai-import", "imported", "manual", "scratch"].includes(
     state.program.source,
   );
-  const [sources, setSources] = useState(() =>
-    clone(
+  const [sources, setSources] = useState(() => {
+    const initial = clone(
       state.profile.prioritySources || {
         manual: state.profile.priorities || [],
         physiqueSuggested: [],
         physiqueConfirmed: [],
       },
-    ),
-  );
+    );
+    initial.manual = normalizeManualPrioritySelection(initial.manual);
+    return initial;
+  });
   const [reviewOpen, setReviewOpen] = useState(false);
+  const [saved, setSaved] = useState(false);
   const manual = sources.manual || [];
   const confirmed = sources.physiqueConfirmed || [];
+  const specificPriorities = manual.filter((option) => option !== "Balanced");
+  const selectionLocked =
+    specificPriorities.length >= MAX_MANUAL_TRAINING_PRIORITIES;
   const toggleManual = (option) =>
     setSources((current) => {
-      let next = current.manual || [];
-      next = next.includes(option)
-        ? next.filter((value) => value !== option)
-        : [...next, option];
-      if (option === "Balanced") next = ["Balanced"];
-      else next = next.filter((value) => value !== "Balanced");
+      const next = nextManualPrioritySelection(current.manual || [], option);
+      setSaved(false);
       return { ...current, manual: next };
     });
   if (reviewOpen)
@@ -7554,7 +8631,7 @@ function TrainingPriorities({ state, update, close }) {
       );
       return current;
     });
-    close();
+    setSaved(true);
   };
   return (
     <main className="screen detail-screen priority-settings">
@@ -7572,24 +8649,61 @@ function TrainingPriorities({ state, update, close }) {
       </Eyebrow>
       <h1>
         {preferencesOnly
-          ? "What should Coach keep in mind?"
+          ? "What would you like Coach to emphasize?"
           : "What would you like to emphasize?"}
       </h1>
       <p>
         {preferencesOnly
-          ? "These choices guide Coach and future generated plans. They don’t update this plan unless you explicitly ask Coach to adjust it."
-          : "Edit your choices at any time. They guide Coach and future program generation; changes apply when you adjust or rebuild your plan."}
+          ? "Choose up to two areas. These guide Coach recommendations and future Rook-generated programs. Your current plan won’t change automatically."
+          : "Choose up to two areas. These guide Coach and future program rebuilds. Your current plan won’t change unless you explicitly adjust or rebuild it."}
       </p>
+      <span id="priority-limit-reason" className="visually-hidden">
+        Maximum of two priorities selected. Deselect one to choose another.
+      </span>
       <div className="option-list option-grid">
-        {PRIORITIES.map((option) => (
-          <OnboardingOptionCard
-            key={option}
-            label={option}
-            selected={manual.includes(option)}
-            onClick={() => toggleManual(option)}
-          />
-        ))}
+        {PRIORITIES.map((option) => {
+          const selected = manual.includes(option);
+          const locked =
+            option !== "Balanced" && selectionLocked && !selected;
+          return (
+            <OnboardingOptionCard
+              key={option}
+              label={option}
+              selected={selected}
+              ariaDisabled={locked}
+              describedBy={locked ? "priority-limit-reason" : undefined}
+              onClick={() => toggleManual(option)}
+            />
+          );
+        })}
       </div>
+      <div
+        className="priority-selection-summary"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+      >
+        <strong>
+          {manual.includes("Balanced") || manual.length === 0
+            ? "Balanced plan"
+            : `${manual.length} of ${MAX_MANUAL_TRAINING_PRIORITIES} selected`}
+        </strong>
+        <small>
+          {manual.includes("Balanced") || manual.length === 0
+            ? "No muscle group gets extra weekly volume."
+            : selectionLocked
+              ? "Deselect one to choose another."
+              : manual.join(" + ")}
+        </small>
+      </div>
+      {saved && (
+        <div className="priority-save-status" role="status" aria-live="polite">
+          <strong>
+            {preferencesOnly ? "Preferences saved." : "Priorities saved."}
+          </strong>{" "}
+          Current plan unchanged.
+        </div>
+      )}
       {confirmed.length > 0 && (
         <section className="confirmed-physique">
           <Eyebrow>CONFIRMED FROM PHYSIQUE REVIEW</Eyebrow>
@@ -7633,6 +8747,11 @@ function TrainingPriorities({ state, update, close }) {
       <Button onClick={save}>
         {preferencesOnly ? "SAVE PREFERENCES" : "SAVE PRIORITIES"}
       </Button>
+      {saved && (
+        <Button variant="quiet" onClick={adjustPlan}>
+          {preferencesOnly ? "ASK COACH TO ADJUST PLAN" : "ADJUST CURRENT PLAN"}
+        </Button>
+      )}
     </main>
   );
 }
@@ -7804,6 +8923,99 @@ export function planEditorAllowsSupersets(mode = "review") {
   return mode === "edit";
 }
 
+function SupersetPartnerPicker({
+  exercise,
+  candidates,
+  profile,
+  onConfirm,
+  onClose,
+  className = "",
+  helper = "Rook will alternate one set of each exercise, then start your rest.",
+}) {
+  const [selectedPartnerId, setSelectedPartnerId] = useState(null);
+  const selectedPartner = candidates.find(
+    (candidate) => candidate.id === selectedPartnerId,
+  );
+  useEffect(() => {
+    if (
+      selectedPartnerId &&
+      !candidates.some((candidate) => candidate.id === selectedPartnerId)
+    ) {
+      setSelectedPartnerId(null);
+    }
+  }, [candidates, selectedPartnerId]);
+  useEffect(() => {
+    const closeOnEscape = (event) => {
+      if (event.key !== "Escape") return;
+      event.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", closeOnEscape, true);
+    return () => document.removeEventListener("keydown", closeOnEscape, true);
+  }, [onClose]);
+  return (
+    <main
+      className={`sheet replace-sheet superset-partner-sheet ${className}`.trim()}
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="superset-partner-title"
+      onClick={(event) => event.stopPropagation()}
+    >
+      <header className="superset-partner-header">
+        <div className="superset-partner-header-row">
+          <Eyebrow>CREATE SUPERSET</Eyebrow>
+          <button
+            className="sheet-close superset-partner-close"
+            aria-label="Close"
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+        <h2 id="superset-partner-title">Choose a second exercise</h2>
+        <p>
+          Pair it with {exerciseName(exercise)}. {helper}
+        </p>
+      </header>
+      <div
+        className="superset-partner-options"
+        role="radiogroup"
+        aria-label={`Exercise to pair with ${exerciseName(exercise)}`}
+      >
+        {candidates.map((candidate) => {
+          const selected = candidate.id === selectedPartnerId;
+          const prescription = targetLabel(candidate, profile.rirEnabled);
+          return (
+            <button
+              type="button"
+              className={`choice-row superset-partner-option${selected ? " is-selected" : ""}`}
+              role="radio"
+              aria-checked={selected}
+              aria-label={`${exerciseName(candidate)}, ${prescription}`}
+              key={candidate.id}
+              onClick={() => setSelectedPartnerId(candidate.id)}
+            >
+              <span>
+                <strong>{exerciseName(candidate)}</strong>
+                <small>{prescription}</small>
+              </span>
+              <i aria-hidden="true">✓</i>
+            </button>
+          );
+        })}
+      </div>
+      <footer className="superset-partner-footer">
+        <Button
+          disabled={!selectedPartner}
+          onClick={() => selectedPartner && onConfirm(selectedPartner.id)}
+        >
+          CREATE SUPERSET
+        </Button>
+      </footer>
+    </main>
+  );
+}
+
 function PlanEditor({
   source,
   profile,
@@ -7811,6 +9023,8 @@ function PlanEditor({
   onSave,
   onCancel,
   saving = false,
+  reviewExerciseIds = [],
+  headingRef,
 }) {
   const withWarmupPreference = (value) => ({
     ...clone(value),
@@ -7827,7 +9041,7 @@ function PlanEditor({
         ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
       )?.id ?? null;
   const [expandedExerciseId, setExpandedExerciseId] = useState(() =>
-    firstUnresolvedExercise(source),
+    reviewExerciseIds[0] || firstUnresolvedExercise(source),
   );
   const [exercisePickerId, setExercisePickerId] = useState(null);
   const [exerciseQuery, setExerciseQuery] = useState("");
@@ -7836,6 +9050,7 @@ function PlanEditor({
   const [addingToDayId, setAddingToDayId] = useState(null);
   const [copyingDayId, setCopyingDayId] = useState(null);
   const [pairingExerciseId, setPairingExerciseId] = useState(null);
+  const [expandedWarmupDayId, setExpandedWarmupDayId] = useState(null);
   const [collapsedDayIds, setCollapsedDayIds] = useState([]);
   const reorderRootRef = useRef(null);
   const reorderGestureRef = useRef(null);
@@ -7859,7 +9074,7 @@ function PlanEditor({
     const next = withWarmupPreference(source);
     setProgram(next);
     setDirty(false);
-    setExpandedExerciseId(firstUnresolvedExercise(next));
+    setExpandedExerciseId(reviewExerciseIds[0] || firstUnresolvedExercise(next));
     setExercisePickerId(null);
     setExerciseQuery("");
     setPrescriptionEditorId(null);
@@ -7867,11 +9082,21 @@ function PlanEditor({
     setAddingToDayId(null);
     setCopyingDayId(null);
     setPairingExerciseId(null);
+    setExpandedWarmupDayId(null);
     setCollapsedDayIds([]);
-  }, [source.id]);
+  }, [source.id, reviewExerciseIds.join("|")]);
+  useEffect(() => {
+    if (!reviewExerciseIds[0]) return;
+    requestAnimationFrame(() =>
+      document
+        .getElementById(`import-exercise-${reviewExerciseIds[0]}`)
+        ?.scrollIntoView({ behavior: "smooth", block: "center" }),
+    );
+  }, [reviewExerciseIds.join("|")]);
   const imported = program.source === "ai-import";
   const scratch = mode === "scratch";
   const preview = ["review", "import", "expert"].includes(mode);
+  const compactWarmupPreview = mode === "review" || mode === "expert";
   const importReview = imported && mode === "import";
   const allowSupersets = planEditorAllowsSupersets(mode);
   const allowReorder = mode === "edit";
@@ -7897,6 +9122,26 @@ function PlanEditor({
   const catalog = Object.values(exerciseCatalog)
     .filter((item) => isExerciseAllowed(item, profile))
     .sort((a, b) => a.name.localeCompare(b.name));
+  const pairingContext = pairingExerciseId
+    ? program.days
+        .map((day) => {
+          const exercise = day.exercises.find(
+            (item) => item.id === pairingExerciseId,
+          );
+          if (!exercise || exercise.supersetId) return null;
+          return {
+            day,
+            exercise,
+            candidates: day.exercises.filter(
+              (candidate) =>
+                candidate.id !== exercise.id &&
+                !candidate.supersetId &&
+                candidate.sets.length === exercise.sets.length,
+            ),
+          };
+        })
+        .find(Boolean)
+    : null;
   const commitReorder = (gesture) => {
     const current = programRef.current;
     if (!current || !gesture || gesture.targetIndex === null) return false;
@@ -7913,7 +9158,9 @@ function PlanEditor({
       const targetDay = next.days.find((day) => day.id === gesture.dayId);
       targetDay.exercises = moved.map((exercise) => clone(exercise));
       targetDay.estimatedMinutes = estimateSessionMinutes(targetDay.exercises);
-      setProgram(next);
+      const apply = () => setProgram(next);
+      if (gesture.animate) runRookViewTransition(apply);
+      else apply();
       setDirty(true);
       setReorderAnnouncement(`${gesture.label} moved in ${targetDay.weekday}.`);
       return true;
@@ -7925,7 +9172,9 @@ function PlanEditor({
     );
     if (moved === current.days) return false;
     const destination = moved.find((day) => day.id === gesture.dayId);
-    setProgram({ ...current, days: moved });
+    const apply = () => setProgram({ ...current, days: moved });
+    if (gesture.animate) runRookViewTransition(apply);
+    else apply();
     setDirty(true);
     setReorderAnnouncement(
       `${gesture.label} moved to ${destination?.weekday || "the selected day"}.`,
@@ -7953,6 +9202,7 @@ function PlanEditor({
       exerciseId,
       label: exerciseName(blocks[sourceIndex].exercises[0]),
       targetIndex,
+      animate: true,
     });
   };
   const moveWorkoutWithControls = (dayId, destination) => {
@@ -7971,6 +9221,7 @@ function PlanEditor({
       label: workoutDisplayParts(days[sourceIndex], days[sourceIndex].weekday)
         .primary,
       targetIndex,
+      animate: true,
     });
   };
 
@@ -8433,28 +9684,37 @@ function PlanEditor({
     setPairingExerciseId(null);
   };
   const removeExercise = (dayId, exerciseId) => {
-    setExpandedExerciseId(null);
-    setExercisePickerId(null);
-    setExerciseQuery("");
-    setDirty(true);
-    setProgram((current) => {
-      const next = clone(current);
-      const day = next.days.find((item) => item.id === dayId);
-      if (!day || (!scratch && day.exercises.length <= 1)) return current;
-      const removed = day.exercises.find((item) => item.id === exerciseId);
-      if (
-        removed?.supersetId &&
-        !confirm(
-          `Remove ${exerciseName(removed)}? Its partner will stay in the day and the superset pairing will be removed.`,
-        )
+    const sourceDay = programRef.current?.days.find((item) => item.id === dayId);
+    const removed = sourceDay?.exercises.find((item) => item.id === exerciseId);
+    if (!sourceDay || !removed || (!scratch && sourceDay.exercises.length <= 1))
+      return;
+    if (
+      removed.supersetId &&
+      !confirm(
+        `Remove ${exerciseName(removed)}? Its partner will stay in the day and the superset pairing will be removed.`,
       )
-        return current;
-      day.exercises = day.exercises.filter((item) => item.id !== exerciseId);
-      day.exercises.forEach((item) => {
-        if (item.supersetId === removed?.supersetId) delete item.supersetId;
+    )
+      return;
+    runRookViewTransition(() => {
+      setExpandedExerciseId(null);
+      setExercisePickerId(null);
+      setExerciseQuery("");
+      setDirty(true);
+      setProgram((current) => {
+        const next = clone(current);
+        const day = next.days.find((item) => item.id === dayId);
+        if (!day) return current;
+        day.exercises = day.exercises.filter((item) => item.id !== exerciseId);
+        if (day.warmupPlan?.mode === "custom")
+          day.warmupPlan.rampUpSets = (day.warmupPlan.rampUpSets || []).filter(
+            (group) => group.targetExerciseEntryId !== exerciseId,
+          );
+        day.exercises.forEach((item) => {
+          if (item.supersetId === removed.supersetId) delete item.supersetId;
+        });
+        day.estimatedMinutes = estimateSessionMinutes(day.exercises);
+        return next;
       });
-      day.estimatedMinutes = estimateSessionMinutes(day.exercises);
-      return next;
     });
   };
   const addExercise = (dayId, catalogId) => {
@@ -8474,8 +9734,9 @@ function PlanEditor({
         : compound
           ? 10
           : 15;
-    setDirty(true);
-    setProgram((current) => {
+    runRookViewTransition(() => {
+      setDirty(true);
+      setProgram((current) => {
       const next = clone(current);
       const day = next.days.find((value) => value.id === dayId);
       if (
@@ -8502,10 +9763,11 @@ function PlanEditor({
         defaultIncrement: item.increment,
       });
       day.estimatedMinutes = estimateSessionMinutes(day.exercises);
-      return next;
+        return next;
+      });
+      setAddingToDayId(null);
+      setExerciseQuery("");
     });
-    setAddingToDayId(null);
-    setExerciseQuery("");
   };
   const addCustomExercise = (dayId, rawName) => {
     const name = String(rawName || "")
@@ -8514,8 +9776,9 @@ function PlanEditor({
     if (!name) return;
     const exerciseId = `manual-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const customId = `imported-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    setDirty(true);
-    setProgram((current) => {
+    runRookViewTransition(() => {
+      setDirty(true);
+      setProgram((current) => {
       const next = clone(current);
       const day = next.days.find((value) => value.id === dayId);
       if (!day || day.exercises.length >= 8) return current;
@@ -8548,11 +9811,12 @@ function PlanEditor({
         defaultIncrement: 1,
       });
       day.estimatedMinutes = estimateSessionMinutes(day.exercises);
-      return next;
+        return next;
+      });
+      setAddingToDayId(null);
+      setExerciseQuery("");
+      setExpandedExerciseId(exerciseId);
     });
-    setAddingToDayId(null);
-    setExerciseQuery("");
-    setExpandedExerciseId(exerciseId);
   };
   const replaceExercise = (dayId, exerciseId, catalogId) => {
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -8649,8 +9913,9 @@ function PlanEditor({
     });
   };
   const setCount = (dayId, exerciseId, count) => {
-    setDirty(true);
-    setProgram((current) => {
+    runRookViewTransition(() => {
+      setDirty(true);
+      setProgram((current) => {
       const next = clone(current);
       const day = next.days.find((item) => item.id === dayId);
       const exercise = day?.exercises.find((item) => item.id === exerciseId);
@@ -8681,7 +9946,8 @@ function PlanEditor({
           )
           .forEach(resize);
       day.estimatedMinutes = estimateSessionMinutes(day.exercises);
-      return next;
+        return next;
+      });
     });
   };
   const setRep = (dayId, exerciseId, key, value) =>
@@ -8698,6 +9964,8 @@ function PlanEditor({
     mutateExercise(dayId, exerciseId, (exercise) => {
       exercise.sets[setIndex].weight =
         value === "" ? null : Math.max(0, Number(value));
+      exercise.sets[setIndex].weightProvenance =
+        value === "" ? null : "explicit-plan";
     });
   const setStartingWeight = (dayId, exerciseId, value) =>
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -8707,6 +9975,7 @@ function PlanEditor({
           : Math.max(0, storedWeight(value, profile.units));
       exercise.sets.forEach((set) => {
         set.weight = weight;
+        set.weightProvenance = weight === null ? null : "explicit-plan";
       });
     });
   const setProgramName = (value) => {
@@ -8752,6 +10021,77 @@ function PlanEditor({
     setDirty(true);
     setProgram((current) => ({ ...current, includeRecommendedWarmups: value }));
   };
+  const editWarmup = (dayId) => {
+    setDirty(true);
+    setProgram((current) => {
+      const next = clone(current);
+      const day = next.days.find((item) => item.id === dayId);
+      if (!day) return current;
+      if (!day.warmupPlan || day.warmupPlan.mode === "auto")
+        day.warmupPlan = materializeWarmupPlan(day, profile, next);
+      else if (day.warmupPlan.mode === "none")
+        day.warmupPlan = {
+          mode: "custom",
+          provenance: "user",
+          items: [],
+          rampUpSets: [],
+        };
+      return next;
+    });
+    setExpandedWarmupDayId(dayId);
+  };
+  const mutateWarmup = (dayId, mutate) => {
+    setDirty(true);
+    setProgram((current) => {
+      const next = clone(current);
+      const day = next.days.find((item) => item.id === dayId);
+      if (!day?.warmupPlan) return current;
+      day.warmupPlan.provenance = "user";
+      mutate(day.warmupPlan, day);
+      if (
+        day.warmupPlan.mode === "custom" &&
+        !(day.warmupPlan.items || []).length &&
+        !(day.warmupPlan.rampUpSets || []).length
+      )
+        day.warmupPlan = { mode: "none", items: [], rampUpSets: [] };
+      return next;
+    });
+  };
+  const addWarmupItem = (dayId) => {
+    if (program.days.find((day) => day.id === dayId)?.warmupPlan?.mode !== "custom")
+      editWarmup(dayId);
+    setDirty(true);
+    setProgram((current) => {
+      const next = clone(current);
+      const day = next.days.find((item) => item.id === dayId);
+      if (!day) return current;
+      if (day.warmupPlan?.mode !== "custom")
+        day.warmupPlan = { mode: "custom", items: [], rampUpSets: [] };
+      day.warmupPlan.provenance = "user";
+      day.warmupPlan.items ||= [];
+      day.warmupPlan.items.push({
+        id: `warmup-item-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+        label: "New warm-up movement",
+        minutes: 1,
+        sets: 1,
+        reps: 10,
+        seconds: null,
+        provenance: "user",
+      });
+      return next;
+    });
+    setExpandedWarmupDayId(dayId);
+  };
+  const restoreAutomaticWarmup = (dayId) => {
+    setDirty(true);
+    setProgram((current) => ({
+      ...current,
+      days: current.days.map((day) =>
+        day.id === dayId ? { ...day, warmupPlan: { mode: "auto" } } : day,
+      ),
+    }));
+    setExpandedWarmupDayId(null);
+  };
   const copyDayExercises = (sourceDayId, targetDayId) => {
     setDirty(true);
     setProgram((current) => {
@@ -8760,9 +10100,11 @@ function PlanEditor({
       const targetDay = next.days.find((day) => day.id === targetDayId);
       if (!sourceDay?.exercises.length || !targetDay || targetDay.exercises.length)
         return current;
+      const copiedExerciseIds = new Map();
       targetDay.exercises = remapCopiedSupersetIds(
         sourceDay.exercises.map((exercise, exerciseIndex) => {
           const exerciseId = `manual-exercise-${Date.now()}-${exerciseIndex}-${Math.random().toString(36).slice(2, 7)}`;
+          copiedExerciseIds.set(exercise.id, exerciseId);
           return {
             ...clone(exercise),
             id: exerciseId,
@@ -8776,6 +10118,27 @@ function PlanEditor({
         () =>
           `superset-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       );
+      if (sourceDay.warmupPlan) {
+        targetDay.warmupPlan = clone(sourceDay.warmupPlan);
+        targetDay.warmupPlan.items = (targetDay.warmupPlan.items || []).map(
+          (item, index) => ({
+            ...item,
+            id: `warmup-item-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+          }),
+        );
+        targetDay.warmupPlan.rampUpSets = (
+          targetDay.warmupPlan.rampUpSets || []
+        ).map((group, index) => ({
+          ...group,
+          id: `warmup-ramp-${Date.now()}-${index}-${Math.random().toString(36).slice(2, 7)}`,
+          targetExerciseEntryId:
+            copiedExerciseIds.get(group.targetExerciseEntryId) || null,
+          sets: (group.sets || []).map((set, setIndex) => ({
+            ...set,
+            id: `warmup-ramp-set-${Date.now()}-${index}-${setIndex}`,
+          })),
+        })).filter((group) => group.targetExerciseEntryId);
+      }
       targetDay.estimatedMinutes = estimateSessionMinutes(targetDay.exercises);
       return next;
     });
@@ -8902,7 +10265,9 @@ function PlanEditor({
   return (
     <>
       <Eyebrow>{copy.eyebrow}</Eyebrow>
-      <h1>{copy.title}</h1>
+      <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+        {copy.title}
+      </h1>
       <p>{copy.body}</p>
       {mode === "review" && (
         <PersonalizationSummary profile={profile} program={program} />
@@ -8920,7 +10285,7 @@ function PlanEditor({
       </div>
       <section
         ref={reorderRootRef}
-        className={`import-preview plan-editor${importReview ? " is-import-review" : ""}${reorderView ? " is-reordering" : ""}`}
+        className={`import-preview plan-editor${importReview ? " is-import-review" : ""}${importReview && unresolved === 0 && namesValid ? " has-ready-sticky-action" : ""}${reorderView ? " is-reordering" : ""}`}
       >
         <div className="import-plan-meta">
           {mode === "edit" || scratch ? (
@@ -9018,10 +10383,26 @@ function PlanEditor({
             reorderView?.kind === "workout" &&
             reorderView.targetIndex === workoutRemainingIndexes.length &&
             workoutRemainingIndexes.at(-1) === dayIndex;
+          const warmupMode = day.warmupPlan?.mode || "auto";
+          const warmupIncluded =
+            program.includeRecommendedWarmups !== false &&
+            warmupMode !== "none";
+          const warmupPrescription = warmupIncluded
+            ? warmupForWorkout(day, profile, program)
+            : null;
+          const warmupMovementCount = warmupPrescription
+            ? (warmupPrescription.general?.length || 0) +
+              (warmupPrescription.movementPreparation?.length || 0)
+            : 0;
+          const warmupRampGroupCount =
+            warmupPrescription?.rampUpSets?.length || 0;
           return (
           <div
-            className={`import-day${scratch ? " scratch-workout-day" : ""}${ready ? " is-ready" : " is-incomplete"}${collapsed ? " is-collapsed" : ""}${reorderView?.kind === "workout" && reorderView.dayId === day.id ? " reorder-placeholder" : ""}${workoutDropBefore ? " reorder-drop-before" : ""}${workoutDropAfter ? " reorder-drop-after" : ""}`}
+            className={`import-day${scratch ? " scratch-workout-day" : ""}${allowReorder ? " plan-edit-day-section" : ""}${ready ? " is-ready" : " is-incomplete"}${collapsed ? " is-collapsed" : ""}${reorderView?.kind === "workout" && reorderView.dayId === day.id ? " reorder-placeholder" : ""}${workoutDropBefore ? " reorder-drop-before" : ""}${workoutDropAfter ? " reorder-drop-after" : ""}`}
             key={day.id}
+            style={{
+              viewTransitionName: rookViewTransitionName("workout", day.id),
+            }}
             data-day-id={day.id}
             data-reorder-workout-section={allowReorder ? "true" : undefined}
             data-reorder-index={allowReorder ? dayIndex : undefined}
@@ -9112,6 +10493,9 @@ function PlanEditor({
                 {dayTitleParts.detail && <small>{dayTitleParts.detail}</small>}
               </strong>
             )}
+            {compactWarmupPreview && warmupIncluded && (
+              <small className="plan-warmup-status">Warm-up included</small>
+            )}
             {scratch && (
               <div className="scratch-day-status">
                 <small
@@ -9132,8 +10516,142 @@ function PlanEditor({
               </div>
             )}
             {!collapsed && <div className="plan-editor-cards">
+              {!compactWarmupPreview && (() => {
+                const warmupExpanded = expandedWarmupDayId === day.id;
+                const warmupItems = day.warmupPlan?.items || [];
+                const rampGroups = day.warmupPlan?.rampUpSets || [];
+                const editable = mode === "edit" || mode === "import" || scratch;
+                const warmupCustomized =
+                  warmupMode === "custom" &&
+                  day.warmupPlan?.provenance !== "generated-materialized";
+                const warmupSummaryParts = [];
+                if (warmupMovementCount > 0) {
+                  warmupSummaryParts.push(
+                    pluralize(warmupMovementCount, "movement"),
+                  );
+                }
+                if (warmupRampGroupCount > 0) {
+                  warmupSummaryParts.push(
+                    pluralize(warmupRampGroupCount, "ramp-up group"),
+                  );
+                }
+                const warmupSummary = warmupIncluded
+                  ? warmupSummaryParts.join(" · ") || "Warm-up included"
+                  : "Not included";
+                return (
+                  <div className={`plan-warmup-card mode-${warmupMode}`}>
+                    <div className="plan-warmup-card-header">
+                      <span>
+                        <small>WARM-UP</small>
+                        <strong>
+                          {warmupMode === "auto"
+                            ? "Recommended warm-up"
+                            : warmupMode === "none"
+                              ? "No warm-up"
+                              : warmupCustomized
+                                ? "Custom warm-up"
+                                : "Recommended warm-up"}
+                        </strong>
+                        <em>{warmupSummary}</em>
+                      </span>
+                      {editable && (
+                        <button
+                          type="button"
+                          className="text-button"
+                          onClick={() =>
+                            warmupMode === "custom" && warmupExpanded
+                              ? setExpandedWarmupDayId(null)
+                              : editWarmup(day.id)
+                          }
+                        >
+                          {warmupMode === "custom" && warmupExpanded ? "DONE" : "EDIT"}
+                        </button>
+                      )}
+                    </div>
+                    {warmupMode === "custom" && warmupExpanded && (
+                      <div className="plan-warmup-editor">
+                        {warmupItems.length > 0 && (
+                          <section className="plan-warmup-editor-group">
+                            <header>
+                              <small>GENERAL PREPARATION</small>
+                              <span>{pluralize(warmupItems.length, "movement")}</span>
+                            </header>
+                            <div className="plan-warmup-editor-list">
+                              {warmupItems.map((item, itemIndex) => (
+                                <div className="plan-warmup-item" key={item.id}>
+                                  <input
+                                    aria-label={`Warm-up movement ${itemIndex + 1}`}
+                                    value={item.label || ""}
+                                    maxLength={80}
+                                    onChange={(event) =>
+                                      mutateWarmup(day.id, (plan) => {
+                                        plan.items[itemIndex].label = event.target.value;
+                                      })
+                                    }
+                                  />
+                                  <div>
+                                    <label>
+                                      <span>SETS</span>
+                                      <input type="number" min="1" max="10" value={item.sets || 1} onChange={(event) => mutateWarmup(day.id, (plan) => { plan.items[itemIndex].sets = Math.max(1, Number(event.target.value) || 1); })} />
+                                    </label>
+                                    <label>
+                                      <span>REPS</span>
+                                      <input type="number" min="1" max="100" value={item.reps || ""} placeholder="—" onChange={(event) => mutateWarmup(day.id, (plan) => { plan.items[itemIndex].reps = event.target.value ? Math.max(1, Number(event.target.value)) : null; if (event.target.value) plan.items[itemIndex].seconds = null; })} />
+                                    </label>
+                                    <label>
+                                      <span>SEC</span>
+                                      <input type="number" min="1" max="1800" value={item.seconds || (!item.reps && Number(item.minutes) > 1 ? Math.round(Number(item.minutes) * 60) : "")} placeholder="—" onChange={(event) => mutateWarmup(day.id, (plan) => { const seconds = event.target.value ? Math.max(1, Number(event.target.value)) : null; plan.items[itemIndex].seconds = seconds; plan.items[itemIndex].minutes = seconds ? Math.max(1, Math.ceil(seconds / 60)) : 1; if (seconds) plan.items[itemIndex].reps = null; })} />
+                                    </label>
+                                    <button type="button" aria-label={`Remove ${item.label || "warm-up movement"}`} onClick={() => mutateWarmup(day.id, (plan) => { plan.items.splice(itemIndex, 1); })}>×</button>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </section>
+                        )}
+                        {rampGroups.length > 0 && (
+                          <section className="plan-warmup-editor-group">
+                            <header>
+                              <small>RAMP-UP</small>
+                              <span>{pluralize(rampGroups.length, "exercise")}</span>
+                            </header>
+                            <div className="plan-warmup-editor-list">
+                              {rampGroups.map((group, groupIndex) => {
+                                const target = day.exercises.find(
+                                  (exercise) => exercise.id === group.targetExerciseEntryId,
+                                );
+                                return (
+                                  <div className="plan-warmup-ramp" key={group.id}>
+                                    <span>
+                                      <strong>{target ? exerciseName(target) : "Exercise needs review"}</strong>
+                                      <small>
+                                        RAMP-UP SETS · {group.sets.map((set) => `${set.reps} × ${set.loadKind === "percent_working" ? `${set.loadValue}%` : set.loadKind === "absolute" ? `${set.loadValue} ${weightUnit(profile.units)}` : set.loadInstruction || "light"}`).join(" · ")}
+                                      </small>
+                                    </span>
+                                    <button type="button" aria-label="Remove ramp-up sets" onClick={() => mutateWarmup(day.id, (plan) => { plan.rampUpSets.splice(groupIndex, 1); })}>×</button>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </section>
+                        )}
+                        <div className="plan-warmup-editor-actions">
+                          <button type="button" className="text-button plan-add-warmup" onClick={() => addWarmupItem(day.id)}>+ ADD MOVEMENT</button>
+                          <button type="button" className="text-button plan-restore-warmup" onClick={() => restoreAutomaticWarmup(day.id)}>RESTORE RECOMMENDED</button>
+                        </div>
+                      </div>
+                    )}
+                    {warmupMode === "none" && editable && (
+                      <button type="button" className="text-button plan-restore-warmup" onClick={() => restoreAutomaticWarmup(day.id)}>RESTORE RECOMMENDED WARM-UP</button>
+                    )}
+                  </div>
+                );
+              })()}
               {day.exercises.map((exercise, exerciseIndex) => {
                 const expanded = expandedExerciseId === exercise.id;
+                const safetyReviewRequired = reviewExerciseIds.includes(
+                  exercise.id,
+                );
                 const needsReview = ["unresolved", "needs-name-review"].includes(
                   exercise.matchStatus,
                 );
@@ -9158,7 +10676,7 @@ function PlanEditor({
                   );
                 const externalLoadRelevant =
                   importedWeights.length > 0 ||
-                  loadRequirement !== "none";
+                  (!timed && loadRequirement !== "none");
                 const pair = exercise.supersetId
                   ? supersetMeta(day.exercises, exerciseIndex)
                   : null;
@@ -9229,8 +10747,15 @@ function PlanEditor({
                 return (
                   <article
                     id={`import-exercise-${exercise.id}`}
-                    className={`import-exercise plan-editor-exercise${expanded ? " is-expanded" : ""}${needsReview ? " needs-review" : ""}${pairRole ? ` is-superset superset-${pairRole.toLowerCase()}` : ""}${reorderView?.kind === "exercise" && reorderView.dayId === day.id && reorderView.sourceIndex === reorderBlockIndex ? " reorder-placeholder" : ""}${exerciseDropBefore ? " reorder-drop-before" : ""}${exerciseDropAfter ? " reorder-drop-after" : ""}`}
+                    className={`import-exercise plan-editor-exercise${expanded ? " is-expanded" : ""}${needsReview ? " needs-review" : ""}${safetyReviewRequired ? " safety-review-required" : ""}${pairRole ? ` is-superset superset-${pairRole.toLowerCase()}` : ""}${reorderView?.kind === "exercise" && reorderView.dayId === day.id && reorderView.sourceIndex === reorderBlockIndex ? " reorder-placeholder" : ""}${exerciseDropBefore ? " reorder-drop-before" : ""}${exerciseDropAfter ? " reorder-drop-after" : ""}`}
                     key={exercise.id}
+                    style={{
+                      viewTransitionName: rookViewTransitionName(
+                        "exercise",
+                        day.id,
+                        exercise.id,
+                      ),
+                    }}
                     data-reorder-block-index={allowReorder ? reorderBlockIndex : undefined}
                   >
                     <button
@@ -9254,9 +10779,11 @@ function PlanEditor({
                         );
                       }}
                       onClick={() => {
-                        setExpandedExerciseId(expanded ? null : exercise.id);
-                        setExercisePickerId(null);
-                        setExerciseQuery("");
+                        runRookViewTransition(() => {
+                          setExpandedExerciseId(expanded ? null : exercise.id);
+                          setExercisePickerId(null);
+                          setExerciseQuery("");
+                        });
                       }}
                     >
                       <span className="plan-editor-heading">
@@ -9280,6 +10807,8 @@ function PlanEditor({
                         <b>
                           {expanded
                             ? "CLOSE"
+                            : safetyReviewRequired
+                              ? "REVIEW REQUIRED"
                             : needsReview
                               ? "NEEDS REVIEW"
                               : "EDIT"}
@@ -9312,7 +10841,16 @@ function PlanEditor({
                       </div>
                     )}
                     {expanded && (
-                      <div className="plan-editor-fields">
+                      <div
+                        className="plan-editor-fields"
+                        style={{
+                          viewTransitionName: rookViewTransitionName(
+                            "editor-fields",
+                            day.id,
+                            exercise.id,
+                          ),
+                        }}
+                      >
                         {needsReview && importReview ? (
                           <div className="import-review-resolution">
                             <span className="import-review-status">
@@ -9799,34 +11337,6 @@ function PlanEditor({
                           </button>
                         </div>
                         )}
-                        {allowSupersets &&
-                          !pair &&
-                          pairingExerciseId === exercise.id && (
-                            <div className="superset-picker">
-                              <strong>Create superset</strong>
-                              <small>
-                                Choose the exercise to perform immediately after
-                                this one. Complete one set of each, then rest.
-                              </small>
-                              <div>
-                                {eligiblePartners.map((candidate) => (
-                                  <button
-                                    type="button"
-                                    key={candidate.id}
-                                    onClick={() =>
-                                      createSuperset(
-                                        day.id,
-                                        exercise.id,
-                                        candidate.id,
-                                      )
-                                    }
-                                  >
-                                    {exerciseName(candidate)}
-                                  </button>
-                                ))}
-                              </div>
-                            </div>
-                          )}
                       </div>
                     )}
                   </article>
@@ -10021,11 +11531,39 @@ function PlanEditor({
         </section>
       )}
       <Button
+        className={
+          importReview && unresolved === 0 && namesValid
+            ? "import-ready-sticky-action"
+            : ""
+        }
         disabled={saving || unresolved > 0 || !namesValid}
         onClick={saveProgram}
       >
         {saving ? "SAVING…" : copy.action}
       </Button>
+      {pairingContext && pairingContext.candidates.length > 0 && (
+        <div
+          className="modal-layer superset-picker-layer"
+          onClick={(event) => {
+            if (event.target === event.currentTarget) setPairingExerciseId(null);
+          }}
+        >
+          <SupersetPartnerPicker
+            exercise={pairingContext.exercise}
+            candidates={pairingContext.candidates}
+            profile={profile}
+            className="plan-superset-sheet"
+            onClose={() => setPairingExerciseId(null)}
+            onConfirm={(partnerId) =>
+              createSuperset(
+                pairingContext.day.id,
+                pairingContext.exercise.id,
+                partnerId,
+              )
+            }
+          />
+        </div>
+      )}
       <Button
         variant="quiet"
         className={mode === "import" ? "" : "bottom-back"}
@@ -11077,7 +12615,7 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
     </main>
   );
 }
-function EditPlan({ state, update, close }) {
+function EditPlan({ state, update, close, reviewExerciseIds = [] }) {
   const save = (program) => {
     update((current) => {
       current.program = program;
@@ -11109,6 +12647,7 @@ function EditPlan({ state, update, close }) {
           source={state.program}
           profile={state.profile}
           mode="edit"
+          reviewExerciseIds={reviewExerciseIds}
           onSave={save}
           onCancel={close}
         />
@@ -11235,9 +12774,10 @@ function SheetDragHandle({
   return (
     <div
       className={`sheet-grab-zone${disabled ? " disabled" : ""}`}
-      aria-label="Drag down to close"
+      aria-label="Drag down or tap to close"
       role="button"
       tabIndex={disabled ? -1 : 0}
+      onClick={disabled ? undefined : close}
       onKeyDown={(event) => {
         if (!disabled && (event.key === "Enter" || event.key === " ")) {
           event.preventDefault();
@@ -11550,12 +13090,42 @@ function Detail({
         onPlanAccepted={onPlanImported}
       />
     );
-  if (detail === "edit-plan")
-    return <EditPlan state={state} update={update} close={close} />;
+  if (detail === "edit-plan" || detail?.editPlan)
+    return (
+      <EditPlan
+        state={state}
+        update={update}
+        close={close}
+        reviewExerciseIds={detail?.editPlan?.reviewExerciseIds || []}
+      />
+    );
   if (detail === "training-priorities")
-    return <TrainingPriorities state={state} update={update} close={close} />;
+    return (
+      <TrainingPriorities
+        state={state}
+        update={update}
+        close={close}
+        adjustPlan={() => {
+          update((current) => {
+            current.coachDraft = "I want to adjust my current training plan using my saved priorities.";
+            return current;
+          });
+          close();
+          setPage("coach");
+        }}
+      />
+    );
   if (detail === "training-restrictions")
-    return <TrainingRestrictions state={state} update={update} close={close} />;
+    return (
+      <TrainingRestrictions
+        state={state}
+        update={update}
+        close={close}
+        reviewPlan={(reviewExerciseIds) =>
+          setDetail({ editPlan: { reviewExerciseIds } })
+        }
+      />
+    );
   if (detail === "profile-details")
     return <ProfileDetails state={state} update={update} close={close} />;
   if (detail?.profileTrainingSetting)
@@ -11588,7 +13158,6 @@ function Detail({
         request={detail.export}
         state={state}
         close={close}
-        setDetail={setDetail}
       />
     );
   if (detail?.completedWorkout)
@@ -11598,7 +13167,6 @@ function Detail({
         state={state}
         update={update}
         close={close}
-        setDetail={setDetail}
       />
     );
   if (detail?.todayExerciseActions)
@@ -11728,7 +13296,11 @@ function Detail({
             <>
               <Eyebrow>FIRST SESSION</Eyebrow>
               <h1>No history yet.</h1>
-              <p>Choose a comfortable starting load when you begin your first set.</p>
+              <p>
+                {loadRequirement === "required"
+                  ? "Choose a comfortable starting load when you begin your first set."
+                  : "Choose a comfortable starting effort when you begin your first set."}
+              </p>
             </>
           )}
           <p className="exercise-detail-target">
@@ -11896,55 +13468,109 @@ function Logging({ state, update, close }) {
       </section>
       <section className="logging-group increments-group">
         <Eyebrow>UNITS</Eyebrow>
-        <div className="segmented" aria-label="Weight units">
+        <div
+          className="segmented unit-segmented"
+          data-unit={p.units}
+          aria-label="Weight units"
+        >
           {["kg", "lb"].map((unit) => (
             <button
               key={unit}
               className={p.units === unit ? "active" : ""}
               aria-pressed={p.units === unit}
-              onClick={() =>
+              onClick={() => {
+                if (p.units === unit) return;
                 update((current) => {
                   current.profile.units = unit;
                   return current;
-                })
-              }
+                });
+              }}
             >
               {unit}
             </button>
           ))}
         </div>
-        <Eyebrow className="increments-heading">
-          DEFAULT INCREMENTS · {weightUnit(p.units).toUpperCase()}
-        </Eyebrow>
-        {Object.entries(p.increments).map(([key, value]) => (
-          <IncrementInput
-            key={key}
-            label={titleCase(key)}
-            value={value}
-            units={p.units}
-            update={(shown) =>
-              update((current) => {
-                current.profile.increments[key] = storedWeight(
-                  shown,
-                  current.profile.units,
-                );
-                return current;
-              })
-            }
-          />
-        ))}
+        <div
+          key={p.units}
+          className="unit-dependent-values"
+        >
+          <Eyebrow className="increments-heading">
+            DEFAULT INCREMENTS · {weightUnit(p.units).toUpperCase()}
+          </Eyebrow>
+          {Object.entries(p.increments).map(([key, value]) => (
+            <IncrementInput
+              key={key}
+              label={titleCase(key)}
+              value={value}
+              units={p.units}
+              update={(shown) =>
+                update((current) => {
+                  current.profile.increments[key] = storedWeight(
+                    shown,
+                    current.profile.units,
+                  );
+                  return current;
+                })
+              }
+            />
+          ))}
+        </div>
       </section>
     </main>
   );
 }
 function Appearance({ state, update, close }) {
   const showExerciseImages = state.profile.showExerciseImages !== false;
-  const [themePickerOpen, setThemePickerOpen] = useState(false);
-  const themePreference = ["system", "light", "dark", "premium"].includes(
-    state.profile.themePreference,
+  const appearancePreference = ["system", "light", "dark"].includes(
+    state.profile.appearancePreference,
   )
-    ? state.profile.themePreference
-    : "light";
+    ? state.profile.appearancePreference
+    : state.profile.themePreference === "premium"
+      ? "system"
+      : ["system", "light", "dark"].includes(state.profile.themePreference)
+        ? state.profile.themePreference
+        : "light";
+  const stylePreference = ["standard", "premium"].includes(
+    state.profile.stylePreference,
+  )
+    ? state.profile.stylePreference
+    : state.profile.themePreference === "premium"
+      ? "premium"
+      : "standard";
+  const [systemDark, setSystemDark] = useState(() =>
+    window.matchMedia("(prefers-color-scheme: dark)").matches,
+  );
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const sync = () => setSystemDark(media.matches);
+    sync();
+    media.addEventListener?.("change", sync);
+    return () => media.removeEventListener?.("change", sync);
+  }, []);
+  const themeHelp =
+    appearancePreference === "system"
+      ? `Follows your device appearance — ${systemDark ? "Dark" : "Light"} right now.`
+      : appearancePreference === "dark"
+        ? "Always use ROOK’s dark appearance."
+        : "Always use ROOK’s light appearance.";
+  const setAppearance = (value) =>
+    update((current) => {
+      current.profile.appearancePreference = value;
+      current.profile.themePreference = legacyThemePreference(
+        value,
+        current.profile.stylePreference || stylePreference,
+      );
+      return current;
+    });
+  const setStyle = (value) =>
+    update((current) => {
+      current.profile.stylePreference = value;
+      current.profile.themePreference = legacyThemePreference(
+        current.profile.appearancePreference || appearancePreference,
+        value,
+      );
+      return current;
+    });
   return (
     <main className="screen detail-screen logging-screen appearance-screen">
       <header className="detail-header">
@@ -11956,17 +13582,53 @@ function Appearance({ state, update, close }) {
       </header>
       <section className="logging-group appearance-theme-group">
         <Eyebrow>THEME</Eyebrow>
-        <button
-          type="button"
-          className="appearance-theme-row"
-          onClick={() => setThemePickerOpen(true)}
+        <div
+          className="appearance-segmented"
+          role="group"
+          aria-label="Theme"
         >
-          <span>
-            <strong>Theme</strong>
-            <small>{titleCase(themePreference)}</small>
-          </span>
-          <span aria-hidden="true">›</span>
-        </button>
+          {[
+            ["system", "System"],
+            ["light", "Light"],
+            ["dark", "Dark"],
+          ].map(([value, label]) => (
+            <button
+              type="button"
+              key={value}
+              aria-pressed={appearancePreference === value}
+              onClick={() => setAppearance(value)}
+            >
+              <i aria-hidden="true">✓</i>
+              <strong>{label}</strong>
+            </button>
+          ))}
+        </div>
+        <small className="appearance-theme-help" aria-live="polite">
+          {themeHelp}
+        </small>
+      </section>
+      <section className="logging-group appearance-style-group">
+        <Eyebrow>STYLE</Eyebrow>
+        <div className="appearance-style-choices">
+          {[
+            ["standard", "Standard", "ROOK green."],
+            ["premium", "Premium", "Warm gold accents on the same surfaces."],
+          ].map(([value, label, help]) => (
+            <button
+              type="button"
+              className="appearance-style-choice"
+              key={value}
+              aria-pressed={stylePreference === value}
+              onClick={() => setStyle(value)}
+            >
+              <span>
+                <strong>{label}</strong>
+                <small>{help}</small>
+              </span>
+              <i aria-hidden="true">✓</i>
+            </button>
+          ))}
+        </div>
       </section>
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>
@@ -12006,68 +13668,6 @@ function Appearance({ state, update, close }) {
           .
         </p>
       </section>
-      {themePickerOpen && (
-        <div
-          className="theme-choice-layer"
-          role="presentation"
-          onMouseDown={(event) => {
-            if (event.target === event.currentTarget) setThemePickerOpen(false);
-          }}
-        >
-          <section
-            className="theme-choice-sheet"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="theme-choice-title"
-          >
-            <div className="sheet-grab-zone" aria-hidden="true">
-              <span />
-            </div>
-            <header>
-              <h2 id="theme-choice-title">Theme</h2>
-              <button
-                type="button"
-                aria-label="Close theme choices"
-                onClick={() => setThemePickerOpen(false)}
-              >
-                ×
-              </button>
-            </header>
-            <div className="theme-choice-list">
-              {[
-                ["system", "System", "Follows your device appearance."],
-                ["light", "Light", "Always use ROOK’s light appearance."],
-                ["dark", "Dark", "Always use ROOK’s dark appearance."],
-                [
-                  "premium",
-                  "Premium",
-                  "Warm gold accents adapted to your device appearance.",
-                ],
-              ].map(([value, label, help]) => (
-                <button
-                  type="button"
-                  key={value}
-                  className={themePreference === value ? "selected" : ""}
-                  aria-pressed={themePreference === value}
-                  onClick={() => {
-                    update((current) => {
-                      current.profile.themePreference = value;
-                      return current;
-                    });
-                    setThemePickerOpen(false);
-                  }}
-                >
-                  <span>
-                    <strong>{label}</strong>
-                    <small>{help}</small>
-                  </span>
-                  {themePreference === value && <i aria-hidden="true">✓</i>}
-                </button>
-              ))}
-            </div>
-          </section>
-        </div>
-      )}
     </main>
   );
 }
@@ -12119,12 +13719,10 @@ function TodayExerciseActions({ request, state, update, close }) {
   const wouldEmptyProgram = recurringIsLast && state.program.days.length <= 1;
   const activeSource = state.activeWorkout?.programDayId === request.workoutId;
   const isToday = planDate === isoDay();
-  const dateLabel = isToday
-    ? "today"
-    : new Intl.DateTimeFormat("en", {
-        month: "short",
-        day: "numeric",
-      }).format(localDate(planDate));
+  const dateLabel = new Intl.DateTimeFormat("en", {
+    month: "short",
+    day: "numeric",
+  }).format(localDate(planDate));
   const previousOverride = clone(
     state.workoutOccurrenceOverrides?.[planDate]?.[request.workoutId] || null,
   );
@@ -12144,44 +13742,52 @@ function TodayExerciseActions({ request, state, update, close }) {
     request.onApplied?.(notice);
   };
   const removeOccurrence = () => {
-    update((current) =>
-      removeExerciseFromOccurrence(current, {
-        planDate,
-        workoutId: request.workoutId,
-        planEntryId: request.planEntryId,
-      }),
-    );
-    finishAction({
-      message: occurrenceIsLast
-        ? `${isToday ? "Today’s" : dateLabel} workout skipped`
-        : `Removed from ${dateLabel}`,
-      undo: () =>
-        update((current) =>
-          restoreOccurrenceOverride(current, {
-            planDate,
-            workoutId: request.workoutId,
-            previousOverride,
-          }),
-        ),
+    runRookViewTransition(() => {
+      update((current) =>
+        removeExerciseFromOccurrence(current, {
+          planDate,
+          workoutId: request.workoutId,
+          planEntryId: request.planEntryId,
+        }),
+      );
+      finishAction({
+        message: occurrenceIsLast
+          ? `${isToday ? "Today’s" : dateLabel} workout skipped`
+          : `Removed from ${dateLabel}`,
+        undo: () =>
+          runRookViewTransition(() =>
+            update((current) =>
+              restoreOccurrenceOverride(current, {
+                planDate,
+                workoutId: request.workoutId,
+                previousOverride,
+              }),
+            ),
+          ),
+      });
     });
   };
   const removeWeekly = () => {
     if (!weeklySnapshot || wouldEmptyProgram) return;
-    update((current) =>
-      removeExerciseFromWeeklyPlan(
-        current,
-        request.workoutId,
-        request.planEntryId,
-      ),
-    );
-    finishAction({
-      message: recurringIsLast
-        ? `${sourceWorkout.weekday} is now a rest day`
-        : "Removed from weekly plan",
-      undo: () =>
-        update((current) =>
-          restoreWeeklyPlanWorkout(current, weeklySnapshot),
+    runRookViewTransition(() => {
+      update((current) =>
+        removeExerciseFromWeeklyPlan(
+          current,
+          request.workoutId,
+          request.planEntryId,
         ),
+      );
+      finishAction({
+        message: recurringIsLast
+          ? `${sourceWorkout.weekday} is now a rest day`
+          : `Removed from future ${sourceWorkout.name} workouts`,
+        undo: () =>
+          runRookViewTransition(() =>
+            update((current) =>
+              restoreWeeklyPlanWorkout(current, weeklySnapshot),
+            ),
+          ),
+      });
     });
   };
   const confirmOccurrence = confirming === "occurrence";
@@ -12202,17 +13808,17 @@ function TodayExerciseActions({ request, state, update, close }) {
         <Eyebrow>{confirmOccurrence ? "SKIP WORKOUT" : "WEEKLY PLAN"}</Eyebrow>
         <h2 id={titleId}>
           {confirmOccurrence
-            ? `Skip ${isToday ? "today’s" : `${dateLabel}’s`} workout?`
+            ? `Skip the ${dateLabel} workout?`
             : recurringIsLast
               ? `Make ${sourceWorkout.weekday} a rest day?`
-              : `Remove ${name} from ${activeSource ? "future workouts" : "weekly plan"}?`}
+              : `Remove ${name} from ${sourceWorkout.name}?`}
         </h2>
         <p>
           {confirmOccurrence
             ? `${name} is the only exercise left. Your weekly plan won’t change.`
             : recurringIsLast
               ? `${name} is the only exercise in ${sourceWorkout.name}. The current workout and past history won’t change.`
-              : `It will be removed from ${sourceWorkout.name} going forward. ${activeSource ? "Your current workout " : "Past workouts and history "}won’t change.`}
+              : `It will be removed from future ${sourceWorkout.name} workouts. ${activeSource ? "Your current workout " : "Past workouts and history "}won’t change.`}
         </p>
         <div className="today-exercise-confirm-actions">
           <Button variant="secondary" onClick={() => setConfirming(null)}>
@@ -12244,8 +13850,7 @@ function TodayExerciseActions({ request, state, update, close }) {
       <button className="sheet-close" aria-label="Close" onClick={close}>
         ×
       </button>
-      <Eyebrow>EXERCISE</Eyebrow>
-      <h2 id={titleId}>{name}</h2>
+      <h2 id={titleId}>{`Remove ${name}?`}</h2>
       <button
         type="button"
         className="choice-row today-exercise-remove-occurrence"
@@ -12254,7 +13859,7 @@ function TodayExerciseActions({ request, state, update, close }) {
         }
       >
         <strong>{`Remove from ${dateLabel}`}</strong>
-        <small>Keeps it in your weekly plan.</small>
+        <small>Only this scheduled workout.</small>
       </button>
       <button
         type="button"
@@ -12264,16 +13869,19 @@ function TodayExerciseActions({ request, state, update, close }) {
       >
         <strong>
           {activeSource
-            ? "Remove from future weekly plan"
-            : "Remove from weekly plan"}
+            ? `Remove from future ${sourceWorkout.name}`
+            : `Remove from ${sourceWorkout.name}`}
         </strong>
         <small>
           {wouldEmptyProgram
             ? "Keep at least one workout in your plan."
             : activeSource
               ? "Your current workout stays unchanged."
-              : `Removes this entry from ${sourceWorkout?.name || "this workout"} going forward.`}
+              : `Also removes it from future ${sourceWorkout.name} workouts.`}
         </small>
+      </button>
+      <button type="button" className="today-exercise-cancel" onClick={close}>
+        CANCEL
       </button>
     </main>
   );
@@ -12457,6 +14065,18 @@ function ActiveSuperset({ exercise, state, update, close }) {
     });
     close();
   };
+  if (!pair && !locked && candidates.length) {
+    return (
+      <SupersetPartnerPicker
+        exercise={current || exercise}
+        candidates={candidates}
+        profile={state.profile}
+        className="active-superset-sheet"
+        onClose={close}
+        onConfirm={createPair}
+      />
+    );
+  }
   return (
     <main
       className="sheet replace-sheet active-superset-sheet"
@@ -12503,17 +14123,6 @@ function ActiveSuperset({ exercise, state, update, close }) {
               <p className="offline-banner">
                 Superset changes are locked after work is logged.
               </p>
-            ) : candidates.length ? (
-              candidates.map((candidate) => (
-                <button
-                  className="choice-row"
-                  key={candidate.id}
-                  onClick={() => createPair(candidate.id)}
-                >
-                  <strong>{exerciseName(candidate)}</strong>
-                  <small>{targetLabel(candidate, state.profile.rirEnabled)}</small>
-                </button>
-              ))
             ) : (
               <p className="offline-banner">
                 No unstarted upcoming exercise is available to pair.
@@ -12753,8 +14362,11 @@ function Replace({ exercise, state, update, close }) {
 }
 
 export default function App() {
-  const [state, update] = useLiftState();
-  useResolvedTheme(state.profile.themePreference);
+  const [state, update, persistenceFailed] = useLiftState();
+  useResolvedTheme(
+    state.profile.appearancePreference,
+    state.profile.stylePreference,
+  );
   const [page, setPage] = useState("today");
   const [detail, setDetail] = useState(null);
   const [entryMode, setEntryMode] = useState(null);
@@ -12880,46 +14492,54 @@ export default function App() {
   if (!state.profile.onboardingComplete) {
     if (entryMode === "personalize")
       return (
-        <Onboarding
-          update={update}
-          exit={() => setEntryMode(null)}
-          onPlanAccepted={showGeneratedPlan}
-        />
+        <PersistenceHost failed={persistenceFailed}>
+          <Onboarding
+            update={update}
+            exit={() => setEntryMode(null)}
+            onPlanAccepted={showGeneratedPlan}
+          />
+        </PersistenceHost>
       );
     if (entryMode === "import")
       return (
-        <ImportPlan
-          state={state}
-          update={update}
-          close={() => setEntryMode(null)}
-          onPlanAccepted={showToday}
-          initial
-        />
+        <PersistenceHost failed={persistenceFailed}>
+          <ImportPlan
+            state={state}
+            update={update}
+            close={() => setEntryMode(null)}
+            onPlanAccepted={showToday}
+            initial
+          />
+        </PersistenceHost>
       );
     if (entryMode === "scratch")
       return (
-        <ScratchPlan
-          state={state}
-          update={update}
-          close={() => setEntryMode(null)}
-          onPlanAccepted={showGeneratedPlan}
-        />
+        <PersistenceHost failed={persistenceFailed}>
+          <ScratchPlan
+            state={state}
+            update={update}
+            close={() => setEntryMode(null)}
+            onPlanAccepted={showGeneratedPlan}
+          />
+        </PersistenceHost>
       );
     return (
-      <EntryLanding
-        personalize={() => {
-          trackFunnelEvent("onboarding_started", { path: "personalized" });
-          setEntryMode("personalize");
-        }}
-        importPlan={() => {
-          trackFunnelEvent("onboarding_started", { path: "import" });
-          setEntryMode("import");
-        }}
-        startFromScratch={() => {
-          trackFunnelEvent("onboarding_started", { path: "scratch" });
-          setEntryMode("scratch");
-        }}
-      />
+      <PersistenceHost failed={persistenceFailed}>
+        <EntryLanding
+          personalize={() => {
+            trackFunnelEvent("onboarding_started", { path: "personalized" });
+            setEntryMode("personalize");
+          }}
+          importPlan={() => {
+            trackFunnelEvent("onboarding_started", { path: "import" });
+            setEntryMode("import");
+          }}
+          startFromScratch={() => {
+            trackFunnelEvent("onboarding_started", { path: "scratch" });
+            setEntryMode("scratch");
+          }}
+        />
+      </PersistenceHost>
     );
   }
   const content =
@@ -12960,10 +14580,11 @@ export default function App() {
       />
     );
   return (
+    <PersistenceHost failed={persistenceFailed}>
     <div className="app-shell">
       <div className="app-content" ref={backgroundRef}>
         {content}
-        {!["workout", "complete"].includes(page) && (
+        {!detail && !repairPreview && !["workout", "complete"].includes(page) && (
           <BottomNav page={page} setPage={setPage} />
         )}
       </div>
@@ -13005,5 +14626,14 @@ export default function App() {
       )}
       {state.ai.repairingPlan && <BuildingOverlay stage={repairStage} />}
     </div>
+    </PersistenceHost>
+  );
+}
+
+export function RookRoot() {
+  return (
+    <RookErrorBoundary>
+      <App />
+    </RookErrorBoundary>
   );
 }

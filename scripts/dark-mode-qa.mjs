@@ -137,6 +137,39 @@ async function geometry(page) {
   });
 }
 
+async function weekStateSignals(page) {
+  return page.locator(".week-strip").evaluate((strip) => {
+    const planned = strip.querySelector(".workout-planned:not(.selected-day)");
+    const rest = strip.querySelector(".workout-rest:not(.selected-day)");
+    const selected = strip.querySelector(".selected-day");
+    const today = strip.querySelector(".today-date");
+    const style = (element) => {
+      const current = getComputedStyle(element);
+      return {
+        background: current.backgroundColor,
+        border: current.borderColor,
+        color: current.color,
+      };
+    };
+    const plannedDot = planned?.querySelector(".workout-dot");
+    return {
+      planned: style(planned),
+      rest: style(rest),
+      selected: style(selected),
+      selectedState: selected?.classList.contains("workout-rest") ? "rest" : "workout",
+      selectedHasMarker: Boolean(selected?.querySelector(".workout-dot, .completed-dot")),
+      plannedDotFill: plannedDot ? getComputedStyle(plannedDot).backgroundColor : null,
+      plannedDotBorder: plannedDot ? getComputedStyle(plannedDot).borderStyle : null,
+      todayMarkerWidth: today ? getComputedStyle(today, "::after").width : null,
+      minimumHeight: Math.min(
+        ...[...strip.querySelectorAll("button")].map(
+          (button) => button.getBoundingClientRect().height,
+        ),
+      ),
+    };
+  });
+}
+
 async function screenshot(page, name) {
   await page.screenshot({ path: output(name), fullPage: false });
 }
@@ -169,31 +202,50 @@ for (const [state, ratio] of Object.entries(await contrastSignals(darkRun.page))
 await screenshot(lightRun.page, "390-today-light.png");
 await screenshot(darkRun.page, "390-today-dark.png");
 
-// Selected, outlined-today, and neutral date semantics stay distinct.
+// Workout, rest, selection, today, and completion use the same independent
+// visual layers in Light and Dark; only their palette tokens differ.
+for (const [theme, page] of [
+  ["Light", lightRun.page],
+  ["Dark", darkRun.page],
+]) {
+  const signals = await weekStateSignals(page);
+  assert.notEqual(
+    signals.planned.background,
+    signals.rest.background,
+    `${theme} planned days use a distinct tile surface`,
+  );
+  assert.notEqual(
+    signals.planned.border,
+    signals.rest.border,
+    `${theme} planned days use a distinct tile border`,
+  );
+  assert.equal(signals.selectedState, "workout");
+  assert.equal(signals.selectedHasMarker, true);
+  assert.equal(signals.plannedDotFill, "rgba(0, 0, 0, 0)");
+  assert.equal(signals.plannedDotBorder, "solid");
+  assert.equal(signals.todayMarkerWidth, "12px");
+  assert.ok(signals.minimumHeight >= 44, `${theme} day targets remain at least 44px high`);
+
+  const restChip = page.locator(".week-strip .workout-rest").first();
+  await restChip.click();
+  const selectedRest = await weekStateSignals(page);
+  assert.equal(selectedRest.selectedState, "rest");
+  assert.equal(selectedRest.selectedHasMarker, false);
+  assert.equal(
+    selectedRest.selected.background,
+    selectedRest.rest.background,
+    `${theme} selected rest keeps the neutral rest interior`,
+  );
+  await page.locator('.week-strip button[aria-current="date"]').click();
+}
+
 const weekChips = darkRun.page.locator(".week-strip button");
 const todayChip = darkRun.page.locator('.week-strip button[aria-current="date"]');
-const chipStates = await darkRun.page.locator(".week-strip").evaluate((strip) => {
-  const selected = strip.querySelector(".selected-day");
-  const neutral = strip.querySelector("button:not(.selected-day):not(.today-date)");
-  const style = (element) => {
-    const current = getComputedStyle(element);
-    return {
-      background: current.backgroundColor,
-      border: current.borderColor,
-      color: current.color,
-    };
-  };
-  return { selected: style(selected), neutral: style(neutral) };
-});
-assert.equal(chipStates.selected.background, "rgb(235, 238, 236)");
-assert.equal(chipStates.selected.color, "rgb(17, 20, 19)");
-assert.equal(chipStates.neutral.background, "rgb(35, 40, 37)");
-assert.equal(chipStates.neutral.border, "rgb(47, 53, 50)");
 if (await todayChip.evaluate((chip) => chip.classList.contains("workout-planned"))) {
   assert.equal(
-    await todayChip.locator(".workout-dot").evaluate((dot) => getComputedStyle(dot).backgroundColor),
-    "rgb(17, 20, 19)",
-    "the planned-workout dot remains visible inside the light selected chip",
+    await todayChip.locator(".workout-dot").evaluate((dot) => getComputedStyle(dot).borderStyle),
+    "solid",
+    "the pending-workout marker remains hollow inside the selected chip",
   );
 }
 const todayIndex = await weekChips.evaluateAll((chips) =>
@@ -201,11 +253,11 @@ const todayIndex = await weekChips.evaluateAll((chips) =>
 );
 if (todayIndex > 0) {
   await weekChips.nth(todayIndex - 1).click();
-  const [todayBorder, neutralBorder] = await Promise.all([
-    todayChip.evaluate((chip) => getComputedStyle(chip).borderColor),
-    darkRun.page.locator('.week-strip button:not(.selected-day):not([aria-current="date"])').first().evaluate((chip) => getComputedStyle(chip).borderColor),
-  ]);
-  assert.notEqual(todayBorder, neutralBorder, "unselected today keeps a distinct secondary indicator");
+  assert.equal(
+    await todayChip.evaluate((chip) => getComputedStyle(chip, "::after").width),
+    "12px",
+    "unselected today keeps its independent underline",
+  );
   await todayChip.click();
 }
 
@@ -244,25 +296,28 @@ const loggingStates = await darkRun.page.locator(".logging-screen").evaluate((sc
     selected: style(".segmented .active"),
     unselected: style(".segmented button:not(.active)"),
     select: style("select"),
+    unitIndicator: getComputedStyle(
+      screen.querySelector(".unit-segmented"),
+      "::before",
+    ).backgroundColor,
   };
 });
-assert.equal(loggingStates.selected.background, "rgb(235, 238, 236)");
+assert.equal(loggingStates.selected.background, "rgba(0, 0, 0, 0)");
 assert.equal(loggingStates.selected.color, "rgb(17, 20, 19)");
+assert.equal(loggingStates.unitIndicator, "rgb(235, 238, 236)");
 assert.equal(loggingStates.unselected.color, "rgb(137, 145, 140)");
 assert.equal(loggingStates.select.border, "rgb(98, 108, 102)");
 await screenshot(darkRun.page, "390-logging-dark.png");
 await darkRun.page.getByRole("button", { name: "Close", exact: true }).click();
 
-// Appearance picker, explicit override, System live update, and persistence.
+// Flat Appearance controls, explicit override, System live update, and persistence.
 await darkRun.page.getByRole("button", { name: /Appearance/ }).click();
 await screenshot(darkRun.page, "390-appearance-dark.png");
-await darkRun.page.getByRole("button", { name: /^Theme/ }).click();
-assert.equal(await darkRun.page.getByRole("dialog", { name: "Theme" }).count(), 1);
-await screenshot(darkRun.page, "390-theme-picker-dark.png");
+assert.equal(await darkRun.page.locator(".theme-choice-layer").count(), 0);
 const workoutsBefore = await darkRun.page.evaluate(() =>
   JSON.stringify(JSON.parse(localStorage.getItem("lift-v2-state")).workouts),
 );
-await darkRun.page.getByRole("button", { name: /^Light/ }).click();
+await darkRun.page.getByRole("button", { name: "Light", exact: true }).click();
 assert.equal((await themeSignals(darkRun.page)).theme, "light");
 assert.equal(
   await darkRun.page.evaluate(() =>
@@ -270,8 +325,7 @@ assert.equal(
   ),
   "light",
 );
-await darkRun.page.getByRole("button", { name: /^Theme/ }).click();
-await darkRun.page.getByRole("button", { name: /^System/ }).click();
+await darkRun.page.getByRole("button", { name: "System", exact: true }).click();
 assert.equal((await themeSignals(darkRun.page)).theme, "light");
 await darkRun.page.emulateMedia({ colorScheme: "dark" });
 await darkRun.page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
@@ -353,7 +407,7 @@ const setStates = await activeRun.page.locator(".sets").evaluate((sets) => {
       : null,
   };
 });
-assert.equal(setStates.ready.border, "rgba(79, 191, 135, 0.5)");
+assert.equal(setStates.ready.border, "rgba(79, 191, 135, 0.6)");
 assert.equal(setStates.future.color, "rgb(126, 135, 129)");
 assert.equal(setStates.inputBackground, "rgba(0, 0, 0, 0)");
 assert.notEqual(setStates.stepperDivider, "rgba(0, 0, 0, 0)");

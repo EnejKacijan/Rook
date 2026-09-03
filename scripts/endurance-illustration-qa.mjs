@@ -3,7 +3,12 @@ import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
-import { estimateSessionMinutes, isoDay, weekday } from "../src/domain.js";
+import {
+  estimateSessionMinutes,
+  isoDay,
+  matchImportedExerciseName,
+  weekday,
+} from "../src/domain.js";
 
 const artifacts = new URL("../artifacts/endurance-illustrations/", import.meta.url);
 await mkdir(artifacts, { recursive: true });
@@ -39,8 +44,10 @@ const names = [
 const base = day.exercises[0];
 day.exercises = names.map((name, index) => {
   const exercise = structuredClone(base);
+  const recognized = matchImportedExerciseName(name);
   exercise.id = `qa-endurance-${index + 1}`;
-  exercise.exerciseId = `imported-custom-endurance-${index + 1}`;
+  exercise.exerciseId =
+    recognized.exerciseId || `imported-custom-endurance-${index + 1}`;
   exercise.originalImportedName = name;
   exercise.importedName = name;
   exercise.importedExercise = {
@@ -51,7 +58,7 @@ day.exercises = names.map((name, index) => {
     muscles: null,
     equipment: null,
   };
-  exercise.matchStatus = "unresolved";
+  exercise.matchStatus = recognized.status;
   exercise.sets = exercise.sets.slice(0, 2).map((set, setIndex) => ({
     ...set,
     id: `${exercise.id}-set-${setIndex + 1}`,
@@ -109,7 +116,20 @@ assert.equal(
   1,
   "artwork remains available in the focused exercise detail view",
 );
+assert.equal(
+  await page.getByText(
+    "Choose a comfortable starting effort when you begin your first set.",
+    { exact: true },
+  ).count(),
+  1,
+  "load-free first-session guidance does not imply a required kg/lb entry",
+);
+await page.screenshot({
+  path: fileURLToPath(new URL("monster-walk-detail-dark.png", artifacts)),
+  fullPage: false,
+});
 await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.waitForTimeout(260);
 await page.screenshot({
   path: fileURLToPath(new URL("endurance-dark-390.png", artifacts)),
   fullPage: true,

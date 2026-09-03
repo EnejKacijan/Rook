@@ -470,12 +470,12 @@ function parsedDayHeading(value) {
 function noteSectionMode(value) {
   const section = foldNoteText(cleanNoteItem(value));
   if (
-    /^(?:ogrevanje|warm up|warmup|agility|delo z zogo|ball work|aktivni recovery|active recovery)(?:\s|$)/.test(
+    /^(?:ogrevanje|warm up|warmup|general warm up|mobility|mobilnost|activation|aktivacija|prep|preparation|primer|dynamic warm up|ramp up|ramp sets|warm up sets|agility|delo z zogo|ball work|aktivni recovery|active recovery)(?:\s|$)/.test(
       section,
     ) ||
     /(?:^|\s)agility(?:\s|$)/.test(section)
   )
-    return "skip";
+    return "warmup";
   if (
     /^(?:trening|workout|strength|moc|stabilnost|stability|pliometrija|plyometrics|core)(?:\s|$)/.test(
       section,
@@ -483,6 +483,47 @@ function noteSectionMode(value) {
   )
     return "exercises";
   return null;
+}
+function parseWarmupNoteItem(value) {
+  const raw = cleanNoteItem(value)
+    .replace(
+      /^(?:ogrevanje|warm[ -]?up|general warm[ -]?up|mobility|mobilnost|activation|aktivacija|prep(?:aration)?|primer|dynamic warm[ -]?up|ramp[ -]?up|ramp sets|warm[ -]?up sets|agility|delo z zogo|ball work|aktivni recovery|active recovery)\s*[:\-–—]?\s*/iu,
+      "",
+    )
+    .trim();
+  if (!raw) return null;
+  const duration = raw.match(/(?:^|\s)(\d+)\s*(sec(?:ond)?s?|s|min(?:ute)?s?)\b/iu);
+  const prescription = parseNotePrescription(raw);
+  let label = raw;
+  let sets = 1;
+  let reps = null;
+  let seconds = null;
+  let minutes = 1;
+  if (prescription) {
+    sets = prescription.count;
+    reps = prescription.repMin;
+    label = raw
+      .slice(0, prescription.index)
+      .replace(/[\s:|,\-–—]+$/gu, "")
+      .trim();
+  }
+  if (duration) {
+    const amount = Number(duration[1]);
+    const isMinutes = /^min/iu.test(duration[2]);
+    seconds = isMinutes ? amount * 60 : amount;
+    minutes = Math.max(1, Math.ceil(seconds / 60));
+    reps = null;
+    label = raw.replace(duration[0], " ").replace(/^[\s:|,\-–—]+|[\s:|,\-–—]+$/gu, "").trim();
+  }
+  if (!label) label = "Warm-up movement";
+  return {
+    label: label.slice(0, 80),
+    sets: Math.max(1, Math.min(10, sets)),
+    reps,
+    seconds,
+    minutes,
+    provenance: "imported",
+  };
 }
 const NOTE_SET_WORD =
   "(?:sets?|serije?|seriji|serij|series?|rounds?|krogi?|kroga|krogov)";
@@ -607,6 +648,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
           name: normalizeWorkoutName(headingName || "Workout", weekday),
           estimatedMinutes: 60,
           exercises: [],
+          warmup: null,
         };
         days.push(current);
       }
@@ -617,13 +659,22 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
     const nextSectionMode = noteSectionMode(line);
     if (nextSectionMode) {
       sectionMode = nextSectionMode;
+      if (sectionMode === "warmup") {
+        current.warmup ||= { items: [], rampUpSets: [] };
+        const inlineItem = parseWarmupNoteItem(line);
+        if (inlineItem) current.warmup.items.push(inlineItem);
+      }
       continue;
     }
     if (/^(?:progression|progresija|tvoj glavni princip)/i.test(foldNoteText(line))) {
       current = null;
       continue;
     }
-    if (sectionMode === "skip") continue;
+    if (sectionMode === "warmup") {
+      const warmupItem = parseWarmupNoteItem(line);
+      if (warmupItem) current.warmup.items.push(warmupItem);
+      continue;
+    }
     const rest = parsedRestSeconds(line);
     if (rest !== null && current.exercises.length) {
       current.exercises.at(-1).restSeconds = rest;

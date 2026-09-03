@@ -53,10 +53,16 @@ for (const width of [320, 360, 390, 430, 477, 768]) {
   const demo = page.getByRole('region', { name: 'SEE HOW ROOK ADAPTS' });
   await demo.waitFor();
   assert.equal(await page.getByText('Illustrative preview', { exact: true }).count(), 0, 'technical preview label is removed');
+  assert.equal(await demo.getByText('WHAT EQUIPMENT CHANGES', { exact: true }).count(), 0, 'heavy equipment explanation heading is removed');
+  assert.equal(await demo.getByText('Pressing example', { exact: true }).count(), 0, 'internal movement-pattern language is not exposed');
+  assert.equal(await demo.getByText('ROOK MIGHT CHOOSE', { exact: true }).count(), 1, 'compact row clearly frames the value as illustrative');
+  assert.equal(await demo.locator('.entry-equipment-result').count(), 0, 'equipment feedback is not wrapped in the old card');
+  assert.equal(await demo.getByText('Example exercise', { exact: true }).count(), 0, 'generic equipment-effect label is removed');
   assert.equal(await demo.locator('li').count(), 7, 'illustrative week keeps all seven days visible');
   assert.ok((await demo.boundingBox()).y > (await primary.boundingBox()).y, 'optional demo follows the immediately available primary CTA');
   assert.equal(await demo.locator('.training-day').count(), 4);
-  await demo.getByRole('button', { name: '3', exact: true }).click();
+  const exampleRowHeight = (await demo.locator('.entry-equipment-example').boundingBox()).height;
+  await demo.getByRole('radio', { name: '3', exact: true }).check();
   assert.equal(await demo.locator('.training-day').count(), 3, 'frequency materially recomposes the illustrative week');
   assert.equal(
     await demo.locator('.entry-week-transition').evaluate(node => getComputedStyle(node).animationDuration),
@@ -64,20 +70,57 @@ for (const width of [320, 360, 390, 430, 477, 768]) {
     'frequency change uses the restrained 190 ms week transition',
   );
   assert.match(await demo.getByRole('list').getAttribute('aria-label'), /^3-day illustrative/);
-  await demo.getByRole('button', { name: '5', exact: true }).click();
+  await demo.getByRole('radio', { name: '5', exact: true }).check();
   assert.equal(await demo.locator('.training-day').count(), 5, 'the five-day preview uses a genuinely different weekly structure');
-  await demo.getByRole('button', { name: '3', exact: true }).click();
+  assert.equal(await demo.getByText('Barbell Bench Press', { exact: true }).count(), 1, 'days do not alter the equipment example');
+  await demo.getByRole('radio', { name: '3', exact: true }).check();
   const labelsBeforeEquipment = await demo.locator('li small').allTextContents();
-  await demo.getByRole('button', { name: 'Dumbbells', exact: true }).click();
+  const weekTopBeforeEquipment = (await demo.locator('.entry-week-result').boundingBox()).y;
+  await demo.getByRole('radio', { name: 'Dumbbells', exact: true }).check();
   assert.deepEqual(await demo.locator('li small').allTextContents(), labelsBeforeEquipment, 'equipment does not fabricate a split change');
+  assert.equal(await demo.getByText('Dumbbell Bench Press', { exact: true }).count(), 1, 'equipment visibly changes a concrete exercise example');
   assert.equal(
     await demo.locator('.entry-week-result > p').innerText(),
-    'Example only · Rook adapts exercise selection to your equipment.',
+    'Example only · Your plan is personalized.',
   );
   assert.equal(
-    await demo.getByRole('button', { name: 'Dumbbells', exact: true }).getAttribute('aria-pressed'),
-    'true',
-    'equipment selection updates immediately',
+    await demo.getByRole('radio', { name: 'Dumbbells', exact: true }).isChecked(),
+    true,
+    'equipment radio selection updates immediately',
+  );
+  assert.equal(
+    await demo.getByRole('status').innerText(),
+    'Equipment set to Dumbbells. Rook might choose Dumbbell Bench Press.',
+    'equipment change has one concise polite announcement',
+  );
+  assert.equal(
+    Math.round((await demo.locator('.entry-week-result').boundingBox()).y),
+    Math.round(weekTopBeforeEquipment),
+    'equipment substitutions do not shift the week preview vertically',
+  );
+  assert.equal(
+    Math.round((await demo.locator('.entry-equipment-example').boundingBox()).height),
+    Math.round(exampleRowHeight),
+    'current equipment examples do not shift the compact row height',
+  );
+  assert.equal(
+    await demo.locator('.entry-equipment-value-transition').evaluate(node => getComputedStyle(node).animationDuration),
+    '0.14s',
+    'equipment change cross-fades only the dynamic exercise value',
+  );
+  await demo.getByRole('radio', { name: 'Bodyweight', exact: true }).check();
+  assert.equal(await demo.getByText('Push-Up', { exact: true }).count(), 1, 'bodyweight selection exposes its truthful exercise substitute');
+  assert.equal(
+    Math.round((await demo.locator('.entry-equipment-example').boundingBox()).height),
+    Math.round(exampleRowHeight),
+    'the shortest current example preserves the row height',
+  );
+  await demo.getByRole('radio', { name: 'Bodyweight', exact: true }).focus();
+  await page.keyboard.press('ArrowLeft');
+  assert.equal(await demo.getByRole('radio', { name: 'Dumbbells', exact: true }).isChecked(), true, 'native radio group supports arrow-key selection');
+  assert.ok(
+    (await demo.locator('.entry-equipment label > span').first().boundingBox()).height >= 44,
+    'equipment choices keep a 44px mobile touch target',
   );
   const weekGeometry = await demo.evaluate(node => {
     const header = node.querySelector('.entry-week-header');
@@ -120,7 +163,7 @@ for (const width of [320, 360, 390, 430, 477, 768]) {
       ctaInk: color('.entry-primary-action .button'),
       accentText: color('.entry-demo-header > span'),
       restDayText: color('.entry-week-result .rest-day > strong'),
-      selectedControl: background('.entry-days button[aria-pressed="true"]'),
+      selectedControl: background('.entry-days input:checked + span'),
       demoBorder: getComputedStyle(document.querySelector('.entry-demo')).borderTopColor,
     };
   });
@@ -158,10 +201,21 @@ for (const { theme, colorScheme } of themeVariants) {
   await page.evaluate(() => {
     document.documentElement.style.zoom = '1.25';
     document.querySelector('.entry-week-header small').textContent = 'Four available training days';
+    document.querySelector('.entry-equipment-example strong').textContent = 'Dumbbell Neutral-Grip Bench Press';
     const localizedWorkouts = ['Upper body strength', 'Lower hypertrophy', 'Recovery day', 'Upper chest', 'Recovery day', 'Posterior chain', 'Recovery day'];
     document.querySelectorAll('.entry-week-result li small').forEach((node, index) => { node.textContent = localizedWorkouts[index]; });
   });
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${theme} enlarged and localized copy does not overflow horizontally`);
+  const enlargedExampleGeometry = await page.locator('.entry-equipment-example').evaluate(node => {
+    const label = node.firstElementChild.getBoundingClientRect();
+    const value = node.lastElementChild.getBoundingClientRect();
+    return {
+      separated: label.bottom <= value.top || label.right <= value.left,
+      valueVisible: getComputedStyle(node.lastElementChild).textOverflow !== 'ellipsis',
+    };
+  });
+  assert.equal(enlargedExampleGeometry.separated, true, `${theme} enlarged example label and value do not collide`);
+  assert.equal(enlargedExampleGeometry.valueVisible, true, `${theme} enlarged example name is not truncated`);
   const enlargedWeekGeometry = await page.locator('.entry-demo').evaluate(node => {
     const header = node.querySelector('.entry-week-header');
     const title = header.firstElementChild.getBoundingClientRect();
@@ -179,6 +233,34 @@ for (const { theme, colorScheme } of themeVariants) {
   await context.close();
 }
 
+const isolationContext = await browser.newContext({
+  viewport: { width: 390, height: 844 },
+  colorScheme: 'dark',
+});
+const isolationPage = await isolationContext.newPage();
+await isolationPage.goto(appUrl, { waitUntil: 'networkidle' });
+const isolationDemo = isolationPage.getByRole('region', { name: 'SEE HOW ROOK ADAPTS' });
+await isolationDemo.getByRole('radio', { name: '5', exact: true }).check();
+await isolationDemo.getByRole('radio', { name: 'Bodyweight', exact: true }).check();
+await isolationPage.getByRole('button', { name: 'BUILD MY PLAN' }).click();
+await isolationPage.locator('.age-range-trigger').waitFor();
+await isolationPage.locator('.age-range-trigger').click();
+await isolationPage.getByRole('option', { name: '18–29' }).click();
+await isolationPage.getByRole('button', { name: 'CONTINUE' }).click();
+await isolationPage.locator('.onboarding-option').first().waitFor();
+await isolationPage.locator('.onboarding-option').first().click();
+await isolationPage.getByRole('button', { name: 'CONTINUE' }).click();
+await isolationPage.locator('.onboarding-option').first().waitFor();
+await isolationPage.locator('.onboarding-option').first().click();
+await isolationPage.getByRole('button', { name: 'CONTINUE' }).click();
+await isolationPage.getByRole('heading', { name: 'What does a realistic training week look like?' }).waitFor();
+assert.equal(
+  await isolationPage.getByRole('button', { name: '5 days' }).getAttribute('aria-pressed'),
+  'false',
+  'illustrative frequency is not silently persisted into onboarding',
+);
+await isolationContext.close();
+
 const reducedContext = await browser.newContext({
   viewport: { width: 390, height: 844 },
   colorScheme: 'dark',
@@ -187,11 +269,17 @@ const reducedContext = await browser.newContext({
 const reducedPage = await reducedContext.newPage();
 await reducedPage.goto(appUrl, { waitUntil: 'networkidle' });
 const reducedDemo = reducedPage.getByRole('region', { name: 'SEE HOW ROOK ADAPTS' });
-await reducedDemo.getByRole('button', { name: '5', exact: true }).click();
+await reducedDemo.getByRole('radio', { name: '5', exact: true }).check();
 assert.equal(
   await reducedDemo.locator('.entry-week-transition').evaluate(node => getComputedStyle(node).animationName),
   'none',
   'reduced motion removes the decorative week transition',
+);
+await reducedDemo.getByRole('radio', { name: 'Dumbbells', exact: true }).check();
+assert.equal(
+  await reducedDemo.locator('.entry-equipment-value-transition').evaluate(node => getComputedStyle(node).animationName),
+  'none',
+  'reduced motion removes the equipment-value cross-fade',
 );
 await reducedContext.close();
 

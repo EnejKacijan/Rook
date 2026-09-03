@@ -127,9 +127,18 @@
 
 .entry-v2 .entry-demo-control {
   margin-top: 17px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
 }
 
-.entry-v2 .entry-demo-control > span {
+.entry-v2 .entry-demo-control + .entry-demo-control {
+  margin-top: 14px;
+}
+
+.entry-v2 .entry-demo-control > legend {
+  width: 100%;
+  padding: 0;
   display: block;
   margin-bottom: 7px;
   color: var(--rook-muted);
@@ -144,17 +153,38 @@
   gap: 6px;
 }
 
-.entry-v2 :is(.entry-days, .entry-equipment) button {
+.entry-v2 :is(.entry-days, .entry-equipment) label {
+  position: relative;
   min-width: 0;
-  min-height: 42px;
+  cursor: pointer;
+}
+
+.entry-v2 :is(.entry-days, .entry-equipment) input {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.entry-v2 :is(.entry-days, .entry-equipment) label > span {
+  min-width: 0;
+  min-height: 44px;
   padding: 0 7px;
   border: 1px solid var(--rook-border);
   border-radius: 10px;
   background: transparent;
   color: var(--rook-secondary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
   font-size: 12px;
   font-weight: 700;
   line-height: 1.2;
+  text-align: center;
   transition:
     background-color var(--rook-motion-state) var(--rook-ease-standard),
     border-color var(--rook-motion-state) var(--rook-ease-standard),
@@ -162,21 +192,63 @@
     transform var(--rook-motion-press-out) var(--rook-ease-release);
 }
 
-.entry-v2 :is(.entry-days, .entry-equipment) button[aria-pressed="true"] {
+.entry-v2 :is(.entry-days, .entry-equipment) input:checked + span {
   border-color: var(--rook-accent);
   background: var(--rook-accent-soft);
   color: var(--rook-accent-text);
+  font-weight: 800;
 }
 
-.entry-v2 :is(.entry-days, .entry-equipment) button:not(:disabled):active {
+.entry-v2 :is(.entry-days, .entry-equipment) input:focus-visible + span {
+  outline: 2px solid var(--rook-focus-ring);
+  outline-offset: 2px;
+}
+
+.entry-v2 :is(.entry-days, .entry-equipment) label:active > span {
   transform: translateY(1px) scale(.98);
   transition-duration: var(--rook-motion-press-in);
 }
 
+.entry-v2 .entry-equipment-example {
+  min-height: 20px;
+  min-width: 0;
+  margin-top: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.entry-v2 .entry-equipment-example > span {
+  flex: 0 0 auto;
+  color: var(--rook-muted);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+  line-height: 1.35;
+}
+
+.entry-v2 .entry-equipment-example > strong {
+  min-width: 0;
+  color: var(--rook-text);
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.35;
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.entry-v2 .entry-equipment-example > strong.entry-equipment-value-transition {
+  animation: entry-equipment-value-update 140ms var(--rook-ease-standard) both;
+}
+
+@keyframes entry-equipment-value-update {
+  from { opacity: .5; }
+  to { opacity: 1; }
+}
+
 .entry-v2 .entry-week-result {
-  margin-top: 18px;
-  padding-top: 15px;
-  border-top: 1px solid var(--rook-border);
+  margin-top: 22px;
 }
 
 .entry-v2 .entry-week-result ul {
@@ -298,7 +370,7 @@
   transition: transform var(--rook-motion-press-out) var(--rook-ease-release);
 }
 
-:root:is([data-theme="dark"], [data-theme="premium"])
+:root[data-appearance="dark"]
   .entry-v2.entry-screen
   .entry-actions
   :is(.existing-plan-action, .scratch-plan-action) {
@@ -352,7 +424,15 @@
     margin-left: 0;
     text-align: left;
   }
-  .entry-v2 .entry-equipment button { padding-inline: 4px; font-size: 10.5px; }
+  .entry-v2 .entry-equipment label > span { padding-inline: 4px; font-size: 10.5px; }
+  .entry-v2 .entry-equipment-example {
+    min-height: 35px;
+    align-items: flex-start;
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+  }
+  .entry-v2 .entry-equipment-example > strong { text-align: left; }
 }
 
 @media (max-width: 369px) {

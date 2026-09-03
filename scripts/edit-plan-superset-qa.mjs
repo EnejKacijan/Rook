@@ -6,6 +6,7 @@ const browser = await chromium.launch({
   executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   headless: true,
 });
+const baseUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 
 async function verifyEditableSuperset(source) {
   const state = createReturningUserFixture(2);
@@ -32,7 +33,7 @@ async function verifyEditableSuperset(source) {
       body: JSON.stringify({ available: false, provider: null }),
     }),
   );
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+  await page.goto(baseUrl, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
   await page.getByRole("button", { name: /^Edit plan/i }).click();
   await page.getByRole("heading", { name: "Edit your plan", exact: true }).waitFor();
@@ -48,7 +49,29 @@ async function verifyEditableSuperset(source) {
   });
   assert.equal(await createButton.count(), 1, `${source}: edit mode exposes Create Superset`);
   await createButton.click();
-  await firstCard.locator(".superset-picker").getByRole("button").first().click();
+  let picker = page.locator(".plan-superset-sheet");
+  await picker.waitFor();
+  await page.keyboard.press("Escape");
+  await picker.waitFor({ state: "detached" });
+  assert.equal(
+    await page.getByRole("heading", { name: "Edit your plan", exact: true }).count(),
+    1,
+    `${source}: Escape closes only the nested superset picker`,
+  );
+  await createButton.click();
+  picker = page.locator(".plan-superset-sheet");
+  await picker.waitFor();
+  const confirmButton = picker.getByRole("button", {
+    name: "CREATE SUPERSET",
+    exact: true,
+  });
+  assert.equal(await confirmButton.isDisabled(), true);
+  const option = picker.getByRole("radio").first();
+  await option.click();
+  assert.equal(await option.getAttribute("aria-checked"), "true");
+  assert.equal(await confirmButton.isEnabled(), true);
+  assert.equal(await daySection.getByText("PAIR", { exact: true }).count(), 0);
+  await confirmButton.click();
   assert.equal(await daySection.getByText("PAIR", { exact: true }).count(), 2);
   assert.equal(await daySection.getByText("A1", { exact: true }).count(), 0);
   assert.equal(await daySection.getByText("A2", { exact: true }).count(), 0);

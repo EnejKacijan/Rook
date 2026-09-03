@@ -10,29 +10,74 @@
     <title>Rook</title>
     <script>
       (() => {
-        const light = "#f6f5f2";
-        const dark = "#111413";
-        let preference = "system";
+        let appearancePreference = "system";
+        let stylePreference = "standard";
         try {
           const stored = JSON.parse(localStorage.getItem("lift-v2-state"));
-          if (stored?.schemaVersion === 2)
-            preference = ["system", "light", "dark"].includes(
+          if (stored?.schemaVersion === 2) {
+            const legacy = ["system", "light", "dark", "premium"].includes(
               stored.profile?.themePreference,
             )
               ? stored.profile.themePreference
               : "light";
+            appearancePreference = ["system", "light", "dark"].includes(
+              stored.profile?.appearancePreference,
+            )
+              ? stored.profile.appearancePreference
+              : legacy === "premium"
+                ? "system"
+                : legacy;
+            stylePreference = ["standard", "premium"].includes(
+              stored.profile?.stylePreference,
+            )
+              ? stored.profile.stylePreference
+              : legacy === "premium"
+                ? "premium"
+                : "standard";
+            const expectedLegacy =
+              stylePreference === "premium"
+                ? "premium"
+                : appearancePreference;
+            if (
+              ["system", "light", "dark", "premium"].includes(
+                stored.profile?.themePreference,
+              ) &&
+              stored.profile.themePreference !== expectedLegacy
+            ) {
+              appearancePreference =
+                stored.profile.themePreference === "premium"
+                  ? "system"
+                  : stored.profile.themePreference;
+              stylePreference =
+                stored.profile.themePreference === "premium"
+                  ? "premium"
+                  : "standard";
+            }
+          }
         } catch {}
-        const resolved =
-          preference === "system"
+        const appearance =
+          appearancePreference === "system"
             ? matchMedia("(prefers-color-scheme: dark)").matches
               ? "dark"
               : "light"
-            : preference;
-        document.documentElement.dataset.theme = resolved;
-        document.documentElement.style.colorScheme = resolved;
+            : appearancePreference;
+        const style = stylePreference === "premium" ? "premium" : "standard";
+        document.documentElement.dataset.appearance = appearance;
+        document.documentElement.dataset.style = style;
+        document.documentElement.dataset.theme =
+          style === "premium" ? "premium" : appearance;
+        if (style === "premium")
+          document.documentElement.dataset.premiumScheme = appearance;
+        document.documentElement.style.colorScheme = appearance;
+        const colors = {
+          "light-standard": "#f6f5f2",
+          "dark-standard": "#111413",
+          "light-premium": "#f7f5f0",
+          "dark-premium": "#11110f",
+        };
         document
           .querySelector('meta[name="theme-color"]')
-          ?.setAttribute("content", resolved === "dark" ? dark : light);
+          ?.setAttribute("content", colors[`${appearance}-${style}`]);
       })();
     </script>
   </head>

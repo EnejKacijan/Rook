@@ -22,6 +22,8 @@ import {
   validStepperDraft,
   planEditorAllowsSupersets,
   profileTrainingRows,
+  legacyThemePreference,
+  resolvedAppearance,
   resolvedTheme,
   setupSelectionValid,
   shouldEnableRir,
@@ -62,7 +64,7 @@ describe("context-aware Coach home", () => {
     ];
     expect(coachContextSummary(state)).toEqual({
       primary: "Rest day today",
-      secondary: "1 workout logged · recent working weights available",
+      secondary: "1 workout logged · Recent working weights available",
     });
     expect(contextualCoachPrompts(state)).toEqual([
       "Should I train today anyway?",
@@ -81,7 +83,7 @@ describe("context-aware Coach home", () => {
       },
     ];
     expect(coachContextSummary(state).secondary).toBe(
-      "1 workout logged · completed training history available",
+      "1 workout logged · Completed training history available",
     );
   });
 });
@@ -100,6 +102,11 @@ describe("training setup validation", () => {
     expect(resolvedTheme("dark", false)).toBe("dark");
     expect(resolvedTheme("premium", false)).toBe("premium");
     expect(resolvedTheme("premium", true)).toBe("premium");
+    expect(resolvedAppearance("system", false)).toBe("light");
+    expect(resolvedAppearance("system", true)).toBe("dark");
+    expect(resolvedAppearance("light", true)).toBe("light");
+    expect(legacyThemePreference("dark", "standard")).toBe("dark");
+    expect(legacyThemePreference("light", "premium")).toBe("premium");
   });
 
   it("uses only faithful exercise-specific art and no pattern fallback", () => {

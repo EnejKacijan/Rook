@@ -108,6 +108,47 @@ for (const theme of ["light", "dark", "premium"]) {
     `${theme} day selection switches immediately after the tactile press`,
   );
   assert.equal(await todayRun.page.locator(".day-selection-trace").count(), 0, `${theme} avoids rotating border decoration`);
+
+  await todayRun.page.getByRole("button", { name: "PROFILE", exact: true }).click();
+  await todayRun.page.getByRole("button", { name: /Logging & increments/ }).click();
+  const units = todayRun.page.locator(".unit-segmented");
+  assert.equal(
+    await units.evaluate((node) => getComputedStyle(node, "::before").transitionDuration),
+    "0.18s",
+    `${theme} units use the shared 180ms sliding indicator`,
+  );
+  await todayRun.page.getByRole("button", { name: "lb", exact: true }).click();
+  await todayRun.page.waitForTimeout(25);
+  assert.equal(
+    await todayRun.page.getByRole("button", { name: "lb", exact: true }).getAttribute("aria-pressed"),
+    "true",
+    `${theme} unit semantics update immediately`,
+  );
+  assert.match(
+    await todayRun.page.locator(".increments-heading").textContent(),
+    /LB/,
+    `${theme} dependent copy updates with the selected unit`,
+  );
+  assert.equal(
+    await todayRun.page.locator(".unit-dependent-values").evaluate((node) => getComputedStyle(node).animationName),
+    "rook-unit-values-in",
+    `${theme} converted values use one restrained fade`,
+  );
+  await todayRun.page.getByRole("button", { name: "Close", exact: true }).click();
+  await todayRun.page.getByRole("button", { name: /Edit plan/ }).click();
+  const firstEditor = todayRun.page.locator(".plan-editor-summary").first();
+  await firstEditor.click();
+  await todayRun.page.waitForTimeout(35);
+  assert.equal(
+    await firstEditor.getAttribute("aria-expanded"),
+    "true",
+    `${theme} exercise editor opens semantically during the spatial transition`,
+  );
+  assert.equal(
+    await todayRun.page.locator(".plan-editor-fields").count(),
+    1,
+    `${theme} opens only the selected editor`,
+  );
   await todayRun.context.close();
 
   const workoutRun = await openState(fixture(theme, true));
@@ -115,6 +156,23 @@ for (const theme of ["light", "dark", "premium"]) {
   const addSet = workoutRun.page.getByRole("button", { name: "+ ADD SET" });
   const nextExercise = workoutRun.page.getByRole("button", { name: /NEXT EXERCISE|FINISH WORKOUT/ });
   assert.notEqual(await activeTransform(workoutRun.page, addSet), "none", `${theme} Add Set shares tactile press motion`);
+  const setCount = await workoutRun.page.locator(".set-row").count();
+  await addSet.click();
+  await workoutRun.page.waitForTimeout(35);
+  assert.equal(
+    await workoutRun.page.locator(".set-row").count(),
+    setCount + 1,
+    `${theme} Add Set updates the list during the layout transition`,
+  );
+  const transitionNames = await workoutRun.page.locator(".set-row").evaluateAll((nodes) =>
+    nodes.map((node) => getComputedStyle(node).viewTransitionName),
+  );
+  assert.equal(
+    new Set(transitionNames).size,
+    transitionNames.length,
+    `${theme} set rows have stable unique transition identities`,
+  );
+  await workoutRun.page.waitForTimeout(220);
   assert.notEqual(await activeTransform(workoutRun.page, nextExercise), "none", `${theme} workout navigation shares tactile press motion`);
   const completion = workoutRun.page.getByRole("button", { name: "Complete set 2" });
   await completion.click();
@@ -156,5 +214,41 @@ assert.equal(
 );
 await reducedRun.context.close();
 
+const reducedSettings = await openState(fixture("dark"), {
+  reducedMotion: "reduce",
+});
+await reducedSettings.page.getByRole("button", { name: "PROFILE", exact: true }).click();
+await reducedSettings.page.getByRole("button", { name: /Logging & increments/ }).click();
+assert.equal(
+  await reducedSettings.page.locator(".unit-segmented").evaluate(
+    (node) => getComputedStyle(node, "::before").transitionDuration,
+  ),
+  "0s",
+  "reduced motion removes the sliding unit transition",
+);
+await reducedSettings.page.getByRole("button", { name: "lb", exact: true }).click();
+await reducedSettings.page.waitForTimeout(25);
+assert.equal(
+  await reducedSettings.page.locator(".unit-dependent-values").evaluate(
+    (node) => getComputedStyle(node).animationName,
+  ),
+  "none",
+  "reduced motion removes the converted-value fade",
+);
+await reducedSettings.page.evaluate(() => {
+  const indicator = document.createElement("div");
+  indicator.className = "thinking-dots";
+  indicator.innerHTML = "<i></i><i></i><i></i>";
+  document.body.append(indicator);
+});
+assert.equal(
+  await reducedSettings.page.locator(".thinking-dots i").first().evaluate(
+    (node) => getComputedStyle(node).animationName,
+  ),
+  "none",
+  "reduced motion also stops the repeating Coach thinking animation",
+);
+await reducedSettings.context.close();
+
 await browser.close();
-console.log("Motion QA passed: Light, Dark, and Premium share tactile buttons and day cards, set commit feedback, active-state advancement, and reduced-motion behavior without rotating decoration or shared theme colors.");
+console.log("Motion QA passed: Light, Dark, and Premium share unit, list, editor, tactile, and completion motion while reduced-motion keeps every state change immediate and still.");

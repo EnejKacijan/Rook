@@ -22,6 +22,20 @@ async function verifyLongForm(page, selector, label) {
   const compactTitle = header.locator(":scope > strong");
   await panel.waitFor();
   await page.waitForTimeout(220);
+  const modal = page.locator('.modal-layer');
+  assert.equal(await modal.getAttribute('role'), 'dialog', `${label} exposes dialog semantics`);
+  assert.equal(await modal.getAttribute('aria-modal'), 'true', `${label} is announced as modal`);
+  const focusableCount = await modal.evaluate((node) => {
+    const controls = [...node.querySelectorAll('button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+      .filter((element) => element.getClientRects().length > 0);
+    controls[0]?.focus({ preventScroll: true });
+    return controls.length;
+  });
+  assert.ok(focusableCount >= 2, `${label} has a meaningful focus loop`);
+  await page.keyboard.press('Shift+Tab');
+  assert.equal(await page.evaluate(() => document.activeElement === [...document.querySelectorAll('.modal-layer button:not([disabled]), .modal-layer [href], .modal-layer input:not([disabled]), .modal-layer select:not([disabled]), .modal-layer textarea:not([disabled]), .modal-layer [tabindex]:not([tabindex="-1"])')].filter((element) => element.getClientRects().length > 0).at(-1)), true, `${label} traps reverse focus at its final control`);
+  await page.keyboard.press('Tab');
+  assert.equal(await page.evaluate(() => document.activeElement === [...document.querySelectorAll('.modal-layer button:not([disabled]), .modal-layer [href], .modal-layer input:not([disabled]), .modal-layer select:not([disabled]), .modal-layer textarea:not([disabled]), .modal-layer [tabindex]:not([tabindex="-1"])')].filter((element) => element.getClientRects().length > 0)[0]), true, `${label} loops focus back to its first control`);
   const initial = await panel.evaluate((node) => {
     const style = getComputedStyle(node);
     return {
@@ -30,13 +44,21 @@ async function verifyLongForm(page, selector, label) {
       overflowY: style.overflowY,
       radius: parseFloat(style.borderTopLeftRadius),
       clientHeight: node.clientHeight,
+      viewportHeight: innerHeight,
     };
   });
   assert.ok(isOpaque(initial.background), `${label} surface is fully opaque`);
   assert.equal(initial.overflowX, "hidden", `${label} clips across its rounded top`);
   assert.match(initial.overflowY, /auto|scroll/u, `${label} owns vertical scrolling`);
   assert.ok(initial.radius >= 20, `${label} keeps the shared rounded-sheet character`);
-  assert.ok(initial.clientHeight >= 660, `${label} uses the near-full-height long-form scaffold`);
+  assert.ok(
+    initial.clientHeight <= initial.viewportHeight * 0.93,
+    `${label} respects the shared viewport cap`,
+  );
+  assert.ok(
+    initial.clientHeight >= 500,
+    `${label} retains enough room for an efficient long-form flow`,
+  );
 
   const headerStyle = await header.evaluate((node) => {
     const style = getComputedStyle(node);
@@ -120,6 +142,23 @@ for (const theme of ["light", "dark", "premium"]) {
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: /Training restrictions/ }).click();
+  const restrictionPanel = page.locator(".training-restrictions-screen");
+  const restrictionBox = await restrictionPanel.boundingBox();
+  const restrictionHandle = await page.locator(".modal-drag-handle").boundingBox();
+  assert.ok(
+    restrictionBox.height < 844 * 0.82,
+    `${theme} short restrictions sheet sizes to its content`,
+  );
+  assert.ok(
+    Math.abs(restrictionHandle.y - restrictionBox.y) <= 1,
+    `${theme} drag handle follows the compact sheet top`,
+  );
+  await page.screenshot({ path: output(`${theme}-training-restrictions-compact.png`) });
+  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.locator(".modal-layer").waitFor({ state: "detached" });
+
   await page.setViewportSize({ width: 390, height: 1100 });
   await page.getByRole("button", { name: /Appearance/ }).click();
   const appearanceHeader = page.locator(".appearance-screen > .detail-header");
@@ -133,6 +172,11 @@ for (const theme of ["light", "dark", "premium"]) {
     await appearanceHeader.locator(":scope > strong").evaluate(node => getComputedStyle(node).opacity),
     "1",
     `${theme} short Appearance sheet keeps its compact title visible`,
+  );
+  const appearanceBox = await page.locator(".appearance-screen").boundingBox();
+  assert.ok(
+    appearanceBox.height < 1100 * 0.6,
+    `${theme} Appearance sheet does not reserve empty viewport height`,
   );
   await page.getByRole("button", { name: "Close", exact: true }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
@@ -157,5 +201,5 @@ for (const theme of ["light", "dark", "premium"]) {
 
 await browser.close();
 console.log(
-  "Modal scaffold QA passed: Training priorities and Edit plan are opaque, clipped, near-full-height surfaces with sticky headers in Light, Dark and Premium.",
+  "Modal scaffold QA passed: short sheets size to content, long sheets use the shared viewport cap, and headers remain correct in Light, Dark and Premium.",
 );

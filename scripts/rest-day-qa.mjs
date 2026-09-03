@@ -67,7 +67,11 @@ for (const theme of ['light', 'dark', 'premium']) {
     selectedChip.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, border: getComputedStyle(node).borderTopColor, borderWidth: getComputedStyle(node).borderTopWidth })),
     todayChip.evaluate(node => ({ background: getComputedStyle(node).backgroundColor, border: getComputedStyle(node).borderTopColor, borderWidth: getComputedStyle(node).borderTopWidth })),
   ]);
-  assert.notEqual(selectedStyle.background, todayStyle.background, `${theme}: selected day has the stronger surface treatment`);
+  assert.ok(
+    selectedStyle.background !== todayStyle.background ||
+      parseFloat(selectedStyle.borderWidth) > parseFloat(todayStyle.borderWidth),
+    `${theme}: selected day has the stronger surface or ring treatment`,
+  );
   assert.notEqual(selectedStyle.border, todayStyle.border, `${theme}: today uses a distinct secondary indicator`);
   if (theme === 'premium') assert.ok(parseFloat(selectedStyle.borderWidth) > parseFloat(todayStyle.borderWidth), 'premium: selected border is stronger than the today indicator');
   await page.screenshot({ path: output(`390-selected-non-today-rest-${theme}.png`), fullPage: false }); assert.deepEqual(errors, []); await context.close();

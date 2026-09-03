@@ -61,7 +61,7 @@ assert.equal(await page.getByRole('button', { name: 'REVIEW RESTRICTIONS' }).cou
 await page.screenshot({ path: output('390-training-paused.png'), fullPage: false });
 
 await page.getByRole('button', { name: 'REVIEW RESTRICTIONS' }).click();
-assert.equal(await page.getByRole('heading', { name: 'Apply only clear limits.' }).count(), 1);
+assert.equal(await page.getByRole('heading', { name: 'Set clear training limits.' }).count(), 1);
 assert.match(await page.locator('.training-safety-summary').last().textContent(), /TRAINING PAUSED.*unresolved restriction.*cannot determine an appropriate strength-training plan/i);
 await page.screenshot({ path: output('390-restriction-review.png'), fullPage: false });
 
@@ -76,8 +76,14 @@ await page.getByText('RESTRICTIONS APPLIED', { exact: true }).waitFor();
 assert.match(await page.locator('.training-safety-summary').last().textContent(), /RESTRICTIONS APPLIED.*Upper-body strength training only/i);
 await page.screenshot({ path: output('390-confirmed-clinician-scope.png'), fullPage: false });
 await page.getByRole('button', { name: 'SAVE RESTRICTIONS' }).click();
+await page.getByRole('heading', { name: 'This affects your current plan' }).waitFor();
+assert.match(await page.locator('.restriction-impact-review').textContent(), /planned exercises? conflict.*won’t change.*automatically/i);
+await page.screenshot({ path: output('390-current-plan-impact.png'), fullPage: false });
+await page.getByRole('button', { name: 'SAVE & REVIEW PLAN' }).click();
+await page.getByRole('heading', { name: 'Edit your plan' }).waitFor();
+assert.equal(await page.locator('.safety-review-required').count() > 0, true, 'affected exercises are highlighted for review');
 assert.deepEqual(errors, []);
 
 await context.close();
 await browser.close();
-console.log('Training safety QA passed: unresolved surgery blocks Start, restriction review explains the boundary, and clinician scope requires semantic confirmation.');
+console.log('Training safety QA passed: unresolved surgery blocks Start, clinician scope requires confirmation, and conflicting plans require explicit save-and-review.');

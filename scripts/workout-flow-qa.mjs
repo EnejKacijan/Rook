@@ -89,6 +89,8 @@ async function completeCurrentExercise(page) {
 // Sequential sets, persistence, extra sets, direct next navigation, and full completion.
 {
   const { context, page, errors } = await openWorkout();
+  const activeExerciseName = await page.locator('.exercise-heading h1').innerText();
+  assert.equal(await page.locator('.workout-warmup-toggle small').innerText(), `For ${activeExerciseName}`, 'collapsed warm-up derives its target name from the current active exercise entry');
   for (const width of [375, 390, 430, 500]) await snap(page, 'first-exercise', width);
   await page.setViewportSize({ width: 390, height: 844 });
 
@@ -122,6 +124,7 @@ async function completeCurrentExercise(page) {
 
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
+  assert.equal(await page.locator('.workout-warmup-toggle small').innerText(), `For ${activeExerciseName}`, 'reload cannot restore a stale cached warm-up target name');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '25');
   assert.equal(await page.getByRole('button', { name: 'Complete set 2' }).isEnabled(), true);
   assert.equal(await page.locator('.rest-timer').isVisible(), true, 'active rest timer survives reload');
@@ -133,10 +136,12 @@ async function completeCurrentExercise(page) {
 
   await page.getByRole('button', { name: '+ ADD SET' }).click();
   const extraRemove = page.getByRole('button', { name: /^Remove extra set / });
+  await extraRemove.waitFor();
   assert.equal(await extraRemove.count(), 1);
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 4/ }).inputValue(), '17.5', 'a new set inherits the immediately previous set rather than the first set');
   await snap(page, 'extra-set');
   await extraRemove.click();
+  await extraRemove.waitFor({ state: 'detached' });
   assert.equal(await page.getByRole('button', { name: /^Remove extra set / }).count(), 0);
   await page.getByRole('button', { name: '+ ADD SET' }).click();
   await completeCurrentExercise(page);
@@ -144,6 +149,10 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('primary')), true, 'Next Exercise becomes primary when prescribed sets are complete');
   const totalBeforeExtra = Number((await page.locator('.workout-header small').innerText()).match(/\/ (\d+) sets/)[1]);
   await page.getByRole('button', { name: '+ ADD SET' }).click();
+  await page.waitForFunction(
+    expected => document.querySelector('.workout-header small')?.textContent.includes(`/ ${expected} sets ·`),
+    totalBeforeExtra + 1,
+  );
   assert.match(await page.locator('.workout-header small').innerText(), new RegExp(`/ ${totalBeforeExtra + 1} sets ·`), 'an added working set immediately updates the workout total');
   assert.equal(await page.locator('.set-row').last().getAttribute('data-set-state'), 'ready', 'an added set becomes the current actionable set after the prescribed work is complete');
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('secondary')), true, 'an unfinished added set makes the exercise incomplete again');
@@ -192,7 +201,7 @@ async function completeCurrentExercise(page) {
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
   await page.getByRole('dialog').waitFor();
   assert.match(await page.getByRole('dialog').textContent(), /sets are still incomplete/);
-  const dragHandle = page.getByRole('button', { name: 'Drag down to close' });
+  const dragHandle = page.getByRole('button', { name: 'Drag down or tap to close' });
   assert.equal(await dragHandle.count(), 1, 'incomplete-exercise confirmation has one functional drag handle');
   await snap(page, 'incomplete-next-confirmation');
   const sheet = page.locator('.workout-confirm'); const initialSheetBox = await sheet.boundingBox(); const titleBox = await page.getByRole('heading', { name: /still incomplete/ }).boundingBox();
@@ -238,7 +247,7 @@ async function completeCurrentExercise(page) {
   await page.getByRole('button', { name: 'Finish', exact: true }).click();
   const dialog = page.getByRole('dialog');
   await dialog.waitFor();
-  assert.equal(await page.getByRole('button', { name: 'Drag down to close' }).count(), 1, 'early-finish confirmation uses the same drag interaction');
+  assert.equal(await page.getByRole('button', { name: 'Drag down or tap to close' }).count(), 1, 'early-finish confirmation uses the same drag interaction');
   assert.match(await dialog.textContent(), new RegExp(`1 of ${planned} sets is complete[\\s\\S]*Only completed sets will be logged`));
   await snap(page, 'early-finish-confirmation');
   await page.getByRole('button', { name: 'FINISH ANYWAY' }).click();

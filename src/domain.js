@@ -1796,6 +1796,8 @@ export function defaultProfile() {
     recommendedWarmupsEnabled: true,
     rampUpSetsEnabled: true,
     showExerciseImages: true,
+    appearancePreference: "system",
+    stylePreference: "standard",
     themePreference: "system",
     restTimerEnabled: true,
     restTimerAutoStart: true,
@@ -1976,14 +1978,51 @@ export function loadState() {
       physiqueSuggested: [],
       physiqueConfirmed: [],
     };
+    const legacyThemePreference = ["system", "light", "dark", "premium"].includes(
+      stored.profile?.themePreference,
+    )
+      ? stored.profile.themePreference
+      : "light";
+    let appearancePreference = ["system", "light", "dark"].includes(
+      stored.profile?.appearancePreference,
+    )
+      ? stored.profile.appearancePreference
+      : legacyThemePreference === "premium"
+        ? "system"
+        : legacyThemePreference;
+    let stylePreference = ["standard", "premium"].includes(
+      stored.profile?.stylePreference,
+    )
+      ? stored.profile.stylePreference
+      : legacyThemePreference === "premium"
+        ? "premium"
+        : "standard";
+    const expectedLegacyTheme =
+      stylePreference === "premium" ? "premium" : appearancePreference;
+    if (
+      ["system", "light", "dark", "premium"].includes(
+        stored.profile?.themePreference,
+      ) &&
+      stored.profile.themePreference !== expectedLegacyTheme
+    ) {
+      // A still-open legacy client can update only themePreference. Preserve
+      // that write and immediately bring the new axes back into sync.
+      appearancePreference =
+        stored.profile.themePreference === "premium"
+          ? "system"
+          : stored.profile.themePreference;
+      stylePreference =
+        stored.profile.themePreference === "premium" ? "premium" : "standard";
+    }
     const profile = {
       ...base.profile,
       ...(stored.profile || {}),
-      themePreference: ["system", "light", "dark", "premium"].includes(
-        stored.profile?.themePreference,
-      )
-        ? stored.profile.themePreference
-        : "light",
+      appearancePreference,
+      stylePreference,
+      // Keep the old value as a one-release compatibility alias for older
+      // tabs and integrations that have not adopted the two-axis model yet.
+      themePreference:
+        stylePreference === "premium" ? "premium" : appearancePreference,
       prioritySources: {
         ...base.profile.prioritySources,
         ...legacyPrioritySources,
@@ -2041,7 +2080,7 @@ export function loadState() {
         (conversations.length ? "legacy" : null);
     if (
       stored.activeWorkout?.warmup &&
-      stored.activeWorkout.warmup.generatorVersion !== 2
+      stored.activeWorkout.warmup.generatorVersion !== 3
     )
       refreshWorkoutWarmup(stored.activeWorkout, profile, program);
     return {
@@ -2071,8 +2110,53 @@ export function loadState() {
     return blankState();
   }
 }
-export const saveState = (state) =>
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+export const saveState = (state) => {
+  let persistedState = state;
+  if (state?.profile) {
+    const currentLegacy = state.profile.themePreference;
+    const expectedLegacy =
+      state.profile.stylePreference === "premium"
+        ? "premium"
+        : ["system", "light", "dark"].includes(
+              state.profile.appearancePreference,
+            )
+          ? state.profile.appearancePreference
+          : currentLegacy;
+    // An older open tab may still write only themePreference. Detect that
+    // deliberate legacy-axis change and migrate it forward before persisting.
+    if (
+      ["system", "light", "dark", "premium"].includes(currentLegacy) &&
+      currentLegacy !== expectedLegacy
+    ) {
+      persistedState = {
+        ...state,
+        profile: {
+          ...state.profile,
+          appearancePreference:
+            currentLegacy === "premium" ? "system" : currentLegacy,
+          stylePreference:
+            currentLegacy === "premium" ? "premium" : "standard",
+        },
+      };
+    }
+    persistedState = {
+      ...persistedState,
+      profile: {
+        ...persistedState.profile,
+        themePreference:
+          persistedState.profile.stylePreference === "premium"
+        ? "premium"
+            : persistedState.profile.appearancePreference,
+      },
+    };
+  }
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
+    return true;
+  } catch {
+    return false;
+  }
+};
 
 export const weekKey = (date = new Date()) => isoDay(weekDate("Mon", date));
 function calendarDate(value) {
@@ -2127,13 +2211,29 @@ export function currentWeekSchedule(state, date = new Date()) {
         state.workoutOccurrenceOverrides?.[scheduledDate]?.[sourceWorkout.id];
       if (occurrence?.skipWorkout) return null;
       const excludedEntryIds = new Set(occurrence?.excludedEntryIds || []);
-      const workout = excludedEntryIds.size
-        ? {
-            ...sourceWorkout,
-            exercises: sourceWorkout.exercises.filter(
-              (exercise) => !excludedEntryIds.has(exercise.id),
-            ),
-          }
+      const orderedEntryIds = Array.isArray(occurrence?.orderedEntryIds)
+        ? occurrence.orderedEntryIds
+        : [];
+      const orderIndex = new Map(
+        orderedEntryIds.map((entryId, index) => [entryId, index]),
+      );
+      const sourceIndex = new Map(
+        sourceWorkout.exercises.map((exercise, index) => [exercise.id, index]),
+      );
+      const occurrenceExercises = sourceWorkout.exercises
+        .filter((exercise) => !excludedEntryIds.has(exercise.id))
+        .sort((first, second) => {
+          const firstOrder = orderIndex.has(first.id)
+            ? orderIndex.get(first.id)
+            : orderedEntryIds.length + sourceIndex.get(first.id);
+          const secondOrder = orderIndex.has(second.id)
+            ? orderIndex.get(second.id)
+            : orderedEntryIds.length + sourceIndex.get(second.id);
+          return firstOrder - secondOrder;
+        });
+      const customizedOccurrence = excludedEntryIds.size || orderedEntryIds.length;
+      const workout = customizedOccurrence
+        ? { ...sourceWorkout, exercises: occurrenceExercises }
         : sourceWorkout;
       if (!workout.exercises.length) return null;
       if (workout !== sourceWorkout)
@@ -2148,6 +2248,34 @@ export function currentWeekSchedule(state, date = new Date()) {
     })
     .filter(Boolean)
     .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate));
+}
+
+export function reorderExercisesForOccurrence(
+  state,
+  { planDate, workoutId, orderedEntryIds },
+) {
+  const date = /^\d{4}-\d{2}-\d{2}$/.test(String(planDate || ""))
+    ? String(planDate)
+    : isoDay(planDate);
+  const source = state.program?.days.find((day) => day.id === workoutId);
+  if (!source || !Array.isArray(orderedEntryIds)) return state;
+  if (
+    state.activeWorkout?.programDayId === workoutId &&
+    workoutPlanDate(state.activeWorkout) === date
+  )
+    return state;
+  const validIds = new Set(source.exercises.map((entry) => entry.id));
+  const uniqueOrder = [...new Set(orderedEntryIds)].filter((entryId) =>
+    validIds.has(entryId),
+  );
+  const dateOverrides = (state.workoutOccurrenceOverrides ||= {});
+  const workoutOverrides = (dateOverrides[date] ||= {});
+  const previous = workoutOverrides[workoutId] || {};
+  workoutOverrides[workoutId] = {
+    ...previous,
+    orderedEntryIds: uniqueOrder,
+  };
+  return state;
 }
 
 export function removeExerciseFromOccurrence(
@@ -3883,6 +4011,8 @@ export function candidateScore(
     ["horizontal-pull", "vertical-pull"].includes(item.pattern)
   )
     value -= 8;
+  // Scoring is only a tie-breaker; protected post-conditions below guarantee
+  // the material weekly effect without letting this bias distort the split.
   if (isPriorityExercise(item, profile)) value += 7;
   if (physiquePriorityMatch(item, profile)) value += 4;
   if (profile.goal === "Build muscle" && item.stability === "high") value += 4;
@@ -3964,10 +4094,12 @@ export function candidateScore(
   return value + ((item.id.length + dayIndex) % 7) / 100;
 }
 function isPriorityExercise(item, profile) {
-  return (
-    (profile.priorities || []).some(
-      (priority) => priority !== "Balanced" && item.muscles.includes(priority),
-    ) || physiquePriorityMatch(item, profile)
+  if (!item) return false;
+  const stimulus = stimulusProfileForExercise(item);
+  return priorityProgrammingGroupsForProfile(profile).some(
+    (group) =>
+      (!group.patterns?.length || group.patterns.includes(item.pattern)) &&
+      group.muscles.some((muscle) => stimulus[muscle] === 1),
   );
 }
 function makeProgramExercise(item, profile, options = {}) {
@@ -3999,6 +4131,7 @@ function makeProgramExercise(item, profile, options = {}) {
     targetRir: p.targetRir,
     restSeconds: p.restSeconds,
     defaultIncrement: item.increment,
+    ...(options.prioritySet ? { protectedPrioritySets: 1 } : {}),
   };
 }
 export function estimateExerciseMinutes(exercise) {
@@ -4032,7 +4165,11 @@ export function roundedEstimate(minutes, step = 5) {
   return Math.max(increment, Math.round(value / increment) * increment);
 }
 function minimumWorkingSets(profile, exercise) {
-  return minimumWorkingSetsForExercise(profile, exercise);
+  return Math.min(
+    exercise.sets.length,
+    minimumWorkingSetsForExercise(profile, exercise) +
+      Math.max(0, Number(exercise.protectedPrioritySets) || 0),
+  );
 }
 function fitSessionToDuration(
   exercises,
@@ -4044,12 +4181,17 @@ function fitSessionToDuration(
   // The requested duration is the generation budget. Display-estimation
   // tolerance belongs in validation, not as free programming time.
   while (estimateSessionMinutes(result) > minutes) {
-    const reducible = [...result]
+    const reduciblePool = [...result]
       .reverse()
-      .find(
+      .filter(
         (exercise) =>
           exercise.sets.length > minimumWorkingSets(profile, exercise),
       );
+    const reducible =
+      reduciblePool.find(
+        (exercise) =>
+          !isPriorityExercise(exerciseCatalog[exercise.exerciseId], profile),
+      ) || reduciblePool[0];
     if (reducible) reducible.sets.pop();
     else {
       const removableCandidates = [...result.keys()].reverse().filter(
@@ -4060,9 +4202,17 @@ function fitSessionToDuration(
             result.filter((_, candidate) => candidate !== index),
           ),
       );
+      const optionalCandidates = removableCandidates.filter(
+        (index) => !result[index].requiredRole,
+      );
       const removableIndex =
-        removableCandidates.find((index) => !result[index].requiredRole) ??
-        removableCandidates[0];
+        optionalCandidates.find(
+          (index) =>
+            !isPriorityExercise(
+              exerciseCatalog[result[index].exerciseId],
+              profile,
+            ),
+        ) ?? optionalCandidates[0] ?? removableCandidates[0];
       if (removableIndex === undefined) break;
       result.splice(removableIndex, 1);
     }
@@ -4483,7 +4633,9 @@ function repairProgramSchedule(program) {
   };
 }
 function prioritySetBudgets(profile) {
-  const bonus = profile.goal === "Build muscle" ? 4 : 2;
+  const frequency = Math.max(2, Math.min(6, Number(profile.daysPerWeek) || 3));
+  const bonus =
+    profile.goal === "Build muscle" ? (frequency >= 5 ? 3 : 2) : 2;
   return new Map(priorityProgrammingGroupsForProfile(profile).map((group, index) => [
     `${group.source}:${group.key}:${index}`,
     { ...group, remaining: bonus },
@@ -5008,7 +5160,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
             exercise,
             exerciseIndex,
             item: exerciseCatalog[exercise.exerciseId],
-          })).filter(entry => entry.exercise !== candidate.exercise && entry.exercise.programmingRole !== "main" && !entry.exercise.requiredRole)
+          })).filter(entry => entry.exercise !== candidate.exercise && entry.exercise.programmingRole !== "main" && !entry.exercise.requiredRole && !entry.exercise.protectedPrioritySets)
             .filter(entry => mutationWithinVolumePolicy({
               addItem: candidate.item,
               addSets: 1,
@@ -5072,7 +5224,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
               exercise: candidate,
               exerciseIndex,
               item: exerciseCatalog[candidate.exerciseId],
-            })).filter(candidate => candidate.exercise.programmingRole !== "main" && !candidate.exercise.requiredRole)
+            })).filter(candidate => candidate.exercise.programmingRole !== "main" && !candidate.exercise.requiredRole && !candidate.exercise.protectedPrioritySets)
               .filter(candidate => mutationWithinVolumePolicy({
                 addItem: exercise.exerciseId,
                 addSets: exercise.sets.length,
@@ -5193,6 +5345,7 @@ function enforceInitialVolumeCeilings(program, profile) {
           (entry) =>
             entry.day.exercises.length > 2 &&
             entry.exercise.programmingRole !== "main" &&
+            !entry.exercise.protectedPrioritySets &&
             sessionNameMatchesExercises(
               entry.day,
               entry.day.exercises.filter(
@@ -5226,7 +5379,328 @@ function enforceInitialVolumeCeilings(program, profile) {
     day.estimatedMinutes = estimateSessionMinutes(day.exercises);
   return refreshHypertrophyCoverage(program, profile);
 }
-export function buildProgram(profile) {
+
+function priorityGroupMatchesDirectExercise(group, exercise) {
+  const item = exerciseCatalog[exercise?.exerciseId];
+  if (!item) return false;
+  if (group.patterns?.length && !group.patterns.includes(item.pattern))
+    return false;
+  const stimulus = stimulusProfileForExercise(item);
+  return group.muscles.some((muscle) => stimulus[muscle] === 1);
+}
+
+function directPriorityGroupSets(program, group) {
+  return program.days.reduce(
+    (total, day) =>
+      total +
+      day.exercises.reduce(
+        (dayTotal, exercise) =>
+          dayTotal +
+          (priorityGroupMatchesDirectExercise(group, exercise)
+            ? exercise.sets.length
+            : 0),
+        0,
+      ),
+    0,
+  );
+}
+
+function prioritizeFirstRelevantExposure(program, profile, group) {
+  const relevantDays = program.days.filter((day) =>
+    group.muscles.some((muscle) => sessionSupportsStimulus(day, muscle)),
+  );
+  const first = relevantDays[0];
+  if (!first) return false;
+  const hasDirect = (day) =>
+    day.exercises.some((exercise) =>
+      priorityGroupMatchesDirectExercise(group, exercise),
+    );
+  if (!hasDirect(first)) {
+    const source = relevantDays.slice(1).find((day) =>
+      day.exercises.some(
+        (exercise) =>
+          priorityGroupMatchesDirectExercise(group, exercise) &&
+          exercise.programmingRole !== "main" &&
+          !exercise.requiredRole,
+      ),
+    );
+    const sourceIndex = source?.exercises.findIndex(
+      (exercise) =>
+        priorityGroupMatchesDirectExercise(group, exercise) &&
+        exercise.programmingRole !== "main" &&
+        !exercise.requiredRole,
+    );
+    const targetIndex = first.exercises.findIndex(
+      (exercise) =>
+        !priorityGroupMatchesDirectExercise(group, exercise) &&
+        exercise.programmingRole !== "main" &&
+        !exercise.requiredRole,
+    );
+    if (source && sourceIndex >= 0 && targetIndex >= 0) {
+      const originalSourceExercise = source.exercises[sourceIndex];
+      const originalTargetExercise = first.exercises[targetIndex];
+      const sourceExercise = {
+        ...originalSourceExercise,
+        sets: originalSourceExercise.sets.slice(
+          0,
+          originalTargetExercise.sets.length,
+        ),
+      };
+      const targetExercise = {
+        ...originalTargetExercise,
+        sets: Array.from(
+          { length: originalSourceExercise.sets.length },
+          (_, index) =>
+            originalTargetExercise.sets[index] || {
+              ...originalTargetExercise.sets.at(-1),
+              id: uid("set"),
+            },
+        ),
+      };
+      const nextFirst = first.exercises.map((exercise, index) =>
+        index === targetIndex ? sourceExercise : exercise,
+      );
+      const nextSource = source.exercises.map((exercise, index) =>
+        index === sourceIndex ? targetExercise : exercise,
+      );
+      if (
+        estimateSessionMinutes(nextFirst) <= Number(profile.sessionMinutes || 45) &&
+        estimateSessionMinutes(nextSource) <= Number(profile.sessionMinutes || 45) &&
+        requiredSessionRolesSatisfied(first, nextFirst) &&
+        requiredSessionRolesSatisfied(source, nextSource) &&
+        sessionNameMatchesExercises(first, nextFirst) &&
+        sessionNameMatchesExercises(source, nextSource)
+      ) {
+        first.exercises = nextFirst;
+        source.exercises = nextSource;
+      }
+    }
+    if (!hasDirect(first)) {
+      const targetIndex = first.exercises.findIndex(
+        (exercise) =>
+          !priorityGroupMatchesDirectExercise(group, exercise) &&
+          exercise.programmingRole !== "main" &&
+          !exercise.requiredRole,
+      );
+      const existing = new Set(
+        first.exercises.map((exercise) => exercise.exerciseId),
+      );
+      const allowed = Object.values(exerciseCatalog)
+        .filter((item) => isExerciseAutoGeneratable(item, profile))
+        .filter((item) => !existing.has(item.id))
+        .filter((item) =>
+          priorityGroupMatchesDirectExercise(group, { exerciseId: item.id }),
+        )
+        .sort(
+          (a, b) =>
+            candidateScore(
+              b,
+              profile,
+              new Map(),
+              b.pattern,
+              0,
+              "accessory",
+              first.exercises.map(
+                (exercise) => exerciseCatalog[exercise.exerciseId],
+              ),
+            ) -
+              candidateScore(
+                a,
+                profile,
+                new Map(),
+                a.pattern,
+                0,
+                "accessory",
+                first.exercises.map(
+                  (exercise) => exerciseCatalog[exercise.exerciseId],
+                ),
+              ) ||
+            a.name.localeCompare(b.name),
+        );
+      if (targetIndex >= 0 && allowed.length) {
+        const target = first.exercises[targetIndex];
+        const replacement = makeProgramExercise(allowed[0], profile, {
+          prioritySet: true,
+          requiredRole: false,
+          slotPatterns: [allowed[0].pattern],
+        });
+        replacement.sets = Array.from(
+          { length: target.sets.length },
+          (_, index) =>
+            replacement.sets[index] || {
+              ...replacement.sets.at(-1),
+              id: uid("set"),
+            },
+        );
+        const next = first.exercises.map((exercise, index) =>
+          index === targetIndex ? replacement : exercise,
+        );
+        if (
+          estimateSessionMinutes(next) <= Number(profile.sessionMinutes || 45) &&
+          requiredSessionRolesSatisfied(first, next) &&
+          sessionNameMatchesExercises(first, next)
+        ) {
+          first.exercises = next;
+        }
+      }
+    }
+  }
+  const priorityIndex = first.exercises.findIndex((exercise) =>
+    priorityGroupMatchesDirectExercise(group, exercise),
+  );
+  if (priorityIndex < 0) return false;
+  let firstAccessoryIndex = 0;
+  while (
+    firstAccessoryIndex < first.exercises.length &&
+    ["main", "power"].includes(
+      first.exercises[firstAccessoryIndex].programmingRole,
+    )
+  ) {
+    firstAccessoryIndex += 1;
+  }
+  if (priorityIndex > firstAccessoryIndex) {
+    const [priorityExercise] = first.exercises.splice(priorityIndex, 1);
+    first.exercises.splice(firstAccessoryIndex, 0, priorityExercise);
+  }
+  for (const day of new Set([first, ...relevantDays]))
+    day.estimatedMinutes = estimateSessionMinutes(day.exercises);
+  return true;
+}
+
+function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
+  const target = directPriorityGroupSets(baseline, group) + bonus;
+  const policies = hypertrophyVolumeTargets(profile);
+  let guard = 0;
+  while (directPriorityGroupSets(program, group) < target && guard++ < 12) {
+    const volume = weeklyStimulusVolume(program);
+    const candidates = program.days
+      .flatMap((day, dayIndex) =>
+        day.exercises.map((exercise, exerciseIndex) => ({
+          day,
+          dayIndex,
+          exercise,
+          exerciseIndex,
+          item: exerciseCatalog[exercise.exerciseId],
+        })),
+      )
+      .filter((entry) => priorityGroupMatchesDirectExercise(group, entry.exercise))
+      .filter((entry) => entry.exercise.sets.length < 5)
+      .filter((entry) =>
+        Object.entries(stimulusProfileForExercise(entry.item)).every(
+          ([muscle, credit]) =>
+            (volume[muscle] || 0) + credit <=
+            (policies[muscle]?.hardCap || initialVolumeCeiling(profile)),
+        ),
+      )
+      .sort((a, b) =>
+        a.exercise.sets.length - b.exercise.sets.length ||
+        Number(a.exercise.programmingRole === "main") -
+          Number(b.exercise.programmingRole === "main") ||
+        a.dayIndex - b.dayIndex ||
+        a.exerciseIndex - b.exerciseIndex,
+      );
+    let applied = false;
+    for (const candidate of candidates) {
+      const addedSet = { ...candidate.exercise.sets.at(-1), id: uid("set") };
+      const withAddedSet = candidate.day.exercises.map((exercise) =>
+        exercise === candidate.exercise
+          ? { ...exercise, sets: [...exercise.sets, addedSet] }
+          : exercise,
+      );
+      if (
+        estimateSessionMinutes(withAddedSet) <= Number(profile.sessionMinutes || 45)
+      ) {
+        candidate.exercise.sets.push(addedSet);
+        candidate.exercise.protectedPrioritySets =
+          (candidate.exercise.protectedPrioritySets || 0) + 1;
+        applied = true;
+      } else {
+        const donor = candidate.day.exercises
+          .map((exercise, exerciseIndex) => ({
+            exercise,
+            exerciseIndex,
+            item: exerciseCatalog[exercise.exerciseId],
+          }))
+          .filter((entry) => entry.exercise !== candidate.exercise)
+          .filter(
+            (entry) =>
+              !priorityGroupMatchesDirectExercise(group, entry.exercise) &&
+              entry.exercise.sets.length > minimumWorkingSets(profile, entry.exercise),
+          )
+          .filter((entry) =>
+            Object.entries(stimulusProfileForExercise(entry.item)).every(
+              ([muscle, credit]) =>
+                (volume[muscle] || 0) - credit >= (policies[muscle]?.floor || 0),
+            ),
+          )
+          .sort((a, b) =>
+            Number(a.exercise.requiredRole) - Number(b.exercise.requiredRole) ||
+            Number(a.exercise.programmingRole === "main") -
+              Number(b.exercise.programmingRole === "main") ||
+            b.exerciseIndex - a.exerciseIndex,
+          )[0];
+        if (!donor) continue;
+        donor.exercise.sets.pop();
+        candidate.exercise.sets.push(addedSet);
+        candidate.exercise.protectedPrioritySets =
+          (candidate.exercise.protectedPrioritySets || 0) + 1;
+        applied = true;
+      }
+      if (applied) {
+        candidate.day.estimatedMinutes = estimateSessionMinutes(
+          candidate.day.exercises,
+        );
+        break;
+      }
+    }
+    if (!applied) break;
+  }
+  const actual = directPriorityGroupSets(program, group);
+  if (actual < target) {
+    program.priorityConstrained ||= {};
+    program.priorityConstrained[group.key] = {
+      actual,
+      target,
+      reason: "time-recovery-or-volume",
+    };
+  }
+}
+
+function enforceManualPriorityPostconditions(program, baseline, profile) {
+  if (profile.goal !== "Build muscle") return program;
+  const groups = priorityProgrammingGroupsForProfile(profile).filter(
+    (group) => group.source === "manual",
+  );
+  if (!groups.length) return program;
+  const bonus = Number(profile.daysPerWeek) >= 5 ? 3 : 2;
+  for (const group of groups) {
+    prioritizeFirstRelevantExposure(program, profile, group);
+    addProtectedPrioritySets(program, baseline, profile, group, bonus);
+  }
+  for (const day of program.days) {
+    day.exercises = fitSessionToDuration(
+      day.exercises,
+      Number(profile.sessionMinutes) || 45,
+      profile,
+      day,
+    );
+    day.estimatedMinutes = estimateSessionMinutes(day.exercises);
+  }
+  for (const group of groups) {
+    const target = directPriorityGroupSets(baseline, group) + bonus;
+    const actual = directPriorityGroupSets(program, group);
+    if (actual >= target) continue;
+    program.priorityConstrained ||= {};
+    program.priorityConstrained[group.key] = {
+      actual,
+      target,
+      reason: "time-recovery-or-volume",
+    };
+  }
+  return refreshHypertrophyCoverage(program, profile);
+}
+
+export function buildProgram(profile, options = {}) {
   const trainingSafety = compileProfileTrainingSafety(
     profile,
     Object.values(exerciseCatalog),
@@ -5419,7 +5893,28 @@ export function buildProgram(profile) {
   };
   rebalanceHypertrophyFloors(generatedProgram, profile, allowed, usedCounts);
   generatedProgram.days = adaptConsecutiveSessionRecovery(generatedProgram.days, profile);
-  return enforceInitialVolumeCeilings(generatedProgram, profile);
+  const finalized = enforceInitialVolumeCeilings(generatedProgram, profile);
+  if (options.skipPriorityPostconditions) return finalized;
+  const hasManualPriority = priorityProgrammingGroupsForProfile(profile).some(
+    (group) => group.source === "manual",
+  );
+  if (!hasManualPriority || profile.goal !== "Build muscle") return finalized;
+  const neutralProfile = {
+    ...profile,
+    priorities: ["Balanced"],
+    prioritySources: {
+      ...(profile.prioritySources || {}),
+      manual: [],
+    },
+  };
+  const baseline = buildProgram(neutralProfile, {
+    skipPriorityPostconditions: true,
+  });
+  return enforceManualPriorityPostconditions(
+    finalized,
+    baseline,
+    profile,
+  );
 }
 
 const REPLACEMENT_GENERATOR_VERSION = 1;
@@ -6361,6 +6856,11 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
               ? null
               : Number(setWeights[index])
             : commonWeight,
+          weightProvenance:
+            preserve &&
+            Number(setWeights ? setWeights[index] : commonWeight) > 0
+              ? "imported"
+              : null,
           reps: repMin,
           completed: false,
           rir: null,
@@ -6377,6 +6877,31 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
       (profile.environment === "Home gym" ? "Home" : "Commercial gym");
     const normalizedWorkoutName = normalizeWorkoutName(day.name, day.weekday);
     const titleParts = workoutDisplayParts(normalizedWorkoutName, day.weekday);
+    const importedWarmupItems = preserve
+      ? (day.warmup?.items || []).slice(0, 12).map((item) => {
+          const label = String(item.label || item.name || item.sourceName || "")
+            .trim()
+            .slice(0, 80);
+          const match = matchImportedExerciseName(label);
+          return {
+            id: uid("warmup-item"),
+            exerciseId: match.exerciseId || null,
+            label: label || "Warm-up movement",
+            sets: Math.max(1, Math.min(10, Number(item.sets) || 1)),
+            reps:
+              Number(item.reps) > 0
+                ? Math.min(100, Number(item.reps))
+                : null,
+            seconds:
+              Number(item.seconds) > 0
+                ? Math.min(1800, Number(item.seconds))
+                : null,
+            minutes: Math.max(1, Math.min(30, Number(item.minutes) || 1)),
+            notes: item.notes ? String(item.notes).slice(0, 160) : null,
+            provenance: "imported",
+          };
+        })
+      : [];
     return {
       id: uid("program-day"),
       weekday: day.weekday,
@@ -6388,6 +6913,14 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
       workoutDescriptor: titleParts.detail || undefined,
       structureKey: sessionStructureKey(day),
       estimatedMinutes: estimateSessionMinutes(exercises),
+      warmupPlan: importedWarmupItems.length
+        ? {
+            mode: "custom",
+            provenance: "imported",
+            items: importedWarmupItems,
+            rampUpSets: [],
+          }
+        : undefined,
       exercises,
     };
   });
@@ -6580,12 +7113,143 @@ export function previousExercise(workouts, exerciseId) {
   return null;
 }
 export function warmupForWorkout(workout, profile, program = null) {
+  const warmupPlan = workout?.warmupPlan;
+  if (warmupPlan?.mode === "none") return null;
+  if (warmupPlan?.mode === "custom")
+    return customWarmupForWorkout(workout, warmupPlan);
   return generateWarmup(workout, profile, exerciseCatalog, {
     includeRecommendedWarmups:
       program?.includeRecommendedWarmups ??
       profile?.recommendedWarmupsEnabled !== false,
     includeRampUpSets: profile?.rampUpSetsEnabled !== false,
   });
+}
+function customWarmupMovementLabel(item) {
+  const name = String(item?.label || item?.name || "Warm-up movement").trim();
+  const sets = Math.max(1, Number(item?.sets) || 1);
+  if (Number(item?.seconds) > 0)
+    return `${name} · ${sets} × ${Number(item.seconds)} sec`;
+  if (Number(item?.reps) > 0)
+    return `${name} · ${sets} × ${Number(item.reps)}`;
+  return name;
+}
+function customWarmupForWorkout(workout, plan) {
+  const general = (plan.items || []).map((item, index) => ({
+    id: item.id || `custom-warmup-${index}`,
+    label: customWarmupMovementLabel(item),
+    minutes: Math.max(1, Number(item.minutes) || 1),
+    custom: true,
+    completed: false,
+  }));
+  const rampUpSets = (plan.rampUpSets || [])
+    .map((entry, index) => {
+      const exerciseIndex = (workout.exercises || []).findIndex(
+        (exercise) => exercise.id === entry.targetExerciseEntryId,
+      );
+      if (exerciseIndex < 0) return null;
+      const exercise = workout.exercises[exerciseIndex];
+      const item = exerciseCatalog[exercise.exerciseId];
+      return {
+        exerciseId: exercise.exerciseId,
+        exerciseInstanceId: exercise.id,
+        exerciseIndex,
+        exerciseName: exerciseName(exercise),
+        movementFamily: item?.pattern || null,
+        sets: (entry.sets || []).map((set, setIndex) => ({
+          id: set.id || `custom-ramp-${index}-${setIndex}`,
+          reps: Math.max(1, Number(set.reps) || 1),
+          loadPercent:
+            set.loadKind === "percent_working" ? Number(set.loadValue) : null,
+          weight:
+            set.loadKind === "absolute" ? Number(set.loadValue) : null,
+          loadInstruction:
+            set.loadKind === "instruction" ? set.loadInstruction : null,
+          completed: false,
+        })),
+      };
+    })
+    .filter((entry) => entry?.sets.length);
+  const stageIndexes = new Set([
+    ...(general.length && workout.exercises?.length ? [0] : []),
+    ...rampUpSets.map((entry) => entry.exerciseIndex),
+  ]);
+  const stages = [...stageIndexes]
+    .sort((a, b) => a - b)
+    .map((exerciseIndex) => {
+      const exercise = workout.exercises[exerciseIndex];
+      const ramps = rampUpSets.filter(
+        (entry) => entry.exerciseIndex === exerciseIndex,
+      );
+      return {
+        id: `custom-warmup-stage-${exercise.id}`,
+        exerciseId: exercise.exerciseId,
+        exerciseInstanceId: exercise.id,
+        exerciseIndex,
+        exerciseName: exerciseName(exercise),
+        general: exerciseIndex === 0 ? general : [],
+        movementPreparation: [],
+        rampUpSets: ramps,
+        estimatedMinutes: Math.max(
+          1,
+          (exerciseIndex === 0
+            ? general.reduce((sum, item) => sum + item.minutes, 0)
+            : 0) + Math.ceil(ramps.reduce((sum, entry) => sum + entry.sets.length, 0) * 0.5),
+        ),
+        completed: false,
+        skipped: false,
+      };
+    });
+  if (!stages.length) return null;
+  return {
+    generatorVersion: 3,
+    source: "custom",
+    general,
+    movementPreparation: [],
+    rampUpSets,
+    stages,
+    nonRampMinutes: general.reduce((sum, item) => sum + item.minutes, 0),
+    estimatedMinutes: stages.reduce((sum, stage) => sum + stage.estimatedMinutes, 0),
+    safetyMessage: null,
+    conservative: false,
+    skipped: false,
+  };
+}
+export function materializeWarmupPlan(workout, profile, program = null) {
+  const generated = generateWarmup(workout, profile, exerciseCatalog, {
+    includeRecommendedWarmups:
+      program?.includeRecommendedWarmups ??
+      profile?.recommendedWarmupsEnabled !== false,
+    includeRampUpSets: profile?.rampUpSetsEnabled !== false,
+  });
+  return {
+    mode: "custom",
+    provenance: "generated-materialized",
+    items: [
+      ...(generated?.general || []),
+      ...(generated?.movementPreparation || []),
+    ].map((item) => ({
+      id: uid("warmup-item"),
+      exerciseId: item.exerciseId || null,
+      label: item.label,
+      minutes: Math.max(1, Number(item.minutes) || 1),
+      sets: null,
+      reps: null,
+      seconds: null,
+      provenance: "generated-materialized",
+    })),
+    rampUpSets: (generated?.rampUpSets || []).map((entry) => ({
+      id: uid("warmup-ramp"),
+      targetExerciseEntryId: entry.exerciseInstanceId,
+      provenance: "generated-materialized",
+      sets: entry.sets.map((set) => ({
+        id: uid("warmup-ramp-set"),
+        reps: set.reps,
+        loadKind: set.loadInstruction ? "instruction" : "percent_working",
+        loadValue: set.loadInstruction ? null : set.loadPercent,
+        loadInstruction: set.loadInstruction || null,
+      })),
+    })),
+  };
 }
 export function refreshWorkoutWarmup(workout, profile, program = null) {
   if (!workout) return workout;
@@ -6596,6 +7260,13 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
     const previousRampSets = new Map(
       (previous?.rampUpSets || []).flatMap((entry) =>
         (entry.sets || []).map((set) => [set.id, Boolean(set.completed)]),
+      ),
+    );
+    const previousItems = new Map(
+      (previous?.stages || []).flatMap((stage) =>
+        [...(stage.general || []), ...(stage.movementPreparation || [])].map(
+          (item) => [item.id, Boolean(item.completed)],
+        ),
       ),
     );
     for (const stage of next.stages || []) {
@@ -6611,6 +7282,12 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
         for (const set of entry.sets || [])
           if (previousRampSets.has(set.id))
             set.completed = previousRampSets.get(set.id);
+      for (const item of [
+        ...(stage.general || []),
+        ...(stage.movementPreparation || []),
+      ])
+        if (previousItems.has(item.id))
+          item.completed = previousItems.get(item.id);
     }
   }
   workout.warmup = next;
@@ -6673,22 +7350,35 @@ export function startWorkout(state, template) {
     rest: null,
     handledSupersetRestRounds: [],
     adapted: Boolean(template.optionalSessionId),
+    warmupPlan: template.warmupPlan
+      ? structuredClone(template.warmupPlan)
+      : { mode: "auto" },
     exercises: template.exercises.map((base) => {
       const previous = previousExercise(state.workouts, base.exerciseId);
       const completedPreviousSets =
         previous?.sets.filter((set) => set.completed) || [];
       return {
         ...structuredClone(base),
-        sets: base.sets.map((set, index) => ({
-          ...set,
-          id: uid("set"),
-          planned: true,
-          added: false,
-          completed: false,
-          weight: completedPreviousSets[index]?.weight ?? set.weight ?? null,
-          reps: completedPreviousSets[index]?.reps ?? base.repMin,
-          rir: null,
-        })),
+        sets: base.sets.map((set, index) => {
+          const previousSet = completedPreviousSets[index];
+          const weight = previousSet?.weight ?? set.weight ?? null;
+          return {
+            ...set,
+            id: uid("set"),
+            planned: true,
+            added: false,
+            completed: false,
+            weight,
+            weightProvenance:
+              Number(previousSet?.weight) > 0
+                ? "history"
+                : Number(weight) > 0
+                  ? set.weightProvenance || "explicit-plan"
+                  : null,
+            reps: previousSet?.reps ?? base.repMin,
+            rir: null,
+          };
+        }),
       };
     }),
   };

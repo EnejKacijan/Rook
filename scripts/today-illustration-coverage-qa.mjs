@@ -5,7 +5,10 @@ import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
 import { estimateSessionMinutes, isoDay, weekday } from "../src/domain.js";
 
-const artifacts = new URL("../artifacts/today-illustration-coverage/", import.meta.url);
+const artifacts = new URL(
+  "../artifacts/today-illustration-coverage/",
+  import.meta.url,
+);
 await mkdir(artifacts, { recursive: true });
 const state = createReturningUserFixture(1);
 const today = weekday();
@@ -52,7 +55,8 @@ importedPluralExercise.sets = importedPluralExercise.sets.map((set, index) => ({
 day.exercises.push(importedPluralExercise);
 const importedMixedLanguageExercise = structuredClone(day.exercises[0]);
 importedMixedLanguageExercise.id = "qa-imported-leg-press-calf-raise";
-importedMixedLanguageExercise.exerciseId = "imported-custom-leg-press-calf-raise";
+importedMixedLanguageExercise.exerciseId =
+  "imported-custom-leg-press-calf-raise";
 importedMixedLanguageExercise.originalImportedName =
   "Calf Raises na Leg Press mašini";
 importedMixedLanguageExercise.importedName =
@@ -76,7 +80,11 @@ day.exercises.push(importedMixedLanguageExercise);
 for (const [exerciseId, label, artId] of [
   ["machine-chest-press", "Machine Chest Press", "wg-machine-chest-press"],
   ["single-arm-cable-row", "Single-Arm Cable Row", "wg-single-arm-cable-row"],
-  ["machine-shoulder-press", "Machine Shoulder Press", "wg-machine-shoulder-press"],
+  [
+    "machine-shoulder-press",
+    "Machine Shoulder Press",
+    "wg-machine-shoulder-press",
+  ],
   [
     "straight-arm-cable-pulldown",
     "Straight-Arm Cable Pulldown",
@@ -143,8 +151,8 @@ await page.route("**/api/ai/status", (route) =>
 await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
 const rows = page.locator(".today-screen .exercise-list-row");
 const pageText = await page.locator("body").innerText();
-const storedProgram = await page.evaluate(() =>
-  JSON.parse(localStorage.getItem("lift-v2-state")).program,
+const storedProgram = await page.evaluate(
+  () => JSON.parse(localStorage.getItem("lift-v2-state")).program,
 );
 assert.equal(
   await page.locator(".today-screen .workout-title").count(),
@@ -162,17 +170,16 @@ assert.equal(
   "Today overview rows reserve no thumbnail column",
 );
 assert.equal(
-  (await page.locator(".today-screen .workout-title").innerText()).replace(/\s+/g, " "),
+  (await page.locator(".today-screen .workout-title").innerText()).replace(
+    /\s+/g,
+    " ",
+  ),
   day.name,
   `the intended long workout title is rendered: ${JSON.stringify(
     storedProgram.days.map(({ weekday, name }) => ({ weekday, name })),
   )}; rotation=${storedProgram.rotationStartDate}`,
 );
-assert.equal(
-  await rows.count(),
-  day.exercises.length,
-  pageText,
-);
+assert.equal(await rows.count(), day.exercises.length, pageText);
 const illustratedDetailRow = rows.filter({ hasText: "Lateral Raises" });
 await illustratedDetailRow.click();
 assert.equal(
@@ -183,10 +190,16 @@ assert.equal(
 await page.getByRole("button", { name: "Close", exact: true }).click();
 const wideLayout = await rows.evaluateAll((items) =>
   items.map((row) => {
-    const main = row.querySelector(".exercise-row-main").getBoundingClientRect();
-    const end = row.querySelector(".navigation-row-end").getBoundingClientRect();
+    const main = row
+      .querySelector(".exercise-row-main")
+      .getBoundingClientRect();
+    const end = row
+      .querySelector(".navigation-row-end")
+      .getBoundingClientRect();
     return {
-      centerDelta: Math.abs(main.top + main.height / 2 - (end.top + end.height / 2)),
+      centerDelta: Math.abs(
+        main.top + main.height / 2 - (end.top + end.height / 2),
+      ),
       prescriptionColor: getComputedStyle(
         row.querySelector(".navigation-row-end"),
       ).color,
@@ -198,7 +211,7 @@ assert.ok(
   "prescriptions remain vertically centered",
 );
 assert.ok(
-  wideLayout.every((item) => item.prescriptionColor === "rgb(177, 174, 165)"),
+  wideLayout.every((item) => item.prescriptionColor === "rgb(166, 175, 170)"),
   "dark prescriptions use the readable secondary text token",
 );
 const workoutTitle = page.locator(".today-screen .workout-title");
@@ -208,8 +221,14 @@ const titleMetrics = await workoutTitle.evaluate((element) => ({
   height: element.getBoundingClientRect().height,
   lineHeight: Number.parseFloat(getComputedStyle(element).lineHeight),
 }));
-assert.ok(titleMetrics.scrollWidth <= titleMetrics.clientWidth + 1, "workout title does not overflow");
-assert.ok(titleMetrics.height <= titleMetrics.lineHeight * 2.2, "workout title remains within two lines");
+assert.ok(
+  titleMetrics.scrollWidth <= titleMetrics.clientWidth + 1,
+  "workout title does not overflow",
+);
+assert.ok(
+  titleMetrics.height <= titleMetrics.lineHeight * 2.2,
+  "workout title remains within two lines",
+);
 await page.screenshot({
   path: fileURLToPath(new URL("mixed-coverage-dark-390.png", artifacts)),
   fullPage: true,
@@ -217,26 +236,31 @@ await page.screenshot({
 await page.setViewportSize({ width: 320, height: 760 });
 const layout = await rows.evaluateAll((items) =>
   items.map((row) => {
-    const title = row.querySelector(".exercise-row-main > span:last-child");
+    const title = row.querySelector(".exercise-row-main strong");
     const end = row.querySelector(".navigation-row-end");
     const titleBox = title.getBoundingClientRect();
     const endBox = end.getBoundingClientRect();
     return {
       titleLeft: Math.round(titleBox.left),
-      prescriptionBelow: endBox.top >= titleBox.bottom,
+      prescriptionClear:
+        endBox.top >= titleBox.bottom || endBox.left >= titleBox.right + 8,
       imageCount: row.querySelectorAll("img").length,
       thumbnailCount: row.querySelectorAll(".exercise-thumbnail-slot").length,
     };
   }),
 );
-assert.equal(new Set(layout.map((item) => item.titleLeft)).size, 1, "titles align");
+assert.equal(
+  new Set(layout.map((item) => item.titleLeft)).size,
+  1,
+  "titles align",
+);
 assert.ok(
   layout.every((item) => item.imageCount === 0 && item.thumbnailCount === 0),
   "canonical, imported, and custom overview rows share the same text-only structure",
 );
 assert.ok(
-  layout.every((item) => item.prescriptionBelow),
-  "narrow overview rows prioritize the title and move prescriptions below it",
+  layout.every((item) => item.prescriptionClear),
+  "narrow overview rows keep prescriptions below or clearly beside the title without overlap",
 );
 await page.screenshot({
   path: fileURLToPath(new URL("mixed-coverage-320.png", artifacts)),

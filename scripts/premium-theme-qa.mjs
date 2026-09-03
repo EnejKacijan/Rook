@@ -179,6 +179,42 @@ assert.deepEqual(await premiumSignals(run.page), {
   artFilter: "grayscale(1) sepia(1) saturate(1.9) brightness(1.46)",
   overflow: false,
 });
+const weekStateSignals = await run.page.evaluate(() => {
+  const planned = document.querySelector(
+    ".week-strip .workout-planned:not(.selected-day)",
+  );
+  const rest = document.querySelector(
+    ".week-strip .workout-rest:not(.selected-day)",
+  );
+  const plannedStyle = getComputedStyle(planned);
+  const restStyle = getComputedStyle(rest);
+  const plannedDotStyle = getComputedStyle(planned.querySelector(".workout-dot"));
+  const today = document.querySelector(".week-strip .today-date");
+  return {
+    selectedToday: today?.classList.contains("selected-day") || false,
+    plannedSurface: plannedStyle.backgroundColor,
+    restSurface: restStyle.backgroundColor,
+    plannedLine: plannedStyle.borderColor,
+    restLine: restStyle.borderColor,
+    plannedDotFill: plannedDotStyle.backgroundColor,
+    plannedDotBorder: plannedDotStyle.borderStyle,
+    todayMarkerWidth: getComputedStyle(today, "::after").width,
+  };
+});
+assert.equal(weekStateSignals.selectedToday, true, "today remains independently marked when selected");
+assert.notEqual(
+  weekStateSignals.plannedSurface,
+  weekStateSignals.restSurface,
+  "Premium planned days use a distinct tile surface",
+);
+assert.notEqual(
+  weekStateSignals.plannedLine,
+  weekStateSignals.restLine,
+  "Premium planned days use a distinct tile border",
+);
+assert.equal(weekStateSignals.plannedDotFill, "rgba(0, 0, 0, 0)");
+assert.equal(weekStateSignals.plannedDotBorder, "solid");
+assert.equal(weekStateSignals.todayMarkerWidth, "12px");
 const primary = run.page.locator(".today-hero .primary");
 if (await primary.count()) {
   assert.equal(
@@ -228,13 +264,12 @@ assert.deepEqual(
 await screenshot(run.page, "390-plan-editor-premium.png");
 await run.page.getByRole("button", { name: "Close", exact: true }).click();
 await run.page.getByRole("button", { name: /Appearance/ }).click();
-await run.page.getByRole("button", { name: /^Theme/ }).click();
 assert.equal(
-  await run.page.getByRole("button", { name: /^Premium/ }).getAttribute("aria-pressed"),
+  await run.page.getByRole("button", { name: /Premium.*Warm gold/ }).getAttribute("aria-pressed"),
   "true",
 );
-await screenshot(run.page, "390-theme-picker-premium.png");
-await run.page.getByRole("button", { name: "Close theme choices" }).click();
+assert.equal(await run.page.locator(".theme-choice-layer").count(), 0);
+await screenshot(run.page, "390-appearance-premium.png");
 await run.page.reload({ waitUntil: "networkidle" });
 assert.equal((await premiumSignals(run.page)).theme, "premium");
 assert.equal(
