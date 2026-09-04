@@ -2,6 +2,7 @@ import { createServer } from "node:http";
 import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { extname, join, normalize } from "node:path";
+import { gzipSync } from "node:zlib";
 import {
   applyExpertPolicyToPlan,
   expertExamplesForProfile,
@@ -14,16 +15,20 @@ import { runPlanQualityPipeline } from "./src/planPipeline.js";
 import { verifyTrainingSafetyAnalysis } from "./src/trainingSafety.js";
 
 const port = Number(process.env.PORT || 4173);
+const host = process.env.HOST || "127.0.0.1";
 const model = process.env.OPENAI_MODEL || "gpt-5-mini";
+const importModel = process.env.OPENAI_IMPORT_MODEL || model;
 const planModel = process.env.OPENAI_PLAN_MODEL || "gpt-5-mini";
 const expertModel = process.env.OPENAI_EXPERT_MODEL || planModel;
 const planReasoning = process.env.OPENAI_PLAN_REASONING || "medium";
 const expertReasoning = process.env.OPENAI_EXPERT_REASONING || "high";
 const defaultReasoning = process.env.OPENAI_REASONING || "low";
+const importReasoning = process.env.OPENAI_IMPORT_REASONING || "low";
 const apiKey = process.env.OPENAI_API_KEY;
 const expertLabEnabled = process.env.EXPERT_LAB_ENABLED === "true";
 const expertPolicyEnabled = process.env.EXPERT_POLICY_ENABLED !== "false";
 const developmentLogging = process.env.NODE_ENV !== "production";
+const activeImportRequests = new Map();
 const expertFeedbackFile = join(process.cwd(), "data", "expert-feedback.jsonl");
 const mime = {
   ".html": "text/html",
@@ -658,6 +663,11 @@ function developmentLog(stage, details = {}) {
     );
 }
 function operationConfiguration(operation, payload = {}) {
+  if (operation === "import-plan")
+    return {
+      selectedModel: importModel,
+      effort: reasoningEffort(importReasoning),
+    };
   if (operation === "plan-review")
     return {
       selectedModel: expertModel,
@@ -709,7 +719,9 @@ async function callProvider(operation, payload) {
     "import-plan",
     "physique-review",
   ].includes(operation)
-    ? 110_000
+    ? operation === "import-plan"
+      ? 45_000
+      : 110_000
     : 55_000;
   const { selectedModel, effort } = operationConfiguration(operation, payload);
   const requestBody = {
@@ -740,8 +752,12 @@ async function callProvider(operation, payload) {
       signal: AbortSignal.timeout(upstreamTimeoutMs),
     });
   } catch (error) {
-    if (error?.name === "TimeoutError" || error?.name === "AbortError")
-      throw new Error("Provider request took too long.");
+    if (error?.name === "TimeoutError" || error?.name === "AbortError") {
+      const timeoutError = new Error("Provider request took too long.");
+      timeoutError.retryable = true;
+      throw timeoutError;
+    }
+    error.retryable = true;
     throw error;
   }
   const data = await response.json();
@@ -759,8 +775,13 @@ async function callProvider(operation, payload) {
         ok: response.ok,
       }),
     );
-  if (!response.ok)
-    throw new Error(data.error?.message || "Provider request failed.");
+  if (!response.ok) {
+    const providerError = new Error(
+      data.error?.message || "Provider request failed.",
+    );
+    providerError.retryable = response.status === 429 || response.status >= 500;
+    throw providerError;
+  }
   const outputText =
     data.output_text ||
     data.output
@@ -958,6 +979,33 @@ async function generatePlan(payload) {
 
 async function openAI(operation, payload) {
   if (operation === "plan") return generatePlan(payload);
+  if (operation === "import-plan") {
+    const attemptId = String(payload?.importAttemptId || "").trim();
+    if (attemptId && activeImportRequests.has(attemptId))
+      return activeImportRequests.get(attemptId);
+    const importing = (async () => {
+      let lastError;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          return await callProvider(operation, payload);
+        } catch (error) {
+          lastError = error;
+          if (attempt === 1 || error?.retryable === false) throw error;
+          await new Promise((resolve) => setTimeout(resolve, 250));
+        }
+      }
+      throw lastError;
+    })();
+    if (attemptId) {
+      activeImportRequests.set(attemptId, importing);
+      const clearActiveImport = () => {
+        if (activeImportRequests.get(attemptId) === importing)
+          activeImportRequests.delete(attemptId);
+      };
+      importing.then(clearActiveImport, clearActiveImport);
+    }
+    return importing;
+  }
   return callProvider(operation, payload);
 }
 
@@ -1065,10 +1113,28 @@ export async function rookRequestHandler(request, response) {
     const safe = normalize(urlPath).replace(/^([.][.][/\\])+/, "");
     const file = join(process.cwd(), "dist", safe);
     const data = await readFile(file);
+    const contentType = mime[extname(file)] || "application/octet-stream";
+    const fingerprintedAsset =
+      urlPath.startsWith("/assets/") && /-[A-Za-z0-9_-]{8}\.[^/]+$/u.test(urlPath);
+    const gzipAccepted = /(?:^|,)\s*gzip(?:\s*;|\s*,|\s*$)/iu.test(
+      String(request.headers["accept-encoding"] || ""),
+    );
+    const compressible =
+      contentType.startsWith("text/") ||
+      ["image/svg+xml", "application/json", "application/manifest+json"].includes(
+        contentType,
+      );
+    const body = gzipAccepted && compressible ? gzipSync(data) : data;
     response.writeHead(200, {
-      "content-type": mime[extname(file)] || "application/octet-stream",
+      "content-type": contentType,
+      "cache-control": fingerprintedAsset
+        ? "public, max-age=31536000, immutable"
+        : "no-cache",
+      ...(compressible ? { vary: "Accept-Encoding" } : {}),
+      ...(gzipAccepted && compressible ? { "content-encoding": "gzip" } : {}),
+      "content-length": body.length,
     });
-    response.end(data);
+    response.end(request.method === "HEAD" ? undefined : body);
   } catch {
     if (request.url?.split("?")[0].startsWith("/assets/")) {
       response.writeHead(404);
@@ -1090,7 +1156,7 @@ const launchedDirectly =
 
 if (launchedDirectly) {
   const server = createServer(rookRequestHandler);
-  server.listen(port, "127.0.0.1", () =>
-    console.log(`Rook server running at http://127.0.0.1:${port}`),
+  server.listen(port, host, () =>
+    console.log(`Rook server running at http://${host}:${port}`),
   );
 }

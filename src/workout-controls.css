@@ -312,8 +312,6 @@
 
 .today-start-button { transition: transform 120ms cubic-bezier(.2, 0, 0, 1), background-color 150ms cubic-bezier(.2, 0, 0, 1); }
 .today-start-button:active { transform: scale(.985); }
-.exercise-heading,
-.exercise-transition-content { animation: rook-exercise-enter 210ms cubic-bezier(.2, 0, 0, 1) both; }
 .exercise-heading-art-button { transition: transform 120ms cubic-bezier(.2, 0, 0, 1); }
 .exercise-heading-art-button:active { transform: scale(.97); }
 
@@ -325,10 +323,6 @@
 @keyframes rook-check-commit {
   from { opacity: 0; transform: scale(.84); }
   to { opacity: 1; transform: scale(1); }
-}
-@keyframes rook-exercise-enter {
-  from { opacity: 0; transform: translateY(8px); }
-  to { opacity: 1; transform: translateY(0); }
 }
 
 .exercise-heading .exercise-meta { margin-top: 9px; display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 7px; row-gap: 2px; color: #6f6c68; font-size: 13px; line-height: 1.4; }
@@ -416,12 +410,37 @@
     color var(--rook-motion-state, 200ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)),
     filter var(--rook-motion-press-out, 120ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1));
 }
+.workout-next-completing { cursor: default; }
+.exercise-complete-check {
+  display: grid;
+  width: 22px;
+  height: 22px;
+  margin: auto;
+  place-items: center;
+}
+.exercise-complete-check svg {
+  width: 20px;
+  height: 20px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.15;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.exercise-complete-check path {
+  stroke-dasharray: 22;
+  stroke-dashoffset: 22;
+  animation: rook-exercise-complete-check 140ms cubic-bezier(.2, 0, 0, 1) forwards;
+}
+@keyframes rook-exercise-complete-check {
+  to { stroke-dashoffset: 0; }
+}
 .workout-primary-action .workout-previous { min-height: 44px; color: #1f6b4c; }
 
 .workout-confirm-layer { position: fixed; z-index: 30; inset: 0; background: rgba(27, 26, 25, .35); display: flex; justify-content: center; align-items: flex-end; }
 .workout-confirm { width: 100%; max-width: 500px; padding: 0 22px var(--rook-sheet-safe-bottom); border-radius: 24px 24px 0 0; background: #f6f5f2; box-shadow: 0 -12px 40px rgba(0, 0, 0, .14); will-change: transform; }
 .workout-confirm.drag-anywhere { touch-action: pan-y pinch-zoom; }
-.workout-confirm > .sheet-grab-zone { height: 48px; margin: -4px -2px 2px; }
+.workout-confirm > .sheet-header-chrome { margin: -4px -2px 2px; }
 
 .exercise-visual-layer {
   align-items: stretch;
@@ -533,8 +552,7 @@
   .set-row.set-completing::after { display: none; animation: none; }
   .check:not(:disabled):active { transform: none; }
   .set-row.set-completing .check > span:not(.check-pending) { animation: rook-check-fade 100ms linear both; }
-  .exercise-heading,
-  .exercise-transition-content { animation: none; }
+  .exercise-complete-check path { animation: none; stroke-dashoffset: 0; }
   .exercise-visual-layer { animation: rook-visual-backdrop-in 80ms linear both; }
   .exercise-visual-viewer {
     animation: rook-visual-reduced-fade 80ms linear both;

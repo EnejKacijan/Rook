@@ -165,28 +165,56 @@ async function completeCurrentExercise(page) {
   const nextName = (await page.locator('.up-next button').first().locator('span').textContent()).trim();
   assert.equal(await page.locator('.workout-primary-action small').count(), 0, 'next exercise name is not duplicated below the primary action');
   assert.equal(await page.locator('.up-next').textContent().then(text => text.includes('Single-Arm Incline Dumbbell Bench Press')), false);
+  const completedExerciseName = await page.locator('.exercise-heading h1').textContent();
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
+  const completionAcknowledgement = page.getByRole('button', { name: 'Exercise complete' });
+  await completionAcknowledgement.waitFor();
+  assert.equal(await completionAcknowledgement.locator('.exercise-complete-check').count(), 1, 'completed navigation replaces the fixed button label with one minimal check');
+  assert.equal(await completionAcknowledgement.evaluate((button) => button.disabled), false, 'the acknowledgement keeps the completed button paint instead of disabled styling');
+  assert.equal(await completionAcknowledgement.evaluate((button) => getComputedStyle(button).opacity), '1', 'the acknowledgement stays fully opaque');
+  assert.equal(await completionAcknowledgement.locator('path').evaluate((path) => getComputedStyle(path).animationName), 'rook-exercise-complete-check', 'the check draws once inside the button');
+  assert.equal(await page.locator('.exercise-heading h1').textContent(), completedExerciseName, 'the completed exercise remains in place while the check is acknowledged');
+  assert.equal(await page.evaluate(() => document.getAnimations().some((animation) => String(animation.animationName || '').startsWith('rook-exercise-panel-'))), false, 'exercise content has no panel transition or fade');
+  await snap(page, 'exercise-complete-acknowledgement');
+  await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent === name, nextName);
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.locator('.exercise-heading h1').textContent(), nextName);
+  assert.match(await page.locator('[role="status"].visually-hidden').first().textContent(), new RegExp(`Exercise complete\\. Next: ${nextName}`), 'assistive technology receives the completion and next-exercise announcement');
   await snap(page, 'second-exercise');
   const firstCompletedSets = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises[0].sets.filter(set => set.completed).length);
   assert.equal(await page.getByRole('button', { name: '← PREVIOUS EXERCISE' }).count(), 1, 'later exercises provide a clear way back');
-  await page.getByRole('button', { name: '← PREVIOUS EXERCISE' }).click();
-  assert.equal(await page.getByRole('button', { name: '← PREVIOUS EXERCISE' }).count(), 0, 'the previous action is hidden on the first exercise');
+  const previousAction = page.getByRole('button', { name: '← PREVIOUS EXERCISE' });
+  await previousAction.click();
+  await previousAction.waitFor({ state: 'detached' });
+  assert.equal(await previousAction.count(), 0, 'the previous action is hidden on the first exercise');
   assert.equal(await page.locator('.set-row.set-done').count(), firstCompletedSets, 'returning preserves completed sets');
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
+  await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent === name, nextName);
   assert.equal(await page.locator('.exercise-heading h1').textContent(), nextName);
 
   while (true) {
     await completeCurrentExercise(page);
     const next = page.getByRole('button', { name: 'NEXT EXERCISE →' });
-    if (await next.count()) await next.click();
+    if (await next.count()) {
+      const currentName = await page.locator('.exercise-heading h1').textContent();
+      await next.click();
+      await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent !== name, currentName);
+    }
     else break;
   }
   await snap(page, 'ready-to-finish');
   await page.getByRole('button', { name: 'FINISH WORKOUT' }).click();
   assert.equal(await page.getByRole('dialog').count(), 0);
   await page.getByRole('heading', { name: 'Workout complete' }).waitFor();
+  assert.equal(await page.locator('.complete-mark').evaluate((mark) => getComputedStyle(mark).animationName), 'rook-workout-complete-mark');
+  assert.equal(await page.locator('.complete-mark').evaluate((mark) => getComputedStyle(mark, '::after').animationName), 'rook-workout-complete-ring');
+  assert.equal(await page.getByRole('heading', { name: 'Workout complete' }).evaluate((heading) => getComputedStyle(heading).animationName), 'rook-workout-complete-copy');
+  assert.deepEqual(
+    await page.locator('.stat-grid > div').evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName)),
+    ['rook-workout-complete-stat', 'rook-workout-complete-stat', 'rook-workout-complete-stat'],
+    'completion stats share the restrained staggered entrance',
+  );
+  await page.waitForFunction(() => document.activeElement?.matches('.complete-screen > h1'));
   const doneDock = await page.locator('.complete-done-dock').boundingBox();
   assert.ok(doneDock && doneDock.y + doneDock.height <= 844 + .5, 'Done remains available inside the mobile viewport');
   await page.getByLabel('Session note').focus();
@@ -365,6 +393,7 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.locator('.exercise-heading').getAttribute('data-test-id'), null);
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
   await page.getByRole('button', { name: 'SKIP INCOMPLETE SETS' }).click();
+  assert.equal(await page.locator('.exercise-complete-check').count(), 0, 'skipping an incomplete exercise does not show a success check');
   const persisted = await page.evaluate(id => { const active = JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout; const first = active.exercises.find(item => item.id === id); return { index: active.exerciseIndex, completed: first.sets.map(set => set.completed) }; }, originalId);
   assert.equal(persisted.index, 1);
   assert.deepEqual(persisted.completed.slice(0, 3), [true, false, false]);
@@ -435,7 +464,13 @@ async function completeCurrentExercise(page) {
     { left: 24, right: 24 },
     'mobile content width and existing side padding stay unchanged',
   );
-  assert.ok(density.headingTopGap <= 36.5, JSON.stringify(density));
+  assert.ok(density.headingTopGap >= 96 && density.headingTopGap <= 108, JSON.stringify(density));
+  assert.equal(await page.locator('.complete-mark').count(), 1, 'ended-early completion keeps the calm saved-session check');
+  assert.equal(
+    await page.locator('.complete-mark').evaluate((mark) => getComputedStyle(mark, '::after').content),
+    'none',
+    'ended-early completion omits the full-workout celebration ring',
+  );
   assert.ok(density.rowHeight >= 48 && density.rowHeight <= 60, JSON.stringify(density));
   assert.equal(density.rowPaddingTop, 12);
   assert.equal(density.savedPaddingTop, 15);

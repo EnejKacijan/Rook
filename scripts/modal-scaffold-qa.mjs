@@ -19,6 +19,7 @@ const isOpaque = (color) =>
 async function verifyLongForm(page, selector, label) {
   const panel = page.locator(selector);
   const header = panel.locator(":scope > .detail-header");
+  const handle = header.locator(":scope > .modal-drag-handle");
   const compactTitle = header.locator(":scope > strong");
   await panel.waitFor();
   await page.waitForTimeout(220);
@@ -36,6 +37,8 @@ async function verifyLongForm(page, selector, label) {
   assert.equal(await page.evaluate(() => document.activeElement === [...document.querySelectorAll('.modal-layer button:not([disabled]), .modal-layer [href], .modal-layer input:not([disabled]), .modal-layer select:not([disabled]), .modal-layer textarea:not([disabled]), .modal-layer [tabindex]:not([tabindex="-1"])')].filter((element) => element.getClientRects().length > 0).at(-1)), true, `${label} traps reverse focus at its final control`);
   await page.keyboard.press('Tab');
   assert.equal(await page.evaluate(() => document.activeElement === [...document.querySelectorAll('.modal-layer button:not([disabled]), .modal-layer [href], .modal-layer input:not([disabled]), .modal-layer select:not([disabled]), .modal-layer textarea:not([disabled]), .modal-layer [tabindex]:not([tabindex="-1"])')].filter((element) => element.getClientRects().length > 0)[0]), true, `${label} loops focus back to its first control`);
+  await panel.evaluate(node => { node.scrollTop = 0; });
+  await page.waitForTimeout(220);
   const initial = await panel.evaluate((node) => {
     const style = getComputedStyle(node);
     return {
@@ -71,6 +74,7 @@ async function verifyLongForm(page, selector, label) {
     };
   });
   assert.equal(headerStyle.position, "sticky", `${label} scrollable header is sticky`);
+  assert.equal(await handle.count(), 1, `${label} keeps its drag handle inside the sticky header`);
   assert.ok(isOpaque(headerStyle.background), `${label} header is opaque`);
   assert.equal(await compactTitle.evaluate(node => getComputedStyle(node).opacity), "0", `${label} compact title starts hidden`);
   assert.match(headerStyle.border, /rgba\(.+, 0\)|transparent/u, `${label} divider starts transparent`);
@@ -97,6 +101,10 @@ async function verifyLongForm(page, selector, label) {
   assert.ok(
     Math.abs(scrolledHeaderBox.y - scrolledPanelBox.y) <= 2,
     `${label} header remains pinned while content scrolls`,
+  );
+  assert.ok(
+    Math.abs((await handle.boundingBox()).y - scrolledHeaderBox.y) <= 1,
+    `${label} drag handle remains pinned with the complete header`,
   );
   assert.equal(await compactTitle.evaluate(node => getComputedStyle(node).opacity), "1", `${label} compact title appears after the hero scrolls away`);
   assert.doesNotMatch(await header.evaluate(node => getComputedStyle(node).borderBottomColor), /rgba\(.+, 0\)|transparent/u, `${label} divider appears only once content scrolls beneath the header`);

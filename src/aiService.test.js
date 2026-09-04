@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   AI_REQUEST_TIMEOUT_MS,
+  IMPORT_PLAN_TIMEOUT_MS,
   PLAN_GENERATION_TIMEOUT_MS,
   AIService,
   detectCoachLanguage,
@@ -233,6 +234,62 @@ Use double progression.`;
       "Mon",
       "Sat",
     ]);
+  });
+  it("imports slash-separated per-set loads locally without flattening them", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => {
+        throw new Error("A safe slash prescription must stay on the local path.");
+      }),
+    );
+    const profile = {
+      ...blankState().profile,
+      environment: "Commercial gym",
+      equipment: ["full gym"],
+      units: "kg",
+    };
+    const result = await AIService.importTrainingPlan(
+      profile,
+      "Monday — Push\nBench Press 80/80/75 5 reps\nCable Row 3x8",
+    );
+    expect(fetch).not.toHaveBeenCalled();
+    expect(
+      result.program.days[0].exercises[0].sets.map((set) => set.weight),
+    ).toEqual([80, 80, 75]);
+    expect(
+      result.program.days[0].exercises[0].sets.map((set) => set.reps),
+    ).toEqual([5, 5, 5]);
+  });
+  it("keeps a slow AI import alive beyond twelve seconds", async () => {
+    vi.useFakeTimers();
+    let importSignal;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((url, options = {}) => {
+        if (url === "/api/ai/status")
+          return Promise.resolve({
+            ok: true,
+            json: async () => ({ available: true }),
+          });
+        importSignal = options.signal;
+        return new Promise((_resolve, reject) =>
+          options.signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          ),
+        );
+      }),
+    );
+    const importing = AIService.importTrainingPlan(
+      blankState().profile,
+      "A workout note the deterministic parser cannot safely structure",
+    );
+    const rejected = expect(importing).rejects.toThrow(/took too long/i);
+    await vi.advanceTimersByTimeAsync(12000);
+    expect(importSignal.aborted).toBe(false);
+    await vi.advanceTimersByTimeAsync(IMPORT_PLAN_TIMEOUT_MS - 12000);
+    await rejected;
   });
   it("detects the latest conversation language without locking Coach to the app language", () => {
     expect(
@@ -1860,5 +1917,38 @@ zadnja čista ponovitev = konec serije`;
     );
     expect(result.source).toBe("ai");
     expect(result.exerciseIds).toEqual([]);
+  });
+  it("really aborts a slow AI import while preserving a retryable cancellation message", async () => {
+    const state = stateWithPlan();
+    let markStarted;
+    const started = new Promise((resolve) => {
+      markStarted = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url, options = {}) => {
+        if (url === "/api/ai/status")
+          return { ok: true, json: async () => ({ available: true }) };
+        markStarted();
+        return new Promise((_resolve, reject) => {
+          options.signal.addEventListener(
+            "abort",
+            () => reject(new DOMException("Aborted", "AbortError")),
+            { once: true },
+          );
+        });
+      }),
+    );
+    const controller = new AbortController();
+    const importing = AIService.importTrainingPlan(
+      state.profile,
+      "Training on Monday — Push\nBench Press 3x8",
+      { signal: controller.signal },
+    );
+    await started;
+    controller.abort();
+    await expect(importing).rejects.toThrow(
+      "Import cancelled. Your notes are still here.",
+    );
   });
 });

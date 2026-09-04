@@ -1,4 +1,4 @@
-const CACHE = 'rook-v6';
+const CACHE = 'rook-v7';
 const APP_SHELL = ['/manifest.webmanifest', '/icon.svg'];
 
 async function precacheCurrentBuild() {
@@ -44,6 +44,25 @@ self.addEventListener('fetch', event => {
           return response;
         })
         .catch(() => caches.match('/index.html', { ignoreVary: true }))
+    );
+    return;
+  }
+
+  // Vite fingerprints build assets in their filenames. Once downloaded, that
+  // exact URL is immutable, so artwork and bundles can be returned immediately
+  // without waiting for a network round trip on every view.
+  if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(
+      caches.match(request).then(cached => {
+        if (cached) return cached;
+        return fetch(request).then(response => {
+          if (response.ok)
+            event.waitUntil(
+              caches.open(CACHE).then(cache => cache.put(request, response.clone()))
+            );
+          return response;
+        });
+      })
     );
     return;
   }

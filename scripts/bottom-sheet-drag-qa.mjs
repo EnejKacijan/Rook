@@ -38,10 +38,18 @@ async function openScreen(buttonName) {
 {
   const { panel, handle } = await openScreen('Logging & increments');
   assert.match(await panel.evaluate(element => getComputedStyle(element).animationName), /rook-sheet-enter/, 'bottom sheets use the shared upward entrance animation');
-  assert.equal(await handle.evaluate(element => getComputedStyle(element).animationName), 'none', 'the grabber stays pinned at the sheet top while content enters');
-  const openingHandleTop = (await handle.boundingBox()).y;
+  assert.equal(await handle.evaluate(element => getComputedStyle(element).animationName), 'none', 'the grabber does not run a separate entrance animation');
+  assert.equal(await handle.evaluate(element => element.parentElement?.classList.contains('detail-header')), true, 'the grabber is physically part of the sheet header');
+  const [openingPanelTop, openingHandleTop] = await Promise.all([
+    panel.boundingBox().then(box => box.y),
+    handle.boundingBox().then(box => box.y),
+  ]);
   await page.waitForTimeout(100);
-  assert.ok(Math.abs((await handle.boundingBox()).y - openingHandleTop) <= 0.5, 'the grabber does not travel during the sheet entrance');
+  const [enteredPanelTop, enteredHandleTop] = await Promise.all([
+    panel.boundingBox().then(box => box.y),
+    handle.boundingBox().then(box => box.y),
+  ]);
+  assert.ok(Math.abs((enteredHandleTop - openingHandleTop) - (enteredPanelTop - openingPanelTop)) <= 1, 'the header grabber travels upward with the sheet as one surface');
   assert.match(await page.locator('.modal-layer').evaluate(element => getComputedStyle(element).animationName), /rook-sheet-backdrop-in/, 'the backdrop fades in with the sheet');
   await handle.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the top handle starts the standard downward close animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
@@ -54,7 +62,7 @@ for (const name of ['Logging & increments', 'Review priorities', 'Add a few deta
   const { handle } = await openScreen(name); if (name === 'Logging & increments') { await page.screenshot({ path: output('390-logging-handle.png'), fullPage: false }); await page.waitForTimeout(220); const box = await handle.boundingBox(); const x = box.x + 18; const y = box.y + 24; await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' }); } else { await handle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' }); }
 }
 
-await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); let compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await compactGrabZone.click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); assert.equal(await compactGrabZone.evaluate(element => element.parentElement?.classList.contains('sheet-header-chrome')), true, 'compact-sheet grabber is part of its fixed header chrome'); let compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await compactGrabZone.click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
 await page.getByRole('button', { name: 'Replace plan' }).click(); compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); await compactGrabZone.waitFor(); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
 const importHandle = page.getByRole('button', { name: 'Drag down or tap to close' }); await importHandle.waitFor(); assert.equal(await page.locator('.modal-layer > .import-plan-screen').count(), 1); await importHandle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' });

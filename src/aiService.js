@@ -34,7 +34,7 @@ import {
 
 export const AI_REQUEST_TIMEOUT_MS = 60000;
 export const PLAN_GENERATION_TIMEOUT_MS = 240000;
-export const IMPORT_PLAN_TIMEOUT_MS = 20000;
+export const IMPORT_PLAN_TIMEOUT_MS = 95000;
 export const TRAINING_SAFETY_TIMEOUT_MS = 65000;
 let activePlanGeneration = null;
 const availableExerciseCatalog = Object.values(exerciseCatalog).filter(
@@ -61,10 +61,12 @@ function pendingAdaptationText(action, responseLanguage) {
 async function request(
   operation,
   payload,
-  { timeoutMs = AI_REQUEST_TIMEOUT_MS } = {},
+  { timeoutMs = AI_REQUEST_TIMEOUT_MS, signal = null } = {},
 ) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abortFromCaller = () => controller.abort();
+  signal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
     const response = await fetch("/api/ai", {
       method: "POST",
@@ -76,11 +78,14 @@ async function request(
     if (!response.ok) throw new Error(body.error || "AI service unavailable.");
     return body.data;
   } catch (error) {
+    if (error?.name === "AbortError" && signal?.aborted)
+      throw new Error("Import cancelled. Your notes are still here.");
     if (error?.name === "AbortError")
       throw new Error("The request took too long. Please try again.");
     throw error;
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener("abort", abortFromCaller);
   }
 }
 
@@ -437,11 +442,28 @@ const NOTE_WEEKDAYS = {
   cetvrtak: "Thu",
   subota: "Sat",
   nedjelja: "Sun",
+  montag: "Mon",
+  dienstag: "Tue",
+  mittwoch: "Wed",
+  donnerstag: "Thu",
+  freitag: "Fri",
+  samstag: "Sat",
+  sonntag: "Sun",
+  lunes: "Mon",
+  martes: "Tue",
+  miercoles: "Wed",
+  jueves: "Thu",
+  viernes: "Fri",
+  sabado: "Sat",
+  domingo: "Sun",
 };
+const NOTE_WEEKDAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 const cleanNoteItem = (value) =>
   String(value || "")
     .trim()
-    .replace(/^(?:[-*\u2022]\s+|\d+[.)]\s+)/u, "")
+    .replace(/^(?:[-*\u2022]\s*)?\[[ xX✓✔]?\]\s*/u, "")
+    .replace(/^[☐☑✅✓✔◦▪︎▸►→]+\s*/u, "")
+    .replace(/^(?:[-*\u2022]\s+|\d+[.)]\s+|[A-Z]\d+[.):]?\s+)/u, "")
     .trim();
 const foldNoteText = (value) =>
   String(value || "")
@@ -468,6 +490,72 @@ function parsedDayHeading(value) {
     if (parenthesized) name = parenthesized[1].trim();
   }
   return { weekday, name };
+}
+function weekdayForDateHeading(value) {
+  const cleaned = cleanNoteItem(value);
+  let match = cleaned.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/u);
+  let year;
+  let month;
+  let day;
+  if (match) [, year, month, day] = match;
+  else {
+    match = cleaned.match(/\b(\d{1,2})[.](\d{1,2})[.](20\d{2})\b/u);
+    if (!match) return null;
+    [, day, month, year] = match;
+  }
+  const date = new Date(Date.UTC(Number(year), Number(month) - 1, Number(day)));
+  if (
+    date.getUTCFullYear() !== Number(year) ||
+    date.getUTCMonth() !== Number(month) - 1 ||
+    date.getUTCDate() !== Number(day)
+  )
+    return null;
+  return NOTE_WEEKDAY_ORDER[(date.getUTCDay() + 6) % 7];
+}
+const GENERIC_WORKOUT_HEADING =
+  /^(?:(?:day|dan|tag|dia)\s*[#.]?\s*\d+[a-z]?(?:\s+.+)?|(?:workout|training|trening|session|sesija|rutina|entrenamiento)\s+(?:[a-z]|[1-7]|push|pull|legs|upper|lower|full\s+body)(?:\s+.+)?|push(?:\s+[ab12])?|pull(?:\s+[ab12])?|legs(?:\s+[ab12])?|upper(?:\s+(?:body|a|b|1|2))?|lower(?:\s+(?:body|a|b|1|2))?|full\s*body(?:\s+[ab12])?|chest(?:\s+(?:and|back))*|back|arms?|shoulders?|noge(?:\s+[ab12])?|zgornji(?:\s+del)?|spodnji(?:\s+del)?|celo\s+telo|oberkorper|unterkorper|ganzkorper|empuje|tiron|piernas)$/i;
+const COMMON_SPLIT_HEADING =
+  /^(?:chest|back|shoulders?|arms?|glutes?|hamstrings?|quads?|prsa|hrbet|rame|roke|zadnjica)(?:\s+(?:and|in|und|y)\s+(?:chest|back|shoulders?|arms?|biceps|triceps|glutes?|hamstrings?|quads?|prsa|hrbet|rame|roke|zadnjica))?(?:\s+[ab12])?$/i;
+function genericWorkoutHeading(value) {
+  const cleaned = cleanNoteItem(value).replace(/^[^\p{L}\p{N}]+/u, "").trim();
+  if (
+    !cleaned ||
+    parseNotePrescription(cleaned) ||
+    !GENERIC_WORKOUT_HEADING.test(foldNoteText(cleaned)) &&
+    !COMMON_SPLIT_HEADING.test(foldNoteText(cleaned))
+  )
+    return null;
+  return cleaned.replace(/[:|/\u2013\u2014-]+$/u, "").trim();
+}
+function contextualWorkoutHeading(value, nextValue) {
+  const cleaned = cleanNoteItem(value).replace(/[:|/\u2013\u2014-]+$/u, "").trim();
+  const nextPrescription = parseNotePrescription(cleanNoteItem(nextValue));
+  const folded = ` ${foldNoteText(cleaned)} `;
+  const containsUnparsedWeekday = Object.keys(NOTE_WEEKDAYS).some(
+    (token) => token.length >= 3 && folded.includes(` ${token} `),
+  );
+  if (
+    !cleaned ||
+    cleaned.length > 50 ||
+    parsedDayHeading(cleaned) ||
+    containsUnparsedWeekday ||
+    noteSectionMode(cleaned) ||
+    !nextPrescription ||
+    nextPrescription.index <= 0
+  )
+    return null;
+  const letters = cleaned.replace(/[^\p{L}]/gu, "");
+  const uppercase = letters.length >= 3 && letters === letters.toLocaleUpperCase();
+  const coded = /(?:\s|[-–—])(?:[AB]|[1-7])$/u.test(cleaned);
+  return uppercase || coded ? cleaned : null;
+}
+function sequentialImportWeekdays(profile, used = []) {
+  const preferred = Array.isArray(profile?.availableDays)
+    ? profile.availableDays.filter((day) => NOTE_WEEKDAY_ORDER.includes(day))
+    : [];
+  return [...new Set([...preferred, ...NOTE_WEEKDAY_ORDER])].filter(
+    (day) => !used.includes(day),
+  );
 }
 function noteSectionMode(value) {
   const section = foldNoteText(cleanNoteItem(value));
@@ -528,12 +616,106 @@ function parseWarmupNoteItem(value) {
   };
 }
 const NOTE_SET_WORD =
-  "(?:sets?|serije?|seriji|serij|series?|rounds?|krogi?|kroga|krogov)";
+  "(?:sets?|serije?|seriji|serij|series?|rounds?|krogi?|kroga|krogov|satz|satze|sätze|runden?|series?|rondas?)";
+const NOTE_REP_WORD =
+  "(?:reps?|repov|ponovitev|ponovitve|ponavljanj|wdh|repeticiones?)";
 function parseNotePrescription(value) {
   const source = String(value || "");
+  const clock = source.match(
+    /(\d+)\s*[x×*]\s*(?:(\d{1,2}):)?(\d{1,2}):(\d{2})/u,
+  );
+  if (clock) {
+    const seconds = Number(clock[2] || 0) * 3600 + Number(clock[3]) * 60 + Number(clock[4]);
+    return {
+      index: clock.index,
+      length: clock[0].length,
+      count: Number(clock[1]),
+      repMin: seconds,
+      repMax: seconds,
+      suffix: `seconds ${source.slice(clock.index + clock[0].length)}`,
+      failure: false,
+    };
+  }
+  const timeFirst = source.match(
+    /(\d+)\s*(s|sec(?:ond)?s?|sek(?:und[ei]?)?)\s*[x×*]\s*(\d+)/iu,
+  );
+  if (timeFirst)
+    return {
+      index: timeFirst.index,
+      length: timeFirst[0].length,
+      count: Number(timeFirst[3]),
+      repMin: Number(timeFirst[1]),
+      repMax: Number(timeFirst[1]),
+      suffix: `seconds ${source.slice(timeFirst.index + timeFirst[0].length)}`,
+      failure: false,
+    };
+  const perSetLoads = source.match(
+    new RegExp(
+      `(\\d+(?:[.,]\\d+)?(?:\\s*\\/\\s*\\d+(?:[.,]\\d+)?){1,19})\\s*(kg|kgs|lb|lbs)?\\s*(?:[x×*]\\s*)?(\\d+)\\s*${NOTE_REP_WORD}\\b`,
+      "iu",
+    ),
+  );
+  if (perSetLoads) {
+    const loads = perSetLoads[1]
+      .split("/")
+      .map((entry) => Number(entry.trim().replace(",", ".")));
+    return {
+      index: perSetLoads.index,
+      length: perSetLoads[0].length,
+      count: loads.length,
+      repMin: Number(perSetLoads[3]),
+      repMax: Number(perSetLoads[3]),
+      suffix: source.slice(perSetLoads.index + perSetLoads[0].length),
+      failure: false,
+      setLoads: loads,
+      loadUnit: perSetLoads[2]?.toLowerCase() || null,
+    };
+  }
+  const weightFirst = source.match(
+    /(\d+(?:[.,]\d+)?)\s*(kg|kgs|lb|lbs)\s*[x×*]\s*(\d+)(?:\s*[x×*]\s*(\d+))?/iu,
+  );
+  if (weightFirst)
+    return {
+      index: weightFirst.index,
+      length: weightFirst[0].length,
+      count: Number(weightFirst[4] || 1),
+      repMin: Number(weightFirst[3]),
+      repMax: Number(weightFirst[3]),
+      suffix: source.slice(weightFirst.index + weightFirst[0].length),
+      failure: false,
+    };
+  const keyed = source.match(
+    /(?:sets?|serije?|satze|sätze|series?)\s*[:=]?\s*(\d+)\s*[,|; ]+\s*(?:reps?|ponovitve?|wdh|repeticiones?)\s*[:=]?\s*(\d+)(?:\s*[–—-]\s*(\d+))?/iu,
+  );
+  if (keyed)
+    return {
+      index: keyed.index,
+      length: keyed[0].length,
+      count: Number(keyed[1]),
+      repMin: Number(keyed[2]),
+      repMax: Number(keyed[3] || keyed[2]),
+      suffix: source.slice(keyed.index + keyed[0].length),
+      failure: false,
+    };
+  const setsOf = source.match(
+    new RegExp(
+      `(\\d+)\\s*${NOTE_SET_WORD}\\s*(?:of|po|de|a|à|mit|x|×)?\\s*(\\d+)(?:\\s*[–—-]\\s*(\\d+))?`,
+      "iu",
+    ),
+  );
+  if (setsOf)
+    return {
+      index: setsOf.index,
+      length: setsOf[0].length,
+      count: Number(setsOf[1]),
+      repMin: Number(setsOf[2]),
+      repMax: Number(setsOf[3] || setsOf[2]),
+      suffix: source.slice(setsOf.index + setsOf[0].length),
+      failure: false,
+    };
   const standard = source.match(
     new RegExp(
-      `(\\d+)\\s*(?:${NOTE_SET_WORD}\\s*)?[x×]\\s*(\\d+)(?:\\s*[–—-]\\s*(\\d+))?\\s*(?:reps?|ponovitev|ponovitve)?`,
+      `(\\d+)\\s*(?:${NOTE_SET_WORD}\\s*)?[x×*]\\s*(\\d+)(?:\\s*[–—-]\\s*(\\d+))?\\s*(?:reps?|ponovitev|ponovitve|wdh|repeticiones?)?`,
       "iu",
     ),
   );
@@ -547,7 +729,9 @@ function parseNotePrescription(value) {
       suffix: source.slice(standard.index + standard[0].length),
       failure: false,
     };
-  const failure = source.match(/(\d+)\s*[x×]\s*(?:failure|do\s+odpovedi)/iu);
+  const failure = source.match(
+    /(\d+)\s*[x×*]\s*(?:amrap|max(?:\s+reps?)?|failure|do\s+odpovedi|al\s+fallo)/iu,
+  );
   if (failure)
     return {
       index: failure.index,
@@ -558,9 +742,27 @@ function parseNotePrescription(value) {
       suffix: source.slice(failure.index + failure[0].length),
       failure: true,
     };
+  const repList = source.match(
+    new RegExp(
+      `(?:${NOTE_REP_WORD}\\s*[:=]?\\s*(\\d+(?:\\s*\\/\\s*\\d+){1,19})|(\\d+(?:\\s*\\/\\s*\\d+){1,19})\\s*${NOTE_REP_WORD}\\b)`,
+      "iu",
+    ),
+  );
+  if (repList) {
+    const values = (repList[1] || repList[2]).split("/").map(Number);
+    return {
+      index: repList.index,
+      length: repList[0].length,
+      count: values.length,
+      repMin: Math.min(...values),
+      repMax: Math.max(...values),
+      suffix: source.slice(repList.index + repList[0].length),
+      failure: false,
+    };
+  }
   const rounds = source.match(
     new RegExp(
-      `(\\d+)\\s*${NOTE_SET_WORD}(?:\\s*(?:x|×|po)\\s*(\\d+))?`,
+      `(\\d+)\\s*(${NOTE_SET_WORD})(?:\\s*(?:x|×|po)\\s*(\\d+))?`,
       "iu",
     ),
   );
@@ -569,12 +771,64 @@ function parseNotePrescription(value) {
       index: rounds.index,
       length: rounds[0].length,
       count: Number(rounds[1]),
-      repMin: Number(rounds[2] || 1),
-      repMax: Number(rounds[2] || 1),
+      repMin: Number(rounds[3] || 1),
+      repMax: Number(rounds[3] || 1),
       suffix: source.slice(rounds.index + rounds[0].length),
       failure: false,
+      implicitReps: !rounds[3],
+      setUnit: foldNoteText(rounds[2]),
     };
   return null;
+}
+function prefixedNoteExercise(value) {
+  const source = cleanNoteItem(value);
+  const prescription = parseNotePrescription(source);
+  if (!prescription || prescription.index !== 0) return null;
+  let remainder = source
+    .slice(prescription.length)
+    .replace(/^[\s\u00b7:|/\u2013\u2014-]+/u, "")
+    .trim();
+  if (!remainder) return null;
+  if (prescription.implicitReps) {
+    const trailingReps = remainder.match(
+      /^(.+?)[\s\u00b7:|/\u2013\u2014-]+[x×]?(\d+)(?:\s*[–—-]\s*(\d+))?\s*(?:reps?|ponovitev|ponovitve|wdh|repeticiones?)?$/iu,
+    );
+    const trailingFailure = remainder.match(
+      /^(.+?)[\s\u00b7:|/\u2013\u2014-]+(?:amrap|failure|do\s+odpovedi|al\s+fallo)$/iu,
+    );
+    if (trailingReps) {
+      remainder = trailingReps[1].trim();
+      prescription.repMin = Number(trailingReps[2]);
+      prescription.repMax = Number(trailingReps[3] || trailingReps[2]);
+      prescription.implicitReps = false;
+      prescription.suffix = "";
+    } else if (trailingFailure) {
+      remainder = trailingFailure[1].trim();
+      prescription.failure = true;
+      prescription.implicitReps = false;
+      prescription.suffix = "";
+    } else {
+      return null;
+    }
+  }
+  const detailAt = remainder.search(
+    /\s+(?:@\s*(?:(?:[0-4]\s*)?RIR|(?:[6-9]|10)\s*RPE)|(?:RIR|RPE|rest|po[cč]itek|odmor|pause|descanso)\s*:)/iu,
+  );
+  const detail = detailAt >= 0 ? remainder.slice(detailAt).trim() : "";
+  const sourceName = (detailAt >= 0 ? remainder.slice(0, detailAt) : remainder)
+    .replace(/[\s\u00b7:|/\u2013\u2014-]+$/u, "")
+    .trim();
+  if (
+    !sourceName ||
+    /^(?:circuit|krog|circuito|zirkel|giant set|superset|super set|super serija)\b/iu.test(
+      sourceName,
+    )
+  )
+    return null;
+  return {
+    sourceName,
+    prescription: { ...prescription, suffix: detail },
+  };
 }
 function prescribedExerciseNames(sourceText) {
   return String(sourceText || "")
@@ -595,7 +849,7 @@ function prescribedExerciseNames(sourceText) {
 }
 function parsedRestSeconds(value) {
   const match = String(value || "").match(
-    /^rest\s*:\s*(\d+(?:[.,]\d+)?)\s*(?:[\u2013\u2014-]\s*(\d+(?:[.,]\d+)?))?\s*(min(?:ute)?s?|sec(?:ond)?s?)\b/i,
+    /^(?:rest|po[cč]itek|odmor|pause|descanso)\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:[\u2013\u2014-]\s*(\d+(?:[.,]\d+)?))?\s*(min(?:ute)?s?|sec(?:ond)?s?|s|sek(?:und[ei]?)?)\b/i,
   );
   if (!match) return null;
   const first = Number(match[1].replace(",", "."));
@@ -603,17 +857,176 @@ function parsedRestSeconds(value) {
   const amount = (first + second) / 2;
   return Math.round(amount * (/^min/i.test(match[3]) ? 60 : 1));
 }
+function clearlyNotExerciseName(value) {
+  return /^(?:buy|order|call|email|message|meeting|appointment|chapter|page|room|photo|print|battery|batteries|tiles?|boxes?|screws?|recipe|dose|tablet|password|invoice|budget|hotel|flight|train ticket|week|month|year|sets?|reps?)\b/i.test(
+    foldNoteText(value),
+  );
+}
+function parsedLoggedSetLine(value) {
+  const source = cleanNoteItem(value);
+  const weighted = source.match(
+    /^(\d+(?:[.,]\d+)?)\s*(kg|kgs|lb|lbs)\s*[x×]\s*(\d+)(?:\s*(?:reps?))?(.*)$/iu,
+  );
+  if (weighted)
+    return {
+      reps: Number(weighted[3]),
+      suffix: weighted[4].trim(),
+    };
+  const repsOnly = source.match(/^x\s*(\d+)(?:\s*reps?)?(.*)$/iu);
+  if (repsOnly)
+    return { reps: Number(repsOnly[1]), suffix: repsOnly[2].trim() };
+  return null;
+}
+function noteTableCells(value) {
+  const line = String(value || "").trim();
+  let cells = null;
+  if (line.includes("\t")) cells = line.split(/\t+/u);
+  else if ((line.match(/\|/g) || []).length >= 2)
+    cells = line.replace(/^\||\|$/g, "").split("|");
+  else if (/^(?:exercise|vaja|ubung|übung|ejercicio)\s*,/iu.test(line))
+    cells = line.split(",");
+  else if (
+    /^(?:exercise|vaja|ubung|übung|ejercicio)\s*;/iu.test(line) &&
+    (line.match(/;/g) || []).length >= 2
+  )
+    cells = line.split(";");
+  return cells?.map((cell) => cell.trim()).filter((cell, index, all) => cell || all.length > 1) || null;
+}
+function noteTableHeader(cells) {
+  if (!cells) return null;
+  const aliases = {
+    name: /^(?:exercise|movement|vaja|ubung|übung|ejercicio|name)$/i,
+    sets: /^(?:sets?|serije?|satze|sätze|series?)$/i,
+    reps: /^(?:reps?|ponovitve?|wdh|repeticiones?)$/i,
+    weight: /^(?:weight|load|teza|teža|gewicht|peso)(?:\s*\([^)]*\))?$/i,
+    rir: /^(?:rir|rpe|effort)$/i,
+    rest: /^(?:rest|pocitek|počitek|odmor|pause|descanso)$/i,
+    notes: /^(?:notes?|opombe?|notizen|notas?)$/i,
+  };
+  const header = {};
+  cells.forEach((cell, index) => {
+    const key = Object.entries(aliases).find(([, pattern]) => pattern.test(cell))?.[0];
+    if (key && header[key] === undefined) header[key] = index;
+  });
+  return header.name !== undefined && (header.sets !== undefined || header.reps !== undefined)
+    ? header
+    : null;
+}
+function tableExerciseLine(cells, header) {
+  if (!cells || !header) return null;
+  const at = (key) =>
+    header[key] === undefined ? "" : String(cells[header[key]] || "").trim();
+  const name = at("name");
+  const sets = Number(at("sets"));
+  const reps = at("reps").replace(/^x\s*/i, "");
+  if (!name || !Number.isInteger(sets) || sets < 1 || sets > 20 || !/^\d+(?:\s*[–—-]\s*\d+)?$/u.test(reps))
+    return null;
+  return [
+    name,
+    `${sets}x${reps}`,
+    at("weight"),
+    at("rir") && /r(?:ir|pe)/i.test(at("rir")) ? at("rir") : at("rir") ? `RIR ${at("rir")}` : "",
+    at("rest") ? `rest: ${at("rest")}` : "",
+    at("notes"),
+  ]
+    .filter(Boolean)
+    .join(" | ");
+}
+function expandStructuredNoteLines(sourceText) {
+  const rawLines = String(sourceText || "").split(/\r?\n/u);
+  const expanded = [];
+  let tableHeader = null;
+  for (const rawLine of rawLines) {
+    const line = rawLine.trim();
+    if (!line) continue;
+    let cells = noteTableCells(line);
+    if (!cells && tableHeader && line.includes(";"))
+      cells = line.split(";").map((cell) => cell.trim());
+    if (!cells && tableHeader && line.includes(","))
+      cells = line.split(",").map((cell) => cell.trim());
+    const header = noteTableHeader(cells);
+    if (header) {
+      tableHeader = header;
+      continue;
+    }
+    if (tableHeader && /^\s*:?-{2,}/u.test(line.replace(/^\|/u, ""))) continue;
+    const tableLine = tableExerciseLine(cells, tableHeader);
+    if (tableLine) {
+      expanded.push(tableLine);
+      continue;
+    }
+    if (cells && tableHeader) tableHeader = null;
+    const semicolonParts = line.split(/\s*;\s*/u).filter(Boolean);
+    if (
+      semicolonParts.length > 1 &&
+      semicolonParts.filter((part) => parseNotePrescription(cleanNoteItem(part))).length >= 2
+    ) {
+      expanded.push(...semicolonParts);
+      continue;
+    }
+    expanded.push(line);
+  }
+  return expanded;
+}
+function prescribedSourceCandidates(lines) {
+  const names = [];
+  for (let index = 0; index < lines.length; index++) {
+    const cleaned = cleanNoteItem(lines[index]);
+    const prefixed = prefixedNoteExercise(cleaned);
+    if (prefixed) {
+      names.push(prefixed.sourceName);
+      continue;
+    }
+    const inline = parseNotePrescription(cleaned);
+    if (inline?.index > 0) {
+      const rawName = cleaned
+        .slice(0, inline.index)
+        .replace(/[\s\u00b7:|/\u2013\u2014-]+$/gu, "")
+        .trim();
+      const name = splitImportedExerciseLabel(rawName).name;
+      if (
+        name &&
+        !/^(?:circuit|krog|circuito|zirkel|giant set|superset|super set|super serija)\b/iu.test(
+          name,
+        ) &&
+        !parsedDayHeading(name) &&
+        !genericWorkoutHeading(name) &&
+        !noteSectionMode(name) &&
+        !clearlyNotExerciseName(name)
+      )
+        names.push(name);
+      continue;
+    }
+    const next = parseNotePrescription(cleanNoteItem(lines[index + 1]));
+    if (
+      next?.index === 0 &&
+      cleaned &&
+      !parseNotePrescription(cleaned) &&
+      !parsedDayHeading(cleaned) &&
+      !genericWorkoutHeading(cleaned) &&
+      !noteSectionMode(cleaned) &&
+      !clearlyNotExerciseName(cleaned)
+    ) {
+      names.push(cleaned);
+      index++;
+    }
+  }
+  return names;
+}
 export function parseStructuredTrainingNotes(sourceText, profile = {}) {
-  const lines = String(sourceText || "")
-    .split(/\r?\n/u)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const lines = expandStructuredNoteLines(sourceText);
   if (!lines.length) return null;
   const goal = lines
     .find((line) => /^goal\s*:/i.test(line))
     ?.replace(/^goal\s*:\s*/i, "")
     .trim();
-  const firstDayIndex = lines.findIndex((line) => parsedDayHeading(line));
+  const firstDayIndex = lines.findIndex(
+    (line, index) =>
+      parsedDayHeading(line) ||
+      weekdayForDateHeading(line) ||
+      genericWorkoutHeading(line) ||
+      contextualWorkoutHeading(line, lines[index + 1]),
+  );
   const explicitTitle = lines
     .slice(0, firstDayIndex < 0 ? 0 : firstDayIndex)
     .find(
@@ -626,11 +1039,42 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
         ),
     );
   const days = [];
+  const explicitWeekdays = lines
+    .map((line) => parsedDayHeading(line)?.weekday || weekdayForDateHeading(line))
+    .filter(Boolean);
+  const unresolvedDayMarker = lines.some((line) => {
+    if (parsedDayHeading(line) || weekdayForDateHeading(line) || genericWorkoutHeading(line))
+      return false;
+    const folded = ` ${foldNoteText(line)} `;
+    return Object.keys(NOTE_WEEKDAYS).some(
+      (token) => token.length >= 3 && folded.includes(` ${token} `),
+    );
+  });
+  const availableSequentialDays = sequentialImportWeekdays(profile, explicitWeekdays);
+  let sequentialDayIndex = 0;
   let current = null;
   let sectionMode = "exercises";
+  let circuitSets = null;
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    const heading = parsedDayHeading(line);
+    const explicitHeading = parsedDayHeading(line);
+    const dateWeekday = explicitHeading ? null : weekdayForDateHeading(line);
+    const genericHeading =
+      explicitHeading || dateWeekday
+        ? null
+        : genericWorkoutHeading(line) ||
+          contextualWorkoutHeading(line, lines[index + 1]);
+    const heading = explicitHeading ||
+      (dateWeekday
+        ? { weekday: dateWeekday, name: cleanNoteItem(line) }
+        : genericHeading
+          ? {
+              weekday:
+                availableSequentialDays[sequentialDayIndex++] ||
+                NOTE_WEEKDAY_ORDER[(days.length + explicitWeekdays.length) % 7],
+              name: genericHeading,
+            }
+          : null);
     if (heading) {
       const weekday = heading.weekday;
       const headingName = heading.name;
@@ -655,7 +1099,25 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
         days.push(current);
       }
       sectionMode = "exercises";
+      circuitSets = null;
       continue;
+    }
+    if (
+      !current &&
+      !unresolvedDayMarker &&
+      (parseNotePrescription(cleanNoteItem(line)) ||
+        parseNotePrescription(cleanNoteItem(lines[index + 1])))
+    ) {
+      const weekday = sequentialImportWeekdays(profile)[0] || "Mon";
+      current = {
+        weekday,
+        location: "Commercial gym",
+        name: normalizeWorkoutName("Workout", weekday),
+        estimatedMinutes: 60,
+        exercises: [],
+        warmup: null,
+      };
+      days.push(current);
     }
     if (!current) continue;
     const nextSectionMode = noteSectionMode(line);
@@ -666,6 +1128,13 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
         const inlineItem = parseWarmupNoteItem(line);
         if (inlineItem) current.warmup.items.push(inlineItem);
       }
+      continue;
+    }
+    const circuit = cleanNoteItem(line).match(
+      /^(?:circuit|krog|circuito|zirkel|giant set|superset|super set|super serija)\s*(?:[a-z]\s*)?(?:x|×|:|-)?\s*(\d+)\s*(?:rounds?|krogi?|runden?|rondas?|sets?|serije?)?/iu,
+    );
+    if (circuit) {
+      circuitSets = Math.max(1, Math.min(20, Number(circuit[1])));
       continue;
     }
     if (/^(?:progression|progresija|tvoj glavni princip)/i.test(foldNoteText(line))) {
@@ -684,18 +1153,65 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
     }
     const cleanedLine = cleanNoteItem(line);
     let sourceName = cleanedLine;
-    let prescription = parseNotePrescription(cleanNoteItem(lines[index + 1]));
-    let consumedPrescriptionLine = Boolean(prescription);
+    const loggedSets = [];
+    for (let cursor = index + 1; cursor < lines.length; cursor++) {
+      const logged = parsedLoggedSetLine(lines[cursor]);
+      if (!logged) break;
+      loggedSets.push(logged);
+    }
+    const nextLinePrescription = parseNotePrescription(
+      cleanNoteItem(lines[index + 1]),
+    );
+    let prescription = loggedSets.length
+      ? {
+          index: 0,
+          length: 0,
+          count: loggedSets.length,
+          repMin: Math.min(...loggedSets.map((set) => set.reps)),
+          repMax: Math.max(...loggedSets.map((set) => set.reps)),
+          suffix: loggedSets.map((set) => set.suffix).filter(Boolean).join(" · "),
+          failure: false,
+        }
+      : nextLinePrescription?.index === 0
+        ? nextLinePrescription
+        : null;
+    let consumedPrescriptionLines = loggedSets.length || (prescription ? 1 : 0);
     const inline = parseNotePrescription(cleanedLine);
-    if (inline) {
+    const prefixed = prefixedNoteExercise(cleanedLine);
+    if (prefixed) {
+      sourceName = prefixed.sourceName;
+      prescription = prefixed.prescription;
+      consumedPrescriptionLines = 0;
+    } else if (
+      inline &&
+      (!inline.implicitReps || /^(?:round|krog|rund|ronda)/i.test(inline.setUnit))
+    ) {
       sourceName = cleanedLine
         .slice(0, inline.index)
         .replace(/[\s\u00b7:|/\u2013\u2014-]+$/gu, "")
         .trim();
       prescription = inline;
-      consumedPrescriptionLine = false;
+      consumedPrescriptionLines = 0;
     }
-    if (!prescription || !sourceName) continue;
+    if (!prescription && circuitSets) {
+      const circuitReps = cleanedLine.match(
+        /^(.*?)[\s:|-]+(\d+)(?:\s*[–—-]\s*(\d+))?\s*(?:reps?|ponovitev|ponovitve|wdh|repeticiones?)$/iu,
+      );
+      if (circuitReps?.[1]) {
+        sourceName = circuitReps[1].trim();
+        prescription = {
+          index: circuitReps[1].length,
+          length: circuitReps[0].length - circuitReps[1].length,
+          count: circuitSets,
+          repMin: Number(circuitReps[2]),
+          repMax: Number(circuitReps[3] || circuitReps[2]),
+          suffix: "Circuit",
+          failure: false,
+        };
+        consumedPrescriptionLines = 0;
+      }
+    }
+    if (!prescription || !sourceName || clearlyNotExerciseName(sourceName)) continue;
     const count = prescription.count;
     const repMin = prescription.repMin;
     const repMax = prescription.repMax;
@@ -712,10 +1228,12 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
       )
       .replace(/^[\s\u00b7,|;]+/u, "")
       .trim();
-    const rirMatch = detail.match(/\b([0-4])\s*RIR\b/i);
+    const rirMatch = detail.match(/\b(?:RIR\s*[:=]?\s*([0-4])|([0-4])\s*RIR)\b/i);
+    const rpeMatch = detail.match(/\b(?:RPE\s*[:=]?\s*([6-9]|10)|([6-9]|10)\s*RPE)\b/i);
     const inlineRest = parsedRestSeconds(detail);
     const note = detail
-      .replace(/\b[0-4]\s*RIR\b/gi, "")
+      .replace(/\b(?:RIR\s*[:=]?\s*[0-4]|[0-4]\s*RIR)\b/gi, "")
+      .replace(/\b(?:RPE\s*[:=]?\s*(?:[6-9]|10)|(?:[6-9]|10)\s*RPE)\b/gi, "")
       .replace(/^[\s\u00b7,|;]+|[\s\u00b7,|;]+$/gu, "")
       .trim();
     if (count < 1 || count > 20 || repMin < 1 || repMax < repMin) continue;
@@ -725,13 +1243,38 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
       : note && inlineRest === null && !/^[@\d]/.test(note)
         ? note
         : null;
+    const prescriptionUnit = /^(?:lb|lbs)$/iu.test(
+      String(prescription.loadUnit || ""),
+    )
+      ? "lb"
+      : /^(?:kg|kgs)$/iu.test(String(prescription.loadUnit || ""))
+        ? "kg"
+        : profile.units === "lb"
+          ? "lb"
+          : profile.units === "kg"
+            ? "kg"
+            : null;
+    const parsedSetWeights =
+      Array.isArray(prescription.setLoads) && prescriptionUnit
+        ? prescription.setLoads.map((load) =>
+            Number(
+              (prescriptionUnit === "lb" ? load * 0.45359237 : load).toFixed(
+                2,
+              ),
+            ),
+          )
+        : null;
     current.exercises.push({
       exerciseId: null,
       sourceName: importedLabel.name,
       sets: count,
       repMin,
       repMax,
-      targetRir: rirMatch ? Number(rirMatch[1]) : null,
+      targetRir: rirMatch
+        ? Number(rirMatch[1] || rirMatch[2])
+        : rpeMatch
+          ? Math.max(0, Math.min(4, 10 - Number(rpeMatch[1] || rpeMatch[2])))
+          : null,
       restSeconds: inlineRest,
       measure: timed ? "seconds" : null,
       failureTarget: prescription.failure,
@@ -740,12 +1283,28 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}) {
           " · ",
         ) || null,
       weightKg: null,
-      setWeightsKg: null,
+      setWeightsKg: parsedSetWeights,
     });
-    if (consumedPrescriptionLine) index++;
+    if (consumedPrescriptionLines) index += consumedPrescriptionLines;
   }
   const trainingDays = days.filter((day) => day.exercises.length);
   if (!trainingDays.length) return null;
+  const parsedNameCounts = new Map();
+  for (const name of trainingDays.flatMap((day) => [
+    ...day.exercises.map((exercise) => exercise.sourceName),
+    ...(day.warmup?.items || []).map((item) => item.label),
+  ])) {
+    const key = foldNoteText(name);
+    parsedNameCounts.set(key, (parsedNameCounts.get(key) || 0) + 1);
+  }
+  const missingPrescribedSource = prescribedSourceCandidates(lines).some((name) => {
+    const key = foldNoteText(name);
+    const remaining = parsedNameCounts.get(key) || 0;
+    if (!remaining) return true;
+    parsedNameCounts.set(key, remaining - 1);
+    return false;
+  });
+  if (missingPrescribedSource) return null;
   for (const day of trainingDays) {
     const requiresCommercialGym = day.exercises.some((exercise) => {
       const match = matchImportedExerciseName(exercise.sourceName);
@@ -827,6 +1386,7 @@ function finalizeImportedPlan(profile, existingPlanText, data) {
           ...exercise,
           sourceName: alignedSourceNames[index],
         })),
+        profile.units,
       )
     : null;
   let sourceIndex = 0;
@@ -845,7 +1405,7 @@ function finalizeImportedPlan(profile, existingPlanText, data) {
         : sourceMatch.exact
         ? authoritativeImportedWeights(existingPlanText, [
             proposedExercises[sourceIndex],
-          ])[0]
+          ], profile.units)[0]
         : { weightKg: null, setWeightsKg: null };
       exercise.weightKg = weights.weightKg;
       exercise.setWeightsKg = weights.setWeightsKg;
@@ -1157,7 +1717,7 @@ export const AIService = {
         : null,
     };
   },
-  async importTrainingPlan(profile, existingPlanText) {
+  async importTrainingPlan(profile, existingPlanText, { signal = null } = {}) {
     const locallyParsed = parseStructuredTrainingNotes(
       existingPlanText,
       profile,
@@ -1177,8 +1737,11 @@ export const AIService = {
         profile,
         existingPlanText,
         previousValidationError: null,
+        importAttemptId:
+          globalThis.crypto?.randomUUID?.() ||
+          `import-${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
-      { timeoutMs: IMPORT_PLAN_TIMEOUT_MS },
+      { timeoutMs: IMPORT_PLAN_TIMEOUT_MS, signal },
     );
     return finalizeImportedPlan(profile, existingPlanText, data);
   },

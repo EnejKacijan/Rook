@@ -1200,54 +1200,31 @@ export function bindScrollableSheetTouch({
   };
 }
 function ModalDragHandle({ layerRef, close, finishClose }) {
-  const [visible, setVisible] = useState(false);
+  const [header, setHeader] = useState(null);
   const drag = useRef(null);
   const suppressActivation = useRef(false);
   const closeTimer = useRef(null);
-  useEffect(() => {
-    setVisible(
-      Boolean(
-        layerRef.current?.firstElementChild?.classList.contains("screen"),
-      ),
-    );
-  });
   useEffect(() => () => clearTimeout(closeTimer.current), []);
   const panel = () => layerRef.current?.firstElementChild;
-  const handle = () => layerRef.current?.querySelector(".modal-drag-handle");
+  useEffect(() => {
+    const target = panel();
+    const nextHeader = target?.classList.contains("screen")
+      ? Array.from(target.children).find((child) =>
+          child.matches?.(".detail-header, .long-form-sheet-header"),
+        ) || null
+      : null;
+    setHeader((current) => (current === nextHeader ? current : nextHeader));
+  });
   const stopEntranceAnimation = () => {
     const layer = layerRef.current;
     const target = panel();
-    const control = handle();
     if (layer) layer.style.animation = "none";
     if (target) target.style.animation = "none";
-    if (control) control.style.animation = "none";
   };
-  useLayoutEffect(() => {
-    if (!visible) return undefined;
-    const target = panel();
-    const control = handle();
-    if (!target || !control) return undefined;
-    const alignToPanel = () => {
-      control.style.top = `${target.offsetTop}px`;
-    };
-    alignToPanel();
-    const observer =
-      typeof ResizeObserver === "undefined"
-        ? null
-        : new ResizeObserver(alignToPanel);
-    observer?.observe(target);
-    addEventListener("resize", alignToPanel);
-    return () => {
-      observer?.disconnect();
-      removeEventListener("resize", alignToPanel);
-    };
-  }, [visible]);
   const applyDistance = (distance) => {
     const target = panel();
-    const control = handle();
-    if (!target || !control) return;
+    if (!target) return;
     target.style.transform = `translateY(${distance}px)`;
-    control.style.transform = `translateY(${distance}px)`;
     const progress = Math.min(
       1,
       distance / Math.max(1, target.getBoundingClientRect().height * 0.65),
@@ -1256,10 +1233,8 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
   };
   const settle = (dismiss) => {
     const target = panel();
-    const control = handle();
-    if (!target || !control) return;
+    if (!target) return;
     target.style.transition = "transform 180ms ease-out";
-    control.style.transition = "transform 180ms ease-out";
     if (dismiss) {
       const distance = target.getBoundingClientRect().height + 24;
       applyDistance(distance);
@@ -1267,11 +1242,9 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
       closeTimer.current = setTimeout(finishClose, 180);
     } else {
       target.style.transform = "";
-      control.style.transform = "";
       layerRef.current.style.backgroundColor = "";
       closeTimer.current = setTimeout(() => {
         target.style.transition = "";
-        control.style.transition = "";
       }, 180);
     }
   };
@@ -1292,7 +1265,6 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
     stopEntranceAnimation();
     const target = panel();
     if (target) target.style.transition = "";
-    event.currentTarget.style.transition = "";
   };
   const move = (event) => {
     if (!drag.current) return;
@@ -1317,7 +1289,7 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
     settle(distance >= 72 || (distance >= 24 && velocity > 0.65));
   };
   useEffect(() => {
-    if (!visible) return undefined;
+    if (!header) return undefined;
     const surface = panel();
     return bindScrollableSheetTouch({
       surface,
@@ -1326,15 +1298,13 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
       onDragStart: () => {
         stopEntranceAnimation();
         surface.style.transition = "none";
-        const control = handle();
-        if (control) control.style.transition = "none";
       },
       onDismiss: () => settle(true),
       onReset: () => settle(false),
     });
-  }, [visible]);
-  if (!visible) return null;
-  return (
+  }, [header]);
+  if (!header) return null;
+  return createPortal(
     <div
       className="modal-drag-handle"
       aria-label="Drag down or tap to close"
@@ -1364,7 +1334,8 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
       }}
     >
       <i />
-    </div>
+    </div>,
+    header,
   );
 }
 function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) {
@@ -1459,7 +1430,6 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
     const fromHistory = options?.fromHistory === true;
     const layer = layerRef.current;
     const panel = layer?.firstElementChild;
-    const handle = layer?.querySelector(".modal-drag-handle");
     if (!layer || !panel) {
       close();
       return;
@@ -1467,7 +1437,6 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
     closing.current = true;
     layer.style.animation = "none";
     panel.style.animation = "none";
-    if (handle) handle.style.animation = "none";
     if (
       fullscreen &&
       !fromHistory &&
@@ -1484,10 +1453,6 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
     }
     panel.style.transition = "transform 180ms ease-out";
     panel.style.transform = `translateY(${panel.getBoundingClientRect().height + 24}px)`;
-    if (handle) {
-      handle.style.transition = "transform 180ms ease-out";
-      handle.style.transform = `translateY(${panel.getBoundingClientRect().height + 24}px)`;
-    }
     layer.style.backgroundColor = "rgba(27, 26, 25, 0)";
     closeTimer.current = setTimeout(close, 180);
   };
@@ -1634,7 +1599,7 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
       kind === "program" && cancellable
         ? setTimeout(() => setShowCancel(true), 3000)
         : null;
-    const long = setTimeout(() => setWaitLevel(1), 5000);
+    const long = setTimeout(() => setWaitLevel(1), kind === "import" ? 12000 : 5000);
     return () => {
       if (reveal) clearTimeout(reveal);
       if (revealCancel) clearTimeout(revealCancel);
@@ -1696,11 +1661,11 @@ function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
         <div className="building-card" role="status" aria-live="polite">
           <Eyebrow>IMPORTING YOUR PLAN</Eyebrow>
           <h2 id="building-title">
-            {waitLevel ? "Still structuring your plan…" : "Structuring your plan…"}
+            {waitLevel ? "Still working on your plan…" : "Structuring your plan…"}
           </h2>
           <p id="building-detail">
             {waitLevel
-              ? "This is taking a little longer than usual. Your notes are still safe."
+              ? "Messy notes can take a little longer. Your original text is still safe."
               : "Matching exercises and checking your notes for review."}
           </p>
           <div className="building-spinner" aria-hidden="true" />
@@ -1838,6 +1803,19 @@ export function exerciseArt(exercise) {
   return artId
     ? EXERCISE_ART_ASSETS[`./assets/exercise-art/${artId}.svg`] || null
     : null;
+}
+const preloadedExerciseArt = new Map();
+export function preloadExerciseArt(exercise, fetchPriority = "auto") {
+  const source = exerciseArt(exercise);
+  if (!source || typeof Image === "undefined") return null;
+  if (preloadedExerciseArt.has(source)) return preloadedExerciseArt.get(source);
+  const image = new Image();
+  image.decoding = "async";
+  image.fetchPriority = fetchPriority;
+  image.src = source;
+  const ready = image.decode?.().catch(() => {}) || Promise.resolve();
+  preloadedExerciseArt.set(source, ready);
+  return ready;
 }
 export function exerciseThumbnailPresentation(exercise) {
   const artId = exerciseArtId(exercise);
@@ -3723,6 +3701,16 @@ function TodayExerciseRow({
 }) {
   const keyboardContext = useRef(false);
   const keyboardContextTimer = useRef(null);
+  useEffect(() => {
+    if (profile.showExerciseImages === false) return undefined;
+    const preload = () => preloadExerciseArt(exercise, "low");
+    if (typeof window.requestIdleCallback === "function") {
+      const idleId = window.requestIdleCallback(preload, { timeout: 750 });
+      return () => window.cancelIdleCallback(idleId);
+    }
+    const timer = setTimeout(preload, 0);
+    return () => clearTimeout(timer);
+  }, [exercise, profile.showExerciseImages]);
   useEffect(
     () => () => {
       clearTimeout(keyboardContextTimer.current);
@@ -5234,7 +5222,9 @@ function WorkoutConfirmation({ confirmation, cancel, continueAction }) {
       aria-describedby="workout-confirm-detail"
     >
       <div ref={sheetRef} className="workout-confirm drag-anywhere">
-        <SheetDragHandle sheetRef={sheetRef} close={cancel} dragAnywhere />
+        <header className="sheet-header-chrome">
+          <SheetDragHandle sheetRef={sheetRef} close={cancel} dragAnywhere />
+        </header>
         <Eyebrow>{next ? "INCOMPLETE EXERCISE" : "END SESSION"}</Eyebrow>
         <h2 id="workout-confirm-title">
           {next
@@ -5264,11 +5254,18 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   const active = state.activeWorkout;
   const [now, setNow] = useState(Date.now());
   const [confirmation, setConfirmation] = useState(null);
+  const [exerciseTransitioning, setExerciseTransitioning] = useState(false);
+  const [exerciseCompleting, setExerciseCompleting] = useState(false);
+  const [exerciseNavigationAnnouncement, setExerciseNavigationAnnouncement] =
+    useState("");
   const [warmupOpen, setWarmupOpen] = useState(false);
   const [dismissingWarmup, setDismissingWarmup] = useState(null);
   const [recentlyCompletedSetId, setRecentlyCompletedSetId] = useState(null);
   const [restCompleteVisible, setRestCompleteVisible] = useState(false);
   const screenRef = useRef(null);
+  const exerciseHeadingRef = useRef(null);
+  const workoutActionLockRef = useRef(false);
+  const workoutActionUnlockTimerRef = useRef(null);
   const completionFeedbackTimerRef = useRef(null);
   const restCompleteTimerRef = useRef(null);
   const warmupDismissTimerRef = useRef(null);
@@ -5331,6 +5328,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       clearTimeout(completionFeedbackTimerRef.current);
       clearTimeout(restCompleteTimerRef.current);
       clearTimeout(warmupDismissTimerRef.current);
+      clearTimeout(workoutActionUnlockTimerRef.current);
     },
     [],
   );
@@ -5343,6 +5341,17 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     },
     [active?.id, active?.exerciseIndex],
   );
+  const currentExercise = active?.exercises?.[active.exerciseIndex] || null;
+  const upcomingExercise = active?.exercises?.[active.exerciseIndex + 1] || null;
+  useEffect(() => {
+    if (state.profile.showExerciseImages === false) return;
+    preloadExerciseArt(currentExercise, "high");
+    preloadExerciseArt(upcomingExercise, "low");
+  }, [
+    currentExercise,
+    upcomingExercise,
+    state.profile.showExerciseImages,
+  ]);
   if (!active)
     return (
       <main className="screen">
@@ -5353,7 +5362,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         />
       </main>
     );
-  const exercise = active.exercises[active.exerciseIndex];
+  const exercise = currentExercise;
   const exerciseIllustration =
     state.profile.showExerciseImages !== false ? exerciseArt(exercise) : null;
   const superset = supersetMeta(active.exercises, active.exerciseIndex);
@@ -5598,17 +5607,43 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       }),
     );
   };
-  const moveToExercise = (index) => {
+  const moveToExercise = (
+    index,
+    { alreadyLocked = false, haptic = "tap", announcement = "" } = {},
+  ) => {
+    if (
+      (!alreadyLocked && workoutActionLockRef.current) ||
+      index < 0 ||
+      index >= active.exercises.length ||
+      index === active.exerciseIndex
+    )
+      return;
+    if (!alreadyLocked) workoutActionLockRef.current = true;
+    setExerciseTransitioning(true);
+    if (haptic) triggerHaptic(haptic);
+    const unlock = () => {
+      clearTimeout(workoutActionUnlockTimerRef.current);
+      workoutActionLockRef.current = false;
+      setExerciseTransitioning(false);
+    };
     mutate((workout) => {
       workout.exerciseIndex = index;
       workout.rest = null;
     });
+    setExerciseCompleting(false);
     setConfirmation(null);
+    setExerciseNavigationAnnouncement(announcement);
+    screenRef.current?.scrollTo({ top: 0, behavior: "auto" });
     requestAnimationFrame(() =>
-      screenRef.current?.scrollTo({ top: 0, behavior: "smooth" }),
+      requestAnimationFrame(() =>
+        exerciseHeadingRef.current?.focus({ preventScroll: true }),
+      ),
     );
+    workoutActionUnlockTimerRef.current = setTimeout(unlock, 80);
   };
   const finishWorkout = () => {
+    if (workoutActionLockRef.current) return;
+    workoutActionLockRef.current = true;
     if (state.workouts.length === 0)
       trackFunnelEventOnce("first_workout_completed", {
         setCount: summary.completed,
@@ -5619,11 +5654,32 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     setPage("complete");
   };
   const requestNext = () => {
+    if (workoutActionLockRef.current) return;
     if (incompleteCurrent)
       setConfirmation({ type: "next", incomplete: incompleteCurrent });
-    else moveToExercise(nextIndex);
+    else {
+      workoutActionLockRef.current = true;
+      setExerciseTransitioning(true);
+      setExerciseCompleting(true);
+      triggerHaptic("success");
+      const completeNavigation = () =>
+        moveToExercise(nextIndex, {
+          alreadyLocked: true,
+          haptic: null,
+          announcement: `Exercise complete. Next: ${exerciseName(nextExercise)}`,
+        });
+      clearTimeout(workoutActionUnlockTimerRef.current);
+      if (window.matchMedia?.("(prefers-reduced-motion: reduce)").matches)
+        requestAnimationFrame(completeNavigation);
+      else
+        workoutActionUnlockTimerRef.current = setTimeout(
+          completeNavigation,
+          240,
+        );
+    }
   };
   const requestFinish = () => {
+    if (workoutActionLockRef.current) return;
     if (summary.completed < summary.total)
       setConfirmation({
         type: "finish",
@@ -5633,7 +5689,11 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     else finishWorkout();
   };
   const confirmAction = () =>
-    confirmation?.type === "next" ? moveToExercise(nextIndex) : finishWorkout();
+    confirmation?.type === "next"
+      ? moveToExercise(nextIndex, {
+          announcement: `Skipped ${exerciseName(exercise)}. Next: ${exerciseName(nextExercise)}`,
+        })
+      : finishWorkout();
   const canRestartWorkout = activeWorkoutCanRestart(active);
   const restartWorkout = () => {
     const restartedAt = Date.now();
@@ -5644,6 +5704,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     setDismissingWarmup(null);
     warmupDismissLockRef.current = false;
     setRecentlyCompletedSetId(null);
+    setExerciseCompleting(false);
+    setExerciseNavigationAnnouncement("");
     setRestCompleteVisible(false);
     clearTimeout(completionFeedbackTimerRef.current);
     clearTimeout(restCompleteTimerRef.current);
@@ -5847,6 +5909,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       ref={screenRef}
       className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}`}
     >
+      <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
+        {exerciseNavigationAnnouncement}
+      </p>
       <header className="workout-header">
         <button aria-label="Back to Today" onClick={() => setPage("today")}>
           ‹
@@ -5859,7 +5924,12 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           </small>
         </div>
         <span className="workout-header-actions">
-          <button className="text-button" onClick={requestFinish}>
+          <button
+            className="text-button"
+            disabled={exerciseTransitioning}
+            aria-disabled={exerciseTransitioning}
+            onClick={requestFinish}
+          >
             Finish
           </button>
           <button
@@ -5877,7 +5947,11 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           </button>
         </span>
       </header>
-      {warmup && (
+      <div
+        key={`exercise-panel-${exercise.id}`}
+        className="exercise-panel"
+      >
+        {warmup && (
         <section
           className={`workout-warmup ${warmupOpen ? "open" : ""}${warmupCompleting ? " completing completed" : ""}${warmupCollapsing ? " dismissing" : ""}`}
           aria-hidden={warmupCollapsing || undefined}
@@ -6054,6 +6128,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               src={exerciseIllustration}
               alt=""
               aria-hidden="true"
+              decoding="async"
+              fetchPriority="high"
             />
           </button>
         )}
@@ -6104,7 +6180,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               </button>
             </div>
           </div>
-          <h1>{exerciseName(exercise)}</h1>
+          <h1 ref={exerciseHeadingRef} tabIndex={-1}>
+            {exerciseName(exercise)}
+          </h1>
           <p className="exercise-meta">
             Target {targetLabel(exercise, state.profile.rirEnabled)}
           </p>
@@ -6319,6 +6397,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
             <Button
               variant="quiet"
               className="workout-previous"
+              disabled={exerciseTransitioning}
+              aria-disabled={exerciseTransitioning}
               onClick={() => moveToExercise(previousIndex)}
             >
               ← PREVIOUS EXERCISE
@@ -6339,12 +6419,30 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                 nextExercise
                   ? incompleteCurrent > 0
                     ? "workout-next-pending"
-                    : "workout-next-ready"
+                    : `workout-next-ready${exerciseCompleting ? " workout-next-completing" : ""}`
                   : ""
               }
               onClick={nextExercise ? requestNext : requestFinish}
+              aria-disabled={exerciseTransitioning}
+              aria-label={
+                exerciseCompleting
+                  ? "Exercise complete"
+                  : nextExercise
+                    ? "NEXT EXERCISE →"
+                    : "FINISH WORKOUT"
+              }
             >
-              {nextExercise ? "NEXT EXERCISE →" : "FINISH WORKOUT"}
+              {exerciseCompleting ? (
+                <span className="exercise-complete-check" aria-hidden="true">
+                  <svg viewBox="0 0 24 24" focusable="false">
+                    <path d="M5.5 12.5 10 17l8.5-10" />
+                  </svg>
+                </span>
+              ) : nextExercise ? (
+                "NEXT EXERCISE →"
+              ) : (
+                "FINISH WORKOUT"
+              )}
             </Button>
           )}
         </div>
@@ -6355,6 +6453,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           {upNextBlocks.map((block) => (
             <button
               key={block.entries.map((entry) => entry.id).join("-")}
+              disabled={exerciseTransitioning}
+              aria-disabled={exerciseTransitioning}
               onClick={() => moveToExercise(block.index)}
             >
               <span className="up-next-main">
@@ -6394,6 +6494,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           ))}
         </section>
       )}
+      </div>
       <WorkoutConfirmation
         confirmation={confirmation}
         cancel={() => setConfirmation(null)}
@@ -6961,24 +7062,41 @@ function CompletedWorkoutDetail({ workoutId, state, update, close, setPage }) {
 
 function Complete({ state, update, setPage, setDetail }) {
   const session = state.workouts.at(-1);
-  if (!session) return null;
-  const completedExercises = session.exercises.filter((item) =>
+  const headingRef = useRef(null);
+  const completionFeedbackSentRef = useRef(false);
+  const completedExercises = (session?.exercises || []).filter((item) =>
     item.sets.some((set) => set.completed),
   );
-  const summary = workoutSetSummary(session);
-  const endedEarly =
-    session.status === "ended-early" ||
-    summary.completed < summary.total;
+  const summary = session
+    ? workoutSetSummary(session)
+    : { completed: 0, total: 0 };
+  const endedEarly = Boolean(
+    session &&
+      (session.status === "ended-early" || summary.completed < summary.total),
+  );
   const setResult = endedEarly
     ? `${summary.completed} of ${pluralize(summary.total, "set")}`
     : pluralize(summary.completed, "set");
   const visibleExercises = endedEarly ? session.exercises : completedExercises;
+  useEffect(() => {
+    if (!session || completionFeedbackSentRef.current) return;
+    completionFeedbackSentRef.current = true;
+    triggerHaptic(endedEarly ? "success" : "complete");
+    requestAnimationFrame(() =>
+      headingRef.current?.focus({ preventScroll: true }),
+    );
+  }, [endedEarly, session?.id]);
+  if (!session) return null;
   return (
     <main
       className={`screen complete-screen ${endedEarly ? "ended-early" : ""}`}
     >
-      {!endedEarly && <div className="complete-mark">✓</div>}
-      <h1>{endedEarly ? "Workout ended early" : "Workout complete"}</h1>
+      <div className="complete-mark" aria-hidden="true">
+        <span>✓</span>
+      </div>
+      <h1 ref={headingRef} tabIndex={-1}>
+        {endedEarly ? "Workout ended early" : "Workout complete"}
+      </h1>
       <div className="stat-grid">
         <div>
           <strong>{session.name}</strong>
@@ -8791,6 +8909,9 @@ function Progress({ state, update, setDetail }) {
       workout.completedAt && workoutSetSummary(workout).completed > 0,
   );
   const consistency = consistencyForCurrentWeek(state);
+  const weekComplete =
+    consistency.planned > 0 &&
+    consistency.completed === consistency.planned;
   const unit = weightUnit(state.profile.units);
   const latest = [];
   const seen = new Set();
@@ -8915,12 +9036,19 @@ function Progress({ state, update, setDetail }) {
           <>
             <div
               className="consistency"
-              aria-label={`${consistency.completed} of ${consistency.planned} planned sessions completed this week`}
+              aria-label={`${consistency.completed} of ${consistency.planned} planned sessions completed this week${weekComplete ? ". Week complete." : ""}`}
             >
               <strong>
                 {consistency.completed} / {consistency.planned}
               </strong>
               <span>planned sessions completed</span>
+              {weekComplete && (
+                <span className="weekly-completion-mark" aria-hidden="true">
+                  <svg viewBox="0 0 16 16">
+                    <path d="m4 8.2 2.5 2.5L12 5.5" />
+                  </svg>
+                </span>
+              )}
             </div>
             <div className="consistency-bars">
               {Array.from({ length: consistency.planned }, (_, index) => (
@@ -13427,6 +13555,8 @@ function ImportPlan({
   const [preview, setPreview] = useState(null);
   const importRun = useRef(0);
   const importTextRef = useRef(null);
+  const importAbortRef = useRef(null);
+  useEffect(() => () => importAbortRef.current?.abort(), []);
   useEffect(() => {
     if (initial && preview)
       trackFunnelEventOnce("first_plan_viewed", {
@@ -13436,6 +13566,9 @@ function ImportPlan({
   }, [initial, preview]);
   const generate = async () => {
     const run = ++importRun.current;
+    importAbortRef.current?.abort();
+    const controller = new AbortController();
+    importAbortRef.current = controller;
     const startedAt = performance.now();
     setBusy(true);
     trackFunnelEvent("plan_generation_started", {
@@ -13447,6 +13580,7 @@ function ImportPlan({
       const result = await AIService.importTrainingPlan(
         state.profile,
         text.trim(),
+        { signal: controller.signal },
       );
       const remainingTransition =
         MINIMUM_PLAN_TRANSITION_MS - (performance.now() - startedAt);
@@ -13475,11 +13609,14 @@ function ImportPlan({
         setError(reason.message || "The plan could not be imported.");
       }
     } finally {
+      if (importAbortRef.current === controller) importAbortRef.current = null;
       if (run === importRun.current) setBusy(false);
     }
   };
   const cancelImport = () => {
     importRun.current++;
+    importAbortRef.current?.abort();
+    importAbortRef.current = null;
     setBusy(false);
     setError("Import cancelled. Your notes are still here.");
   };
@@ -13680,10 +13817,12 @@ function RestTrainingSheet({ date, state, update, close, setPage }) {
       aria-labelledby="rest-training-title"
       onClick={(event) => event.stopPropagation()}
     >
-      <SheetDragHandle sheetRef={sheetRef} close={close} />
-      <button className="sheet-close" aria-label="Close" onClick={close}>
-        ×
-      </button>
+      <header className="sheet-header-chrome">
+        <SheetDragHandle sheetRef={sheetRef} close={close} />
+        <button className="sheet-close" aria-label="Close" onClick={close}>
+          ×
+        </button>
+      </header>
       {mode !== "menu" && (
         <button
           className="sheet-back text-button"
@@ -14436,8 +14575,8 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
         aria-modal="true"
         aria-labelledby="change-plan-title"
       >
-        <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
         <header className="long-form-sheet-header">
+          <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
           <span />
           <strong id="change-plan-title">Plan preview</strong>
           <button
@@ -14467,10 +14606,12 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
       aria-modal="true"
       aria-labelledby="change-plan-title"
     >
-      <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
-      <button className="sheet-close" aria-label="Close" onClick={close}>
-        ×
-      </button>
+      <header className="sheet-header-chrome">
+        <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
+        <button className="sheet-close" aria-label="Close" onClick={close}>
+          ×
+        </button>
+      </header>
       {mode === "menu" ? (
         <>
           <Eyebrow>PROGRAM</Eyebrow>
@@ -14679,6 +14820,7 @@ function HelpPopover({ id, label, title, term, children }) {
       ref={rootRef}
       className={`help-popover${term ? " help-popover-with-term" : ""}`}
     >
+      {term && <span className="help-popover-term">{term}</span>}
       <button
         ref={triggerRef}
         type="button"
@@ -14689,8 +14831,7 @@ function HelpPopover({ id, label, title, term, children }) {
         aria-describedby={open ? id : undefined}
         onClick={() => setOpen((current) => !current)}
       >
-        {term && <span className="help-popover-term">{term}</span>}
-        <span className="help-popover-mark" aria-hidden="true">?</span>
+        <span className="help-popover-mark" aria-hidden="true" />
       </button>
       {open && createPortal(
         <span
@@ -15101,6 +15242,8 @@ function Detail({
               src={detailIllustration}
               alt=""
               aria-hidden="true"
+              decoding="async"
+              fetchPriority="high"
             />
           </button>
         )}
@@ -15488,7 +15631,13 @@ function ExerciseVisualViewer({ exercise, close }) {
         </button>
       </header>
       <div className="exercise-visual-stage">
-        <img src={artwork} alt="" aria-hidden="true" />
+        <img
+          src={artwork}
+          alt=""
+          aria-hidden="true"
+          decoding="async"
+          fetchPriority="high"
+        />
       </div>
     </main>
   );
@@ -16172,10 +16321,12 @@ function Replace({ exercise, state, update, close }) {
       aria-labelledby="replace-title"
       onClick={(event) => event.stopPropagation()}
     >
-      <SheetDragHandle sheetRef={sheetRef} close={close} />
-      <button className="sheet-close" aria-label="Close" onClick={close}>
-        ×
-      </button>
+      <header className="sheet-header-chrome">
+        <SheetDragHandle sheetRef={sheetRef} close={close} />
+        <button className="sheet-close" aria-label="Close" onClick={close}>
+          ×
+        </button>
+      </header>
       <div className="sheet-scroll">
         {picker ? (
           <>

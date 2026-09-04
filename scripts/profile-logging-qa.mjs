@@ -699,6 +699,7 @@ for (const [theme, colorScheme] of [
   state.profile = {
     ...state.profile,
     themePreference: theme,
+    rirEnabled: true,
     availableDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
   };
   state.program = buildProgram(state.profile);
@@ -740,6 +741,50 @@ for (const [theme, colorScheme] of [
     fullPage: false,
   });
   await page.getByRole("button", { name: /^Close/ }).click();
+  await page.getByRole("button", { name: /Logging & increments/ }).click();
+  const loggingColors = await page
+    .locator(".logging-screen")
+    .evaluate((screen) => ({
+      text: getComputedStyle(screen).color,
+      rirLabel: getComputedStyle(
+        screen.querySelector(".setting-switch-text"),
+      ).color,
+    }));
+  assert.equal(
+    loggingColors.rirLabel,
+    loggingColors.text,
+    `${theme} Track reps in reserve uses the readable theme text color`,
+  );
+  const loggingSwitchLayout = await page
+    .locator(".setting-switch-with-accessory")
+    .evaluate((row) => {
+      const label = row.querySelector(".setting-switch-text").getBoundingClientRect();
+      const mark = row.querySelector(".help-popover-mark").getBoundingClientRect();
+      const accessoryThumb = getComputedStyle(
+        row.querySelector(".setting-switch-toggle i"),
+        "::after",
+      ).backgroundColor;
+      const regularThumb = getComputedStyle(
+        row.closest(".logging-group").nextElementSibling.querySelector(".setting-switch i"),
+        "::after",
+      ).backgroundColor;
+      return {
+        helpGap: mark.left - label.right,
+        accessoryThumb,
+        regularThumb,
+      };
+    });
+  assert.ok(
+    loggingSwitchLayout.helpGap >= 8 && loggingSwitchLayout.helpGap <= 10,
+    `${theme} RIR help icon stays 8–10px from its label: ${loggingSwitchLayout.helpGap}`,
+  );
+  if (colorScheme === "dark")
+    assert.equal(
+      loggingSwitchLayout.accessoryThumb,
+      loggingSwitchLayout.regularThumb,
+      `${theme} enabled Logging switches share the same dark thumb`,
+    );
+  await page.getByRole("button", { name: "Close Logging" }).click();
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "125%";
   });

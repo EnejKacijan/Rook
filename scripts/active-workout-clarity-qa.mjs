@@ -135,6 +135,18 @@ const rirHelp = page.getByRole("button", { name: "What is RIR?" });
 assert.equal(await rirHelp.count(), 1, "active logging explains RIR once, at the column header");
 const rirHelpTarget = await rirHelp.boundingBox();
 assert.ok(rirHelpTarget.width >= 44 && rirHelpTarget.height >= 44, "RIR help keeps a 44px mobile target");
+const rirTerm = page.locator(".set-labels .help-popover-term");
+const rirTermTarget = await rirTerm.boundingBox();
+assert.ok(
+  rirTermTarget.x + rirTermTarget.width <= rirHelpTarget.x,
+  "the static RIR label does not overlap the question-mark touch target",
+);
+await rirTerm.click();
+assert.equal(
+  await page.getByRole("tooltip").count(),
+  0,
+  "tapping the RIR label does not open its explanation",
+);
 const [kgLabelBox, repsLabelBox, rirMarkBox, kgControlBox, repsControlBox, rirControlBox] =
   await Promise.all([
     page.locator(".set-labels > span").nth(1).boundingBox(),
@@ -165,9 +177,12 @@ assert.ok(
   rirVerticalGap >= 12 && rirVerticalGap <= 16,
   `RIR header sits 12–16px above its first control; received ${rirVerticalGap}px`,
 );
+const rirHeaderTarget = await page
+  .locator(".set-label-help > .help-popover")
+  .boundingBox();
 assert.ok(
   Math.abs(
-    rirHelpTarget.x + rirHelpTarget.width / 2 -
+    rirHeaderTarget.x + rirHeaderTarget.width / 2 -
       (rirControlBox.x + rirControlBox.width / 2),
   ) <= 1,
   "RIR label and help control remain centered over the RIR column",

@@ -6954,18 +6954,51 @@ function findImportedOccurrences(sourceText, proposedNames) {
     };
   });
 }
-function explicitKgPrescription(source, setCount) {
-  const slashValues = [
-    ...String(source).matchAll(
-      /(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?)+)\s*kg\b/gi,
-    ),
-  ].flatMap((match) =>
-    match[1].split("/").map((value) => Number(value.trim().replace(",", "."))),
+function explicitKgPrescription(source, setCount, defaultUnit = null) {
+  const text = String(source);
+  const normalizeLoad = (value, unit) => {
+    const numeric = Number(String(value).trim().replace(",", "."));
+    if (!Number.isFinite(numeric)) return NaN;
+    return Number(
+      ((unit === "lb" ? numeric * KG_PER_LB : numeric)).toFixed(2),
+    );
+  };
+  const normalizedUnit = (value) =>
+    /^(?:lb|lbs)$/iu.test(String(value || ""))
+      ? "lb"
+      : /^(?:kg|kgs)$/iu.test(String(value || ""))
+        ? "kg"
+        : defaultUnit === "lb" || defaultUnit === "kg"
+          ? defaultUnit
+          : null;
+  const sharedRepsSequence = text.match(
+    /(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?){1,19})\s*(kg|kgs|lb|lbs)?\s*(?:[x×*]\s*)?\d+\s*(?:reps?|repov|ponovitev|ponovitve|ponavljanj|wdh|repeticiones?)\b/iu,
   );
+  const sharedUnit = normalizedUnit(sharedRepsSequence?.[2]);
+  const sharedValues =
+    sharedRepsSequence && sharedUnit
+      ? sharedRepsSequence[1]
+          .split("/")
+          .map((value) => normalizeLoad(value, sharedUnit))
+      : [];
+  const explicitSlash = text.match(
+    /(\d+(?:[.,]\d+)?(?:\s*\/\s*\d+(?:[.,]\d+)?){1,19})\s*(kg|kgs|lb|lbs)\b/iu,
+  );
+  const slashUnit = normalizedUnit(explicitSlash?.[2]);
+  const slashValues =
+    explicitSlash && slashUnit
+      ? explicitSlash[1]
+          .split("/")
+          .map((value) => normalizeLoad(value, slashUnit))
+      : [];
   const directValues = [
-    ...String(source).matchAll(/(\d+(?:[.,]\d+)?)\s*kg\b/gi),
-  ].map((match) => Number(match[1].replace(",", ".")));
-  const values = slashValues.length ? slashValues : directValues;
+    ...text.matchAll(/(\d+(?:[.,]\d+)?)\s*(kg|kgs|lb|lbs)\b/giu),
+  ].map((match) => normalizeLoad(match[1], normalizedUnit(match[2])));
+  const values = sharedValues.length
+    ? sharedValues
+    : slashValues.length
+      ? slashValues
+      : directValues;
   if (
     !values.length ||
     values.some((value) => !Number.isFinite(value) || value < 0)
@@ -6978,7 +7011,11 @@ function explicitKgPrescription(source, setCount) {
     return { weightKg: values[0], setWeightsKg: null };
   return { weightKg: null, setWeightsKg: null };
 }
-export function authoritativeImportedWeights(sourceText, proposedExercises) {
+export function authoritativeImportedWeights(
+  sourceText,
+  proposedExercises,
+  defaultUnit = null,
+) {
   const source = String(sourceText || "");
   const occurrences = findImportedOccurrences(
     source,
@@ -7004,7 +7041,23 @@ export function authoritativeImportedWeights(sourceText, proposedExercises) {
         ? occurrence.rawStart
         : lineStart;
     const end = next && next.rawStart < lineEnd ? next.rawStart : lineEnd;
-    return explicitKgPrescription(source.slice(start, end), value.sets);
+    const inline = explicitKgPrescription(
+      source.slice(start, end),
+      value.sets,
+      defaultUnit,
+    );
+    if (inline.weightKg !== null || inline.setWeightsKg !== null) return inline;
+    const nextOccurrence = occurrences[index + 1];
+    const blankLine = source.slice(occurrence.rawEnd).search(/\r?\n\s*\r?\n/u);
+    const blockEnd = Math.min(
+      nextOccurrence?.rawStart ?? source.length,
+      blankLine >= 0 ? occurrence.rawEnd + blankLine : source.length,
+    );
+    return explicitKgPrescription(
+      source.slice(occurrence.rawEnd, blockEnd),
+      value.sets,
+      defaultUnit,
+    );
   });
 }
 export function matchImportedExerciseName(value) {

@@ -214,6 +214,21 @@ assert.equal(
   "none",
   "reduced motion removes the traveling row wash",
 );
+const reducedExerciseName = await reducedRun.page.locator(".exercise-heading h1").textContent();
+await reducedRun.page.locator(".up-next button").first().click();
+await reducedRun.page.waitForFunction(
+  (name) => document.querySelector(".exercise-heading h1")?.textContent !== name,
+  reducedExerciseName,
+);
+assert.equal(
+  await reducedRun.page.evaluate(() =>
+    document.getAnimations().some((animation) =>
+      String(animation.animationName || "").startsWith("rook-exercise-panel-"),
+    ),
+  ),
+  false,
+  "reduced motion changes exercises without a traveling panel",
+);
 await reducedRun.context.close();
 
 const reducedSettings = await openState(fixture("dark"), {
@@ -249,6 +264,22 @@ assert.equal(
   ),
   "none",
   "reduced motion also stops the repeating Coach thinking animation",
+);
+await reducedSettings.page.evaluate(() => {
+  const completion = document.createElement("main");
+  completion.className = "complete-screen";
+  completion.innerHTML = '<div class="complete-mark"><span>✓</span></div><h1>Workout complete</h1><div class="stat-grid"><div>Session</div><div>Duration</div><div>Sets</div></div>';
+  document.body.append(completion);
+});
+assert.deepEqual(
+  await reducedSettings.page.locator(".complete-screen").evaluate((screen) => ({
+    mark: getComputedStyle(screen.querySelector(".complete-mark")).animationName,
+    ring: getComputedStyle(screen.querySelector(".complete-mark"), "::after").display,
+    heading: getComputedStyle(screen.querySelector("h1")).animationName,
+    stats: [...screen.querySelectorAll(".stat-grid > div")].map((item) => getComputedStyle(item).animationName),
+  })),
+  { mark: "none", ring: "none", heading: "none", stats: ["none", "none", "none"] },
+  "reduced motion keeps workout completion immediate and still",
 );
 await reducedSettings.context.close();
 
