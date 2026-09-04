@@ -1183,10 +1183,27 @@ const EXPLICIT_LOAD_REQUIREMENTS = Object.freeze({
   "bosu-balance": "none",
   "wg-banded-monster-walk": "none",
   "wg-skater-hop": "none",
+  // These movements have a valid unloaded/bodyweight baseline even when the
+  // catalog also names the station or optional dumbbells used to progress it.
+  "back-extension-45": "optional",
+  "wg-reverse-hyperextension": "optional",
+  "wg-captains-chair-knee-raise": "optional",
+  "split-squat": "optional",
+  "bulgarian-split-squat": "optional",
+  "walking-lunge": "optional",
+  "step-up": "optional",
+  "single-leg-romanian-deadlift": "optional",
+  "assisted-pull-up": "optional",
+  "assisted-dip": "optional",
+  "wg-assisted-chin-up": "optional",
   "weighted-push-up": "required",
   "wg-weighted-pull-up": "required",
   "wg-weighted-dip": "required",
   "wg-weighted-chin-up": "required",
+  // Timed work can still have an intrinsic external load. Keep these explicit
+  // so the duration fallback below never turns them into load-free work.
+  "wg-farmer-carry": "required",
+  "wg-cable-pallof-hold": "required",
 });
 for (const [exerciseId, aliases] of Object.entries(SLOVENIAN_EXERCISE_ALIASES)) {
   const exercise = exerciseCatalog[exerciseId];
@@ -1445,9 +1462,206 @@ const WORKOUT_DAY_NAMES = {
 };
 export const uid = (prefix = "id") =>
   `${prefix}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+export const TRAINING_GOAL_KEYS = Object.freeze({
+  "Build muscle": "build_muscle",
+  "Get stronger": "get_stronger",
+  "Lose fat": "lose_fat",
+  "General fitness": "general_fitness",
+  "Athletic performance": "athletic_performance",
+});
+export const TRAINING_GOAL_LABELS = Object.freeze(
+  Object.fromEntries(
+    Object.entries(TRAINING_GOAL_KEYS).map(([label, key]) => [key, label]),
+  ),
+);
+export const trainingGoalKey = (value) =>
+  TRAINING_GOAL_KEYS[value] || (TRAINING_GOAL_LABELS[value] ? value : null);
+export const trainingGoalLabel = (value) =>
+  TRAINING_GOAL_LABELS[value] || (TRAINING_GOAL_KEYS[value] ? value : null);
+export const profileIsUnder18 = (profile = {}) =>
+  profile.ageRange === "Under 18";
+
 export function isoDay(date = new Date()) {
   const value = new Date(date);
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}-${String(value.getDate()).padStart(2, "0")}`;
+}
+
+const dayNumber = (value) =>
+  Math.floor(new Date(`${value}T12:00:00Z`).getTime() / 86400000);
+const roundTo = (value, places = 1) => {
+  const scale = 10 ** places;
+  return Math.round((Number(value) + Number.EPSILON) * scale) / scale;
+};
+
+export function effectiveProgressFocus(state = {}) {
+  const planId = state.program?.id;
+  const override = planId
+    ? trainingGoalKey(state.progressFocusOverrideByPlanId?.[planId])
+    : null;
+  const provenance = trainingGoalKey(state.program?.goalAtCreation);
+  const focus = override || provenance || null;
+  return profileIsUnder18(state.profile) && focus === "lose_fat"
+    ? null
+    : focus;
+}
+
+export function bodyWeightToKg(value, units = "kg") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return units === "lb" ? numeric / 2.2046226218 : numeric;
+}
+
+export function bodyWeightFromKg(value, units = "kg") {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return roundTo(units === "lb" ? numeric * 2.2046226218 : numeric, 1);
+}
+
+export function validateWeightCheckin({ value, units = "kg", localDate } = {}) {
+  const weightKg = bodyWeightToKg(value, units);
+  if (!Number.isFinite(weightKg) || weightKg < 10 || weightKg > 700)
+    return { valid: false, error: "Enter a valid body weight." };
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(String(localDate || "")))
+    return { valid: false, error: "Choose a valid date." };
+  if (dayNumber(localDate) > dayNumber(isoDay()))
+    return { valid: false, error: "Choose today or an earlier date." };
+  return { valid: true, weightKg: roundTo(weightKg, 4) };
+}
+
+export function weightCheckinNeedsConfirmation(
+  checkins = [],
+  localDate,
+  weightKg,
+) {
+  const target = dayNumber(localDate);
+  const recent = checkins
+    .filter((entry) => {
+      const difference = target - dayNumber(entry.localDate);
+      return difference >= 1 && difference <= 3;
+    })
+    .sort((left, right) => right.localDate.localeCompare(left.localDate))[0];
+  return Boolean(
+    recent &&
+      Math.abs(Number(weightKg) - Number(recent.weightKg)) /
+        Number(recent.weightKg) >
+        0.05,
+  );
+}
+
+export function upsertWeightCheckin(checkins = [], entry) {
+  const now = new Date().toISOString();
+  const existing = checkins.find((item) => item.localDate === entry.localDate);
+  const next = {
+    id: existing?.id || entry.id || uid("weight"),
+    localDate: entry.localDate,
+    weightKg: roundTo(entry.weightKg, 4),
+    createdAt: existing?.createdAt || entry.createdAt || now,
+    updatedAt: now,
+  };
+  return [...checkins.filter((item) => item.localDate !== entry.localDate), next]
+    .sort((left, right) => left.localDate.localeCompare(right.localDate));
+}
+
+export function weightTrend(checkins = []) {
+  const validEntries = [...checkins]
+    .filter(
+      (entry) =>
+        /^\d{4}-\d{2}-\d{2}$/.test(String(entry?.localDate || "")) &&
+        Number.isFinite(Number(entry.weightKg)),
+    )
+    .sort((left, right) =>
+      String(left.updatedAt || left.createdAt || "").localeCompare(
+        String(right.updatedAt || right.createdAt || ""),
+      ),
+    );
+  const entries = [...new Map(
+    validEntries.map((entry) => [entry.localDate, entry]),
+  ).values()].sort((left, right) =>
+    left.localDate.localeCompare(right.localDate),
+  );
+  const weekBuckets = new Map();
+  for (const entry of entries) {
+    const date = new Date(`${entry.localDate}T12:00:00Z`);
+    const weekStartDay =
+      dayNumber(entry.localDate) - ((date.getUTCDay() + 6) % 7);
+    const weekStart = new Date(weekStartDay * 86400000)
+      .toISOString()
+      .slice(0, 10);
+    const bucket = weekBuckets.get(weekStart) || [];
+    bucket.push(entry);
+    weekBuckets.set(weekStart, bucket);
+  }
+  const weeks = [...weekBuckets.entries()].map(([weekStart, weekEntries]) => ({
+    weekStart,
+    localDate: weekStart,
+    weightKg:
+      weekEntries.reduce((sum, entry) => sum + Number(entry.weightKg), 0) /
+      weekEntries.length,
+    samples: weekEntries.length,
+    entries: weekEntries,
+  }));
+  const points = weeks.map(({ localDate, weightKg, samples }) => ({
+    localDate,
+    weightKg,
+    samples,
+  }));
+  const spanDays = entries.length
+    ? dayNumber(entries.at(-1).localDate) - dayNumber(entries[0].localDate)
+    : 0;
+  const latest = points.at(-1) || null;
+  const candidates = latest
+    ? points
+        .slice(0, -1)
+        .map((point) => ({
+          point,
+          days: dayNumber(latest.localDate) - dayNumber(point.localDate),
+        }))
+        .filter((item) => item.days >= 7)
+    : [];
+  const fourWeek = candidates
+    .filter((item) => item.days >= 21 && item.days <= 35)
+    .sort(
+      (left, right) =>
+        Math.abs(left.days - 28) - Math.abs(right.days - 28) ||
+        right.days - left.days,
+    )[0];
+  const comparison = fourWeek || candidates[0] || null;
+  const ready = Boolean(
+    entries.length >= 3 &&
+      spanDays >= 7 &&
+      weeks.length >= 2 &&
+      latest &&
+      comparison &&
+      comparison.days >= 7,
+  );
+  const changeKg = ready
+    ? latest.weightKg - comparison.point.weightKg
+    : null;
+  const changeFraction = ready
+    ? changeKg / comparison.point.weightKg
+    : null;
+  const weeklyFraction = ready
+    ? changeFraction / (comparison.days / 7)
+    : null;
+  return {
+    entries,
+    weeks,
+    points,
+    ready,
+    latest,
+    comparison,
+    spanDays,
+    changeKg,
+    stable: Boolean(
+      ready &&
+        comparison.days >= 28 &&
+        Math.abs(changeFraction) < 0.005,
+    ),
+    rapidDownward: Boolean(
+      ready && comparison.days >= 14 && weeklyFraction < -0.01,
+    ),
+  };
 }
 export function workoutPlanDate(workout) {
   const explicit = workout?.canonicalPlanDate || workout?.workoutDateKey;
@@ -1599,40 +1813,49 @@ export const exerciseMeasure = (exercise) =>
 export function exerciseLoadRequirement(exercise) {
   const snapshot =
     typeof exercise === "string" ? { exerciseId: exercise } : exercise || {};
-  const explicit = snapshot.loadRequirement;
-  if (LOAD_REQUIREMENTS.has(explicit)) return explicit;
-
   const id = snapshot.exerciseId || snapshot.id;
   const catalogItem = id ? exerciseCatalog[id] : null;
+  const explicitCatalogRequirement = EXPLICIT_LOAD_REQUIREMENTS[id];
+  if (explicitCatalogRequirement) return explicitCatalogRequirement;
+
+  // Catalog metadata is the canonical contract. A program or active-workout
+  // snapshot may have been stored by an older release with the wrong value;
+  // never let that stale snapshot override a known exercise definition.
   if (
     catalogItem !== snapshot &&
     LOAD_REQUIREMENTS.has(catalogItem?.loadRequirement)
   )
     return catalogItem.loadRequirement;
-  const explicitCatalogRequirement = EXPLICIT_LOAD_REQUIREMENTS[id];
-  if (explicitCatalogRequirement) return explicitCatalogRequirement;
+
+  const explicit = snapshot.loadRequirement;
+  if (LOAD_REQUIREMENTS.has(explicit)) return explicit;
 
   const source = catalogItem || snapshot;
   const equipment = (source.equipment || snapshot.equipment || []).map((value) =>
     String(value).toLowerCase(),
   );
-  if (equipment.some((value) => LOAD_BEARING_EQUIPMENT.has(value)))
-    return "required";
   if (
     source.isStretch ||
     ["mobility", "balance"].includes(source.pattern) ||
+    ["duration", "distance_duration"].includes(source.exerciseType) ||
     (source.kind === "power" && source.bodyweight) ||
     (equipment.length > 0 &&
       equipment.every((value) => LOAD_FREE_EQUIPMENT.has(value)))
   )
     return "none";
+  // A support station does not automatically make load mandatory. Exercises
+  // explicitly modeled as bodyweight reps (for example a reverse hyper or
+  // captain's-chair raise) remain completable at zero added load.
   if (
     source.bodyweight ||
+    source.exerciseType === "bodyweight_reps" ||
+    source.exerciseType === "assisted_bodyweight" ||
     equipment.includes("bodyweight") ||
-    equipment.includes("pull-up bar") ||
-    source.exerciseType === "bodyweight_reps"
+    equipment.includes("pull-up bar")
   )
     return "optional";
+  if (equipment.some((value) => LOAD_BEARING_EQUIPMENT.has(value)))
+    return "required";
   return "required";
 }
 export function workingSetCanComplete(exercise, set) {
@@ -1642,7 +1865,14 @@ export function workingSetCanComplete(exercise, set) {
   if (requirement === "none") return true;
   const weightMissing =
     set?.weight === null || set?.weight === undefined || set?.weight === "";
-  if (requirement === "optional" && weightMissing) return true;
+  // Null is the canonical representation for bodyweight with no added load.
+  // Accept legacy zeroes too so an old session can never trap the user, then
+  // normalize them during state loading and the next edit.
+  if (
+    requirement === "optional" &&
+    (weightMissing || Number(set?.weight) === 0)
+  )
+    return true;
   const weight = Number(set?.weight);
   return Number.isFinite(weight) && weight > 0;
 }
@@ -1809,21 +2039,71 @@ export function defaultProfile() {
 }
 export function blankState() {
   return {
-    schemaVersion: 2,
+    schemaVersion: 3,
     profile: defaultProfile(),
     program: null,
     activeWorkout: null,
+    activeOptionalSession: null,
     todayAdaptation: null,
     weekScheduleOverrides: {},
     workoutOccurrenceOverrides: {},
     optionalSessions: [],
     workouts: [],
+    workoutCorrections: [],
+    programChangeHistory: [],
     conversations: [],
     activeCoachConversationId: null,
+    progressFocusOverrideByPlanId: {},
+    weightTrackingEnabled: false,
+    weightCheckins: [],
     selectedDay: null,
     selectedDate: null,
     ai: { available: null, provider: null },
   };
+}
+function normalizeActiveOptionalSession(session) {
+  if (!session || !["Cardio", "Mobility"].includes(session.kind)) return null;
+  const startedAt = Number(session.startedAt);
+  if (!Number.isFinite(startedAt)) return null;
+  const paused = session.status === "paused";
+  return {
+    ...session,
+    status: paused ? "paused" : "active",
+    startedAt,
+    runningSince: paused
+      ? null
+      : Number.isFinite(Number(session.runningSince))
+        ? Number(session.runningSince)
+        : startedAt,
+    accumulatedSeconds: Math.max(
+      0,
+      Number(session.accumulatedSeconds) || 0,
+    ),
+  };
+}
+function migrateOptionalSessionLifecycle(stored) {
+  stored.optionalSessions = Array.isArray(stored.optionalSessions)
+    ? stored.optionalSessions
+    : [];
+  let active = normalizeActiveOptionalSession(stored.activeOptionalSession);
+  const legacyIndex = stored.optionalSessions.findLastIndex((session) =>
+    ["started", "active", "paused"].includes(session?.status),
+  );
+  if (!active && legacyIndex >= 0) {
+    active = normalizeActiveOptionalSession(stored.optionalSessions[legacyIndex]);
+    stored.optionalSessions.splice(legacyIndex, 1);
+  }
+  if (active && stored.activeWorkout) {
+    stored.optionalSessions.push({
+      ...active,
+      status: "cancelled",
+      cancelledAt: Date.now(),
+      cancellationReason: "conflicting-active-workout",
+    });
+    active = null;
+  }
+  stored.activeOptionalSession = active;
+  return stored;
 }
 function blockedExerciseReplacementId(exerciseId, profile) {
   return (
@@ -1921,6 +2201,26 @@ function migrateMissingExerciseRest(stored) {
     migrateWorkout(session?.workout);
   return stored;
 }
+function migrateExerciseLoadContracts(stored) {
+  const migrateWorkout = (workout) => {
+    for (const exercise of workout?.exercises || []) {
+      const requirement = exerciseLoadRequirement(exercise);
+      exercise.loadRequirement = requirement;
+      if (requirement !== "optional") continue;
+      for (const set of exercise.sets || []) {
+        if (Number(set.weight) !== 0) continue;
+        set.weight = null;
+        set.weightProvenance = null;
+      }
+    }
+  };
+  stored.program?.days?.forEach(migrateWorkout);
+  migrateWorkout(stored.activeWorkout);
+  for (const session of stored.optionalSessions || [])
+    migrateWorkout(session?.workout);
+  for (const workout of stored.workouts || []) migrateWorkout(workout);
+  return stored;
+}
 function migrateWorkoutPlanDates(stored) {
   const migrate = (workout) => {
     if (!workout || typeof workout !== "object") return;
@@ -1939,10 +2239,13 @@ function migrateWorkoutPlanDates(stored) {
 export function loadState() {
   try {
     const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
-    if (!stored || stored.schemaVersion !== 2) return blankState();
+    if (!stored || ![2, 3].includes(stored.schemaVersion)) return blankState();
+    stored.schemaVersion = 3;
     migrateBlockedExercises(stored);
     migrateMissingExerciseRest(stored);
+    migrateExerciseLoadContracts(stored);
     migrateWorkoutPlanDates(stored);
+    migrateOptionalSessionLifecycle(stored);
     const base = blankState();
     stored.program?.days?.forEach((day) =>
       normalizeTimedExercises(day.exercises),
@@ -1963,14 +2266,16 @@ export function loadState() {
       )
         day.originalImportedWorkoutName = day.name;
     });
-    const validationProfile = repairedProgram?.userEdited
-      ? { ...(stored.profile || {}), sessionMinutes: null }
-      : stored.profile;
-    const checked = validateProgram(repairedProgram, validationProfile, {
+    const checked = validateProgram(repairedProgram, null, {
       preserveSchedule: Boolean(repairedProgram?.userEdited),
-      ignoreTrainingSafety: true,
     });
     const program = checked.valid ? repairedProgram : null;
+    if (program && program.goalAtCreation === undefined) {
+      const userAuthored = ["ai-import", "manual"].includes(program.source);
+      program.goalAtCreation = userAuthored
+        ? null
+        : trainingGoalKey(program.goal || stored.profile?.goal);
+    }
     const legacyPrioritySources = stored.profile?.prioritySources || {
       manual: Array.isArray(stored.profile?.priorities)
         ? stored.profile.priorities
@@ -2101,8 +2406,35 @@ export function loadState() {
               : [],
           }
         : null,
+      activeOptionalSession: normalizeActiveOptionalSession(
+        stored.activeOptionalSession,
+      ),
       todayAdaptation,
       workouts: Array.isArray(stored.workouts) ? stored.workouts : [],
+      workoutCorrections: Array.isArray(stored.workoutCorrections)
+        ? stored.workoutCorrections
+        : [],
+      programChangeHistory: Array.isArray(stored.programChangeHistory)
+        ? stored.programChangeHistory
+        : [],
+      progressFocusOverrideByPlanId:
+        stored.progressFocusOverrideByPlanId &&
+        typeof stored.progressFocusOverrideByPlanId === "object"
+          ? stored.progressFocusOverrideByPlanId
+          : {},
+      weightTrackingEnabled: Boolean(stored.weightTrackingEnabled),
+      weightCheckins: Array.isArray(stored.weightCheckins)
+        ? stored.weightCheckins
+            .filter(
+              (entry) =>
+                entry &&
+                /^\d{4}-\d{2}-\d{2}$/.test(entry.localDate) &&
+                Number.isFinite(Number(entry.weightKg)) &&
+                Number(entry.weightKg) >= 10 &&
+                Number(entry.weightKg) <= 700,
+            )
+            .map((entry) => ({ ...entry, weightKg: Number(entry.weightKg) }))
+        : [],
       conversations,
       activeCoachConversationId,
     };
@@ -2494,13 +2826,64 @@ export function validateProgramExerciseChanges(state, changes) {
       };
     const currentIds = workout.exercises.map((exercise) => exercise.exerciseId);
     const current = new Set(currentIds);
+    const operations = [];
+    const operatedEntries = new Set();
+    for (const operation of change.operations || []) {
+      if (!["replace", "remove"].includes(operation?.type))
+        return {
+          valid: false,
+          error: `A proposed change for ${workout.name} is invalid.`,
+          changes: [],
+        };
+      const entry = workout.exercises.find(
+        (exercise) => exercise.id === operation.exerciseEntryId,
+      );
+      if (
+        !entry ||
+        operatedEntries.has(entry.id) ||
+        (operation.fromExerciseId &&
+          operation.fromExerciseId !== entry.exerciseId)
+      )
+        return {
+          valid: false,
+          error: `The proposed exercise in ${workout.name} has changed.`,
+          changes: [],
+        };
+      const normalizedOperation = {
+        type: operation.type,
+        exerciseEntryId: entry.id,
+        fromExerciseId: entry.exerciseId,
+      };
+      if (operation.type === "replace") {
+        const replacement = exerciseCatalog[operation.toExerciseId];
+        const duplicate = workout.exercises.some(
+          (exercise) =>
+            exercise.id !== entry.id &&
+            exercise.exerciseId === operation.toExerciseId,
+        );
+        const compatible = compatibleReplacementCandidates(
+          entry,
+          state.profile,
+          currentIds,
+        ).some((item) => item.id === operation.toExerciseId);
+        if (!replacement || duplicate || !compatible)
+          return {
+            valid: false,
+            error: `The proposed replacement for ${workout.name} is no longer available.`,
+            changes: [],
+          };
+        normalizedOperation.toExerciseId = replacement.id;
+      }
+      operatedEntries.add(entry.id);
+      operations.push(normalizedOperation);
+    }
     const removeExerciseIds = [
       ...new Set(change.removeExerciseIds || []),
     ].filter((id) => current.has(id));
     const addExerciseIds = [...new Set(change.addExerciseIds || [])].filter(
       (id) => !current.has(id),
     );
-    if (!removeExerciseIds.length && !addExerciseIds.length)
+    if (!operations.length && !removeExerciseIds.length && !addExerciseIds.length)
       return {
         valid: false,
         error: `No actual change was proposed for ${workout.name}.`,
@@ -2518,7 +2901,15 @@ export function validateProgramExerciseChanges(state, changes) {
         error: `A proposed exercise for ${workout.name} is unavailable with this profile.`,
         changes: [],
       };
-    const remaining = currentIds.filter(
+    const operationRemovals = new Set(
+      operations
+        .filter((operation) => operation.type === "remove")
+        .map((operation) => operation.exerciseEntryId),
+    );
+    const remaining = workout.exercises
+      .filter((exercise) => !operationRemovals.has(exercise.id))
+      .map((exercise) => exercise.exerciseId)
+      .filter(
       (id) => !removeExerciseIds.includes(id),
     );
     if (
@@ -2532,6 +2923,7 @@ export function validateProgramExerciseChanges(state, changes) {
       };
     normalized.push({
       workoutId: workout.id,
+      operations,
       addExerciseIds,
       removeExerciseIds,
     });
@@ -2542,10 +2934,40 @@ export function validateProgramExerciseChanges(state, changes) {
 export function applyProgramExerciseChanges(state, changes) {
   const checked = validateProgramExerciseChanges(state, changes);
   if (!checked.valid) return state;
+  const previousVersion = Number(state.program.version || 1);
   for (const change of checked.changes) {
     const workout = state.program.days.find(
       (day) => day.id === change.workoutId,
     );
+    for (const operation of change.operations) {
+      const index = workout.exercises.findIndex(
+        (exercise) => exercise.id === operation.exerciseEntryId,
+      );
+      if (index < 0) continue;
+      if (operation.type === "remove") {
+        workout.exercises.splice(index, 1);
+        continue;
+      }
+      const current = workout.exercises[index];
+      const replacement = exerciseCatalog[operation.toExerciseId];
+      workout.exercises[index] = {
+        ...current,
+        exerciseId: replacement.id,
+        defaultIncrement: replacement.increment,
+        restSeconds: replacement.restSeconds,
+        importedName: replacement.name,
+        originalImportedName: replacement.name,
+        matchStatus: "confirmed-match",
+        exerciseSource: "catalog",
+        sets: current.sets.map((set) => ({
+          ...set,
+          weight: null,
+          completed: false,
+          rir: null,
+        })),
+      };
+      delete workout.exercises[index].importedExercise;
+    }
     const removed = new Set(change.removeExerciseIds);
     workout.exercises = workout.exercises.filter(
       (exercise) => !removed.has(exercise.exerciseId),
@@ -2556,8 +2978,18 @@ export function applyProgramExerciseChanges(state, changes) {
       );
     workout.estimatedMinutes = estimateSessionMinutes(workout.exercises);
   }
-  state.program.version = Number(state.program.version || 1) + 1;
+  state.program.version = previousVersion + 1;
   state.program.updatedAt = new Date().toISOString();
+  state.programChangeHistory ||= [];
+  state.programChangeHistory.push({
+    id: uid("program-change"),
+    type: "exercise-review",
+    programId: state.program.id,
+    fromVersion: previousVersion,
+    toVersion: state.program.version,
+    changes: structuredClone(checked.changes),
+    appliedAt: state.program.updatedAt,
+  });
   return state;
 }
 
@@ -4115,6 +4547,7 @@ function makeProgramExercise(item, profile, options = {}) {
   return {
     id: uid("program-exercise"),
     exerciseId: item.id,
+    loadRequirement: exerciseLoadRequirement(item),
     programmingRole: options.role || "accessory",
     effortMode: item.kind === "power" ? "velocity-quality" : "rir",
     requiredRole: options.requiredRole !== false,
@@ -5862,6 +6295,7 @@ export function buildProgram(profile, options = {}) {
       templateId,
       programmingVersion: 3,
       goal: profile.goal,
+      goalAtCreation: trainingGoalKey(profile.goal),
       createdAt: new Date().toISOString(),
       version: 1,
       source: "fixed-template",
@@ -6820,6 +7254,14 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
       return {
         id: uid("program-exercise"),
         exerciseId,
+        loadRequirement: exerciseLoadRequirement(
+          item || {
+            ...value,
+            exerciseId,
+            importedName,
+            importedExercise,
+          },
+        ),
         programmingRole,
         effortMode:
           !preserve && item?.kind === "power" ? "velocity-quality" : undefined,
@@ -6972,6 +7414,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
     id: uid("program"),
     name: String(raw.name || "Personalized Plan"),
     goal: profile.goal,
+    goalAtCreation: preserve ? null : trainingGoalKey(profile.goal),
     createdAt: new Date().toISOString(),
     version: 1,
     source: "ai",
@@ -7028,6 +7471,55 @@ export const exerciseNote = (value) => {
     ) || null
   );
 };
+export const EXERCISE_PERSONAL_NOTE_MAX_LENGTH = 120;
+export function normalizeExercisePersonalNote(note) {
+  const normalized = String(note || "").trim();
+  return normalized
+    ? normalized.slice(0, EXERCISE_PERSONAL_NOTE_MAX_LENGTH)
+    : null;
+}
+export const exercisePersonalNote = (value) =>
+  normalizeExercisePersonalNote(value?.personalNote);
+
+function assignExercisePersonalNote(exercise, note) {
+  if (!exercise) return;
+  if (note) exercise.personalNote = note;
+  else delete exercise.personalNote;
+}
+
+export function saveActiveExercisePersonalNote(
+  state,
+  activeExerciseId,
+  note,
+) {
+  const active = state?.activeWorkout;
+  const activeExercise = active?.exercises?.find(
+    (exercise) => exercise.id === activeExerciseId,
+  );
+  if (!activeExercise) return { saved: false, scope: null };
+
+  const normalized = normalizeExercisePersonalNote(note);
+  assignExercisePersonalNote(activeExercise, normalized);
+  const restartExercise = active.restartSnapshot?.exercises?.find(
+    (exercise) => exercise.id === activeExerciseId,
+  );
+  assignExercisePersonalNote(restartExercise, normalized);
+
+  const programDay = state.program?.days?.find(
+    (day) => day.id === active.programDayId,
+  );
+  const templateExercise = programDay?.exercises?.find(
+    (exercise) => exercise.id === activeExerciseId,
+  );
+  assignExercisePersonalNote(templateExercise, normalized);
+  active.updatedAt = Date.now();
+
+  return {
+    saved: true,
+    scope: templateExercise ? "template" : "workout",
+    note: normalized,
+  };
+}
 export function templateForToday(program, date = new Date(), selectedDay) {
   if (!program) return null;
   return (
@@ -7417,6 +7909,99 @@ export function restartActiveWorkout(state, restartedAt = Date.now()) {
     },
   };
 }
+
+export function completedWorkoutCanResume(state, workoutId) {
+  if (state?.activeWorkout || !workoutId) return false;
+  const workout = (state.workouts || []).find((item) => item.id === workoutId);
+  if (
+    !workout ||
+    !Array.isArray(workout.exercises) ||
+    workoutSetSummary(workout).completed !== 0
+  )
+    return false;
+  return !(state.workoutCorrections || []).some(
+    (item) =>
+      item?.type === "resume-empty-completion" &&
+      item.targetCompletedWorkoutId === workoutId,
+  );
+}
+
+export function resumeCompletedWorkout(
+  state,
+  workoutId,
+  resumedAt = Date.now(),
+  operationId = `resume:${workoutId}`,
+) {
+  const existing = (state.workoutCorrections || []).find(
+    (item) =>
+      item?.type === "resume-empty-completion" &&
+      (item.operationId === operationId ||
+        item.targetCompletedWorkoutId === workoutId),
+  );
+  if (existing) return state;
+  if (!completedWorkoutCanResume(state, workoutId)) return state;
+  const workoutIndex = state.workouts.findIndex(
+    (item) => item.id === workoutId,
+  );
+  const completed = state.workouts[workoutIndex];
+  const elapsedSeconds = Math.max(0, Number(completed.durationSeconds) || 0);
+  const replacementId = uid("active");
+  const frozen = structuredClone(completed);
+  const active = structuredClone(completed);
+  for (const key of [
+    "completedAt",
+    "endedAt",
+    "durationSeconds",
+    "status",
+    "endedEarly",
+    "plannedSetCount",
+    "completedPlannedSetCount",
+    "completedSetCount",
+    "supersedesCompletionId",
+  ])
+    delete active[key];
+  active.id = replacementId;
+  active.startedAt = resumedAt - elapsedSeconds * 1000;
+  active.updatedAt = resumedAt;
+  active.resumedAt = resumedAt;
+  active.resumedFromCompletionId = completed.id;
+  active.resumeOperationId = operationId;
+  active.exerciseIndex = Math.max(
+    0,
+    active.exercises.findIndex((exercise) =>
+      (exercise.sets || []).some((set) => !set.completed),
+    ),
+  );
+  active.rest = null;
+  active.handledSupersetRestRounds = [];
+  active.restartSnapshot = {
+    exercises: structuredClone(active.exercises),
+    warmup: active.warmup ? structuredClone(active.warmup) : null,
+  };
+  const correction = {
+    id: uid("workout-correction"),
+    type: "resume-empty-completion",
+    targetCompletedWorkoutId: completed.id,
+    replacementActiveWorkoutId: replacementId,
+    operationId,
+    createdAt: new Date(resumedAt).toISOString(),
+    completedWorkout: frozen,
+  };
+  const optionalSessions = (state.optionalSessions || []).map((optional) =>
+    optional.id === active.optionalSessionId
+      ? { ...optional, status: "active", completedAt: null }
+      : optional,
+  );
+  return {
+    ...state,
+    activeWorkout: active,
+    optionalSessions,
+    selectedDay: active.templateId || state.selectedDay,
+    selectedDate: workoutPlanDate(active) || state.selectedDate,
+    workouts: state.workouts.filter((_, index) => index !== workoutIndex),
+    workoutCorrections: [...(state.workoutCorrections || []), correction],
+  };
+}
 export function progressionFor(exercise, history, profile = null) {
   const min = exercise.repMin ?? exercise.repRange?.[0];
   const max = exercise.repMax ?? exercise.repRange?.[1];
@@ -7779,6 +8364,9 @@ export function completeWorkout(state) {
     plannedSetCount: summary.planned,
     completedPlannedSetCount: summary.completedPlanned,
     completedSetCount: summary.completed,
+    ...(state.activeWorkout.resumedFromCompletionId
+      ? { supersedesCompletionId: state.activeWorkout.resumedFromCompletionId }
+      : {}),
   };
   const optionalSessions = (state.optionalSessions || []).map((optional) =>
     optional.id === state.activeWorkout.optionalSessionId
@@ -7790,6 +8378,115 @@ export function completeWorkout(state) {
     activeWorkout: null,
     optionalSessions,
     workouts: [...state.workouts, session],
+  };
+}
+export function optionalSessionElapsedSeconds(session, now = Date.now()) {
+  if (!session) return 0;
+  const accumulated = Math.max(
+    0,
+    Number(session.accumulatedSeconds) || 0,
+  );
+  if (session.status !== "active") return accumulated;
+  const runningSince = Number(session.runningSince ?? session.startedAt);
+  if (!Number.isFinite(runningSince)) return accumulated;
+  return accumulated + Math.max(0, Number(now) - runningSince) / 1000;
+}
+export function startOptionalSession(
+  state,
+  {
+    date = isoDay(),
+    kind,
+    activity,
+    duration,
+    intensity = "Easy",
+  },
+  now = Date.now(),
+) {
+  if (
+    state.activeWorkout ||
+    state.activeOptionalSession ||
+    date !== isoDay(new Date(now)) ||
+    !["Cardio", "Mobility"].includes(kind)
+  )
+    return state;
+  const targetMinutes = Math.max(
+    1,
+    Math.min(180, Math.round(Number(duration) || 15)),
+  );
+  return {
+    ...state,
+    activeOptionalSession: {
+      id: uid("optional-session"),
+      date,
+      kind,
+      activity: String(
+        activity || (kind === "Cardio" ? "Light cardio" : "Mobility / recovery"),
+      ).slice(0, 60),
+      duration: targetMinutes,
+      intensity: kind === "Cardio" ? String(intensity || "Easy") : "Easy",
+      status: "active",
+      startedAt: Number(now),
+      runningSince: Number(now),
+      accumulatedSeconds: 0,
+    },
+  };
+}
+export function pauseOptionalSession(state, now = Date.now()) {
+  const session = state.activeOptionalSession;
+  if (!session || session.status !== "active") return state;
+  return {
+    ...state,
+    activeOptionalSession: {
+      ...session,
+      status: "paused",
+      accumulatedSeconds: optionalSessionElapsedSeconds(session, now),
+      runningSince: null,
+      pausedAt: Number(now),
+    },
+  };
+}
+export function resumeOptionalSession(state, now = Date.now()) {
+  const session = state.activeOptionalSession;
+  if (!session || session.status !== "paused" || state.activeWorkout)
+    return state;
+  return {
+    ...state,
+    activeOptionalSession: {
+      ...session,
+      status: "active",
+      runningSince: Number(now),
+      resumedAt: Number(now),
+    },
+  };
+}
+export function finishOptionalSession(state, now = Date.now()) {
+  const session = state.activeOptionalSession;
+  if (!session || !["active", "paused"].includes(session.status)) return state;
+  const completed = {
+    ...session,
+    status: "completed",
+    elapsedSeconds: Math.max(
+      0,
+      Math.round(optionalSessionElapsedSeconds(session, now)),
+    ),
+    completedAt: new Date(now).toISOString(),
+    runningSince: null,
+  };
+  delete completed.pausedAt;
+  return {
+    ...state,
+    activeOptionalSession: null,
+    optionalSessions: [
+      ...(state.optionalSessions || []).filter((item) => item.id !== session.id),
+      completed,
+    ],
+  };
+}
+export function cancelOptionalSession(state, now = Date.now()) {
+  if (!state.activeOptionalSession) return state;
+  return {
+    ...state,
+    activeOptionalSession: null,
   };
 }
 function replacementMetadata(source) {
@@ -7851,6 +8548,22 @@ export function compatibleReplacementCandidates(
       return score(b) - score(a) || a.name.localeCompare(b.name);
     },
   );
+}
+export function userSelectableReplacementCandidates(
+  source,
+  profile,
+  excludedExerciseIds = [],
+) {
+  const sourceId = typeof source === "string" ? source : source?.exerciseId;
+  const excluded = new Set(excludedExerciseIds);
+  return Object.values(exerciseCatalog)
+    .filter(
+      (item) =>
+        item.id !== sourceId &&
+        !excluded.has(item.id) &&
+        isExerciseAllowed(item, profile),
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
 }
 export function replacementCandidates(
   source,
@@ -7941,12 +8654,15 @@ export function coachContext(state) {
           id: state.program.id,
           name: state.program.name,
           goal: state.program.goal,
+          source: state.program.source || null,
+          version: Number(state.program.version || 1),
           days: state.program.days.map((day) => ({
             id: day.id,
             weekday: day.weekday,
             name: day.name,
             estimatedMinutes: day.estimatedMinutes,
             exercises: day.exercises.map((item) => ({
+              exerciseEntryId: item.id,
               exerciseId: item.exerciseId,
               name: exerciseName(item),
               target: [item.repMin, item.repMax],
@@ -7995,9 +8711,12 @@ export function coachContext(state) {
         }
       : null,
     recentWorkouts: state.workouts.slice(-8).map((workout) => ({
+      id: workout.id,
       planDate: workoutPlanDate(workout),
       completedAt: workout.completedAt,
       name: workout.name,
+      completedSetCount: workoutSetSummary(workout).completed,
+      resumable: completedWorkoutCanResume(state, workout.id),
       sessionNote: normalizeSessionNote(workout.sessionNote)
         ? {
             text: normalizeSessionNote(workout.sessionNote),
@@ -8557,6 +9276,34 @@ export function deterministicCoach(state, message) {
       source: "deterministic",
       final: true,
     };
+  const wantsResume =
+    /\b(?:resume|reopen|reset|restart|nadaljuj\p{L}*|odpri\p{L}*|reset\p{L}*|ponovno\p{L}*)\b/u.test(
+      lower,
+    ) ||
+    /(?:pomotoma|po nesreči).{0,40}(?:zaključ\p{L}*|konč\p{L}*)/u.test(lower);
+  const resumable = [...(state.workouts || [])]
+    .reverse()
+    .find((workout) => completedWorkoutCanResume(state, workout.id));
+  if (wantsResume && resumable) {
+    const slovenian = /\b(?:pomotoma|po nesreči|zaključ\p{L}*|trening|vadb\p{L}*)\b/u.test(
+      lower,
+    );
+    return {
+      text: slovenian
+        ? "Ta prazen trening lahko varno znova odprem. Preglej dejanje spodaj; plan in drugi zaključeni treningi ostanejo nespremenjeni."
+        : "I can safely reopen that empty workout. Review the action below; your plan and other completed workouts stay unchanged.",
+      action: {
+        type: "resume-empty-completed-workout",
+        label: "RESUME WORKOUT",
+        targetCompletedWorkoutId: resumable.id,
+        trainingDate: workoutPlanDate(resumable),
+        expectedCompletedAt: resumable.completedAt,
+        operationId: `coach-resume:${resumable.id}:${resumable.completedAt}`,
+      },
+      source: "deterministic",
+      final: true,
+    };
+  }
   if (minuteMatch) {
     const requestedDay = mentionedWeekdays(lower)[0];
     const target = requestedDay ? weekDate(requestedDay) : new Date();
@@ -8640,6 +9387,27 @@ export function deterministicCoach(state, message) {
   };
 }
 export function coachActionConflict(state, action) {
+  if (action?.type === "resume-empty-completed-workout") {
+    const target = state.workouts.find(
+      (workout) => workout.id === action.targetCompletedWorkoutId,
+    );
+    if (!target || !completedWorkoutCanResume(state, target.id))
+      return "workout-changed";
+    if (
+      action.expectedCompletedAt &&
+      target.completedAt !== action.expectedCompletedAt
+    )
+      return "workout-changed";
+    if (action.trainingDate && workoutPlanDate(target) !== action.trainingDate)
+      return "workout-changed";
+    return null;
+  }
+  if (
+    action?.type === "program-exercise-change" &&
+    Number.isFinite(Number(action.baseProgramVersion)) &&
+    Number(state.program?.version || 1) !== Number(action.baseProgramVersion)
+  )
+    return "program-changed";
   if (action?.type !== "adapt-today" || !action.workoutId) return null;
   if (!state.activeWorkout || state.activeWorkout.id !== action.workoutId)
     return "workout-changed";
@@ -8651,6 +9419,15 @@ export function coachActionConflict(state, action) {
 export function applyCoachAction(state, action) {
   if (!action) return state;
   if (coachActionConflict(state, action)) return state;
+  if (action.type === "resume-empty-completed-workout") {
+    const resumed = resumeCompletedWorkout(
+      state,
+      action.targetCompletedWorkoutId,
+      Date.now(),
+      action.operationId,
+    );
+    if (resumed !== state) Object.assign(state, resumed);
+  }
   if (action.type === "add-today-workout") {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(action.targetDate || ""))
       ? action.targetDate

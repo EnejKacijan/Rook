@@ -104,7 +104,7 @@ for (const testCase of [
   assert.equal(await page.locator(".today-exercise-remove").count(), 0);
   await page.locator(".exercise-list-row").first().click();
   assert.equal(await page.locator(".detail-screen").count(), 1);
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
 
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   assert.equal(await page.getByText("EDIT WORKOUT", { exact: true }).count(), 1);

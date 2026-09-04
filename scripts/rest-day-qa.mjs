@@ -2,9 +2,10 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { WEEKDAYS, blankState, buildProgram, isoDay, weekDate, weekday } from '../src/domain.js';
+import { WEEKDAYS, blankState, buildProgram, isoDay, startOptionalSession, startWorkout, weekDate, weekday } from '../src/domain.js';
 
 const outputRoot = new URL('../artifacts/rest-day/', import.meta.url);
+const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
@@ -17,12 +18,15 @@ function fixture(availableDays) {
   return state;
 }
 
-async function pageFor(state, viewport) {
-  const context = await browser.newContext({ viewport, serviceWorkers: 'block', colorScheme: ['dark', 'premium'].includes(state.profile.themePreference) ? 'dark' : 'light' }); const page = await context.newPage(); const errors = [];
-  await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
+async function pageFor(state, viewport, colorScheme = ['dark', 'premium'].includes(state.profile.themePreference) ? 'dark' : 'light') {
+  const context = await browser.newContext({ viewport, serviceWorkers: 'block', colorScheme }); const page = await context.newPage(); const errors = [];
+  await context.addInitScript(value => {
+    if (!localStorage.getItem('lift-v2-state'))
+      localStorage.setItem('lift-v2-state', JSON.stringify(value));
+  }, state);
   await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false }) }));
   page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto(`http://127.0.0.1:4173/?rest-day=${Date.now()}`, { waitUntil: 'networkidle' });
+  await page.goto(`${appUrl}/?rest-day=${Date.now()}`, { waitUntil: 'networkidle' });
   return { context, page, errors };
 }
 
@@ -104,5 +108,132 @@ for (const theme of ['light', 'dark', 'premium']) {
   await page.screenshot({ path: output('390-view-workout-next-week.png'), fullPage: false }); assert.deepEqual(errors, []); await context.close();
 }
 
+{
+  const state = fixture([offsetDay(1), offsetDay(4)]);
+  const { context, page, errors } = await pageFor(state, { width: 390, height: 844 }, 'dark');
+  const hydratedBefore = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  const programBefore = JSON.stringify(hydratedBefore.program);
+  const scheduleBefore = JSON.stringify(hydratedBefore.weekScheduleOverrides);
+  await page.getByRole('button', { name: 'Train today instead' }).click();
+  await page.getByRole('heading', { name: "Choose today's activity" }).waitFor();
+  await page.getByRole('button', { name: /LIGHT CARDIO/ }).click();
+  await page.getByLabel('Type').selectOption('Walking');
+  await page.getByRole('button', { name: 'Easy', exact: true }).click();
+  await page.getByRole('button', { name: 'START SESSION', exact: true }).click();
+  await page.getByRole('heading', { name: 'Walking' }).waitFor();
+  assert.equal(await page.locator('.optional-session-clock').getAttribute('aria-live'), null, 'running timer is not announced every second');
+  assert.equal(await page.locator('.bottom-nav').count(), 0, 'active optional session has a focused session shell');
+  let persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(persisted.activeOptionalSession.activity, 'Walking');
+  assert.equal(persisted.activeOptionalSession.duration, 20);
+  assert.equal(persisted.activeOptionalSession.status, 'active');
+  assert.equal(persisted.optionalSessions.length, 0, 'starting does not log an unfinished activity');
+  await page.screenshot({ path: output('390-active-walking-dark.png'), fullPage: false });
+
+  await page.getByRole('button', { name: 'Back to Today' }).click();
+  await page.getByRole('heading', { name: 'Rest day' }).waitFor();
+  assert.match(await page.locator('.active-optional-session-notice').innerText(), /Walking[\s\S]*In progress/);
+  await page.getByRole('button', { name: 'COACH', exact: true }).click();
+  await page.getByRole('heading', { name: /Your plan and real training data/ }).waitFor();
+  await page.getByRole('button', { name: 'TODAY', exact: true }).click();
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  await page.locator('.profile-screen').waitFor();
+  await page.getByRole('button', { name: 'TODAY', exact: true }).click();
+  await page.getByRole('button', { name: 'PROGRESS', exact: true }).click();
+  await page.locator('.progress-screen').waitFor();
+  await page.getByRole('button', { name: 'TODAY', exact: true }).click();
+  await page.getByRole('button', { name: 'Resume Walking optional session' }).click();
+  await page.getByRole('button', { name: 'PAUSE', exact: true }).click();
+  persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(persisted.activeOptionalSession.status, 'paused');
+  assert.equal(persisted.activeWorkout, null, `optional session must not create an active strength workout: ${JSON.stringify(persisted.activeWorkout)}`);
+
+  await page.reload({ waitUntil: 'networkidle' });
+  await page.getByRole('heading', { name: 'Rest day' }).waitFor();
+  const reloadedState = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(
+    await page.locator('.active-optional-session-notice').count(),
+    1,
+    `paused optional session survives reload: ${JSON.stringify({ activeOptionalSession: reloadedState.activeOptionalSession, activeWorkout: reloadedState.activeWorkout, optionalSessions: reloadedState.optionalSessions })}; errors: ${JSON.stringify(errors)}`,
+  );
+  assert.match(await page.locator('.active-optional-session-notice').innerText(), /Paused/);
+  await page.getByRole('button', { name: 'Resume Walking optional session' }).click();
+  await page.getByRole('button', { name: 'RESUME', exact: true }).click();
+  await page.getByRole('button', { name: 'FINISH SESSION', exact: true }).click();
+  await page.getByText('SESSION COMPLETE', { exact: true }).waitFor();
+  assert.equal(await page.getByText('Your planned rest day is unchanged.', { exact: true }).count(), 1);
+  await page.screenshot({ path: output('390-walking-complete-dark.png'), fullPage: false });
+  await page.getByRole('button', { name: 'DONE', exact: true }).click();
+  await page.getByRole('heading', { name: 'Rest day' }).waitFor();
+  assert.equal(await page.getByText('✓ Walking completed', { exact: true }).count(), 1);
+  persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(persisted.activeOptionalSession, null);
+  assert.equal(persisted.optionalSessions.at(-1).status, 'completed');
+  assert.equal(persisted.workouts.length, 0, 'optional cardio is not added to strength workout history');
+  assert.equal(JSON.stringify(persisted.program), programBefore, 'optional cardio leaves the recurring plan unchanged');
+  assert.equal(JSON.stringify(persisted.weekScheduleOverrides), scheduleBefore, 'optional cardio leaves weekly placement unchanged');
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+{
+  const state = fixture([offsetDay(1), offsetDay(4)]);
+  const { context, page, errors } = await pageFor(state, { width: 390, height: 844 }, 'light');
+  await page.getByRole('button', { name: 'Train today instead' }).click();
+  await page.getByRole('button', { name: /MOBILITY \/ RECOVERY/ }).click();
+  await page.getByRole('button', { name: 'START SESSION', exact: true }).click();
+  await page.getByRole('heading', { name: 'Mobility / recovery' }).waitFor();
+  assert.equal(await page.getByText('Intensity', { exact: true }).count(), 0, 'mobility does not invent unnecessary metrics');
+  await page.getByRole('button', { name: 'FINISH SESSION', exact: true }).click();
+  await page.getByText('SESSION COMPLETE', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'DONE', exact: true }).click();
+  await page.getByRole('heading', { name: 'Rest day' }).waitFor();
+  assert.equal(await page.getByText('✓ Mobility / recovery completed', { exact: true }).count(), 1);
+  const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(persisted.workouts.length, 0);
+  assert.equal(persisted.optionalSessions.at(-1).kind, 'Mobility');
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+for (const variant of [
+  { name: 'standard-light', appearance: 'light', style: 'standard', scheme: 'light' },
+  { name: 'standard-dark', appearance: 'dark', style: 'standard', scheme: 'dark' },
+  { name: 'premium-light', appearance: 'light', style: 'premium', scheme: 'light' },
+  { name: 'premium-dark', appearance: 'dark', style: 'premium', scheme: 'dark' },
+]) {
+  let state = fixture([offsetDay(1), offsetDay(4)]);
+  state.profile.appearancePreference = variant.appearance;
+  state.profile.stylePreference = variant.style;
+  state.profile.themePreference = variant.style === 'premium' ? 'premium' : variant.appearance;
+  state = startOptionalSession(state, {
+    date: isoDay(), kind: 'Cardio', activity: 'Walking', duration: 20, intensity: 'Easy',
+  }, Date.now() - 65_000);
+  const { context, page, errors } = await pageFor(state, { width: 390, height: 844 }, variant.scheme);
+  await page.getByRole('button', { name: 'Resume Walking optional session' }).click();
+  assert.equal(await page.locator('html').getAttribute('data-appearance'), variant.appearance);
+  assert.equal(await page.locator('html').getAttribute('data-style'), variant.style);
+  for (const label of ['PAUSE', 'FINISH SESSION']) {
+    const box = await page.getByRole('button', { name: label, exact: true }).boundingBox();
+    assert.ok(box.height >= 44, `${variant.name} ${label} keeps a comfortable touch target`);
+  }
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${variant.name} active optional screen has no horizontal overflow`);
+  await page.screenshot({ path: output(`390-active-walking-${variant.name}.png`), fullPage: false });
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+{
+  const state = fixture([offsetDay(1), offsetDay(4)]);
+  state.activeWorkout = startWorkout(state, state.program.days[0]);
+  const { context, page, errors } = await pageFor(state, { width: 390, height: 844 }, 'dark');
+  assert.equal(await page.getByRole('button', { name: 'Train today instead' }).count(), 0, 'active strength prevents an optional-session start path');
+  assert.equal(await page.getByRole('button', { name: 'RESUME WORKOUT', exact: true }).count(), 1);
+  const persisted = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(persisted.activeOptionalSession, null, 'no conflicting optional timer is created');
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
 await browser.close();
-console.log('Rest-day QA passed: tomorrow, later, selected rest, planned workout, and narrow mobile states render with correct schedule data and hierarchy.');
+console.log('Rest-day QA passed: schedule hierarchy plus persisted cardio/mobility start, pause, resume, reload, completion, theme, and single-active-session behavior.');

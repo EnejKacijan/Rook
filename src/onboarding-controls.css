@@ -34,6 +34,61 @@
 .personal-fields :is(label, .personal-field) small { color: #a3a09b; font-weight: 500; }
 .personal-fields input,
 .personal-fields select { width: 100%; height: 54px; padding: 0 15px; border: 1px solid rgba(27, 26, 25, .12); border-radius: 14px; background: #fff; color: #1b1a19; }
+.profile-sex-trigger {
+  width: 100%;
+  min-height: 54px;
+  padding: 0 14px 0 15px;
+  border: 1px solid var(--rook-control-border, rgba(27, 26, 25, .12));
+  border-radius: 14px;
+  background: var(--rook-surface, #fff);
+  color: var(--rook-text, #1b1a19);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  text-align: left;
+}
+.personal-fields .profile-sex-trigger > span { min-width: 0; display: block; font-weight: 650; }
+.profile-sex-trigger .placeholder,
+.profile-sex-trigger > i { color: var(--rook-secondary, #77736e); }
+.profile-sex-trigger[aria-expanded="true"] .disclosure-chevron::before { transform: rotate(225deg); }
+.profile-sex-options {
+  width: 100%;
+  margin: 0;
+  padding: 4px;
+  border: 1px solid var(--rook-control-border, rgba(27, 26, 25, .12));
+  border-radius: 14px;
+  background: var(--rook-surface, #fff);
+}
+.personal-fields .profile-sex-options > label {
+  position: relative;
+  min-height: 44px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: var(--rook-text, #1b1a19);
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  cursor: pointer;
+}
+.personal-fields .profile-sex-options > label > input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: 0;
+  padding: 0;
+  opacity: 0;
+}
+.personal-fields .profile-sex-options > label > span { min-width: 0; display: block; font-size: 14px; font-weight: 650; }
+.personal-fields .profile-sex-options > label > i { width: 18px; color: var(--rook-accent, #1f6b4c); font-size: 13px; font-style: normal; font-weight: 800; text-align: center; }
+.personal-fields .profile-sex-options > label.is-selected { background: color-mix(in srgb, var(--rook-accent, #1f6b4c) 10%, transparent); color: var(--rook-accent, #1f6b4c); }
+.personal-fields .profile-sex-options > label:has(input:focus-visible) { outline: 2px solid color-mix(in srgb, var(--rook-accent, #1f6b4c) 48%, transparent); outline-offset: -2px; }
+@media (hover: hover) and (pointer: fine) {
+  .personal-fields .profile-sex-options > label:hover { background: color-mix(in srgb, var(--rook-accent, #1f6b4c) 6%, transparent); }
+  .personal-fields .profile-sex-options > label.is-selected:hover { background: color-mix(in srgb, var(--rook-accent, #1f6b4c) 12%, transparent); }
+}
 .age-range-picker { position: relative; width: 100%; }
 .age-range-trigger {
   width: 100%;

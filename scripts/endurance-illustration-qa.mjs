@@ -128,7 +128,7 @@ await page.screenshot({
   path: fileURLToPath(new URL("monster-walk-detail-dark.png", artifacts)),
   fullPage: false,
 });
-await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.getByRole("button", { name: /^Close/ }).click();
 await page.waitForTimeout(260);
 await page.screenshot({
   path: fileURLToPath(new URL("endurance-dark-390.png", artifacts)),

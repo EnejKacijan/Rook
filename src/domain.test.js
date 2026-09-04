@@ -23,6 +23,8 @@ import {
   combinedTrainingPriorities,
   compatibleReplacementCandidates,
   completeWorkout,
+  completedWorkoutCanResume,
+  cancelOptionalSession,
   conditioningForProfile,
   consistencyForCurrentWeek,
   currentWeekSchedule,
@@ -35,6 +37,7 @@ import {
   exerciseNameWithoutExecutionModifier,
   exerciseName,
   exerciseNote,
+  exercisePersonalNote,
   exerciseValueLabel,
   firstScheduledDate,
   hasBalancedPullEquipment,
@@ -42,6 +45,7 @@ import {
   importedExerciseNameNeedsReview,
   isExerciseAllowed,
   isExerciseAutoGenerationBlocked,
+  userSelectableReplacementCandidates,
   isoDay,
   loadState,
   matchImportedExerciseName,
@@ -51,6 +55,8 @@ import {
   normalizeSessionNote,
   normalizeWorkoutName,
   optionalStrengthForDate,
+  optionalSessionElapsedSeconds,
+  pauseOptionalSession,
   plannedWorkoutForDate,
   pluralize,
   previousExercise,
@@ -67,18 +73,24 @@ import {
   reorderExercisesForOccurrence,
   roundedEstimate,
   restartActiveWorkout,
+  resumeCompletedWorkout,
+  resumeOptionalSession,
   restoreOccurrenceOverride,
   restoreWeeklyPlanWorkout,
   saveState,
+  saveActiveExercisePersonalNote,
   sessionStructureKey,
   splitImportedExerciseLabel,
   startWorkout,
+  startOptionalSession,
   stimulusProfileForExercise,
   stimulusMutationPreservesPolicy,
   storedWeight,
+  finishOptionalSession,
   targetLabel,
   templateIdForFrequency,
   validateProgram,
+  validateProgramExerciseChanges,
   validateWeekScheduleChanges,
   weekDate,
   weekday,
@@ -88,6 +100,7 @@ import {
   workoutSetSummary,
   workoutPlanDate,
   workingSetCanComplete,
+  EXERCISE_PERSONAL_NOTE_MAX_LENGTH,
 } from "./domain.js";
 
 describe("exercise load requirements", () => {
@@ -105,6 +118,22 @@ describe("exercise load requirements", () => {
     expect(exerciseLoadRequirement({ exerciseId: "pull-up" })).toBe(
       "optional",
     );
+    for (const exerciseId of [
+      "back-extension-45",
+      "wg-reverse-hyperextension",
+      "wg-captains-chair-knee-raise",
+      "split-squat",
+      "bulgarian-split-squat",
+      "walking-lunge",
+      "step-up",
+      "single-leg-romanian-deadlift",
+      "assisted-pull-up",
+      "assisted-dip",
+      "wg-assisted-chin-up",
+    ])
+      expect(exerciseLoadRequirement({ exerciseId }), exerciseId).toBe(
+        "optional",
+      );
     expect(exerciseLoadRequirement({ exerciseId: "barbell-bench-press" })).toBe(
       "required",
     );
@@ -133,6 +162,38 @@ describe("exercise load requirements", () => {
     expect(exerciseLoadRequirement({ name: "Unknown custom exercise" })).toBe(
       "required",
     );
+  });
+
+  it("uses the canonical catalog contract over stale stored metadata", () => {
+    expect(
+      exerciseLoadRequirement({
+        exerciseId: "pull-up",
+        loadRequirement: "required",
+      }),
+    ).toBe("optional");
+    expect(
+      exerciseLoadRequirement({
+        exerciseId: "barbell-bench-press",
+        loadRequirement: "none",
+      }),
+    ).toBe("required");
+  });
+
+  it("does not mistake duration or distance machines for kilogram loads", () => {
+    for (const exerciseId of [
+      "wg-running",
+      "wg-rowing",
+      "wg-stair-climber",
+      "wg-jump-rope",
+      "wg-assault-bike",
+    ])
+      expect(exerciseLoadRequirement({ exerciseId })).toBe("none");
+    expect(exerciseLoadRequirement({ exerciseId: "wg-farmer-carry" })).toBe(
+      "required",
+    );
+    expect(
+      exerciseLoadRequirement({ exerciseId: "wg-cable-pallof-hold" }),
+    ).toBe("required");
   });
 
   it("keeps load policy independent from reps versus timed measurement", () => {
@@ -166,10 +227,37 @@ describe("exercise load requirements", () => {
         { reps: 8, weight: null },
       ),
     ).toBe(true);
+    for (const exerciseId of [
+      "back-extension-45",
+      "wg-reverse-hyperextension",
+      "wg-captains-chair-knee-raise",
+      "assisted-pull-up",
+    ]) {
+      expect(
+        workingSetCanComplete(
+          { exerciseId },
+          { reps: 8, weight: 0 },
+        ),
+        exerciseId,
+      ).toBe(true);
+      expect(
+        workingSetCanComplete(
+          { exerciseId },
+          { reps: 8, weight: null },
+        ),
+        exerciseId,
+      ).toBe(true);
+    }
     expect(
       workingSetCanComplete(
         { exerciseId: "pull-up" },
         { reps: 8, weight: 10 },
+      ),
+    ).toBe(true);
+    expect(
+      workingSetCanComplete(
+        { exerciseId: "pull-up" },
+        { reps: 8, weight: 0 },
       ),
     ).toBe(true);
     expect(
@@ -198,6 +286,166 @@ describe("exercise load requirements", () => {
         { reps: 30, weight: 24 },
       ),
     ).toBe(true);
+  });
+
+  it("audits completion behavior for every catalog exercise", () => {
+    for (const item of Object.values(exerciseCatalog)) {
+      const requirement = exerciseLoadRequirement(item);
+      expect(["required", "optional", "none"]).toContain(requirement);
+      expect(
+        workingSetCanComplete(
+          { exerciseId: item.id, loadRequirement: "required" },
+          { reps: 8, weight: null },
+        ),
+        item.id,
+      ).toBe(requirement !== "required");
+    }
+  });
+});
+
+describe("optional session lifecycle", () => {
+  const startedAt = new Date("2026-09-03T10:00:00").getTime();
+  const date = isoDay(new Date(startedAt));
+
+  it("tracks real elapsed time across pause, resume, and finish", () => {
+    const initial = blankState();
+    const schedule = structuredClone(initial.weekScheduleOverrides);
+    const active = startOptionalSession(
+      initial,
+      {
+        date,
+        kind: "Cardio",
+        activity: "Walking",
+        duration: 20,
+        intensity: "Easy",
+      },
+      startedAt,
+    );
+    expect(active.activeOptionalSession.status).toBe("active");
+    expect(active.optionalSessions).toEqual([]);
+    expect(
+      optionalSessionElapsedSeconds(active.activeOptionalSession, startedAt + 65_000),
+    ).toBe(65);
+
+    const paused = pauseOptionalSession(active, startedAt + 65_000);
+    expect(paused.activeOptionalSession.status).toBe("paused");
+    expect(
+      optionalSessionElapsedSeconds(paused.activeOptionalSession, startedAt + 120_000),
+    ).toBe(65);
+
+    const resumed = resumeOptionalSession(paused, startedAt + 120_000);
+    const completed = finishOptionalSession(resumed, startedAt + 180_000);
+    expect(completed.activeOptionalSession).toBeNull();
+    expect(completed.optionalSessions).toHaveLength(1);
+    expect(completed.optionalSessions[0]).toMatchObject({
+      activity: "Walking",
+      status: "completed",
+      elapsedSeconds: 125,
+    });
+    expect(completed.workouts).toEqual([]);
+    expect(completed.weekScheduleOverrides).toEqual(schedule);
+  });
+
+  it("keeps wall-clock elapsed time correct when a running session crosses midnight", () => {
+    const beforeMidnight = new Date(2026, 8, 3, 23, 59, 30).getTime();
+    const active = startOptionalSession(
+      blankState(),
+      {
+        date: isoDay(new Date(beforeMidnight)),
+        kind: "Mobility",
+        activity: "Mobility / recovery",
+        duration: 15,
+      },
+      beforeMidnight,
+    );
+    const afterMidnight = beforeMidnight + 95_000;
+    expect(new Date(afterMidnight).getDate()).not.toBe(
+      new Date(beforeMidnight).getDate(),
+    );
+    expect(
+      optionalSessionElapsedSeconds(active.activeOptionalSession, afterMidnight),
+    ).toBe(95);
+    expect(
+      finishOptionalSession(active, afterMidnight).optionalSessions[0],
+    ).toMatchObject({
+      date: isoDay(new Date(beforeMidnight)),
+      elapsedSeconds: 95,
+      status: "completed",
+    });
+  });
+
+  it("enforces one current-date tracked session without overwriting history", () => {
+    const initial = blankState();
+    const first = startOptionalSession(
+      initial,
+      { date, kind: "Mobility", activity: "Mobility / recovery", duration: 15 },
+      startedAt,
+    );
+    expect(
+      startOptionalSession(
+        first,
+        { date, kind: "Cardio", activity: "Cycling", duration: 20 },
+        startedAt + 1_000,
+      ),
+    ).toBe(first);
+    const completed = finishOptionalSession(first, startedAt + 60_000);
+    const second = startOptionalSession(
+      completed,
+      { date, kind: "Cardio", activity: "Cycling", duration: 20 },
+      startedAt + 61_000,
+    );
+    expect(second.activeOptionalSession.activity).toBe("Cycling");
+    expect(second.optionalSessions).toHaveLength(1);
+    expect(
+      startOptionalSession(
+        initial,
+        { date: "2026-09-04", kind: "Cardio", activity: "Walking", duration: 20 },
+        startedAt,
+      ),
+    ).toBe(initial);
+  });
+
+  it("never starts alongside strength and cancellation is not logged", () => {
+    const strength = blankState();
+    strength.activeWorkout = { id: "strength", exercises: [] };
+    expect(
+      startOptionalSession(
+        strength,
+        { date, kind: "Cardio", activity: "Walking", duration: 20 },
+        startedAt,
+      ),
+    ).toBe(strength);
+
+    const active = startOptionalSession(
+      blankState(),
+      { date, kind: "Cardio", activity: "Walking", duration: 20 },
+      startedAt,
+    );
+    const cancelled = cancelOptionalSession(active, startedAt + 5_000);
+    expect(cancelled.activeOptionalSession).toBeNull();
+    expect(cancelled.optionalSessions).toEqual([]);
+  });
+
+  it("migrates the old passive started record into a resumable active session", () => {
+    const state = blankState();
+    state.optionalSessions = [{
+      id: "legacy-optional",
+      date,
+      kind: "Cardio",
+      activity: "Walking",
+      duration: 20,
+      intensity: "Easy",
+      status: "started",
+      startedAt,
+    }];
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+    const loaded = loadState();
+    expect(loaded.activeOptionalSession).toMatchObject({
+      id: "legacy-optional",
+      status: "active",
+      runningSince: startedAt,
+    });
+    expect(loaded.optionalSessions).toEqual([]);
   });
 });
 
@@ -228,6 +476,34 @@ function stateFor(overrides = {}) {
 
 describe("personalized training domain", () => {
   beforeEach(() => localStorage.clear());
+  it("repairs stale bodyweight load metadata and fake zeroes on load", () => {
+    const state = blankState();
+    state.activeWorkout = {
+      id: "active-load-migration",
+      startedAt: Date.now(),
+      exerciseIndex: 0,
+      exercises: [
+        {
+          id: "active-pull-up",
+          exerciseId: "pull-up",
+          loadRequirement: "required",
+          sets: [{ id: "set-1", reps: 6, weight: 0, completed: false }],
+        },
+      ],
+    };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+
+    const loaded = loadState();
+
+    expect(loaded.activeWorkout.exercises[0].loadRequirement).toBe("optional");
+    expect(loaded.activeWorkout.exercises[0].sets[0].weight).toBeNull();
+    expect(
+      workingSetCanComplete(
+        loaded.activeWorkout.exercises[0],
+        loaded.activeWorkout.exercises[0].sets[0],
+      ),
+    ).toBe(true);
+  });
   it("starts onboarding with Balanced selected as the default priority", () => {
     const state = blankState();
     expect(state.profile.priorities).toEqual(["Balanced"]);
@@ -273,6 +549,9 @@ describe("personalized training domain", () => {
     };
     expect(exerciseName(legacyExercise)).toBe("Single-Leg Leg Extension");
     expect(exerciseNote(legacyExercise)).toBe("curl mašina · Slow tempo");
+    legacyExercise.personalNote = "  Seat 4  ";
+    expect(exerciseNote(legacyExercise)).toBe("curl mašina · Slow tempo");
+    expect(exercisePersonalNote(legacyExercise)).toBe("Seat 4");
   });
 
   it("prefers stable catalog identities when an imported library name overlaps", () => {
@@ -1913,6 +2192,34 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       previousExercise(blankState().workouts, first.exercises[0].exerciseId),
     ).toBeNull();
   });
+  it("persists personal exercise notes by template slot without rewriting history", () => {
+    const state = stateFor();
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    const exerciseId = state.activeWorkout.exercises[0].id;
+    const longNote = `  Seat 4 / handles 2 ${"x".repeat(150)}  `;
+    const saved = saveActiveExercisePersonalNote(state, exerciseId, longNote);
+
+    expect(saved.scope).toBe("template");
+    expect(saved.note).toHaveLength(EXERCISE_PERSONAL_NOTE_MAX_LENGTH);
+    expect(state.activeWorkout.exercises[0].personalNote).toBe(saved.note);
+    expect(state.activeWorkout.restartSnapshot.exercises[0].personalNote).toBe(
+      saved.note,
+    );
+    expect(state.program.days[0].exercises[0].personalNote).toBe(saved.note);
+
+    state.activeWorkout.exercises[0].sets[0].completed = true;
+    const completed = completeWorkout(state);
+    const completedNote = completed.workouts.at(-1).exercises[0].personalNote;
+    completed.activeWorkout = startWorkout(completed, completed.program.days[0]);
+    saveActiveExercisePersonalNote(completed, exerciseId, "Use other machine");
+
+    expect(completed.program.days[0].exercises[0].personalNote).toBe(
+      "Use other machine",
+    );
+    expect(completed.workouts.at(-1).exercises[0].personalNote).toBe(
+      completedNote,
+    );
+  });
   it("anchors an active workout to its selected date and rejects a second session", () => {
     const state = stateFor();
     state.selectedDate = "2026-08-27";
@@ -2026,6 +2333,70 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     state.activeWorkout.exercises[0].sets[0].touched = true;
     expect(activeWorkoutCanRestart(state.activeWorkout)).toBe(false);
     expect(restartActiveWorkout(state, 5000)).toBe(state);
+  });
+  it("resumes an accidentally completed empty workout from its frozen session", () => {
+    const state = stateFor();
+    const recurringProgram = structuredClone(state.program);
+    state.selectedDate = "2026-09-04";
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    state.activeWorkout.startedAt = 10_000;
+    state.activeWorkout.exercises[0].sets[0].weight = 42.5;
+    state.activeWorkout.exercises[0].personalNote = "Seat 4";
+    state.activeWorkout.sessionNote = "Accidentally closed";
+    const completed = completeWorkout(state);
+    const empty = completed.workouts.at(-1);
+    empty.durationSeconds = 90;
+
+    expect(completedWorkoutCanResume(completed, empty.id)).toBe(true);
+    const resumed = resumeCompletedWorkout(
+      completed,
+      empty.id,
+      200_000,
+      "resume-once",
+    );
+
+    expect(resumed.workouts).toHaveLength(0);
+    expect(resumed.activeWorkout).toMatchObject({
+      startedAt: 110_000,
+      updatedAt: 200_000,
+      resumedAt: 200_000,
+      resumedFromCompletionId: empty.id,
+      resumeOperationId: "resume-once",
+      sessionNote: "Accidentally closed",
+      rest: null,
+    });
+    expect(resumed.activeWorkout.exercises[0]).toMatchObject({
+      personalNote: "Seat 4",
+    });
+    expect(resumed.activeWorkout.exercises[0].sets[0].weight).toBe(42.5);
+    expect(resumed.workoutCorrections).toHaveLength(1);
+    expect(resumed.workoutCorrections[0]).toMatchObject({
+      type: "resume-empty-completion",
+      targetCompletedWorkoutId: empty.id,
+      operationId: "resume-once",
+      completedWorkout: { id: empty.id },
+    });
+    expect(resumed.program).toEqual(recurringProgram);
+    expect(resumeCompletedWorkout(resumed, empty.id, 210_000, "resume-once"))
+      .toBe(resumed);
+
+    resumed.activeWorkout.exercises[0].sets[0].completed = true;
+    const recompleted = completeWorkout(resumed);
+    expect(recompleted.workouts.at(-1).supersedesCompletionId).toBe(empty.id);
+    expect(recompleted.workoutCorrections[0].completedWorkout).toEqual(empty);
+  });
+  it("never resumes a workout with logged sets or while another workout is active", () => {
+    const state = stateFor();
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    state.activeWorkout.exercises[0].sets[0].completed = true;
+    const completed = completeWorkout(state);
+    const logged = completed.workouts.at(-1);
+    expect(completedWorkoutCanResume(completed, logged.id)).toBe(false);
+    expect(resumeCompletedWorkout(completed, logged.id, 5000)).toBe(completed);
+
+    logged.exercises[0].sets[0].completed = false;
+    completed.activeWorkout = startWorkout(completed, completed.program.days[0]);
+    expect(completedWorkoutCanResume(completed, logged.id)).toBe(false);
   });
   it("migrates a legacy active workout to the date on which it started", () => {
     const state = stateFor();
@@ -3112,6 +3483,31 @@ leg curl: 3 sets of 12, pavza 60 sec`;
         id,
       ).toBe(true);
     }
+  });
+  it("lets an explicit user replacement override movement compatibility while preserving hard constraints", () => {
+    const p = profile({
+      environment: "Home gym",
+      equipment: ["dumbbells", "bodyweight only"],
+      avoid: "Avoid squats",
+    });
+    const suggestions = compatibleReplacementCandidates(
+      "dumbbell-bench-press",
+      p,
+    );
+    const selectable = userSelectableReplacementCandidates(
+      "dumbbell-bench-press",
+      p,
+      ["dumbbell-row"],
+    );
+    expect(suggestions.every((item) => item.pattern === "horizontal-push")).toBe(
+      true,
+    );
+    expect(selectable.some((item) => item.pattern !== "horizontal-push")).toBe(
+      true,
+    );
+    expect(selectable.some((item) => item.id === "dumbbell-row")).toBe(false);
+    expect(selectable.every((item) => isExerciseAllowed(item, p))).toBe(true);
+    expect(selectable.some((item) => item.pattern === "squat")).toBe(false);
   });
   it("uses known custom metadata but refuses to guess for unresolved imported exercises", () => {
     const p = profile();
@@ -4391,6 +4787,79 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(workout.exercises.at(-1).exerciseId).toBe(addition.id);
     expect(state.program.version).toBe(2);
   });
+  it("validates and applies an exact reviewed replacement without inheriting load", () => {
+    const state = stateFor({ daysPerWeek: 2, availableDays: ["Tue", "Sat"] });
+    state.profile.environment = "Commercial gym";
+    state.profile.equipment = ["full gym"];
+    const workout = state.program.days[0];
+    const source = workout.exercises.find(
+      (exercise) =>
+        compatibleReplacementCandidates(
+          exercise,
+          state.profile,
+          workout.exercises.map((item) => item.exerciseId),
+        ).length,
+    );
+    const replacement = compatibleReplacementCandidates(
+      source,
+      state.profile,
+      workout.exercises.map((item) => item.exerciseId),
+    )[0];
+    source.sets.forEach((set) => {
+      set.weight = 42;
+    });
+    const changes = [{
+      workoutId: workout.id,
+      operations: [{
+        type: "replace",
+        exerciseEntryId: source.id,
+        fromExerciseId: source.exerciseId,
+        toExerciseId: replacement.id,
+      }],
+      addExerciseIds: [],
+      removeExerciseIds: [],
+    }];
+    expect(validateProgramExerciseChanges(state, changes).valid).toBe(true);
+    applyCoachAction(state, { type: "program-exercise-change", changes });
+    const applied = workout.exercises.find((exercise) => exercise.id === source.id);
+    expect(applied.exerciseId).toBe(replacement.id);
+    expect(applied.sets.every((set) => set.weight === null)).toBe(true);
+    expect(state.program.version).toBe(2);
+    expect(state.programChangeHistory).toMatchObject([
+      {
+        type: "exercise-review",
+        fromVersion: 1,
+        toVersion: 2,
+      },
+    ]);
+  });
+  it("rejects stale exact program exercise operations", () => {
+    const state = stateFor({ daysPerWeek: 2, availableDays: ["Tue", "Sat"] });
+    const workout = state.program.days[0];
+    const source = workout.exercises[0];
+    const checked = validateProgramExerciseChanges(state, [{
+      workoutId: workout.id,
+      operations: [{
+        type: "remove",
+        exerciseEntryId: source.id,
+        fromExerciseId: "not-the-current-exercise",
+      }],
+      addExerciseIds: [],
+      removeExerciseIds: [],
+    }]);
+    expect(checked.valid).toBe(false);
+    expect(checked.error).toMatch(/has changed/i);
+  });
+  it("detects a recurring-program proposal created against an older version", () => {
+    const state = stateFor({ daysPerWeek: 2, availableDays: ["Tue", "Sat"] });
+    state.program.version = 4;
+    expect(
+      coachActionConflict(state, {
+        type: "program-exercise-change",
+        baseProgramVersion: 3,
+      }),
+    ).toBe("program-changed");
+  });
   it("reserves both horizontal and vertical pulling in five- and six-day plans, including short sessions", () => {
     for (const daysPerWeek of [5, 6])
       for (const sessionMinutes of [30, 60]) {
@@ -4669,6 +5138,48 @@ leg curl: 3 sets of 12, pavza 60 sec`;
     expect(loaded.program.id).toBe(id);
     expect(loaded.profile.onboardingComplete).toBe(true);
   });
+  it.each(["ai-import", "manual"])(
+    "keeps an existing %s program authoritative when planning preferences change",
+    (source) => {
+      const state = stateFor({
+        daysPerWeek: 3,
+        availableDays: ["Mon", "Wed", "Fri"],
+        environment: "Commercial gym",
+        equipment: ["full gym"],
+      });
+      state.profile.onboardingComplete = true;
+      state.program.source = source;
+      state.program.userEdited = source === "manual";
+      const expected = state.program.days.map((day) => ({
+        id: day.id,
+        weekday: day.weekday,
+        exercises: day.exercises.map((exercise) => exercise.exerciseId),
+      }));
+      state.profile = {
+        ...state.profile,
+        daysPerWeek: 1,
+        availableDays: ["Sun"],
+        environment: "Home gym",
+        equipment: ["dumbbells"],
+      };
+      saveState(state);
+      const loaded = loadState();
+      expect(loaded.program).not.toBeNull();
+      expect(
+        loaded.program.days.map((day) => ({
+          id: day.id,
+          weekday: day.weekday,
+          exercises: day.exercises.map((exercise) => exercise.exerciseId),
+        })),
+      ).toEqual(expected);
+      expect(loaded.profile).toMatchObject({
+        daysPerWeek: 1,
+        availableDays: ["Sun"],
+        environment: "Home gym",
+        equipment: ["dumbbells"],
+      });
+    },
+  );
   it("repairs a persisted recovery conflict without deleting the plan or changing session IDs", () => {
     const state = stateFor({
       daysPerWeek: 4,

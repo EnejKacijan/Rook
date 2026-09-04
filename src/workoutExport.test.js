@@ -100,6 +100,7 @@ describe("workout text export", () => {
       workoutOccurrenceOverrides: {},
     };
     const result = buildWeeklyPlanExport({ state, date: "2026-09-02" });
+    expect(result.title).toBe("Functional week");
     expect(result.filename).toBe("rook-weekly-plan-2026-08-31.txt");
     expect(result.text).toContain("MON - Functional day");
     expect(result.text).toContain("SUN - Rest");

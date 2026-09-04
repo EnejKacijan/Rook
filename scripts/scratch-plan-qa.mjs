@@ -5,12 +5,13 @@ import { chromium } from 'playwright-core';
 
 const root = new URL('../artifacts/scratch-plan/', import.meta.url); await mkdir(root, { recursive: true });
 const output = name => fileURLToPath(new URL(name, root));
+const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
 const page = await context.newPage(); const errors = [];
 page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false }) }));
-await page.goto('http://127.0.0.1:4173/?scratch-plan-qa=1', { waitUntil: 'networkidle' });
+await page.goto(`${appUrl}/?scratch-plan-qa=1`, { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: /Start from scratch/i }).click();
 await page.getByRole('heading', { name: 'Create your own week.' }).waitFor();
 assert.equal(await page.getByText('Choose your training days, then build each workout yourself.', { exact: true }).count(), 1);
@@ -54,7 +55,9 @@ await page.screenshot({ path: output('390-editor-empty.png'), fullPage: false })
 async function addExercise(day, query, name) {
   const daySection = page.locator('.import-day').filter({ has: page.getByLabel(`${day} workout name`) });
   await daySection.getByRole('button', { name: /\+ ADD (FIRST )?EXERCISE/ }).click();
-  await daySection.getByLabel(`Search exercise for ${day}`).fill(query);
+  const search = daySection.getByLabel(`Search exercise for ${day}`);
+  assert.equal(await search.evaluate(node => document.activeElement === node), false, `${day} exercise picker does not summon the keyboard when opened`);
+  await search.fill(query);
   await daySection.getByRole('option', { name, exact: true }).click();
 }
 await addExercise('Mon', 'Bench Press', 'Bench Press');

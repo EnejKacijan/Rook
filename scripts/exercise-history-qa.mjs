@@ -172,6 +172,26 @@ async function openDetail(state, exercise, width = 390) {
   assert.match(await sheet.innerText(), /8 \/ 8 \/ 7 reps · 2 RIR/);
   assert.match(await sheet.innerText(), /Weight not logged/);
   assert.equal(await sheet.locator(".exercise-detail-art").count(), 1);
+  const artButton = sheet.getByRole("button", { name: /View .* illustration/ });
+  assert.equal(await artButton.count(), 1, "exercise history artwork is tappable");
+  await artButton.click();
+  const visualViewer = page.locator(".exercise-visual-viewer");
+  await visualViewer.waitFor();
+  await page.waitForTimeout(240);
+  const viewerBox = await visualViewer.boundingBox();
+  assert.equal(viewerBox.y, 0, "history artwork opens at the top of the viewport");
+  assert.equal(viewerBox.height, 844, "history artwork uses the full mobile viewport");
+  await page.screenshot({ path: output("320-working-weight-visual-viewer.png") });
+  await visualViewer.getByRole("button", { name: "Close visual viewer" }).click();
+  await visualViewer.waitFor({ state: "detached" });
+  await sheet.waitFor();
+  await page.waitForTimeout(50);
+  assert.match(await sheet.innerText(), /CURRENT WORKING WEIGHT/);
+  assert.equal(
+    await artButton.evaluate((node) => document.activeElement === node),
+    true,
+    "closing the viewer returns to exercise history and restores thumbnail focus",
+  );
   const overview = await sheet.locator(".exercise-detail-overview").evaluate((node) => ({
     clientWidth: node.clientWidth,
     scrollWidth: node.scrollWidth,

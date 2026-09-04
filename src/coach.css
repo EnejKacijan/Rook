@@ -74,6 +74,7 @@
 .thinking-dots i { width: 6px; height: 6px; border-radius: 50%; background: #8fb8a5; animation: coach-pulse 1s infinite ease-in-out; }
 .thinking-dots i:nth-child(2) { animation-delay: .15s; }
 .thinking-dots i:nth-child(3) { animation-delay: .3s; }
+.thinking-reduced-label { display: none; color: #6f6c68; font-size: 12px; }
 @keyframes coach-pulse { 0%, 60%, 100% { opacity: .35; transform: translateY(0); } 30% { opacity: 1; transform: translateY(-2px); } }
 
 .coach-screen .coach-input { position: static; flex: 0 0 auto; align-items: flex-end; margin: 0 -24px; padding: 6px 24px; border-top: 1px solid rgba(27, 26, 25, .08); background: rgba(246, 245, 242, .97); backdrop-filter: blur(14px); }
@@ -84,6 +85,12 @@
 .coach-screen .coach-input .coach-send:disabled { opacity: 1; }
 .coach-screen .coach-input .coach-send.is-empty { border: 1px solid rgba(27, 26, 25, .08); background: #e8e6e2; color: #9b9893; }
 .coach-screen .coach-input .coach-send.is-sending { border: 1px solid rgba(31, 107, 76, .14); background: #e2ece7; color: #1f6b4c; }
+.coach-screen .coach-input .coach-send.is-unavailable {
+  border: 1px solid var(--rook-border, rgba(27, 26, 25, .08));
+  background: var(--rook-disabled-surface, #efede8);
+  color: var(--rook-disabled-text, #918d87);
+  opacity: 1;
+}
 .coach-screen .coach-input .coach-send > span { display: grid; place-items: center; min-width: 18px; min-height: 18px; }
 .coach-screen .action-card-applied { border-color: rgba(31, 107, 76, .2); background: #fbfdfc; }
 .coach-screen .action-applied { margin-top: 18px; padding: 14px 16px; border: 1px solid rgba(31, 107, 76, .18); border-radius: 14px; background: #eaf2ee; color: #1f6b4c; text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
@@ -131,6 +138,8 @@
 .coach-screen .optional-workout-list > div { min-height: 38px; padding: 7px 0; border-bottom: 1px solid rgba(27, 26, 25, .06); display: flex; align-items: center; gap: 9px; }
 .coach-screen .optional-workout-list > div > span { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; background: #e7f1ec; color: #1f6b4c; display: grid; place-items: center; font-size: 13px; }
 .coach-screen .optional-workout-list strong { font-size: 13px; }
+.coach-screen .resume-workout-action-card > .eyebrow { display: block; margin-bottom: 8px; }
+.coach-screen .resume-workout-action-card .button { margin-top: 18px; }
 
 @media (min-width: 501px) {
   .coach-screen { height: calc(100dvh - 40px); padding-bottom: 64px; }
@@ -148,7 +157,9 @@
   .coach-intro h1 { font-size: 27px; }
 }
 @media (prefers-reduced-motion: reduce) {
+  .thinking-dots { display: none; }
   .thinking-dots i { animation: none; opacity: .7; transform: none; }
+  .thinking-reduced-label { display: block; }
 }
 .action-card-conflict { border-color: #dbcaa8; background: #fbf7ee; }
 .action-card-conflict h3 { color: #6b531e; }

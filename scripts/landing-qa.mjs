@@ -46,7 +46,7 @@ for (const width of [320, 360, 390, 430, 477, 768]) {
   const tagline = page.getByText('Training, built around you', { exact: true });
   await tagline.waitFor();
   await page.getByRole('heading', { name: 'A plan that fits. And keeps up.' }).waitFor();
-  await page.getByText(/Tell Rook when you can train, your equipment, and your experience/).waitFor();
+  await page.getByText(/Tell Rook your schedule, equipment, and experience/).waitFor();
   const primary = page.getByRole('button', { name: 'BUILD MY PLAN' });
   await primary.waitFor();
   await page.getByText('About 2 minutes · No account needed', { exact: true }).waitFor();
@@ -56,6 +56,7 @@ for (const width of [320, 360, 390, 430, 477, 768]) {
   assert.equal(await demo.getByText('WHAT EQUIPMENT CHANGES', { exact: true }).count(), 0, 'heavy equipment explanation heading is removed');
   assert.equal(await demo.getByText('Pressing example', { exact: true }).count(), 0, 'internal movement-pattern language is not exposed');
   assert.equal(await demo.getByText('ROOK MIGHT CHOOSE', { exact: true }).count(), 1, 'compact row clearly frames the value as illustrative');
+  assert.equal(await demo.locator('.entry-demo-output').count(), 1, 'exercise and week examples form one coherent output group');
   assert.equal(await demo.locator('.entry-equipment-result').count(), 0, 'equipment feedback is not wrapped in the old card');
   assert.equal(await demo.getByText('Example exercise', { exact: true }).count(), 0, 'generic equipment-effect label is removed');
   assert.equal(await demo.locator('li').count(), 7, 'illustrative week keeps all seven days visible');
@@ -231,6 +232,73 @@ for (const { theme, colorScheme } of themeVariants) {
   await page.getByRole('button', { name: /Start from scratch/ }).scrollIntoViewIfNeeded();
   assert.equal(await page.getByRole('button', { name: /Start from scratch/ }).isVisible(), true, `${theme} enlarged copy keeps routes reachable`);
   await context.close();
+}
+
+const responsiveViewports = [
+  { width: 320, height: 568 },
+  { width: 360, height: 780 },
+  { width: 390, height: 844 },
+  { width: 393, height: 852 },
+  { width: 430, height: 932 },
+  { width: 477, height: 852 },
+  { width: 500, height: 852 },
+];
+
+for (const { theme, colorScheme } of themeVariants) {
+  for (const viewport of responsiveViewports) {
+    const context = await browser.newContext({ viewport, colorScheme });
+    if (theme === 'premium') {
+      const premiumState = blankState();
+      premiumState.profile.themePreference = 'premium';
+      await context.addInitScript(({ key, state }) => {
+        localStorage.setItem(key, JSON.stringify(state));
+      }, { key: STORAGE_KEY, state: premiumState });
+    }
+    const page = await context.newPage();
+    await page.goto(appUrl, { waitUntil: 'networkidle' });
+    const scratch = page.getByRole('button', { name: /Start from scratch/ });
+    await scratch.waitFor();
+    const layout = await page.evaluate(() => {
+      const root = document.querySelector('.entry-v2');
+      const headline = document.querySelector('.entry-content h1');
+      const primary = document.querySelector('.entry-primary-action .button');
+      const demoHeader = document.querySelector('.entry-demo-header');
+      const equipment = document.querySelector('.entry-equipment');
+      const example = document.querySelector('.entry-equipment-example');
+      const output = document.querySelector('.entry-demo-output');
+      const lastAction = document.querySelector('.scratch-plan-action').getBoundingClientRect();
+      return {
+        documentHeight: root.scrollHeight,
+        viewportHeight: window.innerHeight,
+        headlineSize: parseFloat(getComputedStyle(headline).fontSize),
+        primary: primary.getBoundingClientRect().toJSON(),
+        demoHeader: demoHeader.getBoundingClientRect().toJSON(),
+        equipment: equipment.getBoundingClientRect().toJSON(),
+        example: example.getBoundingClientRect().toJSON(),
+        outputBorder: getComputedStyle(output).borderTopColor,
+        outputBackground: getComputedStyle(output).backgroundColor,
+        lastActionBottom: lastAction.bottom,
+      };
+    });
+    assert.ok(layout.headlineSize >= 40, `${theme} ${viewport.width}x${viewport.height} keeps the hero confident rather than shrinking it`);
+    assert.ok(layout.primary.height >= 58, `${theme} ${viewport.width}x${viewport.height} preserves the dominant CTA touch target`);
+    assert.ok(layout.primary.bottom <= layout.viewportHeight, `${theme} ${viewport.width}x${viewport.height} keeps the primary conversion action above the fold`);
+    assert.ok(layout.demoHeader.top < layout.viewportHeight, `${theme} ${viewport.width}x${viewport.height} reveals the interactive proof in the first screen`);
+    if (viewport.height >= 780) {
+      assert.ok(layout.equipment.bottom <= layout.viewportHeight, `${theme} ${viewport.width}x${viewport.height} shows both demo inputs without compressing them`);
+      assert.ok(layout.example.top < layout.viewportHeight, `${theme} ${viewport.width}x${viewport.height} begins the demo result within the first screen`);
+    }
+    assert.notEqual(layout.outputBorder, 'rgba(0, 0, 0, 0)', `${theme} output group uses one restrained separator`);
+    assert.equal(layout.outputBackground, 'rgba(0, 0, 0, 0)', `${theme} output grouping does not introduce another card`);
+    assert.ok(layout.lastActionBottom <= layout.documentHeight + 1, `${theme} ${viewport.width}x${viewport.height} keeps both secondary routes reachable through natural scrolling`);
+    assert.ok((await scratch.boundingBox()).height >= 44, 'secondary route retains a 44px touch target');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${theme} ${viewport.width}x${viewport.height} has no horizontal overflow`);
+    await page.screenshot({
+      path: output(`${theme}-${viewport.width}x${viewport.height}-landing-polished.png`),
+      fullPage: false,
+    });
+    await context.close();
+  }
 }
 
 const isolationContext = await browser.newContext({

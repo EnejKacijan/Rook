@@ -20,7 +20,7 @@ async function openScreen(buttonName) {
 }
 
 {
-  const { panel, handle } = await openScreen('Edit plan'); const box = await handle.boundingBox(); const startX = box.x + 24; const startY = box.y + 8;
+  const { panel, handle } = await openScreen('Edit plan'); await page.waitForTimeout(220); const box = await handle.boundingBox(); const startX = box.x + 24; const startY = box.y + 8;
   assert.ok(box.width >= 350 && box.height >= 44, 'the whole top edge is a wide Spotify-style drag surface, not just the visible indicator');
   assert.equal(await handle.evaluate(element => getComputedStyle(element).cursor), 'default', 'desktop does not show a hand/grab cursor');
   await page.screenshot({ path: output('390-edit-plan-handle.png'), fullPage: false });
@@ -36,15 +36,22 @@ async function openScreen(buttonName) {
 }
 
 {
-  const { panel, handle } = await openScreen('Logging & increments'); await handle.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the top handle starts the standard downward close animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const { panel, handle } = await openScreen('Logging & increments');
+  assert.match(await panel.evaluate(element => getComputedStyle(element).animationName), /rook-sheet-enter/, 'bottom sheets use the shared upward entrance animation');
+  assert.equal(await handle.evaluate(element => getComputedStyle(element).animationName), 'none', 'the grabber stays pinned at the sheet top while content enters');
+  const openingHandleTop = (await handle.boundingBox()).y;
+  await page.waitForTimeout(100);
+  assert.ok(Math.abs((await handle.boundingBox()).y - openingHandleTop) <= 0.5, 'the grabber does not travel during the sheet entrance');
+  assert.match(await page.locator('.modal-layer').evaluate(element => getComputedStyle(element).animationName), /rook-sheet-backdrop-in/, 'the backdrop fades in with the sheet');
+  await handle.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the top handle starts the standard downward close animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
 
 {
-  const { panel } = await openScreen('Logging & increments'); const close = page.getByRole('button', { name: 'Close', exact: true }); assert.equal((await close.innerText()).trim(), '×', 'Logging uses a neutral close control instead of a back arrow'); await close.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'the close button uses the same downward sheet animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const { panel } = await openScreen('Logging & increments'); const close = page.getByRole('button', { name: 'Close Logging' }); assert.equal((await close.innerText()).trim(), '×', 'Logging uses a neutral close control instead of a back arrow'); await close.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'the close button uses the same downward sheet animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
 
 for (const name of ['Logging & increments', 'Review priorities', 'Add a few details']) {
-  const { handle } = await openScreen(name); if (name === 'Logging & increments') { await page.screenshot({ path: output('390-logging-handle.png'), fullPage: false }); const box = await handle.boundingBox(); const x = box.x + 18; const y = box.y + 24; await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' }); } else { await handle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' }); }
+  const { handle } = await openScreen(name); if (name === 'Logging & increments') { await page.screenshot({ path: output('390-logging-handle.png'), fullPage: false }); await page.waitForTimeout(220); const box = await handle.boundingBox(); const x = box.x + 18; const y = box.y + 24; await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' }); } else { await handle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' }); }
 }
 
 await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); let compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await compactGrabZone.click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
@@ -52,7 +59,7 @@ await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGra
 await page.getByRole('button', { name: 'Replace plan' }).click(); compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); await compactGrabZone.waitFor(); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
 const importHandle = page.getByRole('button', { name: 'Drag down or tap to close' }); await importHandle.waitFor(); assert.equal(await page.locator('.modal-layer > .import-plan-screen').count(), 1); await importHandle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
-await openScreen('Appearance'); assert.equal(await page.locator('.theme-choice-layer').count(), 0, 'Appearance keeps Theme and Style inline without a nested sheet'); await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+await openScreen('Appearance'); assert.equal(await page.locator('.theme-choice-layer').count(), 0, 'Appearance keeps Theme and Style inline without a nested sheet'); await page.getByRole('button', { name: 'Close Appearance' }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
 assert.deepEqual(errors, []); await browser.close();
 console.log('Bottom-sheet handle QA passed: full-width top-edge handles tap-close, drag, fade, spring back, and dismiss while Appearance remains a single flat sheet.');

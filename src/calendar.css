@@ -113,10 +113,13 @@
 .rest-up-next > span { display: block; margin-top: 6px; color: #6f6c68; font-size: 13px; }
 .rest-up-next .rest-view-workout { width: auto; min-height: 46px; margin-top: 18px; padding: 0 20px; border-radius: 13px; }
 .train-anyway { display: block; margin: 10px 0 0; min-height: 44px; padding: 0 8px; color: #6f6c68; text-decoration: underline; text-decoration-color: rgba(111,108,104,.35); text-underline-offset: 3px; }
-.optional-session-note { display: block; margin-top: 8px; color: #1f6b4c; }
+.optional-session-history { margin-top: 14px; border-top: 1px solid var(--rook-border); }
+.optional-session-note { padding: 12px 0; border-bottom: 1px solid var(--rook-border); display: flex; align-items: baseline; justify-content: space-between; gap: 14px; color: var(--rook-accent-text); }
+.optional-session-note strong { min-width: 0; font-size: 12px; line-height: 1.35; }
+.optional-session-note small { flex: 0 0 auto; color: var(--rook-secondary); font-size: 11px; }
 .today-screen .workout-title-primary { max-width: 100%; text-wrap: balance; }
 .today-screen .compact-workout-title .workout-title-primary { white-space: nowrap; overflow-wrap: normal; }
-.rest-training-sheet { padding-top: 34px; padding-bottom: calc(28px + env(safe-area-inset-bottom)); }
+.rest-training-sheet { padding-top: 34px; padding-bottom: var(--rook-sheet-safe-bottom); }
 .rest-training-option,.move-workout-row { width: 100%; min-height: 68px; padding: 13px 2px; border: 0; border-bottom: 1px solid rgba(27,26,25,.08); background: transparent; color: #1b1a19; display: flex; justify-content: space-between; align-items: center; gap: 12px; text-align: left; }
 .rest-training-option span,.move-workout-row span { display: flex; flex-direction: column; gap: 4px; }
 .rest-training-option strong,.move-workout-row strong { font-size: 13px; }
@@ -133,6 +136,44 @@
 .optional-duration button { width: 40px; height: 40px; border: 1px solid rgba(27,26,25,.1); border-radius: 12px; background: #fff; }
 .optional-duration strong { min-width: 52px; text-align: center; }
 .sheet-footnote { display: block; margin-top: 10px; color: #8a8783; text-align: center; }
+
+.optional-session-screen { min-height: 100dvh; padding: calc(8px + env(safe-area-inset-top)) 20px calc(28px + env(safe-area-inset-bottom)); display: flex; flex-direction: column; outline: none; }
+.optional-session-header { min-height: 68px; padding-bottom: 12px; border-bottom: 1px solid var(--rook-border); display: grid; grid-template-columns: 52px minmax(0, 1fr) 52px; align-items: center; }
+.optional-session-header > button:first-child { width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-text); text-align: left; font-size: 29px; }
+.optional-session-header > div { min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 4px; text-align: center; }
+.optional-session-header > div strong { font-size: 11px; letter-spacing: .1em; }
+.optional-session-header > div small { color: var(--rook-secondary); font-size: 11px; }
+.optional-session-header > .text-button { min-height: 44px; padding: 0; justify-self: end; color: var(--rook-accent-text); }
+.optional-session-body { flex: 1; padding: 46px 6px 0; display: flex; flex-direction: column; align-items: stretch; }
+.optional-session-body > .eyebrow { color: var(--rook-accent-text); }
+.optional-session-body h1 { max-width: 100%; margin-top: 11px; font-size: clamp(36px, 11vw, 48px); overflow-wrap: anywhere; }
+.optional-session-clock { display: block; margin-top: 44px; color: var(--rook-text); font-size: clamp(54px, 17vw, 74px); font-weight: 780; line-height: 1; letter-spacing: -.04em; font-variant-numeric: tabular-nums; }
+.optional-session-facts { margin: 27px 0 0; padding: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.optional-session-facts > div { min-width: 0; padding-top: 12px; border-top: 1px solid var(--rook-border); display: flex; flex-direction: column; gap: 6px; }
+.optional-session-facts dt { color: var(--rook-muted); font-size: 9px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }
+.optional-session-facts dd { margin: 0; color: var(--rook-text); font-size: 14px; font-weight: 700; }
+.optional-session-plan-note { max-width: 360px; margin-top: 28px !important; color: var(--rook-secondary) !important; }
+.optional-session-actions { margin-top: auto; padding-top: 30px; display: grid; grid-template-columns: minmax(0, .78fr) minmax(0, 1.22fr); gap: 10px; }
+.optional-session-actions .button { min-width: 0; }
+.optional-session-cancel { min-height: 44px; margin: 9px auto 0; color: var(--rook-secondary); }
+.optional-session-cancel-confirm { margin-top: 14px; padding: 14px; border: 1px solid var(--rook-border); border-radius: 14px; background: var(--rook-surface); }
+.optional-session-cancel-confirm > p { margin: 0; color: var(--rook-secondary); font-size: 12px; }
+.optional-session-cancel-confirm > div { margin-top: 10px; display: flex; justify-content: flex-end; gap: 8px; }
+.optional-session-cancel-confirm button { min-height: 40px; padding: 0 10px; border: 0; background: transparent; color: var(--rook-secondary); font-size: 10px; font-weight: 800; letter-spacing: .07em; }
+.optional-session-cancel-confirm button:last-child { color: var(--rook-error-text); }
+.optional-session-complete { justify-content: center; }
+.optional-session-complete-body { width: 100%; max-width: 400px; margin: auto; padding: 24px 6px; }
+.optional-session-complete-mark { width: 42px; height: 42px; margin-bottom: 25px; border: 1px solid var(--rook-accent-hairline); border-radius: 50%; display: grid; place-items: center; color: var(--rook-accent-text); font-size: 18px; }
+.optional-session-complete-body > .eyebrow { color: var(--rook-accent-text); }
+.optional-session-complete-body h1 { margin-top: 12px; font-size: clamp(38px, 11vw, 50px); overflow-wrap: anywhere; }
+.optional-session-summary-time { display: block; margin-top: 25px; font-size: 30px; font-variant-numeric: tabular-nums; }
+.optional-session-complete-body > p { margin-top: 28px; color: var(--rook-secondary); }
+.optional-session-complete-body > .button { margin-top: 28px; }
+@media (max-width: 350px) {
+  .optional-session-body { padding-top: 30px; }
+  .optional-session-clock { margin-top: 30px; }
+  .optional-session-actions { grid-template-columns: minmax(0, 1fr); }
+}
 .today-screen .workout-title-detail { margin-top: 7px; color: #6f6c68; font-size: 16px; font-weight: 600; line-height: 1.3; letter-spacing: 0; overflow-wrap: anywhere; }
 .today-screen .workout-title-context { margin-top: 3px; color: #8a8783; font-size: 14px; font-weight: 550; line-height: 1.35; }
 

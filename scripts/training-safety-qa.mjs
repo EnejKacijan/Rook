@@ -77,13 +77,19 @@ assert.match(await page.locator('.training-safety-summary').last().textContent()
 await page.screenshot({ path: output('390-confirmed-clinician-scope.png'), fullPage: false });
 await page.getByRole('button', { name: 'SAVE RESTRICTIONS' }).click();
 await page.getByRole('heading', { name: 'This affects your current plan' }).waitFor();
-assert.match(await page.locator('.restriction-impact-review').textContent(), /planned exercises? conflict.*won’t change.*automatically/i);
+assert.match(await page.locator('.restriction-impact-review').textContent(), /planned exercises? conflict.*review each suggestion/i);
 await page.screenshot({ path: output('390-current-plan-impact.png'), fullPage: false });
-await page.getByRole('button', { name: 'SAVE & REVIEW PLAN' }).click();
-await page.getByRole('heading', { name: 'Edit your plan' }).waitFor();
-assert.equal(await page.locator('.safety-review-required').count() > 0, true, 'affected exercises are highlighted for review');
+for (const selector of await page.locator('.restriction-change select').all()) {
+  const remove = selector.locator('option[value="remove"]');
+  if (await remove.count()) await selector.selectOption('remove');
+}
+await page.getByRole('button', { name: /SAVE & APPLY \d+ CHANGES?/ }).click();
+await page.getByText("TODAY'S EXERCISES", { exact: true }).waitFor();
+const stored = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+assert.equal(stored.profile.avoid, 'Post-op knee; surgeon cleared upper-body strength training only.');
+assert.equal(stored.program.version, 2, 'reviewed restriction changes update the recurring plan once');
 assert.deepEqual(errors, []);
 
 await context.close();
 await browser.close();
-console.log('Training safety QA passed: unresolved surgery blocks Start, clinician scope requires confirmation, and conflicting plans require explicit save-and-review.');
+console.log('Training safety QA passed: unresolved surgery blocks Start, clinician scope requires confirmation, and conflicting plans require explicit reviewed Apply.');

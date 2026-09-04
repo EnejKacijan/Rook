@@ -155,6 +155,11 @@ for (const theme of ["light", "dark"]) {
   const descriptorField = page.getByLabel(`${day.weekday} workout descriptor`);
   assert.equal(await nameField.inputValue(), "NOGE B");
   assert.equal(await descriptorField.inputValue(), "Funkcija");
+  assert.equal(
+    await descriptorField.getAttribute("placeholder"),
+    "e.g. Chest focus, Strength or Hypertrophy",
+    "the descriptor example follows the app's English UI language",
+  );
   await nameField.fill("Spodnji del B");
   await descriptorField.fill("Moč");
   await page.getByRole("button", { name: "SAVE CHANGES" }).click();

@@ -27,6 +27,7 @@
     "qa:active-workout-bottom": "node scripts/active-workout-bottom-qa.mjs",
     "qa:active-workout-clarity": "node scripts/active-workout-clarity-qa.mjs",
     "qa:workout-restart": "node scripts/workout-restart-qa.mjs",
+    "qa:workout-resume": "node scripts/workout-resume-qa.mjs",
     "qa:warmup-sequencing": "node scripts/warmup-sequencing-qa.mjs",
     "qa:exercise-history": "node scripts/exercise-history-qa.mjs",
     "qa:today-illustrations": "node scripts/today-illustration-coverage-qa.mjs",
@@ -43,6 +44,9 @@
     "qa:appearance": "node scripts/appearance-qa.mjs",
     "qa:motion-themes": "node scripts/motion-theme-qa.mjs",
     "qa:persistence-failure": "node scripts/persistence-failure-qa.mjs",
+    "qa:load-contract": "node scripts/load-contract-qa.mjs",
+    "qa:goal-progress": "node scripts/goal-progress-qa.mjs",
+    "qa:restriction-plan": "node scripts/training-restriction-plan-qa.mjs",
     "art:normalize": "node scripts/normalize-exercise-art.mjs",
     "art:check": "node scripts/normalize-exercise-art.mjs --check"
   },

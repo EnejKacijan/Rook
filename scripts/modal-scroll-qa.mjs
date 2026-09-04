@@ -30,12 +30,14 @@ async function verifyScroller(page, locator, label) {
       touchAction: style.touchAction,
       scrollHeight: node.scrollHeight,
       clientHeight: node.clientHeight,
-      scrollTop: node.scrollTop
+      scrollTop: node.scrollTop,
+      paddingBottom: parseFloat(style.paddingBottom),
     };
   });
   assert.match(state.overflowY, /auto|scroll/, `${label} has its own vertical scroll area`);
   assert.equal(state.overscroll, 'contain', `${label} does not scroll the frozen page behind it`);
   assert.match(state.touchAction, /pan-y/, `${label} allows native vertical touch gestures`);
+  assert.equal(state.paddingBottom, 20, `${label} owns the shared 20px terminal content space`);
   if (state.scrollHeight > state.clientHeight) assert.ok(state.scrollTop > 0, `${label} content can reach the bottom`);
   assert.equal(await page.evaluate(() => document.body.style.position), 'fixed', `${label} keeps the page behind fixed`);
   assert.equal(await page.locator('.app-content').getAttribute('inert'), '', `${label} makes the page behind inert`);
@@ -52,17 +54,31 @@ async function verifyScroller(page, locator, label) {
     await page.setViewportSize({ width, height: 568 });
     await page.screenshot({ path: output(`${width}-logging.png`) });
   }
-  await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  await page.setViewportSize({ width: 473, height: 842 });
+  await logging.evaluate(node => { node.scrollTop = node.scrollHeight; });
+  await page.screenshot({ path: output('473-logging-terminal-spacing.png') });
+  await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+
+  await page.locator('button.info-row').filter({ hasText: 'Availability' }).click();
+  const fixedFooterPanel = page.locator('.profile-training-setting-screen');
+  await fixedFooterPanel.waitFor();
+  const fixedFooterSpacing = await fixedFooterPanel.evaluate(node => ({
+    panel: parseFloat(getComputedStyle(node).paddingBottom),
+    scroll: parseFloat(getComputedStyle(node.querySelector('.profile-setting-scroll')).paddingBottom),
+    footer: parseFloat(getComputedStyle(node.querySelector('.profile-setting-footer')).paddingBottom),
+  }));
+  assert.deepEqual(fixedFooterSpacing, { panel: 0, scroll: 20, footer: 12 }, 'fixed-footer sheet gives terminal safe-area ownership to its footer only');
+  await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
   await page.getByRole('button', { name: 'Replace plan' }).click();
   await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
   await verifyScroller(page, page.locator('.modal-layer > .import-plan-screen'), 'Import Plan');
-  await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
   await page.getByRole('button', { name: 'PROGRESS', exact: true }).click();
   await page.locator('.working-weight-row').first().click();
   await verifyScroller(page, page.locator('.modal-layer > .detail-screen'), 'Exercise history');
-  await page.getByRole('button', { name: 'Close', exact: true }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => document.body.style.position), '', 'closing restores normal document scrolling');
   await context.close();
 }

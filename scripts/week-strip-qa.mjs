@@ -11,8 +11,9 @@ const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Goog
 
 function contrastRatio(first, second) {
   const luminance = value => {
+    const srgbFunctionalColor = value.startsWith('color(srgb');
     const channels = (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number).map(channel => {
-      const normalized = channel / 255;
+      const normalized = srgbFunctionalColor ? channel : channel / 255;
       return normalized <= .04045 ? normalized / 12.92 : ((normalized + .055) / 1.055) ** 2.4;
     });
     return .2126 * channels[0] + .7152 * channels[1] + .0722 * channels[2];
@@ -53,7 +54,7 @@ for (const todayState of ['rest', 'planned', 'completed']) {
   assert.equal(await strip.locator('button:disabled').count(), 0, 'no calendar day is disabled');
   assert.equal(await strip.locator('.selected-day').count(), 1, 'only one day looks selected');
   assert.equal(await strip.locator('[aria-pressed="true"]').count(), 1, 'selection is exposed accessibly');
-  const neutralTile = strip.locator('button:not(.selected-day):not(.today-date)').first();
+  const neutralTile = strip.locator('.workout-rest:not(.selected-day):not(.today-date)').first();
   assert.equal(await neutralTile.evaluate(element => getComputedStyle(element).backgroundColor), 'rgb(255, 255, 255)', 'ordinary days keep the neutral chip fill');
   assert.equal(await neutralTile.evaluate(element => getComputedStyle(element).borderWidth), '1px', 'ordinary days keep the subtle neutral outline');
   assert.equal(await strip.locator('.workout-rest i').count(), 0, 'rest days have no dot');
@@ -69,7 +70,7 @@ for (const todayState of ['rest', 'planned', 'completed']) {
   await rest.click();
   const selectedRest = strip.locator('.selected-day.workout-rest');
   assert.equal(await selectedRest.count(), 1, 'a rest day remains tappable and selectable');
-  await page.waitForTimeout(220);
+  await page.waitForTimeout(300);
   const selectedRestColors = await selectedRest.evaluate(element => ({
     actual: getComputedStyle(element).color,
     expected: (() => {
@@ -105,10 +106,19 @@ assert.equal(await selectedTodayTile.evaluate(element => getComputedStyle(elemen
 assert.notEqual(await selectedTodayTile.evaluate(element => getComputedStyle(element, '::after').content), 'none', 'selected today retains the subtle today underline');
 await selectedTodayContext.close();
 
-for (const theme of ['light', 'dark', 'premium']) {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const themeVariants = [
+  { label: 'standard light', appearance: 'light', style: 'standard', colorScheme: 'light' },
+  { label: 'standard dark', appearance: 'dark', style: 'standard', colorScheme: 'dark' },
+  { label: 'premium light', appearance: 'light', style: 'premium', colorScheme: 'light' },
+  { label: 'premium dark', appearance: 'dark', style: 'premium', colorScheme: 'dark' },
+];
+for (const variant of themeVariants) {
+  const { label, appearance, style, colorScheme } = variant;
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme });
   const state = fixture('completed');
-  state.profile.themePreference = theme;
+  state.profile.appearancePreference = appearance;
+  state.profile.stylePreference = style;
+  state.profile.themePreference = style === 'premium' ? 'premium' : appearance;
   state.selectedDay = weekday();
   state.selectedDate = isoDay();
   await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
@@ -118,22 +128,48 @@ for (const theme of ['light', 'dark', 'premium']) {
   const strip = page.locator('.week-strip');
   const today = strip.locator('[aria-current="date"]');
   const planned = strip.locator('.workout-planned:not(.selected-day)').first();
-  assert.match(await today.getAttribute('aria-label'), /completed workout/, `${theme}: completed status is named accessibly`);
-  assert.match(await planned.getAttribute('aria-label'), /planned workout/, `${theme}: planned status is named accessibly`);
+  const rest = strip.locator('.workout-rest:not(.selected-day)').first();
+  assert.equal(await page.locator('html').getAttribute('data-appearance'), appearance, `${label}: expected appearance is active`);
+  assert.equal(await page.locator('html').getAttribute('data-style'), style, `${label}: expected style is active`);
+  assert.match(await today.getAttribute('aria-label'), /completed workout/, `${label}: completed status is named accessibly`);
+  assert.match(await planned.getAttribute('aria-label'), /planned workout/, `${label}: planned status is named accessibly`);
   const completedSelected = await today.locator('.completed-dot').evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor }));
-  const selectedTodayColors = await today.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, text: getComputedStyle(element.querySelector('strong')).color, day: getComputedStyle(element.querySelector('small')).color }));
-  assert.ok(contrastRatio(selectedTodayColors.text, selectedTodayColors.background) >= 4.5, `${theme}: selected today's date remains readable`);
-  assert.ok(contrastRatio(selectedTodayColors.day, selectedTodayColors.background) >= 4.5, `${theme}: selected today's weekday remains readable`);
+  const selectedTodayColors = await today.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor, borderWidth: getComputedStyle(element).borderWidth, text: getComputedStyle(element.querySelector('strong')).color, day: getComputedStyle(element.querySelector('small')).color, weight: Number(getComputedStyle(element.querySelector('strong')).fontWeight) }));
+  const plannedColors = await planned.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor, borderWidth: getComputedStyle(element).borderWidth, weight: Number(getComputedStyle(element.querySelector('strong')).fontWeight) }));
+  const restColors = await rest.evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor }));
+  if (style === 'premium') {
+    const expected = appearance === 'light'
+      ? { background: 'rgb(238, 224, 185)', border: 'rgb(138, 103, 15)' }
+      : { background: 'rgb(51, 43, 24)', border: 'rgb(215, 177, 90)' };
+    assert.deepEqual(
+      { background: selectedTodayColors.background, border: selectedTodayColors.border },
+      expected,
+      `${label}: approved Premium selected-day treatment remains visually unchanged`,
+    );
+  }
+  assert.notEqual(selectedTodayColors.background, plannedColors.background, `${label}: selected surface is distinct from scheduled surface`);
+  assert.notEqual(selectedTodayColors.background, restColors.background, `${label}: selected surface is distinct from ordinary rest surface`);
+  assert.notEqual(selectedTodayColors.border, plannedColors.border, `${label}: selected border is stronger than scheduled border`);
+  assert.equal(selectedTodayColors.borderWidth, '2px', `${label}: selected uses the shared stronger outline`);
+  assert.equal(plannedColors.borderWidth, '1px', `${label}: scheduled keeps its restrained outline`);
+  assert.ok(selectedTodayColors.weight > plannedColors.weight, `${label}: selected date has a non-color text-weight cue`);
+  assert.ok(contrastRatio(selectedTodayColors.text, selectedTodayColors.background) >= 4.5, `${label}: selected today's date remains readable`);
+  assert.ok(contrastRatio(selectedTodayColors.day, selectedTodayColors.background) >= 4.5, `${label}: selected today's weekday remains readable`);
   const plannedUnselected = await planned.locator('.workout-dot').evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor, style: getComputedStyle(element).borderStyle }));
   await planned.click();
+  await page.waitForTimeout(300);
+  const selectedPlannedSurface = await strip.locator('.selected-day.workout-planned').evaluate(element => getComputedStyle(element).backgroundColor);
+  assert.equal(selectedPlannedSurface, selectedTodayColors.background, `${label}: selected treatment is consistent regardless of workout state`);
+  assert.equal(await today.getAttribute('aria-pressed'), 'false', `${label}: today and selected remain independently exposed`);
   const plannedSelected = await strip.locator('.selected-day.workout-planned .workout-dot').evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor, style: getComputedStyle(element).borderStyle }));
   const completedUnselected = await today.locator('.completed-dot').evaluate(element => ({ background: getComputedStyle(element).backgroundColor, border: getComputedStyle(element).borderColor }));
-  assert.deepEqual(plannedSelected, plannedUnselected, `${theme}: selecting a day does not recolor its planned marker`);
-  assert.deepEqual(completedUnselected, completedSelected, `${theme}: deselecting a day does not recolor its completed marker`);
-  assert.equal(plannedSelected.background, 'rgba(0, 0, 0, 0)', `${theme}: planned remains hollow rather than resembling completion`);
-  assert.equal(plannedSelected.style, 'solid', `${theme}: planned keeps its non-color hollow-marker treatment`);
-  assert.notEqual(completedSelected.background, 'rgba(0, 0, 0, 0)', `${theme}: completed remains solid`);
-  assert.notEqual(await today.evaluate(element => getComputedStyle(element, '::after').content), 'none', `${theme}: today underline survives selection changes`);
+  assert.deepEqual(plannedSelected, plannedUnselected, `${label}: selecting a day does not recolor its planned marker`);
+  assert.deepEqual(completedUnselected, completedSelected, `${label}: deselecting a day does not recolor its completed marker`);
+  assert.equal(plannedSelected.background, 'rgba(0, 0, 0, 0)', `${label}: planned remains hollow rather than resembling completion`);
+  assert.equal(plannedSelected.style, 'solid', `${label}: planned keeps its non-color hollow-marker treatment`);
+  assert.notEqual(completedSelected.background, 'rgba(0, 0, 0, 0)', `${label}: completed remains solid`);
+  assert.notEqual(await today.evaluate(element => getComputedStyle(element, '::after').content), 'none', `${label}: unselected today keeps its independent underline`);
+  await page.screenshot({ path: output(`${label.replaceAll(' ', '-')}-selected-vs-today.png`), fullPage: false });
   await context.close();
 }
 

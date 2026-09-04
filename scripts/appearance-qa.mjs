@@ -107,10 +107,10 @@ for (const [appearance, style, themeColor, accent] of combinations) {
 
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
   assert.match(
-    await page.getByRole("button", { name: /Appearance/ }).innerText(),
+    await page.getByRole("button", { name: /^Appearance/ }).innerText(),
     new RegExp(`${appearance}.*${style}.*Illustrations on`, "i"),
   );
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await page.locator(".theme-choice-layer").count(), 0);
   assert.equal(await page.getByRole("group", { name: "Theme" }).count(), 1);
   assert.equal(
@@ -121,12 +121,66 @@ for (const [appearance, style, themeColor, accent] of combinations) {
     await page.getByRole("button", { name: new RegExp(`^${style}`, "i") }).getAttribute("aria-pressed"),
     "true",
   );
+  const styleIdentity = await page.evaluate((selectedStyle) => {
+    const selected = document.querySelector(
+      `.appearance-style-choice[data-style-option="${selectedStyle}"]`,
+    );
+    const other = document.querySelector(
+      `.appearance-style-choice[data-style-option="${selectedStyle === "standard" ? "premium" : "standard"}"]`,
+    );
+    const root = getComputedStyle(document.documentElement);
+    const selectedColor = getComputedStyle(selected.querySelector("strong")).color;
+    const checkStyle = getComputedStyle(selected.querySelector("i"));
+    const otherColor = getComputedStyle(other.querySelector("strong")).color;
+    const normalColor = root.getPropertyValue("--rook-text").trim();
+    const identityColor = root
+      .getPropertyValue(`--rook-style-${selectedStyle}`)
+      .trim();
+    const backgroundColor = root.getPropertyValue("--rook-bg").trim();
+    const colorToRgb = (value) => {
+      const probe = document.createElement("span");
+      probe.style.color = value;
+      document.body.append(probe);
+      const parsed = getComputedStyle(probe).color.match(/[\d.]+/g).slice(0, 3).map(Number);
+      probe.remove();
+      return parsed;
+    };
+    const luminance = (value) => {
+      const [r, g, b] = colorToRgb(value).map((channel) => {
+        const normalized = channel / 255;
+        return normalized <= 0.04045
+          ? normalized / 12.92
+          : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const foreground = luminance(identityColor);
+    const background = luminance(backgroundColor);
+    return {
+      selectedColor,
+      checkColor: checkStyle.color,
+      checkOpacity: Number(checkStyle.opacity),
+      otherColor,
+      normalColor: `rgb(${colorToRgb(normalColor).join(", ")})`,
+      identityColor: `rgb(${colorToRgb(identityColor).join(", ")})`,
+      contrast: (Math.max(foreground, background) + 0.05) /
+        (Math.min(foreground, background) + 0.05),
+    };
+  }, style);
+  assert.equal(styleIdentity.selectedColor, styleIdentity.identityColor);
+  assert.equal(styleIdentity.checkColor, styleIdentity.identityColor);
+  assert.equal(styleIdentity.checkOpacity, 1);
+  assert.equal(styleIdentity.otherColor, styleIdentity.normalColor);
+  assert.ok(
+    styleIdentity.contrast >= 4.5,
+    `${appearance}/${style}: selected Style label contrast is ${styleIdentity.contrast.toFixed(2)}:1`,
+  );
   const targets = await page.locator(".appearance-segmented > button, .appearance-style-choice").evaluateAll(
     (items) => items.map((item) => ({ width: item.getBoundingClientRect().width, height: item.getBoundingClientRect().height })),
   );
   assert.ok(targets.every(({ width, height }) => width >= 44 && height >= 44));
   await page.screenshot({ path: output(`${appearance}-${style}-appearance.png`), fullPage: false });
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: "Close Appearance" }).click();
   await page.getByRole("button", { name: "COACH", exact: true }).click();
   await page.screenshot({ path: output(`${appearance}-${style}-coach.png`), fullPage: false });
   assert.deepEqual(errors, []);
@@ -174,20 +228,20 @@ for (const legacy of ["system", "light", "dark", "premium"]) {
 {
   const { context, page, errors } = await open(fixture("light", "standard"));
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: /^Appearance/ }).click();
   const illustrations = page.getByRole("switch", { name: "Exercise illustrations" });
   await illustrations.uncheck({ force: true });
   await page.getByRole("button", { name: /Premium.*Warm gold/ }).click();
   assert.equal(await page.locator("html").getAttribute("data-style"), "premium");
   assert.equal(await page.locator(".modal-layer").count(), 1, "style changes keep Appearance open");
-  await page.getByRole("button", { name: "Close", exact: true }).click();
-  assert.match(await page.getByRole("button", { name: /Appearance/ }).innerText(), /Light.*Premium.*Illustrations off/i);
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: "Close Appearance" }).click();
+  assert.match(await page.getByRole("button", { name: /^Appearance/ }).innerText(), /Light.*Premium.*Illustrations off/i);
+  await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await illustrations.isChecked(), false, "illustration preference survives reopening");
   await page.reload({ waitUntil: "networkidle" });
   assert.equal(await page.locator("html").getAttribute("data-style"), "premium");
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await page.getByRole("switch", { name: "Exercise illustrations" }).isChecked(), false);
   assert.deepEqual(errors, []);
   await context.close();

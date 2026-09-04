@@ -5,6 +5,7 @@ import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
 import {
   blankState,
+  completeWorkout,
   exerciseCatalog,
   isoDay,
   startWorkout,
@@ -53,6 +54,48 @@ function returningFixture(active = false) {
     first.reps = Math.max(1, Number(first.reps) || 8);
     first.completed = true;
   }
+  return state;
+}
+
+function returningFixtureWithCurrentCompletion() {
+  let state = returningFixture();
+  const day = state.program.days.find((item) => item.weekday === weekday());
+  day.exercises[0].notes = "Seat position 3";
+  state.activeWorkout = startWorkout(state, day);
+  state.activeWorkout.exercises.forEach((exercise) =>
+    exercise.sets.forEach((set) => {
+      set.weight = exerciseCatalog[exercise.exerciseId]?.bodyweight ? null : 30;
+      set.reps = Math.max(1, Number(set.reps) || 8);
+      set.completed = true;
+    }),
+  );
+  state = completeWorkout(state);
+  return state;
+}
+
+function returningFixtureWithRestriction() {
+  const state = returningFixture();
+  const sourceText = "Avoid Leg Press";
+  const quote = "Leg Press";
+  const start = sourceText.indexOf(quote);
+  state.profile.avoid = sourceText;
+  state.profile.trainingSafetyAnalysis = {
+    sourceText,
+    analysis: {
+      schemaVersion: 2,
+      findings: [
+        {
+          kind: "explicit_avoidance",
+          confidence: 0.99,
+          evidence: [{ start, end: start + quote.length, quote }],
+          targetText: quote,
+          minimumRir: null,
+          allowedBodyRegion: null,
+        },
+      ],
+      unresolved: [],
+    },
+  };
   return state;
 }
 
@@ -144,20 +187,38 @@ async function visibleGreenLeaks(page) {
       "stroke",
       "accentColor",
     ];
-    return [...body.querySelectorAll("*")]
+    const elements = [...body.querySelectorAll("*")]
       .filter((element) => {
         const rect = element.getBoundingClientRect();
         const style = getComputedStyle(element);
         return rect.width > 0 && rect.height > 0 && style.visibility !== "hidden";
-      })
-      .map((element) => {
-        const style = getComputedStyle(element);
+      });
+    const entry = (element, style, pseudo = "") => {
         return {
           tag: element.tagName,
-          className: String(element.className || "").slice(0, 100),
+          className: `${String(element.className || "").slice(0, 100)}${pseudo}`,
           text: String(element.textContent || "").trim().slice(0, 60),
           values: properties.map((property) => `${property}: ${style[property]}`),
         };
+    };
+    return elements
+      .flatMap((element) => {
+        const entries = [entry(element, getComputedStyle(element))];
+        for (const pseudo of ["::before", "::after"]) {
+          const style = getComputedStyle(element, pseudo);
+          const background = parseColor(style.backgroundColor);
+          const hasContent = !["none", "normal", '""'].includes(style.content);
+          const hasBackground = Boolean(background && background[3] > 0.08);
+          const hasBorder = [
+            style.borderTopWidth,
+            style.borderRightWidth,
+            style.borderBottomWidth,
+            style.borderLeftWidth,
+          ].some((width) => Number.parseFloat(width) > 0);
+          if (hasContent || hasBackground || hasBorder)
+            entries.push(entry(element, style, pseudo));
+        }
+        return entries;
       })
       .filter((entry) => entry.values.some((value) => isGreen(value)));
   });
@@ -262,8 +323,8 @@ assert.deepEqual(
   "Expanded Premium plan editor controls contain no legacy ROOK green",
 );
 await screenshot(run.page, "390-plan-editor-premium.png");
-await run.page.getByRole("button", { name: "Close", exact: true }).click();
-await run.page.getByRole("button", { name: /Appearance/ }).click();
+await run.page.getByRole("button", { name: "Close edit plan" }).click();
+await run.page.getByRole("button", { name: /^Appearance/ }).click();
 assert.equal(
   await run.page.getByRole("button", { name: /Premium.*Warm gold/ }).getAttribute("aria-pressed"),
   "true",
@@ -280,6 +341,139 @@ assert.equal(
 );
 assert.deepEqual(run.errors, []);
 await run.context.close();
+
+const lightTabRun = await openState(returningFixtureWithCurrentCompletion(), 390, "light");
+for (const tab of ["TODAY", "COACH", "PROGRESS", "PROFILE"]) {
+  await lightTabRun.page.getByRole("button", { name: tab, exact: true }).click();
+  await screenshot(lightTabRun.page, `390-${tab.toLowerCase()}-premium-light.png`);
+  assert.deepEqual(
+    await visibleGreenLeaks(lightTabRun.page),
+    [],
+    `Premium Light ${tab} contains no ROOK green`,
+  );
+}
+
+await lightTabRun.page.getByRole("button", { name: /Export workout plan/ }).click();
+await lightTabRun.page.getByText("Include notes", { exact: true }).click();
+assert.deepEqual(
+  await visibleGreenLeaks(lightTabRun.page),
+  [],
+  "Premium Light export sheet contains no ROOK green",
+);
+await screenshot(lightTabRun.page, "390-export-plan-premium-light.png");
+await lightTabRun.page.getByRole("button", { name: "Close export workout plan" }).click();
+
+await lightTabRun.page.getByRole("button", { name: /Edit plan/ }).click();
+assert.deepEqual(
+  await visibleGreenLeaks(lightTabRun.page),
+  [],
+  "Premium Light plan editor contains no ROOK green",
+);
+await lightTabRun.page.getByRole("button", { name: /^Edit / }).first().click();
+assert.deepEqual(
+  await visibleGreenLeaks(lightTabRun.page),
+  [],
+  "Expanded Premium Light plan editor contains no ROOK green",
+);
+await screenshot(lightTabRun.page, "390-plan-editor-premium-light.png");
+await lightTabRun.page.getByRole("button", { name: "Close edit plan" }).click();
+
+for (const [entry, screenshotName] of [
+  [/Training restrictions/, "390-restrictions-premium-light.png"],
+  [/Logging & increments/, "390-logging-premium-light.png"],
+  [/Appearance/, "390-appearance-settings-premium-light.png"],
+]) {
+  await lightTabRun.page.getByRole("button", { name: entry }).click();
+  assert.deepEqual(
+    await visibleGreenLeaks(lightTabRun.page),
+    [],
+    `Premium Light ${entry} sheet contains no ROOK green`,
+  );
+  if (screenshotName === "390-logging-premium-light.png") {
+    const units = await lightTabRun.page.locator(".unit-segmented").evaluate((control) => {
+      const channels = (value) => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+      const track = channels(getComputedStyle(control).backgroundColor);
+      const indicator = channels(getComputedStyle(control, "::before").backgroundColor);
+      return {
+        delta: indicator.reduce((sum, value, index) => sum + Math.abs(value - track[index]), 0),
+        active: getComputedStyle(control.querySelector(".active")).color,
+        inactive: getComputedStyle(control.querySelector("button:not(.active)")).color,
+        border: getComputedStyle(control).borderWidth,
+        shadow: getComputedStyle(control).boxShadow,
+      };
+    });
+    assert.ok(units.delta >= 24, "Premium Light selected unit has a clearly differentiated cream fill");
+    assert.notEqual(units.active, units.inactive, "Premium Light selected unit text is distinct");
+    assert.equal(units.border, "0px", "the unit track does not regain an accent outline");
+    assert.equal(units.shadow, "none", "the unit track does not retain a touch focus halo");
+  }
+  await screenshot(lightTabRun.page, screenshotName);
+  await lightTabRun.page.getByRole("button", { name: /^Close/ }).click();
+}
+assert.deepEqual(lightTabRun.errors, []);
+await lightTabRun.context.close();
+
+const lightNoticeState = returningFixture(true);
+const noticeDate = new Date();
+noticeDate.setDate(noticeDate.getDate() + 1);
+lightNoticeState.selectedDate = isoDay(noticeDate);
+lightNoticeState.selectedDay = weekday(noticeDate);
+const lightNoticeRun = await openState(lightNoticeState, 390, "light");
+const activeNotice = lightNoticeRun.page.locator(".active-workout-notice");
+assert.equal(await activeNotice.count(), 1);
+assert.deepEqual(
+  await activeNotice.evaluate((notice) => ({
+    background: getComputedStyle(notice).backgroundColor,
+    border: getComputedStyle(notice).borderColor,
+    eyebrow: getComputedStyle(notice.querySelector(".eyebrow")).color,
+    action: getComputedStyle(notice.querySelector("button")).color,
+  })),
+  {
+    background: "rgb(241, 232, 207)",
+    border: "rgba(138, 103, 15, 0.3)",
+    eyebrow: "rgb(138, 103, 15)",
+    action: "rgb(138, 103, 15)",
+  },
+  "Premium Light active-workout notice uses the restrained gold treatment",
+);
+assert.deepEqual(
+  await visibleGreenLeaks(lightNoticeRun.page),
+  [],
+  "Premium Light active-workout notice contains no legacy green",
+);
+await screenshot(lightNoticeRun.page, "390-active-notice-premium-light.png");
+assert.deepEqual(lightNoticeRun.errors, []);
+await lightNoticeRun.context.close();
+
+const lightRestrictionRun = await openState(returningFixtureWithRestriction(), 390, "light");
+await lightRestrictionRun.page.getByRole("button", { name: "PROFILE", exact: true }).click();
+await lightRestrictionRun.page.getByRole("button", { name: /Training restrictions/ }).click();
+const restrictionSummary = lightRestrictionRun.page.locator(
+  ".training-safety-summary.constraints-active",
+);
+await restrictionSummary.waitFor();
+assert.deepEqual(
+  await restrictionSummary.evaluate((summary) => ({
+    background: getComputedStyle(summary).backgroundColor,
+    border: getComputedStyle(summary).borderColor,
+    eyebrow: getComputedStyle(summary.querySelector(".eyebrow")).color,
+  })),
+  {
+    background: "rgb(241, 232, 207)",
+    border: "rgba(138, 103, 15, 0.3)",
+    eyebrow: "rgb(138, 103, 15)",
+  },
+  "Premium Light applied-restriction summary uses the restrained gold treatment",
+);
+assert.deepEqual(
+  await visibleGreenLeaks(lightRestrictionRun.page),
+  [],
+  "Premium Light applied-restriction summary contains no legacy green",
+);
+await restrictionSummary.scrollIntoViewIfNeeded();
+await screenshot(lightRestrictionRun.page, "390-applied-restrictions-premium-light.png");
+assert.deepEqual(lightRestrictionRun.errors, []);
+await lightRestrictionRun.context.close();
 
 const activeRun = await openState(returningFixture(true), 320);
 await activeRun.page.getByRole("button", { name: "RESUME WORKOUT" }).click();
@@ -312,12 +506,28 @@ assert.equal((await premiumSignals(activeRun.page)).overflow, false);
 await screenshot(activeRun.page, "320-active-workout-premium.png");
 assert.deepEqual(await visibleGreenLeaks(activeRun.page), [], "Premium workout contains no ROOK green");
 await art.click();
-await activeRun.page.locator(".exercise-visual-viewer").waitFor();
+const premiumViewer = activeRun.page.locator(".exercise-visual-viewer");
+await premiumViewer.waitFor();
+await activeRun.page.waitForTimeout(240);
+const premiumViewerBox = await premiumViewer.boundingBox();
+assert.equal(premiumViewerBox.y, 0);
+assert.equal(premiumViewerBox.height, 844);
+assert.deepEqual(
+  await visibleGreenLeaks(activeRun.page),
+  [],
+  "Premium fullscreen exercise viewer contains no ROOK green",
+);
 await screenshot(activeRun.page, "320-exercise-viewer-premium.png");
 assert.deepEqual(activeRun.errors, []);
 await activeRun.context.close();
 
 const lightActiveState = returningFixture(true);
+for (const set of lightActiveState.activeWorkout.exercises[
+  lightActiveState.activeWorkout.exerciseIndex
+].sets) {
+  set.completed = true;
+  set.reps = Math.max(1, Number(set.reps) || 8);
+}
 lightActiveState.activeWorkout.rest = {
   seconds: 120,
   endsAt: Date.now() + 90_000,
@@ -371,12 +581,64 @@ assert.equal(
   "rgb(244, 241, 232)",
   "Premium Light timer Skip keeps high-contrast text",
 );
+const lightNextAction = lightActiveRun.page.getByRole("button", {
+  name: "NEXT EXERCISE →",
+});
+assert.equal(
+  await lightNextAction.evaluate((node) => getComputedStyle(node).color),
+  "rgb(29, 27, 24)",
+  "Premium Light gold actions keep dark ink instead of low-contrast white",
+);
   // Capture the settled dock rather than its brief entrance fade.
   await lightActiveRun.page.waitForTimeout(240);
   await screenshot(lightActiveRun.page, "320-active-workout-premium-light.png");
 assert.deepEqual(await visibleGreenLeaks(lightActiveRun.page), [], "Premium Light contains no ROOK green");
 assert.deepEqual(lightActiveRun.errors, []);
 await lightActiveRun.context.close();
+
+const lightCoachRun = await openState(returningFixture(), 390, "light");
+await lightCoachRun.page.getByRole("button", { name: "COACH", exact: true }).click();
+assert.equal(
+  await lightCoachRun.page.locator(".coach-empty .eyebrow").evaluate(
+    (node) => getComputedStyle(node).color,
+  ),
+  "rgb(138, 103, 15)",
+  "Premium Light Coach context uses the Premium gold accent",
+);
+assert.equal(
+  await lightCoachRun.page.locator(".bottom-nav .nav-active").evaluate(
+    (node) => getComputedStyle(node, "::after").backgroundColor,
+  ),
+  "rgb(138, 103, 15)",
+  "Premium Light active navigation uses gold rather than the light-theme black fallback",
+);
+assert.equal(
+  await lightCoachRun.page.locator(".bottom-nav .nav-active").evaluate(
+    (node) => getComputedStyle(node).color,
+  ),
+  "rgb(138, 103, 15)",
+  "Premium Light active navigation label matches its gold indicator",
+);
+assert.equal(
+  await lightCoachRun.page.getByLabel("Ask Coach").isDisabled(),
+  true,
+  "Premium Light keeps the offline Coach composer disabled",
+);
+assert.notEqual(
+  await lightCoachRun.page.getByRole("button", { name: "Send message" }).evaluate(
+    (node) => getComputedStyle(node).backgroundColor,
+  ),
+  "rgb(184, 137, 30)",
+  "Premium Light gold does not make the unavailable Send action look active",
+);
+await screenshot(lightCoachRun.page, "390-coach-premium-light.png");
+assert.deepEqual(
+  await visibleGreenLeaks(lightCoachRun.page),
+  [],
+  "Premium Light Coach contains no ROOK green",
+);
+assert.deepEqual(lightCoachRun.errors, []);
+await lightCoachRun.context.close();
 
 const timerCompletionState = returningFixture(true);
 timerCompletionState.activeWorkout.rest = {
@@ -403,6 +665,33 @@ await screenshot(onboardingRun.page, "375-onboarding-premium.png");
 assert.deepEqual(await visibleGreenLeaks(onboardingRun.page), [], "Premium onboarding contains no ROOK green");
 assert.deepEqual(onboardingRun.errors, []);
 await onboardingRun.context.close();
+
+const lightLandingRun = await openState(fresh, 375, "light");
+assert.deepEqual(
+  await visibleGreenLeaks(lightLandingRun.page),
+  [],
+  "Premium Light landing contains no ROOK green",
+);
+await lightLandingRun.page.getByRole("button", { name: /Already have a plan/ }).click();
+assert.deepEqual(
+  await visibleGreenLeaks(lightLandingRun.page),
+  [],
+  "Premium Light import entry contains no ROOK green",
+);
+await screenshot(lightLandingRun.page, "375-import-entry-premium-light.png");
+assert.deepEqual(lightLandingRun.errors, []);
+await lightLandingRun.context.close();
+
+const lightScratchRun = await openState(fresh, 375, "light");
+await lightScratchRun.page.getByRole("button", { name: /Start from scratch/ }).click();
+assert.deepEqual(
+  await visibleGreenLeaks(lightScratchRun.page),
+  [],
+  "Premium Light scratch-plan entry contains no ROOK green",
+);
+await screenshot(lightScratchRun.page, "375-scratch-entry-premium-light.png");
+assert.deepEqual(lightScratchRun.errors, []);
+await lightScratchRun.context.close();
 
 await browser.close();
 console.log(

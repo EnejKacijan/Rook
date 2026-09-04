@@ -3,6 +3,8 @@ import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
 import { exerciseCatalog, isoDay, startWorkout, weekday } from "../src/domain.js";
 
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
+
 const browser = await chromium.launch({
   executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   headless: true,
@@ -65,7 +67,7 @@ async function openState(state, { reducedMotion = "no-preference" } = {}) {
     state,
   );
   const page = await context.newPage();
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+  await page.goto(appUrl, { waitUntil: "networkidle" });
   return { context, page };
 }
 
@@ -134,7 +136,7 @@ for (const theme of ["light", "dark", "premium"]) {
     "rook-unit-values-in",
     `${theme} converted values use one restrained fade`,
   );
-  await todayRun.page.getByRole("button", { name: "Close", exact: true }).click();
+  await todayRun.page.getByRole("button", { name: /^Close/ }).click();
   await todayRun.page.getByRole("button", { name: /Edit plan/ }).click();
   const firstEditor = todayRun.page.locator(".plan-editor-summary").first();
   await firstEditor.click();

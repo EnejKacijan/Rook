@@ -6,6 +6,7 @@ import {
   authoritativeImportedWeights,
   cleanImportedExerciseLabel,
   coachContext,
+  completedWorkoutCanResume,
   compatibleReplacementCandidates,
   deterministicCoach,
   estimateSessionMinutes,
@@ -23,6 +24,7 @@ import {
   validateProgramExerciseChanges,
   validateWeekScheduleChanges,
   weekKey,
+  workoutPlanDate,
 } from "./domain.js";
 import { plannerCatalog, summarizeTrainingHistory } from "./planQuality.js";
 import {
@@ -1336,6 +1338,22 @@ function inferImportedProfile(profile, program, schedule) {
 
 function validateAIAction(action, state) {
   if (!action || typeof action !== "object") return null;
+  if (action.type === "resume-empty-completed-workout") {
+    const target = state.workouts.find(
+      (workout) => workout.id === action.targetCompletedWorkoutId,
+    );
+    if (!target || !completedWorkoutCanResume(state, target.id)) return null;
+    const trainingDate = workoutPlanDate(target);
+    if (action.trainingDate && action.trainingDate !== trainingDate) return null;
+    return {
+      type: "resume-empty-completed-workout",
+      label: "RESUME WORKOUT",
+      targetCompletedWorkoutId: target.id,
+      trainingDate,
+      expectedCompletedAt: target.completedAt,
+      operationId: `coach-resume:${target.id}:${target.completedAt}`,
+    };
+  }
   if (action.type === "add-today-workout") {
     const today = isoDay();
     const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(
@@ -1553,6 +1571,7 @@ function validateAIAction(action, state) {
       type: "program-exercise-change",
       label: "APPLY TO PROGRAM",
       changes: checked.changes,
+      baseProgramVersion: Number(state.program?.version || 1),
       explanation: String(
         action.explanation || "Review the proposed recurring program changes.",
       ),

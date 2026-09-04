@@ -122,7 +122,7 @@ for (const [groupIndex, ids] of exerciseGroups.entries()) {
       1,
       `${name} keeps its generated-plan illustration in detail`,
     );
-    await page.getByRole("button", { name: "Close", exact: true }).click();
+    await page.getByRole("button", { name: /^Close/ }).click();
   }
   await page.screenshot({
     path: fileURLToPath(

@@ -168,7 +168,7 @@ export function buildWeeklyPlanExport({
     });
   });
   return {
-    title: `${state.program.name || "ROOK"} - weekly plan`,
+    title: state.program.name || "ROOK",
     text: lines.join("\n"),
     filename: `rook-weekly-plan-${isoDay(monday)}.txt`,
   };

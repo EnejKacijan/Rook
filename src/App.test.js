@@ -25,6 +25,7 @@ import {
   legacyThemePreference,
   resolvedAppearance,
   resolvedTheme,
+  restrictionPlanSuggestions,
   setupSelectionValid,
   shouldEnableRir,
   splitAdaptationCopy,
@@ -33,7 +34,67 @@ import {
   weekLabel,
   workoutTitleParts,
 } from "./App.jsx";
-import { blankState, workingSetCanComplete } from "./domain.js";
+import { blankState, buildProgram, workingSetCanComplete } from "./domain.js";
+
+describe("restriction-aware plan review", () => {
+  const fixture = () => {
+    const state = blankState();
+    state.profile = {
+      ...state.profile,
+      goal: "Build muscle",
+      experience: "Intermediate",
+      daysPerWeek: 2,
+      availableDays: ["Tue", "Sat"],
+      sessionMinutes: 60,
+      environment: "Commercial gym",
+      equipment: ["full gym"],
+    };
+    state.program = buildProgram(state.profile);
+    const day = state.program.days[0];
+    const exercise = day.exercises[0];
+    exercise.exerciseId = "leg-press";
+    return { state, day, exercise };
+  };
+
+  it("does not preselect a plan mutation for an explicit movement limit", () => {
+    const { state, day, exercise } = fixture();
+    const [suggestion] = restrictionPlanSuggestions(
+      state.program,
+      { ...state.profile, avoid: "Avoid Leg Press" },
+      [{
+        dayId: day.id,
+        dayName: day.name,
+        exerciseEntryId: exercise.id,
+        exerciseId: exercise.exerciseId,
+        exerciseName: "Leg Press",
+        reason: "movement",
+        context: "explicit-limit",
+      }],
+    );
+    expect(suggestion.choice).toBe("review");
+    expect(suggestion.candidates.length).toBeGreaterThan(0);
+  });
+
+  it("offers removal rather than inferred substitutions for a pain context", () => {
+    const { state, day, exercise } = fixture();
+    const [suggestion] = restrictionPlanSuggestions(
+      state.program,
+      { ...state.profile, avoid: "Leg Press hurts" },
+      [{
+        dayId: day.id,
+        dayName: day.name,
+        exerciseEntryId: exercise.id,
+        exerciseId: exercise.exerciseId,
+        exerciseName: "Leg Press",
+        reason: "movement",
+        context: "pain",
+      }],
+    );
+    expect(suggestion.choice).toBe("review");
+    expect(suggestion.candidates).toEqual([]);
+    expect(suggestion.canRemove).toBe(true);
+  });
+});
 
 describe("context-aware Coach home", () => {
   it("summarizes today's real workout and first-session context", () => {
@@ -376,7 +437,7 @@ describe("profile presentation", () => {
     });
     expect(rows).toEqual([
       ["Goal", "Build muscle"],
-      ["Schedule", "Mon, Thu"],
+      ["Availability", "Mon, Thu"],
     ]);
     expect(JSON.stringify(rows)).not.toMatch(/null min|undefined/i);
   });

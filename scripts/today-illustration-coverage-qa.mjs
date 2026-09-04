@@ -187,7 +187,7 @@ assert.equal(
   1,
   "an imported alias keeps its illustration in exercise detail",
 );
-await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.getByRole("button", { name: /^Close/ }).click();
 const wideLayout = await rows.evaluateAll((items) =>
   items.map((row) => {
     const main = row

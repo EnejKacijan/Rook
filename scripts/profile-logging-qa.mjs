@@ -8,6 +8,7 @@ import { buildProgram, weekday } from "../src/domain.js";
 const outputRoot = new URL("../artifacts/profile-logging/", import.meta.url);
 await mkdir(outputRoot, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, outputRoot));
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 const browser = await chromium.launch({
   executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   headless: true,
@@ -48,7 +49,7 @@ async function openState(
       body: JSON.stringify({ available: false, provider: null }),
     }),
   );
-  await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+  await page.goto(appUrl, { waitUntil: "networkidle" });
   return { context, page, errors };
 }
 
@@ -57,7 +58,7 @@ async function profileText(page) {
   const text = await page.locator(".profile-screen").innerText();
   assert.equal(
     await page
-      .getByRole("heading", { name: "Training setup", level: 1 })
+      .getByRole("heading", { name: "Training profile", level: 1 })
       .count(),
     1,
     "Profile keeps a stable page heading",
@@ -116,34 +117,52 @@ ensureWorkoutToday(complete);
     "replacement action uses normal title casing",
   );
   assert.equal(
-    await page.getByRole("button", { name: /^Schedule/ }).count(),
+    await page.getByRole("button", { name: /^Availability/ }).count(),
     1,
-    "Schedule is a real interactive row",
+    "Availability is a real interactive planning preference",
   );
   assert.equal(
-    await page.getByRole("button", { name: /^Environment/ }).count(),
+    await page.getByRole("button", { name: /^Training environment/ }).count(),
     1,
-    "Environment is a real interactive row",
+    "Training environment is a real interactive planning preference",
   );
   assert.equal(
-    await page.getByRole("button", { name: /^Equipment/ }).count(),
+    await page.getByRole("button", { name: /^Available equipment/ }).count(),
     1,
-    "Equipment is a real interactive row",
+    "Available equipment is a real interactive planning preference",
+  );
+  assert.equal(
+    await page.getByText(
+      "Used by Coach and future plan changes. Your current program is edited separately.",
+      { exact: true },
+    ).count(),
+    1,
+    "Profile separates planning preferences from the current program",
   );
   const programBeforeProfileEdits = await page.evaluate(() =>
     JSON.stringify(JSON.parse(localStorage.getItem("lift-v2-state")).program),
   );
-  await page.getByRole("button", { name: /^Schedule/ }).click();
+  const programShapeBeforeProfileEdits = await page.evaluate(() => {
+    const program = JSON.parse(localStorage.getItem("lift-v2-state")).program;
+    return {
+      id: program.id,
+      days: program.days.map((day) => ({
+        weekday: day.weekday,
+        exercises: day.exercises.map((exercise) => exercise.exerciseId),
+      })),
+    };
+  });
+  await page.getByRole("button", { name: /^Availability/ }).click();
   assert.equal(
     await page.locator(".day-options button:disabled").count(),
-    new Set(complete.program.days.map((day) => day.weekday)).size,
-    "current program days cannot be removed from availability",
+    0,
+    "current program days are not locked into future availability",
   );
   const extraAvailableDay = page
     .locator('.day-options button[aria-pressed="false"]')
     .first();
   await extraAvailableDay.click();
-  await page.getByRole("button", { name: "SAVE SCHEDULE" }).click();
+  await page.getByRole("button", { name: "SAVE AVAILABILITY" }).click();
   assert.equal(
     await page.evaluate(
       () =>
@@ -153,33 +172,32 @@ ensureWorkoutToday(complete);
     complete.profile.availableDays.length + 1,
     "extra availability saves without moving current workouts",
   );
-  await page.getByRole("button", { name: /^Environment/ }).click();
+  await page.getByRole("button", { name: /^Training environment/ }).click();
   await page.getByRole("button", { name: "Home gym" }).click();
   await page.getByRole("button", { name: "Dumbbells" }).click();
   assert.equal(
     await page.getByRole("button", { name: "SAVE SETUP" }).isDisabled(),
-    true,
-    "an incompatible setup cannot strand the current plan",
+    false,
+    "future setup preferences are not blocked by the current plan",
   );
   assert.equal(
     await page
       .getByText(/current program uses equipment outside this setup/i)
       .count(),
-    1,
-    "incompatible setup explains what must happen next",
+    0,
+    "the current program is not invalidated by preference changes",
   );
-  await page.getByRole("button", { name: "Both" }).click();
   await page.getByRole("button", { name: "SAVE SETUP" }).click();
   assert.match(
-    await page.getByRole("button", { name: /^Environment/ }).innerText(),
-    /Both/,
+    await page.getByRole("button", { name: /^Training environment/ }).innerText(),
+    /Home gym/,
   );
-  await page.getByRole("button", { name: /^Equipment/ }).click();
+  await page.getByRole("button", { name: /^Available equipment/ }).click();
   await page.getByRole("button", { name: "Resistance bands" }).click();
   await page.getByRole("button", { name: "SAVE SETUP" }).click();
   assert.match(
-    await page.getByRole("button", { name: /^Equipment/ }).innerText(),
-    /Full gym, Dumbbells, Resistance bands/,
+    await page.getByRole("button", { name: /^Available equipment/ }).innerText(),
+    /Dumbbells, Resistance bands/,
   );
   assert.equal(
     await page.evaluate(() =>
@@ -190,6 +208,20 @@ ensureWorkoutToday(complete);
   );
   await page.reload({ waitUntil: "networkidle" });
   await profileText(page);
+  assert.deepEqual(
+    await page.evaluate(() => {
+      const program = JSON.parse(localStorage.getItem("lift-v2-state")).program;
+      return {
+        id: program.id,
+        days: program.days.map((day) => ({
+          weekday: day.weekday,
+          exercises: day.exercises.map((exercise) => exercise.exerciseId),
+        })),
+      };
+    }),
+    programShapeBeforeProfileEdits,
+    "planning preference changes cannot invalidate the current program after reload",
+  );
   await page.getByRole("button", { name: /Ask Coach to adjust/i }).click();
   assert.equal(
     await page.getByRole("textbox", { name: "Ask Coach" }).inputValue(),
@@ -231,8 +263,41 @@ ensureWorkoutToday(complete);
   }
   await page.getByRole("button", { name: "Replace plan" }).click();
   await page.getByRole("button", { name: /Import from Notes/ }).waitFor();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.getByRole("button", { name: /Logging & increments/ }).click();
+  await page.setViewportSize({ width: 390, height: 620 });
+  const lightUnitContrast = await page.locator(".unit-segmented").evaluate((control) => {
+    const channels = (value) => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+    const track = channels(getComputedStyle(control).backgroundColor);
+    const indicator = channels(getComputedStyle(control, "::before").backgroundColor);
+    return {
+      delta: indicator.reduce((sum, value, index) => sum + Math.abs(value - track[index]), 0),
+      active: getComputedStyle(control.querySelector(".active")).color,
+      inactive: getComputedStyle(control.querySelector("button:not(.active)")).color,
+    };
+  });
+  assert.ok(lightUnitContrast.delta >= 24, "Standard Light selected unit has a clearly differentiated filled surface");
+  assert.notEqual(lightUnitContrast.active, lightUnitContrast.inactive, "Standard Light selected unit text is distinct");
+  const rirSwitch = page.getByRole("switch", {
+    name: "Track reps in reserve (RIR)",
+  });
+  const rirInitiallyEnabled = await rirSwitch.isChecked();
+  const rirHelp = page.getByRole("button", { name: "What is RIR?" });
+  const rirHelpBox = await rirHelp.boundingBox();
+  assert.ok(rirHelpBox.width >= 44 && rirHelpBox.height >= 44);
+  await rirHelp.click();
+  const rirTooltip = page.getByRole("tooltip");
+  await rirTooltip.waitFor();
+  await page.waitForTimeout(50);
+  assert.match(await rirTooltip.innerText(), /Reps in reserve[\s\S]*0 = none left/);
+  assert.equal(
+    await rirSwitch.isChecked(),
+    rirInitiallyEnabled,
+    "opening help never changes the RIR setting",
+  );
+  await page.screenshot({ path: output("390-logging-rir-help.png") });
+  await page.mouse.click(10, 300);
+  await rirTooltip.waitFor({ state: "detached" });
   assert.equal(
     await page.getByRole("switch", { name: "Rest timer" }).isChecked(),
     true,
@@ -290,7 +355,7 @@ ensureWorkoutToday(complete);
     .locator(".setting-switch")
     .filter({ hasText: "Auto-start after completed set" })
     .click();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.getByRole("button", { name: "TODAY", exact: true }).click();
   await page.getByRole("button", { name: "START WORKOUT" }).click();
   await page.getByRole("button", { name: "Complete set 1" }).click();
@@ -355,6 +420,39 @@ partial.program = buildProgram(partial.profile);
   });
   await page.getByRole("button", { name: /Add a few details/ }).click();
   await page.getByRole("heading", { name: "Complete your profile" }).waitFor();
+  assert.equal(
+    await page.getByRole("combobox", { name: "Sex" }).count(),
+    0,
+    "Sex no longer uses a viewport-clipping native select",
+  );
+  const sexTrigger = page.locator(".profile-sex-trigger");
+  assert.match(await sexTrigger.getAttribute("aria-label") || await sexTrigger.getAttribute("aria-labelledby"), /profile-sex-label/);
+  await sexTrigger.click();
+  const sexGroup = page.getByRole("group", { name: "Sex" });
+  await sexGroup.waitFor();
+  assert.equal(
+    await sexGroup.getByRole("radio").count(),
+    5,
+    "Sex choices use native radio semantics",
+  );
+  assert.deepEqual(
+    await sexGroup.locator("label > span").allTextContents(),
+    ["Not set", "Female", "Male", "Intersex", "Prefer not to say"],
+    "inclusive option set remains complete",
+  );
+  await page.screenshot({
+    path: output("390-profile-sex-options.png"),
+    fullPage: false,
+  });
+  await page.getByText("Intersex", { exact: true }).click();
+  await page.getByRole("group", { name: "Sex" }).waitFor({ state: "detached" });
+  assert.equal(await sexTrigger.getAttribute("aria-expanded"), "false");
+  assert.match(await sexTrigger.innerText(), /Intersex/);
+  assert.equal(
+    await sexTrigger.evaluate((element) => document.activeElement === element),
+    true,
+    "selection collapses the options and restores focus to the disclosure",
+  );
   assert.deepEqual(errors, []);
   await context.close();
 }
@@ -400,7 +498,7 @@ for (const importedExtra of [false, true]) {
     await page.getByRole("button", { name: "SAVE PREFERENCES" }).count(),
     1,
   );
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.screenshot({
     path: output(
       `390-profile-imported-${importedExtra ? "with-details" : "incomplete"}.png`,
@@ -477,7 +575,7 @@ for (const environment of ["Commercial gym", "Home gym"]) {
     0,
     "illustration attribution does not sit outside Appearance on Profile",
   );
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(
     await page.getByText("ILLUSTRATION CREDITS", { exact: true }).count(),
     1,
@@ -519,7 +617,7 @@ for (const environment of ["Commercial gym", "Home gym"]) {
     1,
     "credits remain visible when illustrations are turned off",
   );
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.getByRole("button", { name: "TODAY", exact: true }).click();
   assert.equal(
     await page.locator(".exercise-preview img").count(),
@@ -532,18 +630,18 @@ for (const environment of ["Commercial gym", "Home gym"]) {
     0,
     "exercise detail hides its illustration when disabled",
   );
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
   assert.match(
-    await page.getByRole("button", { name: /Appearance/ }).innerText(),
+    await page.getByRole("button", { name: /^Appearance/ }).innerText(),
     /illustrations off/i,
   );
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await page.getByRole("button", { name: /^Appearance/ }).click();
   await page
     .locator(".setting-switch")
     .filter({ hasText: "Exercise illustrations" })
     .click();
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.getByRole("button", { name: "TODAY", exact: true }).click();
   assert.equal(
     await page.locator(".exercise-preview img").count(),
@@ -561,7 +659,7 @@ for (const environment of ["Commercial gym", "Home gym"]) {
     /\/assets\/wg-.*\.svg$/,
     "exercise detail only uses the bundled library",
   );
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.getByRole("button", { name: "START WORKOUT" }).click();
   const activeArt = page.locator(".exercise-heading-art");
   if (await activeArt.count()) {
@@ -612,7 +710,7 @@ for (const [theme, colorScheme] of [
   const text = await profileText(page);
   assert.match(
     text,
-    /Schedule[\s\S]*Mon–Fri/,
+    /Availability[\s\S]*Mon–Fri/,
     `${theme} profile uses compact continuous schedule copy`,
   );
   assert.equal(
@@ -626,7 +724,7 @@ for (const [theme, colorScheme] of [
     path: output(`340-profile-${theme}.png`),
     fullPage: true,
   });
-  await page.getByRole("button", { name: /^Environment/ }).click();
+  await page.getByRole("button", { name: /^Training environment/ }).click();
   await page.getByRole("button", { name: "Both" }).click();
   await page.getByRole("button", { name: "Dumbbells" }).click();
   await page.getByRole("button", { name: "Resistance bands" }).click();
@@ -641,7 +739,7 @@ for (const [theme, colorScheme] of [
     path: output(`340-equipment-${theme}.png`),
     fullPage: false,
   });
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.evaluate(() => {
     document.documentElement.style.fontSize = "125%";
   });

@@ -131,6 +131,70 @@ await page.route("**/api/ai/status", (route) =>
 await page.goto(appUrl, { waitUntil: "networkidle" });
 await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 
+const rirHelp = page.getByRole("button", { name: "What is RIR?" });
+assert.equal(await rirHelp.count(), 1, "active logging explains RIR once, at the column header");
+const rirHelpTarget = await rirHelp.boundingBox();
+assert.ok(rirHelpTarget.width >= 44 && rirHelpTarget.height >= 44, "RIR help keeps a 44px mobile target");
+const [kgLabelBox, repsLabelBox, rirMarkBox, kgControlBox, repsControlBox, rirControlBox] =
+  await Promise.all([
+    page.locator(".set-labels > span").nth(1).boundingBox(),
+    page.locator(".set-labels > span").nth(2).boundingBox(),
+    page.locator(".set-labels .help-popover-mark").boundingBox(),
+    page.locator(".set-row").first().locator(".stepper").nth(0).boundingBox(),
+    page.locator(".set-row").first().locator(".stepper").nth(1).boundingBox(),
+    page.locator(".set-row").first().locator("select").boundingBox(),
+  ]);
+for (const [label, control, name] of [
+  [kgLabelBox, kgControlBox, "KG"],
+  [repsLabelBox, repsControlBox, "REPS"],
+]) {
+  const verticalGap = control.y - (label.y + label.height);
+  assert.ok(
+    verticalGap >= 12 && verticalGap <= 16,
+    `${name} header sits 12–16px above its first control; received ${verticalGap}px ${JSON.stringify({ label, control })}`,
+  );
+  const labelCenter = label.x + label.width / 2;
+  const controlCenter = control.x + control.width / 2;
+  assert.ok(
+    Math.abs(labelCenter - controlCenter) <= 1,
+    `${name} header remains centered over its control`,
+  );
+}
+const rirVerticalGap = rirControlBox.y - (rirMarkBox.y + rirMarkBox.height);
+assert.ok(
+  rirVerticalGap >= 12 && rirVerticalGap <= 16,
+  `RIR header sits 12–16px above its first control; received ${rirVerticalGap}px`,
+);
+assert.ok(
+  Math.abs(
+    rirHelpTarget.x + rirHelpTarget.width / 2 -
+      (rirControlBox.x + rirControlBox.width / 2),
+  ) <= 1,
+  "RIR label and help control remain centered over the RIR column",
+);
+await rirHelp.click();
+const rirTooltip = page.getByRole("tooltip");
+await rirTooltip.waitFor();
+await page.waitForTimeout(50);
+assert.match(
+  await rirTooltip.innerText(),
+  /Reps in reserve[\s\S]*0 = none left; 1 = one left; up to 4\./,
+);
+const rirTooltipBox = await rirTooltip.boundingBox();
+assert.ok(rirTooltipBox.x >= 0 && rirTooltipBox.x + rirTooltipBox.width <= 320);
+assert.ok(
+  rirTooltipBox.y >= 0 && rirTooltipBox.y + rirTooltipBox.height <= 844,
+  JSON.stringify(rirTooltipBox),
+);
+await page.screenshot({ path: output("320-rir-help.png") });
+await page.keyboard.press("Escape");
+await rirTooltip.waitFor({ state: "detached" });
+assert.equal(
+  await rirHelp.evaluate((node) => document.activeElement === node),
+  true,
+  "closing RIR help keeps focus on its trigger",
+);
+
 const heading = page.locator(".exercise-heading");
 const art = heading.locator(".exercise-heading-art-button");
 assert.equal(await art.count(), 1, "active logging retains the compact exercise artwork");
@@ -162,6 +226,15 @@ const activeStateBeforeViewer = await page.evaluate(() =>
 await art.click();
 const visualViewer = page.locator(".exercise-visual-viewer");
 await visualViewer.waitFor();
+await page.waitForTimeout(240);
+const viewerBox = await visualViewer.boundingBox();
+assert.equal(viewerBox.y, 0, "the artwork viewer starts at the top of the viewport");
+assert.equal(viewerBox.height, 844, "the artwork viewer fills the mobile viewport");
+assert.equal(
+  await page.locator(".exercise-visual-layer .modal-drag-handle").count(),
+  0,
+  "the fullscreen artwork viewer does not retain bottom-sheet chrome",
+);
 assert.equal(
   await visualViewer.getByRole("heading", { name: /Single-Arm Incline Cable Lateral Raise/ }).count(),
   1,
@@ -179,11 +252,77 @@ assert.ok(
 );
 await page.getByRole("button", { name: "Close visual viewer" }).click();
 await visualViewer.waitFor({ state: "detached" });
+await page.waitForTimeout(50);
+assert.equal(
+  await art.evaluate((node) => document.activeElement === node),
+  true,
+  "closing the viewer restores focus to the active-workout thumbnail",
+);
 assert.deepEqual(
   await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).activeWorkout),
   activeStateBeforeViewer,
   "opening and closing artwork preserves every persisted workout field",
 );
+await art.click();
+await visualViewer.waitFor();
+await page.evaluate(() => window.history.back());
+await visualViewer.waitFor({ state: "detached" });
+assert.deepEqual(
+  await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).activeWorkout),
+  activeStateBeforeViewer,
+  "browser Back closes only the viewer and preserves workout progress",
+);
+const noteButton = page.getByRole("button", { name: "No exercise note. Add note." });
+assert.equal(await noteButton.count(), 1, "the current exercise exposes one compact note affordance");
+const noteButtonBox = await noteButton.boundingBox();
+assert.ok(noteButtonBox.width >= 44 && noteButtonBox.height >= 44, "the pencil keeps a 44px touch target");
+await noteButton.click();
+await page.getByRole("heading", { name: "Exercise note" }).waitFor();
+await page.waitForTimeout(50);
+assert.equal(
+  await page.getByRole("button", { name: "Close" }).evaluate((node) => document.activeElement === node),
+  true,
+  "the note sheet opens without focusing the textarea or summoning the software keyboard",
+);
+assert.equal(
+  await page.getByRole("textbox", { name: "Exercise note" }).evaluate((node) => document.activeElement === node),
+  false,
+);
+assert.equal(
+  await page.getByText(/Shown next time in/, { exact: false }).count(),
+  1,
+  "the editor explains its recurring template scope",
+);
+await page.getByRole("textbox", { name: "Exercise note" }).fill("Seat 4 · handles 2");
+await page.screenshot({ path: output("320-exercise-note-editor.png") });
+await page.getByRole("button", { name: "SAVE" }).click();
+await page.locator(".exercise-note-sheet").waitFor({ state: "detached" });
+assert.equal(
+  await heading.locator(".exercise-personal-note").innerText(),
+  "YOUR NOTE · Seat 4 · handles 2",
+  "personal notes remain visually separate from imported program notes",
+);
+assert.equal(
+  await page.getByRole("button", { name: "Exercise note. Added." }).count(),
+  1,
+  "the affordance exposes its saved state without relying on color",
+);
+const storedNote = await page.evaluate(() => {
+  const state = JSON.parse(localStorage.getItem("lift-v2-state"));
+  const activeExercise = state.activeWorkout.exercises[state.activeWorkout.exerciseIndex];
+  const programDay = state.program.days.find((day) => day.id === state.activeWorkout.programDayId);
+  return {
+    active: activeExercise.personalNote,
+    template: programDay.exercises.find((exercise) => exercise.id === activeExercise.id)?.personalNote,
+    restart: state.activeWorkout.restartSnapshot.exercises.find((exercise) => exercise.id === activeExercise.id)?.personalNote,
+  };
+});
+assert.deepEqual(storedNote, {
+  active: "Seat 4 · handles 2",
+  template: "Seat 4 · handles 2",
+  restart: "Seat 4 · handles 2",
+});
+await page.screenshot({ path: output("320-exercise-note-saved.png") });
 await page.getByRole("button", { name: "Exercise options" }).click();
 await page.getByRole("heading", { name: "Exercise options" }).waitFor();
 assert.equal(await page.getByRole("button", { name: /View exercise details/ }).count(), 1);
@@ -194,7 +333,7 @@ assert.equal(
   1,
   "history remains available through the semantically separate details action",
 );
-await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.getByRole("button", { name: /^Close/ }).click();
 await page.locator(".exercise-detail-overview").waitFor({ state: "detached" });
 await page.getByRole("button", { name: "Exercise options" }).click();
 await page.getByRole("button", { name: /Create superset/ }).click();
@@ -204,7 +343,7 @@ assert.equal(
   1,
   "superset creation moved into the secondary exercise-options sheet",
 );
-await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.getByRole("button", { name: /^Close/ }).click();
 
 const progress = page.locator(".workout-header small");
 assert.match(
@@ -344,7 +483,8 @@ assert.equal(Number(disabledStyle.opacity), 1);
 await weight.fill("135");
 assert.equal(await checks.nth(0).isEnabled(), true, "entering a valid load makes the active set confirmable");
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'ready');
-assert.equal(await checks.nth(0).innerText(), "✓");
+assert.equal(await checks.nth(0).innerText(), "", "a ready set keeps the pending ring until completion");
+assert.equal(await checks.nth(0).locator('.check-pending').count(), 1);
 await page.waitForTimeout(220);
 const readyStyle = await checks.nth(0).evaluate((node) => ({
   border: getComputedStyle(node).borderColor,
@@ -397,6 +537,51 @@ assert.equal(
   "curl mašina",
 );
 await page.screenshot({ path: output("320-jumped-to-annotated-exercise.png") });
+
+const noRirState = fixture();
+noRirState.profile.rirEnabled = false;
+const noRirContext = await browser.newContext({
+  viewport: { width: 320, height: 844 },
+  serviceWorkers: "block",
+});
+await noRirContext.addInitScript(
+  (state) => localStorage.setItem("lift-v2-state", JSON.stringify(state)),
+  noRirState,
+);
+const noRirPage = await noRirContext.newPage();
+await noRirPage.route("**/api/ai/status", (route) =>
+  route.fulfill({
+    status: 200,
+    contentType: "application/json",
+    body: JSON.stringify({ available: false }),
+  }),
+);
+await noRirPage.goto(appUrl, { waitUntil: "networkidle" });
+await noRirPage.getByRole("button", { name: "RESUME WORKOUT" }).click();
+await noRirPage.locator(".set-labels:not(.with-rir)").waitFor();
+const [kgLabelWithoutRir, repsLabelWithoutRir, kgControlWithoutRir, repsControlWithoutRir] =
+  await Promise.all([
+    noRirPage.locator(".set-labels > span").nth(1).boundingBox(),
+    noRirPage.locator(".set-labels > span").nth(2).boundingBox(),
+    noRirPage.locator(".set-row").first().locator(".stepper").nth(0).boundingBox(),
+    noRirPage.locator(".set-row").first().locator(".stepper").nth(1).boundingBox(),
+  ]);
+for (const [label, control, name] of [
+  [kgLabelWithoutRir, kgControlWithoutRir, "KG"],
+  [repsLabelWithoutRir, repsControlWithoutRir, "REPS"],
+]) {
+  const verticalGap = control.y - (label.y + label.height);
+  assert.ok(
+    verticalGap >= 12 && verticalGap <= 16,
+    `${name} stays 12–16px above its control when RIR is disabled; received ${verticalGap}px ${JSON.stringify({ label, control })}`,
+  );
+  assert.ok(
+    Math.abs(label.x + label.width / 2 - (control.x + control.width / 2)) <= 1,
+    `${name} remains horizontally aligned when RIR is disabled`,
+  );
+}
+await noRirPage.screenshot({ path: output("320-active-workout-without-rir.png") });
+await noRirContext.close();
 assert.deepEqual(errors, []);
 await browser.close();
 console.log(

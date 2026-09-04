@@ -7,6 +7,7 @@ import { blankState, exerciseCatalog, STORAGE_KEY } from "../src/domain.js";
 const artifacts = new URL("../artifacts/import-review-ux/", import.meta.url);
 await mkdir(artifacts, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, artifacts));
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 const browser = await chromium.launch({
   executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   headless: true,
@@ -38,7 +39,7 @@ async function openImport(notes, { width = 390, theme = "light" } = {}) {
       body: JSON.stringify({ available: false }),
     }),
   );
-  await page.goto(`http://127.0.0.1:4173/?import-review=${Date.now()}`, {
+  await page.goto(`${appUrl}/?import-review=${Date.now()}`, {
     waitUntil: "domcontentloaded",
   });
   await page.getByRole("button", { name: /Already have a plan/i }).click();
@@ -51,7 +52,7 @@ async function openImport(notes, { width = 390, theme = "light" } = {}) {
 const focusedNotes = `WEEKLY WORKOUT PLAN
 Goal: General fitness
 
-MONDAY — FUNKCIONALNI DAN
+MONDAY — FUNKCIONALNI DAN (FUNKCIJA)
 Step-down 2 x 8 reps @ 20 kg
 Incline Dumbbell Press 2 x 8 reps
 Ravnotežje 2 x 30 sec
@@ -72,6 +73,15 @@ Mystery Flow 3 x 10 reps
     await page.locator(".plan-editor-exercise.needs-review").count(),
     2,
   );
+  const workoutTitle = page.locator(".plan-editor-workout-title").first();
+  const [workoutNameBox, workoutDescriptorBox] = await Promise.all([
+    workoutTitle.locator(":scope > span").boundingBox(),
+    workoutTitle.locator(":scope > small").boundingBox(),
+  ]);
+  assert.ok(
+    workoutDescriptorBox.y - (workoutNameBox.y + workoutNameBox.height) >= 3,
+    "imported workout descriptor sits on its own line with clear separation",
+  );
   const reviewCard = page
     .locator(".plan-editor-exercise.needs-review")
     .filter({ hasText: "Ravnotežje" });
@@ -84,6 +94,31 @@ Mystery Flow 3 x 10 reps
     await reviewCard.getByText("NEEDS REVIEW", { exact: true }).count(),
     1,
   );
+  const reviewPresentation = await reviewCard.evaluate((card) => {
+    const normalCard = [...document.querySelectorAll(".plan-editor-exercise")].find(
+      (node) => !node.classList.contains("needs-review"),
+    );
+    const summary = card.querySelector(".plan-editor-summary");
+    const statusId = summary.getAttribute("aria-describedby")
+      ?.split(/\s+/)
+      .find((id) => id.startsWith("import-review-status-"));
+    return {
+      review: card.dataset.review,
+      border: getComputedStyle(card).borderColor,
+      normalBorder: getComputedStyle(normalCard).borderColor,
+      background: getComputedStyle(card).backgroundColor,
+      normalBackground: getComputedStyle(normalCard).backgroundColor,
+      borderWidth: getComputedStyle(card).borderWidth,
+      accessibleStatus: statusId
+        ? document.getElementById(statusId)?.textContent.trim()
+        : null,
+    };
+  });
+  assert.equal(reviewPresentation.review, "required");
+  assert.notEqual(reviewPresentation.border, reviewPresentation.normalBorder, "review card has a distinct semantic outline");
+  assert.equal(reviewPresentation.borderWidth, "1px", "review outline stays restrained");
+  assert.equal(reviewPresentation.background, reviewPresentation.normalBackground, "review state does not tint the card fill");
+  assert.equal(reviewPresentation.accessibleStatus, "Needs review", "review state is announced independently of color");
   assert.equal(
     await reviewCard.getByLabel(/Exercise name for/).count(),
     0,

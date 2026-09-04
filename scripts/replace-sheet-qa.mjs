@@ -2,11 +2,12 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { blankState, buildProgram, exerciseCatalog, isoDay, startWorkout, weekday, WEEKDAYS } from '../src/domain.js';
+import { blankState, buildProgram, exerciseCatalog, isExerciseAllowed, isoDay, startWorkout, weekday, WEEKDAYS } from '../src/domain.js';
 
 const outputRoot = new URL('../artifacts/replace-sheet/', import.meta.url);
 await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
+const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 
 function fixture() {
@@ -18,14 +19,22 @@ function fixture() {
   state.activeWorkout = startWorkout(state, template); state.activeWorkout.exerciseIndex = sourceIndex; return state;
 }
 
+const seededState = fixture();
+const sourceExercise = seededState.activeWorkout.exercises[seededState.activeWorkout.exerciseIndex];
+const activeExerciseIds = new Set(seededState.activeWorkout.exercises.map(item => item.exerciseId));
+const explicitOverride = Object.values(exerciseCatalog).find(item =>
+  item.pattern !== exerciseCatalog[sourceExercise.exerciseId].pattern &&
+  !activeExerciseIds.has(item.id) &&
+  isExerciseAllowed(item, seededState.profile));
+assert.ok(explicitOverride, 'fixture has an allowed movement-incompatible exercise');
 const context = await browser.newContext({ viewport: { width: 390, height: 844 }, serviceWorkers: 'block' });
-await context.addInitScript(state => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem('lift-v2-state', JSON.stringify(state)); }, fixture());
+await context.addInitScript(state => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem('lift-v2-state', JSON.stringify(state)); }, seededState);
 const page = await context.newPage(); const errors = [];
 page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) }));
-await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
+await page.goto(appUrl, { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
 
-const openSheet = async () => { await page.getByRole('button', { name: 'Replace', exact: true }).click(); await page.getByRole('dialog', { name: /Replace Back Squat/ }).waitFor(); };
+const openSheet = async () => { await page.getByRole('button', { name: 'Replace', exact: true }).click(); await page.getByRole('dialog', { name: /Replace Back Squat/ }).waitFor(); await page.waitForTimeout(220); };
 await page.evaluate(() => window.scrollTo(0, Math.min(320, document.documentElement.scrollHeight - innerHeight))); await openSheet(); const originalScroll = await page.evaluate(() => Math.abs(Number.parseInt(document.body.style.top || '0', 10)));
 assert.equal(await page.locator('.app-content').getAttribute('inert'), '', 'background is inert');
 assert.equal(await page.evaluate(() => document.body.style.position), 'fixed', 'page scroll is locked');
@@ -49,20 +58,27 @@ const firstIds = await page.locator('.choice-row').evaluateAll(nodes => nodes.ma
 await page.getByRole('button', { name: 'More suggestions' }).click(); await page.waitForTimeout(750); const expandedCount = await page.locator('.choice-row').count(); assert.ok(expandedCount > 3, `More suggestions exposes another compatible squat (${expandedCount} shown; ${await page.locator('.replacement-secondary').textContent()})`);
 const expanded = await page.locator('.choice-row').evaluateAll(nodes => nodes.map(node => node.textContent)); assert.equal(new Set(expanded).size, expanded.length, `More suggestions adds no duplicates: ${expanded.join(' | ')}`);
 assert.equal(await page.locator('.sheet-scroll').evaluate(node => node.scrollHeight > node.clientHeight), true, 'long content scrolls inside the sheet');
+assert.deepEqual(await page.locator('.replace-sheet').evaluate(node => ({
+  outer: parseFloat(getComputedStyle(node).paddingBottom),
+  scroller: parseFloat(getComputedStyle(node.querySelector('.sheet-scroll')).paddingBottom),
+})), { outer: 0, scroller: 20 }, 'nested sheet assigns the shared terminal space to its scroll container only');
 assert.equal(await page.evaluate(() => document.body.style.position), 'fixed', 'underlying workout stays locked during internal scroll');
 await page.screenshot({ path: output('390-more-suggestions-short-height.png'), fullPage: false });
 
-await page.getByRole('button', { name: 'Choose another exercise' }).click(); const search = page.getByRole('searchbox', { name: 'Search compatible exercises' }); await search.fill('Goblet');
-assert.equal(await page.getByRole('button', { name: /Goblet Squat/ }).count(), 1, 'compatible exercise search finds by name');
-const pickerPatterns = await page.locator('.picker-results .choice-row small').allTextContents(); assert.equal(pickerPatterns.every(text => text.includes('squat')), true, 'picker remains movement-compatible');
+await page.getByRole('button', { name: 'Choose another exercise' }).click(); const search = page.getByRole('searchbox', { name: 'Search all available exercises' });
+assert.equal(await search.evaluate(node => document.activeElement === node), false, 'full-catalog picker does not summon the keyboard when opened');
+await search.fill(explicitOverride.name);
+const explicitChoice = page.locator('.picker-results .choice-row').filter({ has: page.getByText(explicitOverride.name, { exact: true }) });
+assert.equal(await explicitChoice.count(), 1, 'explicit picker searches the full allowed catalog');
+assert.notEqual(explicitOverride.pattern, exerciseCatalog[sourceExercise.exerciseId].pattern, 'test replacement intentionally overrides movement compatibility');
 const activeIndex = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exerciseIndex);
 const permanentId = await page.evaluate(index => JSON.parse(localStorage.getItem('lift-v2-state')).program.days.find(day => day.weekday === ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][new Date().getDay()]).exercises[index].exerciseId, activeIndex);
-await page.getByRole('button', { name: /Goblet Squat/ }).click(); await page.locator('.exercise-heading h1').getByText('Goblet Squat').waitFor();
-let stored = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); assert.equal(stored.activeWorkout.exercises[activeIndex].exerciseId, 'goblet-squat'); assert.equal(stored.activeWorkout.exerciseIndex, activeIndex); assert.equal(stored.program.days.find(day => day.weekday === weekday()).exercises[activeIndex].exerciseId, permanentId, 'permanent program remains unchanged'); assert.equal(stored.activeWorkout.exercises[activeIndex].defaultIncrement, exerciseCatalog['goblet-squat'].increment); assert.equal(stored.activeWorkout.exercises[activeIndex].restSeconds, exerciseCatalog['goblet-squat'].restSeconds);
+await explicitChoice.click(); await page.locator('.exercise-heading h1').getByText(explicitOverride.name).waitFor();
+let stored = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); assert.equal(stored.activeWorkout.exercises[activeIndex].exerciseId, explicitOverride.id); assert.equal(stored.activeWorkout.exerciseIndex, activeIndex); assert.equal(stored.program.days.find(day => day.weekday === weekday()).exercises[activeIndex].exerciseId, permanentId, 'permanent program remains unchanged'); assert.equal(stored.activeWorkout.exercises[activeIndex].defaultIncrement, explicitOverride.increment); assert.equal(stored.activeWorkout.exercises[activeIndex].restSeconds, explicitOverride.restSeconds);
 
-await page.reload({ waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'RESUME WORKOUT' }).click(); assert.equal(await page.locator('.exercise-heading h1').textContent(), 'Goblet Squat', 'today-only replacement survives reload/resume');
+await page.reload({ waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'RESUME WORKOUT' }).click(); assert.equal(await page.locator('.exercise-heading h1').textContent(), explicitOverride.name, 'today-only replacement survives reload/resume');
 stored = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state'))); assert.equal(stored.program.days.find(day => day.weekday === weekday()).exercises[activeIndex].exerciseId, permanentId);
 assert.deepEqual(errors, [], `console errors: ${errors.join('; ')}`);
 
 await context.close(); await browser.close();
-console.log('Replace sheet QA passed: inert backdrop, scroll restoration, swipe/snap, internal scroll, unique more results, compatible search, today-only replacement, and reload persistence.');
+console.log('Replace sheet QA passed: inert backdrop, scroll restoration, swipe/snap, internal scroll, compatible suggestions, full allowed-catalog override, today-only replacement, and reload persistence.');

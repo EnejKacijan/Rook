@@ -81,7 +81,7 @@ assert.equal(Boolean(stored.activeWorkout.exercises[firstIndex].supersetId), fal
 await confirmButton.click();
 await page.getByRole("button", { name: "Exercise options" }).click();
 await page.getByRole("button", { name: "Manage superset" }).waitFor();
-await page.getByRole("button", { name: "Close", exact: true }).click();
+await page.getByRole("button", { name: /^Close/ }).click();
 assert.equal(await page.getByText("A1", { exact: true }).count(), 0);
 assert.equal(await page.getByText("A2", { exact: true }).count(), 0);
 stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));

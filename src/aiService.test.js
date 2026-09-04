@@ -15,6 +15,8 @@ import {
   applyCoachAction,
   blankState,
   buildProgram,
+  compatibleReplacementCandidates,
+  completeWorkout,
   exerciseCatalog,
   exerciseName,
   isExerciseAllowed,
@@ -93,6 +95,29 @@ afterEach(() => {
 });
 
 describe("AI service boundary", () => {
+  it("offers a validated resume action for an accidentally completed empty workout", async () => {
+    const fetchSpy = vi.spyOn(globalThis, "fetch");
+    const state = stateWithTodayPlan();
+    state.activeWorkout = startWorkout(state, state.program.days[0]);
+    const completed = completeWorkout(state);
+    const empty = completed.workouts.at(-1);
+
+    const reply = await AIService.coach(
+      completed,
+      "pomotoma sem zaključil trening, prosim ga ponovno odpri",
+    );
+
+    expect(reply.final).toBe(true);
+    expect(reply.action).toMatchObject({
+      type: "resume-empty-completed-workout",
+      targetCompletedWorkoutId: empty.id,
+      trainingDate: empty.workoutDateKey,
+      expectedCompletedAt: empty.completedAt,
+      label: "RESUME WORKOUT",
+    });
+    expect(fetchSpy).not.toHaveBeenCalled();
+  });
+
   it("treats a successful non-JSON dev-server response as unavailable instead of leaking a rejected promise", async () => {
     vi.stubGlobal(
       "fetch",
@@ -1731,6 +1756,7 @@ zadnja čista ponovitev = konec serije`;
     expect(reply.action).toMatchObject({
       type: "program-exercise-change",
       label: "APPLY TO PROGRAM",
+      baseProgramVersion: state.program.version,
     });
     expect(reply.action.changes[0].addExerciseIds).toEqual([addition.id]);
     const context = JSON.parse(calls[1].options.body).payload.context;
@@ -1741,6 +1767,74 @@ zadnja čista ponovitev = konec serije`;
       ),
     ).toBe(true);
     expect(context.program.days[0].id).toBe(workout.id);
+    expect(context.program.days[0].exercises[0].exerciseEntryId).toBe(
+      workout.exercises[0].id,
+    );
+  });
+  it("accepts an exact reviewed replacement for a restricted exercise in an imported plan", async () => {
+    const state = stateWithPlan();
+    state.profile.environment = "Commercial gym";
+    state.profile.equipment = ["full gym"];
+    state.program = buildProgram(state.profile);
+    state.program.source = "imported";
+    const workout = state.program.days[0];
+    const source = workout.exercises[0];
+    source.exerciseId = "leg-press";
+    state.profile.avoid = "Avoid Leg Press";
+    const replacement = compatibleReplacementCandidates(
+      source,
+      state.profile,
+      workout.exercises.map((exercise) => exercise.exerciseId),
+    )[0];
+    expect(replacement).toBeTruthy();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (url) =>
+        url === "/api/ai/status"
+          ? { ok: true, json: async () => ({ available: true }) }
+          : {
+              ok: true,
+              json: async () => ({
+                data: {
+                  text: "I prepared a similar option for review.",
+                  action: {
+                    type: "program-exercise-change",
+                    changes: [{
+                      workoutId: workout.id,
+                      operations: [{
+                        type: "replace",
+                        exerciseEntryId: source.id,
+                        fromExerciseId: source.exerciseId,
+                        toExerciseId: replacement.id,
+                      }],
+                      addExerciseIds: [],
+                      removeExerciseIds: [],
+                    }],
+                    explanation: "Replace the restricted exercise with a similar option.",
+                  },
+                },
+              }),
+            },
+      ),
+    );
+    const reply = await AIService.coach(
+      state,
+      "Leg Press hurts. Prepare a change to my current plan.",
+    );
+    expect(reply.text).not.toMatch(/does not match the actual schedule/i);
+    expect(reply.action).toMatchObject({
+      type: "program-exercise-change",
+      baseProgramVersion: state.program.version,
+      changes: [{
+        workoutId: workout.id,
+        operations: [{
+          type: "replace",
+          exerciseEntryId: source.id,
+          fromExerciseId: "leg-press",
+          toExerciseId: replacement.id,
+        }],
+      }],
+    });
   });
   it("filters provider replacement IDs through deterministic movement, equipment, and progression rules", async () => {
     const state = stateWithPlan();

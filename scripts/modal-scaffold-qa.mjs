@@ -43,6 +43,7 @@ async function verifyLongForm(page, selector, label) {
       overflowX: style.overflowX,
       overflowY: style.overflowY,
       radius: parseFloat(style.borderTopLeftRadius),
+      paddingBottom: parseFloat(style.paddingBottom),
       clientHeight: node.clientHeight,
       viewportHeight: innerHeight,
     };
@@ -51,6 +52,7 @@ async function verifyLongForm(page, selector, label) {
   assert.equal(initial.overflowX, "hidden", `${label} clips across its rounded top`);
   assert.match(initial.overflowY, /auto|scroll/u, `${label} owns vertical scrolling`);
   assert.ok(initial.radius >= 20, `${label} keeps the shared rounded-sheet character`);
+  assert.equal(initial.paddingBottom, 20, `${label} ends content 20px above the device safe area`);
   assert.ok(
     initial.clientHeight <= initial.viewportHeight * 0.93,
     `${label} respects the shared viewport cap`,
@@ -139,11 +141,12 @@ for (const theme of ["light", "dark", "premium"]) {
   await priorities.evaluate((node) => { node.scrollTop = 0; });
   await page.waitForTimeout(220);
   await page.screenshot({ path: output(`${theme}-training-priorities.png`) });
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.getByRole("button", { name: /Training restrictions/ }).click();
+  await page.waitForTimeout(220);
   const restrictionPanel = page.locator(".training-restrictions-screen");
   const restrictionBox = await restrictionPanel.boundingBox();
   const restrictionHandle = await page.locator(".modal-drag-handle").boundingBox();
@@ -156,7 +159,7 @@ for (const theme of ["light", "dark", "premium"]) {
     `${theme} drag handle follows the compact sheet top`,
   );
   await page.screenshot({ path: output(`${theme}-training-restrictions-compact.png`) });
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 1100 });
@@ -178,7 +181,7 @@ for (const theme of ["light", "dark", "premium"]) {
     appearanceBox.height < 1100 * 0.6,
     `${theme} Appearance sheet does not reserve empty viewport height`,
   );
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 700 });
@@ -192,7 +195,7 @@ for (const theme of ["light", "dark", "premium"]) {
   await editPlan.evaluate((node) => { node.scrollTop = 0; });
   await page.waitForTimeout(220);
   await page.screenshot({ path: output(`${theme}-edit-plan.png`) });
-  await page.getByRole("button", { name: "Close", exact: true }).click();
+  await page.getByRole("button", { name: /^Close/ }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   assert.deepEqual(errors, [], `${theme} overlay flows render without errors`);

@@ -77,6 +77,7 @@ async function completeCurrentExercise(page) {
   assert.match(await page.locator('.workout-header small').innerText(), /0 \/ 1 set · \d{2}:\d{2}/);
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('135');
   await page.getByRole('button', { name: 'Complete set 1' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Reopen set 1' }).textContent(), '✓', 'only a completed set receives the checkmark');
   await skipRest(page);
   assert.match(await page.locator('.workout-header small').innerText(), /1 \/ 1 set · \d{2}:\d{2}/);
   assert.equal(await page.locator('.set-row').count(), 1, 'completing a one-set exercise does not add a set implicitly');
@@ -105,6 +106,7 @@ async function completeCurrentExercise(page) {
 
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
   assert.equal(await page.getByRole('button', { name: 'Complete set 1' }).isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Complete set 1' }).textContent(), '', 'a ready but incomplete set does not show a checkmark');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).inputValue(), '20', 'first entered load fills the next empty set');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '20', 'first entered load fills every remaining empty set');
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('22.5');
@@ -185,8 +187,142 @@ async function completeCurrentExercise(page) {
   await page.getByRole('button', { name: 'FINISH WORKOUT' }).click();
   assert.equal(await page.getByRole('dialog').count(), 0);
   await page.getByRole('heading', { name: 'Workout complete' }).waitFor();
+  const doneDock = await page.locator('.complete-done-dock').boundingBox();
+  assert.ok(doneDock && doneDock.y + doneDock.height <= 844 + .5, 'Done remains available inside the mobile viewport');
+  await page.getByLabel('Session note').focus();
+  assert.equal(await page.locator('.complete-done-dock').evaluate(element => getComputedStyle(element).visibility), 'hidden', 'Done does not cover the session note while the software keyboard is active');
+  await page.getByLabel('Session note').blur();
+  assert.equal(await page.locator('.complete-done-dock').evaluate(element => getComputedStyle(element).visibility), 'visible');
   await snap(page, 'full-completion');
   assert.match(await page.locator('.stat-grid').textContent(), /\d+ setsLOGGED/);
+  const photoInput = page.getByLabel('Add workout photo');
+  assert.equal(await photoInput.getAttribute('accept'), 'image/*');
+  assert.equal(await page.locator('.workout-photo-memory input[type="file"]').count(), 1, 'one native picker offers camera or photo library where the device supports it');
+  await photoInput.setInputFiles({
+    name: 'private-workout-photo.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mP8z8AARAwMjDAGACcCAQH8E/ZXAAAAAElFTkSuQmCC', 'base64'),
+  });
+  await page.getByText('Photo saved with this workout.', { exact: true }).waitFor();
+  let photoState = await page.evaluate(async () => {
+    const state = JSON.parse(localStorage.getItem('lift-v2-state'));
+    const photoId = state.workouts.at(-1).photoId;
+    const record = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('rook-workout-media');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const photoRequest = database.transaction('photos').objectStore('photos').get(photoId);
+        photoRequest.onsuccess = () => { database.close(); resolve(photoRequest.result); };
+        photoRequest.onerror = () => reject(photoRequest.error);
+      };
+    });
+    return { photoId, workoutId: record?.workoutId, size: record?.blob?.size };
+  });
+  assert.ok(photoState.photoId, 'completed workout stores only an IndexedDB photo reference');
+  assert.equal(photoState.workoutId, await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).workouts.at(-1).id));
+  assert.ok(photoState.size > 0, 'the prepared image blob is stored in IndexedDB');
+  await page.getByRole('button', { name: 'View workout photo' }).click();
+  await page.getByRole('dialog', { name: 'Workout photo' }).waitFor();
+  assert.equal(await page.getByRole('dialog', { name: 'Workout photo' }).getByRole('img').count(), 1);
+  const viewerImage = await page.getByRole('dialog', { name: 'Workout photo' }).getByRole('img').boundingBox();
+  assert.ok(viewerImage.width > 200 && viewerImage.height > 0, 'the saved photo is visibly presented instead of remaining at its tiny intrinsic size');
+  await snap(page, 'private-photo-viewer');
+  await page.getByRole('dialog', { name: 'Workout photo' }).getByRole('img').dispatchEvent('error');
+  await page.getByRole('alert').getByText('Photo unavailable', { exact: true }).waitFor();
+  await snap(page, 'private-photo-viewer-error');
+  await page.getByRole('button', { name: 'Close workout photo' }).click();
+  const replacedPhotoId = photoState.photoId;
+  await page.getByLabel('Change workout photo').setInputFiles({
+    name: 'replacement-workout-photo.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mNkYPj/n4GBgYGJAQoAHgQCAfkrNYQAAAAASUVORK5CYII=', 'base64'),
+  });
+  await page.getByText('Saving photo…', { exact: true }).waitFor();
+  await page.getByText('Photo saved with this workout.', { exact: true }).waitFor();
+  photoState = await page.evaluate(() => {
+    const state = JSON.parse(localStorage.getItem('lift-v2-state'));
+    return { photoId: state.workouts.at(-1).photoId, workoutId: state.workouts.at(-1).id };
+  });
+  assert.notEqual(photoState.photoId, replacedPhotoId, 'changing a photo replaces the workout reference');
+  await page.waitForFunction(oldPhotoId => new Promise((resolve, reject) => {
+    const request = indexedDB.open('rook-workout-media');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const photoRequest = database.transaction('photos').objectStore('photos').get(oldPhotoId);
+      photoRequest.onsuccess = () => { database.close(); resolve(!photoRequest.result); };
+      photoRequest.onerror = () => reject(photoRequest.error);
+    };
+  }), replacedPhotoId);
+  await snap(page, 'completion-with-private-photo');
+  await page.getByRole('button', { name: 'DONE', exact: true }).click();
+  await page.getByRole('button', { name: 'PROGRESS', exact: true }).click();
+  await page.locator('.progress-screen').waitFor();
+  await page.locator('.recent-session-row').first().click();
+  await page.locator('.completed-workout-detail').waitFor();
+  assert.equal(await page.getByRole('button', { name: 'View workout photo' }).count(), 1, 'the private photo remains available from workout history');
+  await page.locator('.workout-photo-actions').getByRole('button', { name: 'DELETE', exact: true }).click();
+  const deleteGroup = page.getByRole('group', { name: 'Confirm photo deletion' });
+  await deleteGroup.getByRole('button', { name: 'DELETE PHOTO', exact: true }).click();
+  await page.getByText('Photo deleted. Your workout is unchanged.', { exact: true }).waitFor();
+  const deletedPhotoState = await page.evaluate(async previousPhotoId => {
+    const state = JSON.parse(localStorage.getItem('lift-v2-state'));
+    const record = await new Promise((resolve, reject) => {
+      const request = indexedDB.open('rook-workout-media');
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const database = request.result;
+        const photoRequest = database.transaction('photos').objectStore('photos').get(previousPhotoId);
+        photoRequest.onsuccess = () => { database.close(); resolve(photoRequest.result); };
+        photoRequest.onerror = () => reject(photoRequest.error);
+      };
+    });
+    return { photoId: state.workouts.at(-1).photoId || null, recordExists: Boolean(record) };
+  }, photoState.photoId);
+  assert.deepEqual(deletedPhotoState, { photoId: null, recordExists: false }, 'deleting a photo preserves the workout but removes its reference and blob');
+  await page.evaluate(() => {
+    window.__rookOriginalIndexedDbOpen = indexedDB.open.bind(indexedDB);
+    Object.defineProperty(indexedDB, 'open', {
+      configurable: true,
+      value: () => { throw new DOMException('Quota exceeded', 'QuotaExceededError'); },
+    });
+  });
+  await page.getByLabel('Add workout photo').setInputFiles({
+    name: 'photo-that-cannot-save.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mP8z8AARAwMjDAGACcCAQH8E/ZXAAAAAElFTkSuQmCC', 'base64'),
+  });
+  await page.getByText('Photo couldn’t be saved. Your workout was saved.', { exact: true }).waitFor();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).workouts.at(-1).photoId || null), null, 'photo storage failure never affects the completed workout');
+  await page.evaluate(() => {
+    Object.defineProperty(indexedDB, 'open', {
+      configurable: true,
+      value: window.__rookOriginalIndexedDbOpen,
+    });
+  });
+  await page.getByLabel('Add workout photo').setInputFiles({
+    name: 'photo-cleared-on-logout.png',
+    mimeType: 'image/png',
+    buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFElEQVR42mP8z8AARAwMjDAGACcCAQH8E/ZXAAAAAElFTkSuQmCC', 'base64'),
+  });
+  await page.getByText('Photo saved with this workout.', { exact: true }).waitFor();
+  await page.getByRole('button', { name: 'Close workout details', exact: true }).click();
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  page.once('dialog', dialog => dialog.accept());
+  await page.getByRole('button', { name: 'Log out', exact: true }).click();
+  await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).waitFor();
+  const mediaAfterLogout = await page.evaluate(() => new Promise((resolve, reject) => {
+    const request = indexedDB.open('rook-workout-media');
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const countRequest = database.transaction('photos').objectStore('photos').count();
+      countRequest.onsuccess = () => { database.close(); resolve(countRequest.result); };
+      countRequest.onerror = () => reject(countRequest.error);
+    };
+  }));
+  assert.equal(mediaAfterLogout, 0, 'logging out clears every private workout photo blob');
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-funnel-events-v1')).some(event => event.name === 'first_workout_completed')), true, 'first completed workout closes the measurable activation funnel');
   assert.deepEqual(errors, [], `full-flow console errors: ${errors.join('; ')}`);
   await context.close();
@@ -253,7 +389,64 @@ async function completeCurrentExercise(page) {
   await page.getByRole('button', { name: 'FINISH ANYWAY' }).click();
   await page.getByRole('heading', { name: 'Workout ended early' }).waitFor();
   assert.match(await page.locator('.stat-grid').textContent(), new RegExp(`1 of ${planned} setsCOMPLETED`));
+  const done = page.getByRole('button', { name: 'DONE' });
+  assert.equal((await done.getAttribute('class')).includes('primary'), true, 'Done uses the shared primary CTA treatment');
+  assert.equal((await done.getAttribute('class')).includes('dark'), false, 'Done no longer uses the dark secondary treatment');
+  const sessionLogTrigger = page.locator('.complete-session-log .session-log-trigger').first();
+  assert.equal(await sessionLogTrigger.getAttribute('aria-expanded'), 'false');
+  assert.equal(await sessionLogTrigger.locator('.session-log-summary i').count(), 0, 'set count remains the only trailing row element');
+  await sessionLogTrigger.click();
+  assert.equal(await sessionLogTrigger.getAttribute('aria-expanded'), 'true');
+  const setRows = page.locator('.complete-session-log .session-log-set');
+  assert.ok(await setRows.count() >= 3, 'all planned sets remain visible in the read-only log');
+  assert.deepEqual(
+    await setRows.nth(0).locator(':scope > span').allInnerTexts(),
+    ['1', '6 reps', '20 kg'],
+  );
+  assert.deepEqual(
+    await setRows.nth(1).locator(':scope > span').allInnerTexts(),
+    ['2', 'Not logged'],
+  );
+  assert.equal(await page.getByRole('dialog').count(), 0, 'session details expand inline without opening a sheet');
+  await page.waitForTimeout(240);
+  await snap(page, 'early-completion-session-log-expanded');
+  await sessionLogTrigger.click();
+  assert.equal(await sessionLogTrigger.getAttribute('aria-expanded'), 'false');
+  const density = await page.locator('.complete-screen').evaluate((screen) => {
+    const heading = screen.querySelector('h1').getBoundingClientRect();
+    const bounds = screen.getBoundingClientRect();
+    const row = screen.querySelector('.complete-session-log .list-row').getBoundingClientRect();
+    const rowStyle = getComputedStyle(screen.querySelector('.complete-session-log .list-row'));
+    const savedStyle = getComputedStyle(screen.querySelector('.coach-note'));
+    const noteStyle = getComputedStyle(screen.querySelector('.session-note-editor'));
+    const style = getComputedStyle(screen);
+    return {
+      headingTopGap: heading.top - bounds.top,
+      paddingLeft: Number.parseFloat(style.paddingLeft),
+      paddingRight: Number.parseFloat(style.paddingRight),
+      rowHeight: row.height,
+      rowPaddingTop: Number.parseFloat(rowStyle.paddingTop),
+      savedPaddingTop: Number.parseFloat(savedStyle.paddingTop),
+      noteMarginTop: Number.parseFloat(noteStyle.marginTop),
+    };
+  });
+  assert.deepEqual(
+    { left: density.paddingLeft, right: density.paddingRight },
+    { left: 24, right: 24 },
+    'mobile content width and existing side padding stay unchanged',
+  );
+  assert.ok(density.headingTopGap <= 36.5, JSON.stringify(density));
+  assert.ok(density.rowHeight >= 48 && density.rowHeight <= 60, JSON.stringify(density));
+  assert.equal(density.rowPaddingTop, 12);
+  assert.equal(density.savedPaddingTop, 15);
+  assert.equal(density.noteMarginTop, 18);
+  await page.evaluate(() => scrollTo(0, 0));
   await snap(page, 'early-completion');
+  await page.setViewportSize({ width: 800, height: 900 });
+  const desktopScreen = await page.locator('.complete-screen').boundingBox();
+  assert.ok(desktopScreen.width >= 480 && desktopScreen.width <= 520, JSON.stringify(desktopScreen));
+  assert.ok(Math.abs(desktopScreen.x + desktopScreen.width / 2 - 400) <= 1, JSON.stringify(desktopScreen));
+  await page.screenshot({ path: output('800-early-completion.png'), fullPage: false });
   assert.deepEqual(errors, [], `early-finish console errors: ${errors.join('; ')}`);
   await context.close();
 }

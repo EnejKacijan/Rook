@@ -30,16 +30,49 @@ async function open(state, { width = 390, height = 844, ai = false, coachReply =
   return { context, page, errors };
 }
 
-{
-  const state = fixture(); state.coachDraft = 'Remember my left shoulder note';
-  const { context, page, errors } = await open(state);
+for (const [appearance, style, width] of [
+  ['light', 'standard', 320],
+  ['dark', 'standard', 375],
+  ['light', 'premium', 390],
+  ['dark', 'premium', 430],
+]) {
+  const state = fixture();
+  state.coachDraft = 'Remember my left shoulder note';
+  state.profile.appearancePreference = appearance;
+  state.profile.stylePreference = style;
+  state.profile.themePreference = style === 'premium' ? 'premium' : appearance;
+  const { context, page, errors } = await open(state, { width });
   await page.getByRole('button', { name: 'COACH', exact: true }).click();
-  await page.getByText('AI Coach is unavailable. Logging and data-based progression still work locally.', { exact: true }).waitFor();
+  await page.getByText('Coach unavailable. Logging and data-based progression still work locally.', { exact: true }).waitFor();
   assert.equal(await page.locator('.prompt-list button:enabled').count(), 0, 'AI shortcuts are disabled while Coach is unavailable');
-  assert.equal(await page.getByRole('button', { name: 'Send message' }).isDisabled(), true);
+  const send = page.getByRole('button', { name: 'Send message' });
+  assert.equal(await send.isDisabled(), true);
+  assert.match(await send.getAttribute('class'), /is-unavailable/);
+  assert.equal(await send.evaluate(button => getComputedStyle(button).opacity), '1');
+  assert.equal(await page.getByLabel('Ask Coach').isDisabled(), true, 'the offline composer cannot accept a message that cannot be sent');
   assert.equal(await page.getByLabel('Ask Coach').getAttribute('placeholder'), 'Coach unavailable');
   assert.equal(await page.getByLabel('Ask Coach').inputValue(), state.coachDraft, 'the existing draft is preserved');
-  await page.screenshot({ path: output('390-coach-unavailable.png'), fullPage: false });
+  await page.screenshot({ path: output(`${width}-coach-unavailable-${appearance}-${style}.png`), fullPage: false });
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  assert.deepEqual(errors, []); await context.close();
+}
+
+{
+  const state = fixture();
+  state.profile.appearancePreference = 'light';
+  state.profile.stylePreference = 'premium';
+  state.profile.themePreference = 'premium';
+  const { context, page, errors } = await open(state, { width: 320, height: 640 });
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  await page.getByRole('button', { name: /^Export workout plan/ }).click();
+  const sheet = page.locator('.export-sheet');
+  await sheet.waitFor();
+  await page.waitForTimeout(260);
+  const header = await sheet.locator(':scope > .detail-header').boundingBox();
+  const label = await sheet.getByText('EXPORT PLAN', { exact: true }).boundingBox();
+  assert.ok(label.y >= header.y + header.height - .5, `export label clears the header: ${JSON.stringify({ header, label })}`);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: output('320-export-plan-premium-light.png'), fullPage: false });
   assert.deepEqual(errors, []); await context.close();
 }
 
@@ -59,7 +92,7 @@ async function open(state, { width = 390, height = 844, ai = false, coachReply =
   const state = fixture();
   const { context, page, errors } = await open(state, { width: 340, height: 620 });
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  await page.getByRole('button', { name: /^Environment/ }).click();
+  await page.getByRole('button', { name: /^Training environment/ }).click();
   await page.getByRole('button', { name: 'Home gym' }).click();
   const footer = page.locator('.profile-setting-footer'); const button = page.getByRole('button', { name: 'SAVE SETUP' });
   await footer.waitFor(); const [footerBox, viewport] = await Promise.all([footer.boundingBox(), page.evaluate(() => ({ width: innerWidth, height: innerHeight }))]);
@@ -77,12 +110,8 @@ async function open(state, { width = 390, height = 844, ai = false, coachReply =
   const { context, page, errors } = await open(state);
   await page.getByRole('button', { name: 'PROGRESS', exact: true }).click();
   assert.equal(await page.getByText('THIS WEEK', { exact: true }).count(), 1);
-  assert.equal(await page.getByText('No weight logged', { exact: true }).count(), 1);
   assert.match(await page.locator('.consistency').getAttribute('aria-label'), /planned sessions completed this week$/);
-  await page.locator('.working-weight-row').first().click();
-  assert.equal(await page.getByRole('heading', { name: 'Not set yet' }).count(), 1);
-  assert.equal(await page.getByText('Log a weight on a completed working set to establish this.', { exact: true }).count(), 1);
-  await page.screenshot({ path: output('390-missing-load-detail.png'), fullPage: false });
+  await page.screenshot({ path: output('390-progress-baseline.png'), fullPage: false });
   assert.deepEqual(errors, []); await context.close();
 }
 

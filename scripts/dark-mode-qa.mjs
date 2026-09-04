@@ -228,13 +228,14 @@ for (const [theme, page] of [
 
   const restChip = page.locator(".week-strip .workout-rest").first();
   await restChip.click();
+  await page.waitForTimeout(220);
   const selectedRest = await weekStateSignals(page);
   assert.equal(selectedRest.selectedState, "rest");
   assert.equal(selectedRest.selectedHasMarker, false);
-  assert.equal(
+  assert.notEqual(
     selectedRest.selected.background,
     selectedRest.rest.background,
-    `${theme} selected rest keeps the neutral rest interior`,
+    `${theme} selected rest uses the same distinct selected surface hierarchy`,
   );
   await page.locator('.week-strip button[aria-current="date"]').click();
 }
@@ -272,7 +273,7 @@ await darkRun.page
   .click();
 assert.equal(await darkRun.page.locator(".exercise-detail-art").count(), 1);
 await screenshot(darkRun.page, "390-exercise-detail-dark.png");
-await darkRun.page.getByRole("button", { name: "Close", exact: true }).click();
+await darkRun.page.getByRole("button", { name: /^Close/ }).click();
 
 // Every primary tab renders and remains narrow-safe.
 for (const tab of ["COACH", "PROGRESS", "PROFILE"]) {
@@ -308,10 +309,10 @@ assert.equal(loggingStates.unitIndicator, "rgb(235, 238, 236)");
 assert.equal(loggingStates.unselected.color, "rgb(137, 145, 140)");
 assert.equal(loggingStates.select.border, "rgb(98, 108, 102)");
 await screenshot(darkRun.page, "390-logging-dark.png");
-await darkRun.page.getByRole("button", { name: "Close", exact: true }).click();
+await darkRun.page.getByRole("button", { name: "Close Logging" }).click();
 
 // Flat Appearance controls, explicit override, System live update, and persistence.
-await darkRun.page.getByRole("button", { name: /Appearance/ }).click();
+await darkRun.page.getByRole("button", { name: /^Appearance/ }).click();
 await screenshot(darkRun.page, "390-appearance-dark.png");
 assert.equal(await darkRun.page.locator(".theme-choice-layer").count(), 0);
 const workoutsBefore = await darkRun.page.evaluate(() =>
@@ -358,6 +359,7 @@ const compactArtBox = await activeRun.page.locator(".exercise-heading-art-button
 await activeRun.page.locator(".exercise-heading-art-button").click();
 const visualViewer = activeRun.page.locator(".exercise-visual-viewer");
 await visualViewer.waitFor();
+await activeRun.page.waitForTimeout(240);
 const enlargedArtBox = await visualViewer.locator(".exercise-visual-stage img").boundingBox();
 assert.ok(
   enlargedArtBox.width >= compactArtBox.width * 3 && enlargedArtBox.height >= compactArtBox.height * 3,
@@ -375,7 +377,7 @@ assert.equal(
   1,
   "exercise artwork remains available in the focused detail view",
 );
-await activeRun.page.getByRole("button", { name: "Close", exact: true }).click();
+await activeRun.page.getByRole("button", { name: /^Close/ }).click();
 await activeRun.page.locator(".exercise-detail-overview").waitFor({ state: "detached" });
 await activeRun.page.locator(".exercise-heading").waitFor();
 await activeRun.page.getByRole("button", { name: "Replace", exact: true }).click();
@@ -388,7 +390,7 @@ assert.deepEqual(
   initialReplacementChoices,
   "visible replacement choices remain stable while the sheet is open",
 );
-await activeRun.page.getByRole("button", { name: "Close", exact: true }).click();
+await activeRun.page.getByRole("button", { name: /^Close/ }).click();
 await activeRun.page.locator(".replace-sheet").waitFor({ state: "detached" });
 await screenshot(activeRun.page, "320-active-workout-dark.png");
 const setStates = await activeRun.page.locator(".sets").evaluate((sets) => {
