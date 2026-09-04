@@ -1929,6 +1929,24 @@ leg curl: 3 sets of 12, pavza 60 sec`;
       ),
     ).toEqual([{ weightKg: null, setWeightsKg: null }]);
   });
+  it("does not count an exercise-local warm-up load as a working-set load", () => {
+    const source = `1. Biceps curls incline
+ogrevalni set 12kg
+2 seta 6 reps 14kg
+
+2. Triceps pushdowns z vrvico
+1 set 10 reps 40kg
+2 seta 6 reps 45kg`;
+    expect(
+      authoritativeImportedWeights(source, [
+        { sourceName: "Biceps curls incline", sets: 2 },
+        { sourceName: "Triceps pushdowns z vrvico", sets: 3 },
+      ]),
+    ).toEqual([
+      { weightKg: 14, setWeightsKg: null },
+      { weightKg: null, setWeightsKg: [40, 45, 45] },
+    ]);
+  });
   it("imports unseen exercise names as stable custom identities without catalog substitution", () => {
     const names = [
       "Aurora Meadows Row",

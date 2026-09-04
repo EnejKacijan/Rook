@@ -6994,6 +6994,22 @@ function explicitKgPrescription(source, setCount, defaultUnit = null) {
   const directValues = [
     ...text.matchAll(/(\d+(?:[.,]\d+)?)\s*(kg|kgs|lb|lbs)\b/giu),
   ].map((match) => normalizeLoad(match[1], normalizedUnit(match[2])));
+  const groupedSetValues = [
+    ...text.matchAll(
+      /(\d+)\s*(?:sets?|seti|seta|serije?|seriji|serij|serti|series?|satz|satze|sätze)\b[^\n;]*?(\d+(?:[.,]\d+)?)\s*(kg|kgs|lb|lbs)\b/giu,
+    ),
+  ].flatMap((match) =>
+    Array.from({ length: Number(match[1]) }, () =>
+      normalizeLoad(match[2], normalizedUnit(match[3])),
+    ),
+  );
+  if (
+    groupedSetValues.length === Number(setCount) &&
+    groupedSetValues.every((value) => Number.isFinite(value) && value >= 0)
+  )
+    return groupedSetValues.every((value) => value === groupedSetValues[0])
+      ? { weightKg: groupedSetValues[0], setWeightsKg: null }
+      : { weightKg: null, setWeightsKg: groupedSetValues };
   const values = sharedValues.length
     ? sharedValues
     : slashValues.length
@@ -7017,6 +7033,16 @@ export function authoritativeImportedWeights(
   defaultUnit = null,
 ) {
   const source = String(sourceText || "");
+  const workingLoadText = (value) =>
+    String(value || "")
+      .split(/\r?\n/u)
+      .filter(
+        (line) =>
+          !/^\s*(?:[-*•]\s*)?(?:ogrevaln\p{L}*|warm[ -]?up|ramp[ -]?up|ramp\s+sets?)\b/iu.test(
+            line,
+          ),
+      )
+      .join("\n");
   const occurrences = findImportedOccurrences(
     source,
     proposedExercises.map((value) => value.sourceName),
@@ -7042,7 +7068,7 @@ export function authoritativeImportedWeights(
         : lineStart;
     const end = next && next.rawStart < lineEnd ? next.rawStart : lineEnd;
     const inline = explicitKgPrescription(
-      source.slice(start, end),
+      workingLoadText(source.slice(start, end)),
       value.sets,
       defaultUnit,
     );
@@ -7054,7 +7080,7 @@ export function authoritativeImportedWeights(
       blankLine >= 0 ? occurrence.rawEnd + blankLine : source.length,
     );
     return explicitKgPrescription(
-      source.slice(occurrence.rawEnd, blockEnd),
+      workingLoadText(source.slice(occurrence.rawEnd, blockEnd)),
       value.sets,
       defaultUnit,
     );
