@@ -42,6 +42,7 @@ export default defineConfig(({ mode }) => {
     if (/^(?:OPENAI_|EXPERT_)/.test(key)) process.env[key] = value;
   return {
     plugins: [react(), rookLocalApi()],
+    define: { __ROOK_APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0') },
     test: { environment: 'jsdom', globals: true, testTimeout: 10000 },
   };
 });

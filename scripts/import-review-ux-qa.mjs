@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { verifySearchClear } from './post-review-runtime-checks.mjs';
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
@@ -170,6 +171,7 @@ Mystery Flow 3 x 10 reps
     list: "rgb(28, 32, 30)",
     row: "rgb(28, 32, 30)",
   });
+  await verifySearchClear(page);
   await page.screenshot({ path: output("320-dark-picker-open.png"), fullPage: true });
   assert.equal(
     await reviewCard.getByText("Possible matches", { exact: true }).count(),
@@ -180,6 +182,12 @@ Mystery Flow 3 x 10 reps
     .first();
   const chosenName = await balanceChoice.innerText();
   await balanceChoice.click();
+  assert.equal(
+    (await reviewCard.locator(".import-match-confirmation").innerText()).includes(`→ ${chosenName}`),
+    true,
+    "the chosen source-to-destination mapping is explicit before confirmation",
+  );
+  await reviewCard.getByRole("button", { name: "USE THIS MATCH" }).click();
   assert.equal(
     await page.getByText("1 exercise needs review", { exact: true }).count(),
     1,
@@ -265,7 +273,7 @@ Mystery Flow 3 x 10 reps
   const storedCustom = stored.program.days
     .flatMap((day) => day.exercises)
     .find((exercise) => exercise.originalImportedName === "Mystery Flow");
-  assert.equal(storedCustom.exerciseSource, "imported-custom");
+  assert.equal(storedCustom.exerciseSource, "custom");
   assert.equal(storedCustom.matchStatus, "confirmed-custom");
   assert.match(storedCustom.exerciseId, /^imported-custom-/);
   assert.deepEqual(errors, []);

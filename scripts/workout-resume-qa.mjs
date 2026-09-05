@@ -17,7 +17,7 @@ const browser = await chromium.launch({
 function fixture() {
   const state = blankState();
   const today = weekday();
-  const availableDays = [today, 'Tue', 'Sat'];
+  const availableDays = [...new Set([today, 'Tue', 'Sat'])];
   for (const candidate of ['Mon', 'Wed', 'Fri', 'Sun'])
     if (!availableDays.includes(candidate) && availableDays.length < 3)
       availableDays.push(candidate);

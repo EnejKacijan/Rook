@@ -13,6 +13,7 @@ import {
   workoutPlanDate,
   workoutSetSummary,
 } from "./domain.js";
+import { historySetDescriptor, loggingModeOf, setTypeLabel } from "./advancedLogging.js";
 
 const isoDate = (value) => {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {
@@ -64,7 +65,10 @@ export function formatExportSet(
   const value = Number(set?.reps);
   const timed = exerciseMeasure(exercise) === "seconds";
   const load = exportLoadLabel(exercise, set?.weight, units);
-  let result = Number.isFinite(value) && value > 0
+  const advanced = loggingModeOf(exercise) === "per_side" || Boolean(setTypeLabel(set));
+  let result = advanced
+    ? historySetDescriptor(exercise, set)
+    : Number.isFinite(value) && value > 0
     ? timed
       ? `${value} sec`
       : `${value} reps`

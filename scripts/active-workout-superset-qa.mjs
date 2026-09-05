@@ -25,7 +25,7 @@ state.activeWorkout.exercises.forEach((exercise) => {
   });
 });
 const firstId = state.activeWorkout.exercises[0].id;
-const originalProgram = JSON.stringify(state.program);
+let originalProgram = JSON.stringify(state.program);
 const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
 await context.addInitScript(
   (value) => {
@@ -48,6 +48,9 @@ await page.route("**/api/ai/status", (route) =>
   }),
 );
 await page.goto(baseUrl, { waitUntil: "networkidle" });
+originalProgram = await page.evaluate(() =>
+  JSON.stringify(JSON.parse(localStorage.getItem("lift-v2-state")).program),
+);
 await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 await page.getByRole("button", { name: "Exercise options" }).click();
 await page.getByRole("button", { name: "Create superset" }).click();

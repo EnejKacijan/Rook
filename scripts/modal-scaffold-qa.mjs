@@ -21,6 +21,7 @@ async function verifyLongForm(page, selector, label) {
   const header = panel.locator(":scope > .detail-header");
   const handle = header.locator(":scope > .modal-drag-handle");
   const compactTitle = header.locator(":scope > strong");
+  const closeControl = header.locator(":scope > .detail-header-close");
   await panel.waitFor();
   await page.waitForTimeout(220);
   const modal = page.locator('.modal-layer');
@@ -77,6 +78,20 @@ async function verifyLongForm(page, selector, label) {
   assert.equal(await handle.count(), 1, `${label} keeps its drag handle inside the sticky header`);
   assert.ok(isOpaque(headerStyle.background), `${label} header is opaque`);
   assert.equal(await compactTitle.evaluate(node => getComputedStyle(node).opacity), "0", `${label} compact title starts hidden`);
+  const closeStyle = await closeControl.evaluate((node) => {
+    node.focus({ preventScroll: true });
+    const style = getComputedStyle(node);
+    return {
+      color: style.color,
+      textFill: style.webkitTextFillColor,
+      outlineStyle: style.outlineStyle,
+      outlineColor: style.outlineColor,
+    };
+  });
+  assert.notEqual(closeStyle.color, "rgb(0, 0, 238)", `${label} close control never inherits browser link blue`);
+  assert.equal(closeStyle.textFill, closeStyle.color, `${label} locks the close glyph to the ROOK text token`);
+  assert.notEqual(closeStyle.outlineStyle, "none", `${label} close control keeps a visible themed focus treatment`);
+  assert.doesNotMatch(closeStyle.outlineColor, /rgba\(.+, 0\)|transparent/u, `${label} close focus treatment is visible`);
   assert.match(headerStyle.border, /rgba\(.+, 0\)|transparent/u, `${label} divider starts transparent`);
 
   const [panelBox, headerBox, firstContentBox] = await Promise.all([

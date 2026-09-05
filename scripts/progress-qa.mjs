@@ -226,7 +226,7 @@ async function openProgress(state, name) {
     await page.getByText(/RECENT TRAINING/, { exact: false }).count(),
     0,
   );
-  assert.equal(await page.getByText("THIS WEEK", { exact: true }).count(), 1);
+  assert.equal(await page.getByText("WEEKLY REVIEW", { exact: true }).count(), 1);
   assert.match(await page.locator(".consistency").textContent(), /0 \/ 4/);
   assert.deepEqual(errors, []);
   await context.close();
@@ -342,7 +342,7 @@ async function openProgress(state, name) {
     new RegExp(`${currentWeek.completed} \\/ ${currentWeek.planned}`),
   );
   assert.equal(
-    await page.getByText("THIS WEEK", { exact: true }).count(),
+    await page.getByText("WEEKLY REVIEW", { exact: true }).count(),
     1,
     "weekly completion is not mislabeled as longitudinal consistency",
   );

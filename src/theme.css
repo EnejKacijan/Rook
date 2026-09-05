@@ -1249,6 +1249,19 @@
   transform: translateY(0);
 }
 
+.modal-layer > .screen.detail-screen.adjust-today-sheet > .detail-header.is-collapsing-sheet-header.shows-compact-title > strong {
+  color: var(--rook-secondary);
+  opacity: 1;
+  transition: none;
+}
+
+:root[data-appearance] .adjust-today-sheet .button.primary:disabled {
+  border: 1px solid var(--rook-border);
+  background: var(--rook-disabled-surface, #e7e4de);
+  color: var(--rook-disabled-text, #918d87);
+  opacity: 1;
+}
+
 .modal-layer > .sheet.plan-editor-sheet {
   height: auto;
   max-height: min(92dvh, calc(100dvh - max(12px, env(safe-area-inset-top))));

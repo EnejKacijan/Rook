@@ -14,8 +14,9 @@ const boundedNumber = (value, fallback, min, max) => Math.max(min, Math.min(max,
 const normalized = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 
 function equipmentFor(profile = {}, location = null) {
-  if (location === 'Commercial gym' || profile.environment === 'Commercial gym') return ['barbell', 'rack', 'bench', 'dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands', 'bodyweight'];
   const selected = new Set(profile.equipment || []); const result = new Set(['bodyweight']);
+  if (selected.has('full gym') || (!selected.size && (location === 'Commercial gym' || profile.environment === 'Commercial gym')))
+    return ['barbell', 'rack', 'bench', 'dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands', 'bodyweight'];
   if (selected.has('barbell/rack/bench')) ['barbell', 'rack', 'bench'].forEach(value => result.add(value));
   for (const value of ['dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands']) if (selected.has(value)) result.add(value);
   return [...result];
@@ -66,7 +67,11 @@ export function buildProgrammingContext(profile = {}, catalog = [], historySumma
   const desiredExposure = profile.goal === 'Build muscle' || profile.goal === 'Get stronger'
     ? { defaultPerMusclePerWeek: daysPerWeek >= 4 ? [2, 3] : [1, 2], priorityPerMusclePerWeek: daysPerWeek >= 3 ? [2, 3] : [1, 2] }
     : { defaultPerMusclePerWeek: [1, Math.min(3, daysPerWeek)], priorityPerMusclePerWeek: [2, Math.min(3, daysPerWeek)] };
-  const locations = profile.environment === 'Both' ? ['Commercial gym', 'Home'] : [profile.environment === 'Home gym' ? 'Home' : 'Commercial gym'];
+  const locations = profile.environment === 'Both'
+    ? profile.primaryTrainingEnvironment === 'Home gym'
+      ? ['Home', 'Commercial gym']
+      : ['Commercial gym', 'Home']
+    : [profile.environment === 'Home gym' ? 'Home' : 'Commercial gym'];
   const recentFrequency = historySummary?.recentWeeklyFrequency?.averageCompleted;
   const structuralSelection = selectStructuralTemplate(profile, daysPerWeek);
   const safetyScopedRegion = trainingSafety.constraints.allowedBodyRegions?.length === 1
@@ -83,6 +88,7 @@ export function buildProgrammingContext(profile = {}, catalog = [], historySumma
     requestedFrequency: daysPerWeek,
     availableDays: unique(profile.availableDays).filter(day => WEEKDAYS.includes(day)),
     usableLocations: locations,
+    primaryLocation: locations[0],
     equipmentByLocation: Object.fromEntries(locations.map(location => [location, equipmentFor(profile, location)])),
     sessionMinutes,
     workloadCapacity: workload,

@@ -5,6 +5,7 @@ import {
   exerciseMeasure,
   weightUnit,
 } from "./domain.js";
+import { historySetDescriptor, loggingModeOf, setTypeLabel } from "./advancedLogging.js";
 
 export function sessionLogSetParts(exercise, set, index, units) {
   const number = String(index + 1);
@@ -12,9 +13,12 @@ export function sessionLogSetParts(exercise, set, index, units) {
 
   const timed = exerciseMeasure(exercise) === "seconds";
   const reps = Number(set.reps);
+  const advanced = loggingModeOf(exercise) === "per_side" || Boolean(setTypeLabel(set));
   const parts = [
     number,
-    Number.isFinite(reps)
+    advanced
+      ? historySetDescriptor(exercise, set)
+      : Number.isFinite(reps)
       ? timed
         ? `${reps} sec`
         : `${reps} ${reps === 1 ? "rep" : "reps"}`

@@ -1,0 +1,57 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+const dir = new URL('../artifacts/post-review-onboarding/', import.meta.url);
+await mkdir(dir, { recursive: true });
+const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+for (const width of [320, 390, 430]) {
+  const context = await browser.newContext({ viewport: { width, height: 844 }, serviceWorkers: 'block' });
+  const page = await context.newPage();
+  await context.addInitScript(() => {
+    window.cleanInstallStorage = { saved: localStorage.getItem('lift-v2-state'), databases: indexedDB.databases() };
+  });
+  await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"available":false}' }));
+  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  assert.equal(await page.evaluate(async () => (await window.cleanInstallStorage.databases).length), 0, 'fresh context has no databases before boot');
+  assert.equal(await page.evaluate(() => window.cleanInstallStorage.saved), null, 'no saved application state before boot');
+  await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).click();
+  const step = async (n, name) => {
+    await page.waitForTimeout(350);
+    assert.equal(await page.locator('.step-count').innerText(), `STEP ${n}/8`);
+    assert.equal((await page.locator('.brand').innerText()).replace(/\s/g, ''), 'ROOK');
+    assert.equal(await page.getByText('LIFT', { exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    await page.screenshot({ path: fileURLToPath(new URL(`${width}-${n}-${name}.png`, dir)) });
+  };
+  const next = () => page.getByRole('button', { name: 'CONTINUE', exact: true }).click();
+  await step(1, 'personal');
+  await page.getByRole('combobox', { name: 'Age range' }).click();
+  await page.getByRole('option', { name: '18–29' }).click(); await next();
+  await step(2, 'goal'); await page.getByRole('button', { name: 'Build muscle', exact: true }).click(); await next();
+  await step(3, 'experience'); await page.getByRole('button', { name: /^Beginner/ }).click(); await next();
+  await step(4, 'schedule'); await page.getByRole('button', { name: '3 days', exact: true }).click();
+  await page.getByLabel('Make any day available').check(); await page.getByRole('button', { name: '60 min', exact: true }).click(); await next();
+  await step(5, 'setup');
+  await page.getByRole('button', { name: /Back/, exact: false }).click();
+  assert.equal(await page.getByRole('button', { name: '3 days', exact: true }).getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.getByRole('button', { name: '60 min', exact: true }).getAttribute('aria-pressed'), 'true');
+  assert.equal(await page.getByLabel('Make any day available').isChecked(), true); await next();
+  await page.getByRole('button', { name: 'Commercial gym', exact: true }).click();
+  await page.getByRole('button', { name: 'CUSTOMIZE EQUIPMENT', exact: true }).click(); await step(5, 'equipment');
+  assert.equal(await page.getByRole('button', { name: 'CONTINUE', exact: true }).isEnabled(), true, 'Commercial + Full gym is ready to continue');
+  await next();
+  await step(6, 'priorities'); await page.getByRole('button', { name: 'Balanced', exact: true }).click(); await next();
+  await step(7, 'effort'); await page.getByRole('button', { name: /Balanced starting point/ }).click(); await next();
+  await page.getByRole('button', { name: /Add injuries, pain or movements to avoid/ }).click();
+  await page.getByRole('textbox', { name: 'Restrictions or clinician limits' }).fill('avoid leg press'); await step(8, 'restrictions');
+  await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).click();
+  await page.getByRole('heading', { name: 'Your week is ready.' }).waitFor();
+  await page.screenshot({ path: fileURLToPath(new URL(`${width}-result.png`, dir)) });
+  await page.getByRole('button', { name: 'USE THIS PLAN', exact: true }).click();
+  await page.waitForFunction(() => JSON.parse(localStorage.getItem('lift-v2-state'))?.profile?.onboardingComplete);
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).profile.avoid), 'avoid leg press');
+  await context.close();
+}
+await browser.close();
+console.log('Clean-install onboarding passed at 320/390/430: one ROOK 8-step flow, schedule once, back preservation, restriction persistence, generated result.');

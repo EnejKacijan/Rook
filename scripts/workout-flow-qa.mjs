@@ -5,6 +5,7 @@ import { chromium } from 'playwright-core';
 import { blankState, buildProgram, startWorkout } from '../src/domain.js';
 
 const target = new URL('../artifacts/workout-flow/', import.meta.url);
+const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 await mkdir(target, { recursive: true });
 const output = name => fileURLToPath(new URL(name, target));
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
@@ -38,7 +39,7 @@ async function openWorkout(state = activeFixture(), width = 390) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.goto(appUrl, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
   return { context, page, errors };
 }
@@ -337,8 +338,8 @@ async function completeCurrentExercise(page) {
   await page.getByText('Photo saved with this workout.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Close workout details', exact: true }).click();
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  page.once('dialog', dialog => dialog.accept());
   await page.getByRole('button', { name: 'Log out', exact: true }).click();
+  await page.getByRole('button', { name: 'LOG OUT AND DELETE DATA', exact: true }).click();
   await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).waitFor();
   const mediaAfterLogout = await page.evaluate(() => new Promise((resolve, reject) => {
     const request = indexedDB.open('rook-workout-media');

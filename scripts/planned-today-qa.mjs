@@ -6,6 +6,7 @@ import { WEEKDAYS, blankState, buildProgram, estimateSessionMinutes, exerciseCat
 
 const outputRoot = new URL('../artifacts/planned-today/', import.meta.url); await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
+const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 const today = weekday(); const todayIndex = WEEKDAYS.indexOf(today); const offsetDay = offset => WEEKDAYS[(todayIndex + offset) % 7];
 
@@ -24,7 +25,7 @@ async function open(state, viewport) {
   await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
   await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false }) }));
   page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto(`http://127.0.0.1:4173/?planned-today=${Date.now()}`, { waitUntil: 'networkidle' }); return { context, page, errors };
+  await page.goto(`${appUrl}/?planned-today=${Date.now()}`, { waitUntil: 'networkidle' }); return { context, page, errors };
 }
 
 const lineCount = locator => locator.evaluate(element => { const range = document.createRange(); range.selectNodeContents(element); return [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0).length; });

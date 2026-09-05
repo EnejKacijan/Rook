@@ -64,6 +64,16 @@ async function verifyRest(page, expectedDistance, screenshot) {
 }
 for (const theme of ['light', 'dark', 'premium']) {
   const state = fixture([offsetDay(3), offsetDay(6)]); state.profile.themePreference = theme; const { context, page, errors } = await pageFor(state, { width: 390, height: 844 });
+  await page.getByRole('button', { name: 'Train today instead' }).click();
+  const restTrainingClose = page.locator('.rest-training-sheet .sheet-close');
+  await restTrainingClose.waitFor();
+  const [closeColor, textColor] = await Promise.all([
+    restTrainingClose.evaluate(node => getComputedStyle(node).color),
+    page.locator('html').evaluate(node => getComputedStyle(node).color),
+  ]);
+  assert.equal(closeColor, textColor, `${theme}: Train today close control uses the shared sheet text color`);
+  await restTrainingClose.click();
+  await page.locator('.modal-layer').waitFor({ state: 'detached' });
   const selectedRest = offsetDay(1); await page.locator(`.week-strip button[aria-label^="${selectedRest} "]`).click();
   await page.getByRole('heading', { name: 'Rest day' }).waitFor(); assert.equal(await page.getByRole('button', { name: 'Train today instead' }).count(), 0);
   const selectedChip = page.locator('.week-strip .selected-day'); const todayChip = page.locator('.week-strip [aria-current="date"]');

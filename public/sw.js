@@ -1,4 +1,4 @@
-const CACHE = 'rook-v7';
+const CACHE = 'rook-v12';
 const APP_SHELL = ['/manifest.webmanifest', '/icon.svg'];
 
 async function precacheCurrentBuild() {
@@ -53,7 +53,7 @@ self.addEventListener('fetch', event => {
   // without waiting for a network round trip on every view.
   if (url.pathname.startsWith('/assets/')) {
     event.respondWith(
-      caches.match(request).then(cached => {
+      caches.match(request, { ignoreVary: true }).then(cached => {
         if (cached) return cached;
         return fetch(request).then(response => {
           if (response.ok)
@@ -74,5 +74,20 @@ self.addEventListener('fetch', event => {
         return response;
       })
       .catch(() => caches.match(request, { ignoreVary: true }))
+  );
+});
+
+self.addEventListener('notificationclick', event => {
+  event.notification.close();
+  const target = event.notification.data?.url || '/';
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then(openClients => {
+      const existing = openClients.find(client => new URL(client.url).origin === self.location.origin);
+      if (existing) {
+        existing.navigate?.(target);
+        return existing.focus();
+      }
+      return clients.openWindow(target);
+    })
   );
 });

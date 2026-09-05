@@ -19,6 +19,7 @@ import {
   formatWorkoutElapsedDuration,
   latestLoggedWeightSet,
   normalizeStepperValue,
+  onboardingGenerationProfile,
   validStepperDraft,
   planEditorAllowsSupersets,
   profileTrainingRows,
@@ -273,6 +274,21 @@ describe("training setup validation", () => {
     expect(
       setupSelectionValid({ environment: "Home gym", equipment: [] }),
     ).toBe(false);
+  });
+
+  it("turns Both into the selected primary environment while retaining the onboarding choice", () => {
+    expect(
+      onboardingGenerationProfile({
+        environment: "Both",
+        primaryTrainingEnvironment: "Home gym",
+        equipment: ["dumbbells"],
+      }),
+    ).toMatchObject({
+      environment: "Home gym",
+      primaryTrainingEnvironment: "Home gym",
+      trainingEnvironmentChoice: "Both",
+      equipment: ["dumbbells"],
+    });
   });
 
   it("explains when selected equipment requires a different split", () => {

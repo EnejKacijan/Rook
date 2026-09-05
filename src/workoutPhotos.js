@@ -1,6 +1,8 @@
 const DB_NAME = "rook-workout-media";
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const PHOTO_STORE = "photos";
+const RESTORE_SNAPSHOT_STORE = "restore-snapshot";
+const RESTORE_SNAPSHOT_MARKER = "__rook_restore_snapshot__";
 const MAX_SOURCE_BYTES = 15_000_000;
 const MAX_EDGE = 1600;
 
@@ -27,6 +29,8 @@ function openPhotoDatabase() {
         store.createIndex("workoutId", "workoutId");
       if (!store.indexNames.contains("createdAt"))
         store.createIndex("createdAt", "createdAt");
+      if (!database.objectStoreNames.contains(RESTORE_SNAPSHOT_STORE))
+        database.createObjectStore(RESTORE_SNAPSHOT_STORE, { keyPath: "id" });
     };
     request.onsuccess = () => resolve(request.result);
     request.onerror = () => reject(request.error || new Error("Photo storage could not be opened."));
@@ -43,9 +47,15 @@ async function usePhotoStore(mode, operation) {
       transaction.onerror = () => reject(transaction.error || new Error("Photo storage failed."));
       transaction.onabort = () => reject(transaction.error || new Error("Photo storage was cancelled."));
     });
-    const result = await operation(transaction.objectStore(PHOTO_STORE));
-    await completed;
-    return result;
+    try {
+      const result = await operation(transaction.objectStore(PHOTO_STORE));
+      await completed;
+      return result;
+    } catch (error) {
+      try { transaction.abort(); } catch { /* The browser may already have aborted it. */ }
+      await completed.catch(() => {});
+      throw error;
+    }
   } finally {
     database.close();
   }
@@ -142,4 +152,150 @@ export function deleteWorkoutPhoto(id) {
 
 export function clearWorkoutPhotos() {
   return usePhotoStore("readwrite", (store) => requestResult(store.clear()));
+}
+
+export function getAllWorkoutPhotos() {
+  return usePhotoStore("readonly", (store) => requestResult(store.getAll())).then(
+    (records) => Array.isArray(records) ? records : [],
+  );
+}
+
+export function listWorkoutPhotoMetadata() {
+  return usePhotoStore("readonly", (store) => new Promise((resolve, reject) => {
+    const records = [];
+    const request = store.openCursor();
+    request.onerror = () => reject(request.error || new Error("Photo storage failed."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve(records);
+        return;
+      }
+      const { blob, ...metadata } = cursor.value;
+      records.push(metadata);
+      cursor.continue();
+    };
+  }));
+}
+
+export function replaceWorkoutPhotos(records) {
+  const prepared = Array.isArray(records) ? records : [];
+  return usePhotoStore("readwrite", async (store) => {
+    await requestResult(store.clear());
+    for (const record of prepared) await requestResult(store.put(record));
+  });
+}
+
+function transactionDone(transaction) {
+  return new Promise((resolve, reject) => {
+    transaction.oncomplete = resolve;
+    transaction.onerror = () => reject(transaction.error || new Error("Photo storage failed."));
+    transaction.onabort = () => reject(transaction.error || new Error("Photo storage was cancelled."));
+  });
+}
+
+function copyStoreWithCursor(source, destination) {
+  return new Promise((resolve, reject) => {
+    const request = source.openCursor();
+    request.onerror = () => reject(request.error || new Error("Photo snapshot failed."));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (!cursor) {
+        resolve();
+        return;
+      }
+      const put = destination.put(cursor.value);
+      put.onerror = () => reject(put.error || new Error("Photo snapshot failed."));
+      put.onsuccess = () => cursor.continue();
+    };
+  });
+}
+
+async function useRestoreStores(operation) {
+  const database = await openPhotoDatabase();
+  try {
+    const transaction = database.transaction(
+      [PHOTO_STORE, RESTORE_SNAPSHOT_STORE],
+      "readwrite",
+    );
+    const completed = transactionDone(transaction);
+    try {
+      const result = await operation(
+        transaction.objectStore(PHOTO_STORE),
+        transaction.objectStore(RESTORE_SNAPSHOT_STORE),
+      );
+      await completed;
+      return result;
+    } catch (error) {
+      try { transaction.abort(); } catch { /* The browser may already have aborted it. */ }
+      await completed.catch(() => {});
+      throw error;
+    }
+  } finally {
+    database.close();
+  }
+}
+
+export function stageWorkoutPhotoRestore(records, transactionId) {
+  if (!transactionId) return Promise.reject(new Error("Restore transaction is invalid."));
+  const incoming = Array.isArray(records) ? records : [];
+  return useRestoreStores(async (photos, snapshot) => {
+    await requestResult(snapshot.clear());
+    await copyStoreWithCursor(photos, snapshot);
+    await requestResult(snapshot.put({
+      id: RESTORE_SNAPSHOT_MARKER,
+      transactionId,
+      createdAt: new Date().toISOString(),
+    }));
+    await requestResult(photos.clear());
+    for (const record of incoming) await requestResult(photos.put(record));
+  });
+}
+
+export function rollbackWorkoutPhotoRestore(transactionId) {
+  if (!transactionId) return Promise.resolve(false);
+  return useRestoreStores(async (photos, snapshot) => {
+    const marker = await requestResult(snapshot.get(RESTORE_SNAPSHOT_MARKER));
+    if (marker?.transactionId !== transactionId) return false;
+    await requestResult(photos.clear());
+    await new Promise((resolve, reject) => {
+      const request = snapshot.openCursor();
+      request.onerror = () => reject(request.error || new Error("Photo recovery failed."));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (!cursor) {
+          resolve();
+          return;
+        }
+        if (cursor.key === RESTORE_SNAPSHOT_MARKER) {
+          cursor.continue();
+          return;
+        }
+        const put = photos.put(cursor.value);
+        put.onerror = () => reject(put.error || new Error("Photo recovery failed."));
+        put.onsuccess = () => cursor.continue();
+      };
+    });
+    await requestResult(snapshot.clear());
+    return true;
+  });
+}
+
+export function discardWorkoutPhotoRestoreSnapshot() {
+  return usePhotoDatabaseStore(RESTORE_SNAPSHOT_STORE, "readwrite", (store) =>
+    requestResult(store.clear()),
+  );
+}
+
+async function usePhotoDatabaseStore(storeName, mode, operation) {
+  const database = await openPhotoDatabase();
+  try {
+    const transaction = database.transaction(storeName, mode);
+    const completed = transactionDone(transaction);
+    const result = await operation(transaction.objectStore(storeName));
+    await completed;
+    return result;
+  } finally {
+    database.close();
+  }
 }

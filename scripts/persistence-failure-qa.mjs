@@ -5,6 +5,7 @@ import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
 
 const artifactRoot = new URL("../artifacts/persistence-failure/", import.meta.url);
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
 await mkdir(artifactRoot, { recursive: true });
 
 const browser = await chromium.launch({
@@ -34,18 +35,22 @@ await page.route("**/api/ai/status", (route) =>
     body: JSON.stringify({ available: false }),
   }),
 );
-await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+await page.goto(appUrl, { waitUntil: "networkidle" });
 await page.getByRole("alert").filter({ hasText: "Changes can’t be saved" }).waitFor();
 assert.equal(
   await page.getByRole("button", { name: /START WORKOUT|WORKOUT COMPLETE/ }).count(),
   1,
   "the app remains usable when persistence is unavailable",
 );
+assert.equal(await page.getByRole("button", { name: "BACK UP NOW" }).count(), 1, "the storage warning offers an immediate backup path");
 assert.deepEqual(errors, [], "blocked storage does not cause an uncaught page error");
 await page.screenshot({
   path: fileURLToPath(new URL("390-storage-warning.png", artifactRoot)),
   fullPage: false,
 });
+await page.getByRole("button", { name: "BACK UP NOW" }).click();
+await page.getByRole("heading", { name: "Keep a recovery copy of your training." }).waitFor();
+await page.getByRole("button", { name: "Close Back up ROOK" }).click();
 await context.close();
 const newUserContext = await browser.newContext({
   viewport: { width: 320, height: 700 },
@@ -69,16 +74,16 @@ await newUserPage.route("**/api/ai/status", (route) =>
     body: JSON.stringify({ available: false }),
   }),
 );
-await newUserPage.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
-await newUserPage.getByRole("alert").filter({ hasText: "Changes can’t be saved" }).waitFor();
+await newUserPage.goto(appUrl, { waitUntil: "networkidle" });
+await newUserPage.getByRole("alert").filter({ hasText: "couldn’t safely reopen your data" }).waitFor();
 assert.equal(
-  await newUserPage.getByRole("button", { name: "BUILD MY PLAN" }).count(),
+  await newUserPage.getByRole("button", { name: "RELOAD APP" }).count(),
   1,
-  "a first launch remains usable when all storage access is blocked",
+  "a blocked read fails closed instead of assuming there is no interrupted restore",
 );
 assert.deepEqual(newUserErrors, []);
 await newUserContext.close();
 await browser.close();
 console.log(
-  "Persistence failure QA passed: blocked local storage stays recoverable and produces a clear user-visible warning.",
+  "Persistence failure QA passed: blocked writes stay recoverable, while blocked reads fail closed with a clear recovery state.",
 );

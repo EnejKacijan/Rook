@@ -1,5 +1,6 @@
 .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(24px + env(safe-area-inset-top)); padding-left: 24px; padding-right: 24px; }
 .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) { overflow: clip; }
+.onboarding-setup { overflow-anchor: none; }
 .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 20px; }
 .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line > span { transition: width 220ms cubic-bezier(.2, 0, 0, 1); }
 .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 28px 0 18px; animation: onboarding-step-enter 180ms cubic-bezier(.2, 0, 0, 1); }
@@ -179,11 +180,24 @@
 .setup-environment .option-card-copy { align-items: center; }
 .setup-environment .option-card-copy strong { font-size: 12px; text-align: center; }
 .setup-environment .option-card-check { display: none; }
-.setup-confirmation { min-height: 58px; padding: 11px 13px; border: 1px solid rgba(31,107,76,.16); border-radius: 13px; background: #edf5f1; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.setup-confirmation { min-height: 58px; padding: 11px 13px; border: 1px solid rgba(31,107,76,.16); border-radius: 13px; background: #edf5f1; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.setup-confirmation > span { min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 4px; }
+.profile-setup-confirmation { flex-direction: column; align-items: stretch; justify-content: center; gap: 4px; }
 .setup-confirmation strong { color: #1f6b4c; font-size: 12px; }
 .setup-confirmation small { color: var(--rook-secondary, #527363); font-size: 11px; line-height: 1.35; }
-.setup-equipment .option-list { gap: 7px; margin-top: 8px; }
-.setup-equipment .onboarding-option { min-height: 50px; padding-block: 8px; }
+.setup-confirmation > button,.setup-confirmation-actions > button { flex: 0 0 auto; appearance: none; padding: 7px 0 7px 8px; border: 0; background: transparent; color: var(--rook-accent, #1f6b4c); font-size: 10px; font-weight: 800; letter-spacing: .06em; text-align: right; }
+.setup-confirmation-actions { flex: 0 0 auto; display: flex; flex-direction: column; align-items: flex-end; gap: 0; }
+.setup-confirmation-actions > button { padding-block: 3px; }
+.setup-primary-environment .option-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin-top: 10px; }
+.setup-primary-environment .onboarding-option { min-height: 52px; padding: 8px 12px; justify-content: center; }
+.setup-primary-environment .option-card-copy { align-items: center; }
+.setup-primary-environment .option-card-copy strong { text-align: center; }
+.setup-equipment .onboarding-group-heading { align-items: flex-start; flex-direction: column; gap: 3px; }
+.setup-equipment-title-row { width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.setup-equipment-title-row > strong { color: #4e4b47; font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.setup-equipment-title-row > button { appearance: none; padding: 3px 0 3px 8px; border: 0; background: transparent; color: var(--rook-accent, #1f6b4c); font-size: 9px; font-weight: 800; letter-spacing: .05em; text-align: right; }
+.setup-equipment .option-list { gap: 6px; margin-top: 8px; }
+.setup-equipment .onboarding-option { min-height: 48px; padding-block: 7px; }
 
 .onboarding-priorities .option-list { gap: 7px; margin-top: 18px; }
 .onboarding-priorities .onboarding-option { min-height: 52px; padding-block: 8px; }
@@ -318,7 +332,7 @@
 @media (max-height: 700px) {
   .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(22px + env(safe-area-inset-top)); padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
   .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 19px; }
-  .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 25px 0 14px; }
+  .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 25px 0 12px; }
   .onboarding:not(.entry-screen):not(.physique-review-screen) h1 { font-size: 28px; }
   .onboarding:not(.entry-screen):not(.physique-review-screen) .option-list { margin-top: 16px; }
   .onboarding-schedule .schedule-fields,.onboarding-setup .setup-fields { gap: 12px; margin-top: 14px; }

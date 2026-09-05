@@ -17,6 +17,28 @@ import {
 } from "./prescriptionPolicy.js";
 import { validateSupersetExercises } from "./supersets.js";
 import { workoutGuideExercises } from "./workoutGuideCatalog.js";
+import { PLATE_LOADING_RELATION_BY_EXERCISE_ID } from "./plateCalculator.js";
+import { effectiveGymContext, normalizeGymProfilesState } from "./gymProfiles.js";
+import {
+  normalizeSubstitutionPreferencesState,
+  rankSubstitutionCandidates,
+} from "./substitutions.js";
+import { normalizePlanHistoryState } from "./planHistory.js";
+import { normalizeCustomExercisesState } from "./customExercises.js";
+import {
+  advancedSetCanComplete,
+  effectiveSetReps,
+  normalizeAdvancedLoggingState,
+  progressionComparableSet,
+  setTypeOf,
+} from "./advancedLogging.js";
+import {
+  advanceTrainingBlockAfterWorkout,
+  createTrainingBlock,
+  normalizeTrainingBlock,
+  normalizeTrainingBlocksState,
+  prescribeTrainingBlockWorkout,
+} from "./trainingBlocks.js";
 import {
   accumulateStimulus,
   hypertrophyTargetsForProfile,
@@ -1375,6 +1397,10 @@ function globallyBlockedExerciseLabel(value) {
   );
 }
 for (const item of Object.values(exerciseCatalog)) {
+  if (PLATE_LOADING_RELATION_BY_EXERCISE_ID[item.id])
+    item.plateLoading = {
+      relation: PLATE_LOADING_RELATION_BY_EXERCISE_ID[item.id],
+    };
   item.loadRequirement = exerciseLoadRequirement(item);
   const barbellCompound =
     item.kind === "compound" && item.equipment.includes("barbell");
@@ -1804,8 +1830,10 @@ export const displayDate = (date = new Date()) =>
     month: "short",
     day: "numeric",
   }).format(new Date(date));
-export const formatDuration = (seconds) =>
-  `${Math.floor(Math.max(0, seconds) / 60)}:${String(Math.max(0, seconds) % 60).padStart(2, "0")}`;
+export const formatDuration = (seconds) => {
+  const safe = Number.isFinite(Number(seconds)) ? Math.max(0, Number(seconds)) : 0;
+  return `${Math.floor(safe / 60)}:${String(Math.floor(safe % 60)).padStart(2, "0")}`;
+};
 export const pluralize = (count, singular, plural = `${singular}s`) =>
   `${count} ${Number(count) === 1 ? singular : plural}`;
 export const exerciseMeasure = (exercise) =>
@@ -1859,22 +1887,8 @@ export function exerciseLoadRequirement(exercise) {
   return "required";
 }
 export function workingSetCanComplete(exercise, set) {
-  const repetitions = Number(set?.reps);
-  if (!Number.isFinite(repetitions) || repetitions <= 0) return false;
   const requirement = exerciseLoadRequirement(exercise);
-  if (requirement === "none") return true;
-  const weightMissing =
-    set?.weight === null || set?.weight === undefined || set?.weight === "";
-  // Null is the canonical representation for bodyweight with no added load.
-  // Accept legacy zeroes too so an old session can never trap the user, then
-  // normalize them during state loading and the next edit.
-  if (
-    requirement === "optional" &&
-    (weightMissing || Number(set?.weight) === 0)
-  )
-    return true;
-  const weight = Number(set?.weight);
-  return Number.isFinite(weight) && weight > 0;
+  return advancedSetCanComplete(exercise, set, requirement);
 }
 export const exerciseValueLabel = (exercise, value) =>
   exerciseMeasure(exercise) === "seconds" ? `${value} sec` : String(value);
@@ -2008,6 +2022,8 @@ export function defaultProfile() {
     availableDays: [],
     sessionMinutes: null,
     environment: null,
+    trainingEnvironmentChoice: null,
+    primaryTrainingEnvironment: null,
     equipment: [],
     priorities: ["Balanced"],
     prioritySources: {
@@ -2032,6 +2048,7 @@ export function defaultProfile() {
     restTimerEnabled: true,
     restTimerAutoStart: true,
     restTimerSeconds: null,
+    restTimerNotificationsEnabled: false,
     onboardingComplete: false,
     increments: { barbell: 2.5, dumbbells: 2, machines: 5, cables: 2.5 },
     restDefaults: { compound: 120, isolation: 60 },
@@ -2042,9 +2059,16 @@ export function blankState() {
     schemaVersion: 3,
     profile: defaultProfile(),
     program: null,
+    planVersions: [],
+    completedTrainingBlocks: [],
     activeWorkout: null,
     activeOptionalSession: null,
     todayAdaptation: null,
+    gymProfiles: [],
+    defaultGymProfileId: null,
+    substitutionPreferences: [],
+    customExercises: [],
+    exerciseAliases: [],
     weekScheduleOverrides: {},
     workoutOccurrenceOverrides: {},
     optionalSessions: [],
@@ -2056,6 +2080,7 @@ export function blankState() {
     progressFocusOverrideByPlanId: {},
     weightTrackingEnabled: false,
     weightCheckins: [],
+    dataSafety: { lastBackupCreatedAt: null },
     selectedDay: null,
     selectedDate: null,
     ai: { available: null, provider: null },
@@ -2236,9 +2261,9 @@ function migrateWorkoutPlanDates(stored) {
   for (const session of stored.optionalSessions || []) migrate(session?.workout);
   return stored;
 }
-export function loadState() {
+export function deserializeState(input) {
   try {
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    const stored = typeof input === "string" ? JSON.parse(input) : structuredClone(input);
     if (!stored || ![2, 3].includes(stored.schemaVersion)) return blankState();
     stored.schemaVersion = 3;
     migrateBlockedExercises(stored);
@@ -2344,6 +2369,11 @@ export function loadState() {
         program && stored.profile?.onboardingComplete,
       ),
     };
+    stored.profile = profile;
+    normalizeGymProfilesState(stored);
+    normalizeSubstitutionPreferencesState(stored);
+    normalizeCustomExercisesState(stored);
+    normalizeAdvancedLoggingState(stored);
     const conversations = Array.isArray(stored.conversations)
       ? stored.conversations
       : [];
@@ -2388,11 +2418,27 @@ export function loadState() {
       stored.activeWorkout.warmup.generatorVersion !== 3
     )
       refreshWorkoutWarmup(stored.activeWorkout, profile, program);
+    stored.program = program;
+    if (Array.isArray(stored.planVersions))
+      stored.planVersions = stored.planVersions.filter((version) => {
+        const repaired = repairProgramSchedule(version?.program);
+        const checkedVersion = validateProgram(repaired, null, {
+          preserveSchedule: Boolean(repaired?.userEdited),
+        });
+        if (!checkedVersion.valid) return false;
+        repaired.trainingBlock = normalizeTrainingBlock(repaired);
+        version.program = repaired;
+        return true;
+      });
+    normalizeTrainingBlocksState(stored);
+    normalizePlanHistoryState(stored);
     return {
       ...base,
       ...stored,
       profile,
       program,
+      planVersions: stored.planVersions,
+      completedTrainingBlocks: stored.completedTrainingBlocks,
       activeWorkout: Array.isArray(stored.activeWorkout?.exercises)
         ? {
             ...stored.activeWorkout,
@@ -2442,7 +2488,14 @@ export function loadState() {
     return blankState();
   }
 }
-export const saveState = (state) => {
+export function loadState() {
+  try {
+    return deserializeState(localStorage.getItem(STORAGE_KEY));
+  } catch {
+    return blankState();
+  }
+}
+export const stateForPersistence = (state) => {
   let persistedState = state;
   if (state?.profile) {
     const currentLegacy = state.profile.themePreference;
@@ -2482,8 +2535,12 @@ export const saveState = (state) => {
       },
     };
   }
+  return persistedState;
+};
+export const serializeState = (state) => JSON.stringify(stateForPersistence(state));
+export const saveState = (state) => {
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(persistedState));
+    localStorage.setItem(STORAGE_KEY, serializeState(state));
     return true;
   } catch {
     return false;
@@ -2568,10 +2625,12 @@ export function currentWeekSchedule(state, date = new Date()) {
         ? { ...sourceWorkout, exercises: occurrenceExercises }
         : sourceWorkout;
       if (!workout.exercises.length) return null;
-      if (workout !== sourceWorkout)
-        workout.estimatedMinutes = estimateSessionMinutes(workout.exercises);
+      const prescribedWorkout = prescribeTrainingBlockWorkout(state, workout);
+      prescribedWorkout.estimatedMinutes = estimateSessionMinutes(
+        prescribedWorkout.exercises,
+      );
       return {
-        workout,
+        workout: prescribedWorkout,
         workoutId: sourceWorkout.id,
         originalDate,
         scheduledDate,
@@ -6328,6 +6387,7 @@ export function buildProgram(profile, options = {}) {
   rebalanceHypertrophyFloors(generatedProgram, profile, allowed, usedCounts);
   generatedProgram.days = adaptConsecutiveSessionRecovery(generatedProgram.days, profile);
   const finalized = enforceInitialVolumeCeilings(generatedProgram, profile);
+  finalized.trainingBlock = createTrainingBlock(finalized);
   if (options.skipPriorityPostconditions) return finalized;
   const hasManualPriority = priorityProgrammingGroupsForProfile(profile).some(
     (group) => group.source === "manual",
@@ -6344,11 +6404,13 @@ export function buildProgram(profile, options = {}) {
   const baseline = buildProgram(neutralProfile, {
     skipPriorityPostconditions: true,
   });
-  return enforceManualPriorityPostconditions(
+  const prioritized = enforceManualPriorityPostconditions(
     finalized,
     baseline,
     profile,
   );
+  prioritized.trainingBlock = normalizeTrainingBlock(prioritized);
+  return prioritized;
 }
 
 const REPLACEMENT_GENERATOR_VERSION = 1;
@@ -6628,10 +6690,12 @@ export function validateProgram(program, profile = null, options = {}) {
     for (const exercise of day.exercises || []) {
       const item = exerciseCatalog[exercise.exerciseId];
       const customImportedExercise =
-        (allowImportedExercises || program.source === "manual") &&
         !item &&
         Boolean(exercise.importedName) &&
-        String(exercise.exerciseId || "").startsWith("imported-custom-");
+        ((allowImportedExercises || program.source === "manual") &&
+          String(exercise.exerciseId || "").startsWith("imported-custom-") ||
+          (exercise.exerciseSource === "custom" &&
+            exercise.importedExercise?.id === exercise.exerciseId));
       if (
         (!item && !customImportedExercise) ||
         (!allowImportedExercises && seen.has(exercise.exerciseId))
@@ -6848,6 +6912,10 @@ export function exerciseMatchesQuery(item, query) {
       return (
         normalizedValue.includes(normalizedQuery) ||
         pluralValue.includes(normalizedQuery) ||
+        normalizedQuery
+          .split(" ")
+          .filter(Boolean)
+          .every((token) => normalizedValue.includes(token)) ||
         compactExerciseName(normalizedValue).includes(compactQuery) ||
         compactExerciseName(pluralValue).includes(compactQuery)
       );
@@ -7617,6 +7685,28 @@ export function adaptedTemplateForToday(state, date = new Date()) {
     adaptation.programDayId !== template.id
   )
     return template;
+  if (
+    adaptation.schemaVersion === 1 &&
+    Array.isArray(adaptation.workout?.exercises) &&
+    adaptation.workout.exercises.length
+  )
+    return {
+      ...structuredClone(adaptation.workout),
+      adapted: true,
+      todayOnlyAdjustment: {
+        id: adaptation.id,
+        mode: adaptation.mode,
+        date: adaptation.date,
+        appliedAt: adaptation.appliedAt,
+        requestedMinutes: adaptation.requestedMinutes ?? null,
+        temporaryEquipment: adaptation.temporaryEquipment || null,
+        gymProfileId: adaptation.gymProfileId || null,
+        gymProfileName: adaptation.gymProfileName || null,
+        gymProfileMissing: Boolean(adaptation.gymProfileMissing),
+        changes: structuredClone(adaptation.changes || []),
+        originalWorkout: structuredClone(adaptation.originalWorkout || template),
+      },
+    };
   const setTargets = new Map(
     (adaptation.setTargets || []).map((item) => [
       item.exerciseId,
@@ -7904,9 +7994,9 @@ export function startWorkout(state, template) {
     programDayId: template.id,
     canonicalPlanDate,
     workoutDateKey: canonicalPlanDate,
-    sourcePlanSlotId: template.id
-      ? `${template.id}:${canonicalPlanDate}`
-      : null,
+    sourcePlanSlotId:
+      template.trainingBlock?.blockWorkoutId ||
+      (template.id ? `${template.id}:${canonicalPlanDate}` : null),
     optionalSessionId: template.optionalSessionId || null,
     name: template.name,
     workoutName: template.workoutName,
@@ -7920,7 +8010,18 @@ export function startWorkout(state, template) {
     exerciseIndex: 0,
     rest: null,
     handledSupersetRestRounds: [],
-    adapted: Boolean(template.optionalSessionId),
+    adapted: Boolean(template.optionalSessionId || template.adapted),
+    ...(template.trainingBlock
+      ? { trainingBlock: structuredClone(template.trainingBlock) }
+      : {}),
+    ...(template.todayOnlyAdjustment
+      ? {
+          adjustment: structuredClone(template.todayOnlyAdjustment),
+          originalPlannedWorkout: structuredClone(
+            template.todayOnlyAdjustment.originalWorkout,
+          ),
+        }
+      : {}),
     warmupPlan: template.warmupPlan
       ? structuredClone(template.warmupPlan)
       : { mode: "auto" },
@@ -7931,7 +8032,12 @@ export function startWorkout(state, template) {
       return {
         ...structuredClone(base),
         sets: base.sets.map((set, index) => {
-          const previousSet = completedPreviousSets[index];
+          const candidatePreviousSet = completedPreviousSets[index];
+          const previousSet =
+            candidatePreviousSet &&
+            setTypeOf(candidatePreviousSet) === setTypeOf(set)
+              ? candidatePreviousSet
+              : null;
           const weight = previousSet?.weight ?? set.weight ?? null;
           return {
             ...set,
@@ -7953,6 +8059,7 @@ export function startWorkout(state, template) {
       };
     }),
   };
+  normalizeAdvancedLoggingState({ activeWorkout: workout, workouts: [] });
   const prepared = refreshWorkoutWarmup(workout, state.profile, state.program);
   prepared.restartSnapshot = {
     exercises: structuredClone(prepared.exercises),
@@ -8099,10 +8206,12 @@ export function progressionFor(exercise, history, profile = null) {
   const observations = appearances
     .map((entry) => {
       const planned = (entry.item.sets || []).filter(
-        (set) => set.planned !== false && !set.added,
+        (set) =>
+          set.planned !== false && !set.added && progressionComparableSet(set),
       );
       const completed = planned.filter(
-        (set) => set.completed && Number.isFinite(Number(set.reps)),
+        (set) =>
+          set.completed && Number.isFinite(Number(effectiveSetReps(entry.item, set))),
       );
       const complete =
         planned.length > 0 && completed.length === planned.length;
@@ -8132,11 +8241,14 @@ export function progressionFor(exercise, history, profile = null) {
         hasLoad,
         loadKey,
         weight: hasLoad ? loads[0] : null,
-        allAtTop: complete && completed.every((set) => Number(set.reps) >= max),
+        allAtTop:
+          complete &&
+          completed.every((set) => Number(effectiveSetReps(entry.item, set)) >= max),
         anyBelowMin:
-          complete && completed.some((set) => Number(set.reps) < min),
+          complete &&
+          completed.some((set) => Number(effectiveSetReps(entry.item, set)) < min),
         topReps: completed.length
-          ? Math.max(...completed.map((set) => Number(set.reps)))
+          ? Math.max(...completed.map((set) => Number(effectiveSetReps(entry.item, set))))
           : null,
         effortOkay,
         date: new Date(
@@ -8452,12 +8564,13 @@ export function completeWorkout(state) {
       ? { ...optional, status: "completed", completedAt: session.completedAt }
       : optional,
   );
-  return {
+  const next = {
     ...state,
     activeWorkout: null,
     optionalSessions,
     workouts: [...state.workouts, session],
   };
+  return advanceTrainingBlockAfterWorkout(next, session);
 }
 export function optionalSessionElapsedSeconds(session, now = Date.now()) {
   if (!session) return 0;
@@ -8584,75 +8697,63 @@ export function compatibleReplacementCandidates(
   source,
   profile,
   programExerciseIds = [],
+  options = {},
 ) {
   const current = replacementMetadata(source);
-  if (!current?.pattern) return [];
-  const primaryMuscle = current.muscles?.[0] || null;
-  const sourceId = typeof source === "string" ? source : source.exerciseId;
-  const eligible = Object.values(exerciseCatalog).filter(
-    (item) =>
-      item.id !== sourceId &&
-      item.pattern === current.pattern &&
-      (!primaryMuscle || item.muscles?.includes(primaryMuscle)) &&
-      isExerciseAutoGeneratable(item, profile) &&
-      (profile.experience !== "Beginner" || item.technicalDifficulty <= 2),
+  if (!current) return [];
+  const ranked = rankSubstitutionCandidates({
+    source: { ...current, repMin: source?.repMin, repMax: source?.repMax },
+    candidates: options.candidates || Object.values(exerciseCatalog),
+    profile,
+    isAllowed: isExerciseAllowed,
+    autoGeneratable: isExerciseAutoGeneratable,
+    strictIntent: true,
+    excludedExerciseIds: options.excludedExerciseIds,
+    programExerciseIds,
+    preferences: options.preferences,
+    gymProfileId: options.gymProfileId,
+  });
+  const loadable = ranked.filter(
+    ({ exercise }) =>
+      !exercise.bodyweight && exercise.progressionQuality === "load-and-repetition",
   );
-  const externallyLoadable = eligible.filter(
-    (item) =>
-      !item.bodyweight && item.progressionQuality === "load-and-repetition",
-  );
-  return (externallyLoadable.length ? externallyLoadable : eligible).sort(
-    (a, b) => {
-      const score = (item) =>
-        (item.muscles?.[0] === primaryMuscle ? 6 : 0) +
-        (item.kind === current.kind ? 3 : 0) +
-        (item.stability === current.stability ? 2 : 0) +
-        (item.progressionQuality === "load-and-repetition" ? 2 : 0) +
-        (profile.goal === "Build muscle" && item.stability === "high" ? 2 : 0) +
-        (profile.goal === "Get stronger" && item.equipment.includes("barbell")
-          ? 2
-          : 0) +
-        (profile.exercisePreference === "Prefer free weights" &&
-        item.equipment.some((value) => ["barbell", "dumbbells"].includes(value))
-          ? 2
-          : 0) +
-        (profile.exercisePreference === "Prefer machines" &&
-        item.equipment.some((value) => ["machines", "cables"].includes(value))
-          ? 2
-          : 0) -
-        (item.fatigueCost === "high" && current.fatigueCost !== "high"
-          ? 2
-          : 0) -
-        (programExerciseIds.includes(item.id) ? 4 : 0);
-      return score(b) - score(a) || a.name.localeCompare(b.name);
-    },
+  const hasExplicitPreference = ranked.some(({ preferred }) => preferred);
+  return (hasExplicitPreference || !loadable.length ? ranked : loadable).map(
+    ({ exercise }) => exercise,
   );
 }
 export function userSelectableReplacementCandidates(
   source,
   profile,
   excludedExerciseIds = [],
+  options = {},
 ) {
-  const sourceId = typeof source === "string" ? source : source?.exerciseId;
-  const excluded = new Set(excludedExerciseIds);
-  return Object.values(exerciseCatalog)
-    .filter(
-      (item) =>
-        item.id !== sourceId &&
-        !excluded.has(item.id) &&
-        isExerciseAllowed(item, profile),
-    )
-    .sort((a, b) => a.name.localeCompare(b.name));
+  const current = replacementMetadata(source) || {
+    id: typeof source === "string" ? source : source?.exerciseId,
+  };
+  return rankSubstitutionCandidates({
+    source: { ...current, repMin: source?.repMin, repMax: source?.repMax },
+    candidates: options.candidates || Object.values(exerciseCatalog),
+    profile,
+    isAllowed: isExerciseAllowed,
+    autoGeneratable: isExerciseAutoGeneratable,
+    strictIntent: false,
+    excludedExerciseIds,
+    preferences: options.preferences,
+    gymProfileId: options.gymProfileId,
+  }).map(({ exercise }) => exercise);
 }
 export function replacementCandidates(
   source,
   profile,
   programExerciseIds = [],
+  options = {},
 ) {
   return compatibleReplacementCandidates(
     source,
     profile,
     programExerciseIds,
+    options,
   ).slice(0, 4);
 }
 export function missedPlannedWorkouts(state, date = new Date()) {
@@ -9702,6 +9803,7 @@ export function applyCoachAction(state, action) {
   if (action.type === "program-exercise-change")
     applyProgramExerciseChanges(state, action.changes);
   if (action.type === "replace-exercise" && state.activeWorkout) {
+    const gymContext = effectiveGymContext(state, state.activeWorkout);
     const index = state.activeWorkout.exercises.findIndex(
       (item) => item.exerciseId === action.fromExerciseId,
     );
@@ -9710,7 +9812,10 @@ export function applyCoachAction(state, action) {
       index >= 0 &&
       !state.activeWorkout.exercises[index].sets.some((set) => set.completed) &&
       replacement &&
-      replacementCandidates(action.fromExerciseId, state.profile).some(
+      replacementCandidates(action.fromExerciseId, gymContext.profile, [], {
+        preferences: state.substitutionPreferences,
+        gymProfileId: gymContext.id,
+      }).some(
         (item) => item.id === replacement.id,
       )
     ) {
@@ -9736,6 +9841,7 @@ export function consistencyForCurrentWeek(state, date = new Date()) {
     const planDate = workoutPlanDate(workout);
     return (
       workout.completedAt &&
+      !workout.historicalImport &&
       planDate >= start &&
       planDate <= end &&
       workoutSetSummary(workout).completed > 0

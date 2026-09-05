@@ -11,6 +11,29 @@ function raw(program, user = {}) {
 }
 
 describe('deterministic programming context and plan validation', () => {
+  it('uses the selected inventory for a customized commercial gym', () => {
+    const context = buildProgrammingContext(profile({
+      environment: 'Commercial gym',
+      equipment: ['dumbbells', 'machines'],
+    }), catalog);
+    expect(context.primaryLocation).toBe('Commercial gym');
+    expect(context.equipmentByLocation['Commercial gym']).toEqual([
+      'bodyweight',
+      'dumbbells',
+      'machines',
+    ]);
+  });
+
+  it('orders both-location planning around the selected primary gym', () => {
+    const context = buildProgrammingContext(profile({
+      environment: 'Both',
+      primaryTrainingEnvironment: 'Home gym',
+      equipment: ['dumbbells', 'resistance bands'],
+    }), catalog);
+    expect(context.primaryLocation).toBe('Home');
+    expect(context.usableLocations).toEqual(['Home', 'Commercial gym']);
+  });
+
   const cases = [
     ['beginner two-day full gym', { experience: 'Beginner', daysPerWeek: 2, availableDays: ['Tue', 'Sat'] }],
     ['intermediate three-day', {}],

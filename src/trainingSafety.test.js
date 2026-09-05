@@ -6,6 +6,7 @@ import {
   createTrainingClearanceResponse,
   createTrainingLimitsResponse,
   exerciseAllowedByTrainingSafety,
+  localTrainingSafetyResolution,
   trainingSafetyBlocks,
   verifyTrainingSafetyAnalysis,
 } from "./trainingSafety.js";
@@ -539,6 +540,67 @@ describe("training restriction compiler", () => {
     expect(exerciseAllowedByTrainingSafety(exerciseCatalog["back-squat"], safety)).toBe(false);
     expect(exerciseAllowedByTrainingSafety(exerciseCatalog["barbell-overhead-press"], safety)).toBe(false);
     expect(exerciseAllowedByTrainingSafety(exerciseCatalog["romanian-deadlift"], safety)).toBe(true);
+  });
+
+  it.each([
+    ["Avoid leg press", "Leg Press"],
+    ["No leg press", "Leg Press"],
+    ["I can't do leg press", "Leg Press"],
+    ["Don't include leg press", "Leg Press"],
+    ["Leave out leg press", "Leg Press"],
+    ["Never program leg press", "Leg Press"],
+    ["Skip LEG PRESS", "Leg Press"],
+    ["Avoid burpees", "Burpee"],
+    ["Brez leg pressa", "Leg Press"],
+    ["Izpusti leg press", "Leg Press"],
+  ])("accepts an exact non-medical avoidance locally: %s", (text, label) => {
+    const resolution = localTrainingSafetyResolution(text, catalog);
+    expect(resolution.status).toBe("resolved");
+    expect(resolution.reason).toBe("explicit_avoidance");
+    expect(resolution.safety.appliedLabels).toContain(label);
+  });
+
+  it.each([
+    "Avoid squats and lunges",
+    "Don't include overhead pressing",
+    "Brez počepov",
+    "No lower body exercises",
+    "Avoid all upper body movements",
+  ])("accepts a recognized movement-family restriction locally: %s", (text) => {
+    const resolution = localTrainingSafetyResolution(text, catalog);
+    expect(resolution.status).toBe("resolved");
+    expect(resolution.safety.status).toBe("constraints_active");
+  });
+
+  it("scopes catalog matches to avoidance clauses instead of excluding positive mentions", () => {
+    const safety = compile("Avoid squats, but leg press is fine and bench press is okay.");
+    expect(safety.constraints.avoidPatterns).toContain("squat");
+    expect(safety.constraints.avoidExerciseIds).not.toContain("leg-press");
+    expect(safety.constraints.avoidNameTokens).not.toContain("bench press");
+  });
+
+  it.each([
+    ["Avoid Viking press", "unknown_target"],
+    ["Avoid leg press and Viking press", "unknown_target"],
+    ["I dislike burpees", "unrecognized"],
+    ["My knee hurts on leg press", "medical_context"],
+    ["Avoid leg press because it hurts my knee", "medical_context"],
+    ["Recent surgery; avoid squats", "medical_context"],
+    ["My physio said avoid lunges", "medical_context"],
+  ])("requires semantic review when local interpretation is not sufficient: %s", (text, reason) => {
+    const resolution = localTrainingSafetyResolution(text, catalog);
+    expect(resolution.status).toBe("needs_semantic_review");
+    expect(resolution.reason).toBe(reason);
+  });
+
+  it.each([
+    ["I'm not cleared to lift yet", "blocked_not_cleared"],
+    ["Leg press must stay under 40 kg", "unsupported_limit"],
+  ])("fails closed locally for an explicit deterministic hard stop: %s", (text, status) => {
+    const resolution = localTrainingSafetyResolution(text, catalog);
+    expect(resolution.status).toBe("resolved");
+    expect(resolution.reason).toBe("deterministic_block");
+    expect(resolution.safety.status).toBe(status);
   });
 
   it("requires clarification instead of guessing a body-part-wide rule", () => {

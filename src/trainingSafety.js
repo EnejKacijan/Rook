@@ -145,31 +145,100 @@ function clinicianScope(text) {
   return null;
 }
 
-function explicitAvoidance(text, catalog) {
-  text = text
+const EXPLICIT_AVOIDANCE_OPERATOR =
+  /\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|dont include|do not include|skip|exclude|leave out|never do|never program|brez|izpusti|izpustite|ne smem|ne morem|ne delam|izogibaj se)\b/;
+
+const MEDICAL_REVIEW_LANGUAGE =
+  /\b(?:pain|painful|hurts?|aching|symptom|injury|injured|surgery|operation|procedure|post op|recovering|recovery|rehab|doctor|physician|surgeon|physio|physiotherapist|physical therapist|clinician|medical|medically|cleared|clearance|fracture|sprain|strain|dislocation|bolecin|boli|poskod|operacij|okrev|rehabilit|zdravnik|kirurg|fizioterapevt|dovoljen|dovolil|odobril)\w*\b/;
+
+const avoidanceClauses = (text) =>
+  text
+    .split(/(?:[.;\n]+|\b(?:but|however|although|except|ampak|vendar|razen)\b)/)
+    .map((clause) => clause.trim())
+    .filter((clause) => clause && EXPLICIT_AVOIDANCE_OPERATOR.test(clause));
+
+const normalizeAvoidanceLanguage = (text) =>
+  text
+    .replace(/\b(?:dont include|do not include|leave out|never program)\b/g, "avoid")
+    .replace(/\b(?:brez|izpusti|izpustite|ne smem|ne morem|ne delam|izogibaj se)\b/g, "avoid")
     .replace(/\b(?:pocep|pocepi|pocepov|pocepe)\b/g, "squats")
     .replace(/\b(?:izpadni korak|izpadni koraki|izpadnih korakov)\b/g, "lunges")
     .replace(/\b(?:mrtvi dvig|mrtve dvige|mrtvih dvigov)\b/g, "deadlifts")
     .replace(/\b(?:potisk nad glavo|potiske nad glavo)\b/g, "overhead pressing")
     .replace(/\b(?:skok|skoki|skokov)\b/g, "jumps");
+
+const exerciseNameForms = (item) =>
+  [item.name, ...(item.aliases || [])]
+    .map(normalize)
+    .filter((name) => name.length > 3)
+    .flatMap((name) => [
+      name,
+      `${name}s`,
+      `${name}es`,
+      `${name}a`,
+      name.endsWith("y") ? `${name.slice(0, -1)}ies` : null,
+    ].filter(Boolean));
+
+function unresolvedAvoidanceClauseText(sourceText, catalog) {
+  const phrases = [
+    ...(catalog || []).flatMap(exerciseNameForms),
+    "lower body exercises",
+    "lower body movements",
+    "upper body exercises",
+    "upper body movements",
+    "overhead pressing",
+    "bench presses",
+    "bench press",
+    "leg presses",
+    "leg press",
+    "plyometrics",
+    "jumping",
+    "jumps",
+    "jump",
+    "deadlifts",
+    "deadlift",
+    "lunges",
+    "lunge",
+    "squats",
+    "squat",
+  ].sort((left, right) => right.length - left.length);
+  const filler = new Set([
+    "a", "all", "and", "any", "do", "doing", "exercise", "exercises",
+    "from", "i", "in", "include", "me", "movement", "movements", "my",
+    "or", "please", "program", "the", "training", "workout", "workouts",
+  ]);
+  return avoidanceClauses(normalizeAvoidanceLanguage(normalize(sourceText))).map((clause) => {
+    let remainder = clause.replace(EXPLICIT_AVOIDANCE_OPERATOR, " ");
+    for (const phrase of phrases)
+      remainder = remainder.replace(
+        new RegExp(`\\b${phrase.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\b`, "g"),
+        " ",
+      );
+    return remainder
+      .split(/\s+/)
+      .filter((word) => word && !filler.has(word))
+      .join(" ");
+  }).filter(Boolean);
+}
+
+function explicitAvoidance(text, catalog) {
+  text = normalizeAvoidanceLanguage(text);
   const operatorText = text.replace(
     /\b(?:no|without)\b.{0,24}\bpain\b|\bnot in pain\b|\bpain free\b/g,
     " ",
   );
-  const operator = /\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)\b/;
-  if (!operator.test(operatorText))
+  if (!EXPLICIT_AVOIDANCE_OPERATOR.test(operatorText))
     return { exerciseIds: [], patterns: [], nameTokens: [], labels: [], hasOperator: false };
+  const clauses = avoidanceClauses(operatorText);
   const exerciseIds = [];
   const labels = [];
   const genericMovementNames = new Set([
     "squat", "squats", "lunge", "lunges", "deadlift", "deadlifts", "bench press",
   ]);
   for (const item of catalog || []) {
-    const names = [item.name, ...(item.aliases || [])]
-      .map(normalize)
-      .filter((name) => name.length > 3);
+    const names = exerciseNameForms(item);
     if (
-      names.some((name) => text.includes(name)) &&
+      names.some((name) => clauses.some((clause) => clause.includes(name))) &&
       !names.some((name) => genericMovementNames.has(name))
     ) {
       exerciseIds.push(item.id);
@@ -194,6 +263,18 @@ function explicitAvoidance(text, catalog) {
     nameTokens.push("deadlift");
     labels.push("Deadlifts");
   }
+  if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? leg press(?:es)?\b/.test(operatorText)) {
+    nameTokens.push("leg press");
+    labels.push("Leg presses");
+  }
+  if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? lower body (?:exercises|movements)\b/.test(operatorText)) {
+    patterns.push(...LOWER_PATTERNS);
+    labels.push("Lower-body exercises");
+  }
+  if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? upper body (?:exercises|movements)\b/.test(operatorText)) {
+    patterns.push(...UPPER_PATTERNS);
+    labels.push("Upper-body exercises");
+  }
   if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? bench press(?:es)?\b/.test(operatorText)) {
     nameTokens.push("bench press");
     labels.push("Bench presses");
@@ -211,7 +292,40 @@ function explicitAvoidance(text, catalog) {
     patterns: [...new Set(patterns)],
     nameTokens: [...new Set(nameTokens)],
     labels: [...new Set(labels)],
-    hasOperator: operator.test(operatorText),
+    hasOperator: EXPLICIT_AVOIDANCE_OPERATOR.test(operatorText),
+  };
+}
+
+export function localTrainingSafetyResolution(sourceText, catalog = []) {
+  const source = String(sourceText || "").trim();
+  const safety = compileTrainingSafety(source, catalog);
+  if (!source)
+    return { status: "resolved", reason: "empty", safety };
+
+  const text = normalize(source);
+  const unresolvedClauseText = unresolvedAvoidanceClauseText(source, catalog);
+  if (["blocked_not_cleared", "unsupported_limit"].includes(safety.status))
+    return { status: "resolved", reason: "deterministic_block", safety };
+
+  if (
+    !MEDICAL_REVIEW_LANGUAGE.test(text) &&
+    safety.status === "constraints_active" &&
+    safety.appliedLabels.length > 0 &&
+    unresolvedClauseText.length === 0
+  )
+    return { status: "resolved", reason: "explicit_avoidance", safety };
+
+  const unknownTarget =
+    safety.signals.some((signal) => signal.kind === "explicit_avoidance") &&
+    (safety.appliedLabels.length === 0 || unresolvedClauseText.length > 0);
+  return {
+    status: "needs_semantic_review",
+    reason: MEDICAL_REVIEW_LANGUAGE.test(text)
+      ? "medical_context"
+      : unknownTarget
+        ? "unknown_target"
+        : "unrecognized",
+    safety,
   };
 }
 
