@@ -112,12 +112,13 @@ await capture("390-final-week", fixture({ week: 5 }), { width: 390, height: 844 
 await capture("390-block-complete", fixture({ week: 6, complete: true }), { width: 390, height: 844 }, openDetails);
 await capture("390-block-complete-actions", fixture({ week: 6, complete: true }), { width: 390, height: 844 }, async (page) => {
   await openDetails(page);
-  await page.getByRole("button", { name: "REVIEW NEXT BLOCK" }).scrollIntoViewIfNeeded();
+  await page.getByRole("button", { name: "REVIEW BLOCK", exact: true }).scrollIntoViewIfNeeded();
 });
 await capture("390-next-block-review", fixture({ week: 6, complete: true }), { width: 390, height: 844 }, async (page) => {
   await openDetails(page);
+  await page.getByRole("button", { name: "REVIEW BLOCK", exact: true }).click();
   await page.getByRole("button", { name: "REVIEW NEXT BLOCK" }).click();
-  await page.getByRole("button", { name: "USE NEXT BLOCK" }).waitFor();
+  await page.getByRole("button", { name: "START NEXT BLOCK" }).waitFor();
 });
 await capture("390-edit-block-no-deload", fixture({ week: 2 }), { width: 390, height: 844 }, async (page) => {
   await openDetails(page);
@@ -161,14 +162,15 @@ const completed = await open(fixture({ week: 6, complete: true }));
 await completed.context.setOffline(true);
 await openDetails(completed.page);
 const oldId = await completed.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).program.trainingBlock.id);
+await completed.page.getByRole("button", { name: "REVIEW BLOCK", exact: true }).click();
 await completed.page.getByRole("button", { name: "REVIEW NEXT BLOCK" }).click();
-await completed.page.getByRole("button", { name: "USE NEXT BLOCK" }).click();
+await completed.page.getByRole("button", { name: "START NEXT BLOCK" }).click();
 await completed.page.waitForTimeout(150);
 const nextState = await completed.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 assert.notEqual(nextState.program.trainingBlock.id, oldId, "reviewed next block gets a new stable identity");
 assert.equal(nextState.program.trainingBlock.currentWeek, 1);
 assert.equal(nextState.completedTrainingBlocks.length, 1, "completed block history is preserved");
-assert.equal(nextState.planVersions.at(-1).source, "ROOK plan update");
+assert.equal(nextState.planVersions.at(-1).source, "Next block");
 assert.deepEqual(completed.errors, []);
 await completed.context.close();
 

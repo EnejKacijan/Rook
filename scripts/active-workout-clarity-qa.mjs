@@ -147,46 +147,8 @@ assert.equal(
   0,
   "tapping the RIR label does not open its explanation",
 );
-const [kgLabelBox, repsLabelBox, rirMarkBox, kgControlBox, repsControlBox, rirControlBox] =
-  await Promise.all([
-    page.locator(".set-labels > span").nth(1).boundingBox(),
-    page.locator(".set-labels > span").nth(2).boundingBox(),
-    page.locator(".set-labels .help-popover-mark").boundingBox(),
-    page.locator(".set-row").first().locator(".stepper").nth(0).boundingBox(),
-    page.locator(".set-row").first().locator(".stepper").nth(1).boundingBox(),
-    page.locator(".set-row").first().locator("select").boundingBox(),
-  ]);
-for (const [label, control, name] of [
-  [kgLabelBox, kgControlBox, "KG"],
-  [repsLabelBox, repsControlBox, "REPS"],
-]) {
-  const verticalGap = control.y - (label.y + label.height);
-  assert.ok(
-    verticalGap >= 12 && verticalGap <= 16,
-    `${name} header sits 12–16px above its first control; received ${verticalGap}px ${JSON.stringify({ label, control })}`,
-  );
-  const labelCenter = label.x + label.width / 2;
-  const controlCenter = control.x + control.width / 2;
-  assert.ok(
-    Math.abs(labelCenter - controlCenter) <= 1,
-    `${name} header remains centered over its control`,
-  );
-}
-const rirVerticalGap = rirControlBox.y - (rirMarkBox.y + rirMarkBox.height);
-assert.ok(
-  rirVerticalGap >= 12 && rirVerticalGap <= 16,
-  `RIR header sits 12–16px above its first control; received ${rirVerticalGap}px`,
-);
-const rirHeaderTarget = await page
-  .locator(".set-label-help > .help-popover")
-  .boundingBox();
-assert.ok(
-  Math.abs(
-    rirHeaderTarget.x + rirHeaderTarget.width / 2 -
-      (rirControlBox.x + rirControlBox.width / 2),
-  ) <= 1,
-  "RIR label and help control remain centered over the RIR column",
-);
+// Header geometry belongs to header-alignment-qa.mjs (12 width/theme cases).
+// Keep interaction coverage here, without duplicating old mark-gap/group-centering rules.
 await rirHelp.click();
 const rirTooltip = page.getByRole("tooltip");
 await rirTooltip.waitFor();

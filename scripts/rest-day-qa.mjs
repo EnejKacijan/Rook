@@ -62,6 +62,20 @@ async function verifyRest(page, expectedDistance, screenshot) {
   const { context, page, errors } = await pageFor(fixture([offsetDay(3), offsetDay(6)]), { width: 390, height: 844 });
   await verifyRest(page, 3, '390-rest-next-several-days.png'); assert.deepEqual(errors, []); await context.close();
 }
+for (const appearance of ['light', 'dark']) for (const style of ['standard', 'premium']) {
+  const state = fixture([offsetDay(1), offsetDay(4)]);
+  Object.assign(state.profile, { appearancePreference: appearance, stylePreference: style, themePreference: style === 'premium' ? 'premium' : appearance });
+  const { context, page, errors } = await pageFor(state, { width: 390, height: 844 }, appearance);
+  await verifyRest(page, 1, `390-rest-divider-${style}-${appearance}.png`);
+  const divider = await page.locator('.rest-up-next').evaluate(node => {
+    const css = getComputedStyle(node);
+    const probe = document.createElement('span'); probe.style.color = 'var(--rook-border)'; node.append(probe);
+    const expected = getComputedStyle(probe).color; probe.remove();
+    return { actual: css.borderTopColor, expected, width: css.borderTopWidth, style: css.borderTopStyle, margin: css.marginTop, padding: css.paddingTop };
+  });
+  assert.deepEqual(divider, { actual: divider.expected, expected: divider.expected, width: '1px', style: 'solid', margin: '30px', padding: '18px' }, `${style} ${appearance}: themed divider preserves geometry`);
+  assert.deepEqual(errors, []); await context.close();
+}
 for (const theme of ['light', 'dark', 'premium']) {
   const state = fixture([offsetDay(3), offsetDay(6)]); state.profile.themePreference = theme; const { context, page, errors } = await pageFor(state, { width: 390, height: 844 });
   await page.getByRole('button', { name: 'Train today instead' }).click();
@@ -114,7 +128,7 @@ for (const theme of ['light', 'dark', 'premium']) {
   assert.match(await selectedChip.getAttribute('aria-label'), new RegExp(`^Mon ${expectedMonday.getDate()}`), 'the next week strip selects the same date as the workout');
   assert.equal(await selectedChip.getAttribute('aria-pressed'), 'true');
   assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).selectedDate), expectedDate, 'cross-week View Workout persists the exact selected date');
-  assert.equal(await page.locator('.today-hero > .eyebrow').innerText(), new Intl.DateTimeFormat('en', { weekday: 'long', month: 'short', day: 'numeric' }).format(expectedMonday).toUpperCase());
+  assert.equal(await page.locator('.today-hero .today-day-header > .eyebrow').innerText(), new Intl.DateTimeFormat('en', { weekday: 'long', month: 'short', day: 'numeric' }).format(expectedMonday).toUpperCase());
   await page.screenshot({ path: output('390-view-workout-next-week.png'), fullPage: false }); assert.deepEqual(errors, []); await context.close();
 }
 

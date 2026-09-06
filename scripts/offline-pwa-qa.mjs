@@ -1,9 +1,11 @@
 import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { createReturningUserFixture } from '../src/demoFixture.js';
 import { isoDay, weekday } from '../src/domain.js';
 
 const baseUrl = process.env.QA_BASE_URL || 'http://127.0.0.1:4173';
+await mkdir('artifacts/offline-pwa', { recursive: true });
 const state = createReturningUserFixture(0); const currentWeekday = weekday(); const scheduledToday = state.program.days.find(item => item.weekday === currentWeekday); const day = scheduledToday || state.program.days[0];
 if (!scheduledToday) { const replacedWeekday = day.weekday; day.weekday = currentWeekday; state.profile.availableDays = state.profile.availableDays.map(item => item === replacedWeekday ? currentWeekday : item); }
 state.program.rotationStartDate = null;
@@ -16,5 +18,13 @@ const cacheState = await page.evaluate(async () => ({ controlled: Boolean(naviga
 await context.setOffline(true); await page.reload({ waitUntil: 'domcontentloaded' }); const startButton = page.getByRole('button', { name: 'START WORKOUT' }); if (!await startButton.count()) throw new Error(`Expected cached app with a startable workout. Cache state: ${JSON.stringify(cacheState)}. Errors: ${JSON.stringify(errors)}. Page:\n${await page.content()}`); await startButton.click();
 const sessionId = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.id); const weightInput = page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }); if (await weightInput.count()) await weightInput.fill('40'); const expectedWeight = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises[0].sets[0].weight); await page.getByRole('button', { name: 'Complete set 1' }).click(); await page.reload({ waitUntil: 'domcontentloaded' }); await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
 const offlineRecovered = await page.evaluate(() => { const active = JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout; return { id: active.id, weight: active.exercises[0].sets[0].weight, completed: active.exercises[0].sets[0].completed }; }); assert.deepEqual(offlineRecovered, { id: sessionId, weight: expectedWeight, completed: true });
+await page.waitForFunction(() => [...document.querySelectorAll('.exercise-heading-art')].every(image => image.complete && image.naturalWidth > 0));
+assert.equal(await page.locator('.exercise-heading-art-button').count(), 0, 'An uncached offline illustration is omitted instead of showing a broken image control');
+await page.screenshot({path:'artifacts/offline-pwa/390-offline-resumed-workout.png'});
+await page.getByRole('button',{name:'Back to Today'}).click();
+await page.screenshot({path:'artifacts/offline-pwa/390-offline-today.png'});
+await page.getByRole('button',{name:'COACH',exact:true}).click();
+await page.getByRole('status').filter({hasText:'Coach unavailable'}).waitFor();
+await page.screenshot({path:'artifacts/offline-pwa/390-offline-coach.png'});
 await context.setOffline(false); await page.reload({ waitUntil: 'networkidle' }); const reconnected = await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-v2-state')); return { id: state.activeWorkout.id, completed: state.activeWorkout.exercises.flatMap(item => item.sets).filter(set => set.completed).length }; }); assert.deepEqual(reconnected, { id: sessionId, completed: 1 }); assert.deepEqual(errors, []);
 await context.close(); await browser.close(); console.log('Offline PWA QA passed: cached cold start, offline logging/reload and reconnect preserve one active session and one mutation.');

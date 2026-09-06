@@ -1,3 +1,4 @@
+import { effectiveWeekSchedule } from './flexibleWeek.js';
 import {
   BASELINE_TEMPLATE_BY_FREQUENCY,
   TRAINING_STRUCTURES,
@@ -38,6 +39,7 @@ import {
   normalizeTrainingBlock,
   normalizeTrainingBlocksState,
   prescribeTrainingBlockWorkout,
+  resolveTrainingBlockSkips,
 } from "./trainingBlocks.js";
 import {
   accumulateStimulus,
@@ -2070,6 +2072,7 @@ export function blankState() {
     customExercises: [],
     exerciseAliases: [],
     weekScheduleOverrides: {},
+    flexibleWeek: null,
     workoutOccurrenceOverrides: {},
     optionalSessions: [],
     workouts: [],
@@ -2587,6 +2590,9 @@ function rotatingWorkoutForDate(program, scheduledDate) {
   return position ? sequence[(position - 1) % sequence.length] : null;
 }
 export function currentWeekSchedule(state, date = new Date()) {
+  return state.flexibleWeek ? effectiveWeekSchedule(state, date) : baseWeekSchedule(state, date);
+}
+export function baseWeekSchedule(state, date = new Date()) {
   if (!state?.program) return [];
   const key = weekKey(date);
   const overrides = state.weekScheduleOverrides?.[key] || {};
@@ -7692,6 +7698,9 @@ export function adaptedTemplateForToday(state, date = new Date()) {
   )
     return {
       ...structuredClone(adaptation.workout),
+      logicalSessionId: template.logicalSessionId,
+      originalScheduledDate: template.originalScheduledDate,
+      flexibleWeekMoved: template.flexibleWeekMoved,
       adapted: true,
       todayOnlyAdjustment: {
         id: adaptation.id,
@@ -7987,7 +7996,7 @@ export function startWorkout(state, template) {
       `${exerciseName(prohibited)} conflicts with the current training restrictions.`,
     );
   const startedAt = Date.now();
-  const canonicalPlanDate = state.selectedDate || isoDay(startedAt);
+  const canonicalPlanDate = template.flexibleWeekMoved ? isoDay(startedAt) : state.selectedDate || isoDay(startedAt);
   const workout = {
     id: uid("active"),
     templateId: template.weekday,
@@ -7995,9 +8004,10 @@ export function startWorkout(state, template) {
     canonicalPlanDate,
     workoutDateKey: canonicalPlanDate,
     sourcePlanSlotId:
-      template.trainingBlock?.blockWorkoutId ||
+      template.logicalSessionId || template.trainingBlock?.blockWorkoutId ||
       (template.id ? `${template.id}:${canonicalPlanDate}` : null),
     optionalSessionId: template.optionalSessionId || null,
+    ...(template.logicalSessionId ? { logicalSessionId: template.logicalSessionId, originalScheduledDate: template.originalScheduledDate, flexibleWeekMoved: template.flexibleWeekMoved } : {}),
     name: template.name,
     workoutName: template.workoutName,
     workoutDescriptor: template.workoutDescriptor,
@@ -8026,6 +8036,9 @@ export function startWorkout(state, template) {
       ? structuredClone(template.warmupPlan)
       : { mode: "auto" },
     exercises: template.exercises.map((base) => {
+      const reviewedStart = base.nextBlockStartingLoad && template.trainingBlock && base.nextBlockStartingLoad.blockId === template.trainingBlock.blockId &&
+        !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
+        ? base.nextBlockStartingLoad.weight : null;
       const previous = previousExercise(state.workouts, base.exerciseId);
       const completedPreviousSets =
         previous?.sets.filter((set) => set.completed) || [];
@@ -8038,7 +8051,7 @@ export function startWorkout(state, template) {
             setTypeOf(candidatePreviousSet) === setTypeOf(set)
               ? candidatePreviousSet
               : null;
-          const weight = previousSet?.weight ?? set.weight ?? null;
+          const weight = reviewedStart ?? previousSet?.weight ?? set.weight ?? null;
           return {
             ...set,
             id: uid("set"),
@@ -8047,12 +8060,12 @@ export function startWorkout(state, template) {
             completed: false,
             weight,
             weightProvenance:
-              Number(previousSet?.weight) > 0
+              reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0
                 ? "history"
                 : Number(weight) > 0
                   ? set.weightProvenance || "explicit-plan"
                   : null,
-            reps: previousSet?.reps ?? base.repMin,
+            reps: reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
             rir: null,
           };
         }),
@@ -8144,6 +8157,7 @@ export function resumeCompletedWorkout(
     "completedPlannedSetCount",
     "completedSetCount",
     "supersedesCompletionId",
+    "sessionFeedback",
   ])
     delete active[key];
   active.id = replacementId;
@@ -8570,7 +8584,7 @@ export function completeWorkout(state) {
     optionalSessions,
     workouts: [...state.workouts, session],
   };
-  return advanceTrainingBlockAfterWorkout(next, session);
+  return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), Object.values(next.flexibleWeek?.sessions || {}).filter(record => record.blockId === next.program?.trainingBlock?.id));
 }
 export function optionalSessionElapsedSeconds(session, now = Date.now()) {
   if (!session) return 0;
@@ -8794,6 +8808,13 @@ export function coachContext(state) {
   );
   return {
     currentDate,
+    blockReview: state.program?.trainingBlock ? {
+      blockId: state.program.trainingBlock.id,
+      status: state.program.trainingBlock.completed ? "completed-review-available" : "in-progress",
+      nextBlockApplied: !state.program.trainingBlock.completed && (state.completedTrainingBlocks || []).length > 0,
+      currentWeek: state.program.trainingBlock.currentWeek,
+      totalWeeks: state.program.trainingBlock.totalWeeks,
+    } : null,
     currentWeekday: weekday(),
     todayStatus: {
       date: currentDate,

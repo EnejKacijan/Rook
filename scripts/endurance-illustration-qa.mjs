@@ -76,7 +76,7 @@ const context = await browser.newContext({
   serviceWorkers: "block",
 });
 await context.addInitScript(
-  (value) => localStorage.setItem("lift-v2-state", JSON.stringify(value)),
+  (value) => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem("lift-v2-state", JSON.stringify(value)); },
   state,
 );
 const page = await context.newPage();
@@ -135,8 +135,12 @@ await page.screenshot({
   fullPage: true,
 });
 await page.evaluate(() => {
-  document.documentElement.dataset.theme = "light";
+  const current=JSON.parse(localStorage.getItem('lift-v2-state'));
+  Object.assign(current.profile,{appearancePreference:'light',stylePreference:'standard',themePreference:'light'});
+  localStorage.setItem('lift-v2-state',JSON.stringify(current));
 });
+await page.reload({waitUntil:'networkidle'});
+assert.equal(await page.locator('html').getAttribute('data-appearance'),'light');
 await page.screenshot({
   path: fileURLToPath(new URL("endurance-light-390.png", artifacts)),
   fullPage: true,

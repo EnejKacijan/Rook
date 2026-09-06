@@ -145,6 +145,7 @@ export function createTrainingBlock(program, options = {}) {
     currentWeek: clamp(options.currentWeek || 1, 1, totalWeeks),
     completed: Boolean(options.completed),
     completedAt: options.completedAt || null,
+    resolvedSkips: Array.isArray(options.resolvedSkips) ? clone(options.resolvedSkips).filter(item => item?.blockWorkoutId && item?.blockWeekId) : [],
     weeks: blockWeeks(program, id, totalWeeks, plannedDeloadWeek, options.weeks),
   };
 }
@@ -248,11 +249,13 @@ export function advanceTrainingBlockAfterWorkout(state, session) {
         (workout) =>
           workout.trainingBlock?.blockId === block.id &&
           workout.trainingBlock?.blockWeekId === week.id &&
-          workout.completedAt,
+          workout.completedAt && !workout.optionalSessionId,
       )
       .map((workout) => workout.trainingBlock.blockWorkoutId),
   );
-  if (!week.workouts.every((workout) => completedWorkoutIds.has(workout.id)))
+  const skippedIds = new Set((block.resolvedSkips || []).filter(item => item.blockWeekId === week.id).map(item => item.blockWorkoutId));
+  if (state.activeWorkout?.trainingBlock?.blockId === block.id) return state;
+  if (!week.workouts.filter(workout => !state.program.days.find(day => day.id === workout.programDayId)?.optional).every((workout) => completedWorkoutIds.has(workout.id) || skippedIds.has(workout.id)))
     return state;
   if (block.currentWeek < block.totalWeeks) {
     block.currentWeek += 1;
@@ -261,7 +264,7 @@ export function advanceTrainingBlockAfterWorkout(state, session) {
   block.completed = true;
   block.completedAt = session.completedAt || new Date().toISOString();
   if (!(state.completedTrainingBlocks || []).some((item) => item.id === block.id))
-    (state.completedTrainingBlocks ||= []).push(clone(block));
+    (state.completedTrainingBlocks ||= []).push({ ...clone(block), program: clone(state.program) });
   state.completedTrainingBlocks = state.completedTrainingBlocks.slice(-24);
   return state;
 }
@@ -283,6 +286,33 @@ export function reconfigureTrainingBlock(program, options = {}) {
     completedAt: null,
     weeks: [],
   });
+}
+
+// An explicit skip resolves a logical obligation, never a completed workout.
+// Call only with records checked against the current permanent-plan fingerprint.
+export function resolveTrainingBlockSkips(state, records, timestamp = new Date().toISOString()) {
+  const block = currentTrainingBlock(state);
+  if (!block || block.completed) return state;
+  block.resolvedSkips ||= [];
+  const priorIds = new Set(block.resolvedSkips.map(item => item.blockWorkoutId));
+  for (const record of records) {
+    if (!record.skipped || record.blockId && record.blockId !== block.id) continue;
+    const week = block.weeks.find(item => item.weekNumber === record.blockWeekNumber);
+    const ref = week?.workouts.find(item => item.programDayId === record.workoutId);
+    if (!ref || block.resolvedSkips.some(item => item.blockWorkoutId === ref.id)) continue;
+    block.resolvedSkips.push({ blockWorkoutId: ref.id, blockWeekId: week.id, blockWeekNumber: week.weekNumber, logicalSessionId: record.id, date: record.originalDate, skippedAt: record.updatedAt || timestamp });
+  }
+  // All required work in a week must be resolved before the sequence advances.
+  // A resolution trigger carries identity only; it is never inserted in History.
+  for (let i = 0; i < block.totalWeeks && !block.completed; i++) {
+    const before = block.currentWeek;
+    advanceTrainingBlockAfterWorkout(state, { trainingBlock: { blockId: block.id, blockWeekNumber: before }, completedAt: timestamp });
+    if (block.currentWeek === before) break;
+  }
+  // Until the week resolves, skips remain reversible date-only state in
+  // Flexible Week. Archive only skips that actually advanced the sequence.
+  block.resolvedSkips = block.resolvedSkips.filter(item => block.completed || item.blockWeekNumber < block.currentWeek || priorIds.has(item.blockWorkoutId));
+  return state;
 }
 
 export function createFollowUpTrainingBlock(program, { repeat = false, startDate = Date.now() } = {}) {

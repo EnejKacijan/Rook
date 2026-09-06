@@ -1,0 +1,20 @@
+.block-review-sheet h1, .block-review-sheet h2, .block-review-sheet p { overflow-wrap: anywhere; }
+.block-review-hero { margin: 24px 0 28px; display: flex; flex-direction: column; gap: 6px; }
+.block-review-hero > strong { font-size: 48px; line-height: 1.08; }
+.block-review-hero > span, .block-outcomes small, .block-next-change > small { color: var(--rook-secondary); }
+.block-review-sheet h2.eyebrow { margin-top: 28px; }
+.block-review-next { margin-top: 28px; }
+.block-outcomes article, .block-next-change { padding: 18px 0; border-bottom: 1px solid var(--rook-border); }
+.block-outcomes h2, .block-next-change h2, .block-unchanged h2 { font-size: 18px; margin: 0 0 8px; }
+.block-outcomes article > strong { font-size: 13px; }
+.block-outcomes p, .block-next-change p { margin: 8px 0; }
+.block-outcomes small, .block-next-change > small { display: block; line-height: 1.5; }
+.block-unchanged { margin-top: 24px; }
+.block-unchanged summary { min-height: 44px; padding: 12px 0; cursor: pointer; }
+.block-review-sheet { scroll-padding-bottom: calc(var(--block-footer-height, 126px) + 30px); }
+.block-next-content { padding-bottom: calc(var(--block-footer-height, 126px) + 30px); margin-bottom: calc(-1 * var(--block-footer-height, 126px)); }
+.block-review-sheet .flexible-week-footer { box-shadow: 0 -12px 0 var(--rook-bg), 0 48px 0 var(--rook-bg); }
+.block-review-sheet .flexible-week-footer p { margin: 0 0 12px; font-size: 14px; line-height: 1.45; }
+.block-review-sheet .flexible-week-footer > .text-button { min-height: 44px; margin-bottom: 8px; }
+.block-review-sheet .flexible-week-footer:has([role="alert"], [role="status"]) { box-shadow: 0 -24px 0 var(--rook-bg), 0 48px 0 var(--rook-bg); }
+.block-review-sheet .rook-search-field > input { box-sizing: border-box; height: 52px; min-height: 52px; padding-block: 12px; }

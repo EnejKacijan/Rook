@@ -37,6 +37,9 @@ await page.route("**/api/ai/status", (route) =>
 );
 await page.goto(appUrl, { waitUntil: "networkidle" });
 await page.getByRole("alert").filter({ hasText: "Changes can’t be saved" }).waitFor();
+// The real current day may be a rest day; inspect an explicitly planned day.
+const plannedDay = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).program.days[0].weekday);
+await page.getByRole("button", { name: new RegExp(`^${plannedDay} `) }).click();
 assert.equal(
   await page.getByRole("button", { name: /START WORKOUT|WORKOUT COMPLETE/ }).count(),
   1,

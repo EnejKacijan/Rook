@@ -364,8 +364,9 @@ export function weeklyPerformanceReview(
   );
   const prExerciseCount = new Set(events.map((event) => event.exerciseId)).size;
   const scheduleMoves = state?.weekScheduleOverrides?.[range.start] || {};
-  const moved = new Set(Object.keys(scheduleMoves)).size;
-  let skipped = 0;
+  const flexible = Object.values(state?.flexibleWeek?.sessions || {});
+  const moved = new Set([...Object.keys(scheduleMoves), ...flexible.filter(r => !r.skipped && r.scheduledDate !== r.originalDate && r.scheduledDate >= range.start && r.scheduledDate <= range.end).map(r => r.id)]).size;
+  let skipped = flexible.filter(r => r.skipped && r.originalDate >= range.start && r.originalDate <= range.end).length;
   for (let cursor = range.start; cursor <= range.end; cursor = addDays(cursor, 1))
     skipped += Object.values(state?.workoutOccurrenceOverrides?.[cursor] || {})
       .filter((override) => override?.skipWorkout).length;
@@ -374,10 +375,12 @@ export function weeklyPerformanceReview(
   const blockWorkout = inWeek.find((workout) => workout.trainingBlock);
   const activeBlock = state?.program?.trainingBlock;
   const block = blockWorkout?.trainingBlock || activeBlock || null;
+  const performedWeeks = [...new Set(inWeek.filter(workout => workout.trainingBlock).map(workout => Number(workout.trainingBlock.blockWeekNumber)).filter(Boolean))].sort((a, b) => a - b);
   const blockContext = block
     ? {
         name: block.blockName || block.name,
         week: Number(block.blockWeekNumber || block.currentWeek) || 1,
+        weeks: performedWeeks,
         totalWeeks: Number(block.totalWeeks) || null,
         plannedDeload: Boolean(
           block.plannedDeload ||
@@ -386,7 +389,8 @@ export function weeklyPerformanceReview(
         ),
       }
     : null;
-  const planned = Number(state?.program?.days?.length) || 0;
+  const inRange = date => date >= range.start && date <= range.end;
+  const planned = Math.max(0, (Number(state?.program?.days?.length) || 0) + flexible.filter(r => !r.skipped && !inRange(r.originalDate) && inRange(r.scheduledDate)).length - flexible.filter(r => !r.skipped && inRange(r.originalDate) && !inRange(r.scheduledDate)).length);
   const completed = inWeek.length;
   const completedSets = inWeek.reduce(
     (total, workout) => total + completedWorkingSets(workout),
@@ -418,6 +422,7 @@ export function weeklyPerformanceReview(
     );
   if (blockContext?.plannedDeload)
     summary.push("Planned deload week. Lower programmed targets are expected.");
+  if (performedWeeks.length > 1) summary.push(`Includes program weeks ${performedWeeks.join(' and ')}. Carried sessions retain their original targets.`);
   return {
     ...range,
     planned,

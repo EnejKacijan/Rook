@@ -23,6 +23,11 @@ async function verifyLongForm(page, selector, label) {
   const compactTitle = header.locator(":scope > strong");
   const closeControl = header.locator(":scope > .detail-header-close");
   await panel.waitFor();
+  const reviewLink = panel.locator('.physique-review-entry small');
+  if (await reviewLink.count()) {
+    const colors = await reviewLink.evaluate(node => ({ text: getComputedStyle(node).color, action: getComputedStyle(node.closest('button')).color }));
+    assert.equal(colors.text, colors.action, `${label} optional review link uses its theme action color`);
+  }
   await page.waitForTimeout(220);
   const modal = page.locator('.modal-layer');
   assert.equal(await modal.getAttribute('role'), 'dialog', `${label} exposes dialog semantics`);

@@ -212,6 +212,18 @@ assert.equal(await page.evaluate(() => document.scrollingElement.scrollTop), 0, 
 assert.equal(await generatedHeading.evaluate(element => document.activeElement === element), true, '320px generated preview focuses its main heading');
 assert.ok((await generatedHeading.boundingBox()).y >= 0, '320px generated preview shows the complete heading');
 assert.equal(await page.getByRole('region', { name: 'How your answers shaped this plan' }).count(), 1);
+const answerContrast = await page.locator('.personalization-summary').evaluate(section => {
+  if (document.documentElement.dataset.appearance !== 'dark') return [];
+  const luminance = color => color.match(/[\d.]+/g).slice(0, 3).map(Number)
+    .map(value => { const channel = value / 255; return channel <= .04045 ? channel / 12.92 : ((channel + .055) / 1.055) ** 2.4; })
+    .reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+  return [...section.querySelectorAll('dt, dd')].map(node => {
+    const text = luminance(getComputedStyle(node).color);
+    const surface = luminance(getComputedStyle(node.parentElement).backgroundColor);
+    return { label: node.textContent, ratio: (Math.max(text, surface) + .05) / (Math.min(text, surface) + .05) };
+  });
+});
+for (const { label, ratio } of answerContrast) assert.ok(ratio >= 4.5, `Dark plan-answer contrast for ${label}: ${ratio}`);
 await page.screenshot({ path: output('09-personalized-result.png') });
 await page.getByRole('button', { name: 'Back to onboarding' }).click();
 await page.setViewportSize({ width: 390, height: 700 });

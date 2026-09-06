@@ -14,9 +14,11 @@ const context = await browser.newContext({ viewport: { width: 390, height: 844 }
 await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
 const page = await context.newPage();
 let providerPlanCalls = 0;
+let releaseStatus;
+const statusGate = new Promise(resolve => { releaseStatus = resolve; });
 
 await page.route('**/api/ai/status', async route => {
-  await new Promise(resolve => setTimeout(resolve, 4000));
+  await statusGate;
   await route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) });
 });
 await page.route('**/api/expert-lab/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ enabled: false, feedbackCount: 0 }) }));
@@ -26,8 +28,10 @@ await page.route('**/api/ai', route => {
 });
 
 await page.goto(`http://127.0.0.1:4173/?plan-upgrade-fallback=${Date.now()}`, { waitUntil: 'domcontentloaded' });
-await page.getByRole('heading', { name: 'Your week is ready.' }).waitFor({ timeout: 2000 });
+// Prove independence from the pending provider response, not a CPU-speed deadline.
+await page.getByRole('heading', { name: 'Your week is ready.' }).waitFor({ timeout: 30000 });
 assert.equal(providerPlanCalls, 0, 'stored-plan upgrade does not call the provider plan endpoint');
+releaseStatus();
 
 await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
 await page.getByText('YOUR PLAN IS READY', { exact: true }).waitFor();

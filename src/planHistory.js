@@ -222,6 +222,7 @@ export function restorePlanVersion(state, targetVersionId, timestamp = Date.now(
     activeWorkoutPreserved: Boolean(state.activeWorkout),
     todayAdjustmentRemoved: Boolean(state.todayAdaptation),
     flexibleWeekReferencesRemoved: 0,
+    flexibleWeekNeedsReview: Object.keys(state.flexibleWeek?.sessions || {}).length,
     occurrenceReferencesRemoved: 0,
   };
   const weekScheduleOverrides = {};

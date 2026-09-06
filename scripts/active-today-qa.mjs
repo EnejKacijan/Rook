@@ -47,7 +47,7 @@ await page.locator('.week-strip .workout-planned:not(.selected-day)').first().cl
 assert.equal(await page.locator('.active-workout-hero').count(), 0, 'another workout day does not inherit active workout content');
 assert.equal(await page.locator('.active-workout-notice').count(), 1, 'another workout day keeps a compact resume route');
 assert.match(await page.locator('.active-workout-notice-progress').textContent(), new RegExp(`^0 / ${totalSets} sets · 18 min$`), 'compact resume route shows live set and time progress');
-assert.equal(await page.getByText('Finish the active workout before starting this one.', { exact: true }).count(), 1);
+assert.equal(await page.getByText('Finish the active session before starting this workout.', { exact: true }).count(), 1);
 assert.equal(await page.getByRole('button', { name: 'START WORKOUT' }).count(), 0, 'another workout cannot start while one is active');
 assert.equal(await page.locator('.exercise-preview .exercise-row-main img').count(), 0, 'another workout day keeps the same text-first overview list');
 assert.equal(await page.getByText('WORKOUT EXERCISES', { exact: true }).count(), 1, 'another workout date uses the neutral workout heading while today remains active');
@@ -60,6 +60,8 @@ for (const theme of ['dark', 'premium']) {
   await page.evaluate(themePreference => {
     const state = JSON.parse(localStorage.getItem('lift-v2-state'));
     state.profile.themePreference = themePreference;
+    state.profile.appearancePreference = themePreference === 'dark' ? 'dark' : 'light';
+    state.profile.stylePreference = themePreference === 'premium' ? 'premium' : 'standard';
     localStorage.setItem('lift-v2-state', JSON.stringify(state));
   }, theme);
   await page.reload({ waitUntil: 'networkidle' });
@@ -71,6 +73,8 @@ for (const theme of ['dark', 'premium']) {
 await page.evaluate(() => {
   const state = JSON.parse(localStorage.getItem('lift-v2-state'));
   state.profile.themePreference = 'light';
+  state.profile.appearancePreference = 'light';
+  state.profile.stylePreference = 'standard';
   localStorage.setItem('lift-v2-state', JSON.stringify(state));
 });
 await page.reload({ waitUntil: 'networkidle' });
@@ -92,13 +96,13 @@ await page.reload({ waitUntil: 'networkidle' }); assert.match(await page.locator
 await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-v2-state')); state.activeWorkout.startedAt = Date.now() - 18 * 60 * 1000; localStorage.setItem('lift-v2-state', JSON.stringify(state)); }); await page.reload({ waitUntil: 'networkidle' });
 
 await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
-await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('32.5');
+await page.getByRole('spinbutton', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('32.5');
 await page.getByRole('button', { name: 'Complete set 1' }).click();
 await page.locator('.rest-timer').getByRole('button', { name: 'SKIP' }).click();
 await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
 await page.getByRole('button', { name: /SKIP INCOMPLETE SETS?/ }).click();
 const currentExercise = await page.locator('.exercise-heading h1').textContent();
-await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('47.5');
+await page.getByRole('spinbutton', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('47.5');
 await page.getByRole('button', { name: 'Complete set 1' }).click();
 await page.getByRole('button', { name: 'Back to Today' }).click();
 assert.match(await page.locator('.active-workout-hero > p').textContent(), new RegExp(`^2 / ${totalSets} sets · 18 min$`));

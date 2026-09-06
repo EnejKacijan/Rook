@@ -1,0 +1,32 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { fileURLToPath } from 'node:url';
+import { chromium } from 'playwright-core';
+import { createReturningUserFixture } from '../src/demoFixture.js';
+const out = new URL('../artifacts/profile-grouping/', import.meta.url);
+await mkdir(out, { recursive: true });
+const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+for (const appearance of ['light', 'dark']) for (const style of ['standard', 'premium']) {
+  const state = createReturningUserFixture(2);
+  Object.assign(state.profile, { appearancePreference: appearance, stylePreference: style, themePreference: style === 'premium' ? 'premium' : appearance });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, colorScheme: appearance, serviceWorkers: 'block' });
+  await context.addInitScript(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), state);
+  const page = await context.newPage();
+  await page.route('**/api/ai/status', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"available":false}' }));
+  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+  const row = page.getByRole('button', { name: /Training restrictions/ });
+  assert.equal(await row.count(), 1);
+  const training = page.locator('section').filter({ has: page.locator('.eyebrow').getByText('TRAINING', { exact: true }) });
+  assert.equal(await training.getByRole('button', { name: /Training restrictions/ }).count(), 1);
+  assert.match(await row.locator('xpath=preceding-sibling::*[1]').innerText(), /Gym profiles/);
+  const settings = page.locator('section').filter({ has: page.getByText('SETTINGS', { exact: true }) });
+  assert.equal(await settings.getByRole('button').count(), 2);
+  assert.match(await settings.innerText(), /Logging & increments[\s\S]*Appearance/);
+  await page.screenshot({ path: fileURLToPath(new URL(`${style}-${appearance}.png`, out)), fullPage: true });
+  await row.click();
+  await page.locator('.training-restrictions-screen').waitFor();
+  await context.close();
+}
+await browser.close();
+console.log('Profile grouping: all four themes passed; unique Training row, unchanged destination, two Settings rows.');

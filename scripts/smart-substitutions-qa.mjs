@@ -150,6 +150,7 @@ async function open(state, viewport = { width: 390, height: 844 }) {
   await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
   await page.getByRole("button", { name: "Replace", exact: true }).click();
   await page.getByRole("dialog").waitFor();
+  await page.waitForTimeout(350); // Measure the settled sheet, not its entrance animation.
   return { context, page, errors };
 }
 

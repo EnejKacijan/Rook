@@ -5,6 +5,7 @@ import { chromium } from 'playwright-core';
 import { blankState, buildProgram, startWorkout, weekday, isoDay, WEEKDAYS } from '../src/domain.js';
 
 const output = new URL('../artifacts/header-alignment/', import.meta.url);
+const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 await mkdir(output, { recursive: true });
 const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
 for (const width of [320, 390, 430]) for (const style of ['standard', 'premium']) for (const appearance of ['light', 'dark']) {
@@ -17,7 +18,7 @@ for (const width of [320, 390, 430]) for (const style of ['standard', 'premium']
   await context.addInitScript(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), state);
   const page = await context.newPage();
   await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"available":false}' }));
-  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.goto(appUrl, { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
   await page.waitForTimeout(300);
   const measure = () => page.evaluate(() => {

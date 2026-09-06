@@ -6,6 +6,7 @@ import {
   strToU8,
   unzipSync,
 } from "fflate";
+import { validSessionFeedback } from './sessionFeedback.js';
 import {
   STORAGE_KEY,
   deserializeState,
@@ -132,13 +133,48 @@ function validateDurableState(raw) {
       fail("invalid-backup", `${key} is invalid.`);
   if (state.planVersions !== undefined && !Array.isArray(state.planVersions))
     fail("invalid-backup", "planVersions is invalid.");
+  if (state.flexibleWeek != null) {
+    const flexible = asObject(state.flexibleWeek, "Flexible Week");
+    if (flexible.schemaVersion !== 1) fail("invalid-backup", "Unsupported Flexible Week version.");
+    const sessions = asObject(flexible.sessions, "Flexible Week sessions");
+    const dates = new Set();
+    const validCalendarDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
+    for (const [id, record] of Object.entries(sessions)) {
+      if (!record || record.id !== id || id !== `${record.workoutId}:${record.originalDate}` || typeof record.workoutId !== 'string' || !validCalendarDate(record.originalDate) || !validCalendarDate(record.scheduledDate) || typeof record.planFingerprint !== 'string' || typeof record.skipped !== 'boolean') fail("invalid-backup", "Invalid Flexible Week session.");
+      if (!record.skipped && dates.has(record.scheduledDate)) fail("invalid-backup", "Conflicting Flexible Week dates.");
+      if (!record.skipped) dates.add(record.scheduledDate);
+    }
+  }
   if (state.completedTrainingBlocks !== undefined && !Array.isArray(state.completedTrainingBlocks))
     fail("invalid-backup", "completedTrainingBlocks is invalid.");
+  for (const block of [state.program?.trainingBlock, ...(state.completedTrainingBlocks || [])].filter(Boolean)) {
+    if (block.resolvedSkips !== undefined && (!Array.isArray(block.resolvedSkips) || block.resolvedSkips.some(item =>
+      !item || typeof item.blockWorkoutId !== 'string' || typeof item.blockWeekId !== 'string' ||
+      !block.weeks?.some(week => week.id === item.blockWeekId && week.workouts?.some(ref => ref.id === item.blockWorkoutId)))))
+      fail("invalid-backup", "Invalid resolved block-session references.");
+    if (block.program !== undefined && (!block.program || !Array.isArray(block.program.days) || block.program.days.some(day => !day || !Array.isArray(day.exercises))))
+      fail("invalid-backup", "Invalid archived block program.");
+    if (block.reviewSummary !== undefined) {
+      const review = asObject(block.reviewSummary, "Block review");
+      if (review.blockId !== block.id || typeof review.name !== 'string' || typeof review.startDate !== 'string' ||
+          !Array.isArray(review.rows) || review.rows.some(row => !row || typeof row.id !== 'string' || typeof row.name !== 'string' ||
+            typeof row.reason !== 'string' || !['progressed', 'held', 'review', 'insufficient'].includes(row.status)))
+        fail("invalid-backup", "Invalid archived block review.");
+      for (const key of ['totalWeeks', 'plannedSessions', 'completedSessions', 'endedEarly', 'skipped', 'optionalCompleted', 'moved', 'adjusted', 'loggedSets', 'prescribedSets', 'progressed', 'held', 'review', 'prs'])
+        if (!Number.isSafeInteger(review[key]) || review[key] < 0) fail("invalid-backup", "Invalid block review counts.");
+    }
+  }
   if (state.customExercises !== undefined && !Array.isArray(state.customExercises))
     fail("invalid-backup", "customExercises is invalid.");
   if (state.exerciseAliases !== undefined && !Array.isArray(state.exerciseAliases))
     fail("invalid-backup", "exerciseAliases is invalid.");
   const hydrated = deserializeState(state);
+  for (const workout of state.workouts || []) {
+    if (!validSessionFeedback(workout.sessionFeedback)) fail('invalid-backup', 'Invalid session feedback.');
+    if (workout.correctedAt !== undefined && (typeof workout.correctedAt !== 'string' || !Number.isFinite(Date.parse(workout.correctedAt)))) fail('invalid-backup', 'Invalid workout correction timestamp.');
+    if (workout.correctionRevision !== undefined && (!Number.isSafeInteger(workout.correctionRevision) || workout.correctionRevision < 1)) fail('invalid-backup', 'Invalid workout correction revision.');
+    for (const exercise of workout.exercises || []) if (exercise.originalPrescription !== undefined && (!exercise.originalPrescription || !Array.isArray(exercise.originalPrescription.sets))) fail('invalid-backup', 'Invalid original workout prescription.');
+  }
   if (state.program && !hydrated.program)
     fail("invalid-backup", "The training plan in this backup is invalid.");
   return hydrated;

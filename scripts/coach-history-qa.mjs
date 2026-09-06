@@ -35,6 +35,15 @@ for (const scenario of [{ name: '0-conversations', count: 0 }, { name: '1-conver
   const header = await page.locator('.coach-history-header').boundingBox(); assert.ok(header.y >= 0 && header.y < 2, `history header stays fixed at the top: ${JSON.stringify(header)}`);
   if (!scenario.count) { assert.equal(await page.getByRole('heading', { name: 'No conversations yet' }).count(), 1); assert.equal(await page.getByText('Your Coach conversations will appear here.', { exact: true }).count(), 1); }
   if (scenario.count) {
+    const contrast = await page.locator('.coach-history-group button.active strong').evaluate(node => {
+      const rgb = value => value.match(/[\d.]+/g).slice(0, 3).map(Number);
+      let parent = node, background;
+      while (parent) { const value = getComputedStyle(parent).backgroundColor; if (Number(value.match(/[\d.]+/g)?.[3] ?? 1) >= .99) { background = rgb(value); break; } parent = parent.parentElement; }
+      const luminance = values => values.map(value => { value /= 255; return value <= .04045 ? value / 12.92 : ((value + .055) / 1.055) ** 2.4; }).reduce((sum, value, index) => sum + value * [.2126, .7152, .0722][index], 0);
+      const text = luminance(rgb(getComputedStyle(node).color)), surface = luminance(background || [255, 255, 255]);
+      return (Math.max(text, surface) + .05) / (Math.min(text, surface) + .05);
+    });
+    assert.ok(contrast >= 4.5, `Selected conversation remains readable: ${contrast}`);
     assert.match(await page.locator('.coach-history-group small').first().textContent(), /^\d+ messages? · \d{1,2}:\d{2} [AP]M$/, 'recent conversations show message count and time');
     const row = page.locator('.coach-history-group button').first(); const box = await row.boundingBox(); assert.ok(box.height >= 48, `row has an adequate mobile hit area: ${box.height}`);
   }

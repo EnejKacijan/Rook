@@ -1,0 +1,10 @@
+import { readFile, readdir, writeFile } from 'node:fs/promises';
+import { zipSync, strToU8 } from 'fflate';
+const root='artifacts/edit-plan-opening';
+const results=JSON.parse(await readFile(`${root}/RESULTS.json`,'utf8'));
+if(results.length!==12)throw new Error('Complete all 12 cases before packaging');
+const files={};
+for(const name of await readdir(root))if(/^\d+-(standard|premium)-(light|dark)-(normal|today|target|picker|next|resolved)\.png$/.test(name))files[name]=[await readFile(`${root}/${name}`),{level:0}];
+files['README.md']=strToU8('Fresh real-app Edit plan / Review conflict screenshots. Synthetic fixtures only. 320/390/430px × Standard/Premium Light/Dark. Normal = unchanged edit entry. Today = primary REVIEW 2 CONFLICTS. Target = first conflict on last workout. Picker = lazy filtered selection. Next = automatically revealed second conflict after first replacement. Resolved = Today after explicit Save. Real runtime checks verify focus, expanded target, blocked start until saved, no draft persistence, filtered choices, and sequential conflict review. Screenshots alone do not prove interaction or physical-device behavior. Please assess visual hierarchy and target clarity without redesigning unrelated UI.');
+await writeFile(`${root}/review.zip`,zipSync(files));
+console.log(`${Object.keys(files).length-1} PNGs packaged.`);

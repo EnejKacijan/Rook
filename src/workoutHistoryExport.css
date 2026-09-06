@@ -1,0 +1,21 @@
+.history-export-screen { padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
+.history-export-screen > h1 { margin-top:12px; }
+.history-export-screen > p { line-height:1.5; color:var(--rook-secondary); }
+.history-export-count { font-size:13px; }
+.history-export-screen fieldset { border:0;padding:0;margin:24px 0;min-width:0; }
+.history-export-screen legend { font-size:12px;letter-spacing:.09em;color:var(--rook-secondary);margin-bottom:12px; }
+.history-export-formats { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
+.history-export-formats button { min-height:52px;border:1px solid var(--rook-border);border-radius:16px;background:var(--rook-surface);color:var(--rook-text);font:inherit;font-weight:700; }
+:root[data-appearance] .history-export-formats .is-selected { background:var(--rook-text);color:var(--rook-surface); }
+.history-export-notes { display:flex;align-items:center;gap:20px;justify-content:space-between;padding:18px 0;border-block:1px solid var(--rook-border); }
+.history-export-notes span { display:grid;gap:6px; }
+.history-export-notes small { color:var(--rook-secondary);line-height:1.4; }
+.history-export-notes input { appearance:none;width:26px;height:26px;flex-shrink:0;border:1px solid var(--rook-secondary);border-radius:8px;background:transparent;display:grid;place-items:center; }
+.history-export-notes input:checked { background:var(--rook-text);border-color:var(--rook-text); }
+.history-export-notes input:checked::after { content:'✓';color:var(--rook-surface);font-size:18px;font-weight:700; }
+.history-export-notes input:focus-visible { outline:2px solid var(--rook-accent);outline-offset:3px; }
+:root[data-appearance] .history-export-screen .button.primary:disabled { background:var(--rook-disabled-surface);color:var(--rook-disabled-text);border:1px solid var(--rook-border);opacity:1; }
+.history-export-explanation { font-size:13px;margin-top:20px; }
+.history-export-status { font-size:14px;line-height:1.45; }
+.history-export-status .restriction-spinner { display:inline-block;width:16px;height:16px;vertical-align:middle; }
+.history-export-screen > .button { width:100%;margin-top:16px; }

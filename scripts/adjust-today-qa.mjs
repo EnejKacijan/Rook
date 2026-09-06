@@ -54,7 +54,9 @@ function fixture({ appearance = "light", style = "standard", custom = false } = 
   };
   state.program = buildProgram(state.profile);
   const selected = state.program.days.find((day) => day.weekday === today);
-  selected.name = "Upper Strength and Hypertrophy A";
+  // Keep the generated split identity: forcing "Upper" onto a Sunday Lower
+  // session falsely triggers the cross-week recovery validator.
+  selected.name = `${selected.name} Strength and Hypertrophy`;
   if (custom) {
     selected.exercises[0] = {
       ...selected.exercises[0],
@@ -193,11 +195,12 @@ async function assertReadable(locator, label, minimum = 4.5) {
 }
 
 async function assertCompactAdjustHeader(page, label) {
-  const [header, eyebrow] = await Promise.all([
-    page.locator(".adjust-today-sheet > .detail-header").boundingBox(),
-    page.locator(".adjust-today-sheet > .eyebrow").first().boundingBox(),
-  ]);
-  const gap = eyebrow.y - (header.y + header.height);
+  // Both boxes must come from the same animation frame of the opening sheet.
+  const gap = await page.locator('.adjust-today-sheet').evaluate(sheet => {
+    const header = sheet.querySelector(':scope > .detail-header').getBoundingClientRect();
+    const eyebrow = sheet.querySelector(':scope > .eyebrow').getBoundingClientRect();
+    return eyebrow.top - header.bottom;
+  });
   assert.ok(gap >= 4 && gap <= 10, `${label}: header-to-content gap is ${gap}px`);
 }
 
@@ -290,6 +293,7 @@ async function createLessTimeReview(page, captureLoading = false) {
   await page.getByText("Today only · Adjusted for today").waitFor();
   await page.getByRole("button", { name: "Restore original" }).click();
   await page.getByText("Restore the original workout?").waitFor();
+  await page.getByRole("button", { name: "KEEP ADJUSTMENT" }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: output("10-restore-original.png") });
   await page.getByRole("button", { name: "KEEP ADJUSTMENT" }).click();
   await page.getByRole("button", { name: "DONE" }).click();

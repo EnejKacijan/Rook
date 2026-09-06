@@ -1,10 +1,21 @@
 import { SearchInput } from './SearchInput.jsx';
+import { useAvailableImage } from './useAvailableImage.js';
+import { SessionFeedbackPrompt, SessionFeedbackDisplay } from './SessionFeedback.jsx';
+import { WorkoutHistoryExport } from './WorkoutHistoryExport.jsx';
+import { HistoryCorrectionEditor } from './HistoryCorrectionEditor.jsx';
+import { WorkoutPhotoCompare } from './WorkoutPhotoCompare.jsx';
+import { BlockReviewSheet } from './BlockReviewSheet.jsx';
+import { useSheetBack } from './useSheetBack.js';
+import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
+import { flexibleSourceForDate, flexibleWeekConflict, missedFlexibleSessions } from './flexibleWeek.js';
+import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import {
   Component,
   Fragment,
   cloneElement,
   isValidElement,
   useEffect,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -274,7 +285,6 @@ import {
   restorePlanVersion,
 } from "./planHistory.js";
 import {
-  createFollowUpTrainingBlock,
   currentTrainingBlock,
   currentTrainingBlockWeek,
   normalizeTrainingBlocksState,
@@ -1301,6 +1311,7 @@ export function bindScrollableSheetTouch({
     const y = event.touches[0].clientY;
     touch = {
       startY: y,
+      startX: event.touches[0].clientX,
       lastY: y,
       lastAt: performance.now(),
       velocity: 0,
@@ -1312,6 +1323,7 @@ export function bindScrollableSheetTouch({
   const move = (event) => {
     if (!touch || disabled() || event.touches.length !== 1) return;
     const y = event.touches[0].clientY;
+    if (surface.dataset.edgeBackActive === 'true' || (surface.dataset.edgeBackSurface === 'true' && !touch.dragging && Math.abs(event.touches[0].clientX - touch.startX) > Math.abs(y - touch.startY) * 1.4 && Math.abs(event.touches[0].clientX - touch.startX) > 10)) { touch = null; return; }
     const now = performance.now();
     const step = y - touch.lastY;
     const elapsed = Math.max(1, now - touch.lastAt);
@@ -1416,6 +1428,7 @@ function ModalDragHandle({ layerRef, close, finishClose }) {
   const settle = (dismiss) => {
     const target = panel();
     if (!target) return;
+    if (dismiss && !target.dispatchEvent(new CustomEvent('rook:before-sheet-close', { bubbles: true, cancelable: true }))) dismiss = false;
     target.style.transition = "transform 180ms ease-out";
     if (dismiss) {
       const distance = target.getBoundingClientRect().height + 24;
@@ -1527,6 +1540,7 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
   const historyMarker = useRef(null);
   const historyDismissed = useRef(false);
   const historyCleanupTimer = useRef(null);
+  const [panelRevision, setPanelRevision] = useState(0);
   const fullscreen = presentation === "fullscreen";
   useEffect(
     () => () => {
@@ -1585,10 +1599,11 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
       header.classList.add("is-ready");
       updateHeader();
     });
-    const mutationObserver = new MutationObserver(() =>
-      requestAnimationFrame(updateHeader),
-    );
-    mutationObserver.observe(panel, {
+    const mutationObserver = new MutationObserver(() => {
+      if (layer.firstElementChild !== panel) { setPanelRevision(value => value + 1); return; }
+      requestAnimationFrame(updateHeader);
+    });
+    mutationObserver.observe(layer, {
       childList: true,
       subtree: true,
       characterData: true,
@@ -1606,12 +1621,13 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
       panel.removeEventListener("scroll", updateHeader);
       window.removeEventListener("resize", updateHeader);
     };
-  }, [children]);
+  }, [children, panelRevision]);
   const requestClose = (options) => {
     if (closing.current) return;
     const fromHistory = options?.fromHistory === true;
     const layer = layerRef.current;
     const panel = layer?.firstElementChild;
+    if (panel && !panel.dispatchEvent(new CustomEvent('rook:before-sheet-close', { bubbles: true, cancelable: true }))) return;
     if (!layer || !panel) {
       close();
       return;
@@ -1706,9 +1722,9 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
       const panel = layerRef.current?.firstElementChild;
       const scroller = panel?.querySelector(".sheet-scroll") || panel;
       scroller?.scrollTo?.({ top: 0, left: 0 });
-      layerRef.current
-        ?.querySelector("[autofocus], .sheet-close, button, input")
-        ?.focus({ preventScroll: true });
+      const initialFocus = layerRef.current?.querySelector('[data-sheet-initial-focus]')
+        || layerRef.current?.querySelector("[autofocus], .sheet-close, button, input");
+      initialFocus?.focus({ preventScroll: true });
     });
     return () => {
       cancelAnimationFrame(frame);
@@ -4475,6 +4491,19 @@ function Today({
     ? localDate(state.selectedDate)
     : weekDate(state.selectedDay || weekday());
   const [now, setNow] = useState(Date.now());
+  const lastCalendarDay = useRef(isoDay());
+  useEffect(() => {
+    const refreshCalendar = () => {
+      const nextDay = isoDay(), previousDay = lastCalendarDay.current;
+      lastCalendarDay.current = nextDay;
+      setNow(Date.now());
+      if (nextDay !== previousDay && state.selectedDate === previousDay) update(current => ({ ...current, selectedDate: nextDay, selectedDay: weekday(nextDay) }));
+    };
+    const interval = setInterval(refreshCalendar, 30000);
+    window.addEventListener('focus', refreshCalendar);
+    document.addEventListener('visibilitychange', refreshCalendar);
+    return () => { clearInterval(interval); window.removeEventListener('focus', refreshCalendar); document.removeEventListener('visibilitychange', refreshCalendar); };
+  }, [state.selectedDate, update]);
   useEffect(() => {
     if (!trackedActive) return undefined;
     setNow(Date.now());
@@ -4546,12 +4575,13 @@ function Today({
       ? state.todayAdaptation
       : null;
   const trainingSafety = trainingSafetyFor(state.profile);
-  const restrictedTemplateConflict = trainingSafetyBlocks(trainingSafety.status)
-    ? null
+  const restrictedTemplateConflicts = trainingSafetyBlocks(trainingSafety.status)
+    ? []
     : plannedExerciseSafetyConflicts(
         template ? { days: [template] } : null,
         trainingSafety,
-      )[0] || null;
+      );
+  const restrictedTemplateConflict = restrictedTemplateConflicts[0] || null;
   const trainingPaused =
     trainingSafetyBlocks(trainingSafety.status) ||
     Boolean(restrictedTemplateConflict);
@@ -4580,7 +4610,8 @@ function Today({
       )
     : localDate(isoDay(state.program.createdAt));
   const canGoBack = selectedMonday > weekDate("Mon", earliestDate);
-  const canGoForward = selectedMonday < currentMonday;
+  const latestFlexibleDate = Object.values(state.flexibleWeek?.sessions || {}).reduce((latest, item) => item.scheduledDate > latest ? item.scheduledDate : latest, isoDay());
+  const canGoForward = selectedMonday < weekDate("Mon", localDate(latestFlexibleDate));
   const selectDate = (day, date) => {
     dismissPlanReady?.();
     update((current) => {
@@ -4694,6 +4725,8 @@ function Today({
           selectDate={selectDate}
         />
       </div>
+      {flexibleWeekConflict(state) && <aside className="flexible-week-missed"><strong>Review your temporary schedule</strong><small>Your plan changed. Some moved sessions need review.</small><button className="text-button" onClick={() => setDetail({ flexibleWeek: {} })}>REVIEW SCHEDULE</button></aside>}
+      {selectedIso === isoDay() && !trackedActive && missedFlexibleSessions(state).length > 0 && <aside className="flexible-week-missed"><strong>{missedFlexibleSessions(state)[0].workout.name}</strong><small>Planned for {displayDate(localDate(missedFlexibleSessions(state)[0].scheduledDate))}</small><button className="text-button" onClick={() => setDetail({ flexibleWeek: { sessionId: missedFlexibleSessions(state)[0].logicalSessionId } })}>REVIEW MISSED SESSION</button></aside>}
       {planReady && (
         <PlanReadyNotice
           workoutToday={workoutToday}
@@ -4711,6 +4744,7 @@ function Today({
       onResume={() => setPage("workout")}
     />
   );
+  const dayHeader = label => <div className="today-day-header"><Eyebrow>{label}</Eyebrow><button className="text-button flexible-week-entry" onClick={() => setDetail({ flexibleWeek: {} })}>ADJUST WEEK</button></div>;
   const activeOptionalNotice = activeOptional && (
     <ActiveOptionalSessionNotice
       session={activeOptional}
@@ -4726,7 +4760,7 @@ function Today({
       <main className="screen today-screen">
         {calendar}
         <section className="today-hero active-workout-hero">
-          <Eyebrow>{displayDate(selectedDate)}</Eyebrow>
+          {dayHeader(displayDate(selectedDate))}
           <WorkoutTitle workout={active} day={selectedDay} />
           <p>
             {completedSets} / {pluralize(sets.length, "set")} ·{" "}
@@ -4775,12 +4809,14 @@ function Today({
   }
   const completed = datedWorkouts.find(
     (workout) =>
-      workoutPlanDate(workout) === selectedIso &&
+      (workoutPlanDate(workout) === selectedIso || (template?.logicalSessionId && workout.logicalSessionId === template.logicalSessionId)) &&
       (!template ||
         workout.programDayId === template.id ||
         (!workout.programDayId && workout.templateId === template.weekday)),
   );
   const isHistoricalWeek = selectedMonday < currentMonday;
+  const movedSource = flexibleSourceForDate(state, selectedIso)[0];
+  if (!template && !completed && movedSource) return <main className="screen today-screen">{calendar}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.name}</h1><p>{movedSource.skipped ? 'Skipped this week' : `Moved to ${displayDate(localDate(movedSource.scheduledDate))}`}</p>{!movedSource.skipped && <Button variant="secondary" onClick={() => selectDate(weekday(movedSource.scheduledDate), localDate(movedSource.scheduledDate))}>VIEW DESTINATION</Button>}</section></main>;
   if (!template && !completed) {
     const upcoming = nextScheduledWorkout(state, selectedDate);
     const upcomingTitle = upcoming
@@ -4798,8 +4834,9 @@ function Today({
         {calendar}
         {activeNotice}
         {activeOptionalNotice}
+        {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
         <section className="rest-day-state">
-          <Eyebrow>REST DAY</Eyebrow>
+          {dayHeader('REST DAY')}
           <h1>Rest day</h1>
           <p>
             {isHistoricalWeek
@@ -4863,6 +4900,7 @@ function Today({
     );
   }
   const session = completed || template;
+  const blockPhaseLabel = (session.trainingBlock?.label || (session.trainingBlock?.plannedDeload ? "Planned deload" : "")).trim();
   const editableTodayWorkout = Boolean(
     !completed &&
       !isHistoricalWeek &&
@@ -5240,9 +5278,7 @@ function Today({
         restrictedTemplateConflict
           ? {
               editPlan: {
-                reviewExerciseIds: [
-                  restrictedTemplateConflict.exerciseEntryId,
-                ],
+                reviewExerciseIds: restrictedTemplateConflicts.map(item => item.exerciseEntryId),
               },
             }
           : "training-restrictions",
@@ -5287,19 +5323,21 @@ function Today({
           <Eyebrow>BLOCK COMPLETE</Eyebrow>
           <strong>{state.program.trainingBlock.name}</strong>
           <p>Review the completed block before choosing what comes next.</p>
-          <button className="text-button" onClick={() => setDetail("training-block")}>
+          <button className="text-button" onClick={() => setDetail("block-review")}>
             REVIEW BLOCK
           </button>
         </section>
       )}
       <section className="today-hero">
-        <Eyebrow>{displayDate(selectedDate)}</Eyebrow>
+        {dayHeader(displayDate(selectedDate))}
         <WorkoutTitle workout={session} day={selectedDay} />
+        {session.flexibleWeekMoved && <small className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))}</small>}
         {session.trainingBlock && (
           <button type="button" onClick={() => setDetail("training-block")} aria-label="View training block" className={`today-block-week${session.trainingBlock.plannedDeload ? " is-deload" : ""}`}>
-            {session.trainingBlock.plannedDeload
-              ? `Planned deload · Week ${session.trainingBlock.blockWeekNumber} of ${session.trainingBlock.totalWeeks}`
-              : `Week ${session.trainingBlock.blockWeekNumber} of ${session.trainingBlock.totalWeeks}`}
+            <strong>Week {session.trainingBlock.blockWeekNumber} of {session.trainingBlock.totalWeeks}</strong>
+            {blockPhaseLabel ? (
+              <span className="today-block-phase"> · {blockPhaseLabel.replace(/\S+$/u, "")}<span className="today-block-phase-end">{blockPhaseLabel.match(/\S+$/u)?.[0]}<span className="today-block-chevron" aria-hidden="true">›</span></span></span>
+            ) : <span className="today-block-chevron" aria-hidden="true">›</span>}
           </button>
         )}
         <p>
@@ -5329,27 +5367,25 @@ function Today({
             WORKOUT NOT LOGGED
           </Button>
         ) : trackedActive ? (
-          <p className="active-workout-start-lock">
+          <p id="other-active-workout-edit-lock" className="active-workout-start-lock">
             Finish the active session before starting this workout.
           </p>
         ) : trainingPaused ? (
           <Button
-            variant="secondary"
+            variant={restrictedTemplateConflict ? "primary" : "secondary"}
             onClick={() =>
               setDetail(
                 restrictedTemplateConflict
                   ? {
                       editPlan: {
-                        reviewExerciseIds: [
-                          restrictedTemplateConflict.exerciseEntryId,
-                        ],
+                        reviewExerciseIds: restrictedTemplateConflicts.map(item => item.exerciseEntryId),
                       },
                     }
                   : "training-restrictions",
               )
             }
           >
-            {restrictedTemplateConflict ? "REVIEW PLAN" : "REVIEW RESTRICTIONS"}
+            {restrictedTemplateConflict ? restrictedTemplateConflicts.length > 1 ? `REVIEW ${restrictedTemplateConflicts.length} CONFLICTS` : "REVIEW CONFLICT" : "REVIEW RESTRICTIONS"}
           </Button>
         ) : (
           <div
@@ -5421,7 +5457,7 @@ function Today({
               {todayEditMode
                 ? "EDIT WORKOUT"
                 : completed
-                  ? "LOGGED EXERCISES"
+                  ? "WORKOUT EXERCISES"
                   : viewingToday
                     ? "TODAY'S EXERCISES"
                     : "WORKOUT EXERCISES"}
@@ -5459,11 +5495,6 @@ function Today({
             </small>
           )}
         </div>
-        {todayEditLocked && (
-          <small id="other-active-workout-edit-lock" className="today-edit-lock-note">
-            Finish your active workout to edit exercises.
-          </small>
-        )}
         <span className="visually-hidden" role="status" aria-live="polite">
           {todayEditAnnouncement}
         </span>
@@ -5814,6 +5845,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     [active?.id, active?.exerciseIndex],
   );
   const currentExercise = active?.exercises?.[active.exerciseIndex] || null;
+  const activeArtwork = useAvailableImage(state.profile.showExerciseImages !== false ? exerciseArt(currentExercise) : null);
   const upcomingExercise = active?.exercises?.[active.exerciseIndex + 1] || null;
   useEffect(() => {
     if (state.profile.showExerciseImages === false) return;
@@ -5835,8 +5867,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       </main>
     );
   const exercise = currentExercise;
-  const exerciseIllustration =
-    state.profile.showExerciseImages !== false ? exerciseArt(exercise) : null;
+  const exerciseIllustration = activeArtwork.source;
   const superset = supersetMeta(active.exercises, active.exerciseIndex);
   const canonicalSupersetStep = superset
     ? nextSupersetStep(active.exercises, superset.id)
@@ -6638,6 +6669,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           >
             <img
               className="exercise-heading-art"
+              onError={activeArtwork.onError}
               src={exerciseIllustration}
               alt=""
               aria-hidden="true"
@@ -7176,6 +7208,7 @@ function PrivateWorkoutPhotoViewer({
   onClose,
   onDelete,
   onViewWorkout,
+  error = "",
 }) {
   const [viewerError, setViewerError] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
@@ -7187,11 +7220,14 @@ function PrivateWorkoutPhotoViewer({
     closeViewerRef.current?.focus();
     const closeOnEscape = (event) => {
       if (event.key !== "Escape") return;
+      // The photo is the topmost dialog; do not also dismiss its parent sheet.
+      event.preventDefault();
+      event.stopImmediatePropagation();
       if (confirmDelete) setConfirmDelete(false);
       else onClose();
     };
-    window.addEventListener("keydown", closeOnEscape);
-    return () => window.removeEventListener("keydown", closeOnEscape);
+    window.addEventListener("keydown", closeOnEscape, true);
+    return () => window.removeEventListener("keydown", closeOnEscape, true);
   }, [confirmDelete, onClose]);
 
   return (
@@ -7238,6 +7274,7 @@ function PrivateWorkoutPhotoViewer({
         ) : (
           <div className="workout-photo-delete-confirm" role="group" aria-label="Confirm photo deletion">
             <p>Delete this photo? Your workout will remain saved.</p>
+            {error && <p role="alert">{error}</p>}
             <button type="button" onClick={() => setConfirmDelete(false)}>KEEP PHOTO</button>
             <button type="button" disabled={busy} onClick={onDelete}>DELETE PHOTO</button>
           </div>
@@ -7247,7 +7284,7 @@ function PrivateWorkoutPhotoViewer({
   );
 }
 
-function LazyWorkoutPhotoThumbnail({ entry, onOpen }) {
+function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMode = false, selectionIndex = 0, disabled = false }) {
   const hostRef = useRef(null);
   const [nearViewport, setNearViewport] = useState(false);
   const [photoUrl, setPhotoUrl] = useState("");
@@ -7280,26 +7317,30 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen }) {
         if (!current) return;
         if (!record?.blob || !String(record.mimeType || record.blob.type || "").startsWith("image/")) {
           setUnavailable(true);
+          onAvailability?.(entry.id, false);
           return;
         }
+        setUnavailable(false);
         lease = createObjectUrlLease(record.blob);
         setPhotoUrl(lease.url);
       })
       .catch(() => {
-        if (current) setUnavailable(true);
+        if (current) { setUnavailable(true); onAvailability?.(entry.id, false); }
       });
     return () => {
       current = false;
       lease?.revoke();
     };
-  }, [entry.id, entry.metadataAvailable, nearViewport]);
+  }, [entry.id, entry.metadataAvailable, nearViewport, onAvailability]);
 
   return (
     <button
       ref={hostRef}
       type="button"
-      className={`workout-photo-timeline-item${unavailable ? " is-unavailable" : ""}`}
-      aria-label={`View photo from ${entry.workoutName}, ${entry.day}`}
+      className={`workout-photo-timeline-item${unavailable ? " is-unavailable" : ""}${selectionIndex ? " is-compare-selected" : ""}`}
+      aria-label={`${selectionMode ? 'Select' : 'View'} photo from ${entry.workoutName}, ${entry.day}`}
+      aria-pressed={selectionMode ? Boolean(selectionIndex) : undefined}
+      disabled={disabled}
       onClick={onOpen}
     >
       <span className="workout-photo-timeline-image">
@@ -7310,10 +7351,11 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen }) {
             alt=""
             loading="lazy"
             decoding="async"
-            onLoad={() => setImageReady(true)}
-            onError={() => setUnavailable(true)}
+            onLoad={() => { setImageReady(true); onAvailability?.(entry.id, true); }}
+            onError={() => { setUnavailable(true); onAvailability?.(entry.id, false); }}
           />
         )}
+        {selectionIndex > 0 && <span className="photo-compare-selection-mark" aria-hidden="true">{selectionIndex}</span>}
         {unavailable ? (
           <span aria-hidden="true">Unavailable</span>
         ) : !imageReady ? (
@@ -7330,6 +7372,9 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen }) {
 }
 
 function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
+  const [compareMode, setCompareMode] = useState(false);
+  const [availability, setAvailability] = useState({});
+  const onAvailability = useCallback((id, usable) => setAvailability(current => current[id] === usable ? current : { ...current, [id]: usable }), []);
   const [metadata, setMetadata] = useState([]);
   const [loading, setLoading] = useState(true);
   const [selected, setSelected] = useState(null);
@@ -7378,26 +7423,31 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
     };
   }, [selected]);
 
-  const removeSelected = async () => {
-    if (!selected || busy) return;
+  const removePhoto = async (photo) => {
+    if (!photo || busy) return false;
     setBusy(true);
     try {
-      await deleteWorkoutPhoto(selected.id);
+      await deleteWorkoutPhoto(photo.id);
       update((current) => {
-        const workout = current.workouts.find((item) => item.id === selected.workoutId);
-        if (workout?.photoId === selected.id) delete workout.photoId;
+        const workout = current.workouts.find((item) => item.id === photo.workoutId);
+        if (workout?.photoId === photo.id) delete workout.photoId;
         return current;
       });
-      setMetadata((current) => current.filter((record) => record.id !== selected.id));
+      setMetadata((current) => current.filter((record) => record.id !== photo.id));
+      onAvailability(photo.id, false);
       setSelected(null);
       setStatus("Photo deleted. Your workout is unchanged.");
       triggerHaptic("tap");
+      return true;
     } catch {
       setStatus("Photo couldn’t be deleted. Try again.");
+      return false;
     } finally {
       setBusy(false);
     }
   };
+
+  if (compareMode) return <WorkoutPhotoCompare entries={entries} availability={availability} onAvailability={onAvailability} onBack={() => setCompareMode(false)} onClose={close} onDeletePhoto={removePhoto} onViewWorkout={id => setDetail({ completedWorkout: id })} busy={busy} status={status} Header={SheetHeader} Thumbnail={LazyWorkoutPhotoThumbnail} Viewer={PrivateWorkoutPhotoViewer} />;
 
   return (
     <main className="screen detail-screen workout-photo-timeline-screen">
@@ -7408,6 +7458,7 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
         Photos stay on this device. ROOK does not upload or analyze them.
       </p>
       <p className="workout-photo-timeline-status" role="status" aria-live="polite">{status}</p>
+      {entries.length >= 2 && <button className="text-button workout-photo-compare-entry" disabled={entries.filter(entry => entry.metadataAvailable && availability[entry.id] === true).length < 2} onClick={() => setCompareMode(true)}>COMPARE</button>}
       {loading ? (
         <p className="muted">Loading workout photos…</p>
       ) : groups.length ? (
@@ -7420,6 +7471,7 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
                   <LazyWorkoutPhotoThumbnail
                     key={entry.id}
                     entry={entry}
+                    onAvailability={onAvailability}
                     onOpen={() => setSelected(entry)}
                   />
                 ))}
@@ -7439,7 +7491,7 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
           workout={selected.workout}
           busy={busy}
           onClose={() => setSelected(null)}
-          onDelete={removeSelected}
+          onDelete={() => removePhoto(selected)}
           onViewWorkout={() => setDetail({ completedWorkout: selected.workoutId })}
         />
       )}
@@ -7759,6 +7811,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
                       </div>
                     );
                   })}
+                  {exercise.personalNote && <p className="sheet-footnote">{exercise.personalNote}</p>}
                 </div>
               </div>
             </div>
@@ -7774,7 +7827,9 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
 function CompletedWorkoutDetail({ workoutId, state, update, close, setPage }) {
   const workout = state.workouts.find((item) => item.id === workoutId);
   const [confirmingResume, setConfirmingResume] = useState(false);
+  const [editing, setEditing] = useState(false);
   if (!workout) return null;
+  if (editing) return <HistoryCorrectionEditor workout={workout} state={state} update={update} onDone={()=>setEditing(false)} closeSheet={close} Header={SheetHeader}/>;
   const summary = workoutSetSummary(workout);
   const date = workoutPlanDate(workout);
   const canResume = completedWorkoutCanResume(state, workout.id);
@@ -7800,6 +7855,8 @@ function CompletedWorkoutDetail({ workoutId, state, update, close, setPage }) {
       />
       <Eyebrow>{date ? displayDate(localDate(date)) : "COMPLETED WORKOUT"}</Eyebrow>
       <h1>{workout.name}</h1>
+      <button className="text-button" onClick={()=>setEditing(true)}>EDIT</button>
+      {workout.flexibleWeekMoved && workout.originalScheduledDate && <small className="completed-adjustment-marker">Originally planned for {displayDate(localDate(workout.originalScheduledDate))}</small>}
       {workout.adjustment && (
         <small className="completed-adjustment-marker">Adjusted workout · Today only</small>
       )}
@@ -7823,6 +7880,7 @@ function CompletedWorkoutDetail({ workoutId, state, update, close, setPage }) {
       </div>
       <WorkoutPhotoMemory workout={workout} update={update} />
       <SessionNoteEditor workout={workout} update={update} />
+      <SessionFeedbackDisplay value={workout.sessionFeedback} />
       <WorkoutSessionLog
         exercises={workout.exercises}
         units={state.profile.units}
@@ -7917,6 +7975,7 @@ function Complete({ state, update, setPage, setDetail }) {
       </div>
       <WorkoutPhotoMemory workout={session} update={update} />
       <SessionNoteEditor workout={session} update={update} />
+      <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
       <WorkoutSessionLog
         exercises={visibleExercises}
         units={state.profile.units}
@@ -9713,11 +9772,11 @@ function Progress({ state, update, setDetail }) {
       workout.completedAt && workoutSetSummary(workout).completed > 0,
   );
   const photoWorkouts = completedWorkouts.filter((workout) => workout.photoId);
-  const consistency = consistencyForCurrentWeek(state);
   const weeklyReview = weeklyPerformanceReview(state, new Date(), {
     e1rmEligible: exerciseSupportsEstimatedOneRepMax,
     exerciseLabel: exerciseName,
   });
+  const consistency = state.flexibleWeek ? { completed: weeklyReview.completed, planned: weeklyReview.planned } : consistencyForCurrentWeek(state);
   const weekComplete =
     consistency.planned > 0 &&
     consistency.completed === consistency.planned;
@@ -9803,42 +9862,6 @@ function Progress({ state, update, setDetail }) {
       <Eyebrow>PROGRESS</Eyebrow>
       <h1>{title}</h1>
       <p className="progress-lede">{intro}</p>
-      <GoalProgress
-        state={state}
-        progressionRows={allProgressionRows}
-        improvements={improvements}
-        setDetail={setDetail}
-      />
-      <section className="progression-overview">
-        <Eyebrow>PROGRESSION</Eyebrow>
-        {progressionRows.length ? (
-          progressionRows.map(({ exercise, result }) => (
-            <button
-              key={exercise.exerciseId}
-              className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title) ? " progression-caution" : ""}`}
-              onClick={() => setDetail({ exercise })}
-            >
-              <span>
-                <strong>{exerciseName(exercise)}</strong>
-                <small>{result.title}</small>
-                {result.type === "progress" && result.weight ? (
-                  <small className="progression-next">
-                    Next: {displayWeight(result.weight, state.profile.units)} {unit}
-                  </small>
-                ) : null}
-              </span>
-              <span className="navigation-chevron" aria-hidden="true">
-                ›
-              </span>
-            </button>
-          ))
-        ) : (
-          <p className="progression-empty">
-            More comparable sessions are needed before there is a progression
-            call.
-          </p>
-        )}
-      </section>
       <section className="weekly-review-section">
         <div className="weekly-review-heading">
           <Eyebrow>WEEKLY REVIEW</Eyebrow>
@@ -9851,7 +9874,7 @@ function Progress({ state, update, setDetail }) {
         {weeklyReview.blockContext && (
           <p className="weekly-review-context">
             {weeklyReview.blockContext.plannedDeload ? "Planned deload · " : ""}
-            Week {weeklyReview.blockContext.week} of {weeklyReview.blockContext.totalWeeks}
+            {weeklyReview.blockContext.weeks?.length > 1 ? `Program weeks ${weeklyReview.blockContext.weeks.join(' / ')}` : `Week ${weeklyReview.blockContext.week} of ${weeklyReview.blockContext.totalWeeks}`}
           </p>
         )}
         <div className={`weekly-review-card${weeklyReview.empty ? " is-empty" : ""}`}>
@@ -9894,6 +9917,42 @@ function Progress({ state, update, setDetail }) {
             {weeklyReview.summary.slice(0, 4).map((line) => <p key={line}>{line}</p>)}
           </div>
         </div>
+      </section>
+      <GoalProgress
+        state={state}
+        progressionRows={allProgressionRows}
+        improvements={improvements}
+        setDetail={setDetail}
+      />
+      <section className="progression-overview">
+        <Eyebrow>PROGRESSION</Eyebrow>
+        {progressionRows.length ? (
+          progressionRows.map(({ exercise, result }) => (
+            <button
+              key={exercise.exerciseId}
+              className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title) ? " progression-caution" : ""}`}
+              onClick={() => setDetail({ exercise })}
+            >
+              <span>
+                <strong>{exerciseName(exercise)}</strong>
+                <small>{result.title}</small>
+                {result.type === "progress" && result.weight ? (
+                  <small className="progression-next">
+                    Next: {displayWeight(result.weight, state.profile.units)} {unit}
+                  </small>
+                ) : null}
+              </span>
+              <span className="navigation-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ))
+        ) : (
+          <p className="progression-empty">
+            More comparable sessions are needed before there is a progression
+            call.
+          </p>
+        )}
       </section>
       <section className="workout-photo-entry-section">
         <Eyebrow>WORKOUT PHOTOS</Eyebrow>
@@ -10410,7 +10469,6 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           </button>
         </section>
       )}
-      {training.length > 0 && (
         <section className="planning-setup">
           <Eyebrow>TRAINING</Eyebrow>
           <p className="planning-setup-copy">
@@ -10434,8 +10492,27 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
             value={gymSummary}
             onClick={() => setDetail("gym-profiles")}
           />
+          <button
+            className="list-row"
+            onClick={() => setDetail("training-restrictions")}
+          >
+            <span>
+              <strong>Training restrictions</strong>
+              <small>
+                {trainingSafetyBlocks(profileSafety.status)
+                  ? "Training paused · Needs review"
+                  : profileSafetyConflicts.length
+                    ? "Plan review required"
+                  : profileSafety.status === "constraints_active"
+                    ? "Explicit restrictions applied"
+                    : profileSafety.pastResolved
+                      ? "Past issue noted"
+                      : "None added"}
+              </small>
+            </span>
+            <span>›</span>
+          </button>
         </section>
-      )}
       {state.program.conditioning && (
         <section>
           <Eyebrow>CARDIO</Eyebrow>
@@ -10560,26 +10637,6 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
       </section>
       <section>
         <Eyebrow>SETTINGS</Eyebrow>
-        <button
-          className="list-row"
-          onClick={() => setDetail("training-restrictions")}
-        >
-          <span>
-            <strong>Training restrictions</strong>
-            <small>
-              {trainingSafetyBlocks(profileSafety.status)
-                ? "Training paused · Needs review"
-                : profileSafetyConflicts.length
-                  ? "Plan review required"
-                : profileSafety.status === "constraints_active"
-                  ? "Explicit restrictions applied"
-                  : profileSafety.pastResolved
-                    ? "Past issue noted"
-                    : "None added"}
-            </small>
-          </span>
-          <span>›</span>
-        </button>
         <button className="list-row" onClick={() => setDetail("logging")}> 
           <span>
             <strong>Logging & increments</strong>
@@ -10615,6 +10672,10 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
             <strong>Import workout history</strong>
             <small>Hevy, Strong or Generic CSV · Parsed on this device</small>
           </span>
+          <span>›</span>
+        </button>
+        <button className="list-row" onClick={() => setDetail("export-workout-history")}>
+          <span><strong>Export workout history</strong><small>CSV or JSON · Your training records</small></span>
           <span>›</span>
         </button>
         <button className="list-row" onClick={() => setDetail("backup-rook")}>
@@ -11629,6 +11690,10 @@ function PlanEditor({
     return next;
   };
   const [program, setProgram] = useState(() => withWarmupPreference(source));
+  const reviewConflicts = useMemo(() => reviewExerciseIds.length
+    ? plannedExerciseSafetyConflicts(program, trainingSafetyFor(profile)).filter(item => reviewExerciseIds.includes(item.exerciseEntryId))
+    : [], [program, profile, reviewExerciseIds.join("|")]);
+  const reviewTargetId = reviewConflicts[0]?.exerciseEntryId;
   const [dirty, setDirty] = useState(false);
   const firstUnresolvedExercise = (value) =>
     value.days
@@ -11650,6 +11715,8 @@ function PlanEditor({
   const [pairingExerciseId, setPairingExerciseId] = useState(null);
   const [expandedWarmupDayId, setExpandedWarmupDayId] = useState(null);
   const [collapsedDayIds, setCollapsedDayIds] = useState([]);
+  const resetKey = `${source.id}|${reviewExerciseIds.join("|")}`;
+  const initializedKey = useRef(resetKey);
   const reorderRootRef = useRef(null);
   const reorderGestureRef = useRef(null);
   const reorderPreviewRef = useRef(null);
@@ -11669,6 +11736,9 @@ function PlanEditor({
     );
   }, [reorderView]);
   useEffect(() => {
+    // The state initializer already prepared this source on mount.
+    if (initializedKey.current === resetKey) return;
+    initializedKey.current = resetKey;
     const next = withWarmupPreference(source);
     setProgram(next);
     setDirty(false);
@@ -11684,15 +11754,29 @@ function PlanEditor({
     setPairingExerciseId(null);
     setExpandedWarmupDayId(null);
     setCollapsedDayIds([]);
-  }, [source.id, reviewExerciseIds.join("|")]);
+  }, [resetKey]);
   useEffect(() => {
-    if (!reviewExerciseIds[0]) return;
-    requestAnimationFrame(() =>
-      document
-        .getElementById(`import-exercise-${reviewExerciseIds[0]}`)
-        ?.scrollIntoView({ behavior: "smooth", block: "center" }),
-    );
-  }, [reviewExerciseIds.join("|")]);
+    if (reviewTargetId) setExpandedExerciseId(reviewTargetId);
+  }, [resetKey, reviewTargetId]);
+  useEffect(() => {
+    if (!reviewTargetId || expandedExerciseId !== reviewTargetId) return;
+    let cancelled = false;
+    const frame = requestAnimationFrame(async () => {
+      const target = document.getElementById(`import-exercise-${reviewTargetId}`);
+      const screen = target?.closest('.detail-screen');
+      if (!target || !screen) return;
+      // Do not compete with the sheet entrance or scroll the background page.
+      const animations = [];
+      for (let node = screen; node; node = node.parentElement) animations.push(...node.getAnimations());
+      await Promise.all(animations.filter(animation => animation.effect?.getTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+      if (cancelled || !target.isConnected) return;
+      const header = screen.querySelector('.detail-header, .long-form-sheet-header');
+      const inset = (header?.getBoundingClientRect().height || 64) + 16;
+      screen.scrollTop += target.getBoundingClientRect().top - screen.getBoundingClientRect().top - inset;
+      target.focus({ preventScroll: true });
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); };
+  }, [resetKey, reviewTargetId, expandedExerciseId]);
   const imported = program.source === "ai-import";
   const scratch = mode === "scratch";
   const preview = ["review", "import", "expert"].includes(mode);
@@ -11719,10 +11803,15 @@ function PlanEditor({
     .filter((exercise) =>
       ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
     ).length;
-  const catalog = [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(exerciseState)]
-    .filter((item) => isExerciseAllowed(item, profile))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  const editorCatalog = Object.fromEntries(catalog.map((item) => [item.id, item]));
+  const allEditorItems = useMemo(
+    () => [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(exerciseState)],
+    [exerciseState?.customExercises],
+  );
+  const catalogNeeded = exercisePickerId !== null || addingToDayId !== null;
+  const catalog = useMemo(() => catalogNeeded
+    ? allEditorItems.filter((item) => isExerciseAllowed(item, profile)).sort((a, b) => a.name.localeCompare(b.name))
+    : [], [catalogNeeded, allEditorItems, profile]);
+  const editorCatalog = useMemo(() => Object.fromEntries(allEditorItems.map(item => [item.id, item])), [allEditorItems]);
   const pairingContext = pairingExerciseId
     ? program.days
         .map((day) => {
@@ -12320,7 +12409,7 @@ function PlanEditor({
   };
   const addExercise = (dayId, catalogId) => {
     const item = editorCatalog[catalogId];
-    if (!item) return;
+    if (!item || !isExerciseAllowed(item, profile)) return;
     const exerciseId = `manual-exercise-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const compound = item.kind === "compound" || item.kind === "power";
     const repMin =
@@ -12427,6 +12516,7 @@ function PlanEditor({
     });
   };
   const replaceExercise = (dayId, exerciseId, catalogId) => {
+    if (!editorCatalog[catalogId] || !isExerciseAllowed(editorCatalog[catalogId], profile)) return;
     const sourceExercise = programRef.current?.days.find((item) => item.id === dayId)?.exercises.find((item) => item.id === exerciseId);
     const sourceAlias = sourceExercise?.importedSourceName || sourceExercise?.originalImportedName || sourceExercise?.importedName || sourceExercise?.importedExercise?.name;
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -13282,9 +13372,8 @@ function PlanEditor({
               })()}
               {day.exercises.map((exercise, exerciseIndex) => {
                 const expanded = expandedExerciseId === exercise.id;
-                const safetyReviewRequired = reviewExerciseIds.includes(
-                  exercise.id,
-                );
+                const safetyConflict = reviewConflicts.find(item => item.exerciseEntryId === exercise.id);
+                const safetyReviewRequired = Boolean(safetyConflict);
                 const needsReview = ["unresolved", "needs-name-review"].includes(
                   exercise.matchStatus,
                 );
@@ -13342,7 +13431,7 @@ function PlanEditor({
                     !candidate.supersetId &&
                     candidate.sets.length === exercise.sets.length,
                 );
-                const availableExercises = catalog.filter(
+                const availableExercises = pickerOpen ? catalog.filter(
                   (item) =>
                     !day.exercises.some(
                       (other) =>
@@ -13350,8 +13439,8 @@ function PlanEditor({
                         other.exerciseId === item.id,
                     ) &&
                     exerciseMatchesQuery(item, exerciseQuery),
-                );
-                const likelyMatches = needsReview
+                ) : [];
+                const likelyMatches = pickerOpen && needsReview
                   ? likelyImportedMatches(exercise, availableExercises)
                   : [];
                 const likelyMatchIds = new Set(
@@ -13362,7 +13451,7 @@ function PlanEditor({
                   : availableExercises.filter(
                       (item) => !likelyMatchIds.has(item.id),
                     );
-                const similarExercises = compatibleReplacementCandidates(
+                const similarExercises = pickerOpen && preview ? compatibleReplacementCandidates(
                   exercise,
                   profile,
                   day.exercises.map((item) => item.exerciseId),
@@ -13373,7 +13462,7 @@ function PlanEditor({
                         other.id !== exercise.id &&
                         other.exerciseId === item.id,
                     ) && exerciseMatchesQuery(item, exerciseQuery),
-                );
+                ) : [];
                 const pickerExercises = preview
                   ? similarExercises
                   : availableExercises;
@@ -13381,6 +13470,7 @@ function PlanEditor({
                 return (
                   <article
                     id={`import-exercise-${exercise.id}`}
+                    tabIndex={safetyReviewRequired ? -1 : undefined}
                     className={`import-exercise plan-editor-exercise${expanded ? " is-expanded" : ""}${needsReview ? " needs-review" : ""}${safetyReviewRequired ? " safety-review-required" : ""}${pairRole ? ` is-superset superset-${pairRole.toLowerCase()}` : ""}${reorderView?.kind === "exercise" && reorderView.dayId === day.id && reorderView.sourceIndex === reorderBlockIndex ? " reorder-placeholder" : ""}${exerciseDropBefore ? " reorder-drop-before" : ""}${exerciseDropAfter ? " reorder-drop-after" : ""}`}
                     key={exercise.id}
                     style={{
@@ -13463,6 +13553,9 @@ function PlanEditor({
                       >
                         Needs review
                       </span>
+                    )}
+                    {safetyReviewRequired && expanded && (
+                      <p className="plan-safety-review-note"><strong>RESTRICTION CONFLICT</strong>{safetyConflict.reason === "effort" ? "Adjust the prescribed effort to match your training restriction." : "This exercise conflicts with your training restrictions. Choose a replacement before saving."}</p>
                     )}
                     {allowReorder && !reorderBlock?.locked && (
                       <div className="plan-reorder-a11y exercise-reorder-a11y" data-no-reorder>
@@ -14748,7 +14841,7 @@ function ImportPlan({
   );
 }
 
-function RestTrainingSheet({ date, state, update, close, setPage }) {
+function RestTrainingSheet({ date, state, update, close, setPage, setDetail }) {
   const [mode, setMode] = useState("menu");
   const [move, setMove] = useState(null);
   const [cardioType, setCardioType] = useState("Walking");
@@ -14795,6 +14888,10 @@ function RestTrainingSheet({ date, state, update, close, setPage }) {
   };
   const applyMove = () => {
     if (!move) return;
+    if (state.flexibleWeek || state.todayAdaptation) {
+      setDetail({ flexibleWeek: { sessionId: move.logicalSessionId || `${move.workoutId}:${move.originalDate}` } });
+      return;
+    }
     update((current) => {
       applyWeekScheduleChanges(
         current,
@@ -16492,7 +16589,7 @@ function TrainingBlockScreen({ state, update, close }) {
   const [name, setName] = useState(block?.name || "Training block");
   const [totalWeeks, setTotalWeeks] = useState(block?.totalWeeks || 6);
   const [includeDeload, setIncludeDeload] = useState(block?.plannedDeloadWeek != null);
-  const [proposal, setProposal] = useState(null);
+  const [archivedId, setArchivedId] = useState(null);
   useLayoutEffect(() => {
     const reset = () => {
       if (screenRef.current) screenRef.current.scrollTop = 0;
@@ -16506,6 +16603,7 @@ function TrainingBlockScreen({ state, update, close }) {
     };
   }, [view, block?.id]);
   if (!block) return null;
+  if (view === "review" || view === "history") return <BlockReviewSheet state={state} update={update} close={close} Header={SheetHeader} blockId={view === "history" ? archivedId : undefined} onBack={()=>setView('overview')}/>;
   const currentWeek = currentTrainingBlockWeek(state);
   const completedWeeks = block.completed ? block.totalWeeks : Math.max(0, block.currentWeek - 1);
   const dateLabel = (value) =>
@@ -16530,31 +16628,6 @@ function TrainingBlockScreen({ state, update, close }) {
         summary: `Updated ${name || "training block"}`,
       },
     });
-    setView("overview");
-    triggerHaptic("success");
-  };
-  const reviewFollowUp = (repeat) => {
-    setProposal({
-      repeat,
-      block: createFollowUpTrainingBlock(state.program, { repeat }),
-    });
-    setView("proposal");
-  };
-  const applyProposal = () => {
-    if (!proposal?.block) return;
-    update((current) => {
-      current.program.trainingBlock = structuredClone(proposal.block);
-      current.program.version = Number(current.program.version || 1) + 1;
-      current.program.updatedAt = new Date().toISOString();
-      return current;
-    }, {
-      planVersion: {
-        source: "ROOK plan update",
-        reason: proposal.repeat ? "Training block repeated after review" : "Next training block accepted after review",
-        summary: proposal.repeat ? `Repeated ${proposal.block.name}` : `Started ${proposal.block.name}`,
-      },
-    });
-    setProposal(null);
     setView("overview");
     triggerHaptic("success");
   };
@@ -16608,23 +16681,6 @@ function TrainingBlockScreen({ state, update, close }) {
         <Button disabled={Boolean(state.activeWorkout) || !name.trim()} onClick={save}>SAVE BLOCK</Button>
       </main>
     );
-  if (view === "proposal" && proposal?.block)
-    return (
-      <main ref={screenRef} key="training-block-proposal" className="screen detail-screen training-block-screen training-block-proposal">
-        <SheetHeader title="Review training block" onBack={() => setView("overview")} onClose={close} />
-        <Eyebrow>{proposal.repeat ? "REPEAT BLOCK" : "NEXT BLOCK"}</Eyebrow>
-        <h1>{proposal.block.name}</h1>
-        <p>Review the full structure before it replaces the completed block. Exercises and performance-based load guidance stay intact.</p>
-        <dl className="training-block-summary">
-          <div><dt>Length</dt><dd>{proposal.block.totalWeeks} weeks</dd></div>
-          <div><dt>Deload</dt><dd>{proposal.block.plannedDeloadWeek ? `Week ${proposal.block.plannedDeloadWeek}` : "None"}</dd></div>
-          <div><dt>Workouts</dt><dd>{state.program.days.length} per week</dd></div>
-          <div><dt>Starts</dt><dd>{dateLabel(proposal.block.startDate)}</dd></div>
-        </dl>
-        {weekRows(proposal.block)}
-        <Button onClick={applyProposal}>{proposal.repeat ? "REPEAT THIS BLOCK" : "USE NEXT BLOCK"}</Button>
-      </main>
-    );
   return (
     <main ref={screenRef} key="training-block-overview" className="screen detail-screen training-block-screen">
       <SheetHeader title="Training block" onClose={close} />
@@ -16645,12 +16701,11 @@ function TrainingBlockScreen({ state, update, close }) {
         <p>{state.program.days.map((day) => day.name || day.weekday).join(" · ")}</p>
       </section>
       {state.completedTrainingBlocks?.length > 0 && (
-        <p className="training-block-history-count">{pluralize(state.completedTrainingBlocks.length, "completed block")} saved locally.</p>
+        <section className="training-block-history-count"><p>{pluralize(state.completedTrainingBlocks.length, "completed block")} saved locally.</p>{state.completedTrainingBlocks.filter(item=>item.id!==block.id).slice().reverse().map(item=><button className="list-row" key={item.id} onClick={()=>{setArchivedId(item.id);setView('history');}}><span>{item.name}<small>{item.completedAt?.slice(0,10)}</small></span><span aria-hidden="true">›</span></button>)}</section>
       )}
       {block.completed ? (
         <div className="training-block-complete-actions">
-          <Button onClick={(event) => { event.currentTarget.blur(); reviewFollowUp(false); }}>REVIEW NEXT BLOCK</Button>
-          <Button variant="secondary" onClick={(event) => { event.currentTarget.blur(); reviewFollowUp(true); }}>REPEAT BLOCK</Button>
+          <Button onClick={(event) => { event.currentTarget.blur(); setView('review'); }}>REVIEW BLOCK</Button>
         </div>
       ) : (
         <>
@@ -16675,6 +16730,8 @@ function PlanHistoryScreen({ state, update, close }) {
   const [selectedId, setSelectedId] = useState(null);
   const [confirming, setConfirming] = useState(false);
   const [restored, setRestored] = useState(false);
+  const backToVersions = () => { setSelectedId(null); setConfirming(false); };
+  useSheetBack(screenRef, selectedId || 'list', selectedId ? 'list' : null, backToVersions, !confirming);
   const selected = versions.find((item) => item.id === selectedId) || null;
   const chronological = [...versions].reverse();
   const parent = selected?.parentVersionId
@@ -16719,7 +16776,7 @@ function PlanHistoryScreen({ state, update, close }) {
   if (selected)
     return (
       <main ref={screenRef} key="plan-version-detail" className="screen detail-screen plan-history-screen plan-version-detail">
-        <SheetHeader title="Plan version" onBack={() => { setSelectedId(null); setConfirming(false); }} onClose={close} />
+        <SheetHeader title="Plan version" onBack={backToVersions} onClose={close} />
         <Eyebrow>{selected.source}</Eyebrow>
         <h1>{selected.summary}</h1>
         <p className="plan-version-timestamp">{planVersionDate(selected.timestamp, true)}</p>
@@ -16747,6 +16804,7 @@ function PlanHistoryScreen({ state, update, close }) {
             <h2>Restore this version?</h2>
             <p>Your current permanent plan will be replaced. Workout History and completed workouts stay unchanged.</p>
             {impact?.activeWorkoutPreserved && <p>Your active workout will continue unchanged as its own snapshot.</p>}
+            {impact?.flexibleWeekNeedsReview > 0 && <p>Your temporary schedule will need review against this restored plan. Completed and active workouts remain fixed.</p>}
             {impact?.todayAdjustmentRemoved && <p>Today’s unstarted adjustment will be removed because it belongs to the current plan.</p>}
             {Boolean(impact?.flexibleWeekReferencesRemoved || impact?.occurrenceReferencesRemoved) && (
               <p>Temporary schedule references that do not exist in this version will be cleared.</p>
@@ -17357,6 +17415,7 @@ function adjustmentModeLabel(mode) {
 }
 
 function AdjustTodaySheet({ state, update, close, request = {} }) {
+  const screenRef = useRef(null);
   const original = plannedWorkoutForDate(state, new Date());
   const existing = state.todayAdaptation?.date === isoDay() ? state.todayAdaptation : null;
   const [step, setStep] = useState(
@@ -17470,6 +17529,11 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
     if (step === "review" && proposal && !existing) setStep(mode === ADJUST_TODAY_MODES.lessTime ? "time" : mode === ADJUST_TODAY_MODES.equipment ? "equipment" : mode === ADJUST_TODAY_MODES.unavailable ? "unavailable" : "energy");
     else setStep("mode");
   };
+  const backFromManual = () => { setManualEntryId(null); setQuery(""); };
+  const configurationStep = mode === ADJUST_TODAY_MODES.lessTime ? "time" : mode === ADJUST_TODAY_MODES.equipment ? "equipment" : mode === ADJUST_TODAY_MODES.unavailable ? "unavailable" : "energy";
+  useSheetBack(screenRef, manualEntryId ? `manual:${manualEntryId}` : step,
+    manualEntryId ? step : step === "mode" ? null : step === "review" && proposal && !existing ? configurationStep : "mode",
+    manualEntryId ? backFromManual : goBack, !busy && !confirmRestore);
 
   if (manualEntryId && proposal) {
     const unresolved = proposal.unresolved.find((item) => item.entryId === manualEntryId);
@@ -17481,8 +17545,8 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
       state.substitutionPreferences,
     );
     return (
-      <main className="screen detail-screen adjust-today-sheet">
-        <SheetHeader title="Choose replacement" onClose={close} onBack={() => { setManualEntryId(null); setQuery(""); }} />
+      <main ref={screenRef} className="screen detail-screen adjust-today-sheet">
+        <SheetHeader title="Choose replacement" onClose={close} onBack={backFromManual} />
         <Eyebrow>TODAY ONLY</Eyebrow>
         <h1>Replace {unresolved?.label || "exercise"}</h1>
         <p>Choose an available exercise manually. Your recurring plan stays unchanged.</p>
@@ -17501,7 +17565,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
   }
 
   return (
-    <main className={`screen detail-screen adjust-today-sheet is-${step}-step`} aria-busy={busy || undefined}>
+    <main ref={screenRef} className={`screen detail-screen adjust-today-sheet is-${step}-step`} aria-busy={busy || undefined}>
       <SheetHeader title={title} onClose={close} onBack={step !== "mode" ? goBack : undefined} />
       {step === "mode" && (
         <>
@@ -17614,6 +17678,7 @@ function Detail({
   onLogout,
 }) {
   const panelRef = useRef(null);
+  const detailArtwork = useAvailableImage(state.profile.showExerciseImages !== false ? exerciseArt(detail?.exercise) : null);
   useEffect(() => {
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
@@ -17625,6 +17690,7 @@ function Detail({
         update={update}
         close={close}
         setPage={setPage}
+        setDetail={setDetail}
       />
     );
   if (detail === "week") {
@@ -17745,6 +17811,8 @@ function Detail({
     return <CustomExercisesScreen state={state} update={update} close={close} />;
   if (detail === "import-workout-history")
     return <HistoricalWorkoutImportScreen state={state} update={update} close={close} />;
+  if (detail === "export-workout-history")
+    return <WorkoutHistoryExport state={state} close={close} SheetHeader={SheetHeader} Button={Button} />;
   if (detail === "gym-profiles")
     return <GymProfilesSheet state={state} update={update} close={close} />;
   if (detail === "backup-rook")
@@ -17778,8 +17846,12 @@ function Detail({
         close={close}
       />
     );
+  if (detail?.flexibleWeek)
+    return <FlexibleWeekSheet state={state} update={update} close={close} Header={SheetHeader} request={detail.flexibleWeek} />;
   if (detail === "training-block")
     return <TrainingBlockScreen state={state} update={update} close={close} />;
+  if (detail === "block-review")
+    return <BlockReviewSheet state={state} update={update} close={close} Header={SheetHeader}/>;
   if (detail === "plan-history")
     return <PlanHistoryScreen state={state} update={update} close={close} />;
   if (detail === "workout-photos")
@@ -17921,17 +17993,6 @@ function Detail({
   const e1rmHistory = performance.sessions
     .filter((session) => session.estimatedOneRepMax !== null)
     .slice(-8);
-  const e1rmValues = e1rmHistory.map((session) => session.estimatedOneRepMax);
-  const e1rmMinimum = e1rmValues.length ? Math.min(...e1rmValues) : 0;
-  const e1rmMaximum = e1rmValues.length ? Math.max(...e1rmValues) : 1;
-  const e1rmRange = Math.max(0.1, e1rmMaximum - e1rmMinimum);
-  const e1rmChartPoints = e1rmHistory
-    .map((session, index) => {
-      const x = e1rmHistory.length === 1 ? 50 : (index / (e1rmHistory.length - 1)) * 100;
-      const y = 88 - ((session.estimatedOneRepMax - e1rmMinimum) / e1rmRange) * 72;
-      return `${x},${y}`;
-    })
-    .join(" ");
   const loadContext = catalogExercise?.equipment?.includes("resistance bands")
     ? "Band"
     : bodyweight
@@ -17956,8 +18017,7 @@ function Detail({
             ? "No added weight"
             : "Not set yet";
   const progression = progressionFor(exercise, state.workouts, state.profile);
-  const detailIllustration =
-    state.profile.showExerciseImages !== false ? exerciseArt(exercise) : null;
+  const detailIllustration = detailArtwork.source;
   return (
     <main ref={panelRef} className="screen detail-screen">
       <SheetHeader
@@ -18024,6 +18084,7 @@ function Detail({
             className="exercise-detail-art-button"
             aria-label={`View ${exerciseName(exercise)} illustration`}
             autoFocus={Boolean(detail?.restoreVisualFocus)}
+            data-sheet-initial-focus={detail?.restoreVisualFocus ? "" : undefined}
             onClick={() =>
               setDetail({
                 visual: exercise,
@@ -18034,6 +18095,7 @@ function Detail({
           >
             <img
               className="exercise-detail-art"
+              onError={detailArtwork.onError}
               src={detailIllustration}
               alt=""
               aria-hidden="true"
@@ -18064,22 +18126,7 @@ function Detail({
               </dd>
             </div>
           </dl>
-          {supportsEstimatedOneRepMax && e1rmHistory.length >= 2 && (
-            <div className="exercise-e1rm-trend">
-              <div>
-                <strong>Estimated 1RM history</strong>
-                <small>Last {e1rmHistory.length} sessions</small>
-              </div>
-              <svg
-                viewBox="0 0 100 100"
-                role="img"
-                aria-label={`Estimated 1RM trend from ${displayWeight(e1rmHistory[0].estimatedOneRepMax, state.profile.units)} to ${displayWeight(e1rmHistory.at(-1).estimatedOneRepMax, state.profile.units)} ${unit}.`}
-                preserveAspectRatio="none"
-              >
-                <polyline points={e1rmChartPoints} fill="none" vectorEffect="non-scaling-stroke" />
-              </svg>
-            </div>
-          )}
+          {supportsEstimatedOneRepMax && <EstimatedOneRepMaxChart sessions={e1rmHistory} units={state.profile.units} />}
           {supportsEstimatedOneRepMax && (
             <p className="exercise-e1rm-note">
               Estimated, not measured. {E1RM_FORMULA}; logged sets of 1–12 reps only.
@@ -18501,6 +18548,7 @@ function Appearance({ state, update, close }) {
 }
 function ExerciseVisualViewer({ exercise, close }) {
   const artwork = exerciseArt(exercise);
+  const availableArtwork = useAvailableImage(artwork);
   if (!artwork) return null;
   return (
     <main
@@ -18524,13 +18572,16 @@ function ExerciseVisualViewer({ exercise, close }) {
         </button>
       </header>
       <div className="exercise-visual-stage">
+        {availableArtwork.source ? (
         <img
-          src={artwork}
+          src={availableArtwork.source}
+          onError={availableArtwork.onError}
           alt=""
           aria-hidden="true"
           decoding="async"
           fetchpriority="high"
         />
+        ) : <p role="status">Illustration unavailable. Reconnect to try again.</p>}
       </div>
     </main>
   );

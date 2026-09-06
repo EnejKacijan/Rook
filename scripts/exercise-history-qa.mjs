@@ -9,6 +9,7 @@ import {
   isoDay,
   targetLabel,
   weekday,
+  weekDate,
 } from "../src/domain.js";
 
 const outputRoot = new URL("../artifacts/exercise-history/", import.meta.url);
@@ -20,25 +21,16 @@ const browser = await chromium.launch({
 });
 
 function ensureWorkoutToday(state) {
-  const today = weekday();
-  const scheduled = state.program.days.find((day) => day.weekday === today);
-  if (!scheduled) {
-    const day = state.program.days[0];
-    const replaced = day.weekday;
-    day.weekday = today;
-    state.profile.availableDays = state.profile.availableDays.map((value) =>
-      value === replaced ? today : value,
-    );
-  }
-  state.selectedDay = today;
-  state.selectedDate = isoDay();
-  state.program.rotationStartDate = null;
+  // Select a real planned date. Mutating only program.days leaves block snapshots stale.
+  const scheduled = state.program.days.find((day) => day.weekday === weekday()) || state.program.days[0];
+  state.selectedDay = scheduled.weekday;
+  state.selectedDate = isoDay(weekDate(scheduled.weekday));
 }
 
 function fixture() {
   const state = createReturningUserFixture(0);
   ensureWorkoutToday(state);
-  const day = state.program.days.find((value) => value.weekday === weekday());
+  const day = state.program.days.find((value) => value.weekday === state.selectedDay);
   const exercise = day.exercises.find((value) => {
     const item = exerciseCatalog[value.exerciseId];
     return !item?.bodyweight && item?.measure !== "seconds" && item?.artId;
@@ -68,8 +60,9 @@ async function openDetail(state, exercise, width = 390) {
     }),
   );
   await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
+  await page.getByRole('button', { name: new RegExp(`^${state.selectedDay} `) }).click();
   await page
-    .locator(".exercise-preview .list-row")
+    .locator(".exercise-preview .exercise-list-row")
     .filter({ hasText: exerciseName(exercise) })
     .first()
     .click();
@@ -185,7 +178,9 @@ async function openDetail(state, exercise, width = 390) {
   await visualViewer.getByRole("button", { name: "Close visual viewer" }).click();
   await visualViewer.waitFor({ state: "detached" });
   await sheet.waitFor();
-  await page.waitForTimeout(50);
+  await page.waitForFunction(() => document.activeElement?.classList.contains('exercise-detail-art-button'), null, { timeout: 5000 }).catch(async error => {
+    throw new Error(`${error.message}; focus: ${await page.evaluate(() => document.activeElement?.outerHTML)}; target: ${await artButton.getAttribute('id')}`);
+  });
   assert.match(await sheet.innerText(), /CURRENT WORKING WEIGHT/);
   assert.equal(
     await artButton.evaluate((node) => document.activeElement === node),

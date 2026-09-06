@@ -1,0 +1,97 @@
+import assert from 'node:assert/strict';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { chromium } from 'playwright-core';
+import { createReturningUserFixture } from '../src/demoFixture.js';
+import { exerciseCatalog, isoDay, weekday } from '../src/domain.js';
+
+const root = 'artifacts/edit-plan-opening';
+await mkdir(root, { recursive: true });
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+const results = [];
+try {
+ for (const width of [320,390,430]) for (const appearance of ['light','dark']) for (const style of ['standard','premium']) {
+  const state = createReturningUserFixture(3);
+  state.activeWorkout = null;
+  state.workouts = [];
+  Object.assign(state.profile, { appearancePreference: appearance, stylePreference: style, themePreference: style==='premium'?'premium':appearance });
+  const day = state.program.days.at(-1);
+  day.weekday = weekday();
+  state.selectedDate = isoDay(); state.selectedDay = weekday();
+  state.profile.availableDays = state.program.days.map(d=>d.weekday);
+  const context = await browser.newContext({ viewport: {width,height:844}, colorScheme:appearance, serviceWorkers:'block', reducedMotion: width===430?'reduce':'no-preference' });
+  await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
+  const page = await context.newPage();
+  const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));
+  await page.goto('http://127.0.0.1:4173');
+  assert.equal(await page.locator('html').getAttribute('data-style'),style);
+  assert.equal(await page.locator('html').getAttribute('data-appearance'),appearance);
+  await page.getByRole('button',{name:'PROFILE',exact:true}).click();
+  const ms=await page.getByRole('button',{name:/Edit plan/}).evaluate(async el=>{
+   const start=performance.now();el.click();
+   await new Promise(resolve=>{const poll=()=>document.querySelector('.edit-plan-screen h1')?requestAnimationFrame(()=>requestAnimationFrame(resolve)):requestAnimationFrame(poll);poll();});
+   return performance.now()-start;
+  });
+  await page.getByRole('heading',{name:'Edit your plan',exact:true}).waitFor();
+  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-normal.png`});
+  await page.getByRole('button',{name:'Close edit plan',exact:true}).click();
+  await page.locator('.edit-plan-screen').waitFor({state:'detached'});
+  // Exercise late in the final workout, with a second conflict immediately after it.
+  const restricted=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+  const last=restricted.program.days.at(-1);
+  last.exercises.slice(-2).forEach((e,i)=>{const id=i?'hack-squat':'leg-press';Object.assign(e,{exerciseId:id,importedName:exerciseCatalog[id].name,originalImportedName:exerciseCatalog[id].name});});
+  const ids=last.exercises.slice(-2).map(e=>e.id);
+  restricted.profile.avoid='Avoid Leg Press and Hack Squat';
+  restricted.profile.trainingSafetyAnalysis={sourceText:restricted.profile.avoid,analysis:{schemaVersion:2,findings:['Leg Press','Hack Squat'].map(quote=>({kind:'explicit_avoidance',confidence:0.99,evidence:[{start:restricted.profile.avoid.indexOf(quote),end:restricted.profile.avoid.indexOf(quote)+quote.length,quote}],targetText:quote,minimumRir:null,allowedBodyRegion:null})),unresolved:[]}};
+  await page.evaluate(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),restricted);
+  await page.reload();
+  await page.getByRole('button',{name:'TODAY',exact:true}).click();
+  const review=page.getByRole('button',{name:'REVIEW 2 CONFLICTS',exact:true});
+  await review.waitFor();
+  assert.match(await review.getAttribute('class'),/primary/);
+  assert.equal(await page.getByRole('button',{name:'START WORKOUT',exact:true}).count(),0);
+  await review.scrollIntoViewIfNeeded();
+  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-today.png`});
+  await review.click();
+  const checkTarget=async id=>{
+   await page.waitForFunction(id=>document.activeElement?.id===`import-exercise-${id}`,id);
+   const target=page.locator(`[id="import-exercise-${id}"]`);
+   const bounds=await target.evaluate(el=>{const r=el.getBoundingClientRect(),screen=el.closest('.detail-screen'),h=screen.querySelector('.detail-header').getBoundingClientRect();return {top:r.top,headerBottom:h.bottom,width:screen.clientWidth,scrollWidth:screen.scrollWidth,scrollTop:screen.scrollTop,maxScroll:screen.scrollHeight-screen.clientHeight};});
+   assert.ok(bounds.top>=bounds.headerBottom-1,JSON.stringify(bounds));
+   assert.ok(bounds.top<bounds.headerBottom+50 || (bounds.scrollTop>=bounds.maxScroll-1 && bounds.top<500),JSON.stringify(bounds));
+   assert.ok(await page.locator('.edit-plan-screen').evaluate(s=>[...s.querySelectorAll('.plan-editor-exercise')].every(e=>{const r=e.getBoundingClientRect(),p=s.getBoundingClientRect();return r.left>=p.left&&r.right<=p.right;})),'Exercise cards stay inside the sheet; clipped header bleed is not content overflow');
+   assert.match(await target.getAttribute('class'),/is-expanded/);
+   await target.getByText('RESTRICTION CONFLICT',{exact:true}).waitFor();
+   return target;
+  };
+  const first=await checkTarget(ids[0]);
+  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-target.png`});
+  await first.locator('.plan-editor-picker-trigger').click();
+  const options=first.getByRole('option');await options.first().waitFor();
+  assert.ok(await options.count()>0);
+  assert.ok(!(await options.allTextContents()).some(text=>text.trim()==='Leg Press'));
+  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-picker.png`});
+  await options.first().click();
+  await checkTarget(ids[1]);
+  assert.doesNotMatch(await first.getAttribute('class'),/safety-review-required/);
+  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-next.png`});
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(stored.program.days.at(-1).exercises.find(e=>e.id===ids[0]).exerciseId,'leg-press','Draft does not mutate saved plan');
+  const second=page.locator(`[id="import-exercise-${ids[1]}"]`);
+  await second.locator('.plan-editor-picker-trigger').click();
+  await second.getByRole('option').first().click();
+  await page.waitForFunction(()=>!document.querySelector('.safety-review-required'));
+  await page.getByRole('button',{name:'SAVE CHANGES',exact:true}).click();
+  await page.locator('.edit-plan-screen').waitFor({state:'detached'});
+  await page.getByRole('button',{name:'START WORKOUT',exact:true}).waitFor();
+  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-resolved.png`});
+  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(saved.profile.avoid,restricted.profile.avoid);
+  assert.ok(saved.program.days.at(-1).exercises.filter(e=>ids.includes(e.id)).every(e=>!['leg-press','hack-squat'].includes(e.exerciseId)));
+  assert.deepEqual(errors,[]);
+  results.push({width,appearance,style,clickToFrameMs:Math.round(ms)});
+  console.log(JSON.stringify(results.at(-1)));
+  await context.close();
+ }
+ await writeFile(`${root}/RESULTS.json`,JSON.stringify(results,null,2));
+} finally {await browser.close();}

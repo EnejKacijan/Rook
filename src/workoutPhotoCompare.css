@@ -1,0 +1,23 @@
+.workout-photo-compare-entry { margin-top: 12px; min-height: 44px; }
+.workout-photo-compare-screen h1:focus { outline: none; }
+.workout-photo-compare-screen .photo-compare-intro { margin-bottom: 0; }
+.photo-compare-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 26px; }
+.photo-compare-context { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+.photo-compare-context time { color: var(--rook-secondary); font-size: 12px; }
+.photo-compare-context strong { font-size: 14px; line-height: 1.3; overflow-wrap: anywhere; }
+.photo-compare-frame { min-width: 0; aspect-ratio: 3 / 4; background: var(--rook-surface-muted); border: 1px solid var(--rook-border); border-radius: 13px; overflow: hidden; }
+.photo-compare-inspect { width: 100%; height: 100%; display: grid; place-items: center; position: relative; border: 0; padding: 0; background: transparent; color: var(--rook-secondary); }
+.photo-compare-inspect:disabled { opacity: 1; }
+.photo-compare-inspect img { display: block; width: 100%; height: 100%; position: absolute; inset: 0; object-fit: contain; }
+.photo-compare-inspect > span { font-size: 12px; padding: 10px; }
+.photo-compare-unavailable { height: 100%; padding: 12px; display: flex; flex-direction: column; justify-content: center; align-items: flex-start; }
+.photo-compare-unavailable p { font-size: 12px; margin: 0 0 8px; }
+.photo-compare-unavailable .text-button { white-space: normal; min-height: 44px; padding: 0; text-align: left; }
+.workout-photo-compare-screen .photo-compare-privacy { font-size: 12px; margin: 18px 0; }
+.photo-compare-change { margin-top: 8px; }
+.photo-compare-selection-footer { position: sticky; bottom: -24px; z-index: 3; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: var(--rook-bg); box-shadow: 0 -12px 0 var(--rook-bg); margin-top: 24px; }
+.photo-compare-selection-footer p { margin: 0 0 10px; font-size: 12px; color: var(--rook-secondary); }
+:root[data-appearance] .workout-photo-compare-screen .photo-compare-selection-footer .button.primary:disabled { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border: 1px solid var(--rook-border); opacity: 1; }
+.workout-photo-compare-screen { scroll-padding-bottom: 180px; }
+.workout-photo-timeline-item.is-compare-selected .workout-photo-timeline-image { border: 2px solid var(--rook-accent); }
+.workout-photo-timeline-image > .photo-compare-selection-mark { position: absolute; z-index: 2; top: 6px; right: 6px; bottom: auto; left: auto; width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); font-size: 12px; font-weight: 700; }

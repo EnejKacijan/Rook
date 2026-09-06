@@ -155,8 +155,8 @@ for (const testCase of [
   const state = fixture();
   const sourceWorkout = state.program.days.find((day) => day.weekday === weekday());
   const originalOrder = sourceWorkout.exercises.map((exercise) => exercise.id);
-  const originalTemplate = structuredClone(sourceWorkout.exercises);
   const { context, page, errors } = await open(state);
+  const originalTemplate = await page.evaluate(id => JSON.parse(localStorage.getItem('lift-v2-state')).program.days.find(day => day.id === id).exercises, sourceWorkout.id);
   await page.getByRole("button", { name: "Edit", exact: true }).click();
   await page.locator(".today-start-region").evaluate(async (element) => {
     await Promise.allSettled(element.getAnimations().map((animation) => animation.finished));

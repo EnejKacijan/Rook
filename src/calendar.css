@@ -67,6 +67,7 @@
 .active-workout-notice > button { min-width: 64px; min-height: 44px; padding: 0 7px; color: #1f6b4c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 .active-workout-start-lock { max-width: 330px; margin: 20px 0 0 !important; color: #6f6c68; font-size: 13px; line-height: 1.45; }
 .active-workout-notice + .rest-day-state { margin-top: 32px; }
+.today-screen.viewing-other-workout .active-workout-notice + .today-hero { margin-top: 38px; }
 .plan-ready-notice { position: relative; margin-top: 16px; padding: 12px 42px 12px 13px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 14px; background: #eaf2ee; }
 .plan-ready-notice > button { position: absolute; top: 3px; right: 4px; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: #6f837a; font-size: 20px; line-height: 1; }
 .plan-ready-notice .eyebrow { color: #1f6b4c; }
@@ -80,6 +81,10 @@
   .today-screen .today-hero { padding-top: 12px; }
   .today-screen .plan-ready-notice + .today-hero { padding-top: 18px; }
 }
+
+/* With no intervening notice, the shared section margin is the only gap
+   below the calendar, matching the existing Rest day header position. */
+.today-screen > .week-selector + .today-hero { padding-top: 0; }
 
 /* Dot color communicates workout state; selection is communicated by the day card. */
 .week-strip button {
@@ -106,13 +111,42 @@
 .rest-day-state { margin-top: 48px; }
 .rest-day-state h1 { margin: 10px 0 0; font-size: 36px; }
 .rest-day-state > p { margin-top: 8px; }
-.rest-up-next { margin-top: 30px; padding-top: 18px; border-top: 1px solid rgba(27,26,25,.08); }
+.rest-up-next { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--rook-border); }
 .rest-up-next time { display: block; margin-top: 10px; color: #6f6c68; font-size: 12px; }
 .rest-up-next h2 { margin: 5px 0 0; font-size: 22px; line-height: 1.2; overflow-wrap: anywhere; }
 .rest-up-next .rest-up-next-descriptor { display: block; margin-top: 4px; color: #6f6c68; font-size: 14px; font-weight: 600; line-height: 1.3; }
 .rest-up-next > span { display: block; margin-top: 6px; color: #6f6c68; font-size: 13px; }
 .rest-up-next .rest-view-workout { width: auto; min-height: 46px; margin-top: 18px; padding: 0 20px; border-radius: 13px; }
-.train-anyway { display: block; margin: 10px 0 0; min-height: 44px; padding: 0 8px; color: #6f6c68; text-decoration: underline; text-decoration-color: rgba(111,108,104,.35); text-underline-offset: 3px; }
+.today-day-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.today-day-header > .eyebrow { min-width: 0; overflow-wrap: anywhere; }
+.today-day-header .flexible-week-entry { margin: -13px 0; min-height: 44px; font-size: 10px; letter-spacing: .08em; color: var(--rook-secondary); white-space: nowrap; }
+.flexible-week-sheet .choice-row:disabled { opacity: 1; color: var(--rook-secondary); cursor: default; }
+.flexible-week-sheet .choice-row:disabled small { color: var(--rook-secondary); }
+.flexible-workout-list { margin-top: 20px; }
+.flexible-week-sheet .flexible-workout-list > .choice-row { min-height: 68px; margin: 0; padding: 13px 2px; border: 0; border-bottom: 1px solid var(--rook-border); border-radius: 0; background: transparent; text-align: left; overflow-wrap: anywhere; }
+.flexible-week-missed { margin-top: 16px; padding: 12px 0; border-bottom: 1px solid var(--rook-border); display: flex; flex-direction: column; gap: 5px; }
+.flexible-week-missed small, .flexible-week-origin { color: var(--rook-secondary); font-size: 11px; }
+.flexible-week-missed button { align-self: flex-start; min-height: 44px; }
+.flexible-week-origin { display: block; margin-top: 8px; }
+.flexible-week-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 20px 0; }
+.flexible-week-dates button { min-height: 48px; border-radius: 12px; border: 1px solid var(--rook-border); background: var(--rook-surface); color: var(--rook-text); font-size: 12px; }
+.flexible-week-dates button.is-selected { background: var(--rook-accent-soft); border-color: var(--rook-accent); }
+.flexible-week-dates button:disabled { opacity: .45; }
+.flexible-availability-note { text-align: left; color: var(--rook-secondary); font-size: 12px; }
+.flexible-availability-dates button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; min-width: 0; }
+.flexible-availability-dates small { max-width: 100%; color: var(--rook-secondary); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.flexible-week-review article { display: flex; flex-direction: column; gap: 6px; padding: 16px 0; border-bottom: 1px solid var(--rook-border); overflow-wrap: anywhere; }
+.flexible-week-review article span { font-size: 13px; }
+.flexible-week-review small, .flexible-week-conflict-actions small { color: var(--rook-secondary); font-size: 11px; line-height: 1.45; }
+.flexible-week-footer { position: sticky; z-index: 2; bottom: 0; padding: 12px 0 max(8px, env(safe-area-inset-bottom)); background: var(--rook-bg); box-shadow: 0 48px 0 var(--rook-bg); margin-top: 18px; }
+.flexible-week-review { padding-bottom: calc(144px + env(safe-area-inset-bottom)); margin-bottom: -126px; }
+.flexible-week-conflict-actions { display: flex; flex-direction: column; align-items: flex-start; gap: 8px; margin-top: 12px; }
+.flexible-week-sheet > .text-button { display: block; min-height: 44px; }
+.flexible-adjustment-choice { margin: 18px 0; padding: 12px; border: 1px solid var(--rook-border); border-radius: 12px; }
+.flexible-adjustment-choice label { display: flex; align-items: center; gap: 8px; min-height: 44px; font-size: 12px; }
+.flexible-adjustment-choice input { accent-color: var(--rook-accent); }
+.flexible-week-error { color: var(--rook-secondary); }
+.train-anyway { display: block; margin: 10px 0 0; min-height: 44px; padding: 0 8px; color: var(--rook-accent-text); text-decoration: none; }
 .optional-session-history { margin-top: 14px; border-top: 1px solid var(--rook-border); }
 .optional-session-note { padding: 12px 0; border-bottom: 1px solid var(--rook-border); display: flex; align-items: baseline; justify-content: space-between; gap: 14px; color: var(--rook-accent-text); }
 .optional-session-note strong { min-width: 0; font-size: 12px; line-height: 1.35; }

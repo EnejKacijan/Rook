@@ -121,24 +121,9 @@ ensureWorkoutToday(complete);
     1,
     "Availability is a real interactive planning preference",
   );
-  assert.equal(
-    await page.getByRole("button", { name: /^Training environment/ }).count(),
-    1,
-    "Training environment is a real interactive planning preference",
-  );
-  assert.equal(
-    await page.getByRole("button", { name: /^Available equipment/ }).count(),
-    1,
-    "Available equipment is a real interactive planning preference",
-  );
-  assert.equal(
-    await page.getByText(
-      "Used by Coach and future plan changes. Your current program is edited separately.",
-      { exact: true },
-    ).count(),
-    1,
-    "Profile separates planning preferences from the current program",
-  );
+  assert.equal(await page.getByRole("button", { name: /^Gym profiles/ }).count(), 1,
+    "Gym profiles is the current equipment-management destination");
+  // Equipment editing/migration is covered by qa:gym-profiles, not the retired setup sheet.
   const programBeforeProfileEdits = await page.evaluate(() =>
     JSON.stringify(JSON.parse(localStorage.getItem("lift-v2-state")).program),
   );
@@ -171,33 +156,6 @@ ensureWorkoutToday(complete);
     ),
     complete.profile.availableDays.length + 1,
     "extra availability saves without moving current workouts",
-  );
-  await page.getByRole("button", { name: /^Training environment/ }).click();
-  await page.getByRole("button", { name: "Home gym" }).click();
-  await page.getByRole("button", { name: "Dumbbells" }).click();
-  assert.equal(
-    await page.getByRole("button", { name: "SAVE SETUP" }).isDisabled(),
-    false,
-    "future setup preferences are not blocked by the current plan",
-  );
-  assert.equal(
-    await page
-      .getByText(/current program uses equipment outside this setup/i)
-      .count(),
-    0,
-    "the current program is not invalidated by preference changes",
-  );
-  await page.getByRole("button", { name: "SAVE SETUP" }).click();
-  assert.match(
-    await page.getByRole("button", { name: /^Training environment/ }).innerText(),
-    /Home gym/,
-  );
-  await page.getByRole("button", { name: /^Available equipment/ }).click();
-  await page.getByRole("button", { name: "Resistance bands" }).click();
-  await page.getByRole("button", { name: "SAVE SETUP" }).click();
-  assert.match(
-    await page.getByRole("button", { name: /^Available equipment/ }).innerText(),
-    /Dumbbells, Resistance bands/,
   );
   assert.equal(
     await page.evaluate(() =>
@@ -283,8 +241,13 @@ ensureWorkoutToday(complete);
   });
   const rirInitiallyEnabled = await rirSwitch.isChecked();
   const rirHelp = page.getByRole("button", { name: "What is RIR?" });
+  await rirHelp.evaluate(async node => {
+    const animations = [];
+    for (let parent = node; parent; parent = parent.parentElement) animations.push(...parent.getAnimations());
+    await Promise.all(animations.filter(animation => animation.effect?.getTiming().iterations !== Infinity).map(animation => animation.finished.catch(() => {})));
+  });
   const rirHelpBox = await rirHelp.boundingBox();
-  assert.ok(rirHelpBox.width >= 44 && rirHelpBox.height >= 44);
+  assert.ok(rirHelpBox.width >= 44 && rirHelpBox.height >= 44, `Settled RIR help target: ${JSON.stringify(rirHelpBox)}`);
   await rirHelp.click();
   const rirTooltip = page.getByRole("tooltip");
   await rirTooltip.waitFor();
@@ -299,7 +262,7 @@ ensureWorkoutToday(complete);
   await page.mouse.click(10, 300);
   await rirTooltip.waitFor({ state: "detached" });
   assert.equal(
-    await page.getByRole("switch", { name: "Rest timer" }).isChecked(),
+    await page.getByRole("switch", { name: "Rest timer", exact: true }).isChecked(),
     true,
   );
   assert.equal(
@@ -448,6 +411,7 @@ partial.program = buildProgram(partial.profile);
   await page.getByRole("group", { name: "Sex" }).waitFor({ state: "detached" });
   assert.equal(await sexTrigger.getAttribute("aria-expanded"), "false");
   assert.match(await sexTrigger.innerText(), /Intersex/);
+  await page.waitForFunction(() => document.activeElement?.classList.contains('profile-sex-trigger'));
   assert.equal(
     await sexTrigger.evaluate((element) => document.activeElement === element),
     true,
@@ -554,9 +518,10 @@ for (const environment of ["Commercial gym", "Home gym"]) {
   state.program = buildProgram(state.profile);
   const { context, page, errors } = await openState(state);
   const text = await profileText(page);
-  assert.match(text, new RegExp(environment));
+  assert.match(text, /Gym profiles/);
+  await page.getByRole('button', { name: /^Gym profiles/ }).click();
   assert.match(
-    text,
+    await page.locator('.detail-screen').innerText(),
     environment === "Commercial gym"
       ? /Full gym/
       : /Dumbbells, Resistance bands/i,
@@ -699,6 +664,8 @@ for (const [theme, colorScheme] of [
   state.profile = {
     ...state.profile,
     themePreference: theme,
+    appearancePreference: colorScheme,
+    stylePreference: theme === 'premium' ? 'premium' : 'standard',
     rirEnabled: true,
     availableDays: ["Mon", "Tue", "Wed", "Thu", "Fri"],
   };
@@ -725,10 +692,9 @@ for (const [theme, colorScheme] of [
     path: output(`340-profile-${theme}.png`),
     fullPage: true,
   });
-  await page.getByRole("button", { name: /^Training environment/ }).click();
-  await page.getByRole("button", { name: "Both" }).click();
-  await page.getByRole("button", { name: "Dumbbells" }).click();
-  await page.getByRole("button", { name: "Resistance bands" }).click();
+  // Equipment editing/migration is covered by qa:gym-profiles. Profile keeps
+  // the current management entry rather than the retired environment sheet.
+  await page.getByRole("button", { name: /^Gym profiles/ }).click();
   assert.equal(
     await page.evaluate(
       () => document.documentElement.scrollWidth <= innerWidth,

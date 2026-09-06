@@ -381,6 +381,8 @@ await activeRun.page.getByRole("button", { name: /^Close/ }).click();
 await activeRun.page.locator(".exercise-detail-overview").waitFor({ state: "detached" });
 await activeRun.page.locator(".exercise-heading").waitFor();
 await activeRun.page.getByRole("button", { name: "Replace", exact: true }).click();
+// Suggestions now load after the sheet paints; compare settled choices, not the loading state.
+await activeRun.page.locator(".replace-sheet .choice-row").first().waitFor();
 const initialReplacementChoices = await activeRun.page
   .locator(".replace-sheet .choice-row")
   .allTextContents();

@@ -425,7 +425,11 @@ async function completeCurrentExercise(page) {
   const sessionLogTrigger = page.locator('.complete-session-log .session-log-trigger').first();
   assert.equal(await sessionLogTrigger.getAttribute('aria-expanded'), 'false');
   assert.equal(await sessionLogTrigger.locator('.session-log-summary i').count(), 0, 'set count remains the only trailing row element');
+  // The completion flow now includes optional feedback above the log. Bring
+  // this disclosure above the fixed Done dock, as a user would by scrolling.
+  await sessionLogTrigger.evaluate(element => element.scrollIntoView({ block: 'center' }));
   await sessionLogTrigger.click();
+  await page.waitForFunction(() => document.querySelector('.complete-session-log .session-log-trigger')?.getAttribute('aria-expanded') === 'true');
   assert.equal(await sessionLogTrigger.getAttribute('aria-expanded'), 'true');
   const setRows = page.locator('.complete-session-log .session-log-set');
   assert.ok(await setRows.count() >= 3, 'all planned sets remain visible in the read-only log');
@@ -441,6 +445,7 @@ async function completeCurrentExercise(page) {
   await page.waitForTimeout(240);
   await snap(page, 'early-completion-session-log-expanded');
   await sessionLogTrigger.click();
+  await page.waitForFunction(() => document.querySelector('.complete-session-log .session-log-trigger')?.getAttribute('aria-expanded') === 'false');
   assert.equal(await sessionLogTrigger.getAttribute('aria-expanded'), 'false');
   const density = await page.locator('.complete-screen').evaluate((screen) => {
     const heading = screen.querySelector('h1').getBoundingClientRect();

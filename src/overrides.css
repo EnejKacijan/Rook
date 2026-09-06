@@ -318,7 +318,16 @@
 .exercise-e1rm-trend > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .exercise-e1rm-trend strong { color: var(--rook-text, #1b1a19); font-size: 13px; }
 .exercise-e1rm-trend small { color: var(--rook-muted, #8a8783); font-size: 10.5px; }
-.exercise-e1rm-trend svg { width: 100%; height: 92px; margin-top: 8px; padding: 7px 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); overflow: visible; }
+.exercise-e1rm-trend svg { display: block; width: 100%; height: 136px; margin-top: 10px; overflow: visible; }
+.exercise-e1rm-trend .e1rm-heading { flex-wrap: wrap; gap: 4px 12px; }
+.e1rm-axis line { stroke: var(--rook-border); stroke-width: 1; }
+.e1rm-axis text, .e1rm-axis-unit, .e1rm-date { fill: var(--rook-secondary); font-size: 10.5px; }
+.e1rm-point-value { fill: var(--rook-text); font-size: 10.5px; font-weight: 600; }
+.e1rm-point { fill: var(--rook-accent); stroke: var(--rook-surface, #f6f5f2); stroke-width: 2; pointer-events: none; }
+.e1rm-point-hit { fill: transparent; cursor: pointer; }
+.exercise-e1rm-trend g[role="button"]:focus-visible { outline: none; }
+.exercise-e1rm-trend g[role="button"]:focus-visible .e1rm-point-hit { stroke: var(--rook-secondary); stroke-width: 1; }
+.exercise-e1rm-trend .e1rm-summary { margin: 7px 0 0; min-height: 16px; color: var(--rook-secondary); font-size: 11px; line-height: 1.45; }
 .exercise-e1rm-trend polyline { stroke: var(--rook-accent, #1f6b4c); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .exercise-e1rm-note { margin: 11px 0 0 !important; color: var(--rook-muted, #8a8783); font-size: 10.5px !important; line-height: 1.45; }
 :root[data-appearance="dark"] .exercise-performance-history .list-row > span:last-child { color: var(--rook-secondary, #b7b1a5); }
@@ -405,6 +414,9 @@
 .restriction-impact-review .button + .button { margin-top: 3px; }
 .plan-editor-exercise.safety-review-required { border-color: rgba(122,93,24,.42); background: #fbf7ec; }
 .plan-editor-exercise.safety-review-required .plan-editor-summary-action b { color: #7a5d18; }
+.plan-editor-exercise.safety-review-required { outline: 1px solid var(--rook-accent); outline-offset: 2px; }
+.plan-safety-review-note { margin: 12px 0; padding: 0 14px; font-size: 13px; line-height: 1.5; color: var(--rook-text); }
+.plan-safety-review-note strong { display: block; margin-bottom: 6px; font-size: 11px; letter-spacing: .08em; }
 
 /* Focused Profile hierarchy and density. */
 .profile-screen { padding-bottom: calc(var(--bottom-nav-height) + 12px + env(safe-area-inset-bottom)); }
@@ -1361,7 +1373,15 @@
 .plan-history-empty p, .plan-history-empty-copy { margin: 6px 0 0 !important; color: var(--rook-secondary, #6f6c68); font-size: 12px !important; }
 
 .today-block-week { display: block; margin-top: 9px; color: var(--rook-secondary, #6f6c68); font-size: 11px; font-weight: 700; letter-spacing: .045em; }
-button.today-block-week { appearance: none; border: 0; background: transparent; padding: 0; font-family: inherit; text-align: left; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+button.today-block-week { position: relative; width: 100%; appearance: none; border: 0; background: transparent; padding: 0; font-family: inherit; text-align: left; cursor: pointer; text-decoration: none; }
+/* Expand the hit area without moving the surrounding title or summary. */
+button.today-block-week::before { content: ""; position: absolute; inset-inline: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
+.today-block-week strong { font-weight: 700; }
+.today-block-week .today-block-phase { font-weight: 400; }
+.today-block-week .today-block-phase { overflow-wrap: anywhere; }
+.today-block-week .today-block-phase-end { display: inline-block; max-width: 100%; padding-inline-end: 14px; position: relative; }
+.today-block-week .today-block-chevron { display: inline-block; margin-inline-start: 7px; color: var(--rook-muted, #8a8783); font-size: 16px; font-weight: 400; line-height: 0; vertical-align: baseline; pointer-events: none; }
+.today-block-phase-end .today-block-chevron { position: absolute; inset-inline-end: 0; bottom: .45em; }
 button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 4px; border-radius: 2px; }
 .today-block-week.is-deload { color: var(--rook-accent-text, var(--rook-accent, #1f6b4c)); }
 .block-complete-card { margin: 18px 0 4px; padding: 16px; border: 1px solid var(--rook-border, rgba(27,26,25,.09)); border-radius: 16px; background: var(--rook-surface-muted, rgba(27,26,25,.035)); }

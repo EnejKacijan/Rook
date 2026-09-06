@@ -40,15 +40,10 @@ async function openScreen(buttonName) {
   assert.match(await panel.evaluate(element => getComputedStyle(element).animationName), /rook-sheet-enter/, 'bottom sheets use the shared upward entrance animation');
   assert.equal(await handle.evaluate(element => getComputedStyle(element).animationName), 'none', 'the grabber does not run a separate entrance animation');
   assert.equal(await handle.evaluate(element => element.parentElement?.classList.contains('detail-header')), true, 'the grabber is physically part of the sheet header');
-  const [openingPanelTop, openingHandleTop] = await Promise.all([
-    panel.boundingBox().then(box => box.y),
-    handle.boundingBox().then(box => box.y),
-  ]);
+  const measureTogether = () => panel.evaluate(node => [node.getBoundingClientRect().y, node.querySelector('.sheet-drag-handle, .sheet-grab-zone, [aria-label="Drag down or tap to close"]').getBoundingClientRect().y]);
+  const [openingPanelTop, openingHandleTop] = await measureTogether();
   await page.waitForTimeout(100);
-  const [enteredPanelTop, enteredHandleTop] = await Promise.all([
-    panel.boundingBox().then(box => box.y),
-    handle.boundingBox().then(box => box.y),
-  ]);
+  const [enteredPanelTop, enteredHandleTop] = await measureTogether();
   assert.ok(Math.abs((enteredHandleTop - openingHandleTop) - (enteredPanelTop - openingPanelTop)) <= 1, 'the header grabber travels upward with the sheet as one surface');
   assert.match(await page.locator('.modal-layer').evaluate(element => getComputedStyle(element).animationName), /rook-sheet-backdrop-in/, 'the backdrop fades in with the sheet');
   await handle.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the top handle starts the standard downward close animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });

@@ -679,6 +679,13 @@ assert.deepEqual(
   "Premium Light import entry contains no ROOK green",
 );
 await screenshot(lightLandingRun.page, "375-import-entry-premium-light.png");
+const disabledImport = lightLandingRun.page.getByRole('button', { name: 'CREATE PREVIEW', exact: true });
+assert.equal(await disabledImport.isDisabled(), true);
+assert.equal(await disabledImport.evaluate(button => {
+  const token = getComputedStyle(button).getPropertyValue('--rook-disabled-surface').trim();
+  const expected = `rgb(${token.slice(1).match(/.{2}/g).map(value => parseInt(value, 16)).join(', ')})`;
+  return getComputedStyle(button).backgroundColor === expected;
+}), true, 'Premium Light empty import uses the disabled surface, not an active gold fill');
 assert.deepEqual(lightLandingRun.errors, []);
 await lightLandingRun.context.close();
 
@@ -690,6 +697,13 @@ assert.deepEqual(
   "Premium Light scratch-plan entry contains no ROOK green",
 );
 await screenshot(lightScratchRun.page, "375-scratch-entry-premium-light.png");
+const disabledScratch = lightScratchRun.page.getByRole('button', { name: 'CONTINUE', exact: true });
+assert.equal(await disabledScratch.isDisabled(), true);
+assert.equal(await disabledScratch.evaluate(button => {
+  const token = getComputedStyle(button).getPropertyValue('--rook-disabled-surface').trim();
+  const expected = `rgb(${token.slice(1).match(/.{2}/g).map(value => parseInt(value, 16)).join(', ')})`;
+  return getComputedStyle(button).backgroundColor === expected;
+}), true, 'Premium Light incomplete scratch plan uses the disabled surface');
 assert.deepEqual(lightScratchRun.errors, []);
 await lightScratchRun.context.close();
 

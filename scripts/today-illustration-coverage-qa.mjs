@@ -135,7 +135,7 @@ const context = await browser.newContext({
   serviceWorkers: "block",
 });
 await context.addInitScript(
-  (value) => localStorage.setItem("lift-v2-state", JSON.stringify(value)),
+  (value) => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem("lift-v2-state", JSON.stringify(value)); },
   state,
 );
 const page = await context.newPage();
@@ -188,6 +188,7 @@ assert.equal(
   "an imported alias keeps its illustration in exercise detail",
 );
 await page.getByRole("button", { name: /^Close/ }).click();
+await page.locator('.modal-layer').waitFor({state:'detached'});
 const wideLayout = await rows.evaluateAll((items) =>
   items.map((row) => {
     const main = row
@@ -267,8 +268,12 @@ await page.screenshot({
   fullPage: true,
 });
 await page.evaluate(() => {
-  document.documentElement.dataset.theme = "light";
+  const current=JSON.parse(localStorage.getItem('lift-v2-state'));
+  Object.assign(current.profile,{appearancePreference:'light',stylePreference:'standard',themePreference:'light'});
+  localStorage.setItem('lift-v2-state',JSON.stringify(current));
 });
+await page.reload({waitUntil:'networkidle'});
+assert.equal(await page.locator('html').getAttribute('data-appearance'),'light');
 assert.equal(await rows.locator("img").count(), 0);
 await page.screenshot({
   path: fileURLToPath(new URL("mixed-coverage-light-320.png", artifacts)),

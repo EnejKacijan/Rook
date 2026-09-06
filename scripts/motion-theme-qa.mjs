@@ -89,6 +89,30 @@ const expectedAccent = {
   premium: "#d7b15a",
 };
 
+// Observe the short-lived class in the page's own mutation turn. Sequential
+// protocol round trips can outlive the reduced-motion confirmation under load.
+async function captureSetCommit(page) {
+  await page.evaluate(() => {
+    window.__rookQaSetCommit = new Promise((resolve, reject) => {
+      const observer = new MutationObserver(() => {
+        const row = document.querySelector('.set-row.set-completing');
+        if (!row) return;
+        observer.disconnect(); clearTimeout(deadline);
+        resolve({
+          pressed: row.querySelector('.check').getAttribute('aria-pressed'),
+          animation: getComputedStyle(row.querySelector('.check > span')).animationName,
+          wash: getComputedStyle(row, '::after').display,
+          activeRows: document.querySelectorAll('.set-row.set-active:not(.set-done)').length,
+        });
+      });
+      const deadline = setTimeout(() => { observer.disconnect(); reject(new Error('Set completion was not observed')); }, 30000);
+      observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
+    });
+  });
+  await page.getByRole('button', { name: 'Complete set 2' }).click();
+  return page.evaluate(() => window.__rookQaSetCommit);
+}
+
 for (const theme of ["light", "dark", "premium"]) {
   const todayRun = await openState(fixture(theme));
   assert.equal(
@@ -176,18 +200,15 @@ for (const theme of ["light", "dark", "premium"]) {
   );
   await workoutRun.page.waitForTimeout(220);
   assert.notEqual(await activeTransform(workoutRun.page, nextExercise), "none", `${theme} workout navigation shares tactile press motion`);
-  const completion = workoutRun.page.getByRole("button", { name: "Complete set 2" });
-  await completion.click();
-  const committedRow = workoutRun.page.locator(".set-row.set-completing");
-  await committedRow.waitFor();
-  assert.equal(await committedRow.locator(".check").getAttribute("aria-pressed"), "true", `${theme} completion semantics update immediately`);
+  const commit = await captureSetCommit(workoutRun.page);
+  assert.equal(commit.pressed, "true", `${theme} completion semantics update immediately`);
   assert.equal(
-    await committedRow.locator(".check > span").evaluate((node) => getComputedStyle(node).animationName),
+    commit.animation,
     "rook-check-commit",
     `${theme} check uses the same restrained commit animation`,
   );
   assert.equal(
-    await workoutRun.page.locator(".set-row.set-active:not(.set-done)").count(),
+    commit.activeRows,
     1,
     `${theme} advances the active state without waiting for decoration`,
   );
@@ -201,16 +222,14 @@ assert.equal(
   "none",
   "reduced motion removes tactile scaling",
 );
-await reducedRun.page.getByRole("button", { name: "Complete set 2" }).click();
-const reducedRow = reducedRun.page.locator(".set-row.set-completing");
-await reducedRow.waitFor();
+const reducedCommit = await captureSetCommit(reducedRun.page);
 assert.equal(
-  await reducedRow.locator(".check > span").evaluate((node) => getComputedStyle(node).animationName),
+  reducedCommit.animation,
   "rook-check-fade",
   "reduced motion keeps only a short opacity confirmation",
 );
 assert.equal(
-  await reducedRow.evaluate((node) => getComputedStyle(node, "::after").display),
+  reducedCommit.wash,
   "none",
   "reduced motion removes the traveling row wash",
 );
