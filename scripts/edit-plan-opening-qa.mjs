@@ -15,12 +15,22 @@ try {
   state.workouts = [];
   Object.assign(state.profile, { appearancePreference: appearance, stylePreference: style, themePreference: style==='premium'?'premium':appearance });
   const day = state.program.days.at(-1);
+  // Keep a valid schedule when today's weekday already belongs to another day.
+  const previousToday = state.program.days.find(item => item !== day && item.weekday === weekday());
+  if (previousToday) previousToday.weekday = day.weekday;
   day.weekday = weekday();
   state.selectedDate = isoDay(); state.selectedDay = weekday();
   state.profile.availableDays = state.program.days.map(d=>d.weekday);
   const context = await browser.newContext({ viewport: {width,height:844}, colorScheme:appearance, serviceWorkers:'block', reducedMotion: width===430?'reduce':'no-preference' });
   await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
   const page = await context.newPage();
+  const capture=async options=>{
+   await page.evaluate(async()=>{
+    await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));
+    await new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)));
+   });
+   await page.screenshot({...options,animations:'disabled'});
+  };
   const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));
   await page.goto('http://127.0.0.1:4173');
@@ -33,7 +43,7 @@ try {
    return performance.now()-start;
   });
   await page.getByRole('heading',{name:'Edit your plan',exact:true}).waitFor();
-  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-normal.png`});
+  await capture({path:`${root}/${width}-${style}-${appearance}-normal.png`});
   await page.getByRole('button',{name:'Close edit plan',exact:true}).click();
   await page.locator('.edit-plan-screen').waitFor({state:'detached'});
   // Exercise late in the final workout, with a second conflict immediately after it.
@@ -51,7 +61,16 @@ try {
   assert.match(await review.getAttribute('class'),/primary/);
   assert.equal(await page.getByRole('button',{name:'START WORKOUT',exact:true}).count(),0);
   await review.scrollIntoViewIfNeeded();
-  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-today.png`});
+  await capture({path:`${root}/${width}-${style}-${appearance}-today.png`});
+  await page.evaluate(() => {
+   window.__conflictFrames=[];
+   const sample=()=>{
+    const sheet=document.querySelector('.edit-plan-screen');
+    if(sheet)window.__conflictFrames.push({time:performance.now(),top:sheet.scrollTop,opacity:getComputedStyle(sheet).opacity});
+    window.__conflictFrame=requestAnimationFrame(sample);
+   };
+   window.__conflictFrame=requestAnimationFrame(sample);
+  });
   await review.click();
   const checkTarget=async id=>{
    await page.waitForFunction(id=>document.activeElement?.id===`import-exercise-${id}`,id);
@@ -65,16 +84,21 @@ try {
    return target;
   };
   const first=await checkTarget(ids[0]);
-  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-target.png`});
+  const motion=await page.evaluate(()=>{cancelAnimationFrame(window.__conflictFrame);return window.__conflictFrames;});
+  const positions=[...new Set(motion.map(frame=>Math.round(frame.top)))];
+  if(width!==430)assert.ok(positions.length>3,'Normal motion includes intermediate sheet scroll positions, not only a jump');
+  else assert.ok(positions.length<=3,'Reduced motion has no animated traversal');
+  assert.ok(motion.every(frame=>frame.opacity==='1'),'Edit plan stays opaque throughout entrance/reveal');
+  await capture({path:`${root}/${width}-${style}-${appearance}-target.png`});
   await first.locator('.plan-editor-picker-trigger').click();
   const options=first.getByRole('option');await options.first().waitFor();
   assert.ok(await options.count()>0);
   assert.ok(!(await options.allTextContents()).some(text=>text.trim()==='Leg Press'));
-  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-picker.png`});
+  await capture({path:`${root}/${width}-${style}-${appearance}-picker.png`});
   await options.first().click();
   await checkTarget(ids[1]);
   assert.doesNotMatch(await first.getAttribute('class'),/safety-review-required/);
-  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-next.png`});
+  await capture({path:`${root}/${width}-${style}-${appearance}-next.png`});
   const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
   assert.equal(stored.program.days.at(-1).exercises.find(e=>e.id===ids[0]).exerciseId,'leg-press','Draft does not mutate saved plan');
   const second=page.locator(`[id="import-exercise-${ids[1]}"]`);
@@ -84,12 +108,12 @@ try {
   await page.getByRole('button',{name:'SAVE CHANGES',exact:true}).click();
   await page.locator('.edit-plan-screen').waitFor({state:'detached'});
   await page.getByRole('button',{name:'START WORKOUT',exact:true}).waitFor();
-  await page.screenshot({path:`${root}/${width}-${style}-${appearance}-resolved.png`});
+  await capture({path:`${root}/${width}-${style}-${appearance}-resolved.png`});
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
   assert.equal(saved.profile.avoid,restricted.profile.avoid);
   assert.ok(saved.program.days.at(-1).exercises.filter(e=>ids.includes(e.id)).every(e=>!['leg-press','hack-squat'].includes(e.exerciseId)));
   assert.deepEqual(errors,[]);
-  results.push({width,appearance,style,clickToFrameMs:Math.round(ms)});
+  results.push({width,appearance,style,clickToFrameMs:Math.round(ms),revealPositions:positions.length});
   console.log(JSON.stringify(results.at(-1)));
   await context.close();
  }

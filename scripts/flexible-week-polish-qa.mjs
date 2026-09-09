@@ -1,3 +1,4 @@
+import { openAdjustWeek } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -20,16 +21,20 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
   const prefix=`${phase}-${width}-${style}-${appearance}-${rest?'rest':'workout'}`;
   const shot=async name=>{await page.waitForTimeout(350);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:fileURLToPath(new URL(`${prefix}-${name}.png`,out))});};
   await shot('today');measurements.push({prefix,titleY:(await page.locator('.today-hero h1,.rest-day-state h1').first().boundingBox()).y});
-  if(!before){const row=page.locator('.today-day-header');const a=await row.locator('.eyebrow').boundingBox(),b=await row.getByRole('button',{name:'ADJUST WEEK'}).boundingBox();assert.ok(a.x+a.width<=b.x);assert.ok(Math.abs(a.y+a.height/2-b.y-b.height/2)<1);assert.ok(b.height>=44);}
+  if(!before){
+    assert.equal(await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).count(),0,'Adjust Week is not duplicated on the approved Today hero');
+    const overflow=page.getByRole('button',{name:'Today options',exact:true});
+    assert.ok((await overflow.boundingBox()).height>=44,'Today overflow retains a mobile touch target');
+  }
   if(rest){const action=page.getByRole('button',{name:'Train today instead',exact:true});if(!before){assert.equal(await action.evaluate(e=>getComputedStyle(e).textDecorationLine),'none');assert.ok((await action.boundingBox()).height>=44);}await action.click();await page.getByRole('heading',{name:"Choose today's activity"}).waitFor();await page.getByRole('button',{name:/Close/}).click();}
-  await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();await shot('root-no-missed');
+  await openAdjustWeek(page);await shot('root-no-missed');
   const missed=page.getByRole('button',{name:/I missed a workout/});if(!before){assert.equal(await missed.isDisabled(),true);await missed.evaluate(e=>e.click());assert.equal(await page.getByRole('heading',{name:'What changed?'}).count(),1);}
   await page.getByRole('button',{name:/Move a workout Choose/}).click();const rows=page.locator('.flexible-week-sheet .choice-row');assert.ok(await rows.count()>=6);await shot('choose');
   const firstName=await rows.first().locator('strong').innerText();await rows.first().click();await page.getByRole('heading',{name:`Move ${firstName}`,exact:true}).waitFor();await shot('dates');await page.getByRole('button',{name:'Close Adjust week',exact:true}).click();
-  await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();await page.getByRole('button',{name:/My available days changed/}).click();await shot('available');await context.close();
+  await openAdjustWeek(page);await page.getByRole('button',{name:/My available days changed/}).click();await shot('available');await context.close();
   if(width===390&&!rest){
     state.program.trainingBlock.startDate=addCalendarDays(today,-6);
-    const c=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'});await c.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);const p=await c.newPage();await p.route('**/api/ai/status',r=>r.fulfill({status:200,contentType:'application/json',body:'{"available":false}'}));await p.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await p.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();assert.equal(await p.getByRole('button',{name:/I missed a workout/}).isEnabled(),true);await p.waitForTimeout(350);await p.screenshot({path:fileURLToPath(new URL(`${prefix}-root-missed.png`,out))});await c.close();
+    const c=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'});await c.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);const p=await c.newPage();await p.route('**/api/ai/status',r=>r.fulfill({status:200,contentType:'application/json',body:'{"available":false}'}));await p.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await openAdjustWeek(p);assert.equal(await p.getByRole('button',{name:/I missed a workout/}).isEnabled(),true);await p.waitForTimeout(350);await p.screenshot({path:fileURLToPath(new URL(`${prefix}-root-missed.png`,out))});await c.close();
   }
 }
 await writeFile(new URL(`${phase}-measurements.json`,out),JSON.stringify(measurements,null,2));await browser.close();console.log(`${phase}: 24 width/theme/day flows passed.`);

@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -283,7 +284,7 @@ for (const tab of ["COACH", "PROGRESS", "PROFILE"]) {
 }
 
 // Settings controls keep intentional selected, unselected, and field boundaries.
-await darkRun.page.getByRole("button", { name: /Logging & increments/ }).click();
+await openProfileArea(darkRun.page, 'preferences'); await darkRun.page.getByRole("button", { name: /Logging & increments/ }).click();
 const loggingStates = await darkRun.page.locator(".logging-screen").evaluate((screen) => {
   const style = (selector) => {
     const current = getComputedStyle(screen.querySelector(selector));
@@ -312,7 +313,7 @@ await screenshot(darkRun.page, "390-logging-dark.png");
 await darkRun.page.getByRole("button", { name: "Close Logging" }).click();
 
 // Flat Appearance controls, explicit override, System live update, and persistence.
-await darkRun.page.getByRole("button", { name: /^Appearance/ }).click();
+await openProfileArea(darkRun.page, 'preferences'); await darkRun.page.getByRole("button", { name: /^Appearance/ }).click();
 await screenshot(darkRun.page, "390-appearance-dark.png");
 assert.equal(await darkRun.page.locator(".theme-choice-layer").count(), 0);
 const workoutsBefore = await darkRun.page.evaluate(() =>
@@ -417,7 +418,7 @@ assert.equal(setStates.inputBackground, "rgba(0, 0, 0, 0)");
 assert.notEqual(setStates.stepperDivider, "rgba(0, 0, 0, 0)");
 if (setStates.rirBackground)
   assert.equal(setStates.rirBackground, "rgb(28, 32, 30)");
-await activeRun.page.getByRole("button", { name: "Complete set 1" }).click();
+await activeRun.page.getByRole("button", { name: "Log set 1" }).click();
 await activeRun.page.waitForTimeout(220);
 assert.equal(
   await activeRun.page.locator(".set-row.set-done .check").first().evaluate(

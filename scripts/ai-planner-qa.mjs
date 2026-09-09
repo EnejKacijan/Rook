@@ -98,7 +98,6 @@ await page.getByRole("combobox", { name: "Age range" }).click();
 await page.getByRole("option", { name: "30–39" }).click();
 await page.getByRole("button", { name: "CONTINUE" }).click();
 await page.getByRole("button", { name: "Build muscle" }).click();
-await page.getByRole("button", { name: "CONTINUE" }).click();
 const beginnerOption = page.getByRole("button", { name: /Beginner/ });
 assert.equal(
   await beginnerOption
@@ -113,14 +112,16 @@ assert.ok(
   "experience guidance keeps a comfortable compact touch target",
 );
 await beginnerOption.click();
+await page.getByRole('heading', {name:'What does a realistic training week look like?',exact:true}).waitFor();
+await page.getByRole('button', {name:'Back',exact:true}).click();
 assert.equal(
   (await beginnerOption.getAttribute("class")).includes("selected-option"),
   true,
   "selected state applies to the whole experience option",
 );
-await page.getByRole("button", { name: "CONTINUE" }).click();
+await beginnerOption.click();
 await page.getByRole("button", { name: "3 days" }).click();
-await page.getByRole("checkbox", { name: "Make any day available" }).check();
+await page.getByRole("checkbox", { name: "Any day works" }).check();
 await page.getByRole("button", { name: "60 min" }).click();
 await page.getByRole("button", { name: "CONTINUE" }).click();
 assert.equal(
@@ -136,7 +137,7 @@ assert.equal(
 );
 await page.getByRole("button", { name: "Home gym" }).click();
 assert.equal(
-  await page.getByText("Available equipment", { exact: true }).count(),
+  await page.getByText("What equipment do you have?", { exact: true }).count(),
   1,
   "home equipment appears inline",
 );
@@ -147,15 +148,19 @@ assert.equal(
 );
 await page.getByRole("button", { name: "Dumbbells" }).click();
 await page.getByRole("button", { name: "Both" }).click();
+await page
+  .locator(".setup-primary-environment")
+  .getByRole("button", { name: "Home gym", exact: true })
+  .click();
 assert.equal(
-  await page.getByText("Equipment available at home", { exact: true }).count(),
+  await page.getByText("What equipment do you have?", { exact: true }).count(),
   1,
-  "Both asks only for home equipment inline",
+  "Both asks for home equipment after the user chooses Home gym as primary",
 );
 assert.equal(
   await page.getByRole("button", { name: "full gym" }).count(),
-  0,
-  "full commercial gym is implicit for Both",
+  1,
+  "Both reuses the canonical Gym Profile equipment options",
 );
 await page.getByRole("button", { name: "Dumbbells" }).click();
 await page.getByRole("button", { name: "Commercial gym" }).click();
@@ -194,7 +199,7 @@ assert.equal(
   "balanced effort is selected by default",
 );
 await page.getByRole("button", { name: "CONTINUE" }).click();
-await page.getByRole("button", { name: /Have a specific split/ }).click();
+await page.getByRole("button", { name: /I already have a preferred weekly structure/ }).click();
 await page.getByRole("button", { name: "Other", exact: true }).click();
 await page
   .getByRole("textbox", { name: "Other preferred split" })
@@ -320,6 +325,8 @@ await importPage
   .getByPlaceholder(/Paste your workout notes/)
   .fill(importSourceText);
 await importPage.getByRole("button", { name: "CREATE PREVIEW" }).click();
+await importPage.getByRole('heading',{name:'Match this exercise',exact:true}).waitFor();
+await importPage.getByRole('button',{name:'KEEP AS CUSTOM',exact:true}).click();
 await importPage.getByRole("button", { name: "USE THIS PLAN" }).waitFor();
 assert.equal(
   await importPage
@@ -341,10 +348,10 @@ assert.equal(
 );
 assert.equal(
   await importPage.getByRole("button", { name: "KEEP ALL AS CUSTOM" }).count(),
-  1,
-  "an unmatched source name has one explicit bulk custom-resolution action",
+  0,
+  "resolving the sole blocker directly leaves no redundant bulk-resolution action",
 );
-await importPage.getByRole("button", { name: "KEEP ALL AS CUSTOM" }).click();
+await importPage.waitForTimeout(500);
 await importPage.getByRole("button", { name: "USE THIS PLAN" }).click();
 await importPage.waitForFunction(() =>
   Boolean(

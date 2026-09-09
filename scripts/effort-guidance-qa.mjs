@@ -17,10 +17,10 @@ async function reachEffortStep(experience) {
   await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
   await page.getByRole('combobox', { name: 'Age range' }).click(); await page.getByRole('option', { name: '18–29' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
-  await page.getByRole('button', { name: 'Build muscle' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
-  await page.getByRole('button', { name: new RegExp(`^${experience}`) }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
+  await page.getByRole('button', { name: 'Build muscle' }).click();
+  await page.getByRole('button', { name: new RegExp(`^${experience}`) }).click();
   await page.getByRole('button', { name: '3 days' }).click();
-  await page.getByLabel('Make any day available').check();
+  await page.getByLabel('Any day works').check();
   await page.getByRole('button', { name: '60 min' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Commercial gym' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Balanced' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();

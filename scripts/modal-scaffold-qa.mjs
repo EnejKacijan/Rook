@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -159,7 +160,8 @@ for (const theme of ["light", "dark", "premium"]) {
   await page.goto("http://127.0.0.1:4173", { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
 
-  await page.getByRole("button", { name: "Review priorities" }).click();
+  await openProfileArea(page, 'training');
+  await page.getByRole("button", { name: /^Training priorities/ }).click();
   const priorities = await verifyLongForm(
     page,
     ".modal-layer > .priority-settings",
@@ -173,7 +175,7 @@ for (const theme of ["light", "dark", "premium"]) {
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 844 });
-  await page.getByRole("button", { name: /Training restrictions/ }).click();
+  await openProfileArea(page, 'training'); await page.getByRole("button", { name: /Training restrictions/ }).click();
   await page.waitForTimeout(220);
   const restrictionPanel = page.locator(".training-restrictions-screen");
   const restrictionBox = await restrictionPanel.boundingBox();
@@ -191,7 +193,7 @@ for (const theme of ["light", "dark", "premium"]) {
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 1100 });
-  await page.getByRole("button", { name: /Appearance/ }).click();
+  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /Appearance/ }).click();
   const appearanceHeader = page.locator(".appearance-screen > .detail-header");
   await appearanceHeader.waitFor();
   assert.equal(
@@ -213,7 +215,7 @@ for (const theme of ["light", "dark", "premium"]) {
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 700 });
-  await page.getByRole("button", { name: "Edit plan" }).click();
+  await openProfileArea(page, 'program'); await page.getByRole("button", { name: "Edit plan" }).click();
   const editPlan = await verifyLongForm(
     page,
     ".modal-layer > .edit-plan-screen",

@@ -82,10 +82,10 @@ else if (!(await page.getByRole("heading", { name: "Pull-up" }).count()))
 const addedLoad = page.getByRole("spinbutton", {
   name: "Added weight (optional) in kg for set 1",
 });
-assert.equal(await addedLoad.getAttribute("placeholder"), "Bodyweight");
+assert.equal(await page.locator('.set-row').first().locator('.stepper-empty-label').innerText(), "Bodyweight");
 assert.equal(await addedLoad.inputValue(), "");
 assert.equal(
-  await page.getByRole("button", { name: "Complete set 1" }).isEnabled(),
+  await page.getByRole("button", { name: "Log set 1" }).isEnabled(),
   true,
   "pull-ups are completable with reps alone",
 );
@@ -103,7 +103,7 @@ const repaired = await page.evaluate(() => {
 });
 assert.deepEqual(repaired, { loadRequirement: "optional", weight: null });
 
-await page.getByRole("button", { name: "Complete set 1" }).click();
+await page.getByRole("button", { name: "Log set 1" }).click();
 assert.equal(
   await page.evaluate(
     () =>
@@ -162,7 +162,7 @@ for (const exerciseId of [
     name: exerciseCatalog[exerciseId].name,
   }).waitFor();
   assert.equal(
-    await scenarioPage.getByRole("button", { name: "Complete set 1" }).isEnabled(),
+    await scenarioPage.getByRole("button", { name: "Log set 1" }).isEnabled(),
     true,
     `${exerciseId} is completable at zero added load`,
   );

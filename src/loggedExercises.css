@@ -1,0 +1,10 @@
+.logged-exercise-row { width:100%;text-align:left;gap:16px;min-height:64px; }
+.logged-exercise-row > span:first-child { display:grid;gap:5px;min-width:0; }
+.logged-exercise-row strong { overflow-wrap:anywhere; }
+.logged-exercise-row small { color:var(--rook-secondary);font-size:12px;line-height:1.4; }
+.logged-exercise-row .navigation-chevron { flex:0 0 auto;color:var(--rook-secondary); }
+.logged-exercises-all { width:100%;text-align:left;color:var(--rook-accent);font-size:13px;min-height:48px;gap:12px; }
+.logged-exercises-preview > h3 { margin-bottom:6px; }
+.logged-exercises-preview > p { color:var(--rook-secondary);font-size:13px; }
+.logged-exercises-sheet .rook-search-field { display:block;margin:16px 0; }
+.logged-exercises-sheet input[type="search"] { width:100%;min-height:48px;padding:12px 44px 12px 12px;background:var(--rook-surface);color:var(--rook-text);border:1px solid var(--rook-control-border);border-radius:12px; }

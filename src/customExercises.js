@@ -276,6 +276,30 @@ export function rememberExerciseAlias(state, aliasValue, exerciseId, { builtInCa
   return { status: "created", alias: record };
 }
 
+export function saveCustomExerciseDetails(state, exerciseId, details, { added = [], removed = [], builtInCatalog = {}, persist } = {}) {
+  const next = structuredClone(state);
+  const result = updateCustomExercise(next, exerciseId, details);
+  if (result.status !== 'updated') return { ...result, state };
+  for (const id of removed) {
+    if (next.exerciseAliases.some(alias => alias.id === id && alias.exerciseId === exerciseId)) removeExerciseAlias(next, id);
+  }
+  for (const alias of added) {
+    const outcome = rememberExerciseAlias(next, alias, exerciseId, { builtInCatalog });
+    if (!['created', 'unchanged'].includes(outcome.status)) return { ...outcome, state };
+  }
+  const snapshot = customExerciseSnapshot(result.exercise);
+  for (const day of next.program?.days || []) for (const exercise of day.exercises || []) {
+    if (exercise.exerciseId !== exerciseId) continue;
+    Object.assign(exercise, { importedName: result.exercise.name, originalImportedName: result.exercise.name,
+      importedExercise: snapshot, measure: snapshot.measure, loadRequirement: snapshot.loadRequirement });
+  }
+  if (persist) {
+    try { if (!persist(next)) return { status: 'persistence-failed', state }; }
+    catch { return { status: 'persistence-failed', state }; }
+  }
+  return { status: 'saved', state: next, exercise: result.exercise };
+}
+
 export function removeExerciseAlias(state, aliasId, now = new Date().toISOString()) {
   normalizeCustomExercisesState(state, now);
   const alias = state.exerciseAliases.find((item) => item.id === aliasId && !item.deletedAt);

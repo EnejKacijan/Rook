@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { openProfileArea } from './qa-current-navigation.mjs';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
@@ -18,6 +19,7 @@ await page.goto(appUrl, { waitUntil: 'networkidle' });
 
 assert.equal(await page.getByRole('button', { name: 'SHARE WORKOUT' }).count(), 0, 'Today does not expose a single-workout export');
 await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+await openProfileArea(page, 'program');
 const exportPlan = page.getByRole('button', { name: /Export workout plan/ });
 assert.equal(await exportPlan.count(), 1, 'Profile owns the full-plan export entry point');
 assert.match(await exportPlan.innerText(), /Share, copy or download the full plan/);

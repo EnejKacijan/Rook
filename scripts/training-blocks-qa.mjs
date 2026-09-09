@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { verifyLongContent } from './post-review-runtime-checks.mjs';
 import { mkdir } from "node:fs/promises";
@@ -70,7 +71,7 @@ async function open(state, viewport = { width: 390, height: 844 }) {
 
 async function openDetails(page) {
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Training block/ }).click();
+  await openProfileArea(page, 'program'); await page.getByRole("button", { name: /Training block/ }).click();
   await page.getByRole("heading", { name: /Upper|Strength Foundation/ }).waitFor();
 }
 

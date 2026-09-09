@@ -97,13 +97,13 @@ await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-
 
 await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
 await page.getByRole('spinbutton', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('32.5');
-await page.getByRole('button', { name: 'Complete set 1' }).click();
+await page.getByRole('button', { name: 'Log set 1' }).click();
 await page.locator('.rest-timer').getByRole('button', { name: 'SKIP' }).click();
 await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
 await page.getByRole('button', { name: /SKIP INCOMPLETE SETS?/ }).click();
 const currentExercise = await page.locator('.exercise-heading h1').textContent();
 await page.getByRole('spinbutton', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('47.5');
-await page.getByRole('button', { name: 'Complete set 1' }).click();
+await page.getByRole('button', { name: 'Log set 1' }).click();
 await page.getByRole('button', { name: 'Back to Today' }).click();
 assert.match(await page.locator('.active-workout-hero > p').textContent(), new RegExp(`^2 / ${totalSets} sets · 18 min$`));
 assert.equal(await page.getByRole('button', { name: 'START WORKOUT' }).count(), 0);
@@ -117,7 +117,7 @@ assert.match(await page.locator('.active-workout-hero > p').textContent(), new R
 await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
 assert.equal(await page.locator('.exercise-heading h1').textContent(), currentExercise, 'resume restores the exact exercise');
 assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '47.5', 'resume restores entered weight');
-assert.equal(await page.getByRole('button', { name: 'Reopen set 1' }).count(), 1, 'resume restores completed sets');
+assert.equal(await page.getByRole('button', { name: 'Undo logged set 1' }).count(), 1, 'resume restores completed sets');
 assert.equal(await page.locator('.rest-timer').isVisible(), true, 'resume restores the relevant rest timer');
 
 await page.getByRole('button', { name: 'Finish', exact: true }).click();

@@ -89,6 +89,8 @@ const PRIORITY_GROUPS_BY_LABEL = Object.freeze({
   Quads: { muscles: ["Quads"] },
   "Hamstrings / glutes": { muscles: ["Hamstrings", "Glutes"] },
   Calves: { muscles: ["Calves"] },
+  "Abs / core": { muscles: ["Core"], exposureFrequency: "distributed" },
+  // Compatibility for early internal fixtures that used the taxonomy label.
   Core: { muscles: ["Core"] },
   AnteriorDelts: { muscles: ["AnteriorDelts"] },
   LateralDelts: { muscles: ["LateralDelts"] },

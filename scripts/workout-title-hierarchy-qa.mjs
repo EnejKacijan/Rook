@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -149,7 +150,7 @@ for (const theme of ["light", "dark"]) {
   const day = state.program.days.find((item) => item.weekday === weekday());
   const { context, page, errors } = await open(state);
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Edit plan/ }).click();
+  await openProfileArea(page, 'program'); await page.getByRole("button", { name: /Edit plan/ }).click();
   await page.getByRole("heading", { name: "Edit your plan" }).waitFor();
   const nameField = page.getByLabel(`${day.weekday} workout name`);
   const descriptorField = page.getByLabel(`${day.weekday} workout descriptor`);

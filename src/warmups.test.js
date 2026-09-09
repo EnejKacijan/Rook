@@ -5,6 +5,8 @@ import {
   exerciseCatalog,
   refreshWorkoutWarmup,
   startWorkout,
+  materializeWarmupPlan,
+  warmupForWorkout,
 } from "./domain.js";
 import { generateWarmup, rampWeightForWorkingLoad } from "./warmups.js";
 
@@ -187,6 +189,28 @@ describe("personalized warm-ups", () => {
     expect(
       active.exercises.reduce((sum, exercise) => sum + exercise.sets.length, 0),
     ).toBeGreaterThan(0);
+  });
+
+  it.each(["generated-materialized", "user", "imported"])("honors warm-up opt-out for %s custom plans after reload without deleting the draft", provenance => {
+    const state = blankState();
+    state.profile = profile();
+    state.program = buildProgram(state.profile);
+    const day = state.program.days[0];
+    day.warmupPlan = { ...materializeWarmupPlan(day, state.profile, state.program), provenance };
+    expect(day.warmupPlan.items.length).toBeGreaterThan(0);
+    const original = structuredClone(day.warmupPlan);
+    state.program.includeRecommendedWarmups = false;
+    const reloaded = JSON.parse(JSON.stringify(state));
+    const active = startWorkout(reloaded, reloaded.program.days[0]);
+    expect(active.warmup.general).toEqual([]);
+    expect(active.warmup.stages.every(stage => stage.general.length === 0)).toBe(true);
+    expect(active.warmup.rampUpSets.length).toBeGreaterThan(0);
+    expect(reloaded.program.days[0].warmupPlan).toEqual(original);
+    reloaded.profile.rampUpSetsEnabled = false;
+    refreshWorkoutWarmup(active, reloaded.profile, reloaded.program);
+    expect(active.warmup).toBeNull();
+    reloaded.program.includeRecommendedWarmups = true;
+    expect(warmupForWorkout(reloaded.program.days[0], reloaded.profile, reloaded.program).general.length).toBeGreaterThan(0);
   });
 
   it("sequences the first two distinct compound warm-ups just in time", () => {

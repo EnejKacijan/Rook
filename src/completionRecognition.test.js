@@ -1,0 +1,21 @@
+import {describe,it,expect} from 'vitest';
+import {completionRecognition} from './completionRecognition.js';
+import {activeExercisePr} from './performanceInsights.js';
+const exercise=(weight=70,reps=8,extra={})=>({exerciseId:'bench',sets:[{id:'set',completed:true,weight,reps}],...extra});
+const workout=(id='new',extra={})=>({id,completedAt:`2026-09-${id==='new'?'07':'01'}T12:00:00Z`,status:'completed',exercises:[exercise()],...extra});
+const options={eligible:()=>true};
+const result=(current,prior)=>completionRecognition(current,prior,options);
+describe('completion recognition is factual and read-only',()=>{
+ it('reuses the existing PR result and preserves canonical load',()=>{const old=workout('old',{exercises:[exercise(70,7)]}),current=workout();const value=result(current,[old]);expect(value.label).toBe('New rep PR');expect(value.record).toEqual(activeExercisePr([old],current.exercises[0]));expect(value.record.weight).toBe(70);});
+ it('labels a weight record precisely, never target success',()=>{expect(result(workout(),[workout('old',{exercises:[exercise(60,8)]})]).label).toBe('New weight PR');});
+ it('qualifies estimates explicitly',()=>{const current=workout('new',{exercises:[exercise(65,12)]});expect(result(current,[workout('old',{exercises:[exercise(70,3)]})]).label).toBe('New estimated 1RM PR');});
+ it('does not award ties or a first exposure, including varying sets',()=>{expect(result(workout(),[workout('old')])).toBeNull();const first=workout();first.exercises[0].sets.push({completed:true,weight:80,reps:8});expect(result(first,[])).toBeNull();});
+ it('never recognizes ended-early, empty, unfinished or imported completions',()=>{for(const patch of [{endedEarly:true},{status:'ended-early'},{completedAt:null},{historicalImport:{}},{exercises:[]},{exercises:[{exerciseId:'bench',sets:[{completed:false}]}]}])expect(result(workout('new',patch),[workout('old',{exercises:[exercise(60,7)]})])).toBeNull();});
+ it('excludes drop/rest-pause/AMRAP sets and per-side comparisons',()=>{for(const type of ['drop','rest_pause','amrap']){const e=exercise();e.sets[0].setType=type;expect(result(workout('new',{exercises:[e]}),[workout('old',{exercises:[exercise(60,7)]})])).toBeNull();}expect(result(workout('new',{exercises:[exercise(70,8,{loggingMode:'per_side'})]}),[workout('old')])).toBeNull();});
+ it('requires explicit catalog eligibility for optional/bodyweight/timed/assisted work',()=>{expect(completionRecognition(workout(),[workout('old',{exercises:[exercise(60,7)]})])).toBeNull();expect(completionRecognition(workout(),[workout('old')],{eligible:()=>false})).toBeNull();});
+ it('does not compare a normal log to previous per-side observations',()=>{expect(result(workout(),[workout('old',{exercises:[exercise(60,7,{loggingMode:'per_side'})]})])).toBeNull();});
+ it('ignores self/future observations and uses corrected baseline values',()=>{const current=workout();expect(result(current,[current,workout('future',{completedAt:'2026-10-01T12:00:00Z',exercises:[exercise(60,7)]})])).toBeNull();const old=workout('old');expect(result(current,[old])).toBeNull();old.exercises[0].sets[0].reps=7;expect(result(current,[old]).label).toBe('New rep PR');});
+ it('can use comparable imported prior history without replaying the import',()=>{expect(result(workout(),[workout('old',{historicalImport:{},exercises:[exercise(60,7)]})]).type).toBe('pr');});
+ it('shows only exact sparse count thresholds, de-duplicating and ignoring empty history',()=>{const history=Array.from({length:9},(_,i)=>workout(String(i)));expect(result(workout(),history)).toEqual({type:'milestone',count:10,label:'10 workouts logged'});expect(result(workout(),[...history,history[0],workout('empty',{exercises:[]})]).count).toBe(10);expect(result(workout(),history.slice(1))).toBeNull();});
+ it('prioritizes one record above a milestone without changing history or session',()=>{const history=Array.from({length:9},(_,i)=>workout(String(i),{exercises:[exercise(60,7)]})),current=workout();const before=JSON.stringify({history,current});expect(result(current,history).type).toBe('pr');expect(JSON.stringify({history,current})).toBe(before);expect(result(current,history)).toEqual(result(current,history));});
+});

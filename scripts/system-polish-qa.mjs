@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -64,7 +65,7 @@ for (const [appearance, style, width] of [
   state.profile.themePreference = 'premium';
   const { context, page, errors } = await open(state, { width: 320, height: 640 });
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  await page.getByRole('button', { name: /^Export workout plan/ }).click();
+  await openProfileArea(page, 'program'); await page.getByRole('button', { name: /^Export workout plan/ }).click();
   const sheet = page.locator('.export-sheet');
   await sheet.waitFor();
   await page.waitForTimeout(260);
@@ -80,10 +81,13 @@ for (const [appearance, style, width] of [
   const state = fixture('imported'); state.profile.priorities = ['Balanced'];
   const { context, page, errors } = await open(state);
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  assert.equal(await page.getByText('COACHING PREFERENCES', { exact: true }).count(), 1);
+  await openProfileArea(page, 'training');
+  await page.getByRole('button', { name: /^Training priorities/ }).click();
+  assert.equal(await page.locator('.priority-settings > .eyebrow').getByText('COACHING PREFERENCES', { exact: true }).count(), 1);
   assert.equal(await page.getByText('TRAINING PRIORITIES', { exact: true }).count(), 0);
-  assert.equal(await page.getByText('No priority areas selected.', { exact: true }).count(), 1);
-  assert.equal(await page.getByText('Used by Coach and future generated plans. Changes don’t update this plan.', { exact: true }).count(), 1);
+  assert.equal(await page.getByRole('button',{name:'Balanced',exact:true}).getAttribute('aria-pressed'),'true');
+  assert.equal(await page.getByText('No muscle group gets extra weekly volume.', { exact: true }).count(), 1);
+  assert.equal(await page.getByText(/These guide Coach recommendations and future Rook-generated programs\. Your current plan won’t change automatically\./).count(), 1);
   await page.screenshot({ path: output('390-imported-profile-preferences.png'), fullPage: false });
   assert.deepEqual(errors, []); await context.close();
 }
@@ -92,10 +96,12 @@ for (const [appearance, style, width] of [
   const state = fixture();
   const { context, page, errors } = await open(state, { width: 340, height: 620 });
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  await page.getByRole('button', { name: /^Training environment/ }).click();
-  await page.getByRole('button', { name: 'Home gym' }).click();
-  const footer = page.locator('.profile-setting-footer'); const button = page.getByRole('button', { name: 'SAVE SETUP' });
-  await footer.waitFor(); const [footerBox, viewport] = await Promise.all([footer.boundingBox(), page.evaluate(() => ({ width: innerWidth, height: innerHeight }))]);
+  await openProfileArea(page, 'training');
+  await page.getByRole('button', { name: /^Availability/ }).click();
+  const footer = page.locator('.profile-setting-footer'); const button = page.getByRole('button', { name: 'SAVE AVAILABILITY' });
+  await footer.waitFor();
+  await page.waitForTimeout(260);
+  const [footerBox, viewport] = await Promise.all([footer.boundingBox(), page.evaluate(() => ({ width: innerWidth, height: innerHeight }))]);
   assert.ok(footerBox.x >= 0 && footerBox.x + footerBox.width <= viewport.width + .5, `setup footer fits the narrow viewport: ${JSON.stringify({ footerBox, viewport })}`);
   assert.ok(footerBox.y + footerBox.height <= viewport.height + .5, `setup footer clears the dynamic viewport bottom: ${JSON.stringify({ footerBox, viewport })}`);
   assert.ok((await button.boundingBox()).height >= 48, 'setup action retains its touch target');
@@ -109,7 +115,7 @@ for (const [appearance, style, width] of [
   active.exercises[0].sets[0].completed = true; active.exercises[0].sets[0].weight = null; active.exercises[0].sets[0].reps = 8; state.activeWorkout = active; state = completeWorkout(state);
   const { context, page, errors } = await open(state);
   await page.getByRole('button', { name: 'PROGRESS', exact: true }).click();
-  assert.equal(await page.getByText('THIS WEEK', { exact: true }).count(), 1);
+  assert.equal(await page.getByText('WEEKLY REVIEW', { exact: true }).count(), 1);
   assert.match(await page.locator('.consistency').getAttribute('aria-label'), /planned sessions completed this week$/);
   await page.screenshot({ path: output('390-progress-baseline.png'), fullPage: false });
   assert.deepEqual(errors, []); await context.close();

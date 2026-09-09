@@ -56,7 +56,7 @@ function exerciseOutcome(state, block, day, exercise, workouts) {
   const decision=cohort.length>=2?progressionFor(latest,cohort,baseGym(state).profile):null;
   let status=cohort.length<2?'insufficient':'held',reason=cohort.length<2?'Not enough comparable sessions to recommend a change.':'Keep the exercise and continue the current progression.';
   if(decision?.type==='progress'){status='progressed';reason=decision.detail;}
-  else if(decision?.type==='stalled' || decision?.title==='Review the load' || decision?.title==='Reduce the hold target slightly'){status='review';reason=decision.detail;}
+  else if(decision?.type==='stalled' || decision?.title==='Review the load' || decision?.title==='Review the variation' || decision?.title==='Reduce the hold target slightly'){status='review';reason=decision.detail;}
   const first=cohort[0]?.exercises[0],firstSets=first?working(first):[],lastSets=latest?working(latest):[];
   const allLoads=sets=>sets.length && sets.every(s=>s.weight!=null && Number.isFinite(Number(s.weight)));
   const fromWeight=allLoads(firstSets)?Math.min(...firstSets.map(s=>Number(s.weight))):null;

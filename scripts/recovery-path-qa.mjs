@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -116,17 +117,17 @@ await putPhoto(source.page);
 await source.page.getByRole("button", { name: "PROFILE", exact: true }).click();
 
 // A normal cancellation keeps the user and all local data in place.
-await source.page.getByRole("button", { name: "Log out", exact: true }).click();
-const logoutDialog = source.page.getByRole("alertdialog", { name: "Log out?" });
+await openProfileArea(source.page, 'data'); await source.page.getByRole("button", { name: /^Delete local data/ }).click();
+const logoutDialog = source.page.getByRole("alertdialog", { name: "Delete local data?" });
 await logoutDialog.waitFor();
 assert.match(await logoutDialog.innerText(), /removes your ROOK data.*workout history and photos/is);
 await source.page.screenshot({ path: output("logout-warning.png"), fullPage: true });
 await logoutDialog.getByRole("button", { name: "CANCEL" }).click();
-await source.page.getByText("Training profile", { exact: true }).waitFor();
+await source.page.locator('.profile-subpage-header').getByText('Data & backup', {exact:true}).waitFor();
 assert.equal((await source.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")))).profile.name, "Recovery QA");
 
 // Leaving the backup flow is a cancellation and must return to confirmation, not log out.
-await source.page.getByRole("button", { name: "Log out", exact: true }).click();
+await openProfileArea(source.page, 'data'); await source.page.getByRole("button", { name: /^Delete local data/ }).click();
 await logoutDialog.getByRole("button", { name: "BACK UP FIRST" }).click();
 await source.page.getByRole("heading", { name: "Keep a recovery copy of your training." }).waitFor();
 await source.page.getByRole("button", { name: "Close Back up ROOK" }).click();
@@ -140,7 +141,8 @@ await source.page.evaluate(() => {
   URL.createObjectURL = () => { throw new Error("QA save failure"); };
 });
 await source.page.getByRole("button", { name: "CREATE BACKUP" }).click();
-await source.page.getByText("Backup creation failed. Your ROOK data is unchanged.", { exact: true }).waitFor();
+await source.page.getByRole("button", { name: "SAVE BACKUP", exact: true }).click();
+await source.page.getByText(/Could not start saving your backup/).waitFor();
 assert.equal((await source.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")))).profile.name, "Recovery QA");
 await source.page.evaluate(() => { URL.createObjectURL = window.__rookQaCreateObjectURL; });
 await source.page.getByRole("button", { name: "Close Back up ROOK" }).click();
@@ -150,6 +152,7 @@ await logoutDialog.waitFor();
 await logoutDialog.getByRole("button", { name: "BACK UP FIRST" }).click();
 const downloadPromise = source.page.waitForEvent("download");
 await source.page.getByRole("button", { name: "CREATE BACKUP" }).click();
+await source.page.getByRole("button", { name: "SAVE BACKUP", exact: true }).click();
 const download = await downloadPromise;
 const backupPath = output("recovery-backup.zip");
 await download.saveAs(backupPath);
@@ -157,7 +160,7 @@ await logoutDialog.waitFor();
 assert.equal((await source.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")))).profile.name, "Recovery QA");
 
 // Confirmed logout clears state and private photos, then exposes recovery on landing.
-await logoutDialog.getByRole("button", { name: "LOG OUT AND DELETE DATA" }).click();
+await logoutDialog.getByRole("button", { name: "DELETE LOCAL DATA", exact: true }).click();
 await source.page.getByRole("button", { name: "Restore from backup" }).waitFor();
 assert.equal(await source.page.evaluate(() => localStorage.getItem("lift-v2-state")), null);
 assert.equal(await countPhotos(source.page), 0);
@@ -166,7 +169,7 @@ await source.page.screenshot({ path: output("landing-after-logout.png"), fullPag
 await source.page.getByRole("button", { name: "Restore from backup" }).click();
 await source.page.getByLabel("Choose ROOK backup file").setInputFiles(backupPath);
 await source.page.getByRole("heading", { name: "ROOK backup" }).waitFor();
-await source.page.getByRole("button", { name: "RESTORE BACKUP", exact: true }).click();
+await source.page.getByRole("button", { name: "RESTORE & REPLACE", exact: true }).click();
 await source.page.getByRole("button", { name: "TODAY", exact: true }).waitFor();
 const afterLogoutRestore = await source.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 assert.equal(afterLogoutRestore.profile.name, "Recovery QA");
@@ -206,7 +209,7 @@ assert.equal(await countPhotos(clean.page), 0);
 await clean.page.getByLabel("Choose ROOK backup file").setInputFiles(backupPath);
 await clean.page.getByRole("heading", { name: "ROOK backup" }).waitFor();
 await clean.page.screenshot({ path: output("clean-install-restore-preview.png"), fullPage: true });
-await clean.page.getByRole("button", { name: "RESTORE BACKUP", exact: true }).click();
+await clean.page.getByRole("button", { name: "RESTORE & REPLACE", exact: true }).click();
 await clean.page.getByRole("button", { name: "TODAY", exact: true }).waitFor();
 const restored = await clean.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 assert.equal(restored.profile.name, fixture.profile.name);

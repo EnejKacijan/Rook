@@ -74,10 +74,11 @@ Mystery Flow 3 x 10 reps
     await page.locator(".plan-editor-exercise.needs-review").count(),
     2,
   );
-  const workoutTitle = page.locator(".plan-editor-workout-title").first();
+  const workoutName = page.getByLabel('Mon workout name', { exact: true });
+  const workoutDescriptor = page.getByLabel('Mon workout descriptor', { exact: true });
   const [workoutNameBox, workoutDescriptorBox] = await Promise.all([
-    workoutTitle.locator(":scope > span").boundingBox(),
-    workoutTitle.locator(":scope > small").boundingBox(),
+    workoutName.boundingBox(),
+    workoutDescriptor.boundingBox(),
   ]);
   assert.ok(
     workoutDescriptorBox.y - (workoutNameBox.y + workoutNameBox.height) >= 3,
@@ -182,12 +183,8 @@ Mystery Flow 3 x 10 reps
     .first();
   const chosenName = await balanceChoice.innerText();
   await balanceChoice.click();
-  assert.equal(
-    (await reviewCard.locator(".import-match-confirmation").innerText()).includes(`→ ${chosenName}`),
-    true,
-    "the chosen source-to-destination mapping is explicit before confirmation",
-  );
-  await reviewCard.getByRole("button", { name: "USE THIS MATCH" }).click();
+  assert.equal(await page.getByRole("button", { name: "USE THIS MATCH" }).count(), 0,
+    "selecting a canonical match resolves it without a second confirmation");
   assert.equal(
     await page.getByText("1 exercise needs review", { exact: true }).count(),
     1,
@@ -222,7 +219,7 @@ Mystery Flow 3 x 10 reps
     `completed review follows the final exercise without a large empty gap; got ${Math.round(completedReviewBox.y - (lastResolvedExerciseBox.y + lastResolvedExerciseBox.height))}px`,
   );
   assert.equal(
-    await completedReview.getByText("All imported exercises are ready.", { exact: true }).count(),
+    await completedReview.getByText("Ready to use", { exact: true }).count(),
     1,
     "the bulk review remains as a quiet completion status",
   );
@@ -262,7 +259,10 @@ Mystery Flow 3 x 10 reps
     .locator(".import-review-summary")
     .evaluate((node) => getComputedStyle(node).color);
   assert.notEqual(warningColor, "rgb(0, 0, 0)");
-  await page.screenshot({ path: output("320-dark-resolved.png"), fullPage: true });
+  await unweightedLoadCard.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: output("320-dark-resolved.png"), fullPage: false, animations: "disabled" });
+  await completedReview.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: output("320-dark-resolved-bottom.png"), fullPage: false, animations: "disabled" });
   await page.getByRole("button", { name: "USE THIS PLAN" }).click();
   await page.waitForFunction(() =>
     Boolean(JSON.parse(localStorage.getItem("lift-v2-state"))?.profile?.onboardingComplete),

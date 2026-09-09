@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { verifyLongContent, verifySearchClear } from './post-review-runtime-checks.mjs';
 import { mkdir } from "node:fs/promises";
@@ -96,7 +97,7 @@ async function open(state, width = 390) {
 
 async function openLibrary(run) {
   await run.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await run.page.getByRole("button", { name: /Custom exercises/ }).click();
+  await openProfileArea(run.page, 'training'); await run.page.getByRole("button", { name: /Custom exercises/ }).click();
   await run.page.getByRole("heading", { name: "Exercises that fit your gym." }).waitFor();
   await run.page.waitForTimeout(300);
 }
@@ -134,7 +135,33 @@ async function assertLayout(page, label) {
   await run.page.getByLabel("New exercise alias").fill("Atlantis Incline Press");
   await run.page.getByRole("button", { name: "ADD", exact: true }).click();
   await run.page.getByText("Atlantis Incline Press", { exact: true }).waitFor();
-  await run.page.screenshot({ path: output("04-alias-saved.png"), fullPage: true });
+  const original = await run.page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.equal(original.exerciseAliases.some(alias => alias.alias === 'Atlantis Incline Press'), false, 'ADD stages only');
+  await run.page.getByRole('button', {name:'Remove alias Prime Chest Machine'}).click();
+  await run.page.getByLabel('Exercise name').fill('Prime Edited Press');
+  await run.page.screenshot({ path: output("04-alias-draft.png"), fullPage: true });
+  await run.page.locator('.custom-exercise-editor .detail-header-back').click();
+  await run.page.getByRole('button', {name:/Prime Incline Press/}).click();
+  assert.equal(await run.page.getByLabel('Exercise name').inputValue(), 'Prime Incline Press');
+  assert.equal(await run.page.getByRole('button',{name:'Remove alias Atlantis Incline Press'}).count(),0);
+  assert.equal(await run.page.getByRole('button',{name:'Remove alias Prime Chest Machine'}).count(),1);
+  await run.page.getByLabel('New exercise alias').fill('Atlantis Incline Press');
+  await run.page.getByRole('button',{name:'ADD',exact:true}).click();
+  await run.page.getByRole('button',{name:'Remove alias Prime Chest Machine'}).click();
+  await run.page.getByLabel('Exercise name').fill('Prime Edited Press');
+  await run.page.evaluate(()=>{window.qaSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(){throw Error('QA quota');};});
+  await run.page.getByRole('button',{name:'SAVE DETAILS',exact:true}).click();
+  await run.page.getByRole('alert').waitFor();
+  assert.deepEqual(await run.page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state'))),original,'failed save leaves details and aliases unchanged');
+  await run.page.screenshot({path:output('04-alias-save-failed.png')});
+  await run.page.evaluate(()=>Storage.prototype.setItem=window.qaSetItem);
+  await run.page.getByRole('button',{name:'TRY AGAIN',exact:true}).click();
+  await run.page.getByRole('button',{name:/Prime Edited Press/}).click();
+  const saved=await run.page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.ok(saved.exerciseAliases.some(alias=>alias.alias==='Atlantis Incline Press'&&!alias.deletedAt));
+  assert.ok(saved.exerciseAliases.find(alias=>alias.alias==='Prime Chest Machine').deletedAt);
+  assert.ok(saved.customExercises.some(exercise=>exercise.name==='Prime Edited Press'));
+  await run.page.screenshot({path:output('04-alias-saved.png'),fullPage:true});
   await run.page.getByRole("button", { name: "Delete exercise" }).click();
   await run.page.locator(".custom-delete-confirm").scrollIntoViewIfNeeded();
   await run.page.screenshot({ path: output("05-delete-confirmation.png"), fullPage: false });
@@ -168,7 +195,7 @@ async function assertLayout(page, label) {
 {
   const run = await open(fixture());
   await run.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await run.page.getByRole("button", { name: /Replace plan/ }).click();
+  await openProfileArea(run.page, 'program'); await run.page.getByRole("button", { name: /Replace plan/ }).click();
   await run.page.getByRole("button", { name: /Import from Notes|Import a different plan/ }).click();
   await run.page.getByPlaceholder(/Paste your workout notes/).fill("MONDAY — PUSH\nPrime Chest Machine 3 x 8 reps @ 55 kg");
   await run.page.getByRole("button", { name: "CREATE PREVIEW" }).click();
@@ -182,22 +209,27 @@ async function assertLayout(page, label) {
 {
   const run = await open(fixture());
   await run.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await run.page.getByRole("button", { name: /Replace plan/ }).click();
+  await openProfileArea(run.page, 'program'); await run.page.getByRole("button", { name: /Replace plan/ }).click();
   await run.page.getByRole("button", { name: /Import from Notes|Import a different plan/ }).click();
   await run.page.getByPlaceholder(/Paste your workout notes/).fill("MONDAY — PUSH\nAtlas Converging Press 3 x 8 reps @ 55 kg");
   await run.page.getByRole("button", { name: "CREATE PREVIEW" }).click();
-  const card = run.page.locator(".plan-editor-exercise.needs-review").first();
-  await card.waitFor({ timeout: 10000 });
-  await card.getByRole("button", { name: /CHOOSE EXERCISE/ }).click();
-  await card.getByLabel(/Search replacement/).fill("Machine Chest Press");
-  await verifySearchClear(run.page);
-  await card.getByRole("option", { name: "Machine Chest Press", exact: true }).click();
-  await card.getByText("Remember this match", { exact: true }).click();
-  await card.getByRole("button", { name: "USE THIS MATCH", exact: true }).scrollIntoViewIfNeeded();
-  await run.page.screenshot({ path: output("09-import-remember-match.png"), fullPage: false });
-  await card.getByRole("button", { name: "USE THIS MATCH", exact: true }).click();
+  const card = run.page.locator(".import-decision-content:visible");
+  await card.getByRole('heading', { name: 'Match this exercise', exact: true }).waitFor();
+  await card.getByRole('searchbox', { name: 'Search exercises', exact: true }).fill("Machine Chest Press");
+  await run.page.screenshot({ path: output("09-import-exercise-match.png"), fullPage: false });
+  await card.getByRole("button", { name: "Machine Chest Press", exact: true }).click();
+  await run.page.getByRole('heading', { name: 'Review your plan', exact: true }).waitFor();
+  assert.equal(await run.page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program.source === 'ai-import'), false, 'Matching only updates the import draft');
+  // A separate deliberate apply follows the existing 350 ms match handoff
+  // guard, which prevents the matching tap from also accepting the plan.
+  await run.page.waitForTimeout(400);
+  run.page.once('dialog', async dialog => { assert.match(dialog.message(), /Replace the current program/); await dialog.accept(); });
+  await run.page.getByRole('button', { name: 'USE THIS PLAN', exact: true }).click();
+  await run.page.waitForFunction(() => JSON.parse(localStorage.getItem('lift-v2-state')).program.source === 'ai-import');
   const stored = await run.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
-  assert.equal(stored.exerciseAliases.some((item) => item.alias === "Atlas Converging Press" && !item.deletedAt), true);
+  assert.equal(stored.program.days[0].exercises[0].matchStatus, 'confirmed-match');
+  assert.equal(stored.program.days[0].exercises[0].importedName, 'Machine Chest Press');
+  assert.equal(stored.exerciseAliases.some((item) => item.alias === "Atlas Converging Press" && !item.deletedAt), false, 'A one-off match does not silently create a remembered alias');
   assert.deepEqual(run.errors, []);
   await run.context.close();
 }

@@ -43,9 +43,7 @@ await page.getByRole("combobox", { name: "Age range" }).click();
 await page.getByRole("option", { name: "18–29" }).click();
 await page.getByRole("button", { name: "CONTINUE" }).click();
 await page.getByRole("button", { name: "Build muscle" }).click();
-await page.getByRole("button", { name: "CONTINUE" }).click();
 await page.getByRole("button", { name: /^Beginner/ }).click();
-await page.getByRole("button", { name: "CONTINUE" }).click();
 await page.getByRole("button", { name: "3 days" }).click();
 for (const day of ["Wed", "Thu", "Sun"])
   await page
@@ -63,7 +61,7 @@ for (const priority of ["Chest", "Back"])
 await page.getByRole("button", { name: "CONTINUE" }).click();
 await page.getByRole("button", { name: /Balanced starting point/ }).click();
 await page.getByRole("button", { name: "CONTINUE" }).click();
-await page.getByRole("button", { name: /Have a specific split/i }).click();
+await page.getByRole("button", { name: /I already have a preferred weekly structure/i }).click();
 await page.getByRole("button", { name: "Other", exact: true }).click();
 await page.locator("textarea").first().fill("Upper / Lower");
 await page.getByRole("button", { name: "BUILD MY PLAN" }).click();
@@ -72,7 +70,7 @@ const state = await page.evaluate(() =>
   JSON.parse(localStorage.getItem("lift-v2-state")),
 );
 assert.equal(
-  state.profile.onboardingComplete,
+  state?.profile?.onboardingComplete ?? false,
   false,
   "preview does not save before confirmation",
 );

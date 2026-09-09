@@ -1,8 +1,9 @@
 .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(24px + env(safe-area-inset-top)); padding-left: 24px; padding-right: 24px; }
 .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) { overflow: clip; }
 .onboarding-setup { overflow-anchor: none; }
-.onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 20px; }
-.onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line > span { transition: width 220ms cubic-bezier(.2, 0, 0, 1); }
+.step-progress { display: flex; flex-direction: column; flex: 0 0 auto; }
+.step-progress .progress-line { margin-top: 20px; }
+.step-progress .progress-line > span { transition: width 220ms cubic-bezier(.2, 0, 0, 1); }
 .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 28px 0 18px; animation: onboarding-step-enter 180ms cubic-bezier(.2, 0, 0, 1); }
 
 @keyframes onboarding-step-enter {
@@ -10,8 +11,11 @@
   to { opacity: 1; transform: translateY(0); }
 }
 
-.select-all-check { width: max-content; display: flex; align-items: center; gap: 8px; margin-top: 18px; color: #4e4b47; font-size: 12px; font-weight: 650; cursor: pointer; }
-.select-all-check input { width: 18px; height: 18px; margin: 0; accent-color: #1f6b4c; cursor: pointer; }
+.select-all-check { position: relative; width: max-content; display: flex; align-items: center; gap: 7px; margin-top: 18px; color: #4e4b47; font-size: 12px; font-weight: 650; cursor: pointer; }
+.select-all-check input { position: absolute; width: 1px; height: 1px; margin: 0; opacity: 0; }
+.select-all-check > i { width: 18px; height: 18px; flex: 0 0 18px; display: grid; place-items: center; border: 1px solid var(--rook-control-border, rgba(27,26,25,.18)); border-radius: 6px; background: var(--rook-surface, #fff); color: transparent; font-size: 11px; font-style: normal; font-weight: 800; line-height: 1; }
+.select-all-check input:checked + i { border-color: var(--rook-accent, #1f6b4c); background: var(--rook-accent, #1f6b4c); color: var(--rook-on-accent, #fff); }
+.select-all-check input:focus-visible + i { outline: 3px solid var(--rook-focus-ring-soft, rgba(31,107,76,.35)); outline-offset: 2px; }
 .option-list.day-options { display: flex; flex-direction: row; flex-wrap: wrap; justify-content: center; gap: 6px; margin-top: 12px; overflow-x: clip; }
 .option-list.day-options .onboarding-option { position: relative; width: calc((100% - 18px) / 4); min-width: 48px; min-height: 48px; flex: 0 1 calc((100% - 18px) / 4); padding: 0 17px 0 10px; justify-content: center; border-radius: 12px; transition: transform 120ms cubic-bezier(.2, 0, 0, 1), background-color 180ms cubic-bezier(.2, 0, 0, 1), border-color 180ms cubic-bezier(.2, 0, 0, 1), color 180ms cubic-bezier(.2, 0, 0, 1); }
 .option-list.day-options .onboarding-option:active { transform: scale(.98); }
@@ -61,6 +65,9 @@
   border-radius: 14px;
   background: var(--rook-surface, #fff);
 }
+.personal-fields .profile-sex-field { gap: 0; }
+.profile-sex-field > span { margin-bottom: 7px; }
+.profile-sex-field > .rook-disclosure > .rook-disclosure-content { padding-top: 7px; }
 .personal-fields .profile-sex-options > label {
   position: relative;
   min-height: 44px;
@@ -161,9 +168,10 @@
 .onboarding-group-heading > strong { color: #4e4b47; font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
 .onboarding-group-heading > small { color: #8a8783; font-size: 10px; }
 .onboarding-group-heading .select-all-check { margin: 0; font-size: 11px; }
-.onboarding-group-heading .select-all-check input { width: 16px; height: 16px; }
+.onboarding-group-heading .select-all-check > i { width: 16px; height: 16px; flex-basis: 16px; border-radius: 5px; font-size: 10px; }
 .schedule-frequency .option-list,
-.schedule-duration .option-list { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }
+.schedule-duration .option-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }
+.schedule-duration-note { display: block; margin-top: 8px; color: var(--rook-text-muted, #6f6c68); font-size: 11px; line-height: 1.4; }
 .schedule-frequency .onboarding-option,
 .schedule-duration .onboarding-option { min-height: 50px; padding: 4px 2px; justify-content: center; border-radius: 12px; }
 .schedule-frequency .option-card-copy,
@@ -173,6 +181,8 @@
 .schedule-frequency .option-card-check,
 .schedule-duration .option-card-check { display: none; }
 .schedule-days .day-options { margin-top: 7px; }
+.schedule-days .day-options .onboarding-option:disabled { opacity: 1; cursor: default; }
+.schedule-days .day-options .onboarding-option:disabled:active { transform: none; }
 .schedule-selection-count { display: block; margin-top: 7px; color: #77736e; font-size: 10.5px; }
 .schedule-hint { display: block; margin-top: 6px; color: #8b6440; font-size: 10px; }
 .setup-environment .option-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; margin-top: 0; }
@@ -201,7 +211,13 @@
 
 .onboarding-priorities .option-list { gap: 7px; margin-top: 18px; }
 .onboarding-priorities .onboarding-option { min-height: 52px; padding-block: 8px; }
+.onboarding-priorities .option-card-copy strong { overflow-wrap: anywhere; }
 .onboarding-priorities .physique-review-entry { min-height: 52px; margin-top: 10px; }
+.priority-choice-groups { display: grid; gap: 13px; margin-top: 18px; }
+.priority-choice-group > .eyebrow { display: block; margin: 0 2px; font-size: 8px; }
+.priority-choice-group .option-list { margin-top: 6px; }
+.priority-balanced-option { display: block; }
+.priority-balanced-option .onboarding-option { width: 100%; }
 .priority-selection-summary { margin-top: 10px; padding: 10px 12px; border: 1px solid var(--rook-accent-hairline, rgba(31,107,76,.16)); border-radius: 12px; background: var(--rook-accent-soft, #edf5f1); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .priority-selection-summary strong { color: var(--rook-accent, #1f6b4c); font-size: 11px; }
 .priority-selection-summary small { min-width: 0; color: var(--rook-secondary, #527363); font-size: 10.5px; text-align: right; }
@@ -244,6 +260,9 @@
 .onboarding-preferences .exercise-preference-options .option-card-check { display: none; }
 
 @media (max-height: 760px) {
+  .onboarding.onboarding-priorities { height: 100dvh; min-height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
+  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .onboarding-priorities .onboarding-content::-webkit-scrollbar { display: none; }
   .onboarding-preferences .onboarding-content { padding-top: 12px !important; padding-bottom: 8px !important; }
   .onboarding-preferences .onboarding-content > p { margin-block: 8px; font-size: 12px; }
   .onboarding-preferences h1 { font-size: 27px !important; }
@@ -293,6 +312,9 @@
 .physique-suggestions i { width: 18px; color: inherit; font-size: 13px; font-style: normal; text-align: center; }
 .physique-control-copy { font-size: 11px !important; font-weight: 650; }
 .priority-settings .option-list { margin-top: 22px; }
+.priority-settings .priority-choice-groups { margin-top: 0; }
+.priority-settings .priority-choice-group { margin-top: 0; }
+.priority-settings .priority-choice-group .option-list { margin-top: 6px; }
 .onboarding-option.locked-option { opacity: .43; cursor: not-allowed; }
 .onboarding-option.locked-option:active { transform: none; }
 .priority-settings > .physique-review-entry { margin-bottom: 18px; }
@@ -319,7 +341,7 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line > span { transition-duration: 80ms; }
+  .step-progress .progress-line > span { transition-duration: 80ms; }
   .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { animation: onboarding-step-fade 120ms linear; }
   .option-list.day-options .onboarding-option { transition: background-color 80ms linear, border-color 80ms linear, color 80ms linear; }
   .option-list.day-options .onboarding-option:active { transform: none; }
@@ -331,7 +353,7 @@
 
 @media (max-height: 700px) {
   .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(22px + env(safe-area-inset-top)); padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
-  .onboarding:not(.entry-screen):not(.physique-review-screen) .progress-line { margin-top: 19px; }
+  .step-progress .progress-line { margin-top: 19px; }
   .onboarding:not(.entry-screen):not(.physique-review-screen) .onboarding-content { padding: 25px 0 12px; }
   .onboarding:not(.entry-screen):not(.physique-review-screen) h1 { font-size: 28px; }
   .onboarding:not(.entry-screen):not(.physique-review-screen) .option-list { margin-top: 16px; }
@@ -346,10 +368,14 @@
   .onboarding-goal .goal-plan-preview { margin-top: 7px; padding-block: 8px; }
   .onboarding-goal .onboarding-option { min-height: 54px; }
   .onboarding-priorities .onboarding-content { padding-top: 16px !important; }
-  .onboarding-priorities .option-list { gap: 6px; margin-top: 12px !important; }
+  .onboarding-priorities .priority-choice-groups { gap: 9px; margin-top: 12px; }
+  .onboarding-priorities .priority-choice-group .option-list { gap: 6px; margin-top: 5px !important; }
   .onboarding-priorities .onboarding-option { min-height: 48px; padding-block: 6px; }
   .onboarding-priorities .priority-selection-summary { margin-top: 6px; padding-block: 8px; }
   .onboarding-priorities .physique-review-entry { min-height: 48px; margin-top: 6px; padding-block: 6px; }
+  .onboarding.onboarding-priorities { height: 100dvh; min-height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
+  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
+  .onboarding-priorities .onboarding-content::-webkit-scrollbar { display: none; }
 }
 
 @media (max-height: 640px) {

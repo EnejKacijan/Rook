@@ -115,6 +115,7 @@ assert.equal(await generalStep.getAttribute("aria-pressed"), "false");
 await generalStep.click();
 assert.equal(await generalStep.getAttribute("aria-pressed"), "true");
 assert.equal(await warmup.locator(".warmup-ramp .warmup-check-row.current").count(), 1);
+await page.waitForTimeout(250);
 await page.screenshot({ path: output("00-first-exercise-expanded-dark.png") });
 await page.evaluate(() => {
   const startedAt = performance.now();
@@ -126,6 +127,25 @@ await page.evaluate(() => {
     });
     observer.observe(document.body, { childList: true, subtree: true });
   });
+});
+await page.evaluate(() => {
+  window.__warmupFrames = [];
+  const sample = () => {
+    const node = document.querySelector('.workout-warmup');
+    if (!node) return;
+    if (node.classList.contains('completing')) {
+      const status = node.querySelector('.warmup-complete-status');
+      const details = node.querySelector('.warmup-details');
+      window.__warmupFrames.push({
+        height: node.getBoundingClientRect().height,
+        status: !!status && getComputedStyle(status).opacity === '1',
+        retained: !!details && details.textContent.includes('RAMP-UP'),
+        opacity: getComputedStyle(node).opacity,
+      });
+    }
+    requestAnimationFrame(sample);
+  };
+  requestAnimationFrame(sample);
 });
 await warmup.getByRole("button", { name: "FINISH WARM-UP" }).click();
 await warmup.getByRole("status").getByText("Warm-up complete").waitFor();
@@ -140,12 +160,18 @@ assert.equal(
   "warm-up completion persists before the visual acknowledgment ends",
 );
 assert.equal(
-  await warmup.locator("button").count(),
-  0,
+  await warmup.locator(".warmup-details").evaluate(element => element.inert),
+  true,
   "completion feedback cannot be triggered repeatedly",
 );
 await page.screenshot({ path: output("01-warmup-complete-ack-dark.png") });
+await page.waitForFunction(() => document.querySelector('.workout-warmup')?.classList.contains('dismissing'));
+await page.screenshot({ path: output("01-warmup-mid-collapse-dark.png") });
 await warmup.waitFor({ state: "detached" });
+const frames = await page.evaluate(() => window.__warmupFrames);
+assert.ok(frames.length > 2, 'sample actual completion frames');
+assert.ok(frames.every(frame => frame.status && frame.retained && frame.opacity === '1'), 'visible acknowledgement and checklist remain throughout collapse');
+assert.ok(frames.some(frame => frame.height < frames[0].height - 20), 'height collapses together with retained content');
 const completionDuration = await page.evaluate(() => window.__warmupRemovalDuration);
 assert.ok(completionDuration >= 350, `completion acknowledgment was only ${completionDuration}ms`);
 assert.ok(completionDuration < 900, `completion acknowledgment took ${completionDuration}ms`);
@@ -257,10 +283,10 @@ await reducedPage.evaluate(() => {
   });
 });
 await reducedPage.getByRole("button", { name: "FINISH WARM-UP" }).click();
-await reducedPage.getByRole("status").getByText("Warm-up complete").waitFor();
+assert.equal(await reducedPage.locator(".warmup-complete-status").count(), 0);
 await reducedPage.locator(".workout-warmup").waitFor({ state: "detached" });
 const reducedDuration = await reducedPage.evaluate(() => window.__warmupRemovalDuration);
-assert.ok(reducedDuration >= 100, `reduced-motion acknowledgment was only ${reducedDuration}ms`);
+await reducedPage.screenshot({ path: output("reduced-motion-settled.png") });
 assert.ok(reducedDuration < 400, `reduced-motion acknowledgment took ${reducedDuration}ms`);
 assert.deepEqual(reducedErrors, []);
 await reducedContext.close();

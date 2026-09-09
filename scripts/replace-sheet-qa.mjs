@@ -55,8 +55,8 @@ assert.ok(Math.abs((await page.evaluate(() => window.scrollY)) - originalScroll)
 
 await page.setViewportSize({ width: 390, height: 560 }); await openSheet();
 const firstIds = await page.locator('.choice-row').evaluateAll(nodes => nodes.map(node => node.textContent)); assert.equal(firstIds.length, 3, 'shows three strongest candidates first');
-await page.getByRole('button', { name: 'More suggestions' }).click(); await page.waitForTimeout(750); const expandedCount = await page.locator('.choice-row').count(); assert.ok(expandedCount > 3, `More suggestions exposes another compatible squat (${expandedCount} shown; ${await page.locator('.replacement-secondary').textContent()})`);
-const expanded = await page.locator('.choice-row').evaluateAll(nodes => nodes.map(node => node.textContent)); assert.equal(new Set(expanded).size, expanded.length, `More suggestions adds no duplicates: ${expanded.join(' | ')}`);
+await page.getByRole('button', { name: 'More compatible options' }).click(); await page.waitForTimeout(750); const expandedCount = await page.locator('.choice-row').count(); assert.ok(expandedCount > 3, `More compatible options exposes another compatible squat (${expandedCount} shown; ${await page.locator('.replacement-secondary').textContent()})`);
+const expanded = await page.locator('.choice-row').evaluateAll(nodes => nodes.map(node => node.textContent)); assert.equal(new Set(expanded).size, expanded.length, `More compatible options adds no duplicates: ${expanded.join(' | ')}`);
 assert.equal(await page.locator('.sheet-scroll').evaluate(node => node.scrollHeight > node.clientHeight), true, 'long content scrolls inside the sheet');
 assert.deepEqual(await page.locator('.replace-sheet').evaluate(node => ({
   outer: parseFloat(getComputedStyle(node).paddingBottom),
@@ -65,8 +65,12 @@ assert.deepEqual(await page.locator('.replace-sheet').evaluate(node => ({
 assert.equal(await page.evaluate(() => document.body.style.position), 'fixed', 'underlying workout stays locked during internal scroll');
 await page.screenshot({ path: output('390-more-suggestions-short-height.png'), fullPage: false });
 
-await page.getByRole('button', { name: 'Choose another exercise' }).click(); const search = page.getByRole('searchbox', { name: 'Search all available exercises' });
+await page.getByRole('button', { name: 'Search all exercises' }).click(); const search = page.getByRole('searchbox', { name: 'Search all available exercises' });
 assert.equal(await search.evaluate(node => document.activeElement === node), false, 'full-catalog picker does not summon the keyboard when opened');
+await page.getByRole('button', {name:'‹ Compatible options',exact:true}).click();
+assert.equal(await page.locator('.choice-row').count(),expandedCount,'back restores compatible options');
+await page.getByRole('button',{name:'Search all exercises',exact:true}).click();
+assert.match(await page.locator('.sheet-scroll').innerText(),/Choose any exercise available with your equipment\. Training restrictions still apply\./);
 await search.fill(explicitOverride.name);
 const explicitChoice = page.locator('.picker-results .choice-row').filter({ has: page.getByText(explicitOverride.name, { exact: true }) });
 assert.equal(await explicitChoice.count(), 1, 'explicit picker searches the full allowed catalog');

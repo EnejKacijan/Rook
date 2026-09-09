@@ -391,7 +391,8 @@ export function weeklyPerformanceReview(
     : null;
   const inRange = date => date >= range.start && date <= range.end;
   const planned = Math.max(0, (Number(state?.program?.days?.length) || 0) + flexible.filter(r => !r.skipped && !inRange(r.originalDate) && inRange(r.scheduledDate)).length - flexible.filter(r => !r.skipped && inRange(r.originalDate) && !inRange(r.scheduledDate)).length);
-  const completed = inWeek.length;
+  const freestyleCompleted = inWeek.filter(workout => workout.source === 'freestyle').length;
+  const completed = inWeek.length - freestyleCompleted;
   const completedSets = inWeek.reduce(
     (total, workout) => total + completedWorkingSets(workout),
     0,
@@ -399,6 +400,7 @@ export function weeklyPerformanceReview(
   const summary = [];
   if (!planned && !completed) summary.push("No sessions planned this week.");
   else summary.push(`${completed} of ${planned} sessions completed.`);
+  if (freestyleCompleted) summary.push(`${freestyleCompleted} freestyle ${freestyleCompleted === 1 ? 'workout' : 'workouts'} logged separately.`);
   if (progress.progressed)
     summary.push(
       `${progress.progressed} ${progress.progressed === 1 ? "exercise" : "exercises"} progressed.`,
@@ -427,6 +429,7 @@ export function weeklyPerformanceReview(
     ...range,
     planned,
     completed,
+    freestyleCompleted,
     adjusted,
     moved,
     completedSets,
@@ -437,7 +440,7 @@ export function weeklyPerformanceReview(
     prEvents: events,
     blockContext,
     summary,
-    empty: completed === 0 && events.length === 0,
+    empty: inWeek.length === 0 && events.length === 0,
     partial: completed > 0 && planned > completed,
   };
 }

@@ -1,9 +1,15 @@
 import { useLayoutEffect, useRef, useState } from 'react';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import { isoDay, saveState, weekKey, weekday } from './domain.js';
 import { addCalendarDays, applyFlexibleWeek, flexibleSessions, flexibleWeekConflict, proposeFlexibleWeek } from './flexibleWeek.js';
 
 const dateLabel = date => new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+export function missedSessionDestinations(state, sessionId, today=isoDay()) {
+  const item=flexibleSessions(state,today).find(s=>s.logicalSessionId===sessionId);
+  if(!item || item.status!=='missed')return [];
+  return Array.from({length:14},(_,i)=>addCalendarDays(today,i)).filter(toDate=>toDate!==item.scheduledDate && proposeFlexibleWeek(state,{mode:'move',sessionId,toDate},today).status==='ready');
+}
 export function FlexibleWeekSheet({ state, update, close, Header, request = {} }) {
   const today = isoDay(), sessions = flexibleSessions(state, today);
   const [steps, setSteps] = useState(request.sessionId ? ['mode', 'destination'] : ['mode']);
@@ -21,6 +27,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
   const availabilityChanged = available.length !== baseline.length || available.some(date => !baseline.includes(date));
   const [proposal, setProposal] = useState(null);
   const [error, setError] = useState('');
+  const [persistenceFailed, setPersistenceFailed] = useState(false);
   const [adaptationChoice, setAdaptationChoice] = useState('restore');
   const applied = useRef(false);
   const screenRef = useRef(null);
@@ -28,6 +35,10 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
   useSheetBack(screenRef, step, steps.at(-2), goBack);
   useLayoutEffect(() => { if (screenRef.current) screenRef.current.scrollTop = 0; }, [step]);
   const item = sessions.find(s => s.logicalSessionId === sessionId);
+  const missedDestination = step==='destination' && item?.status==='missed';
+  const validDates = missedDestination ? missedSessionDestinations(state,sessionId,today) : [];
+  const dateWeeks = [...new Set(validDates.filter(date=>date!==today).map(date=>weekKey(date)))];
+  const occupiedToday = sessions.find(s=>s.logicalSessionId!==sessionId && s.scheduledDate===today && s.status!=='skipped');
   const candidates = sessions.filter(s => ['planned', 'missed', 'optional'].includes(s.status) && s.scheduledDate <= addCalendarDays(today, 13));
   const hasMissed = candidates.some(s => s.status === 'missed');
   const review = action => {
@@ -38,12 +49,13 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
   };
   const apply = () => {
     if (applied.current) return;
+    setPersistenceFailed(false);
     const result = applyFlexibleWeek(state, proposal, { adaptationChoice });
     if (result.status !== 'applied') { setError(result.error); return; }
-    if (!saveState(result.state)) { setError('ROOK couldn’t save the schedule. Your previous schedule is unchanged. Try again.'); return; }
+    if (!saveState(result.state)) { setPersistenceFailed(true); setError('ROOK couldn’t save the schedule. Your previous schedule is unchanged. Try again.'); return; }
     applied.current = true; update(() => result.state); close();
   };
-  return <main ref={screenRef} className="screen detail-screen flexible-week-sheet">
+  return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}`}>
     <Header title="Adjust week" onClose={close} onBack={steps.length > 1 ? goBack : undefined} />
     <p className="eyebrow">TEMPORARY SCHEDULE</p>
     {step === 'mode' && <>
@@ -64,11 +76,17 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
     </>}
     {step === 'destination' && item && <>
       <h1>Move {item.workout.name}</h1><p>Currently {dateLabel(item.scheduledDate)}. Choose a new date.</p>
-      <button className="text-button" onClick={() => review({ mode: 'move', sessionId, toDate: today })}>Move to today</button>
+      {missedDestination ? <>
+        {occupiedToday && <p className="sheet-footnote">Today already has {occupiedToday.workout.name}. Choose another date.</p>}
+        {validDates.includes(today) && <button className="text-button" data-move-date={today} onClick={()=>review({mode:'move',sessionId,toDate:today})}>Move to today</button>}
+        {dateWeeks.length>0 && <p className="eyebrow">AVAILABLE DATES</p>}
+        {dateWeeks.map(week=><section key={week} className="missed-date-group"><h2>{week===weekKey(today)?'This week':week===addCalendarDays(weekKey(today),7)?'Next week':`Week of ${dateLabel(week)}`}</h2><div className="flexible-week-dates">{validDates.filter(date=>date!==today && weekKey(date)===week).map(date=><button key={date} data-move-date={date} onClick={()=>review({mode:'move',sessionId,toDate:date})}>{dateLabel(date)}</button>)}</div></section>)}
+        {!validDates.length && <p>No available dates in the next 14 days. Adjust the remaining week or skip this session.</p>}
+      </> : <><button className="text-button" onClick={() => review({ mode: 'move', sessionId, toDate: today })}>Move to today</button>
       <div className="flexible-week-dates">{Array.from({ length: 14 }, (_, i) => addCalendarDays(today, i)).map(d => {
         const occupied = sessions.some(s => s.logicalSessionId !== sessionId && s.scheduledDate === d && s.status !== 'skipped');
         return <button key={d} disabled={occupied || d === item.scheduledDate} aria-label={`${dateLabel(d)}${occupied ? ', another workout scheduled' : ''}`} onClick={() => review({ mode: 'move', sessionId, toDate: d })}>{dateLabel(d)}</button>;
-      })}</div>
+      })}</div></>}
       <button className="text-button" onClick={() => setStep('available')}>Adjust remaining week</button>
       <button className="text-button" onClick={() => review({ mode: 'skip', sessionId })}>Skip this session</button>
     </>}
@@ -87,12 +105,11 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
     {step === 'availability-result' && availabilityResult && <>
       <h1>{availabilityResult.status === 'no-change' ? 'Your schedule fits' : availabilityResult.status === 'insufficient-capacity' ? 'More training days needed' : 'Review these dates'}</h1>
       <p role="status">{availabilityResult.message || availabilityResult.error}</p>
-      {availabilityResult.status === 'insufficient-capacity' && <div className="flexible-week-conflict-actions">
-        {!expandedAvailability && <button className="text-button" onClick={() => { setExpandedAvailability(true); setStep('available'); }}>SHOW MORE DATES</button>}
-        <button className="text-button" onClick={() => setStep('pick')}>Choose a session to skip</button>
+      {availabilityResult.status === 'insufficient-capacity' && !expandedAvailability && <div className="flexible-week-conflict-actions">
+        <button className="text-button" onClick={() => { setExpandedAvailability(true); setStep('available'); }}>SHOW MORE DATES</button>
       </div>}
       <button className="button secondary" onClick={() => setStep('available')}>EDIT DAYS</button>
-      <button className="button quiet" onClick={close}>DONE</button>
+      <button className="button quiet" onClick={close}>{availabilityResult.status === 'no-change' ? 'DONE' : 'CANCEL'}</button>
     </>}
     {step === 'review' && proposal && <>
       <h1>{proposal.request.mode === 'restore' ? 'Restore the schedule?' : 'Review your schedule'}</h1>
@@ -102,8 +119,8 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
       {proposal.changes.length > 0 && <p className="sheet-footnote">All other sessions keep their dates.{proposal.rejoinDate && ` Normal schedule resumes ${dateLabel(proposal.rejoinDate)}.`}</p>}
       {proposal.warnings.map(w => <p className="sheet-footnote" key={w}>{w}</p>)}
       {proposal.adaptationConflict && (proposal.request.mode === 'skip' ? <p className="sheet-footnote">Skipping also clears this session’s today-only adjustment.</p> : <fieldset className="flexible-adjustment-choice"><legend>This workout has a today-only adjustment.</legend>{[['restore', 'Restore original workout'], ['keep', 'Keep adjusted workout']].map(([value, label]) => <label key={value}><input type="radio" name="move-adjustment" checked={adaptationChoice === value} onChange={() => setAdaptationChoice(value)} />{label}</label>)}</fieldset>)}
-      <div className="flexible-week-footer"><button className="button primary" onClick={apply}>USE THIS SCHEDULE</button><button className="button quiet" onClick={close}>CANCEL</button></div>
+      <SheetActionFooter className="flexible-week-footer">{error && <p role="alert" className="flexible-week-error">{error}</p>}<button className="button primary" onClick={apply}>{error && persistenceFailed ? 'TRY AGAIN' : 'USE THIS SCHEDULE'}</button><button className="button quiet" onClick={close}>CANCEL</button></SheetActionFooter>
     </>}
-    {error && <p role="alert" className="flexible-week-error">{error}</p>}
+    {error && step !== 'review' && <p role="alert" className="flexible-week-error">{error}</p>}
   </main>;
 }

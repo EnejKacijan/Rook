@@ -14,7 +14,7 @@ for (const width of [320, 390, 430]) for (const style of ['standard', 'premium']
   state.program = buildProgram(state.profile);
   state.selectedDay = today; state.selectedDate = isoDay(); state.ai.planUpgradeDismissed = true;
   state.activeWorkout = startWorkout(state, state.program.days.find(d => d.weekday === today));
-  const context = await browser.newContext({ viewport: { width, height: 844 }, colorScheme: appearance, serviceWorkers: 'block' });
+  const context = await browser.newContext({ viewport: { width, height: 844 }, hasTouch: true, colorScheme: appearance, serviceWorkers: 'block' });
   await context.addInitScript(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), state);
   const page = await context.newPage();
   await page.route('**/api/**', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"available":false}' }));
@@ -35,13 +35,14 @@ for (const width of [320, 390, 430]) for (const style of ['standard', 'premium']
   });
   assert.ok(centeringError <= 1, `RIR must center over its input (1px row-border tolerance): ${centeringError}px`);
   assert.ok(Math.max(...current.labels.map(r => r[1])) - Math.min(...current.labels.map(r => r[1])) <= .5, JSON.stringify(current.labels));
-  assert.deepEqual(current.trigger.slice(2), [44, 44]);
+  assert.deepEqual(current.trigger, current.icon, 'native button bounds must equal the visible circle');
   assert.deepEqual(current.icon.slice(2), [18, 18]);
-  const legacy = await page.addStyleTag({ content: `.set-labels.with-rir > span:not(.set-label-help) { height:auto; padding-block-start:0; display:block; transform:translateY(18px); } .set-labels.with-rir .set-load-heading {display:flex!important} .set-labels.with-rir .set-label-help > .help-popover {height:auto;padding-block-start:0;line-height:1;} .set-labels.with-rir .help-popover-term {line-height:inherit;} .set-labels.with-rir .set-label-help :is(.help-popover-term,.help-popover-mark){transform:translateY(16px);}` });
+  const legacy = await page.addStyleTag({ content: `.set-label-help {height:44px} .set-labels.with-rir > span:not(.set-label-help), .set-labels.with-rir .set-label-help > .help-popover {height:44px;padding-block-start:36px}` });
   const before = await measure();
-  assert.deepEqual(current.controls, before.controls, 'set rows unchanged');
-  assert.deepEqual(current.row, before.row, 'header dimensions unchanged');
-  assert.deepEqual(current.labels.slice(0, 2), before.labels.slice(0, 2), 'KG and REPS unchanged');
+  assert.deepEqual(current.controls.map(r => [r[0], r[2], r[3]]), before.controls.map(r => [r[0], r[2], r[3]]), 'set row widths and heights unchanged');
+  assert.ok(current.controls.every((r, i) => Math.abs(before.controls[i][1] - r[1] - 16) < .5), 'only the gap above the table shrinks by 16px');
+  assert.deepEqual(current.labels.map(r => r[0]), before.labels.map(r => r[0]), 'column horizontal alignment unchanged');
+  assert.ok(current.labels.every((r, i) => Math.abs(before.labels[i][1] - r[1] - 16) < .5), 'all labels move up together by 16px');
   await legacy.evaluate(el => el.remove());
   await page.screenshot({ path: fileURLToPath(new URL(`${width}-${style}-${appearance}.png`, output)) });
   await page.evaluate(y => {
@@ -50,9 +51,29 @@ for (const width of [320, 390, 430]) for (const style of ['standard', 'premium']
     document.body.append(guide);
   }, current.labels[0][1]);
   await page.screenshot({ path: fileURLToPath(new URL(`${width}-${style}-${appearance}-guide.png`, output)) });
-  await page.getByRole('button', { name: 'What is RIR?', exact: true }).click();
+  const help = page.getByRole('button', { name: 'What is RIR?', exact: true });
+  const [x,y,w,h] = current.icon;
+  for (const [px,py] of [[x-2,y+h/2],[x+w+2,y+h/2],[x+w/2,y-2],[x+w/2,y+h+2]]) {
+    await page.mouse.click(px,py);
+    assert.equal(await page.getByRole('tooltip').count(),0,'outside the visible mark must not open help');
+    await page.touchscreen.tap(px,py);
+    assert.equal(await page.getByRole('tooltip').count(),0,'touch outside the circle must not open help');
+  }
+  await page.locator('.set-label-help .help-popover-term').click();
+  assert.equal(await page.getByRole('tooltip').count(),0);
+  await help.locator('.help-popover-mark').click();
+  await page.getByRole('tooltip').waitFor();
+  await page.keyboard.press('Escape');
+  await page.touchscreen.tap(x+w/2,y+h/2);
+  await page.getByRole('tooltip').waitFor();
+  await page.keyboard.press('Escape');
+  await help.focus();
+  await page.keyboard.press('Enter');
+  await page.getByRole('tooltip').waitFor();
+  await page.keyboard.press('Escape');
+  await page.keyboard.press('Space');
   await page.getByRole('tooltip').waitFor();
   await context.close();
 }
 await browser.close();
-console.log('12 header alignment cases passed: text centers, unchanged horizontal layout/header/set rows, 44px help target, 18px icon and tooltip.');
+console.log('12 header cases passed: unchanged geometry, 18px mark-only pointer target, surrounding taps ignored, keyboard Enter/Space and Escape preserved.');

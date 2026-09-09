@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -24,15 +25,13 @@ await page.evaluate(() => {
   new MutationObserver(record).observe(document.body, { subtree: true, childList: true, characterData: true });
 });
 await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-await page.getByRole('button', { name: 'Replace plan' }).click();
+await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click();
 await page.getByRole('button', { name: /Build a personalized plan/ }).click();
 await page.getByRole('button', { name: 'BUILD NEW PLAN' }).click();
-await page.getByRole('heading', { name: 'Building your training week…' }).waitFor();
-await page.waitForTimeout(180);
-await page.screenshot({ path: output('390-building.png'), fullPage: false });
+
 await page.getByRole('heading', { name: 'Your week is ready.' }).waitFor();
 const stages = await page.evaluate(() => window.__generationStages);
-assert.deepEqual(stages, ['Building your training week…'], 'local generation uses one stable, honest loading state');
+assert.deepEqual(stages, [], 'fast local generation does not flash a loading surface');
 assert.equal(await page.getByText(/Step \d of 4/).count(), 0, 'the fast local build does not simulate numbered progress');
 assert.equal(aiPlanRequests, 0, 'building a normal plan never requires an AI request');
 assert.equal(await page.locator('.building-overlay').count(), 0, 'loading overlay leaves when the preview is ready');

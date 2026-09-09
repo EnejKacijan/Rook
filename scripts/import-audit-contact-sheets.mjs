@@ -1,0 +1,8 @@
+import {readFile} from 'node:fs/promises';
+import {chromium} from 'playwright-core';
+const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+try{for(const style of ['standard','premium'])for(const appearance of ['light','dark']){
+ const files=[['Entry 390',`import-entry/390-844-${style}-${appearance}-empty.png`],['Entry 320',`import-entry/320-844-${style}-${appearance}-pasted.png`],['Choice 320',`import-decisions/320-${style}-${appearance}-02-selected.png`],['Reps 390',`import-decisions/390-${style}-${appearance}-04-validation.png`],['Match 320',`import-decisions/320-${style}-${appearance}-06-final-blocker.png`],['Advanced 320',`import-ui-audit/320-${style}-${appearance}-Reviewed-set-method.png`],['Review 390',`import-decisions/390-${style}-${appearance}-07-review.png`],['Review scroll 320',`import-ui-audit/320-${style}-${appearance}-review-bottom.png`]];
+ const cards=await Promise.all(files.map(async([label,path])=>`<figure><figcaption>${label}</figcaption><img src="data:image/png;base64,${(await readFile(`artifacts/${path}`)).toString('base64')}"></figure>`));
+ const page=await browser.newPage({viewport:{width:1040,height:1500}});await page.setContent(`<style>body{margin:0;background:#ddd;font:14px Arial}h1{font-size:18px;margin:12px}main{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:8px}figure{margin:0;background:white}figcaption{padding:8px}img{display:block;width:100%}</style><h1>ROOK — ${style} ${appearance} — actual app screenshots</h1><main>${cards.join('')}</main>`);await page.screenshot({path:`artifacts/import-ui-audit/overview-${style}-${appearance}.png`,fullPage:true});await page.close();
+}}finally{await browser.close();}

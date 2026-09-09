@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -33,7 +34,7 @@ function activeFixture() {
 }
 
 async function openWorkout(state = activeFixture(), width = 390) {
-  const context = await browser.newContext({ viewport: { width, height: 844 } });
+  const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'no-preference' });
   await context.addInitScript(value => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem('lift-v2-state', JSON.stringify(value)); }, state);
   const page = await context.newPage();
   const errors = [];
@@ -55,7 +56,7 @@ async function skipRest(page) {
 }
 
 async function completeCurrentExercise(page) {
-  while (await page.getByRole('button', { name: /^Complete set / }).count()) {
+  while (await page.getByRole('button', { name: /^Log set / }).count()) {
     const activeRow = page.locator('.set-row.set-active').first();
     const activeCheck = activeRow.locator('button.check');
     if (await activeCheck.isDisabled()) {
@@ -77,8 +78,8 @@ async function completeCurrentExercise(page) {
   const { context, page, errors } = await openWorkout(state, 320);
   assert.match(await page.locator('.workout-header small').innerText(), /0 \/ 1 set · \d{2}:\d{2}/);
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('135');
-  await page.getByRole('button', { name: 'Complete set 1' }).click();
-  assert.equal(await page.getByRole('button', { name: 'Reopen set 1' }).textContent(), '✓', 'only a completed set receives the checkmark');
+  await page.getByRole('button', { name: 'Log set 1' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Undo logged set 1' }).textContent(), '✓', 'only a completed set receives the checkmark');
   await skipRest(page);
   assert.match(await page.locator('.workout-header small').innerText(), /1 \/ 1 set · \d{2}:\d{2}/);
   assert.equal(await page.locator('.set-row').count(), 1, 'completing a one-set exercise does not add a set implicitly');
@@ -100,14 +101,14 @@ async function completeCurrentExercise(page) {
   const labels = await page.locator('.set-labels').boundingBox();
   assert.ok(labels.y - (heading.y + heading.height) <= 35, 'set controls sit close to exercise metadata');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).getAttribute('placeholder'), 'Enter weight');
-  assert.equal(await page.getByRole('button', { name: 'Complete set 1' }).isDisabled(), true);
-  assert.equal(await page.getByRole('button', { name: 'Complete set 2' }).isDisabled(), true);
-  assert.equal(await page.getByRole('button', { name: 'Complete set 3' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Log set 1' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isDisabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Log set 3' }).isDisabled(), true);
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('secondary')), true, 'Next Exercise stays secondary while prescribed sets are incomplete');
 
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
-  assert.equal(await page.getByRole('button', { name: 'Complete set 1' }).isEnabled(), true);
-  assert.equal(await page.getByRole('button', { name: 'Complete set 1' }).textContent(), '', 'a ready but incomplete set does not show a checkmark');
+  assert.equal(await page.getByRole('button', { name: 'Log set 1' }).isEnabled(), true);
+  assert.equal((await page.getByRole('button', { name: 'Log set 1' }).textContent()).trim(), '✓', 'a ready set keeps the approved visible completion affordance');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).inputValue(), '20', 'first entered load fills the next empty set');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '20', 'first entered load fills every remaining empty set');
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('22.5');
@@ -116,9 +117,9 @@ async function completeCurrentExercise(page) {
   await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).fill('17.5');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '22.5', 'editing an individual set does not overwrite another set');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '17.5', 'an auto-filled later set follows the newly customized previous set');
-  await page.getByRole('button', { name: 'Complete set 1' }).click();
-  assert.equal(await page.getByRole('button', { name: 'Complete set 2' }).isEnabled(), true);
-  assert.equal(await page.getByRole('button', { name: 'Complete set 3' }).isDisabled(), true);
+  await page.getByRole('button', { name: 'Log set 1' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Log set 3' }).isDisabled(), true);
   assert.equal(await page.locator('.rest-timer').isVisible(), true);
   await snap(page, 'after-set-1');
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('25');
@@ -129,12 +130,12 @@ async function completeCurrentExercise(page) {
   await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
   assert.equal(await page.locator('.workout-warmup-toggle small').innerText(), `For ${activeExerciseName}`, 'reload cannot restore a stale cached warm-up target name');
   assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '25');
-  assert.equal(await page.getByRole('button', { name: 'Complete set 2' }).isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isEnabled(), true);
   assert.equal(await page.locator('.rest-timer').isVisible(), true, 'active rest timer survives reload');
-  await page.getByRole('button', { name: 'Reopen set 1' }).click();
-  assert.equal(await page.getByRole('button', { name: 'Complete set 1' }).isEnabled(), true);
-  assert.equal(await page.getByRole('button', { name: 'Complete set 2' }).isDisabled(), true);
-  await page.getByRole('button', { name: 'Complete set 1' }).click();
+  await page.getByRole('button', { name: 'Undo logged set 1' }).click();
+  assert.equal(await page.getByRole('button', { name: 'Log set 1' }).isEnabled(), true);
+  assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isDisabled(), true);
+  await page.getByRole('button', { name: 'Log set 1' }).click();
   await skipRest(page);
 
   await page.getByRole('button', { name: '+ ADD SET' }).click();
@@ -168,16 +169,9 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.locator('.up-next').textContent().then(text => text.includes('Single-Arm Incline Dumbbell Bench Press')), false);
   const completedExerciseName = await page.locator('.exercise-heading h1').textContent();
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
-  const completionAcknowledgement = page.getByRole('button', { name: 'Exercise complete' });
-  await completionAcknowledgement.waitFor();
-  assert.equal(await completionAcknowledgement.locator('.exercise-complete-check').count(), 1, 'completed navigation replaces the fixed button label with one minimal check');
-  assert.equal(await completionAcknowledgement.evaluate((button) => button.disabled), false, 'the acknowledgement keeps the completed button paint instead of disabled styling');
-  assert.equal(await completionAcknowledgement.evaluate((button) => getComputedStyle(button).opacity), '1', 'the acknowledgement stays fully opaque');
-  assert.equal(await completionAcknowledgement.locator('path').evaluate((path) => getComputedStyle(path).animationName), 'rook-exercise-complete-check', 'the check draws once inside the button');
-  assert.equal(await page.locator('.exercise-heading h1').textContent(), completedExerciseName, 'the completed exercise remains in place while the check is acknowledged');
-  assert.equal(await page.evaluate(() => document.getAnimations().some((animation) => String(animation.animationName || '').startsWith('rook-exercise-panel-'))), false, 'exercise content has no panel transition or fade');
-  await snap(page, 'exercise-complete-acknowledgement');
   await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent === name, nextName);
+  assert.notEqual(await page.locator('.exercise-heading h1').textContent(), completedExerciseName, 'completed navigation reaches the next exercise');
+  assert.equal(await page.evaluate(() => document.getAnimations().some((animation) => String(animation.animationName || '').startsWith('rook-exercise-panel-'))), false, 'exercise content has no panel transition or fade');
   assert.equal(await page.getByRole('dialog').count(), 0);
   assert.equal(await page.locator('.exercise-heading h1').textContent(), nextName);
   assert.match(await page.locator('[role="status"].visually-hidden').first().textContent(), new RegExp(`Exercise complete\\. Next: ${nextName}`), 'assistive technology receives the completion and next-exercise announcement');
@@ -338,8 +332,8 @@ async function completeCurrentExercise(page) {
   await page.getByText('Photo saved with this workout.', { exact: true }).waitFor();
   await page.getByRole('button', { name: 'Close workout details', exact: true }).click();
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  await page.getByRole('button', { name: 'Log out', exact: true }).click();
-  await page.getByRole('button', { name: 'LOG OUT AND DELETE DATA', exact: true }).click();
+  await openProfileArea(page, 'data'); await page.getByRole('button', { name: /^Delete local data/ }).click();
+  await page.getByRole('button', { name: 'DELETE LOCAL DATA', exact: true }).click();
   await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).waitFor();
   const mediaAfterLogout = await page.evaluate(() => new Promise((resolve, reject) => {
     const request = indexedDB.open('rook-workout-media');
@@ -361,7 +355,7 @@ async function completeCurrentExercise(page) {
 {
   const { context, page, errors } = await openWorkout();
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
-  await page.getByRole('button', { name: 'Complete set 1' }).click();
+  await page.getByRole('button', { name: 'Log set 1' }).click();
   const originalId = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises[0].id);
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
   await page.getByRole('dialog').waitFor();
@@ -407,7 +401,7 @@ async function completeCurrentExercise(page) {
 {
   const { context, page, errors } = await openWorkout();
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
-  await page.getByRole('button', { name: 'Complete set 1' }).click();
+  await page.getByRole('button', { name: 'Log set 1' }).click();
   await skipRest(page);
   const planned = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises.flatMap(item => item.sets).length);
   await page.getByRole('button', { name: 'Finish', exact: true }).click();

@@ -1,3 +1,4 @@
+import { openAdjustWeek } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,7 @@ for (const width of [320,390,430]) for (const appearance of ['light','dark']) fo
   const plan = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program);
   const shot = async name => { await page.waitForTimeout(350); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: fileURLToPath(new URL(`${width}-${style}-${appearance}-${name}.png`,out)) }); };
   await shot('01-today');
-  await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();
+  await openAdjustWeek(page);
   await shot('02-menu');
   await page.getByRole('button',{name:/Move a workout Choose/}).click();
   await shot('03-picker');
@@ -40,12 +41,12 @@ for (const width of [320,390,430]) for (const appearance of ['light','dark']) fo
   assert.deepEqual(saved.program, plan, 'plan unchanged');
   assert.equal(Object.keys(saved.flexibleWeek.sessions).length,1);
   await context.setOffline(true);
-  await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();
+  await openAdjustWeek(page);
   await page.getByRole('button', { name: 'Close Adjust week', exact: true }).click();
   await context.setOffline(false);
   await page.reload({waitUntil:'networkidle'});
   assert.deepEqual((await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')))).flexibleWeek, saved.flexibleWeek);
-  await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();
+  await openAdjustWeek(page);
   await page.getByRole('button',{name:'Restore original schedule',exact:true}).click();
   await shot('08-restore');
   await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).click();

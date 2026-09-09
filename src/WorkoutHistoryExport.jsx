@@ -1,4 +1,5 @@
 import { useRef, useState, useEffect } from 'react';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { completedExportWorkouts, createWorkoutHistoryExport, presentHistoryExport } from './workoutHistoryExport.js';
 import './workoutHistoryExport.css';
 
@@ -32,7 +33,7 @@ export function WorkoutHistoryExport({state,close,SheetHeader,Button}) {
     <label className="history-export-notes"><span><strong>Include notes</strong><small>{notes?'Session and exercise notes will be included.':'Session and exercise notes are excluded.'}</small></span><input type="checkbox" checked={notes} disabled={busy} onChange={e=>{setNotes(e.target.checked);reset();}}/></label>
     <p className="history-export-explanation">Weights use stored kg values. Photos are not included. Nothing is uploaded by ROOK.</p>
     {!count&&<p>No completed workouts yet. You can still export an empty file.</p>}
-    <div aria-live="polite" className="history-export-status">{busy?<p><span className="restriction-spinner" aria-hidden="true"/> Preparing your file…</p>:message&&<p role={error?'alert':undefined}>{message}</p>}</div>
-    <Button disabled={busy} onClick={run}>{busy?'PREPARING…':file?'SHARE / DOWNLOAD':'EXPORT'}</Button>
+    <div aria-live="polite" className="history-export-status">{busy?<p><span className="restriction-spinner" aria-hidden="true"/> {file?'Opening share / download…':'Preparing your file…'}</p>:message&&<p role={error?'alert':undefined}>{message}</p>}</div>
+    <SheetActionFooter><Button disabled={busy} onClick={run}>{busy?(file?'OPENING…':'PREPARING…'):file?'SHARE / DOWNLOAD':'PREPARE EXPORT'}</Button></SheetActionFooter>
   </main>;
 }

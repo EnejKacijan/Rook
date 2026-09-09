@@ -7,27 +7,14 @@ import {
   estimateSessionMinutes,
   exerciseCatalog,
   isoDay,
+  ROOK_ADAPTED_ILLUSTRATIONS,
+  ROOK_ORIGINAL_ILLUSTRATIONS,
   weekday,
 } from "../src/domain.js";
 
 const exerciseIds = [
-  "incline-machine-press",
-  "machine-high-row",
-  "bodyweight-split-squat",
-  "reverse-lunge",
-  "barbell-curl",
-  "band-chest-press",
-  "band-fly",
-  "band-overhead-press",
-  "band-leg-curl",
-  "band-curl",
-  "band-triceps-pressdown",
-  "dumbbell-calf-raise",
-  "broad-jump",
-  "single-arm-cable-lat-pulldown",
-  "pendulum-squat",
-  "single-leg-leg-press",
-  "preacher-curl",
+  ...Object.keys(ROOK_ORIGINAL_ILLUSTRATIONS),
+  ...Object.keys(ROOK_ADAPTED_ILLUSTRATIONS),
 ];
 const exerciseGroups = [exerciseIds.slice(0, 9), exerciseIds.slice(9)];
 const artifacts = new URL("../artifacts/generated-plan-art/", import.meta.url);

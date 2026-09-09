@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -19,7 +20,7 @@ async function openApp(state, viewport = { width: 390, height: 520 }) {
   return { context, page };
 }
 
-async function verifyScroller(page, locator, label) {
+async function verifyScroller(page, locator, label, terminalPadding = 20) {
   await locator.waitFor();
   const state = await locator.evaluate(node => {
     const style = getComputedStyle(node);
@@ -37,7 +38,7 @@ async function verifyScroller(page, locator, label) {
   assert.match(state.overflowY, /auto|scroll/, `${label} has its own vertical scroll area`);
   assert.equal(state.overscroll, 'contain', `${label} does not scroll the frozen page behind it`);
   assert.match(state.touchAction, /pan-y/, `${label} allows native vertical touch gestures`);
-  assert.equal(state.paddingBottom, 20, `${label} owns the shared 20px terminal content space`);
+  assert.equal(state.paddingBottom, terminalPadding, `${label} owns its current terminal content spacing`);
   if (state.scrollHeight > state.clientHeight) assert.ok(state.scrollTop > 0, `${label} content can reach the bottom`);
   assert.equal(await page.evaluate(() => document.body.style.position), 'fixed', `${label} keeps the page behind fixed`);
   assert.equal(await page.locator('.app-content').getAttribute('inert'), '', `${label} makes the page behind inert`);
@@ -47,7 +48,7 @@ async function verifyScroller(page, locator, label) {
 {
   const { context, page } = await openApp(createReturningUserFixture(6));
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  await page.getByRole('button', { name: /Logging & increments/ }).click();
+  await openProfileArea(page, 'preferences'); await page.getByRole('button', { name: /Logging & increments/ }).click();
   const logging = page.locator('.modal-layer > .detail-screen');
   await verifyScroller(page, logging, 'Logging');
   for (const width of [375, 390, 430, 500]) {
@@ -59,7 +60,8 @@ async function verifyScroller(page, locator, label) {
   await page.screenshot({ path: output('473-logging-terminal-spacing.png') });
   await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
-  await page.locator('button.info-row').filter({ hasText: 'Availability' }).click();
+  await openProfileArea(page, 'training');
+  await page.getByRole('button', { name: /^Availability/ }).click();
   const fixedFooterPanel = page.locator('.profile-training-setting-screen');
   await fixedFooterPanel.waitFor();
   const fixedFooterSpacing = await fixedFooterPanel.evaluate(node => ({
@@ -70,13 +72,13 @@ async function verifyScroller(page, locator, label) {
   assert.deepEqual(fixedFooterSpacing, { panel: 0, scroll: 20, footer: 12 }, 'fixed-footer sheet gives terminal safe-area ownership to its footer only');
   await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
-  await page.getByRole('button', { name: 'Replace plan' }).click();
+  await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click();
   await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
-  await verifyScroller(page, page.locator('.modal-layer > .import-plan-screen'), 'Import Plan');
+  await verifyScroller(page, page.locator('.modal-layer > .import-plan-screen'), 'Import Plan', 0);
   await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
   await page.getByRole('button', { name: 'PROGRESS', exact: true }).click();
-  await page.locator('.working-weight-row').first().click();
+  await page.locator('.logged-exercise-row').first().click();
   await verifyScroller(page, page.locator('.modal-layer > .detail-screen'), 'Exercise history');
   await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(() => document.body.style.position), '', 'closing restores normal document scrolling');

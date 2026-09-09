@@ -1,9 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { displayWeight, storedWeight, exerciseName, exerciseMeasure, exerciseLoadRequirement, saveState } from './domain.js';
 import { SET_TYPES, setTypeOf, loggingModeOf } from './advancedLogging.js';
 import { createHistoryCorrection, correctionFingerprint, prepareHistoryCorrection, saveHistoryCorrection } from './historyCorrection.js';
 import './historyCorrection.css';
+import { sessionFeedbackLabel } from './sessionFeedback.js';
 import { SessionFeedbackChoices } from './SessionFeedback.jsx';
+import { historyCorrectionDelta } from './historyCorrectionDelta.js';
 
 function NumberField({label,value,onChange,weight=false,units='kg',max}) {
   return <label>{label}<input aria-label={label} type="number" inputMode={weight?'decimal':'numeric'} min={0} max={max} step={weight?'any':1} value={value==null?'':weight?displayWeight(value,units):value} onChange={event=>onChange(event.target.value===''?null:weight?storedWeight(event.target.value,units):Number(event.target.value))}/></label>;
@@ -11,8 +14,9 @@ function NumberField({label,value,onChange,weight=false,units='kg',max}) {
 export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,Header}) {
   const [draft,setDraft]=useState(()=>createHistoryCorrection(workout)),[stage,setStage]=useState('edit'),[error,setError]=useState(''),[discard,setDiscard]=useState(null),[removing,setRemoving]=useState(null);
   const root=useRef(null),saved=useRef(false),allowClose=useRef(false);
+  const [persistenceFailed,setPersistenceFailed]=useState(false);
   const dirty=correctionFingerprint(draft.workout)!==draft.initialFingerprint;
-  const change=fn=>{setError('');setDraft(previous=>{const next=structuredClone(previous);fn(next.workout);return next;});};
+  const change=fn=>{setError('');setPersistenceFailed(false);setDraft(previous=>{const next=structuredClone(previous);fn(next.workout);return next;});};
   const editSet=(exerciseId,setId,fn)=>change(w=>fn(w.exercises.find(e=>e.id===exerciseId).sets.find(s=>s.id===setId)));
   const exit=()=>dirty?setDiscard('back'):onDone();
   useEffect(()=>{const layer=root.current?.closest('.modal-layer');const guard=event=>{if(dirty&&!allowClose.current){event.preventDefault();setDiscard('close');}};layer?.addEventListener('rook:before-sheet-close',guard);return ()=>layer?.removeEventListener('rook:before-sheet-close',guard);},[dirty]);
@@ -32,8 +36,8 @@ export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,
     return ()=>{observer.disconnect();window.visualViewport?.removeEventListener('resize',measure);};
   },[stage,discard]);
   const checked=prepareHistoryCorrection(state,draft);
-  const commit=()=>{if(saved.current)return;const result=saveHistoryCorrection(state,draft,{persist:saveState});if(result.status!=='saved'){setError(result.error);return;}saved.current=true;update(()=>result.state,{planVersion:false});onDone();};
-  const review=()=>{if(checked.status!=='ready'){setError(checked.error);return;}if(checked.changes.length)setStage('review');else commit();};
+  const commit=()=>{if(saved.current)return;const result=saveHistoryCorrection(state,draft,{persist:saveState});setPersistenceFailed(result.status==='persistence-failed');if(result.status!=='saved'){setError(result.error);return;}saved.current=true;update(()=>result.state,{planVersion:false});onDone();};
+  const review=()=>{if(checked.status!=='ready'){setError(checked.error);return;}setStage('review');};
   const units=state.profile.units==='lb'?'lb':'kg';
   const describe=(set,exercise)=>!set?'Removed':!set.completed?'Not logged':[
     set.weight!=null?`${displayWeight(set.weight,units)} ${units}`:null,
@@ -42,10 +46,10 @@ export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,
     ...((set.segments||[]).map((segment,index)=>`Segment ${index+1}: ${segment.weight==null?'—':displayWeight(segment.weight,units)} ${units} × ${segment.reps??'—'}${segment.rir!=null?` · ${segment.rir} RIR`:''}${segment.completed?'':' · not logged'}`)),
   ].filter(Boolean).join(' · ');
   return <main ref={root} className="screen detail-screen history-correction-editor" onFocusCapture={()=>requestAnimationFrame(revealFocusedRow)}>
-    <Header title={stage==='review'?'Review corrections':'Edit workout'} onClose={()=>dirty?setDiscard('close'):closeSheet()} onBack={()=>stage==='review'?setStage('edit'):exit()}/>
+    <Header title={stage==='review'?'Review corrections':'Correct history'} onClose={()=>dirty?setDiscard('close'):closeSheet()} onBack={()=>stage==='review'?setStage('edit'):exit()}/>
     <p className="eyebrow">{stage==='review'?'SAVE CHANGES?':'CORRECT HISTORY'}</p><h1 tabIndex={-1}>{workout.name}</h1>
     <p>{stage==='review'?'This may update PRs and progression history.':'Correct what you logged. The original plan, dates and workout identity stay unchanged.'}</p>
-    {discard?<section className="history-correction-confirm" role="alert"><h2>Discard changes?</h2><p>Your saved workout will stay unchanged.</p><button className="button secondary" onClick={()=>setDiscard(null)}>KEEP EDITING</button><button className="button quiet danger-text" onClick={()=>{allowClose.current=true;discard==='close'?closeSheet():onDone();}}>DISCARD CHANGES</button></section>:<>
+    {discard?<section className="history-correction-confirm" role="alert"><h2>Discard changes?</h2><p>Your saved workout will stay unchanged.</p><button className="button primary" onClick={()=>setDiscard(null)}>KEEP EDITING</button><button className="button quiet danger-text" onClick={()=>{allowClose.current=true;discard==='close'?closeSheet():onDone();}}>DISCARD CHANGES</button></section>:<>
     {stage==='edit'?<>
       <label className="history-note">Session note<textarea aria-label="Session note" maxLength={500} rows={2} value={draft.workout.sessionNote||''} onChange={event=>change(w=>w.sessionNote=event.target.value)}/></label>
       <SessionFeedbackChoices value={draft.workout.sessionFeedback} onChange={value=>change(w=>w.sessionFeedback=value)} />
@@ -66,9 +70,13 @@ export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,
         <button className="text-button" onClick={()=>change(w=>w.exercises.find(e=>e.id===exercise.id).sets.push({id:crypto.randomUUID(),planned:false,added:true,completed:false,weight:null,reps:null,rir:null}))}>Add missed set</button>
         <label className="history-note">Exercise note<textarea aria-label={`${exerciseName(exercise)} note`} rows={2} maxLength={120} value={exercise.personalNote||''} onChange={event=>change(w=>w.exercises.find(e=>e.id===exercise.id).personalNote=event.target.value)}/></label>
       </details>)}
-    </>:<section className="history-correction-diff">{checked.changes?.map(item=>{const exercise=draft.workout.exercises.find(e=>e.id===item.exerciseId);return <article key={item.setId}><h2>{exerciseName(exercise)} · Set {item.setNumber}</h2><p>Before: {describe(item.before,exercise)}</p><p>After: {describe(item.after,exercise)}</p></article>;})}</section>}
-    {removing&&<section role="alert" className="history-correction-confirm"><h2>Remove {removing.segmentId?'segment':'added set'}?</h2><p>This changes only the correction draft.</p><button className="button secondary" onClick={()=>setRemoving(null)}>KEEP</button><button className="button quiet danger-text" onClick={()=>{change(w=>{const e=w.exercises.find(e=>e.id===removing.exerciseId);if(removing.segmentId){const s=e.sets.find(s=>s.id===removing.setId);s.segments=s.segments.filter(s=>s.id!==removing.segmentId);}else e.sets=e.sets.filter(s=>s.id!==removing.setId);});setRemoving(null);}}>REMOVE</button></section>}
-    <footer className="history-correction-footer">{error&&<p role="alert">{error}</p>}<button className="button primary" disabled={!dirty||!!removing} onClick={stage==='edit'?review:commit}>SAVE CHANGES</button><button className="button quiet" onClick={()=>stage==='review'?setStage('edit'):exit()}>{stage==='review'?'BACK TO EDIT':'CANCEL'}</button></footer>
+    </>:<section className="history-correction-diff">{[
+      ['Session note', checked.original?.sessionNote || '', checked.corrected?.sessionNote || ''],
+      ['Session felt', sessionFeedbackLabel(checked.original?.sessionFeedback) || (checked.original?.sessionFeedback === 'skipped' ? 'Skipped' : 'Not provided'), sessionFeedbackLabel(checked.corrected?.sessionFeedback) || (checked.corrected?.sessionFeedback === 'skipped' ? 'Skipped' : 'Not provided')],
+      ...(checked.corrected?.exercises || []).map(exercise => [`${exerciseName(exercise)} note`, checked.original.exercises.find(item => item.id === exercise.id)?.personalNote || '', exercise.personalNote || '']),
+    ].filter(([, before, after]) => before !== after).map(([label, before, after], index) => <article key={index}><h2>{label}</h2><p>{before || 'None'} → {after || 'None'}</p></article>)}{checked.changes?.map(item=>{const exercise=draft.workout.exercises.find(e=>e.id===item.exerciseId);return <article key={item.setId}><h2>{exerciseName(exercise)} · Set {item.setNumber}</h2>{item.before&&item.after?historyCorrectionDelta(item.before,item.after,{units,measure:exerciseMeasure(exercise)}).map((line,index)=><p key={index}>{line}</p>):<><p>{item.before?'Removed set':'Added set'}: {describe(item.before||item.after,exercise)}</p></>}</article>;})}</section>}
+    {removing&&<section role="alert" className="history-correction-confirm"><h2>Remove {removing.segmentId?'segment':'added set'}?</h2><p>This changes only the correction draft.</p><button className="button primary" onClick={()=>setRemoving(null)}>KEEP</button><button className="button quiet danger-text" onClick={()=>{change(w=>{const e=w.exercises.find(e=>e.id===removing.exerciseId);if(removing.segmentId){const s=e.sets.find(s=>s.id===removing.setId);s.segments=s.segments.filter(s=>s.id!==removing.segmentId);}else e.sets=e.sets.filter(s=>s.id!==removing.setId);});setRemoving(null);}}>REMOVE</button></section>}
+    <SheetActionFooter className="history-correction-footer">{error&&<p role="alert">{error}</p>}<button className="button primary" disabled={!dirty||!!removing} onClick={stage==='edit'?review:commit}>{stage==='edit'?'REVIEW CHANGES':persistenceFailed?'TRY AGAIN':'SAVE CHANGES'}</button><button className="button quiet" onClick={()=>stage==='review'?setStage('edit'):exit()}>{stage==='review'?'BACK TO EDIT':'CANCEL'}</button></SheetActionFooter>
     </>}
   </main>;
 }

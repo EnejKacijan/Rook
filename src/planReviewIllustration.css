@@ -1,0 +1,7 @@
+.plan-review-illustration { display: block; flex: 0 0 48px; width: 48px; height: 48px; border-radius: 10px; background: var(--rook-surface-muted, #f1eee8); }
+.plan-review-illustration img { display: block; width: 100%; height: 100%; padding: 3px; object-fit: contain; }
+.plan-review-illustration.is-expanded { width: 120px; height: 120px; margin: 0 auto 16px; border-radius: 16px; }
+.plan-review-illustration.is-expanded img { padding: 8px; }
+.plan-editor.has-review-illustrations .plan-editor-summary { gap: 10px; padding-block: 11px; }
+.plan-editor.has-review-illustrations .plan-editor-heading { flex: 1; }
+.plan-editor.has-review-illustrations .plan-editor-heading > strong { white-space: normal; overflow-wrap: anywhere; }

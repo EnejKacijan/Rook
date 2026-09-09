@@ -1,5 +1,36 @@
+import { PlanProcessing as BuildingOverlay, finishPlanProcessing } from './PlanProcessing.jsx';
+import { WeightUnitChoice } from './WeightUnitChoice.jsx';
+import { applySourceUnitDecision } from './importSourceUnits.js';
+import { MonthCalendar, CalendarIcon } from './MonthCalendar.jsx';
+import './profileHub.css';
+import { calendarRange } from './workoutCalendar.js';
+import { completionRecognition } from './completionRecognition.js';
+import { FreestyleEntry, FreestyleActions, FreestyleExercisePicker, FreestylePrevious } from './FreestyleWorkout.jsx';
+import { removeFreestyleExercise } from './freestyleWorkout.js';
+import { adjustedMovedLabel } from './progressPresentation.js';
+import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
+import './loggedExercises.css';
+import { PlanNumberInput } from './PlanNumberInput.jsx';
+import { nextImportReview } from './nextImportReview.js';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
+import './actionHierarchy.css';
+import './bottomNav.css';
 import { SearchInput } from './SearchInput.jsx';
+import { PlanConflictResolution, planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './PlanConflictResolution.jsx';
+import { removalRows, stagePlanRemoval, undoPlanRemoval } from './planRemovalDraft.js';
+import './planRemovalDraft.css';
+import { revealPlanConflict } from './revealPlanConflict.js';
 import { useAvailableImage } from './useAvailableImage.js';
+import { PlanReviewIllustration } from './PlanReviewIllustration.jsx';
+import { PlanImportIssues } from './PlanImportIssues.jsx';
+import { ImportResolution } from './ImportResolution.jsx';
+import { StepProgress } from './StepProgress.jsx';
+import { exerciseNotePresentation } from './exerciseNotePresentation.js';
+import { importMatchEntries, importResolutionGroups } from './importResolution.js';
+import { pendingImportIssues, importDecisionSummary } from './planImportReview.js';
+import { persistPlanImport } from './planImportTransaction.js';
+import { Disclosure } from './Disclosure.jsx';
+import { groupPlanVersions } from './planHistoryGroups.js';
 import { SessionFeedbackPrompt, SessionFeedbackDisplay } from './SessionFeedback.jsx';
 import { WorkoutHistoryExport } from './WorkoutHistoryExport.jsx';
 import { HistoryCorrectionEditor } from './HistoryCorrectionEditor.jsx';
@@ -94,7 +125,10 @@ import {
   onboardingSplitOptions,
 } from "./splitPreferences.js";
 import {
+  BALANCED_TRAINING_PRIORITY,
   MAX_MANUAL_TRAINING_PRIORITIES,
+  TRAINING_EMPHASIS_PRIORITIES,
+  TRAINING_PRIORITY_OPTIONS,
   nextManualPrioritySelection,
   normalizeManualPrioritySelection,
 } from "./prioritySelection.js";
@@ -128,6 +162,8 @@ import {
   exerciseLoadRequirement,
   exerciseMeasure,
   exerciseMatchesQuery,
+  rankExerciseSearch,
+  displayEstimatedOneRepMax,
   exerciseName,
   exerciseNote,
   exercisePersonalNote,
@@ -248,7 +284,7 @@ import {
   rememberExerciseAlias,
   removeExerciseAlias,
   resolveRememberedExercise,
-  updateCustomExercise,
+  saveCustomExerciseDetails,
 } from "./customExercises.js";
 import {
   CUSTOM_EXERCISE_LOGGING_MODES,
@@ -312,7 +348,7 @@ const afterVisibleFrame = () =>
   );
 const waitFor = (milliseconds) =>
   new Promise((resolve) => setTimeout(resolve, milliseconds));
-const MINIMUM_PLAN_TRANSITION_MS = 1600;
+
 async function generatePersonalizedProgram(
   profile,
   { onStage, currentProgram = null, workouts = [] } = {},
@@ -320,24 +356,22 @@ async function generatePersonalizedProgram(
   const startedAt = performance.now();
   onStage?.("preparing");
   await afterVisibleFrame();
-  await waitFor(260);
   onStage?.("building");
   await afterVisibleFrame();
   const program = currentProgram
     ? buildReplacementProgram(profile, currentProgram, workouts)
     : buildProgram(profile);
-  await waitFor(620);
   onStage?.("checking");
   await afterVisibleFrame();
   const validation = validateProgram(program, profile, {
     requireProgramQuality: true,
   });
   if (!validation.valid) throw new Error(validation.errors.join(" "));
-  const remaining = MINIMUM_PLAN_TRANSITION_MS - (performance.now() - startedAt);
-  if (remaining > 0) await waitFor(remaining);
+  await finishPlanProcessing(startedAt, onStage);
   return { program, source: "personalized-template" };
 }
 function useLiftState() {
+  const alreadyPersistedState = useRef(null);
   const [state, setState] = useState(() => {
     const initial = normalizePlanHistoryState(
       normalizeCustomExercisesState(normalizeTrainingBlocksState(loadState())),
@@ -353,8 +387,14 @@ function useLiftState() {
   });
   const [persistenceFailed, setPersistenceFailed] = useState(false);
   useLayoutEffect(() => {
+    if (alreadyPersistedState.current === state) {
+      alreadyPersistedState.current = null;
+      setPersistenceFailed(false);
+      return;
+    }
     const pristineLanding =
       !state.profile.onboardingComplete &&
+      state.profile.units !== 'lb' &&
       !state.program &&
       !state.activeWorkout &&
       !state.activeOptionalSession &&
@@ -407,6 +447,9 @@ function useLiftState() {
             });
           }
         } else normalizePlanHistoryState(next);
+        // An atomic importer can publish the exact state it has just saved.
+        // Only skip the automatic write if normalization changed nothing.
+        if (options.persistedState && JSON.stringify(next) === JSON.stringify(options.persistedState)) alreadyPersistedState.current = next;
         return next;
       }),
     persistenceFailed,
@@ -924,6 +967,46 @@ function OnboardingOptionCard({
     </button>
   );
 }
+function TrainingPriorityChoices({
+  selected = [],
+  selectionLocked = false,
+  onSelect,
+  limitReasonId,
+}) {
+  const option = (label) => {
+    const isSelected = selected.includes(label);
+    const locked =
+      label !== BALANCED_TRAINING_PRIORITY &&
+      selectionLocked &&
+      !isSelected;
+    return (
+      <OnboardingOptionCard
+        key={label}
+        label={label}
+        selected={isSelected}
+        ariaDisabled={locked}
+        describedBy={locked ? limitReasonId : undefined}
+        onClick={() => onSelect(label)}
+      />
+    );
+  };
+  return (
+    <div className="priority-choice-groups">
+      <section className="priority-choice-group priority-balanced-choice">
+        <Eyebrow>BALANCED</Eyebrow>
+        <div className="option-list priority-balanced-option">
+          {option(BALANCED_TRAINING_PRIORITY)}
+        </div>
+      </section>
+      <section className="priority-choice-group priority-emphasis-choice">
+        <Eyebrow>EMPHASIS AREAS</Eyebrow>
+        <div className="option-list option-grid">
+          {TRAINING_EMPHASIS_PRIORITIES.map(option)}
+        </div>
+      </section>
+    </div>
+  );
+}
 function localizedWeekdayLabel(day, width = "short") {
   const index = WEEKDAYS.indexOf(day);
   if (index < 0) return day;
@@ -1002,9 +1085,12 @@ function TrainingPreferencesStep({
   return (
     <div className="preference-fields">
       <section className="onboarding-question-group split-preference">
+        <div className="onboarding-group-heading">
+          <strong>WEEKLY STRUCTURE</strong>
+        </div>
         <div className="option-list split-recommendation">
           <OnboardingOptionCard
-            label="CHOOSE FOR ME"
+            label="LET ROOK CHOOSE"
             description={splitRecommendationCopy(answers.daysPerWeek)}
             selected={splitChoice === "recommended"}
             onClick={() => chooseSplit(splitOptions[0])}
@@ -1018,12 +1104,12 @@ function TrainingPreferencesStep({
           onClick={() => setSpecificSplitOpen((open) => !open)}
         >
           <span>
-            <strong>Have a specific split?</strong>
+            <strong>I already have a preferred weekly structure</strong>
             {selectedSpecific && <small>{selectedSpecific.label}</small>}
           </span>
           <i className="disclosure-chevron" aria-hidden="true" />
         </button>
-        {specificSplitOpen && (
+        <Disclosure open={specificSplitOpen} revealOnOpen>
           <div
             id="specific-split-options"
             className="option-list split-options"
@@ -1037,8 +1123,7 @@ function TrainingPreferencesStep({
               />
             ))}
           </div>
-        )}
-        {specificSplitOpen && splitChoice === "other" && (
+        {splitChoice === "other" && (
           <textarea
             aria-label="Other preferred split"
             className="text-answer split-other-answer"
@@ -1053,6 +1138,7 @@ function TrainingPreferencesStep({
             placeholder="Describe your preferred split"
           />
         )}
+        </Disclosure>
       </section>
       <section className="onboarding-question-group restriction-preference">
         <div className="onboarding-group-heading">
@@ -1078,7 +1164,7 @@ function TrainingPreferencesStep({
               <strong>
                 {restrictionText
                   ? restrictionSummary
-                  : "Add injuries, pain or movements to avoid"}
+                  : "Add movements or exercises to avoid"}
               </strong>
               {restrictionText && (
                 <small>
@@ -1277,9 +1363,45 @@ function WorkoutTitle({ workout, name, day }) {
     </h1>
   );
 }
-function BottomNav({ page, setPage }) {
+function TodayNavGlyph({filled=false}) {
+  return <g stroke="currentColor" strokeWidth="1.2" strokeLinecap="square" strokeLinejoin="miter">
+    <path d="M1.4 12h21.2" fill="none"/>
+    {[{x:2.95,y:9.25,height:5.5},{x:5.7,y:6.5,height:11},{x:15.7,y:6.5,height:11},{x:18.45,y:9.25,height:5.5}].map(plate=>
+      <rect key={plate.x} {...plate} width="2.6" fill={filled?'currentColor':'var(--rook-bg)'}/>
+    )}
+  </g>;
+}
+function ProfileNavGlyph({filled=false}) {
+  return <g stroke="currentColor" strokeWidth="1.6" strokeLinejoin="miter" fill={filled?'currentColor':'none'}>
+    <circle cx="12" cy="8.25" r="3.5"/>
+    <path d="M4.75 19.25v-1.5c0-2.35 3.25-3.75 7.25-3.75s7.25 1.4 7.25 3.75v1.5z"/>
+  </g>;
+}
+function ProgressNavGlyph({filled=false}) {
+  return <g stroke="currentColor" strokeLinecap="square" strokeLinejoin="miter">
+    <path d="M3.5 4.25v15.5H21" fill="none" strokeWidth="1.6"/>
+    {[{x:6.75,y:14.25},{x:11.5,y:9.75},{x:16.25,y:5.25}].map(({x,y})=>
+      <rect key={x} x={x} y={y} width="3" height={18.75-y} fill={filled?'currentColor':'none'} strokeWidth="1.4"/>
+    )}
+  </g>;
+}
+export function BottomNav({ page, setPage }) {
+  const navRef = useRef(null);
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    const root = document.documentElement;
+    const measure = () => {
+      const height = nav.getBoundingClientRect().height;
+      // Mobile Coach temporarily hides navigation while composing.
+      if (height > 0) root.style.setProperty('--bottom-nav-total-height', `${height}px`);
+    };
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(nav);
+    return () => { observer.disconnect(); root.style.removeProperty('--bottom-nav-total-height'); };
+  }, []);
   return (
-    <nav className="bottom-nav" aria-label="Main navigation">
+    <nav ref={navRef} className="bottom-nav" aria-label="Main navigation">
       {navItems.map(([id, label]) => (
         <button
           key={id}
@@ -1288,7 +1410,23 @@ function BottomNav({ page, setPage }) {
           className={page === id ? "nav-active" : ""}
           onClick={() => setPage(id)}
         >
-          <span>{label}</span>
+          <span className="nav-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" focusable="false" data-nav-icon={id}>
+              <g className="nav-icon-line">
+                {id === 'today' && <TodayNavGlyph/>}
+                {id === 'coach' && <path d="M4.25 5h15.5v11H9L5.5 19.25V16H4.25zM7.75 9h8.5M7.75 12.25h5"/>}
+                {id === 'progress' && <ProgressNavGlyph/>}
+                {id === 'profile' && <ProfileNavGlyph/>}
+              </g>
+              <g className="nav-icon-solid">
+                {id === 'today' && <TodayNavGlyph filled/>}
+                {id === 'coach' && <><path d="M4.25 5h15.5v11H9L5.5 19.25V16H4.25z"/><path className="nav-icon-knockout" d="M7.75 8.25h8.5v1.5h-8.5zM7.75 11.5h5v1.5h-5z"/></>}
+                {id === 'progress' && <ProgressNavGlyph filled/>}
+                {id === 'profile' && <ProfileNavGlyph filled/>}
+              </g>
+            </svg>
+          </span>
+          <span className="nav-label">{label}</span>
         </button>
       ))}
     </nav>
@@ -1781,140 +1919,6 @@ function ModalLayer({ children, close, backgroundRef, presentation = "sheet" }) 
     </div>
   );
 }
-function BuildingOverlay({ stage = "building", kind = "program", onCancel }) {
-  const [waitLevel, setWaitLevel] = useState(0);
-  const [visible, setVisible] = useState(kind === "import");
-  const [showCancel, setShowCancel] = useState(kind === "import");
-  const overlayRef = useRef(null);
-  const cancellable = Boolean(onCancel);
-  useEffect(() => {
-    setWaitLevel(0);
-    setVisible(kind === "import");
-    setShowCancel(kind === "import" && cancellable);
-    const reveal =
-      kind === "program" ? setTimeout(() => setVisible(true), 250) : null;
-    const revealCancel =
-      kind === "program" && cancellable
-        ? setTimeout(() => setShowCancel(true), 3000)
-        : null;
-    const long = setTimeout(() => setWaitLevel(1), kind === "import" ? 12000 : 5000);
-    return () => {
-      if (reveal) clearTimeout(reveal);
-      if (revealCancel) clearTimeout(revealCancel);
-      if (long) clearTimeout(long);
-    };
-  }, [kind, cancellable]);
-  useEffect(() => {
-    const overlay = overlayRef.current;
-    if (!overlay) return undefined;
-    const focus = () =>
-      overlay
-        .querySelector("button:not([disabled])")
-        ?.focus({ preventScroll: true });
-    const frame = requestAnimationFrame(focus);
-    const keydown = (event) => {
-      if (event.key === "Escape" && showCancel && onCancel) {
-        event.preventDefault();
-        onCancel();
-        return;
-      }
-      if (event.key !== "Tab") return;
-      const controls = [
-        ...overlay.querySelectorAll(
-          "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
-        ),
-      ];
-      if (!controls.length) {
-        event.preventDefault();
-        return;
-      }
-      const first = controls[0];
-      const last = controls.at(-1);
-      if (event.shiftKey && document.activeElement === first) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && document.activeElement === last) {
-        event.preventDefault();
-        first.focus();
-      }
-    };
-    addEventListener("keydown", keydown);
-    return () => {
-      cancelAnimationFrame(frame);
-      removeEventListener("keydown", keydown);
-    };
-  }, [onCancel, showCancel, visible]);
-  if (!visible) return null;
-  if (kind === "import")
-    return (
-      <div
-        ref={overlayRef}
-        className="building-overlay"
-        role="dialog"
-        aria-modal="true"
-        aria-busy="true"
-        aria-labelledby="building-title"
-        aria-describedby="building-detail"
-      >
-        <div className="building-card" role="status" aria-live="polite">
-          <Eyebrow>IMPORTING YOUR PLAN</Eyebrow>
-          <h2 id="building-title">
-            {waitLevel ? "Still working on your plan…" : "Structuring your plan…"}
-          </h2>
-          <p id="building-detail">
-            {waitLevel
-              ? "Messy notes can take a little longer. Your original text is still safe."
-              : "Matching exercises and checking your notes for review."}
-          </p>
-          <div className="building-spinner" aria-hidden="true" />
-          {showCancel && onCancel ? (
-            <button
-              type="button"
-              className="building-cancel"
-              onClick={onCancel}
-            >
-              CANCEL
-            </button>
-          ) : null}
-        </div>
-      </div>
-    );
-  const saving = stage === "saving";
-  const title = saving ? "Saving your program…" : "Building your training week…";
-  const detail = saving
-    ? "Keeping your new program ready for the first workout."
-    : waitLevel
-      ? "This is taking a little longer than usual."
-      : "Applying your preferences and checking the plan.";
-  return (
-    <div
-      ref={overlayRef}
-      className="building-overlay"
-      role="dialog"
-      aria-modal="true"
-      aria-busy="true"
-      aria-labelledby="building-title"
-      aria-describedby="building-detail"
-    >
-      <div
-        className="building-card"
-        role="status"
-        aria-live="polite"
-        aria-atomic="true"
-      >
-        <Eyebrow>BUILDING YOUR PROGRAM</Eyebrow>
-        <h2 id="building-title">{title}</h2>
-        <p id="building-detail">{detail}</p>
-        <div className="building-spinner" aria-hidden="true" />
-        {showCancel && onCancel ? (
-          <button type="button" className="building-cancel" onClick={onCancel}>
-            CANCEL
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
 
 const GOALS = [
   "Build muscle",
@@ -2052,16 +2056,7 @@ export function onboardingGenerationProfile(profile = {}) {
     environment: operationalEnvironment,
   };
 }
-const PRIORITIES = [
-  "Balanced",
-  "Chest",
-  "Back",
-  "Shoulders",
-  "Arms",
-  "Quads",
-  "Hamstrings / glutes",
-  "Calves",
-];
+const PRIORITIES = TRAINING_PRIORITY_OPTIONS;
 const EFFORT_STYLES = [
   "Balanced workload · usually 3 sets · 1–2 RIR",
   "Fewer hard sets · 2 sets · 1 RIR",
@@ -2185,6 +2180,12 @@ function PhysiqueReview({ profile, onUse, onClose }) {
             Upload a few clear photos and Rook can suggest possible training
             priorities.
           </p>
+          <p className="photo-privacy">
+            Optional online analysis: when you tap REVIEW PHOTOS, selected photos
+            are sent through Rook's server to OpenAI, our AI provider, for a
+            one-time review. This is not on-device processing. Provider retention
+            applies; immediate deletion is not guaranteed.
+          </p>
           <div className="physique-caution">
             Visual estimates can be affected by lighting, pose, camera angle,
             pump and body composition. Suggestions are not objective facts, and
@@ -2300,12 +2301,23 @@ function PhysiqueReview({ profile, onUse, onClose }) {
           Relaxed, consistent pose · body visible where relevant · reasonable
           lighting · no extreme angle or post-workout pump.
         </div>
+        <p className="photo-privacy" id="physique-photo-privacy">
+          Only tapping REVIEW PHOTOS sends resized copies through Rook's server
+          to OpenAI for one-time AI analysis. Rook keeps temporary copies while
+          this review is open, not in your saved profile; leaving clears them
+          from this screen, not your photo library. OpenAI response storage is
+          disabled, but processing and safety retention still apply: abuse
+          monitoring normally lasts up to 30 days, with legal and flagged-image
+          safety exceptions. Immediate deletion is not guaranteed.{" "}
+          <a href="https://developers.openai.com/api/docs/guides/your-data" target="_blank" rel="noopener noreferrer">OpenAI data policy</a>
+        </p>
         <div className="photo-inputs">
           {["front", "back", "side"].map((angle) => (
             <label key={angle} className={photos[angle] ? "ready" : ""}>
               <input
                 type="file"
                 accept="image/*"
+                aria-describedby="physique-photo-privacy"
                 onChange={(event) =>
                   choosePhoto(angle, event.target.files?.[0])
                 }
@@ -2325,10 +2337,6 @@ function PhysiqueReview({ profile, onUse, onClose }) {
           ))}
         </div>
         {error && <p className="offline-banner">{error}</p>}
-        <small className="photo-privacy">
-          Photos are resized for analysis, are not saved to your Rook profile,
-          and are discarded after this request.
-        </small>
       </div>
       <div className="onboarding-footer">
         <Button
@@ -2513,8 +2521,10 @@ function EntryLanding({ personalize, importPlan, startFromScratch, restoreBackup
     </main>
   );
 }
-function Onboarding({ update, exit, onPlanAccepted }) {
+function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }) {
   const [step, setStep] = useState(0);
+  const selectionAdvanceRef = useRef(null);
+  useLayoutEffect(() => { selectionAdvanceRef.current = null; }, [step]);
   const [ageMenuOpen, setAgeMenuOpen] = useState(false);
   const [activeAgeIndex, setActiveAgeIndex] = useState(0);
   const [ageMenuLayout, setAgeMenuLayout] = useState({
@@ -2546,7 +2556,9 @@ function Onboarding({ update, exit, onPlanAccepted }) {
   const generatedPreviewHeadingRef = useRef(null);
   const [generatedPreview, setGeneratedPreview] = useState(null);
   const [equipmentSetupExpanded, setEquipmentSetupExpanded] = useState(false);
-  const [answers, setAnswers] = useState(() => blankState().profile);
+  const [answers, setAnswers] = useState(() => ({...blankState().profile, units: initialUnits}));
+  const [anyDayWorks, setAnyDayWorks] = useState(false);
+  const manualAvailableDaysRef = useRef([]);
   restrictionTextRef.current = String(answers.avoid || "");
   supplementalLimitTextRef.current = supplementalLimitText;
   useEffect(() => {
@@ -2706,9 +2718,8 @@ function Onboarding({ update, exit, onPlanAccepted }) {
     },
     {
       key: "preferences",
-      label: "TRAINING SPLIT",
-      question: "How should Rook structure your week?",
-      helper: "Let Rook choose, or add a preference if you already have one.",
+      label: "FINAL PREFERENCES",
+      question: "Anything else before ROOK builds your plan?",
       options: [],
       optional: true,
     },
@@ -2746,7 +2757,12 @@ function Onboarding({ update, exit, onPlanAccepted }) {
   const goalPlanPreview =
     GOAL_PLAN_PREVIEWS[answers.goal] || DEFAULT_GOAL_PLAN_PREVIEW;
   const splitOptions = onboardingSplitOptions(answers.daysPerWeek);
-  const choose = (option) => {
+  const singleDecision = stage.key === 'goal' || stage.key === 'experience';
+  const choose = (option, event) => {
+    if (singleDecision) {
+      if (event?.detail > 1 || selectionAdvanceRef.current === step) return;
+      selectionAdvanceRef.current = step;
+    }
     if (stage.multi)
       setAnswers((current) => {
         const selected =
@@ -2785,14 +2801,31 @@ function Onboarding({ update, exit, onPlanAccepted }) {
         rirEnabled: shouldEnableRir(current.experience, option),
       }));
     else setAnswers((current) => ({ ...current, [stage.key]: option }));
+    if (singleDecision) advance();
   };
-  const chooseAvailableDay = (option) =>
-    setAnswers((current) => ({
-      ...current,
-      availableDays: current.availableDays.includes(option)
+  const chooseAvailableDay = (option) => {
+    if (anyDayWorks) return;
+    setAnswers((current) => {
+      const availableDays = current.availableDays.includes(option)
         ? current.availableDays.filter((item) => item !== option)
-        : [...current.availableDays, option],
-    }));
+        : [...current.availableDays, option];
+      manualAvailableDaysRef.current = [...availableDays];
+      return { ...current, availableDays };
+    });
+  };
+  const toggleAnyDayWorks = () => {
+    if (anyDayWorks) {
+      setAnyDayWorks(false);
+      setAnswers((current) => ({
+        ...current,
+        availableDays: [...manualAvailableDaysRef.current],
+      }));
+      return;
+    }
+    manualAvailableDaysRef.current = [...answers.availableDays];
+    setAnyDayWorks(true);
+    setAnswers((current) => ({ ...current, availableDays: [...WEEKDAYS] }));
+  };
   const chooseFrequency = (option) => {
     setSplitChoice("recommended");
     setSpecificSplitOpen(false);
@@ -3142,7 +3175,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
       stepIndex: step + 1,
       totalSteps: stages.length,
     });
-    setStep((index) => index + 1);
+    setStep((index) => index === step ? index + 1 : index);
   };
   const submitFollowUp = async (skipped) => {
     const question = followUps[followIndex]?.question || followUps[followIndex];
@@ -3201,6 +3234,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
         </header>
         <PlanEditor
           source={generatedPreview.program}
+          generatedAcceptance
           profile={generatedPreview.profile}
           onSave={acceptGenerated}
           onCancel={() => setGeneratedPreview(null)}
@@ -3271,20 +3305,18 @@ function Onboarding({ update, exit, onPlanAccepted }) {
   }
   return (
     <main className={`onboarding onboarding-${stage.key}`}>
-      <div className="brand">ROOK</div>
-      <div className="progress-line">
-        <span style={{ width: `${((step + 1) / stages.length) * 100}%` }} />
+      <div className={step === 0 ? 'onboarding-start-brand' : undefined}>
+        {step === 0 && <button type="button" className="detail-header-back onboarding-start-back" aria-label="Back to plan options" onClick={exit}>‹</button>}
+        <div className="brand">ROOK</div>
       </div>
-      <span className="step-count">
-        STEP {step + 1}/{stages.length}
-      </span>
+      <StepProgress step={step+1} total={stages.length} />
       <div className="onboarding-content" key={stage.key}>
         <Eyebrow>{stage.label}</Eyebrow>
         <h1>{stage.question}</h1>
         {!stage.hideHelper && (
           <p>
             {stage.personal
-              ? "Age helps Rook choose a more appropriate starting workload and recovery pattern. Your first name is optional."
+              ? "Age helps ROOK choose a more appropriate starting workload and training setup. Your first name is optional."
               : stage.helper ||
                 stage.optionalHint ||
                 (stage.optional
@@ -3390,6 +3422,10 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                 )}
               </div>
             </div>
+            <WeightUnitChoice compact value={answers.units} onChange={units=>{
+              update(current=>{current.profile.units=units;return current;});
+              setAnswers(current=>({...current,units}));
+            }}/>
             <label>
               <span>
                 First name <small>optional</small>
@@ -3430,25 +3466,22 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                 ))}
               </div>
             </section>
-            <section className="onboarding-question-group schedule-days">
+            <section
+              className="onboarding-question-group schedule-days"
+              aria-labelledby="schedule-days-label"
+              aria-describedby="schedule-availability-status"
+            >
               <div className="onboarding-group-heading">
-                <strong>Days you can train</strong>
+                <strong id="schedule-days-label">Days you can train</strong>
                 <label className="select-all-check">
                   <input
                     type="checkbox"
-                    aria-label="Make any day available"
-                    checked={answers.availableDays.length === WEEKDAYS.length}
-                    onChange={() =>
-                      setAnswers((current) => ({
-                        ...current,
-                        availableDays:
-                          current.availableDays.length === WEEKDAYS.length
-                            ? []
-                            : [...WEEKDAYS],
-                      }))
-                    }
+                    aria-label="Any day works"
+                    checked={anyDayWorks}
+                    onChange={toggleAnyDayWorks}
                   />
-                  <span>Any day</span>
+                  <i aria-hidden="true">{anyDayWorks ? "✓" : ""}</i>
+                  <span>Any day works</span>
                 </label>
               </div>
               <div className="option-list day-options">
@@ -3458,30 +3491,34 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                     label={localizedWeekdayLabel(option, "short")}
                     ariaLabel={localizedWeekdayLabel(option, "long")}
                     selected={answers.availableDays.includes(option)}
+                    disabled={anyDayWorks}
+                    describedBy="schedule-availability-status"
                     onClick={() => chooseAvailableDay(option)}
                   />
                 ))}
               </div>
-              <small className="schedule-selection-count" aria-live="polite">
-                {answers.availableDays.length === WEEKDAYS.length
-                  ? "Any day works"
+              <div id="schedule-availability-status" aria-live="polite">
+                <small className="schedule-selection-count">
+                {anyDayWorks
+                  ? "7 days available"
                   : `${answers.availableDays.length} ${
                       answers.availableDays.length === 1 ? "day" : "days"
                     } selected`}
-              </small>
-              {answers.daysPerWeek &&
+                </small>
+                {answers.daysPerWeek &&
                 answers.availableDays.length < answers.daysPerWeek && (
                   <small className="schedule-hint">
-                    Choose at least {answers.daysPerWeek} possible days.
+                    Choose at least {answers.daysPerWeek} available days.
                   </small>
                 )}
+              </div>
             </section>
             <section className="onboarding-question-group schedule-duration">
               <div className="onboarding-group-heading">
                 <strong>Time per workout</strong>
               </div>
               <div className="option-list">
-                {[30, 45, 60, 75, 90].map((option) => (
+                {[30, 45, 60, 75, 90, 120].map((option) => (
                   <OnboardingOptionCard
                     key={option}
                     label={`${option} min`}
@@ -3495,6 +3532,11 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                   />
                 ))}
               </div>
+              <small className="schedule-duration-note">
+                {answers.sessionMinutes === 120
+                  ? "ROOK may finish sooner. It won’t add work just to fill the time."
+                  : "Session length is estimated. Some full-body workouts may run a few minutes longer."}
+              </small>
             </section>
           </div>
         ) : stage.key === "setup" ? (
@@ -3730,18 +3772,35 @@ function Onboarding({ update, exit, onPlanAccepted }) {
               </div>
             </section>
           </div>
+        ) : stage.key === "priorities" ? (
+          <>
+          <button
+            className="physique-review-entry"
+            onClick={() => setPhysiqueOpen(true)}
+          >
+            <span>
+              <strong>Not sure what to prioritize?</strong>
+              <small>Get an optional physique review</small>
+            </span>
+            <i aria-hidden="true">›</i>
+          </button>
+          <TrainingPriorityChoices
+            selected={value}
+            selectionLocked={
+              value.filter(
+                (item) => item !== BALANCED_TRAINING_PRIORITY,
+              ).length >= MAX_MANUAL_TRAINING_PRIORITIES
+            }
+            limitReasonId="onboarding-priority-limit"
+            onSelect={choose}
+          />
+          </>
         ) : (
           <div className={`option-list ${stage.multi ? "option-grid" : ""}`}>
             {stage.options.map((option, index) => {
               const selected = stage.multi
                 ? value.includes(option)
                 : value === option;
-              const priorityLocked =
-                stage.key === "priorities" &&
-                option !== "Balanced" &&
-                !selected &&
-                value.filter((item) => item !== "Balanced").length >=
-                  MAX_MANUAL_TRAINING_PRIORITIES;
               const effortCopy =
                 stage.key === "effortStyle"
                   ? effortGuidance.options[index]
@@ -3759,11 +3818,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                   label={label}
                   description={description}
                   selected={selected}
-                  ariaDisabled={priorityLocked}
-                  describedBy={
-                    priorityLocked ? "onboarding-priority-limit" : undefined
-                  }
-                  onClick={() => choose(option)}
+                  onClick={(event) => choose(option, event)}
                 />
               );
             })}
@@ -3774,35 +3829,21 @@ function Onboarding({ update, exit, onPlanAccepted }) {
             <span id="onboarding-priority-limit" className="visually-hidden">
               Maximum of two priorities selected. Deselect one to choose another.
             </span>
-            <div
+            {!value.includes("Balanced") && value.length > 0 && <div
               className="priority-selection-summary"
               role="status"
               aria-live="polite"
               aria-atomic="true"
             >
               <strong>
-                {value.includes("Balanced") || value.length === 0
-                  ? "Balanced plan"
-                  : `${value.length} of ${MAX_MANUAL_TRAINING_PRIORITIES} selected`}
+                {`${value.length} of ${MAX_MANUAL_TRAINING_PRIORITIES} selected`}
               </strong>
               <small>
-                {value.includes("Balanced") || value.length === 0
-                  ? "No muscle group gets extra weekly volume."
-                  : value.length >= MAX_MANUAL_TRAINING_PRIORITIES
+                {value.length >= MAX_MANUAL_TRAINING_PRIORITIES
                     ? "Deselect one to choose another."
                     : value.join(" + ")}
                 </small>
-              </div>
-              <button
-                className="physique-review-entry"
-                onClick={() => setPhysiqueOpen(true)}
-              >
-                <span>
-                  <strong>Not sure what to prioritize?</strong>
-                  <small>Get an optional physique review</small>
-                </span>
-                <i aria-hidden="true">›</i>
-              </button>
+              </div>}
             </>
           )}
         {stage.key === "preferences" && (
@@ -3845,7 +3886,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
         {notice && <p className="offline-banner">{notice}</p>}
       </div>
       <div className="onboarding-footer">
-        <Button
+        {!singleDecision && <Button
           disabled={!valid || busy || safetyAnalysis.status === "checking"}
           onClick={() => {
             if (
@@ -3905,7 +3946,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
                 : stage.key === "effortStyle" && !value
                   ? "SKIP FOR NOW"
                   : "CONTINUE"}
-        </Button>
+        </Button>}
         {!busy &&
           (step > 0 ? (
             <Button
@@ -3916,16 +3957,7 @@ function Onboarding({ update, exit, onPlanAccepted }) {
             >
               <BackLabel />
             </Button>
-          ) : (
-            <Button
-              variant="quiet"
-              className="bottom-back"
-              aria-label="Back"
-              onClick={exit}
-            >
-              <BackLabel />
-            </Button>
-          ))}
+          ) : null)}
       </div>
       {busy && (
         <BuildingOverlay stage={generationStage} onCancel={cancelGeneration} />
@@ -3950,7 +3982,7 @@ export function weekLabel(date) {
     ? `${month(monday)} ${day(monday)}–${day(sunday)}`
     : `${month(monday)} ${day(monday)}–${month(sunday)} ${day(sunday)}`;
 }
-function WeekNavigation({ date, canGoBack, canGoForward, move }) {
+function WeekNavigation({ date, canGoBack, canGoForward, move, openCalendar, calendarOpen }) {
   return (
     <div className="week-navigation" aria-label="Change week">
       <button
@@ -3960,7 +3992,7 @@ function WeekNavigation({ date, canGoBack, canGoForward, move }) {
       >
         ‹
       </button>
-      <span>{weekLabel(date)}</span>
+      <button type="button" className="week-calendar-trigger" aria-label={`Open calendar, ${weekLabel(date)}`} aria-haspopup="dialog" aria-expanded={calendarOpen} onClick={openCalendar}><CalendarIcon/><span>{weekLabel(date)}</span></button>
       <button
         aria-label="Next week"
         disabled={!canGoForward}
@@ -4455,6 +4487,8 @@ function Today({
   const [startError, setStartError] = useState("");
   const [undoNotice, setUndoNotice] = useState(null);
   const [weekMotion, setWeekMotion] = useState("");
+  const [calendarOpen, setCalendarOpen] = useState(false);
+  const calendarBackground = useRef(null);
   const [todayEditMode, setTodayEditMode] = useState(false);
   const [todayEditOrder, setTodayEditOrder] = useState([]);
   const [todayDraggingId, setTodayDraggingId] = useState(null);
@@ -4600,18 +4634,9 @@ function Today({
   const datedWorkouts = state.workouts.filter(
     (workout) => workout.completedAt && workoutPlanDate(workout),
   );
-  const earliestDate = datedWorkouts.length
-    ? new Date(
-        Math.min(
-          ...datedWorkouts.map((workout) =>
-            localDate(workoutPlanDate(workout)).getTime(),
-          ),
-        ),
-      )
-    : localDate(isoDay(state.program.createdAt));
-  const canGoBack = selectedMonday > weekDate("Mon", earliestDate);
-  const latestFlexibleDate = Object.values(state.flexibleWeek?.sessions || {}).reduce((latest, item) => item.scheduledDate > latest ? item.scheduledDate : latest, isoDay());
-  const canGoForward = selectedMonday < weekDate("Mon", localDate(latestFlexibleDate));
+  const dateBounds = calendarRange(state);
+  const canGoBack = isoDay(selectedMonday) > dateBounds.min;
+  const canGoForward = selectedMonday < weekDate("Mon", dateBounds.max);
   const selectDate = (day, date) => {
     dismissPlanReady?.();
     update((current) => {
@@ -4698,6 +4723,9 @@ function Today({
     planReady && Boolean(plannedWorkoutForDate(state, new Date()));
   const calendar = (
     <>
+      {calendarOpen && createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso}
+        header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>}
+        onSelect={key=>{const date=localDate(key);selectDate(weekday(date),date);requestClose();}}/>}</ModalLayer>,document.body)}
       <div
         className={`week-selector${weekMotion ? ` week-transition-${weekMotion}` : ""}`}
         onClickCapture={suppressWeekClick}
@@ -4713,6 +4741,8 @@ function Today({
             canGoBack={canGoBack}
             canGoForward={canGoForward}
             move={moveWeek}
+            calendarOpen={calendarOpen}
+            openCalendar={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}
           />
           <strong className="today-program-name">
             {displayProgramName(state.program)}
@@ -4726,7 +4756,7 @@ function Today({
         />
       </div>
       {flexibleWeekConflict(state) && <aside className="flexible-week-missed"><strong>Review your temporary schedule</strong><small>Your plan changed. Some moved sessions need review.</small><button className="text-button" onClick={() => setDetail({ flexibleWeek: {} })}>REVIEW SCHEDULE</button></aside>}
-      {selectedIso === isoDay() && !trackedActive && missedFlexibleSessions(state).length > 0 && <aside className="flexible-week-missed"><strong>{missedFlexibleSessions(state)[0].workout.name}</strong><small>Planned for {displayDate(localDate(missedFlexibleSessions(state)[0].scheduledDate))}</small><button className="text-button" onClick={() => setDetail({ flexibleWeek: { sessionId: missedFlexibleSessions(state)[0].logicalSessionId } })}>REVIEW MISSED SESSION</button></aside>}
+      {selectedIso === isoDay() && !trackedActive && missedFlexibleSessions(state).length > 0 && <aside className="flexible-week-missed today-missed-row"><div><small>MISSED SESSION</small><strong>{missedFlexibleSessions(state)[0].workout.name} · {displayDate(localDate(missedFlexibleSessions(state)[0].scheduledDate))}</strong></div><button className="text-button" aria-label="Reschedule missed session" onClick={() => setDetail({ flexibleWeek: { sessionId: missedFlexibleSessions(state)[0].logicalSessionId } })}>RESCHEDULE</button></aside>}
       {planReady && (
         <PlanReadyNotice
           workoutToday={workoutToday}
@@ -4744,7 +4774,8 @@ function Today({
       onResume={() => setPage("workout")}
     />
   );
-  const dayHeader = label => <div className="today-day-header"><Eyebrow>{label}</Eyebrow><button className="text-button flexible-week-entry" onClick={() => setDetail({ flexibleWeek: {} })}>ADJUST WEEK</button></div>;
+  const dayHeader = label => <div className="today-day-header"><Eyebrow>{label}</Eyebrow><button className="text-button today-overflow-entry" aria-label="Today options" aria-haspopup="dialog" onClick={() => setDetail({ todayActions: {date:selectedIso,hasWorkout:Boolean(plannedWorkoutForDate(state,selectedDate))} })}>•••</button></div>;
+  const freestyleEntry = <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} />;
   const activeOptionalNotice = activeOptional && (
     <ActiveOptionalSessionNotice
       session={activeOptional}
@@ -4763,28 +4794,31 @@ function Today({
           {dayHeader(displayDate(selectedDate))}
           <WorkoutTitle workout={active} day={selectedDay} />
           <p>
-            {completedSets} / {pluralize(sets.length, "set")} ·{" "}
+            {active.source === 'freestyle' && sets.length === 0
+              ? 'No exercises yet'
+              : `${completedSets} / ${pluralize(sets.length, "set")}`} ·{" "}
             {formatActiveWorkoutDuration(elapsed)}
           </p>
           <Button onClick={() => setPage("workout")}>
             RESUME WORKOUT
           </Button>
         </section>
-        <section className="exercise-preview">
+        {active.source !== 'freestyle' && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
+        {active.source === 'freestyle' && active.exercises.length === 0 ? null : <section className="exercise-preview">
           <div className="today-exercise-list-heading">
             <Eyebrow>WORKOUT EXERCISES</Eyebrow>
-            <button
+            {active.source !== 'freestyle' && <button
               type="button"
               className="text-button"
               disabled
               aria-describedby="active-workout-edit-lock"
             >
-              Edit
-            </button>
+              Edit exercises
+            </button>}
           </div>
-          <small id="active-workout-edit-lock" className="today-edit-lock-note">
+          {active.source !== 'freestyle' && <small id="active-workout-edit-lock" className="today-edit-lock-note">
             Finish the active workout to edit exercises.
-          </small>
+          </small>}
           {active.exercises.map((exercise, index) => {
             const done = exercise.sets.filter((set) => set.completed).length;
             const current = index === active.exerciseIndex;
@@ -4803,12 +4837,15 @@ function Today({
             );
           })}
         </section>
+        }
+        {active.source === 'freestyle' && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
         {undoBanner}
       </main>
     );
   }
   const completed = datedWorkouts.find(
     (workout) =>
+      workout.source !== 'freestyle' &&
       (workoutPlanDate(workout) === selectedIso || (template?.logicalSessionId && workout.logicalSessionId === template.logicalSessionId)) &&
       (!template ||
         workout.programDayId === template.id ||
@@ -4816,7 +4853,7 @@ function Today({
   );
   const isHistoricalWeek = selectedMonday < currentMonday;
   const movedSource = flexibleSourceForDate(state, selectedIso)[0];
-  if (!template && !completed && movedSource) return <main className="screen today-screen">{calendar}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.name}</h1><p>{movedSource.skipped ? 'Skipped this week' : `Moved to ${displayDate(localDate(movedSource.scheduledDate))}`}</p>{!movedSource.skipped && <Button variant="secondary" onClick={() => selectDate(weekday(movedSource.scheduledDate), localDate(movedSource.scheduledDate))}>VIEW DESTINATION</Button>}</section></main>;
+  if (!template && !completed && movedSource) return <main className="screen today-screen">{calendar}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.name}</h1><p>{movedSource.skipped ? 'Skipped this week' : `Moved to ${displayDate(localDate(movedSource.scheduledDate))}`}</p>{!movedSource.skipped && <Button variant="secondary" onClick={() => selectDate(weekday(movedSource.scheduledDate), localDate(movedSource.scheduledDate))}>VIEW DESTINATION</Button>}{freestyleEntry}</section></main>;
   if (!template && !completed) {
     const upcoming = nextScheduledWorkout(state, selectedDate);
     const upcomingTitle = upcoming
@@ -4840,9 +4877,10 @@ function Today({
           <h1>Rest day</h1>
           <p>
             {isHistoricalWeek
-              ? "No workout was planned or logged on this date."
+              ? "No workout was planned on this date."
               : "This is a planned recovery day."}
           </p>
+          {freestyleEntry}
           {upcoming && (
             <div className="rest-up-next">
               <Eyebrow>UP NEXT</Eyebrow>
@@ -5449,13 +5487,14 @@ function Today({
             </div>
           </div>
         )}
+        <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />
       </section>
       <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
         <div className="today-exercise-edit-header">
           <div className="today-exercise-list-heading">
             <Eyebrow>
               {todayEditMode
-                ? "EDIT WORKOUT"
+                ? "EDIT EXERCISES"
                 : completed
                   ? "WORKOUT EXERCISES"
                   : viewingToday
@@ -5485,7 +5524,7 @@ function Today({
                   setTodayEditAnnouncement("Workout edit mode on. Changes save automatically.");
                 }}
               >
-                {todayEditMode ? "Done" : "Edit"}
+                {todayEditMode ? "Done" : "Edit exercises"}
               </button>
             )}
           </div>
@@ -5597,7 +5636,7 @@ export function alignedStepperValue(value, step, direction, min = 0) {
       : valueUnits - (remainder === 0 ? stepUnits : remainder);
   return Number((Math.max(minimumUnits, nextUnits) / scale).toFixed(precision));
 }
-function Stepper({
+export function Stepper({
   label,
   value,
   onChange,
@@ -5640,8 +5679,8 @@ function Stepper({
         aria-valuenow={
           typeof shownNumeric === "number" ? shownNumeric : undefined
         }
-        aria-valuetext={empty ? undefined : String(shownValue)}
-        placeholder={emptyLabel}
+        aria-valuetext={empty ? (emptyLabel === 'Bodyweight' ? 'Bodyweight' : undefined) : String(shownValue)}
+        placeholder={emptyLabel === 'Bodyweight' ? undefined : emptyLabel}
         inputMode={integer ? "numeric" : "decimal"}
         type="text"
         value={shownValue}
@@ -5661,6 +5700,7 @@ function Stepper({
           if (event.key === "Enter") event.currentTarget.blur();
         }}
       />
+      {empty && emptyLabel && draft === null && <span className="stepper-empty-label" aria-hidden="true">{emptyLabel}</span>}
       <button
         aria-label={`Increase ${label}`}
         disabled={disabled || (empty && !allowIncrementFromEmpty)}
@@ -5721,7 +5761,7 @@ function WorkoutConfirmation({ confirmation, cancel, continueAction }) {
     </div>
   );
 }
-function ActiveWorkout({ state, update, setPage, setDetail }) {
+function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish }) {
   const active = state.activeWorkout;
   const [now, setNow] = useState(Date.now());
   const [confirmation, setConfirmation] = useState(null);
@@ -5867,6 +5907,10 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       </main>
     );
   const exercise = currentExercise;
+  if (active.source === 'freestyle' && !exercise) return <main className="screen workout-screen freestyle-workout">
+    <header className="workout-header"><button aria-label="Back to Today" onClick={() => setPage('today')}>‹</button><div className="workout-header-center"><strong>Freestyle workout</strong><small>{formatWorkoutElapsedDuration(Math.floor((now - active.startedAt) / 1000))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button></span></header>
+    <section className="freestyle-empty"><h1>No exercises yet</h1><p>Add the first exercise when you’re ready. Your plan won’t change.</p><FreestyleActions state={state} update={update} setDetail={setDetail} setPage={setPage} empty /></section>
+  </main>;
   const exerciseIllustration = activeArtwork.source;
   const superset = supersetMeta(active.exercises, active.exerciseIndex);
   const canonicalSupersetStep = superset
@@ -5880,7 +5924,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   });
   const increment =
     state.profile.increments[item?.equipment?.[0]] ?? exercise.defaultIncrement;
-  const recommendation = progressionFor(
+  const recommendation = active.source === 'freestyle' ? null : progressionFor(
     exercise,
     state.workouts,
     state.profile,
@@ -6192,6 +6236,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         setCount: summary.completed,
         endedEarly: summary.completed < summary.total,
       });
+    onLiveFinish?.({priorWorkouts: state.workouts, startedAt: state.activeWorkout.startedAt, presented: false});
     update(completeWorkout);
     setConfirmation(null);
     setPage("complete");
@@ -6223,6 +6268,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   };
   const requestFinish = () => {
     if (workoutActionLockRef.current) return;
+    if (active.source === 'freestyle' && !summary.completed) return;
     if (summary.completed < summary.total)
       setConfirmation({
         type: "finish",
@@ -6356,8 +6402,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
     };
     if (document.activeElement?.closest?.(".workout-warmup"))
       document.activeElement.blur();
-    setWarmupOpen(false);
-    setDismissingWarmup(snapshot);
+    if (!isCompletion) setWarmupOpen(false);
+    setDismissingWarmup(reducedMotion ? null : snapshot);
     mutate((workout) => {
       const stage = workout.warmup?.stages?.find(
         (item) => item.id === currentWarmup.id,
@@ -6365,6 +6411,10 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
       if (stage) stage[field] = true;
     });
     clearTimeout(warmupDismissTimerRef.current);
+    if (reducedMotion) {
+      finishWarmupDismissal(isCompletion);
+      return;
+    }
     if (isCompletion && !reducedMotion) {
       warmupDismissTimerRef.current = setTimeout(() => {
         setDismissingWarmup((value) =>
@@ -6451,7 +6501,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
   return (
     <main
       ref={screenRef}
-      className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}`}
+      className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}${active.source === 'freestyle' ? ' freestyle-workout' : ''}`}
     >
       <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {exerciseNavigationAnnouncement}
@@ -6470,8 +6520,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
         <span className="workout-header-actions">
           <button
             className="text-button"
-            disabled={exerciseTransitioning}
-            aria-disabled={exerciseTransitioning}
+            disabled={exerciseTransitioning || (active.source === 'freestyle' && !summary.completed)}
+            aria-disabled={exerciseTransitioning || (active.source === 'freestyle' && !summary.completed)}
             onClick={requestFinish}
           >
             Finish
@@ -6529,7 +6579,6 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                 </div>
               </div>
             ) : (
-              <>
               <div className="workout-warmup-bar">
                 <button
                   className="workout-warmup-toggle"
@@ -6555,13 +6604,14 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   Skip
                 </button>
               </div>
+            )}
               {active.warmup?.safetyMessage && (
                 <p className="warmup-safety" role="status">
                   {active.warmup.safetyMessage}
                 </p>
               )}
-              {warmupOpen && (
-                <div className="warmup-details">
+              <Disclosure open={warmupOpen}>
+                <div className="warmup-details" inert={warmupCompleting ? '' : undefined}>
                   {warmup.general.length > 0 && (
                     <div className="warmup-checklist-section">
                       <small className="warmup-section-label">GENERAL</small>
@@ -6644,9 +6694,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                     {initialWarmup ? "FINISH WARM-UP" : "FINISH RAMP-UP"}
                   </button>
                 </div>
-              )}
-              </>
-            )}
+              </Disclosure>
           </div>
         </section>
       )}
@@ -6702,7 +6750,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                 type="button"
                 className={`exercise-note-button${exercisePersonalNote(exercise) ? " has-note" : ""}`}
                 aria-label={
-                  exercisePersonalNote(exercise)
+                  exerciseNotePresentation(exercise,state.program).reference
+                    ? "Exercise notes. Original import available."
+                    : exercisePersonalNote(exercise)
                     ? "Exercise note. Added."
                     : "No exercise note. Add note."
                 }
@@ -6713,6 +6763,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   <path d="M4 20h4l10.6-10.6a2.1 2.1 0 0 0-3-3L5 17v3Z" />
                   <path d="m13.8 8.2 3 3" />
                 </svg>
+                <span>Notes</span>
                 {exercisePersonalNote(exercise) && <i aria-hidden="true" />}
               </button>
               <button
@@ -6729,24 +6780,25 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
             {exerciseName(exercise)}
           </h1>
           <p className="exercise-meta">
-            Target {targetLabel(exercise, state.profile.rirEnabled)}
+            {active.source === 'freestyle' ? 'Freestyle · Choose your sets and reps' : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
           </p>
-          <small className="exercise-history-meta">
+          {(active.source !== 'freestyle' || !prior) && <small className="exercise-history-meta">
             {prior
               ? `Last ${prior.sets
                 .filter((set) => set.completed)
                 .map((set) => exerciseValueLabel(exercise, set.reps))
                 .join(" / ")}`
               : "First session"}
-          </small>
+          </small>}
           {performancePr && (
             <small className="active-performance-pr" role="status" aria-live="polite">
               {performancePr.label}
             </small>
           )}
-          {exerciseNote(exercise) && (
-            <small className="exercise-user-note exercise-program-note">{exerciseNote(exercise)}</small>
+          {exerciseNotePresentation(exercise,state.program).cue && (
+            <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
           )}
+          {exerciseNotePresentation(exercise,state.program).reference&&<button className="text-button exercise-source-link" onClick={()=>setDetail({exerciseNote:exercise})}>Original import in Notes</button>}
           {exercisePersonalNote(exercise) && (
             <small className="exercise-personal-note">
               <span>Your note</span> · {exercisePersonalNote(exercise)}
@@ -6757,6 +6809,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           )}
         </div>
       </section>
+      {active.source === 'freestyle' && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} />}
       {recommendation && (
         <section
           className={`recommendation ${recommendation.type} ${recommendationApplied ? "applied" : ""}`}
@@ -6772,7 +6825,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               {recommendation.weight
                 ? recommendationApplied
                   ? `${displayWeight(recommendation.weight, state.profile.units)} ${unit} is set for today’s remaining sets.`
-                  : `Use ${displayWeight(recommendation.weight, state.profile.units)} ${unit} for today’s remaining sets.`
+                  : `Next: ${displayWeight(recommendation.weight, state.profile.units)} ${unit}. ${recommendation.detail}`
                 : recommendation.detail}
             </p>
           </div>
@@ -6841,6 +6894,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
             <span className="set-label-help">
               <HelpPopover
                 id="active-workout-rir-help"
+                circleOnly
                 label="What is RIR?"
                 term="RIR"
                 title="Reps in reserve"
@@ -6850,7 +6904,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
               </HelpPopover>
             </span>
           )}
-          <span />
+          <span className="set-done-heading">DONE</span>
         </div>
         {exercise.sets.map((set, index) => {
           const activeSet = index === activeSetIndex;
@@ -6929,7 +6983,9 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                 />
               )}
               {state.profile.rirEnabled && !timed && (
+                <>
                 <select
+                  className="rir-native"
                   aria-label={`RIR for set ${index + 1}`}
                   value={set.rir ?? ""}
                   onChange={(event) =>
@@ -6949,20 +7005,18 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                     </option>
                   ))}
                 </select>
+                <span className="rir-display" aria-hidden="true"><span className="rir-value">{set.rir == null ? 'RIR' : `${set.rir} RIR`}</span><svg viewBox="0 0 12 12"><path d="m2 4 4 4 4-4" /></svg></span>
+                </>
               )}
               <button
                 className="check"
                 data-check-state={set.completed ? "completed" : ready ? "ready" : activeSet ? "current" : "disabled"}
                 disabled={checkDisabled}
                 aria-pressed={set.completed}
-                aria-label={`${set.completed ? "Reopen" : "Complete"} set ${index + 1}`}
+                aria-label={set.completed ? `Undo logged set ${index + 1}` : `Log set ${index + 1}`}
                 onClick={() => toggleSet(index)}
               >
-                {set.completed ? (
-                  <span aria-hidden="true">✓</span>
-                ) : (
-                  <span className="check-pending" aria-hidden="true" />
-                )}
+                <span className="check-mark" aria-hidden="true">✓</span>
               </button>
             </div>
             {segmentKind && (set.segments || []).length > 0 && (
@@ -7003,6 +7057,8 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
             <Button variant="secondary" disabled>
               LOG NEXT SET TO CONTINUE
             </Button>
+          ) : active.source === 'freestyle' && !nextExercise && !summary.completed ? (
+            <Button variant="secondary" onClick={() => setDetail({ freestylePicker: true })}>+ ADD EXERCISE</Button>
           ) : (
             <Button
               variant={
@@ -7018,6 +7074,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                   : ""
               }
               onClick={nextExercise ? requestNext : requestFinish}
+              disabled={!nextExercise && active.source === 'freestyle' && !summary.completed}
               aria-disabled={exerciseTransitioning}
               aria-label={
                 exerciseCompleting
@@ -7080,7 +7137,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
                       ),
                       "set",
                     ) + " remaining"
-                  : targetLabel(
+                  : active.source === 'freestyle' ? `${block.entries[0].sets.length} sets` : targetLabel(
                       block.entries[0],
                       state.profile.rirEnabled,
                     )}
@@ -7089,6 +7146,7 @@ function ActiveWorkout({ state, update, setPage, setDetail }) {
           ))}
         </section>
       )}
+      {active.source === 'freestyle' && <FreestyleActions state={state} update={update} setDetail={setDetail} setPage={setPage} hideAdd={!nextExercise && !summary.completed && !canonicalSupersetStep} />}
       </div>
       <WorkoutConfirmation
         confirmation={confirmation}
@@ -7355,7 +7413,7 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMod
             onError={() => { setUnavailable(true); onAvailability?.(entry.id, false); }}
           />
         )}
-        {selectionIndex > 0 && <span className="photo-compare-selection-mark" aria-hidden="true">{selectionIndex}</span>}
+        {selectionIndex > 0 && <span className="photo-compare-selection-mark" aria-hidden="true">✓</span>}
         {unavailable ? (
           <span aria-hidden="true">Unavailable</span>
         ) : !imageReady ? (
@@ -7922,8 +7980,12 @@ function CompletedWorkoutDetail({ workoutId, state, update, close, setPage }) {
   );
 }
 
-function Complete({ state, update, setPage, setDetail }) {
+function Complete({ state, update, setPage, setDetail, liveFinish, persistenceFailed }) {
   const session = state.workouts.at(-1);
+  const [liveEntry] = useState(()=>Boolean(liveFinish && !liveFinish.presented && liveFinish.startedAt===session?.startedAt));
+  const [motionCancelled,setMotionCancelled] = useState(false);
+  useEffect(()=>{if(persistenceFailed)setMotionCancelled(true);},[persistenceFailed]);
+  const recognition = useMemo(()=>liveFinish?.startedAt===session?.startedAt ? completionRecognition(session,liveFinish.priorWorkouts,{eligible:exercise=>exerciseSupportsEstimatedOneRepMax(exercise)&&! /assist/i.test(exerciseName(exercise))}) : null,[liveFinish,session?.id]);
   const headingRef = useRef(null);
   const completionFeedbackSentRef = useRef(false);
   const completedExercises = (session?.exercises || []).filter((item) =>
@@ -7934,30 +7996,38 @@ function Complete({ state, update, setPage, setDetail }) {
     : { completed: 0, total: 0 };
   const endedEarly = Boolean(
     session &&
-      (session.status === "ended-early" || summary.completed < summary.total),
+      (session.status === "ended-early" || summary.completed === 0 || summary.completed < summary.total),
   );
   const setResult = endedEarly
     ? `${summary.completed} of ${pluralize(summary.total, "set")}`
     : pluralize(summary.completed, "set");
   const visibleExercises = endedEarly ? session.exercises : completedExercises;
   useEffect(() => {
-    if (!session || completionFeedbackSentRef.current) return;
+    if (!session || !liveEntry || completionFeedbackSentRef.current || liveFinish.presented) return;
     completionFeedbackSentRef.current = true;
-    triggerHaptic(endedEarly ? "success" : "complete");
-    requestAnimationFrame(() =>
-      headingRef.current?.focus({ preventScroll: true }),
-    );
-  }, [endedEarly, session?.id]);
+    liveFinish.presented = true;
+    requestAnimationFrame(() => {
+      if (!headingRef.current) return;
+      // useLiftState writes in an effect. Do not confirm a failed local write
+      // with a success haptic; this read never changes persistence behavior.
+      try {
+        const stored=JSON.parse(localStorage.getItem(STORAGE_KEY));
+        if (!persistenceFailed && stored?.workouts?.some(w=>w.id===session.id && w.completedAt===session.completedAt))
+          triggerHaptic(endedEarly ? "success" : "complete");
+      } catch { /* The existing persistence warning remains the error surface. */ }
+      headingRef.current.focus({ preventScroll: true });
+    });
+  }, [endedEarly, session?.id, liveEntry, liveFinish, persistenceFailed]);
   if (!session) return null;
   return (
     <main
-      className={`screen complete-screen ${endedEarly ? "ended-early" : ""}`}
+      className={`screen complete-screen ${endedEarly ? "ended-early" : ""} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
     >
       <div className="complete-mark" aria-hidden="true">
         <span>✓</span>
       </div>
-      <h1 ref={headingRef} tabIndex={-1}>
-        {endedEarly ? "Workout ended early" : "Workout complete"}
+      <h1 ref={headingRef} tabIndex={-1} aria-describedby={!persistenceFailed && recognition ? "completion-recognition" : undefined}>
+        {summary.completed===0 ? "Workout ended" : endedEarly ? "Workout ended early" : "Workout complete"}
       </h1>
       <div className="stat-grid">
         <div>
@@ -7973,6 +8043,12 @@ function Complete({ state, update, setPage, setDetail }) {
           <small>{endedEarly ? "COMPLETED" : "LOGGED"}</small>
         </div>
       </div>
+      {!persistenceFailed && recognition && <p id="completion-recognition" className="completion-recognition">
+        <strong>{recognition.label}</strong>
+        {recognition.type==='pr' && <span>{exerciseName(recognition.exercise)} · {recognition.record.repPr || recognition.record.weightPr
+          ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
+          : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
+      </p>}
       <WorkoutPhotoMemory workout={session} update={update} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
@@ -8653,32 +8729,26 @@ export function coachContextSummary(state) {
     secondary: `${loggedWorkouts.length} ${loggedWorkouts.length === 1 ? "workout" : "workouts"} logged${hasWorkingWeights ? " · Recent working weights available" : " · Completed training history available"}`,
   };
 }
-export function contextualCoachPrompts(state) {
-  const today = state.activeWorkout || adaptedTemplateForToday(state);
+export function contextualCoachPrompts(state, now = Date.now()) {
+  const date = new Date(now), key = isoDay(date);
+  const today = state.activeWorkout || adaptedTemplateForToday(state, date);
   const hasHistory = state.workouts.some(
     (workout) => workoutSetSummary(workout).completed > 0,
   );
-  if (!today) {
-    return [
-      "Should I train today anyway?",
-      "How am I recovering this week?",
-      hasHistory
-        ? "Am I progressing on this program?"
-        : "Explain how this program fits my goals.",
-    ];
-  }
-  if (hasHistory) {
-    return [
-      "Why did my working weight change?",
-      "Adjust today based on my last workout.",
-      "Am I progressing on this program?",
-    ];
-  }
-  return [
-    "Adapt today to 35 minutes.",
-    "How should I approach my first workout?",
-    "Explain how this program fits my goals.",
-  ];
+  const completed = new Set(state.workouts.filter(workout => workout.completedAt && weekKey(workoutPlanDate(workout)) === weekKey(date)).map(workout => workout.programDayId));
+  const active = Boolean(state.activeWorkout || state.activeOptionalSession);
+  const canMove = currentWeekSchedule(state, date).some(item => !completed.has(item.workoutId) && item.workoutId !== state.activeWorkout?.programDayId);
+  const canShorten = Boolean(today && !active && !state.workouts.some(workout => workout.completedAt && workoutPlanDate(workout) === key && workout.programDayId === today.id));
+  const shorten = "Shorten today’s workout", move = "Move a workout this week", progress = "Review logged progress";
+  const explain = today ? "Explain today’s workout" : nextScheduledWorkout(state, date) ? "Explain my next workout" : "Explain my program";
+  const preferred = active ? [explain, progress, "Explain my program"]
+    : flexibleWeekConflict(state) ? [move, shorten, progress]
+    : canShorten ? [shorten, move, hasHistory ? progress : explain]
+    : [move, explain, progress];
+  return [...new Set([...preferred, explain, "Explain my program", "How my plan fits my goals"])]
+    .filter(prompt => prompt !== shorten || canShorten)
+    .filter(prompt => prompt !== move || canMove)
+    .filter(prompt => prompt !== progress || hasHistory).slice(0, 3);
 }
 function Coach({ state, update, setPage }) {
   const [message, setMessage] = useState(state.coachDraft || "");
@@ -9115,6 +9185,7 @@ function Coach({ state, update, setPage }) {
             </aside>
             <section className="prompt-list">
               <Eyebrow>SHORTCUTS</Eyebrow>
+              <p className="coach-shortcut-helper">Review proposed changes before you apply them.</p>
               <div>
                 {prompts.map((prompt) => (
                   <button
@@ -9186,7 +9257,7 @@ function Coach({ state, update, setPage }) {
               if (!sending && coachAvailable && message.trim()) send(message);
             }
           }}
-          placeholder={coachAvailable ? "Ask anything…" : "Coach unavailable"}
+          placeholder={coachAvailable ? "Ask about your training…" : "Coach unavailable"}
         />
         <Button
           className={`coach-send ${!coachAvailable ? "is-unavailable" : sending ? "is-sending" : message.trim() ? "is-ready" : "is-empty"}`}
@@ -9330,6 +9401,7 @@ function GoalProgress({
   setDetail,
 }) {
   const focus = effectiveProgressFocus(state);
+  const sectionLabel = state.progressFocusOverrideByPlanId?.[state.program?.id] ? 'PROGRESS FOCUS' : 'GOAL PROGRESS';
   const progressionLabel = progressionCountLabel(progressionRows);
   const hasComparableData = progressionRows.length >= 2;
   const trend = weightTrend(state.weightCheckins);
@@ -9351,12 +9423,11 @@ function GoalProgress({
   if (!focus)
     return (
       <section className="goal-progress-section">
-        <Eyebrow>GOAL PROGRESS</Eyebrow>
+        <Eyebrow>PROGRESS FOCUS</Eyebrow>
         <div className="goal-progress-card">
-          <h2>Training progress</h2>
+          <h2>No focus selected.</h2>
           <p>
-            This plan has no goal attached. Choose a focus to change what
-            Progress highlights. It will not change your plan.
+            Choose what Progress highlights. This won’t change your plan.
           </p>
           <button
             type="button"
@@ -9404,7 +9475,7 @@ function GoalProgress({
   if (focus !== "lose_fat")
     return (
       <section className="goal-progress-section">
-        <Eyebrow>GOAL PROGRESS</Eyebrow>
+        <Eyebrow>{sectionLabel}</Eyebrow>
         <div className="goal-progress-card">
           <h2>{content.title}</h2>
           <div className="goal-progress-metric">
@@ -9418,7 +9489,7 @@ function GoalProgress({
   const tracking = Boolean(state.weightTrackingEnabled);
   return (
     <section className="goal-progress-section">
-      <Eyebrow>GOAL PROGRESS</Eyebrow>
+      <Eyebrow>{sectionLabel}</Eyebrow>
       <div className="goal-progress-card">
         {tracking ? (
           <button
@@ -9491,7 +9562,7 @@ function ProgressFocusSheet({ state, update, close }) {
   return (
     <main className="screen detail-screen progress-focus-sheet">
       <SheetHeader title="Progress focus" onClose={close} />
-      <Eyebrow>GOAL PROGRESS</Eyebrow>
+      <Eyebrow>PROGRESS FOCUS</Eyebrow>
       <h1>What should Progress highlight?</h1>
       <p>This only changes Progress. Your workouts stay the same.</p>
       <div className="progress-focus-options" role="radiogroup">
@@ -9654,6 +9725,7 @@ function WeightEditor({ state, update, request, setDetail }) {
               {error}
             </p>
           )}
+          <SheetActionFooter>
           <Button type="submit">SAVE</Button>
           {entry && (
             <button
@@ -9673,6 +9745,7 @@ function WeightEditor({ state, update, request, setDetail }) {
               DELETE CHECK-IN
             </button>
           )}
+          </SheetActionFooter>
         </form>
       )}
     </main>
@@ -9766,7 +9839,19 @@ function WeightHistory({ state, setDetail, close, saved }) {
   );
 }
 
-function Progress({ state, update, setDetail }) {
+function LoggedExerciseRow({row,state,onClick}) {
+  const item=row.exercise,bodyweight=Boolean(exerciseCatalog[item.exerciseId]?.bodyweight||item.importedExercise?.bodyweight);
+  const load=exerciseMeasure(item)==='seconds'||exerciseLoadRequirement(item)==='none'?null:highestSimpleLoggedLoad(item);
+  return <button className="list-row logged-exercise-row" onClick={onClick}><span><strong>{exerciseName(item)}</strong><small>{row.date?`Latest logged session · ${new Intl.DateTimeFormat('en',{day:'numeric',month:'short',year:'numeric'}).format(localDate(row.date))}`:'Date unavailable'}</small>{load!==null?<small>{bodyweight?'Highest added load':'Highest logged load'} · {displayWeight(load,state.profile.units)} {weightUnit(state.profile.units)}</small>:bodyweight&&<small>Bodyweight</small>}</span><span className="navigation-chevron" aria-hidden="true">›</span></button>;
+}
+function LoggedExercises({state,setDetail,close,initial={}}) {
+  const [query,setQuery]=useState(initial.query||'');const ref=useRef(null);
+  useLayoutEffect(()=>{if(ref.current)ref.current.scrollTop=initial.scroll||0;},[]);
+  const rows=loggedExercises(state.workouts).map(row=>({...row,id:row.exercise.exerciseId,name:exerciseName(row.exercise),aliases:exerciseCatalog[row.exercise.exerciseId]?.aliases||[]}));
+  const filtered=rankExerciseSearch(rows.filter(row=>exerciseMatchesQuery(row,query)),query);
+  return <main ref={ref} className="screen detail-screen logged-exercises-sheet"><SheetHeader title="Logged exercises" onClose={close}/><p>Most recent first</p><SearchInput aria-label="Search logged exercises" placeholder="Search logged exercises" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/><div>{filtered.map(row=><LoggedExerciseRow key={row.exercise.exerciseId} row={row} state={state} onClick={()=>setDetail({exercise:row.exercise,returnToLogged:{query,scroll:ref.current?.scrollTop||0}})}/>)}</div>{!filtered.length&&<p role="status">{query?`No logged exercises match “${query}”.`:'No exercises logged yet'}</p>}</main>;
+}
+function Progress({ state, update, setDetail, setPage }) {
   const completedWorkouts = state.workouts.filter(
     (workout) =>
       workout.completedAt && workoutSetSummary(workout).completed > 0,
@@ -9800,7 +9885,7 @@ function Progress({ state, update, setDetail }) {
         plannedSeen.add(exercise.exerciseId);
         earlyExercises.push(exercise);
       }
-  const workingExercises = latest.length ? latest : earlyExercises.slice(0, 3);
+  const loggedRows = loggedExercises(state.workouts);
   const progressionExercises = [];
   const progressionSeen = new Set();
   for (const exercise of [...latest, ...earlyExercises])
@@ -9830,7 +9915,7 @@ function Progress({ state, update, setDetail }) {
     completedWorkouts.length === 0
       ? "Your progress starts here."
       : completedWorkouts.length === 1
-        ? "Your baseline is set."
+        ? "Your first baseline is set."
         : progressionRows.length
           ? "Know where your training stands."
           : "Your training is building a baseline.";
@@ -9838,7 +9923,7 @@ function Progress({ state, update, setDetail }) {
     completedWorkouts.length === 0
       ? "Complete your first workout to start building training history."
       : completedWorkouts.length === 1
-        ? "Your first logged session gives you a real starting point."
+        ? "ROOK now has a starting point for your logged training."
         : "See what is ready to progress, what to hold and what improved.";
   const dateLabel = (value) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))
@@ -9857,6 +9942,119 @@ function Progress({ state, update, setDetail }) {
             day: "numeric",
           }).format(date);
   };
+  const earlyData = !effectiveProgressFocus(state) && !progressionRows.length && !improvements.length;
+  const goalSection = (<GoalProgress
+        state={state}
+        progressionRows={allProgressionRows}
+        improvements={improvements}
+        setDetail={setDetail}
+      />);
+  const progressionSection = (<section className="progression-overview">
+        <Eyebrow>PROGRESSION</Eyebrow>
+        {progressionRows.length ? (
+          progressionRows.map(({ exercise, result }) => (
+            <button
+              key={exercise.exerciseId}
+              className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title) ? " progression-caution" : ""}`}
+              onClick={() => setDetail({ exercise })}
+            >
+              <span>
+                <strong>{exerciseName(exercise)}</strong>
+                <small>{result.title}</small>
+                {result.type === "progress" && result.weight ? (
+                  <small className="progression-next">
+                    Next: {displayWeight(result.weight, state.profile.units)} {unit}
+                  </small>
+                ) : null}
+              </span>
+              <span className="navigation-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ))
+        ) : (
+          <p className="progression-empty">
+            More comparable sessions are needed before ROOK can suggest a progression.
+          </p>
+        )}
+      </section>);
+  const photoSection = (<section className="workout-photo-entry-section">
+        <Eyebrow>WORKOUT PHOTOS</Eyebrow>
+        <button
+          type="button"
+          className="workout-photo-entry-card"
+          onClick={() => setDetail("workout-photos")}
+        >
+          <span>
+            <strong>
+              {photoWorkouts.length
+                ? pluralize(photoWorkouts.length, "private photo")
+                : "No workout photos yet"}
+            </strong>
+            <small>
+              {photoWorkouts.length
+                ? "Look back through your photo timeline."
+                : "Optional photos saved after workouts will appear here."}
+            </small>
+          </span>
+          <span className="navigation-chevron" aria-hidden="true">›</span>
+        </button>
+        <small className="workout-photo-entry-privacy">Stored privately on this device.</small>
+      </section>);
+  const trainingSections = (<>{improvements.length > 0 ? (
+        <section className="progress-lower">
+          <Eyebrow>RECENT IMPROVEMENTS</Eyebrow>
+          {improvements.slice(0, 3).map((item) => (
+            <button
+              key={item.exerciseId}
+              className="list-row"
+              onClick={() => setDetail({ exercise: item.exercise })}
+            >
+              <span>
+                <strong>{exerciseName(item.exercise)}</strong>
+                <small>
+                  {item.type === "weight"
+                    ? `+${displayWeight(item.deltaWeight, state.profile.units)} ${unit} since last session`
+                    : `+${item.deltaReps} ${item.deltaReps === 1 ? "rep" : "reps"}${item.weight !== null ? ` at ${displayWeight(item.weight, state.profile.units)} ${unit}` : ""}`}
+                </small>
+              </span>
+              <span className="navigation-chevron" aria-hidden="true">
+                ›
+              </span>
+            </button>
+          ))}
+        </section>
+      ) : completedWorkouts.length > 0 ? (
+        <section className="progress-lower">
+          <Eyebrow>RECENT TRAINING</Eyebrow>
+          {[...completedWorkouts]
+            .reverse()
+            .slice(0, 3)
+            .map((workout) => {
+              const sets = workoutSetSummary(workout).completed;
+              return (
+                <button
+                  className="list-row recent-session-row"
+                  key={workout.id}
+                  onClick={() => setDetail({ completedWorkout: workout.id })}
+                >
+                  <span>
+                    <strong>{workout.name}</strong>
+                    <small>
+                      {dateLabel(workoutPlanDate(workout))} ·{" "}
+                      {pluralize(sets, "set")}
+                    </small>
+                  </span>
+                  <span className="navigation-chevron" aria-hidden="true">›</span>
+                </button>
+              );
+            })}
+        </section>
+      ) : null}
+      <section className="working-weights-section logged-exercises-preview">
+        <Eyebrow>EXERCISE HISTORY</Eyebrow>
+        {loggedRows.length?<>{loggedRows.slice(0,6).map(row=><LoggedExerciseRow key={row.exercise.exerciseId} row={row} state={state} onClick={()=>setDetail({exercise:row.exercise})}/>)}<button className="list-row logged-exercises-all" onClick={()=>setDetail({loggedExercises:{}})}><span>View all logged exercises ({loggedRows.length})</span><span aria-hidden="true">›</span></button></>:<><h3>No exercises logged yet</h3><p>Complete a workout to see your exercises and latest session details here.</p><button className="text-button" onClick={()=>setPage('today')}>Go to Today</button></>}
+      </section></>);
   return (
     <main className="screen progress-screen">
       <Eyebrow>PROGRESS</Eyebrow>
@@ -9907,7 +10105,7 @@ function Progress({ state, update, setDetail }) {
             <div><dt>PRs</dt><dd>{weeklyReview.prCount}</dd></div>
             <div>
               <dt>Adjusted / moved</dt>
-              <dd>{weeklyReview.adjusted} / {weeklyReview.moved}</dd>
+              <dd className="weekly-review-adjustments">{adjustedMovedLabel(weeklyReview.adjusted, weeklyReview.moved).split(' · ').map((label,index)=><span key={index}>{index ? ' · ' : ''}{label}</span>)}</dd>
             </div>
             {weeklyReview.skipped > 0 && (
               <div><dt>Skipped</dt><dd>{weeklyReview.skipped}</dd></div>
@@ -9918,162 +10116,7 @@ function Progress({ state, update, setDetail }) {
           </div>
         </div>
       </section>
-      <GoalProgress
-        state={state}
-        progressionRows={allProgressionRows}
-        improvements={improvements}
-        setDetail={setDetail}
-      />
-      <section className="progression-overview">
-        <Eyebrow>PROGRESSION</Eyebrow>
-        {progressionRows.length ? (
-          progressionRows.map(({ exercise, result }) => (
-            <button
-              key={exercise.exerciseId}
-              className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title) ? " progression-caution" : ""}`}
-              onClick={() => setDetail({ exercise })}
-            >
-              <span>
-                <strong>{exerciseName(exercise)}</strong>
-                <small>{result.title}</small>
-                {result.type === "progress" && result.weight ? (
-                  <small className="progression-next">
-                    Next: {displayWeight(result.weight, state.profile.units)} {unit}
-                  </small>
-                ) : null}
-              </span>
-              <span className="navigation-chevron" aria-hidden="true">
-                ›
-              </span>
-            </button>
-          ))
-        ) : (
-          <p className="progression-empty">
-            More comparable sessions are needed before there is a progression
-            call.
-          </p>
-        )}
-      </section>
-      <section className="workout-photo-entry-section">
-        <Eyebrow>WORKOUT PHOTOS</Eyebrow>
-        <button
-          type="button"
-          className="workout-photo-entry-card"
-          onClick={() => setDetail("workout-photos")}
-        >
-          <span>
-            <strong>
-              {photoWorkouts.length
-                ? pluralize(photoWorkouts.length, "private photo")
-                : "No workout photos yet"}
-            </strong>
-            <small>
-              {photoWorkouts.length
-                ? "Look back through your photo timeline."
-                : "Optional photos saved after workouts will appear here."}
-            </small>
-          </span>
-          <span className="navigation-chevron" aria-hidden="true">›</span>
-        </button>
-        <small className="workout-photo-entry-privacy">Stored privately on this device.</small>
-      </section>
-      {improvements.length > 0 ? (
-        <section className="progress-lower">
-          <Eyebrow>RECENT IMPROVEMENTS</Eyebrow>
-          {improvements.slice(0, 3).map((item) => (
-            <button
-              key={item.exerciseId}
-              className="list-row"
-              onClick={() => setDetail({ exercise: item.exercise })}
-            >
-              <span>
-                <strong>{exerciseName(item.exercise)}</strong>
-                <small>
-                  {item.type === "weight"
-                    ? `+${displayWeight(item.deltaWeight, state.profile.units)} ${unit} since last session`
-                    : `+${item.deltaReps} ${item.deltaReps === 1 ? "rep" : "reps"}${item.weight !== null ? ` at ${displayWeight(item.weight, state.profile.units)} ${unit}` : ""}`}
-                </small>
-              </span>
-              <span className="navigation-chevron" aria-hidden="true">
-                ›
-              </span>
-            </button>
-          ))}
-        </section>
-      ) : completedWorkouts.length > 0 ? (
-        <section className="progress-lower">
-          <Eyebrow>RECENT TRAINING</Eyebrow>
-          {[...completedWorkouts]
-            .reverse()
-            .slice(0, 3)
-            .map((workout) => {
-              const sets = workoutSetSummary(workout).completed;
-              return (
-                <button
-                  className="list-row recent-session-row"
-                  key={workout.id}
-                  onClick={() => setDetail({ completedWorkout: workout.id })}
-                >
-                  <span>
-                    <strong>{workout.name}</strong>
-                    <small>
-                      {dateLabel(workoutPlanDate(workout))} ·{" "}
-                      {pluralize(sets, "set")}
-                    </small>
-                  </span>
-                </button>
-              );
-            })}
-        </section>
-      ) : null}
-      {workingExercises.length > 0 && (
-        <section className="working-weights-section">
-          <Eyebrow>WORKING WEIGHTS</Eyebrow>
-          {workingExercises.slice(0, 6).map((item) => {
-            const completed = item.sets.filter((set) => set.completed);
-            const weighted = completed.filter(
-              (set) => set.weight !== null && set.weight !== undefined,
-            );
-            const set = weighted.length
-              ? weighted.reduce((best, value) =>
-                  Number(value.weight) >= Number(best.weight) ? value : best,
-                )
-              : null;
-            const isBodyweight = Boolean(
-              exerciseCatalog[item.exerciseId]?.bodyweight,
-            );
-            const loadRequirement = exerciseLoadRequirement(item);
-            const loadContext = exerciseCatalog[
-              item.exerciseId
-            ]?.equipment?.includes("resistance bands")
-              ? "Band"
-              : isBodyweight
-                ? "Bodyweight"
-                : "No load";
-            return (
-              <button
-                key={item.exerciseId}
-                className="list-row working-weight-row"
-                onClick={() => setDetail({ exercise: item })}
-              >
-                <strong>{exerciseName(item)}</strong>
-                <span>
-                  <b>
-                    {set
-                      ? `${displayWeight(set.weight, state.profile.units)} ${unit}`
-                      : loadRequirement !== "required" && completed.length
-                        ? loadContext
-                        : completed.length
-                          ? "No weight logged"
-                          : "Not enough data"}
-                  </b>
-                  <i aria-hidden="true">›</i>
-                </span>
-              </button>
-            );
-          })}
-        </section>
-      )}
+      {earlyData ? <>{trainingSections}{progressionSection}{goalSection}{photoSection}</> : <>{goalSection}{progressionSection}{photoSection}{trainingSections}</>}
     </main>
   );
 }
@@ -10369,6 +10412,17 @@ function PersonalizationSummary({ profile, program }) {
   );
 }
 function Profile({ state, update, setDetail, setPage, onLogout }) {
+  const [area, setArea] = useState(null);
+  const hubPosition = useRef(0), returnControl = useRef(null), profileRef = useRef(null);
+  const openArea = (next, event) => {
+    hubPosition.current = window.scrollY; returnControl.current = next;
+    setArea(next);
+  };
+  const backToProfile = () => setArea(null);
+  useLayoutEffect(() => {
+    if (area) { window.scrollTo(0, 0); profileRef.current?.querySelector('.detail-header-back')?.focus({preventScroll:true}); }
+    else { window.scrollTo(0, hubPosition.current); profileRef.current?.querySelector(`[data-profile-area="${returnControl.current}"]`)?.focus({preventScroll:true}); }
+  }, [area]);
   const p = state.profile;
   const profileSafety = trainingSafetyFor(p);
   const profileSafetyConflicts = plannedExerciseSafetyConflicts(
@@ -10425,36 +10479,35 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
     ? "Imported plan"
     : displayProgramName(state.program);
   const frequency = `${pluralize(state.program.days.length, "day")}/week`;
-  const adjust = () => {
-    update((current) => {
-      current.coachDraft = "I want to adjust my current training plan.";
-      return current;
-    });
-    setPage("coach");
-  };
+  const block = state.program.trainingBlock;
+  const programSummary = `${frequency}${block ? ` · ${block.completed ? "Block complete" : `Week ${block.currentWeek || 1} of ${block.totalWeeks || 1}`}` : !imported && goalContext ? ` · ${goalContext}` : ""}`;
+  const areaTitle = {program:"Program",training:"Training setup",preferences:"Preferences",data:"Data & backup"}[area];
   return (
-    <main className="screen profile-screen">
+    <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape'){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}`}>
+      {area && <div className="profile-subpage-header"><SheetHeader title={areaTitle} onBack={backToProfile} backLabel="Back to Profile" /></div>}
       <header className="profile-program">
+        {!area && <>
         <Eyebrow>PROFILE</Eyebrow>
         <h1>Training profile</h1>
+        </>}
+        {!area ? <button data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`Current program: ${programTitle}, ${programSummary}`}>
+          <span><Eyebrow>CURRENT PROGRAM</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><span aria-hidden="true">›</span>
+        </button> : area === 'program' &&
         <div className="profile-current-program">
           <Eyebrow>CURRENT PROGRAM</Eyebrow>
           <h2>{programTitle}</h2>
           <p>
-            {frequency}
-            {!imported && goalContext ? ` · ${goalContext}` : ""}
+            {programSummary}
           </p>
-        </div>
+        </div>}
       </header>
-      {personal.length > 0 && (
+      {area === 'training' && (
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
-          {personal.map(([label, value]) => (
-            <InfoRow key={label} label={label} value={value} />
-          ))}
+          <button className="list-row" onClick={()=>setDetail('profile-details')}><span><strong>Personal details</strong><small>{personal.length ? personal.map(([,value])=>value).join(' · ') : 'Add name, age or sex'}</small></span><span aria-hidden="true">›</span></button>
         </section>
       )}
-      {personalIncomplete && (
+      {!area && personalIncomplete && (
         <section className="complete-profile">
           <Eyebrow>COMPLETE YOUR PROFILE</Eyebrow>
           <button
@@ -10469,6 +10522,10 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           </button>
         </section>
       )}
+      {!area && <section className="profile-manage"><Eyebrow>MANAGE</Eyebrow>
+        {[['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Preferences','Logging, units, appearance and notifications'],['data','Data & backup','Import, export, backup, restore and local data']].map(([id,title,summary])=><button data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><span aria-hidden="true">›</span></button>)}
+      </section>}
+      {area === 'training' && <>
         <section className="planning-setup">
           <Eyebrow>TRAINING</Eyebrow>
           <p className="planning-setup-copy">
@@ -10513,58 +10570,36 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
             <span>›</span>
           </button>
         </section>
-      {state.program.conditioning && (
+      </>}
+      {area === 'program' && state.program.conditioning && (
         <section>
           <Eyebrow>CARDIO</Eyebrow>
           <ConditioningCard conditioning={state.program.conditioning} />
         </section>
       )}
-      <section>
+      {area === 'training' && <section>
         <Eyebrow>
           {preferencesOnly ? "COACHING PREFERENCES" : "TRAINING PRIORITIES"}
         </Eyebrow>
-        {manualPriorities.length > 0 && (
-          <InfoRow
-            label={
-              preferencesOnly
-                ? manualPriorities.length === 1
-                  ? "Priority area"
-                  : "Priority areas"
-                : manualPriorities.length === 1
-                  ? "Selected area"
-                  : "Selected areas"
-            }
-            value={manualPriorities.join(", ")}
-          />
-        )}
-        {confirmedPriorities.map((item) => (
-          <InfoRow key={item.label} label={item.label} value={item.level} />
-        ))}
-        {!hasPriorities && (
-          <p className="muted profile-priority-empty">
-            {preferencesOnly
-              ? "No priority areas selected."
-              : "Balanced across muscle groups."}
-          </p>
-        )}
         <button
           className="list-row"
           onClick={() => setDetail("training-priorities")}
         >
           <span>
             <strong>
-              {preferencesOnly ? "Edit priorities" : "Review priorities"}
+              Training priorities
             </strong>
             <small>
-              {preferencesOnly
-                ? "Used by Coach and future generated plans. Changes don’t update this plan."
-                : "Used to build your plan and guide Coach. Changes apply when you adjust or rebuild it."}
+              {hasPriorities ? [...manualPriorities,...confirmedPriorities.map(item=>item.label)].join(' · ') : 'None selected'}
             </small>
           </span>
           <span>›</span>
         </button>
-      </section>
-      <section className="program-actions">
+        <button className="list-row" onClick={() => setDetail("custom-exercises")}>
+          <span><strong>Custom exercises</strong><small>{pluralize((state.customExercises || []).filter(item=>!item.deletedAt).length,"exercise")} · {pluralize((state.exerciseAliases || []).filter(item=>!item.deletedAt).length,"alias","aliases")}</small></span><span aria-hidden="true">›</span>
+        </button>
+      </section>}
+      {area === 'program' && <section className="program-actions">
         <Eyebrow>PROGRAM</Eyebrow>
         <button className="list-row" onClick={() => setDetail("training-block")}>
           <span>
@@ -10577,19 +10612,14 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           </span>
           <span>›</span>
         </button>
+        <button className="list-row" disabled={Boolean(state.activeWorkout)} onClick={() => setDetail("edit-plan")}>
+          <span><strong>Edit plan</strong><small>{state.activeWorkout ? "Finish your active workout first." : "Names, exercises, sets, reps and weights"}</small></span>
+          {!state.activeWorkout && <span>›</span>}
+        </button>
         <button className="list-row" onClick={() => setDetail("plan-history")}>
           <span>
             <strong>Plan history</strong>
             <small>{pluralize(state.planVersions?.length || 0, "saved version")}</small>
-          </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" onClick={() => setDetail("custom-exercises")}>
-          <span>
-            <strong>Custom exercises</strong>
-            <small>
-              {pluralize((state.customExercises || []).filter((item) => !item.deletedAt).length, "exercise")} · {pluralize((state.exerciseAliases || []).filter((item) => !item.deletedAt).length, "alias", "aliases")}
-            </small>
           </span>
           <span>›</span>
         </button>
@@ -10605,37 +10635,15 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           </span>
           <span>›</span>
         </button>
-        <button
-          className="list-row"
-          disabled={Boolean(state.activeWorkout)}
-          onClick={() => setDetail("edit-plan")}
-        >
-          <span>
-            <strong>Edit plan</strong>
-            <small>
-              {state.activeWorkout
-                ? "Finish your active workout first."
-                : "Names, exercises, sets, reps and weights"}
-            </small>
-          </span>
-          {!state.activeWorkout && <span>›</span>}
-        </button>
-        <button className="list-row" onClick={adjust}>
-          <span>
-            <strong>Ask Coach to adjust</strong>
-            <small>Make a reviewed AI change</small>
-          </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" onClick={() => setDetail("change-plan")}>
+        <button className="list-row profile-separated-action" onClick={() => setDetail("change-plan")}>
           <span>
             <strong>Replace plan</strong>
             <small>Build or import a different program</small>
           </span>
           <span>›</span>
         </button>
-      </section>
-      <section>
+      </section>}
+      {area === 'preferences' && <section>
         <Eyebrow>SETTINGS</Eyebrow>
         <button className="list-row" onClick={() => setDetail("logging")}> 
           <span>
@@ -10664,8 +10672,9 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           </span>
           <span>›</span>
         </button>
-      </section>
-      <section className="profile-data-actions">
+      </section>}
+      {area === 'preferences' && <button className="list-row" onClick={()=>setDetail('notifications')}><span><strong>Notifications</strong><small>Rest timer · {restNotificationCapability(window).permission === 'denied' ? 'Blocked in browser' : !restNotificationCapability(window).supported ? 'Not supported in this browser' : p.restTimerNotificationsEnabled && restNotificationCapability(window).permission === 'granted' ? 'On' : 'Off'}</small></span><span aria-hidden="true">›</span></button>}
+      {area === 'data' && <><section className="profile-data-actions">
         <Eyebrow>DATA</Eyebrow>
         <button className="list-row" onClick={() => setDetail("import-workout-history")}>
           <span>
@@ -10693,9 +10702,10 @@ function Profile({ state, update, setDetail, setPage, onLogout }) {
           <span>›</span>
         </button>
       </section>
-      <Button variant="quiet" className="logout-button" onClick={onLogout}>
-        Log out
-      </Button>
+      <button className="list-row profile-separated-action profile-delete-action" onClick={onLogout}>
+        <span><strong className="danger-text">Delete local data</strong><small>Erase ROOK data from this device</small></span><span aria-hidden="true">›</span>
+      </button>
+      </>}
     </main>
   );
 }
@@ -11125,6 +11135,7 @@ function TrainingRestrictions({ state, update, close, reviewPlan }) {
               )}
             </div>
           )}
+          <SheetActionFooter>
           <Button
             onClick={() => {
               const manualReview = pendingImpact.suggestions.filter(
@@ -11184,8 +11195,10 @@ function TrainingRestrictions({ state, update, close, reviewPlan }) {
           <Button variant="quiet" onClick={() => setPendingImpact(null)}>
             EDIT RESTRICTION
           </Button>
+          </SheetActionFooter>
         </section>
       )}
+      <SheetActionFooter enabled={!pendingImpact}>
       <Button
         onClick={save}
         disabled={
@@ -11199,6 +11212,7 @@ function TrainingRestrictions({ state, update, close, reviewPlan }) {
       >
         {analysisStatus === "checking" ? "CHECKING…" : "SAVE RESTRICTIONS"}
       </Button>
+      </SheetActionFooter>
     </main>
   );
 }
@@ -11288,24 +11302,23 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
       <span id="priority-limit-reason" className="visually-hidden">
         Maximum of two priorities selected. Deselect one to choose another.
       </span>
-      <div className="option-list option-grid">
-        {PRIORITIES.map((option) => {
-          const selected = manual.includes(option);
-          const locked =
-            option !== "Balanced" && selectionLocked && !selected;
-          return (
-            <OnboardingOptionCard
-              key={option}
-              label={option}
-              selected={selected}
-              ariaDisabled={locked}
-              describedBy={locked ? "priority-limit-reason" : undefined}
-              onClick={() => toggleManual(option)}
-            />
-          );
-        })}
-      </div>
-      <div
+      {!preferencesOnly && <button
+        className="physique-review-entry"
+        onClick={() => setReviewOpen(true)}
+      >
+        <span>
+          <strong>{confirmed.length ? "Run another optional review" : "Not sure what to prioritize?"}</strong>
+          <small>Get an optional physique review</small>
+        </span>
+        <i>›</i>
+      </button>}
+      <TrainingPriorityChoices
+        selected={manual}
+        selectionLocked={selectionLocked}
+        limitReasonId="priority-limit-reason"
+        onSelect={toggleManual}
+      />
+      {(preferencesOnly || (manual.length > 0 && !manual.includes("Balanced"))) && <div
         className="priority-selection-summary"
         role="status"
         aria-live="polite"
@@ -11323,7 +11336,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
               ? "Deselect one to choose another."
               : manual.join(" + ")}
         </small>
-      </div>
+      </div>}
       {saved && (
         <div className="priority-save-status" role="status" aria-live="polite">
           <strong>
@@ -11358,7 +11371,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
           ))}
         </section>
       )}
-      <button
+      {preferencesOnly && <button
         className="physique-review-entry"
         onClick={() => setReviewOpen(true)}
       >
@@ -11371,7 +11384,8 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
           <small>Get an optional physique review</small>
         </span>
         <i>›</i>
-      </button>
+      </button>}
+      <SheetActionFooter>
       <Button onClick={save}>
         {preferencesOnly ? "SAVE PREFERENCES" : "SAVE PRIORITIES"}
       </Button>
@@ -11380,6 +11394,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
           {preferencesOnly ? "ASK COACH TO ADJUST PLAN" : "ADJUST CURRENT PLAN"}
         </Button>
       )}
+      </SheetActionFooter>
     </main>
   );
 }
@@ -11552,7 +11567,7 @@ function ScratchPlan({ state, update, close, onPlanAccepted }) {
   );
 }
 export function planEditorAllowsSupersets(mode = "review") {
-  return mode === "edit";
+  return mode === "edit" || mode === "import";
 }
 
 function SupersetPartnerPicker({
@@ -11636,14 +11651,14 @@ function SupersetPartnerPicker({
           );
         })}
       </div>
-      <footer className="superset-partner-footer">
+      <SheetActionFooter className="superset-partner-footer" separate gutter={22}>
         <Button
           disabled={!selectedPartner}
           onClick={() => selectedPartner && onConfirm(selectedPartner.id)}
         >
           CREATE SUPERSET
         </Button>
-      </footer>
+      </SheetActionFooter>
     </main>
   );
 }
@@ -11652,6 +11667,9 @@ function PlanEditor({
   source,
   profile,
   mode = "review",
+  generatedAcceptance = false,
+  sourceReview = null,
+  saveError = '',
   onSave,
   onCancel,
   saving = false,
@@ -11690,6 +11708,90 @@ function PlanEditor({
     return next;
   };
   const [program, setProgram] = useState(() => withWarmupPreference(source));
+  const pendingNumberCommits = useRef(new Set());
+  const initialImportMatches = useRef(importMatchEntries(program).map(entry=>entry.id));
+  const [resolutionOpen,setResolutionOpen] = useState(()=>mode==='import'&&importResolutionGroups(sourceReview,program).length>0);
+  const [resolutionRevisit,setResolutionRevisit] = useState(null);
+  const matchHandoffUntil=useRef(0);
+  const resolutionMatches = [...new Set([...initialImportMatches.current,...importMatchEntries(program).map(entry=>entry.id)])];
+  initialImportMatches.current = resolutionMatches;
+  const [resolvedImportIssues, setResolvedImportIssues] = useState({});
+  const [importReviewRequest, setImportReviewRequest] = useState(0);
+  const importReviewRef = useRef(null);
+  const pendingSourceReviews = pendingImportIssues(sourceReview, resolvedImportIssues).length;
+  const sourceDecisionSummary = importDecisionSummary(sourceReview, resolvedImportIssues);
+  const advancedReviewOriginals = useRef(new Map());
+  const revealImportReview = () => {
+    if(mode==='import'){setResolutionOpen(true);return;}
+    setImportReviewRequest(value => value + 1);
+    const reviewPanel = importReviewRef.current?.querySelector('.plan-import-issues');
+    const panel = reviewPanel?.querySelector('.plan-import-notes, .plan-import-choice[data-unresolved="true"]') || reviewPanel;
+    panel?.focus({ preventScroll: true });
+    panel?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  };
+  const resolveImportIssue = (issue, value) => {
+    if(issue.field==='sourceUnit' && value && !applySourceUnitDecision(clone(program),issue,value.unit)) {
+      setResolvedImportIssues(current=>({...current,[issue.id]:false}));
+      return;
+    }
+    if (value === null) {
+      setResolvedImportIssues(current => ({...current,[issue.id]:false}));
+      return;
+    }
+    setProgram(current => {
+      const next = clone(current);
+      const day = next.days.find(item => item.id === issue.dayId);
+      const exercise = day?.exercises.find(item => item.id === issue.exerciseId);
+      if (issue.field === 'day' && day) day.weekday = value.value;
+      if (issue.field === 'rir' && exercise) exercise.targetRir = value.value === '' ? null : Number(value.value);
+      if (issue.field === 'loggingMode' && exercise) exercise.loggingMode = value.value;
+      if (issue.field === 'advanced' && exercise) {
+        // Re-selecting a method/target replaces this decision rather than adding
+        // a second special set. Other prescription fields remain untouched.
+        const previous = advancedReviewOriginals.current.get(issue.id);
+        if (previous) {
+          const oldSet = exercise.sets.find(set => set.id === previous.id);
+          if (oldSet) for (const key of ['setType','segments','rir']) {
+            if (Object.hasOwn(previous, key)) oldSet[key] = clone(previous[key]);
+            else delete oldSet[key];
+          }
+        }
+        const set = exercise.sets[value.setIndex];
+        if (set) advancedReviewOriginals.current.set(issue.id, clone(set));
+        if (set && ['drop','rest_pause','amrap'].includes(value.value)) {
+          set.setType = value.value;
+          if (value.value !== 'amrap') set.segments = [];
+        }
+        if (set && value.value === 'failure') set.rir = 0;
+        exercise.notes = [...new Set([exercise.notes, issue.source].filter(Boolean))].join('\n');
+      }
+      if (issue.field === 'load' && exercise) exercise.sets.forEach(set => { set.weight = value.value === '' ? null : Number((Number(value.value) * (value.unit === 'lb' ? 0.45359237 : 1)).toFixed(2)); });
+      if (issue.field === 'sourceUnit') applySourceUnitDecision(next,issue,value.unit);
+      if (issue.field === 'prescription' && exercise) {
+        exercise.repMin = value.repMin; exercise.repMax = value.repMax;
+        exercise.sets = Array.from({length: value.sets}, (_, index) => ({ ...exercise.sets[Math.min(index,exercise.sets.length-1)], id: exercise.sets[index]?.id || `${exercise.id}-review-set-${index}`, reps: value.repMin, completed: false }));
+      }
+      if (issue.field === 'alternative' && exercise && value.option) {
+        const option=value.option,match=matchImportedExerciseName(option.name),item=exerciseCatalog[match.exerciseId];
+        exercise.repMin=option.repMin;exercise.repMax=option.repMax;
+        exercise.sets=Array.from({length:option.sets},(_,index)=>({id:exercise.sets[index]?.id||`${exercise.id}-alternative-${index}`,reps:option.repMin,weight:option.weight,completed:false}));
+        exercise.targetRir=option.targetRir??null;
+        exercise.loggingMode=option.loggingMode||'normal';
+        if(option.measure)exercise.measure=option.measure;else delete exercise.measure;
+        exercise.restSeconds=option.restSeconds??item?.restSeconds??90;
+        exercise.importedName=option.name;exercise.originalImportedName=option.name;
+        if(item&&['matched','alias'].includes(match.status)){
+          exercise.exerciseId=item.id;exercise.exerciseSource='catalog';exercise.matchStatus='confirmed-match';delete exercise.importedExercise;
+        }else{
+          exercise.exerciseId=`imported-custom-${exercise.id}`;exercise.exerciseSource='imported-custom';exercise.matchStatus='needs-name-review';
+          exercise.importedExercise={id:exercise.exerciseId,name:option.name,source:'imported',pattern:null,muscles:null,equipment:null};
+        }
+      }
+      if (['instruction','alternative'].includes(issue.field) && exercise) exercise.notes = [exercise.notes,issue.source].filter(Boolean).join('\n');
+      return next;
+    });
+    setResolvedImportIssues(current => ({...current,[issue.id]:value}));
+  };
   const reviewConflicts = useMemo(() => reviewExerciseIds.length
     ? plannedExerciseSafetyConflicts(program, trainingSafetyFor(profile)).filter(item => reviewExerciseIds.includes(item.exerciseEntryId))
     : [], [program, profile, reviewExerciseIds.join("|")]);
@@ -11705,23 +11807,50 @@ function PlanEditor({
     reviewExerciseIds[0] || firstUnresolvedExercise(source),
   );
   const [exercisePickerId, setExercisePickerId] = useState(null);
+  const [importAdvanceTarget, setImportAdvanceTarget] = useState(null);
+  useEffect(() => {
+    if (!importAdvanceTarget || expandedExerciseId !== importAdvanceTarget) return;
+    let cancelled = false, cancelReveal;
+    const frame = requestAnimationFrame(async () => {
+      const target = document.getElementById(`import-exercise-${importAdvanceTarget}`);
+      let screen = target?.parentElement;
+      while (screen && !(screen.scrollHeight > screen.clientHeight && /auto|scroll/.test(getComputedStyle(screen).overflowY))) screen = screen.parentElement;
+      screen ||= document.scrollingElement;
+      if (!target || !screen) return;
+      const animations = screen.getAnimations({subtree:true}).filter(animation => animation.effect?.getTiming().iterations !== Infinity);
+      await Promise.all(animations.map(animation => animation.finished.catch(() => {})));
+      if (cancelled || !target.isConnected) return;
+      const header = screen.querySelector('.detail-header, .long-form-sheet-header');
+      cancelReveal = revealPlanConflict(screen, target, (header?.getBoundingClientRect().height || 64) + 16);
+    });
+    return () => { cancelled = true; cancelAnimationFrame(frame); cancelReveal?.(); };
+  }, [importAdvanceTarget, expandedExerciseId]);
   const [exerciseQuery, setExerciseQuery] = useState("");
   const [rememberMatchIds, setRememberMatchIds] = useState([]);
-  const [pendingImportMatches, setPendingImportMatches] = useState({});
   const [prescriptionEditorId, setPrescriptionEditorId] = useState(null);
   const [weightEditorId, setWeightEditorId] = useState(null);
   const [addingToDayId, setAddingToDayId] = useState(null);
+  const [removedExercises, setRemovedExercises] = useState([]);
+  const [customCreation, setCustomCreation] = useState(null);
+  const [customAddNotice, setCustomAddNotice] = useState('');
+  const customBackgroundRef = useRef(null);
   const [copyingDayId, setCopyingDayId] = useState(null);
   const [pairingExerciseId, setPairingExerciseId] = useState(null);
   const [expandedWarmupDayId, setExpandedWarmupDayId] = useState(null);
   const [collapsedDayIds, setCollapsedDayIds] = useState([]);
   const resetKey = `${source.id}|${reviewExerciseIds.join("|")}`;
   const initializedKey = useRef(resetKey);
+  const revealedReviewTarget = useRef(null);
   const reorderRootRef = useRef(null);
   const reorderGestureRef = useRef(null);
   const reorderPreviewRef = useRef(null);
   const reorderFrameRef = useRef(null);
   const programRef = useRef(program);
+  const beginCustomCreation = (name = "", addToDayId = null) => {
+    customBackgroundRef.current = reorderRootRef.current?.closest('.screen') || null;
+    setCustomAddNotice('');
+    setCustomCreation({ name, addToDayId });
+  };
   const commitReorderRef = useRef(null);
   const suppressReorderClickUntil = useRef(0);
   const [reorderView, setReorderView] = useState(null);
@@ -11739,6 +11868,8 @@ function PlanEditor({
     // The state initializer already prepared this source on mount.
     if (initializedKey.current === resetKey) return;
     initializedKey.current = resetKey;
+    setResolvedImportIssues({});
+    setImportReviewRequest(0);
     const next = withWarmupPreference(source);
     setProgram(next);
     setDirty(false);
@@ -11746,10 +11877,10 @@ function PlanEditor({
     setExercisePickerId(null);
     setExerciseQuery("");
     setRememberMatchIds([]);
-    setPendingImportMatches({});
     setPrescriptionEditorId(null);
     setWeightEditorId(null);
     setAddingToDayId(null);
+    setRemovedExercises([]);
     setCopyingDayId(null);
     setPairingExerciseId(null);
     setExpandedWarmupDayId(null);
@@ -11760,7 +11891,11 @@ function PlanEditor({
   }, [resetKey, reviewTargetId]);
   useEffect(() => {
     if (!reviewTargetId || expandedExerciseId !== reviewTargetId) return;
+    // Initial Review Plan navigation may reveal its target; manual disclosure
+    // toggles must not repeat that navigation scroll.
+    if (revealedReviewTarget.current === `${resetKey}|${reviewTargetId}`) return;
     let cancelled = false;
+    let cancelReveal;
     const frame = requestAnimationFrame(async () => {
       const target = document.getElementById(`import-exercise-${reviewTargetId}`);
       const screen = target?.closest('.detail-screen');
@@ -11772,21 +11907,29 @@ function PlanEditor({
       if (cancelled || !target.isConnected) return;
       const header = screen.querySelector('.detail-header, .long-form-sheet-header');
       const inset = (header?.getBoundingClientRect().height || 64) + 16;
-      screen.scrollTop += target.getBoundingClientRect().top - screen.getBoundingClientRect().top - inset;
-      target.focus({ preventScroll: true });
+      revealedReviewTarget.current = `${resetKey}|${reviewTargetId}`;
+      cancelReveal = revealPlanConflict(screen, target, inset);
     });
-    return () => { cancelled = true; cancelAnimationFrame(frame); };
+    return () => { cancelled = true; cancelAnimationFrame(frame); cancelReveal?.(); };
   }, [resetKey, reviewTargetId, expandedExerciseId]);
   const imported = program.source === "ai-import";
   const scratch = mode === "scratch";
   const preview = ["review", "import", "expert"].includes(mode);
   const compactWarmupPreview = mode === "review" || mode === "expert";
   const importReview = imported && mode === "import";
+  const importSafety = importReview ? trainingSafetyFor(exerciseState?.profile || profile) : null;
+  const importSafetyConflicts = importReview ? plannedExerciseSafetyConflicts(program, importSafety) : [];
+  const importGym = importReview ? defaultGymProfile(exerciseState) : null;
+  const importUnavailable = importGym ? program.days.flatMap(day => day.exercises).filter(exercise => {
+    const item = exerciseCatalog[exercise.exerciseId];
+    return item && !isExerciseAllowed(item, { ...effectiveGymProfile(exerciseState, null), ignoreTrainingSafety: true });
+  }) : [];
   const allowSupersets = planEditorAllowsSupersets(mode);
-  const allowReorder = mode === "edit";
+  const allowReorder = mode === "edit" || importReview || mode === "review" || scratch;
+  const allowAddExercises = allowReorder;
   const orderedProgramDays = useMemo(
-    () => chronologicalProgramDays(program.days),
-    [program.days],
+    () => sourceReview ? program.days : chronologicalProgramDays(program.days),
+    [program.days, sourceReview],
   );
   const unresolved = program.days
     .flatMap((day) => day.exercises)
@@ -11808,9 +11951,14 @@ function PlanEditor({
     [exerciseState?.customExercises],
   );
   const catalogNeeded = exercisePickerId !== null || addingToDayId !== null;
-  const catalog = useMemo(() => catalogNeeded
-    ? allEditorItems.filter((item) => isExerciseAllowed(item, profile)).sort((a, b) => a.name.localeCompare(b.name))
-    : [], [catalogNeeded, allEditorItems, profile]);
+  const catalogCache = useRef(null);
+  const catalog = useMemo(() => {
+    if (!catalogNeeded) return [];
+    if (catalogCache.current?.source === allEditorItems && catalogCache.current.profile === profile) return catalogCache.current.items;
+    const items = allEditorItems.filter(createPlanEditorExerciseFilter(profile)).sort((a, b) => a.name.localeCompare(b.name));
+    catalogCache.current = { source: allEditorItems, profile, items };
+    return items;
+  }, [catalogNeeded, allEditorItems, profile]);
   const editorCatalog = useMemo(() => Object.fromEntries(allEditorItems.map(item => [item.id, item])), [allEditorItems]);
   const pairingContext = pairingExerciseId
     ? program.days
@@ -12315,7 +12463,7 @@ function PlanEditor({
       window.removeEventListener("blur", clearCandidate);
       document.removeEventListener("visibilitychange", clearCandidate);
     };
-  }, [allowReorder]);
+  }, [allowReorder, resolutionOpen]);
   const mutateExercise = (dayId, exerciseId, mutate) => {
     setDirty(true);
     setProgram((current) => {
@@ -12378,6 +12526,13 @@ function PlanEditor({
     const removed = sourceDay?.exercises.find((item) => item.id === exerciseId);
     if (!sourceDay || !removed || (!scratch && sourceDay.exercises.length <= 1))
       return;
+    if (mode === 'edit') {
+      const result=stagePlanRemoval(programRef.current,removedExercises,dayId,exerciseId);
+      result.program.days.find(d=>d.id===dayId).estimatedMinutes=estimateSessionMinutes(result.program.days.find(d=>d.id===dayId).exercises);
+      setProgram(result.program);setRemovedExercises(result.records);setDirty(true);
+      setExpandedExerciseId(null);setExercisePickerId(null);setExerciseQuery('');
+      return;
+    }
     if (
       removed.supersetId &&
       !confirm(
@@ -12407,9 +12562,10 @@ function PlanEditor({
       });
     });
   };
-  const addExercise = (dayId, catalogId) => {
-    const item = editorCatalog[catalogId];
-    if (!item || !isExerciseAllowed(item, profile)) return;
+  const addExercise = (dayId, catalogId, createdRecord = null) => {
+    const item = createdRecord ? customExerciseCatalogItem(createdRecord) : editorCatalog[catalogId];
+    const targetDay = programRef.current?.days.find(day => day.id === dayId);
+    if (!item || !planEditorExerciseAllowed(item, profile) || !targetDay || targetDay.exercises.length >= 8 || targetDay.exercises.some(exercise => exercise.exerciseId === item.id)) return false;
     const exerciseId = `manual-exercise-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const compound = item.kind === "compound" || item.kind === "power";
     const repMin =
@@ -12444,7 +12600,7 @@ function PlanEditor({
               importedName: item.name,
               originalImportedName: item.name,
               importedExercise: customExerciseSnapshot(
-                (exerciseState?.customExercises || []).find((record) => record.id === item.id),
+                createdRecord || (exerciseState?.customExercises || []).find((record) => record.id === item.id),
               ),
               matchStatus: "confirmed-custom",
               measure: item.measure,
@@ -12470,53 +12626,10 @@ function PlanEditor({
       setAddingToDayId(null);
       setExerciseQuery("");
     });
-  };
-  const addCustomExercise = (dayId, rawName) => {
-    const name = String(rawName || "")
-      .trim()
-      .slice(0, 80);
-    if (!name) return;
-    const exerciseId = `manual-custom-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const record = createCustomExerciseRecord({ name, equipment: ["machines"], primaryMuscle: "Full body", loggingType: "weight_reps" });
-    const customId = record.id;
-    onRegisterCustomExercise?.(record);
-    runRookViewTransition(() => {
-      setDirty(true);
-      setProgram((current) => {
-      const next = clone(current);
-      const day = next.days.find((value) => value.id === dayId);
-      if (!day || day.exercises.length >= 8) return current;
-      day.exercises.push({
-        id: exerciseId,
-        exerciseId: customId,
-        exerciseSource: "imported-custom",
-        importedName: name,
-        originalImportedName: name,
-        importedExercise: customExerciseSnapshot(record, "manual"),
-        matchStatus: "confirmed-custom",
-        programmingRole: "accessory",
-        sets: Array.from({ length: 3 }, (_, index) => ({
-          id: `${exerciseId}-set-${index}`,
-          weight: null,
-          reps: 8,
-          completed: false,
-        })),
-        repMin: 8,
-        repMax: 12,
-        targetRir: null,
-        restSeconds: 90,
-        defaultIncrement: 1,
-      });
-      day.estimatedMinutes = estimateSessionMinutes(day.exercises);
-        return next;
-      });
-      setAddingToDayId(null);
-      setExerciseQuery("");
-      setExpandedExerciseId(exerciseId);
-    });
+    return true;
   };
   const replaceExercise = (dayId, exerciseId, catalogId) => {
-    if (!editorCatalog[catalogId] || !isExerciseAllowed(editorCatalog[catalogId], profile)) return;
+    if (!editorCatalog[catalogId] || !planEditorExerciseAllowed(editorCatalog[catalogId], profile)) return;
     const sourceExercise = programRef.current?.days.find((item) => item.id === dayId)?.exercises.find((item) => item.id === exerciseId);
     const sourceAlias = sourceExercise?.importedSourceName || sourceExercise?.originalImportedName || sourceExercise?.importedName || sourceExercise?.importedExercise?.name;
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -12548,7 +12661,9 @@ function PlanEditor({
     setExercisePickerId(null);
     setExerciseQuery("");
     if (importReview) {
-      setExpandedExerciseId(null);
+      const nextId=nextImportReview(programRef.current,exerciseId);
+      setExpandedExerciseId(nextId);
+      setImportAdvanceTarget(nextId);
       setPrescriptionEditorId(null);
       setWeightEditorId(null);
     }
@@ -12597,7 +12712,7 @@ function PlanEditor({
   };
   const confirmCustom = (dayId, exerciseId) => {
     const sourceExercise = programRef.current?.days.find((item) => item.id === dayId)?.exercises.find((item) => item.id === exerciseId);
-    const name = String(sourceExercise?.originalImportedName || sourceExercise?.importedName || "").trim();
+    const name = String(sourceExercise?.importedSourceName || sourceExercise?.originalImportedName || sourceExercise?.importedName || "").trim();
     if (name && sourceExercise && !String(sourceExercise.exerciseId).startsWith("custom-exercise-")) {
       const record = createCustomExerciseRecord({ id: sourceExercise.exerciseId, name, equipment: ["machines"], primaryMuscle: "Full body", loggingType: "weight_reps" });
       onRegisterCustomExercise?.(record);
@@ -12612,7 +12727,9 @@ function PlanEditor({
         exercise.matchStatus = "confirmed-custom";
       });
     } else mutateExercise(dayId, exerciseId, confirmImportedName);
-    setExpandedExerciseId(null);
+    const nextId = importReview && name ? nextImportReview(programRef.current, exerciseId) : null;
+    setExpandedExerciseId(nextId);
+    setImportAdvanceTarget(nextId);
     setExercisePickerId(null);
     setExerciseQuery("");
     setPrescriptionEditorId(null);
@@ -12636,7 +12753,8 @@ function PlanEditor({
     });
   };
   const setCount = (dayId, exerciseId, count) => {
-    runRookViewTransition(() => {
+    // Commit before the following Save click, not in an async view-transition
+    // callback. The input holds intermediate text without resizing the plan.
       setDirty(true);
       setProgram((current) => {
       const next = clone(current);
@@ -12671,7 +12789,6 @@ function PlanEditor({
       day.estimatedMinutes = estimateSessionMinutes(day.exercises);
         return next;
       });
-    });
   };
   const setRep = (dayId, exerciseId, key, value) =>
     mutateExercise(dayId, exerciseId, (exercise) => {
@@ -12891,7 +13008,7 @@ function PlanEditor({
         set !== null && set !== undefined && set !== "",
       );
     const weightSummary = weights.length
-      ? ` \u00b7 ${weights.map((weight) => Number(weight)).join(" / ")} kg`
+      ? ` \u00b7 ${weights.map((weight) => displayWeight(Number(weight), profile.units)).join(" / ")} ${weightUnit(profile.units)}`
       : "";
     return `${pluralize(exercise.sets.length, "set")} \u00b7 ${reps}${imported ? weightSummary : ""}`;
   };
@@ -12937,7 +13054,7 @@ function PlanEditor({
           ? {
               eyebrow: "IMPORT PLAN",
               title: "Review your plan",
-              body: "Rook matched the exercises it could. Review only the highlighted items, then use your plan.",
+              body: "Inspect your workouts and make any final edits before using this plan.",
               action: "USE THIS PLAN",
             }
           : mode === "expert"
@@ -12967,7 +13084,12 @@ function PlanEditor({
         ).trim() &&
         (!scratch || day.exercises.length >= 1),
     );
-  const saveProgram = () =>
+  const saveProgram = (event) => {
+    if(importReview&&(Date.now()<matchHandoffUntil.current||event?.detail>1))return;
+    // Keyboard/programmatic activation need not blur the field first.
+    const beforeNumbers = programRef.current;
+    flushSync(() => [...pendingNumberCommits.current].forEach(commit => commit()));
+    const program = programRef.current;
     onSave({
       ...program,
       name: String(program.name).trim(),
@@ -12981,12 +13103,41 @@ function PlanEditor({
           ? String(day.workoutDescriptor).trim()
           : undefined,
       })),
-      userEdited: Boolean(program.userEdited || dirty),
+      userEdited: Boolean(program.userEdited || dirty || program !== beforeNumbers),
       version: Number(program.version || 1) + (mode === "edit" ? 1 : 0),
       updatedAt: new Date().toISOString(),
     });
+  };
+  if(importReview&&resolutionOpen)return <ImportResolution
+    review={sourceReview} program={program} resolved={resolvedImportIssues} matchIds={resolutionMatches}
+    revisit={resolutionRevisit}
+    onResolve={resolveImportIssue} onMatch={replaceExercise} onCustom={confirmCustom}
+    candidates={(dayId,exercise,query)=>{
+      const day=program.days.find(item=>item.id===dayId);
+      const available=allEditorItems.filter(createPlanEditorExerciseFilter(profile)).filter(item=>!day.exercises.some(other=>other.id!==exercise.id&&other.exerciseId===item.id));
+      return query.trim()?rankExerciseSearch(available.filter(item=>exerciseMatchesQuery(item,query)),query):likelyImportedMatches(exercise,available);
+    }}
+    onDone={choice=>{if(choice?.fromMatch)matchHandoffUntil.current=Date.now()+350;setResolutionOpen(false);setExpandedExerciseId(null);requestAnimationFrame(()=>headingRef?.current?.scrollIntoView({block:'start'}));}}
+    onBack={onCancel}
+  />;
   return (
     <>
+      {customCreation && createPortal(<ModalLayer close={() => setCustomCreation(null)} backgroundRef={customBackgroundRef}>
+        <CustomExercisesScreen state={exerciseState} createOnly initialName={customCreation.name} createLabel={customCreation.addToDayId ? 'CREATE & ADD' : 'CREATE EXERCISE'}
+          update={updater => {
+            const next = updater(clone(exerciseState));
+            const record = next.customExercises.find(item => !exerciseState.customExercises?.some(existing => existing.id === item.id));
+            if (record) onRegisterCustomExercise(record);
+          }}
+          onCreated={record => {
+            const dayId = customCreation.addToDayId;
+            setCustomCreation(null);
+            if (dayId && addExercise(dayId, record.id, record)) return;
+            setExerciseQuery(record.name);
+            if (dayId) setCustomAddNotice('Exercise created in your library, but it cannot be added to this workout. Your plan draft is unchanged. Check its training restrictions and exercise limit.');
+          }}
+        />
+      </ModalLayer>, document.body)}
       <Eyebrow>{copy.eyebrow}</Eyebrow>
       <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
         {copy.title}
@@ -13006,12 +13157,23 @@ function PlanEditor({
           separately.
         </small>
       </div>
+      {(mode === 'import'||program.importMetadata?.sourceNotes?.length>0) && <div ref={importReviewRef}><PlanImportIssues review={sourceReview} resolved={resolvedImportIssues} program={program} onResolve={resolveImportIssue} reviewRequest={importReviewRequest} summaryOnly={importReview} decisionGroups={importReview?importResolutionGroups(sourceReview,program,resolutionMatches):[]} onChange={id=>{setResolutionRevisit(id);setResolutionOpen(true);}} /></div>}
+      {importReview && (trainingSafetyBlocks(importSafety.status) || importSafetyConflicts.length > 0) && <section className="plan-import-issues">
+        <span className="eyebrow">TRAINING RESTRICTIONS</span>
+        <p>{trainingSafetyBlocks(importSafety.status) ? 'Your restrictions need clarification before this plan can be started.' : `${[...new Set(importSafetyConflicts.map(item => item.exerciseName))].join(', ')} conflicts with your saved restrictions. Review before training.`}</p>
+        <p>No exercises have been removed or replaced automatically.</p>
+      </section>}
+      {importUnavailable.length > 0 && <section className="plan-import-issues">
+        <span className="eyebrow">EQUIPMENT TO REVIEW</span>
+        <p>Not available at {importGym.name}: {[...new Set(importUnavailable.map(exerciseName))].join(', ')}.</p>
+        <p>Keep your intended plan or choose replacements below. Nothing has been replaced automatically.</p>
+      </section>}
       <section
         ref={reorderRootRef}
-        className={`import-preview plan-editor${importReview ? " is-import-review" : ""}${importReview && unresolved === 0 && namesValid ? " has-ready-sticky-action" : ""}${reorderView ? " is-reordering" : ""}`}
+        className={`import-preview plan-editor${generatedAcceptance && profile.showExerciseImages !== false ? " has-review-illustrations" : ""}${importReview ? " is-import-review" : ""}${importReview && unresolved === 0 && namesValid ? " has-ready-sticky-action" : ""}${reorderView ? " is-reordering" : ""}`}
       >
         <div className="import-plan-meta">
-          {mode === "edit" || scratch ? (
+          {mode === "edit" || scratch || importReview ? (
             <label className="plan-name-field">
               <span>WEEKLY PLAN NAME</span>
               <input
@@ -13059,7 +13221,7 @@ function PlanEditor({
             <span>
               <strong>
                 {unresolved
-                  ? `${pluralize(unresolved, "exercise")} ${unresolved === 1 ? "needs" : "need"} review`
+                  ? `${pluralize(unresolved, "exercise")} to match`
                   : "All exercises ready"}
               </strong>
               <small>
@@ -13152,7 +13314,7 @@ function PlanEditor({
                   }}
                 >
                   <i aria-hidden="true" />
-                  <span>{day.weekday.toUpperCase()} WORKOUT</span>
+                  <span>{day.weekday ? `${day.weekday.toUpperCase()} WORKOUT` : 'WORKOUT · DAY NEEDED'}</span>
                   <small>HOLD TO MOVE</small>
                 </div>
                 <div className="plan-reorder-a11y" data-no-reorder>
@@ -13179,8 +13341,16 @@ function PlanEditor({
                 </div>
               </div>
             )}
-            {mode === "edit" || scratch ? (
+            {mode === "edit" || scratch || importReview ? (
               <div className="workout-name-fields">
+                {importReview && <label className="workout-name-field">
+                  <span>WORKOUT DAY</span>
+                  <select aria-label={`Calendar day for ${day.name}`} value={day.weekday || ''}
+                    onChange={event => { const value = event.target.value; setProgram(current => ({ ...current, days: current.days.map(item => item.id === day.id ? { ...item, weekday: value } : item) })); setDirty(true); }}>
+                    <option value="">Choose day</option>
+                    {WEEKDAYS.map(value => <option key={value} value={value} disabled={program.days.some(other => other.id !== day.id && other.weekday === value)}>{value}</option>)}
+                  </select>
+                </label>}
                 <label className="workout-name-field">
                   <span>{allowReorder ? "WORKOUT NAME" : `${day.weekday.toUpperCase()} WORKOUT NAME`}</span>
                   <input
@@ -13263,9 +13433,10 @@ function PlanEditor({
                   : "Not included";
                 return (
                   <div className={`plan-warmup-card mode-${warmupMode}`}>
+                    {mode === 'edit' && <p className="eyebrow plan-warmup-eyebrow">WARM-UP</p>}
                     <div className="plan-warmup-card-header">
                       <span>
-                        <small>WARM-UP</small>
+                        {mode !== 'edit' && <small>WARM-UP</small>}
                         <strong>
                           {warmupMode === "auto"
                             ? "Recommended warm-up"
@@ -13315,7 +13486,7 @@ function PlanEditor({
                                   <div>
                                     <label>
                                       <span>SETS</span>
-                                      <input type="number" min="1" max="10" value={item.sets || 1} onChange={(event) => mutateWarmup(day.id, (plan) => { plan.items[itemIndex].sets = Math.max(1, Number(event.target.value) || 1); })} />
+                                      <PlanNumberInput commits={pendingNumberCommits.current} min="1" max="10" value={item.sets || 1} onCommit={(value) => mutateWarmup(day.id, (plan) => { plan.items[itemIndex].sets = value; })} />
                                     </label>
                                     <label>
                                       <span>REPS</span>
@@ -13370,7 +13541,13 @@ function PlanEditor({
                   </div>
                 );
               })()}
-              {day.exercises.map((exercise, exerciseIndex) => {
+              {removalRows(day, removedExercises).map(({exercise, removed}) => {
+                if(removed)return <div className="plan-removed-exercise" key={exercise.id}><span>{exerciseName(exercise)} removed</span><button type="button" className="text-button" onClick={()=>{
+                  const result=undoPlanRemoval(programRef.current,removedExercises,exercise.id);
+                  const restoredDay=result.program.days.find(d=>d.id===day.id);restoredDay.estimatedMinutes=estimateSessionMinutes(restoredDay.exercises);
+                  setProgram(result.program);setRemovedExercises(result.records);setExpandedExerciseId(exercise.id);setDirty(true);
+                }}>UNDO</button></div>;
+                const exerciseIndex=day.exercises.findIndex(item=>item.id===exercise.id);
                 const expanded = expandedExerciseId === exercise.id;
                 const safetyConflict = reviewConflicts.find(item => item.exerciseEntryId === exercise.id);
                 const safetyReviewRequired = Boolean(safetyConflict);
@@ -13431,7 +13608,7 @@ function PlanEditor({
                     !candidate.supersetId &&
                     candidate.sets.length === exercise.sets.length,
                 );
-                const availableExercises = pickerOpen ? catalog.filter(
+                const availableExercises = pickerOpen ? rankExerciseSearch(catalog.filter(
                   (item) =>
                     !day.exercises.some(
                       (other) =>
@@ -13439,7 +13616,7 @@ function PlanEditor({
                         other.exerciseId === item.id,
                     ) &&
                     exerciseMatchesQuery(item, exerciseQuery),
-                ) : [];
+                ), exerciseQuery) : [];
                 const likelyMatches = pickerOpen && needsReview
                   ? likelyImportedMatches(exercise, availableExercises)
                   : [];
@@ -13451,7 +13628,7 @@ function PlanEditor({
                   : availableExercises.filter(
                       (item) => !likelyMatchIds.has(item.id),
                     );
-                const similarExercises = pickerOpen && preview ? compatibleReplacementCandidates(
+                const similarExercises = pickerOpen && preview ? rankExerciseSearch(compatibleReplacementCandidates(
                   exercise,
                   profile,
                   day.exercises.map((item) => item.exerciseId),
@@ -13462,11 +13639,11 @@ function PlanEditor({
                         other.id !== exercise.id &&
                         other.exerciseId === item.id,
                     ) && exerciseMatchesQuery(item, exerciseQuery),
-                ) : [];
+                ), exerciseQuery) : [];
                 const pickerExercises = preview
                   ? similarExercises
                   : availableExercises;
-                const pendingMatch = editorCatalog[pendingImportMatches[exercise.id]] || null;
+                const pendingMatch = exercise.matchStatus === 'confirmed-match' ? editorCatalog[exercise.exerciseId] : null;
                 return (
                   <article
                     id={`import-exercise-${exercise.id}`}
@@ -13509,13 +13686,12 @@ function PlanEditor({
                         );
                       }}
                       onClick={() => {
-                        runRookViewTransition(() => {
-                          setExpandedExerciseId(expanded ? null : exercise.id);
-                          setExercisePickerId(null);
-                          setExerciseQuery("");
-                        });
+                        setExpandedExerciseId(expanded ? null : exercise.id);
+                        setExercisePickerId(null);
+                        setExerciseQuery("");
                       }}
                     >
+                      {generatedAcceptance && <PlanReviewIllustration exercise={exercise} catalog={exerciseCatalog} resolveArt={exerciseArt} enabled={profile.showExerciseImages !== false} name={exerciseName(exercise)} />}
                       <span className="plan-editor-heading">
                         <strong>
                           {pairRole && (
@@ -13554,9 +13730,6 @@ function PlanEditor({
                         Needs review
                       </span>
                     )}
-                    {safetyReviewRequired && expanded && (
-                      <p className="plan-safety-review-note"><strong>RESTRICTION CONFLICT</strong>{safetyConflict.reason === "effort" ? "Adjust the prescribed effort to match your training restriction." : "This exercise conflicts with your training restrictions. Choose a replacement before saving."}</p>
-                    )}
                     {allowReorder && !reorderBlock?.locked && (
                       <div className="plan-reorder-a11y exercise-reorder-a11y" data-no-reorder>
                         <button
@@ -13581,7 +13754,7 @@ function PlanEditor({
                         >MOVE LAST</button>
                       </div>
                     )}
-                    {expanded && (
+                    <Disclosure open={expanded}>
                       <div
                         className="plan-editor-fields"
                         style={{
@@ -13592,6 +13765,20 @@ function PlanEditor({
                           ),
                         }}
                       >
+                        {generatedAcceptance && <PlanReviewIllustration exercise={exercise} catalog={exerciseCatalog} resolveArt={exerciseArt} enabled={profile.showExerciseImages !== false} expanded name={exerciseName(exercise)} />}
+                        {safetyReviewRequired ? <PlanConflictResolution
+                          key={`${exercise.id}-${safetyConflict.reason}`}
+                          exercise={exercise} day={day} profile={profile} conflict={safetyConflict}
+                          allExercises={allEditorItems}
+                          onCreateCustom={onRegisterCustomExercise ? beginCustomCreation : undefined}
+                          minimumRir={trainingSafetyFor(profile).constraints?.minRirByExerciseId?.[exercise.exerciseId]}
+                          onReplace={catalogId => replaceExercise(day.id, exercise.id, catalogId)}
+                          onRemove={() => removeExercise(day.id, exercise.id)}
+                          onEffort={value => {
+                            const minimum = trainingSafetyFor(profile).constraints?.minRirByExerciseId?.[exercise.exerciseId];
+                            if (Number.isInteger(value) && value >= minimum && value <= 4) mutateExercise(day.id, exercise.id, item => { item.targetRir = value; });
+                          }}
+                        /> : <>
                         {needsReview && importReview ? (
                           <div className="import-review-resolution">
                             <span className="import-review-status">
@@ -13617,7 +13804,7 @@ function PlanEditor({
                               <strong>CHOOSE EXERCISE</strong>
                               <i aria-hidden="true" />
                             </button>
-                            {pickerOpen && (
+                            <Disclosure open={pickerOpen} revealOnOpen>
                               <div
                                 className="plan-editor-picker import-review-picker"
                                 id={`exercise-picker-${exercise.id}`}
@@ -13645,7 +13832,7 @@ function PlanEditor({
                                         aria-selected={pendingMatch?.id === item.id}
                                         className={pendingMatch?.id === item.id ? "is-selected" : ""}
                                         key={item.id}
-                                        onClick={() => setPendingImportMatches((current) => ({ ...current, [exercise.id]: item.id }))}
+                                        onClick={() => replaceExercise(day.id, exercise.id, item.id)}
                                       >
                                         {item.name}
                                         {pendingMatch?.id === item.id && <i aria-hidden="true">✓</i>}
@@ -13663,18 +13850,15 @@ function PlanEditor({
                                       aria-selected={pendingMatch?.id === item.id}
                                       className={pendingMatch?.id === item.id ? "is-selected" : ""}
                                       key={item.id}
-                                      onClick={() => setPendingImportMatches((current) => ({ ...current, [exercise.id]: item.id }))}
+                                      onClick={() => replaceExercise(day.id, exercise.id, item.id)}
                                     >
                                       {item.name}
                                       {pendingMatch?.id === item.id && <i aria-hidden="true">✓</i>}
                                     </button>
                                   ))}
                                 </div>
-                                {pendingMatch && (
-                                  <div className="import-match-confirmation">
-                                    <small>SELECTED MATCH</small>
-                                    <strong>“{importedSourceLabel(exercise)}” → {pendingMatch.name}</strong>
-                                    <label className="remember-import-match">
+                                {(
+                                  <div className="import-match-confirmation">                                    <label className="remember-import-match">
                                       <input
                                         type="checkbox"
                                         checked={rememberMatchIds.includes(exercise.id)}
@@ -13690,12 +13874,10 @@ function PlanEditor({
                                         <strong>Remember this match</strong>
                                         <small>Use it automatically for future imports.</small>
                                       </span>
-                                    </label>
-                                    <button type="button" className="import-use-match" onClick={() => replaceExercise(day.id, exercise.id, pendingMatch.id)}>USE THIS MATCH</button>
-                                  </div>
+                                    </label>                                  </div>
                                 )}
                               </div>
-                            )}
+                            </Disclosure>
                             <button
                               type="button"
                               className="import-review-custom-trigger"
@@ -13751,7 +13933,7 @@ function PlanEditor({
                               <strong>{exerciseName(exercise)}</strong>
                               <i aria-hidden="true" />
                             </button>
-                            {pickerOpen && (
+                            <Disclosure open={pickerOpen} revealOnOpen>
                               <div
                                 className="plan-editor-picker"
                                 id={`exercise-picker-${exercise.id}`}
@@ -13800,8 +13982,9 @@ function PlanEditor({
                                     </small>
                                   )}
                                 </div>
+                                {onRegisterCustomExercise && <button type="button" className="text-button" onClick={() => beginCustomCreation(exerciseQuery)}>CREATE CUSTOM EXERCISE</button>}
                               </div>
-                            )}
+                            </Disclosure>
                           </div>
                         )}
                         {importReview && (
@@ -13831,53 +14014,56 @@ function PlanEditor({
                         <div className="plan-editor-prescription">
                           <label>
                             <span>Sets</span>
-                            <input
+                            <PlanNumberInput
+                              commits={pendingNumberCommits.current}
                               aria-label={`Sets for ${exerciseName(exercise)}`}
                               type="number"
                               min="1"
                               max={imported ? "20" : "6"}
                               value={exercise.sets.length}
-                              onChange={(event) =>
+                              onCommit={(value) =>
                                 setCount(
                                   day.id,
                                   exercise.id,
-                                  event.target.value,
+                                  value,
                                 )
                               }
                             />
                           </label>
                           <label>
                             <span>{timed ? "Min sec" : "Min reps"}</span>
-                            <input
+                            <PlanNumberInput
+                              commits={pendingNumberCommits.current}
                               aria-label={`Minimum ${timed ? "seconds" : "reps"} for ${exerciseName(exercise)}`}
                               type="number"
                               min="1"
                               max={timed ? 600 : 100}
                               value={exercise.repMin}
-                              onChange={(event) =>
+                              onCommit={(value) =>
                                 setRep(
                                   day.id,
                                   exercise.id,
                                   "repMin",
-                                  event.target.value,
+                                  value,
                                 )
                               }
                             />
                           </label>
                           <label>
                             <span>{timed ? "Max sec" : "Max reps"}</span>
-                            <input
+                            <PlanNumberInput
+                              commits={pendingNumberCommits.current}
                               aria-label={`Maximum ${timed ? "seconds" : "reps"} for ${exerciseName(exercise)}`}
                               type="number"
                               min="1"
                               max={timed ? 600 : 100}
                               value={exercise.repMax}
-                              onChange={(event) =>
+                              onCommit={(value) =>
                                 setRep(
                                   day.id,
                                   exercise.id,
                                   "repMax",
-                                  event.target.value,
+                                  value,
                                 )
                               }
                             />
@@ -14048,6 +14234,7 @@ function PlanEditor({
                         <div className="plan-editor-actions">
                           <button
                             type="button"
+                            className="plan-exercise-remove danger-text"
                             disabled={!scratch && day.exercises.length <= 1}
                             onClick={() => removeExercise(day.id, exercise.id)}
                           >
@@ -14092,14 +14279,16 @@ function PlanEditor({
                           </button>
                         </div>
                         )}
+                        </>}
                       </div>
-                    )}
+                    </Disclosure>
                   </article>
                 );
               })}
             </div>}
-            {scratch && (
+            {allowAddExercises && (
               <div className="scratch-add-exercise">
+                {customAddNotice && addingToDayId === day.id && <p role="alert" className="profile-setting-error">{customAddNotice}</p>}
                 {!collapsed && addingToDayId === day.id ? (
                   <>
                     <div className="scratch-exercise-search">
@@ -14122,19 +14311,20 @@ function PlanEditor({
                         CANCEL
                       </button>
                     </div>
+                    {onRegisterCustomExercise && <button type="button" className="text-button" onClick={() => beginCustomCreation(exerciseQuery, day.id)}>CREATE CUSTOM EXERCISE</button>}
                     <div
                       className="scratch-exercise-results"
                       role="listbox"
                       aria-label={`Exercises for ${day.weekday}`}
                     >
-                      {catalog
+                      {rankExerciseSearch(catalog
                         .filter(
                           (item) =>
                             !day.exercises.some(
                               (exercise) => exercise.exerciseId === item.id,
                             ) &&
                             exerciseMatchesQuery(item, exerciseQuery),
-                        )
+                        ), exerciseQuery)
                         .map((item) => (
                           <button
                             type="button"
@@ -14145,25 +14335,8 @@ function PlanEditor({
                             {item.name}
                           </button>
                         ))}
-                      {exerciseQuery.trim() &&
-                        !catalog.some((item) =>
-                          exerciseMatchesQuery(item, exerciseQuery),
-                        ) && (
-                          <button
-                            type="button"
-                            role="option"
-                            className="scratch-custom-exercise"
-                            onClick={() =>
-                              addCustomExercise(day.id, exerciseQuery)
-                            }
-                          >
-                            <strong>
-                              Add “{exerciseQuery.trim().slice(0, 80)}”
-                            </strong>
-                            <small>Custom exercise</small>
-                          </button>
-                        )}
                     </div>
+                    <small>Saved restrictions apply. Custom exercises that cannot be verified are not offered.</small>
                   </>
                 ) : exerciseCount === 0 ? (
                   <button
@@ -14192,7 +14365,7 @@ function PlanEditor({
                           + ADD EXERCISE
                         </button>
                       )}
-                      {emptyCopyTargets.length > 0 && (
+                      {scratch && emptyCopyTargets.length > 0 && (
                         <button
                           type="button"
                           aria-expanded={copyingDayId === day.id}
@@ -14205,12 +14378,12 @@ function PlanEditor({
                           COPY TO DAY
                         </button>
                       )}
-                      <button
+                      {scratch && <button
                         type="button"
                         onClick={() => toggleDayDetails(day.id)}
                       >
                         {collapsed ? "EDIT DAY" : "COLLAPSE"}
-                      </button>
+                      </button>}
                     </div>
                     {copyingDayId === day.id && emptyCopyTargets.length > 0 && (
                       <div className="scratch-copy-targets">
@@ -14264,7 +14437,7 @@ function PlanEditor({
         >
           {keepableUnresolved ? (
             <>
-              <Eyebrow>REVIEW ALL</Eyebrow>
+              <Eyebrow>MATCH EXERCISES</Eyebrow>
               <button type="button" onClick={confirmAllCustom}>
                 <i aria-hidden="true">✓</i>
                 <span>
@@ -14277,24 +14450,37 @@ function PlanEditor({
             <div className="bulk-match-review-complete">
               <i aria-hidden="true">✓</i>
               <span>
-                <strong>REVIEW COMPLETE</strong>
-                <small>All imported exercises are ready.</small>
+                <strong>{pendingImportIssues(sourceReview,resolvedImportIssues).length ? 'EXERCISES MATCHED' : 'REVIEW COMPLETE'}</strong>
+                <small>{pendingSourceReviews ? `Exercises ready · ${sourceDecisionSummary}` : 'Ready to use'}</small>
               </span>
             </div>
           )}
         </section>
       )}
+      <SheetActionFooter>
+      {saveError && <p className="offline-banner" role="alert">{saveError}</p>}
+      {importReview && pendingSourceReviews > 0 && <button type="button" className="button quiet import-review-remaining" onClick={revealImportReview}>{sourceDecisionSummary} · REVIEW</button>}
       <Button
         className={
           importReview && unresolved === 0 && namesValid
             ? "import-ready-sticky-action"
             : ""
         }
-        disabled={saving || unresolved > 0 || !namesValid}
+        disabled={saving || unresolved > 0 || !namesValid || pendingImportIssues(sourceReview,resolvedImportIssues).length > 0 || (sourceReview && (program.days.some(day=>!WEEKDAYS.includes(day.weekday)) || new Set(program.days.map(day=>day.weekday)).size!==program.days.length))}
         onClick={saveProgram}
       >
         {saving ? "SAVING…" : copy.action}
       </Button>
+      <Button
+        variant="quiet"
+        className={mode === "import" ? "" : "bottom-back"}
+        aria-label={mode === "import" ? undefined : "Back"}
+        disabled={saving}
+        onClick={onCancel}
+      >
+        {mode === "import" ? "EDIT NOTES" : <BackLabel />}
+      </Button>
+      </SheetActionFooter>
       {pairingContext && pairingContext.candidates.length > 0 && (
         <div
           className="modal-layer superset-picker-layer"
@@ -14318,15 +14504,6 @@ function PlanEditor({
           />
         </div>
       )}
-      <Button
-        variant="quiet"
-        className={mode === "import" ? "" : "bottom-back"}
-        aria-label={mode === "import" ? undefined : "Back"}
-        disabled={saving}
-        onClick={onCancel}
-      >
-        {mode === "import" ? "EDIT NOTES" : <BackLabel />}
-      </Button>
     </>
   );
 }
@@ -14658,8 +14835,11 @@ function ImportPlan({
   const [error, setError] = useState("");
   const [preview, setPreview] = useState(null);
   const importRun = useRef(0);
+  const [importLibraryDraft,setImportLibraryDraft] = useState(null);
+  const [importStage, setImportStage] = useState('reading');
   const importTextRef = useRef(null);
   const importAbortRef = useRef(null);
+  const importApplyingRef = useRef(false);
   useEffect(() => () => importAbortRef.current?.abort(), []);
   useEffect(() => {
     if (initial && preview)
@@ -14670,6 +14850,7 @@ function ImportPlan({
   }, [initial, preview]);
   const generate = async () => {
     const run = ++importRun.current;
+    setImportStage('reading');
     importAbortRef.current?.abort();
     const controller = new AbortController();
     importAbortRef.current = controller;
@@ -14681,14 +14862,13 @@ function ImportPlan({
     });
     setError("");
     try {
+      await afterVisibleFrame();
       const result = await AIService.importTrainingPlan(
         state.profile,
         text.trim(),
-        { signal: controller.signal },
+        { signal: controller.signal, review: true, onStage: setImportStage },
       );
-      const remainingTransition =
-        MINIMUM_PLAN_TRANSITION_MS - (performance.now() - startedAt);
-      if (remainingTransition > 0) await waitFor(remainingTransition);
+      if (run === importRun.current) await finishPlanProcessing(startedAt, setImportStage);
       if (run === importRun.current) {
         trackFunnelEvent("plan_generation_completed", {
           path: "import",
@@ -14701,6 +14881,7 @@ function ImportPlan({
           ),
         });
         setPreview(result);
+        setImportLibraryDraft(clone(state));
       }
     } catch (reason) {
       if (run === importRun.current) {
@@ -14710,7 +14891,8 @@ function ImportPlan({
           durationMs: Math.round(performance.now() - startedAt),
           reason: "parse_or_provider",
         });
-        setError(reason.message || "The plan could not be imported.");
+        const message = reason.message || "The plan could not be imported.";
+        setError(/current plan.*unchanged/i.test(message) ? message : `${message} Your current plan is unchanged.`);
       }
     } finally {
       if (importAbortRef.current === controller) importAbortRef.current = null;
@@ -14745,6 +14927,11 @@ function ImportPlan({
     }
   };
   const apply = (program) => {
+    if (importApplyingRef.current) return;
+    if (state.activeWorkout || state.activeOptionalSession) {
+      setError('Finish or discard your active workout before replacing your plan.');
+      return;
+    }
     if (
       !initial &&
       !confirm(
@@ -14752,21 +14939,23 @@ function ImportPlan({
       )
     )
       return;
+    importApplyingRef.current = true;
+    try {
+      const importState = {...state,customExercises:importLibraryDraft?.customExercises||state.customExercises,exerciseAliases:importLibraryDraft?.exerciseAliases||state.exerciseAliases};
+      const next = persistPlanImport(importState, program, preview.profile,
+        { date: isoDay(), weekday: weekday(), initial }, saveState);
+      update(() => next, { planVersion: false, persistedState: next });
+    } catch (reason) {
+      importApplyingRef.current = false;
+      setError(reason.message || 'Your plan could not be saved. Your current plan is unchanged.');
+      return;
+    }
     if (initial)
       trackFunnelEvent("onboarding_completed", {
         path: "import",
         source: "ai-import",
         daysPerWeek: program.days.length,
       });
-    update((current) => {
-      current.profile = { ...preview.profile, onboardingComplete: true };
-      current.program = { ...program, goalAtCreation: null };
-      current.selectedDay = weekday();
-      current.selectedDate = isoDay();
-      current.activeWorkout = null;
-      current.ai = { ...current.ai, lastPlanSource: "ai-import" };
-      return current;
-    }, { planVersion: { source: "Imported plan", reason: initial ? "Initial plan imported" : "Current plan replaced by import" } });
     close();
     onPlanAccepted?.();
   };
@@ -14781,6 +14970,7 @@ function ImportPlan({
           : { onClose: close, closeLabel: "Close import plan" })}
       />
       {!preview ? (
+        <>
         <div className="import-plan-compose">
           <Eyebrow>FROM NOTES</Eyebrow>
           <h1>Bring your existing workout into Rook.</h1>
@@ -14819,24 +15009,31 @@ function ImportPlan({
             Plain-text workout notes work best. You’ll review anything Rook can’t
             match.
           </small>
+        </div>
+        <SheetActionFooter className="import-compose-footer" pageScroll={initial}>
           {error && <p className="offline-banner">{error}</p>}
           <Button disabled={busy || text.trim().length === 0} onClick={generate}>
-            CREATE PREVIEW
+            {busy ? 'PREPARING…' : error && !error.startsWith('Import cancelled') ? 'TRY AGAIN' : 'CREATE PREVIEW'}
           </Button>
-        </div>
+        </SheetActionFooter>
+        </>
       ) : (
+        <>
         <PlanEditor
           source={preview.program}
           profile={preview.profile}
           mode="import"
-          exerciseState={state}
-          onRegisterCustomExercise={(record) => update((current) => { registerCustomExerciseRecord(current, record); return current; })}
-          onRememberExerciseAlias={(alias, exerciseId) => update((current) => { rememberExerciseAlias(current, alias, exerciseId, { builtInCatalog: exerciseCatalog }); return current; })}
+          sourceReview={preview.sourceReview}
+          saveError={error}
+          exerciseState={importLibraryDraft||state}
+          onRegisterCustomExercise={(record) => setImportLibraryDraft(current => { const next=clone(current||state);registerCustomExerciseRecord(next,record);return next; })}
+          onRememberExerciseAlias={(alias, exerciseId) => setImportLibraryDraft(current => { const next=clone(current||state);rememberExerciseAlias(next,alias,exerciseId,{builtInCatalog:exerciseCatalog});return next; })}
           onSave={apply}
           onCancel={() => setPreview(null)}
         />
+        </>
       )}
-      {busy && <BuildingOverlay kind="import" onCancel={cancelImport} />}
+      {busy && <BuildingOverlay kind="import" stage={importStage} onCancel={cancelImport} />}
     </main>
   );
 }
@@ -15138,7 +15335,7 @@ function ProfileDetails({ state, update, close }) {
       Math.max(0, selectedIndex + focusOffset),
     );
     setSexOptionsOpen(true);
-    requestAnimationFrame(() => sexOptionRefs.current[nextIndex]?.focus());
+    requestAnimationFrame(() => sexOptionRefs.current[nextIndex]?.focus({ preventScroll: true }));
   };
   const chooseSex = (option) => {
     setDetails((current) => ({ ...current, sex: option }));
@@ -15238,7 +15435,7 @@ function ProfileDetails({ state, update, close }) {
             </span>
             <i className="disclosure-chevron" aria-hidden="true" />
           </button>
-          {sexOptionsOpen && (
+          <Disclosure open={sexOptionsOpen} revealOnOpen>
             <fieldset
               id="profile-sex-options"
               className="profile-sex-options"
@@ -15272,10 +15469,10 @@ function ProfileDetails({ state, update, close }) {
                 </label>
               ))}
             </fieldset>
-          )}
+          </Disclosure>
         </div>
       </div>
-      <Button onClick={save}>SAVE DETAILS</Button>
+      <SheetActionFooter><Button onClick={save}>SAVE DETAILS</Button></SheetActionFooter>
     </main>
   );
 }
@@ -15433,14 +15630,14 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
         </>
       )}
       </div>
-      <div className="profile-setting-footer">
+      <SheetActionFooter className="profile-setting-footer" separate>
         <Button
           disabled={setting === "schedule" ? !scheduleValid : !setupValid}
           onClick={save}
         >
           {setting === "schedule" ? "SAVE AVAILABILITY" : "SAVE SETUP"}
         </Button>
-      </div>
+      </SheetActionFooter>
     </main>
   );
 }
@@ -15705,6 +15902,7 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
         <PlanEditor
           source={preview.program}
           profile={state.profile}
+          generatedAcceptance
           exerciseState={state}
           onSave={accept}
           onCancel={() => setPreview(null)}
@@ -15862,11 +16060,16 @@ function SettingSwitch({
   );
 }
 
-function HelpPopover({ id, label, title, term, children }) {
+function HelpPopover({ id, label, title, term, children, circleOnly=false }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ left: 12, top: 12, width: 260 });
   const rootRef = useRef(null);
   const triggerRef = useRef(null);
+  const pointerInside = useRef(true);
+  const insideCircle = point => {
+    const box=triggerRef.current?.getBoundingClientRect();
+    return Boolean(box&&Math.hypot(point.clientX-box.left-box.width/2,point.clientY-box.top-box.height/2)<=Math.min(box.width,box.height)/2);
+  };
   const contentRef = useRef(null);
 
   useEffect(() => {
@@ -15879,7 +16082,13 @@ function HelpPopover({ id, label, title, term, children }) {
         setOpen(false);
     };
     const escape = (event) => {
-      if (event.key === "Escape") setOpen(false);
+      if (event.key !== "Escape") return;
+      // The help is the topmost dismissible layer. Do not also dismiss its
+      // parent sheet when this event reaches the window-level sheet handler.
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      triggerRef.current?.focus({ preventScroll: true });
     };
     document.addEventListener("pointerdown", outsidePointer);
     document.addEventListener("keydown", escape);
@@ -15944,7 +16153,12 @@ function HelpPopover({ id, label, title, term, children }) {
         aria-expanded={open}
         aria-controls={id}
         aria-describedby={open ? id : undefined}
-        onClick={() => setOpen((current) => !current)}
+        onPointerDown={circleOnly?event=>{pointerInside.current=insideCircle(event);}:undefined}
+        onTouchStart={circleOnly?event=>{pointerInside.current=insideCircle(event.touches[0]);}:undefined}
+        onClick={event => {
+          if(circleOnly&&event.detail!==0&&(!pointerInside.current||!insideCircle(event)))return;
+          setOpen(current=>!current);
+        }}
       >
         <span className="help-popover-mark" aria-hidden="true" />
       </button>
@@ -16010,22 +16224,23 @@ function backupDisplayDate(value) {
   }).format(date);
 }
 
-function BackupSheet({ state, update, close, onBackupCreated }) {
+export function BackupSheet({ state, update, close, onBackupCreated }) {
   const [busy, setBusy] = useState(false);
   const [createdFile, setCreatedFile] = useState(null);
   const [message, setMessage] = useState("");
+  const [handoffError, setHandoffError] = useState("");
   const [unavailablePhotoCount, setUnavailablePhotoCount] = useState(0);
   const photoCount = (state.workouts || []).filter((workout) => workout.photoId).length;
   const create = async (allowUnavailablePhotos = false) => {
     if (busy) return;
     setBusy(true);
     setMessage("");
+    setHandoffError("");
     if (!allowUnavailablePhotos) setUnavailablePhotoCount(0);
     try {
       const {
         backupFile,
         createBackup,
-        presentBackupFile,
         requestPersistentStorage,
       } = await loadBackupTools();
       await requestPersistentStorage();
@@ -16033,7 +16248,6 @@ function BackupSheet({ state, update, close, onBackupCreated }) {
       const file = backupFile(archive);
       setCreatedFile(file);
       setUnavailablePhotoCount(0);
-      const result = await presentBackupFile(file);
       update((current) => {
         current.dataSafety = {
           ...(current.dataSafety || {}),
@@ -16041,17 +16255,30 @@ function BackupSheet({ state, update, close, onBackupCreated }) {
         };
         return current;
       });
-      setMessage(
-        result === "cancelled"
-          ? "Backup created. Sharing was cancelled; you can still download it below."
-          : "Backup created.",
-      );
+      setMessage("");
       triggerHaptic("success");
-      if (result !== "cancelled") onBackupCreated?.();
     } catch (error) {
       const { backupUserMessage } = await loadBackupTools();
       setMessage(backupUserMessage(error, "backup"));
       setUnavailablePhotoCount(error?.unavailablePhotos?.length || 0);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = async () => {
+    if (busy || !createdFile) return;
+    setBusy(true);
+    setHandoffError("");
+    setMessage("");
+    try {
+      const { presentBackupFile } = await loadBackupTools();
+      const result = await presentBackupFile(createdFile);
+      if (result === "cancelled") return;
+      setMessage(result === "shared" ? "Share sheet opened. Check your chosen destination for the file." : "Download started. Check your browser’s downloads and save the file outside ROOK.");
+      onBackupCreated?.();
+    } catch (error) {
+      if (error?.name !== "AbortError")
+        setHandoffError("Could not start saving your backup. The prepared file is still available. Try again.");
     } finally {
       setBusy(false);
     }
@@ -16078,12 +16305,20 @@ function BackupSheet({ state, update, close, onBackupCreated }) {
       </p>
       {state.dataSafety?.lastBackupCreatedAt && (
         <p className="backup-last-created">
-          Last backup created: {backupDisplayDate(state.dataSafety.lastBackupCreatedAt)}
+          Prepared {backupDisplayDate(state.dataSafety.lastBackupCreatedAt)}
         </p>
       )}
+      {createdFile && <p className="backup-status" role="status">Backup ready to save. Save the file outside ROOK to keep a recovery copy.</p>}
+      {!createdFile && state.dataSafety?.lastBackupCreatedAt && <p className="backup-status">Preparation does not confirm a saved copy. Create a new backup to save it from this sheet.</p>}
       {message && <p className="backup-status" role="status">{message}</p>}
-      <Button disabled={busy} onClick={() => create(false)}>
-        {busy ? "CREATING BACKUP…" : "CREATE BACKUP"}
+      {createdFile && <>
+        {handoffError && <p id="backup-handoff-error" className="backup-status is-error" role="alert">{handoffError}</p>}
+        <Button disabled={busy} aria-describedby={handoffError ? "backup-handoff-error" : undefined} onClick={save}>
+          {busy ? "PLEASE WAIT…" : handoffError ? "TRY AGAIN" : "SAVE BACKUP"}
+        </Button>
+      </>}
+      <Button variant={createdFile ? "secondary" : "primary"} disabled={busy} onClick={() => create(false)}>
+        {busy ? (createdFile ? "PLEASE WAIT…" : "CREATING BACKUP…") : createdFile ? "CREATE A NEW BACKUP" : "CREATE BACKUP"}
       </Button>
       {unavailablePhotoCount > 0 && (
         <Button
@@ -16092,20 +16327,6 @@ function BackupSheet({ state, update, close, onBackupCreated }) {
           onClick={() => create(true)}
         >
           {`CREATE WITHOUT ${unavailablePhotoCount} UNAVAILABLE ${unavailablePhotoCount === 1 ? "PHOTO" : "PHOTOS"}`}
-        </Button>
-      )}
-      {createdFile && (
-        <Button variant="secondary" onClick={async () => {
-          try {
-            const { downloadBackupFile } = await loadBackupTools();
-            downloadBackupFile(createdFile);
-            setMessage("Backup created.");
-          } catch (error) {
-            const { backupUserMessage } = await loadBackupTools();
-            setMessage(backupUserMessage(error, "backup"));
-          }
-        }}>
-          DOWNLOAD BACKUP
         </Button>
       )}
     </main>
@@ -16190,7 +16411,7 @@ function RestoreBackupSheet({ state, update, close, onRestored }) {
           </p>
           {error && <p className="backup-status is-error" role="alert">{error}</p>}
           <Button disabled={busy} onClick={restore}>
-            {busy ? "RESTORING…" : "RESTORE BACKUP"}
+            {busy ? "RESTORING…" : "RESTORE & REPLACE"}
           </Button>
           <Button variant="quiet" disabled={busy} onClick={() => setPrepared(null)}>CANCEL</Button>
         </>
@@ -16243,18 +16464,18 @@ function LogoutConfirmSheet({ close, backUpFirst, logOut }) {
       aria-labelledby="logout-confirm-title"
       aria-describedby="logout-confirm-body"
     >
-      <SheetHeader title="Log out" onClose={close} />
+      <SheetHeader title="Delete local data" onClose={close} />
       <Eyebrow>LOCAL DATA</Eyebrow>
-      <h2 id="logout-confirm-title">Log out?</h2>
+      <h2 id="logout-confirm-title">Delete local data?</h2>
       <p id="logout-confirm-body">
-        Logging out removes your ROOK data from this device, including workout
-        history and photos. Create a backup first if you want to restore it later.
+        This permanently removes your ROOK data from this device, including workout
+        history and photos. Save a backup first if you want to restore it later.
       </p>
       {error && <p className="backup-status is-error" role="alert">{error}</p>}
       <div className="logout-confirm-actions">
         <Button disabled={busy} onClick={backUpFirst}>BACK UP FIRST</Button>
-        <Button disabled={busy} className="logout-delete-action" onClick={removeLocalData}>
-          {busy ? "DELETING…" : "LOG OUT AND DELETE DATA"}
+        <Button disabled={busy} variant="danger" className="logout-delete-action" onClick={removeLocalData}>
+          {busy ? "DELETING…" : "DELETE LOCAL DATA"}
         </Button>
         <Button disabled={busy} variant="quiet" onClick={close}>CANCEL</Button>
       </div>
@@ -16472,7 +16693,7 @@ function PlateSetupScreen({ gym, state, update, onBack, close }) {
       <h1>Bars and plates</h1>
       <p>Used only for plate calculations at this gym.</p>
       <PlateSetupFields setup={draft} onChange={setDraft} />
-      <Button onClick={save}>SAVE PLATE SETUP</Button>
+      <SheetActionFooter><Button onClick={save}>SAVE PLATE SETUP</Button></SheetActionFooter>
     </main>
   );
 }
@@ -16502,7 +16723,7 @@ function PlateCalculatorSheet({ request, state, update, close }) {
         <h1>Bars and plates</h1>
         <p>Changes apply to plate calculations at this gym.</p>
         <PlateSetupFields setup={draft} onChange={setDraft} />
-        <Button onClick={save}>SAVE PLATE SETUP</Button>
+        <SheetActionFooter><Button onClick={save}>SAVE PLATE SETUP</Button></SheetActionFooter>
       </main>
     );
   }
@@ -16678,7 +16899,7 @@ function TrainingBlockScreen({ state, update, close }) {
           <i aria-hidden="true">{includeDeload ? "✓" : ""}</i>
         </button>
         {state.activeWorkout && <p className="training-block-warning">Finish the active workout before changing its permanent block.</p>}
-        <Button disabled={Boolean(state.activeWorkout) || !name.trim()} onClick={save}>SAVE BLOCK</Button>
+        <SheetActionFooter><Button disabled={Boolean(state.activeWorkout) || !name.trim()} onClick={save}>SAVE BLOCK</Button></SheetActionFooter>
       </main>
     );
   return (
@@ -16728,6 +16949,7 @@ function PlanHistoryScreen({ state, update, close }) {
     return counts;
   }, new Map());
   const [selectedId, setSelectedId] = useState(null);
+  const [expandedVersionGroups, setExpandedVersionGroups] = useState({});
   const [confirming, setConfirming] = useState(false);
   const [restored, setRestored] = useState(false);
   const backToVersions = () => { setSelectedId(null); setConfirming(false); };
@@ -16809,7 +17031,7 @@ function PlanHistoryScreen({ state, update, close }) {
             {Boolean(impact?.flexibleWeekReferencesRemoved || impact?.occurrenceReferencesRemoved) && (
               <p>Temporary schedule references that do not exist in this version will be cleared.</p>
             )}
-            <div><Button variant="secondary" onClick={() => setConfirming(false)}>CANCEL</Button><Button onClick={restore}>RESTORE VERSION</Button></div>
+            <div><Button variant="quiet" onClick={() => setConfirming(false)}>CANCEL</Button><Button onClick={restore}>RESTORE VERSION</Button></div>
           </section>
         )}
       </main>
@@ -16823,8 +17045,9 @@ function PlanHistoryScreen({ state, update, close }) {
       {restored && <p className="plan-history-restored" role="status">Previous version restored. A new current version was saved.</p>}
       {versions.length ? (
         <section className="plan-history-list" aria-label="Plan versions">
-          {versions.map((version, index) => (
-            <button key={version.id} onClick={(event) => {
+          {groupPlanVersions(versions).map(group => {
+            const rows = group.versions.map(version => (
+            <button className="plan-history-version" key={version.id} onClick={(event) => {
               event.currentTarget.blur();
               setSelectedId(version.id);
               setRestored(false);
@@ -16833,10 +17056,23 @@ function PlanHistoryScreen({ state, update, close }) {
                 <span>{planVersionDate(version.timestamp)}</span>
                 {versionDayCounts.get(planVersionDayKey(version.timestamp)) > 1 && <small>{planVersionTime(version.timestamp)}</small>}
               </time>
-              <span><strong>{version.summary}</strong><small>{version.source}{index === 0 ? " · Current" : ""}</small></span>
+              <span><strong>{version.summary}</strong><small>{version.source}{version.id === latestId ? " · Current" : ""}</small></span>
               <i aria-hidden="true">›</i>
             </button>
-          ))}
+            ));
+            if (group.versions.length === 1) return rows;
+            const open = !!expandedVersionGroups[group.id];
+            return <div key={group.id} className="plan-history-group">
+              <button className="plan-history-version" aria-expanded={open} aria-controls={`versions-${group.id}`}
+                onClick={() => setExpandedVersionGroups(current => ({ ...current, [group.id]: !open }))}>
+                <time dateTime={group.versions[0].timestamp}>{planVersionDate(group.versions[0].timestamp)}</time>
+                <span><strong>{group.versions.length} training-target refinements</strong>
+                  <small>{open ? 'Collapse' : 'Expand'} · Every version remains available</small></span>
+                <i aria-hidden="true">{open ? '⌃' : '⌄'}</i>
+              </button>
+              <Disclosure open={open} id={`versions-${group.id}`}>{rows}</Disclosure>
+            </div>;
+          })}
         </section>
       ) : (
         <section className="plan-history-empty" role="status">
@@ -16857,12 +17093,25 @@ function HistoricalWorkoutImportScreen({ state, update, close }) {
   const [error, setError] = useState("");
   const [result, setResult] = useState(null);
   const [mappingName, setMappingName] = useState(null);
+  const [mappingQueue, setMappingQueue] = useState([]);
+  const mappingScreenRef = useRef(null);
   const [query, setQuery] = useState("");
   const [ambiguousAction, setAmbiguousAction] = useState(null);
   const [showInvalid, setShowInvalid] = useState(false);
   const fileRef = useRef(null);
   const choices = useMemo(() => historicalExerciseChoices(state, query), [state.customExercises, query]);
   const mapping = preview?.exerciseMappings.find((item) => item.sourceName === mappingName) || null;
+  const openMapping = item => {
+    const unresolved = preview.exerciseMappings.filter(entry => !entry.exerciseId && !entry.ignored).map(entry => entry.sourceName);
+    const index = unresolved.indexOf(item.sourceName);
+    setMappingQueue(index < 0 ? [item.sourceName] : [...unresolved.slice(index), ...unresolved.slice(0, index)]);
+    setMappingName(item.sourceName); setQuery('');
+  };
+  useLayoutEffect(() => {
+    if (!mappingName) return;
+    mappingScreenRef.current?.scrollTo(0, 0);
+    mappingScreenRef.current?.querySelector('h1')?.focus({ preventScroll: true });
+  }, [mappingName]);
   const selectSource = (value) => { setSource(value); setStep("file"); setError(""); };
   const chooseFile = async (event) => {
     const file = event.target.files?.[0];
@@ -16878,8 +17127,10 @@ function HistoricalWorkoutImportScreen({ state, update, close }) {
     } catch (reason) { setError(reason.message || "This workout file could not be read."); setStep("file"); }
   };
   const resolve = (resolution) => {
-    setPreview((current) => resolveHistoricalExercise(current, state, mappingName, resolution));
-    setMappingName(null); setQuery("");
+    const next = resolveHistoricalExercise(preview, state, mappingName, resolution);
+    setPreview(next);
+    setMappingName(mappingQueue.find(name => next.exerciseMappings.some(item => item.sourceName === name && !item.exerciseId && !item.ignored)) || null);
+    setQuery("");
   };
   const toggleRemember = (item) => setPreview((current) => resolveHistoricalExercise(current, state, item.sourceName, {
     type: "match", exerciseId: item.exerciseId, rememberMatch: !item.rememberMatch,
@@ -16925,9 +17176,11 @@ function HistoricalWorkoutImportScreen({ state, update, close }) {
     </main>
   );
   if (mapping) return (
-    <main className="screen detail-screen history-import-screen history-import-mapping">
+    <main ref={mappingScreenRef} className="screen detail-screen history-import-screen history-import-mapping">
       <SheetHeader title="Map exercise" onBack={() => { setMappingName(null); setQuery(""); }} onClose={close} />
-      <Eyebrow>FROM {preview.sourceLabel.toUpperCase()}</Eyebrow><h1>{mapping.sourceName}</h1>
+      <Eyebrow>FROM {preview.sourceLabel.toUpperCase()}</Eyebrow>
+      <p role="status">Exercise {mappingQueue.indexOf(mappingName) + 1} of {mappingQueue.length}</p>
+      <h1 tabIndex={-1}>{mapping.sourceName}</h1>
       <p>Choose the exact ROOK exercise. Similar names are not matched automatically.</p>
       <SearchInput onClear={() => setQuery("")} className="text-answer" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search exercises" aria-label="Search exercises" />
       <div className="history-import-match-list">{choices.map((item) => (
@@ -16950,29 +17203,33 @@ function HistoricalWorkoutImportScreen({ state, update, close }) {
         <Button variant="quiet" onClick={() => { setSource(null); setStrongUnit(null); setStep("source"); }}>CHANGE SOURCE</Button>
       </> : <>
         <Eyebrow>DRY RUN · NOTHING SAVED</Eyebrow><h1>Review import</h1><p>{preview.fileName} · {preview.sourceLabel}<br />{dateRange}</p>
-        <dl className="history-import-summary-grid"><div><dt>Workouts</dt><dd>{formatCount(preview.summary.workouts)}</dd></div><div><dt>Sets</dt><dd>{formatCount(preview.summary.sets)}</dd></div><div><dt>Exercises matched</dt><dd>{formatCount(preview.summary.matchedExercises)}</dd></div><div className={preview.summary.reviewExercises ? "needs-review" : ""}><dt>Exercises to review</dt><dd>{formatCount(preview.summary.reviewExercises)}</dd></div><div><dt>Exact duplicates</dt><dd>{formatCount(preview.summary.exactDuplicates)}</dd></div><div><dt>Invalid rows</dt><dd>{formatCount(preview.summary.invalidRows)}</dd></div></dl>
+        <dl className="history-import-summary-grid"><div><dt>Workouts</dt><dd>{formatCount(preview.summary.workouts)}</dd></div><div><dt>Sets</dt><dd>{formatCount(preview.summary.sets)}</dd></div><div><dt>Exercises matched</dt><dd>{formatCount(preview.summary.matchedExercises)}</dd></div><div className={preview.summary.reviewExercises ? "needs-review" : ""}><dt>Exercises to match</dt><dd>{formatCount(preview.summary.reviewExercises)}</dd></div><div><dt>Exact duplicates</dt><dd>{formatCount(preview.summary.exactDuplicates)}</dd></div><div><dt>Invalid rows</dt><dd>{formatCount(preview.summary.invalidRows)}</dd></div></dl>
         <section className="history-import-review-section"><Eyebrow>EXERCISE MATCHING</Eyebrow>{preview.exerciseMappings.map((item) => (
-          <div className={`history-import-mapping-row${!item.exerciseId && !item.ignored ? " needs-review" : ""}`} key={item.sourceName}><span><strong>{item.sourceName}</strong><small>{item.ignored ? "Ignored" : item.exerciseId ? historicalExerciseLabel(state, item.exerciseId) : "Choose a match"}</small></span><button onClick={() => { setMappingName(item.sourceName); setQuery(""); }}>{item.exerciseId || item.ignored ? "CHANGE" : "REVIEW"}</button>{item.matchStatus === "manual" && <label className="remember-import-match"><input type="checkbox" checked={item.rememberMatch} onChange={() => toggleRemember(item)} /><span><strong>Remember this match</strong><small>Use it automatically in future imports.</small></span></label>}</div>
+          <div className={`history-import-mapping-row${!item.exerciseId && !item.ignored ? " needs-review" : ""}`} key={item.sourceName}><span><strong>{item.sourceName}</strong><small>{item.ignored ? "Ignored" : item.exerciseId ? historicalExerciseLabel(state, item.exerciseId) : "Choose a match"}</small></span><button onClick={() => openMapping(item)}>{item.exerciseId || item.ignored ? "CHANGE" : "MATCH"}</button>{item.matchStatus === "manual" && <label className="remember-import-match"><input type="checkbox" checked={item.rememberMatch} onChange={() => toggleRemember(item)} /><span><strong>Remember this match</strong><small>Use it automatically in future imports.</small></span></label>}</div>
         ))}</section>
         {(preview.summary.exactDuplicates > 0 || preview.summary.ambiguousDuplicates > 0) && <section className="history-import-review-section history-import-duplicates"><Eyebrow>DUPLICATES</Eyebrow>{preview.summary.exactDuplicates > 0 && <p><strong>{formatCount(preview.summary.exactDuplicates)} already in ROOK</strong><small>Exact duplicates will be skipped.</small></p>}{preview.summary.ambiguousDuplicates > 0 && <><p><strong>{formatCount(preview.summary.ambiguousDuplicates)} possible {preview.summary.ambiguousDuplicates === 1 ? "duplicate" : "duplicates"}</strong><small>Same date and name, but different set data.</small></p><div role="radiogroup" aria-label="Possible duplicate action"><button className={ambiguousAction === "skip" ? "is-selected" : ""} onClick={() => setAmbiguousAction("skip")}>KEEP EXISTING</button><button className={ambiguousAction === "import" ? "is-selected" : ""} onClick={() => setAmbiguousAction("import")}>IMPORT THIS TOO</button></div></>}</section>}
         {preview.summary.invalidRows > 0 && <section className="history-import-review-section history-import-invalid"><button className="history-import-invalid-toggle" onClick={() => setShowInvalid((value) => !value)}><span><strong>{pluralize(preview.summary.invalidRows, "invalid row")}</strong><small>These rows will be skipped.</small></span><b>{showInvalid ? "HIDE" : "VIEW"}</b></button>{showInvalid && preview.invalidRows.slice(0, 20).map((item) => <p key={item.line}>{item.reason}</p>)}</section>}
         {error && <p className="backup-status is-error" role="alert">{error}</p>}
-        <Button disabled={preview.summary.reviewExercises > 0 || (preview.summary.ambiguousDuplicates > 0 && !ambiguousAction)} onClick={apply}>IMPORT {formatCount(importableCount)} {importableCount === 1 ? "WORKOUT" : "WORKOUTS"}</Button>
         <small className="history-import-atomic-note">If saving fails, existing ROOK history stays unchanged.</small>
+        <SheetActionFooter><Button disabled={preview.summary.reviewExercises > 0 || (preview.summary.ambiguousDuplicates > 0 && !ambiguousAction)} onClick={apply}>IMPORT {formatCount(importableCount)} {importableCount === 1 ? "WORKOUT" : "WORKOUTS"}</Button></SheetActionFooter>
       </>}
     </main>
   );
 }
 
-function CustomExercisesScreen({ state, update, close }) {
+function CustomExercisesScreen({ state, update, close, createOnly = false, initialName = "", onCreated, createLabel = 'CREATE EXERCISE' }) {
+  const creationSubmitted = useRef(false);
   const activeExercises = (state.customExercises || []).filter((item) => !item.deletedAt);
   const [editingId, setEditingId] = useState(null);
-  const [view, setView] = useState("list");
+  const [view, setView] = useState(createOnly ? "editor" : "list");
   const [deletePending, setDeletePending] = useState(false);
   const [aliasDraft, setAliasDraft] = useState("");
+  const [draftAliases, setDraftAliases] = useState([]);
+  const originalAliasIds = useRef([]);
+  const [saveFailed, setSaveFailed] = useState(false);
   const [notice, setNotice] = useState("");
   const emptyForm = () => ({
-    name: "",
+    name: initialName,
     equipment: ["machines"],
     primaryMuscle: "",
     secondaryMuscles: [],
@@ -16983,10 +17240,11 @@ function CustomExercisesScreen({ state, update, close }) {
   });
   const [form, setForm] = useState(emptyForm);
   const editing = activeExercises.find((item) => item.id === editingId) || null;
-  const aliases = (state.exerciseAliases || []).filter(
+  const aliases = draftAliases.filter(
     (item) => !item.deletedAt && item.exerciseId === editingId,
   );
   const beginCreate = () => {
+    setSaveFailed(false);
     setEditingId(null);
     setForm(emptyForm());
     setAliasDraft("");
@@ -16995,6 +17253,9 @@ function CustomExercisesScreen({ state, update, close }) {
     setView("editor");
   };
   const beginEdit = (exercise) => {
+    setSaveFailed(false);
+    setDraftAliases(clone(state.exerciseAliases || []));
+    originalAliasIds.current = (state.exerciseAliases || []).filter(alias => !alias.deletedAt && alias.exerciseId === exercise.id).map(alias => alias.id);
     setEditingId(exercise.id);
     setForm({
       name: exercise.name,
@@ -17012,49 +17273,55 @@ function CustomExercisesScreen({ state, update, close }) {
     setView("editor");
   };
   const save = () => {
+    if (createOnly && creationSubmitted.current) return;
     const name = form.name.trim();
     if (!name || !form.primaryMuscle) {
       setNotice(!name ? "Add an exercise name." : "Choose the main target muscle.");
       return;
     }
-    let result;
-    update((current) => {
-      result = editingId
-        ? updateCustomExercise(current, editingId, form)
-        : createCustomExercise(current, form);
-      if (result.exercise && editingId) {
-        const snapshot = customExerciseSnapshot(result.exercise);
-        for (const day of current.program?.days || [])
-          for (const exercise of day.exercises || [])
-            if (exercise.exerciseId === editingId) {
-              exercise.importedName = result.exercise.name;
-              exercise.originalImportedName = result.exercise.name;
-              exercise.importedExercise = snapshot;
-              exercise.measure = snapshot.measure;
-              exercise.loadRequirement = snapshot.loadRequirement;
-            }
+    if (editingId) {
+      const result = saveCustomExerciseDetails(state, editingId, form, {
+        added: aliases.filter(alias => !originalAliasIds.current.includes(alias.id)).map(alias => alias.alias),
+        removed: originalAliasIds.current.filter(id => !aliases.some(alias => alias.id === id)),
+        builtInCatalog: exerciseCatalog, persist: saveState,
+      });
+      setSaveFailed(result.status === 'persistence-failed');
+      if (result.status !== 'saved') {
+        setNotice(result.status === 'persistence-failed' ? 'Couldn’t save these details and aliases. Your exercise, aliases and plan are unchanged. Try again.' : result.status === 'conflict' ? 'That alias now maps to another exercise. Review your aliases.' : result.status === 'duplicate' ? 'An exercise with this name already exists.' : 'Check the exercise details.');
+        return;
       }
+      update(() => result.state);
+      setView('list');setEditingId(null);return;
+    }
+    let result;
+    if (createOnly) creationSubmitted.current = true;
+    try { update((current) => {
+      result = createCustomExercise(current, form);
       return current;
-    });
+    }); } catch {
+      creationSubmitted.current = false;
+      setNotice("Couldn’t save this exercise. Try again; your plan is unchanged.");
+      return;
+    }
     if (["duplicate", "invalid"].includes(result?.status)) {
+      creationSubmitted.current = false;
       setNotice(result.status === "duplicate" ? "An exercise with this name already exists." : "Check the exercise details.");
       return;
     }
+    if (createOnly && result?.exercise) { onCreated?.(result.exercise); return; }
     setView("list");
     setEditingId(null);
   };
   const addAlias = () => {
     if (!editingId || !aliasDraft.trim()) return;
-    let result;
-    update((current) => {
-      result = rememberExerciseAlias(current, aliasDraft, editingId, { builtInCatalog: exerciseCatalog });
-      return current;
-    });
+    const draft = { ...clone(state), exerciseAliases: clone(draftAliases) };
+    const result = rememberExerciseAlias(draft, aliasDraft, editingId, { builtInCatalog: exerciseCatalog });
     if (result?.status === "conflict") setNotice("That name already maps to another exercise.");
     else if (result?.status === "invalid") setNotice("Enter a distinct alias.");
     else {
       setAliasDraft("");
-      setNotice(result?.status === "unchanged" ? "That alias is already saved." : "Alias saved immediately.");
+      setDraftAliases(draft.exerciseAliases);
+      setNotice(result?.status === "unchanged" ? "That alias is already listed." : "Alias added to draft. Save details to keep it.");
     }
   };
   const confirmDelete = () => {
@@ -17098,10 +17365,11 @@ function CustomExercisesScreen({ state, update, close }) {
     );
   return (
     <main className="screen detail-screen custom-exercise-editor">
-      <SheetHeader title={editing ? "Edit exercise" : "New exercise"} onBack={() => setView("list")} />
+      <SheetHeader title={editing ? "Edit exercise" : "New exercise"} onBack={createOnly ? close : () => setView("list")} />
       <Eyebrow>{editing ? "CUSTOM EXERCISE" : "ADD TO YOUR LIBRARY"}</Eyebrow>
       <h1>{editing ? editing.name : "Make it recognizable."}</h1>
       <p>Only the name, equipment and main target are needed. Add movement details only when you know them.</p>
+      {createOnly && <p>Saved to your exercise library, even if you later cancel plan changes. {createLabel === 'CREATE & ADD' ? 'Added to this workout’s draft; save plan changes when you’re ready.' : 'Return to the chooser to add it to your draft.'} Saved training restrictions still apply.</p>}
       <div className="custom-exercise-form">
         <label>
           <span>EXERCISE NAME</span>
@@ -17156,11 +17424,11 @@ function CustomExercisesScreen({ state, update, close }) {
       {editing && (
         <section className="custom-alias-section">
           <Eyebrow>ALIASES</Eyebrow>
-          <p>Other names that should resolve to this exercise during future imports. Alias changes save immediately.</p>
+          <p>Other names that should resolve to this exercise during future imports. Alias changes are saved with SAVE DETAILS.</p>
           {aliases.map((alias) => (
             <div className="custom-alias-row" key={alias.id}>
               <span>{alias.alias}</span>
-              <button type="button" aria-label={`Remove alias ${alias.alias}`} onClick={() => update((current) => { removeExerciseAlias(current, alias.id); return current; })}>REMOVE</button>
+              <button type="button" aria-label={`Remove alias ${alias.alias}`} onClick={() => setDraftAliases(current => { const draft = { ...clone(state), exerciseAliases: clone(current) }; removeExerciseAlias(draft, alias.id); return draft.exerciseAliases; })}>REMOVE</button>
             </div>
           ))}
           <div className="custom-alias-add">
@@ -17169,8 +17437,9 @@ function CustomExercisesScreen({ state, update, close }) {
           </div>
         </section>
       )}
-      {notice && <p className="custom-exercise-notice" role="status">{notice}</p>}
-      <Button onClick={save}>{editing ? "SAVE DETAILS" : "CREATE EXERCISE"}</Button>
+      <SheetActionFooter enabled={!deletePending}>
+      {notice && <p className="custom-exercise-notice" role={saveFailed ? 'alert' : 'status'}>{notice}</p>}
+      <Button onClick={save}>{saveFailed ? 'TRY AGAIN' : editing ? "SAVE DETAILS" : createLabel}</Button>
       {editing && !deletePending && <Button variant="quiet" className="custom-exercise-delete" onClick={() => setDeletePending(true)}>Delete exercise</Button>}
       {deletePending && (
         <section className="custom-delete-confirm" role="alertdialog" aria-label="Delete custom exercise">
@@ -17179,6 +17448,7 @@ function CustomExercisesScreen({ state, update, close }) {
           <div><button type="button" onClick={() => setDeletePending(false)}>CANCEL</button><button type="button" onClick={confirmDelete}>DELETE</button></div>
         </section>
       )}
+      </SheetActionFooter>
     </main>
   );
 }
@@ -17358,6 +17628,7 @@ function GymProfilesSheet({ state, update, close }) {
         </p>
       )}
       {error && <p className="backup-status is-error" role="alert">{error}</p>}
+      <SheetActionFooter enabled={!confirmDelete}>
       <Button disabled={!valid} onClick={save}>SAVE GYM</Button>
       {view === "edit" && !confirmDelete && (
         <Button variant="quiet" className="gym-delete-entry" onClick={() => setConfirmDelete(true)}>
@@ -17382,21 +17653,22 @@ function GymProfilesSheet({ state, update, close }) {
                   ))}
                 </div>
               )}
-              <Button className="gym-delete-action" disabled={isDefault && !replacementDefaultId} onClick={remove}>DELETE GYM</Button>
+              <Button variant="danger" className="gym-delete-action" disabled={isDefault && !replacementDefaultId} onClick={remove}>DELETE GYM</Button>
             </>
           )}
           <Button variant="quiet" onClick={() => setConfirmDelete(false)}>CANCEL</Button>
         </section>
       )}
+      </SheetActionFooter>
     </main>
   );
 }
 
 const ADJUST_TODAY_OPTIONS = [
   [ADJUST_TODAY_MODES.lessTime, "Less time", "Shorten the session while protecting its main work."],
-  [ADJUST_TODAY_MODES.equipment, "Different equipment", "Use only what is available where you train today."],
+  [ADJUST_TODAY_MODES.equipment, "Different equipment", "Rebuild today around the equipment at this location."],
   [ADJUST_TODAY_MODES.lowEnergy, "Low energy", "Reduce fatigue without making the work more aggressive."],
-  [ADJUST_TODAY_MODES.unavailable, "Something is unavailable", "Replace one or more exercises for this session."],
+  [ADJUST_TODAY_MODES.unavailable, "Specific exercise unavailable", "Replace one or more exercises before you start."],
 ];
 
 const TODAY_EQUIPMENT_OPTIONS = [
@@ -17434,6 +17706,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [confirmRestore, setConfirmRestore] = useState(request.view === "restore");
+  const [persistenceError, setPersistenceError] = useState(false);
   const [manualEntryId, setManualEntryId] = useState(null);
   const [query, setQuery] = useState("");
   const estimatedOriginal = estimateSessionMinutes(original?.exercises || []);
@@ -17461,6 +17734,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
   const generate = async () => {
     if (busy) return;
     setBusy(true);
+    setPersistenceError(false);
     setError("");
     try {
       await afterVisibleFrame();
@@ -17490,6 +17764,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
   };
   const apply = () => {
     setError("");
+    setPersistenceError(false);
     const result = applyTodayAdjustment(state, proposal);
     if (result.status === "conflict") {
       setError("Today’s workout changed. Close this review and create the adjustment again.");
@@ -17501,6 +17776,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
     }
     if (!saveState(result.state)) {
       setError("ROOK couldn’t save this adjustment. Your original workout is unchanged. Try again.");
+      setPersistenceError(true);
       return;
     }
     update(() => result.state);
@@ -17508,6 +17784,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
     close();
   };
   const restore = () => {
+    setPersistenceError(false);
     const result = restoreOriginalTodayWorkout(state);
     if (result.status !== "restored") {
       setError("This workout can no longer be restored from here.");
@@ -17515,6 +17792,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
     }
     if (!saveState(result.state)) {
       setError("ROOK couldn’t save the change. The adjusted workout is still intact.");
+      setPersistenceError(true);
       return;
     }
     update(() => result.state);
@@ -17631,7 +17909,7 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
       )}
       {step === "unavailable" && (
         <>
-          <Eyebrow>SOMETHING IS UNAVAILABLE</Eyebrow>
+          <Eyebrow>SPECIFIC EXERCISE UNAVAILABLE</Eyebrow>
           <h1>Choose affected exercises</h1>
           <p>Select one or more. ROOK will look for compatible replacements.</p>
           <div className="adjust-check-list" role="group" aria-label="Unavailable exercises">
@@ -17657,8 +17935,10 @@ function AdjustTodaySheet({ state, update, close, request = {} }) {
             {proposal.unresolved.map((item) => <div className="adjust-unresolved" role="alert" key={item.entryId}><strong>{item.label} needs a replacement</strong><small>{item.reason}</small><button className="text-button" onClick={() => setManualEntryId(item.entryId)}>Choose replacement</button></div>)}
           </section>
           <p className="adjust-today-note">Future workouts remain based on your original plan.</p>
+          <SheetActionFooter enabled={!existing && !confirmRestore}>
           {error && <p className="backup-status is-error" role="alert">{error}</p>}
-          {confirmRestore ? <div className="adjust-restore-confirm" role="alert"><strong>Restore the original workout?</strong><small>The adjustment will be removed. Your plan will not change.</small><Button variant="secondary" onClick={restore}>RESTORE ORIGINAL</Button><Button variant="quiet" onClick={() => setConfirmRestore(false)}>KEEP ADJUSTMENT</Button></div> : existing ? <><Button variant="secondary" onClick={() => setConfirmRestore(true)}>RESTORE ORIGINAL</Button><Button variant="quiet" onClick={close}>DONE</Button></> : <><Button key={error ? "blocked" : "ready"} variant={error ? "secondary" : "primary"} disabled={Boolean(error) || proposal.unresolved.length || !proposal.meaningful} onClick={apply}>USE THIS WORKOUT</Button><Button variant="quiet" onClick={close}>CANCEL</Button></>}
+          {confirmRestore ? <div className="adjust-restore-confirm" role="alert"><strong>Restore the original workout?</strong><small>The adjustment will be removed. Your plan will not change.</small><Button variant="secondary" onClick={restore}>{persistenceError ? "TRY AGAIN" : "RESTORE ORIGINAL"}</Button><Button variant="quiet" onClick={() => { setConfirmRestore(false); setError(""); setPersistenceError(false); }}>KEEP ADJUSTMENT</Button></div> : existing ? <><Button variant="secondary" onClick={() => setConfirmRestore(true)}>RESTORE ORIGINAL</Button><Button variant="quiet" onClick={close}>DONE</Button></> : <><Button variant={error && !persistenceError ? "secondary" : "primary"} disabled={Boolean(error && !persistenceError) || proposal.unresolved.length || !proposal.meaningful} onClick={apply}>{persistenceError ? "TRY AGAIN" : "USE THIS WORKOUT"}</Button><Button variant="quiet" onClick={close}>CANCEL</Button></>}
+          </SheetActionFooter>
         </>
       )}
       {error && step !== "review" && <p className="backup-status is-error" role="alert">{error}</p>}
@@ -17682,6 +17962,7 @@ function Detail({
   useEffect(() => {
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
+  if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} />;
   if (detail?.restTraining)
     return (
       <RestTrainingSheet
@@ -17805,6 +18086,8 @@ function Detail({
     );
   if (detail === "logging")
     return <Logging state={state} update={update} close={close} />;
+  if (detail === "notifications")
+    return <Logging state={state} update={update} close={close} focusNotifications />;
   if (detail === "appearance")
     return <Appearance state={state} update={update} close={close} />;
   if (detail === "custom-exercises")
@@ -17837,6 +18120,15 @@ function Detail({
         request={detail.adjustToday}
       />
     );
+  if (detail?.todayActions) return <main className="sheet today-actions-sheet">
+    <SheetHeader title="More options" onClose={close}/>
+    <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}>Adjust week</button>
+    {detail.todayActions.hasWorkout&&detail.todayActions.date===isoDay()&&!state.activeWorkout&&!state.activeOptionalSession&&<button className="list-row" onClick={()=>setDetail({todayFreestyle:{date:detail.todayActions.date}})}>Start freestyle workout</button>}
+  </main>;
+  if (detail?.todayFreestyle) return <main className="sheet today-actions-sheet">
+    <SheetHeader title="Freestyle workout" onClose={close}/>
+    <FreestyleEntry state={state} update={update} setPage={page=>{close();setPage(page);}} setDetail={setDetail} date={detail.todayFreestyle.date} hideHistory/>
+  </main>;
   if (detail?.plateCalculator)
     return (
       <PlateCalculatorSheet
@@ -17890,6 +18182,8 @@ function Detail({
         setDetail={setDetail}
       />
     );
+  if (detail?.loggedExercises)
+    return <LoggedExercises state={state} setDetail={setDetail} close={close} initial={detail.loggedExercises}/>;
   if (detail?.weightHistory)
     return (
       <WeightHistory
@@ -17951,6 +18245,7 @@ function Detail({
       <ActiveExerciseOptions
         exercise={detail.options}
         state={state}
+        update={update}
         close={close}
         setDetail={setDetail}
       />
@@ -18023,6 +18318,7 @@ function Detail({
       <SheetHeader
         title={exerciseName(exercise)}
         onClose={close}
+        onBack={detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
         closeLabel={`Close ${exerciseName(exercise)} details`}
       />
       <div className={`exercise-detail-overview${detailIllustration ? " has-illustration" : ""}`}>
@@ -18066,7 +18362,7 @@ function Detail({
             </>
           )}
           <p className="exercise-detail-target">
-            Target · {targetLabel(exercise, state.profile.rirEnabled)}
+            {exercise.prescriptionSource === 'freestyle' ? 'Freestyle · ' : 'Target · '}{targetLabel(exercise, state.profile.rirEnabled)}
           </p>
           {exerciseNote(exercise) && (
             <p className="exercise-detail-program-note">{exerciseNote(exercise)}</p>
@@ -18121,7 +18417,7 @@ function Detail({
               <dt>Estimated 1RM</dt>
               <dd>
                 {performance.estimatedOneRepMax !== null
-                  ? `${displayWeight(performance.estimatedOneRepMax, state.profile.units)} ${unit}`
+                  ? `${displayEstimatedOneRepMax(performance.estimatedOneRepMax, state.profile.units)} ${unit}`
                   : "—"}
               </dd>
             </div>
@@ -18194,7 +18490,9 @@ function Detail({
     </main>
   );
 }
-function Logging({ state, update, close }) {
+function Logging({ state, update, close, focusNotifications = false }) {
+  const notificationRef = useRef(null);
+  useEffect(()=>{if(!focusNotifications)return;const frame=requestAnimationFrame(()=>notificationRef.current?.scrollIntoView({block:'center'}));return()=>cancelAnimationFrame(frame);},[focusNotifications]);
   const p = state.profile;
   const [notificationCapability, setNotificationCapability] = useState(() =>
     restNotificationCapability(window),
@@ -18320,6 +18618,7 @@ function Logging({ state, update, close }) {
           disabled={!p.restTimerEnabled}
           onChange={(value) => setFlag("restTimerAutoStart", value)}
         />
+        <div ref={notificationRef} tabIndex={-1} data-sheet-initial-focus={focusNotifications?'true':undefined}>
         <SettingSwitch
           label="Rest timer notifications"
           checked={
@@ -18341,6 +18640,7 @@ function Logging({ state, update, close }) {
             {notificationNotice}
           </p>
         )}
+        </div>
       </section>
       <section className="logging-group increments-group">
         <Eyebrow>UNITS</Eyebrow>
@@ -18524,7 +18824,7 @@ function Appearance({ state, update, close }) {
       <section className="appearance-credits">
         <Eyebrow>ILLUSTRATION CREDITS</Eyebrow>
         <p>
-          Exercise illustrations by{" "}
+          Library illustrations by{" "}
           <a
             href="https://bryllim.github.io/workout-guide/"
             target="_blank"
@@ -18542,6 +18842,7 @@ function Appearance({ state, update, close }) {
           </a>
           .
         </p>
+        <p>Additional exercise illustrations created for ROOK with AI assistance.</p>
       </section>
     </main>
   );
@@ -18712,6 +19013,7 @@ function TodayExerciseActions({ request, state, update, close }) {
             CANCEL
           </Button>
           <Button
+            variant="danger"
             className="today-exercise-danger"
             onClick={confirmOccurrence ? removeOccurrence : removeWeekly}
           >
@@ -18799,7 +19101,7 @@ function ActiveWorkoutOptions({ close, onRestart }) {
             <Button variant="secondary" onClick={() => setConfirming(false)}>
               CANCEL
             </Button>
-            <Button className="workout-restart-danger" onClick={onRestart}>
+            <Button variant="danger" className="workout-restart-danger" onClick={onRestart}>
               RESTART WORKOUT
             </Button>
           </div>
@@ -18827,6 +19129,7 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
   const current =
     active?.exercises?.find((item) => item.id === exercise.id) || exercise;
   const initialNote = exercisePersonalNote(current) || "";
+  const {reference}=exerciseNotePresentation(current,state.program);
   const [draft, setDraft] = useState(initialNote);
   const templateDay = state.program?.days?.find(
     (day) => day.id === active?.programDayId,
@@ -18853,9 +19156,14 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
       <button className="sheet-close" aria-label="Close" onClick={close}>
         ×
       </button>
-      <Eyebrow>PERSONAL REMINDER</Eyebrow>
-      <h2 id="exercise-note-title">Exercise note</h2>
+      <h2 id="exercise-note-title">Exercise notes</h2>
       <p className="exercise-note-exercise">{exerciseName(current)}</p>
+      {reference&&<section className="exercise-source-reference" aria-label="Original import reference">
+        <Eyebrow>ORIGINAL IMPORT · REFERENCE ONLY</Eyebrow>
+        <p>Original wording may include unselected options. Follow the prescription under Target.</p>
+        <blockquote>{reference}</blockquote>
+      </section>}
+      <Eyebrow>PERSONAL REMINDER</Eyebrow>
       <label className="exercise-note-field">
         <span className="visually-hidden">Exercise note</span>
         <textarea
@@ -18881,6 +19189,7 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
           {draft.length} / {EXERCISE_PERSONAL_NOTE_MAX_LENGTH}
         </small>
       </div>
+      <SheetActionFooter>
       <button type="button" className="button primary exercise-note-save" onClick={() => save()}>
         SAVE
       </button>
@@ -18893,11 +19202,12 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
           Remove note
         </button>
       )}
+      </SheetActionFooter>
     </main>
   );
 }
 
-function ActiveExerciseOptions({ exercise, state, close, setDetail }) {
+function ActiveExerciseOptions({ exercise, state, update, close, setDetail }) {
   const active = state.activeWorkout;
   const exerciseIndex = active?.exercises.findIndex(
     (item) => item.id === exercise.id,
@@ -18939,6 +19249,12 @@ function ActiveExerciseOptions({ exercise, state, close, setDetail }) {
       </button>
       <Eyebrow>EXERCISE</Eyebrow>
       <h2 id="active-exercise-options-title">Exercise options</h2>
+      {active?.source === 'freestyle' && current && !current.sets.some(set => set.completed) && (
+        <button className="choice-row" onClick={() => {
+          update(state => removeFreestyleExercise(state, current.id));
+          close();
+        }}>Remove exercise</button>
+      )}
       <button
         className="choice-row"
         onClick={() => setDetail({ exercise: current })}
@@ -19174,7 +19490,7 @@ function Replace({ exercise, state, update, close }) {
   const [query, setQuery] = useState("");
   const [rememberPreference, setRememberPreference] = useState(false);
   useEffect(() => {
-    // Keep local suggestions stable until their inputs change. More suggestions
+    // Keep local suggestions stable until their inputs change. More compatible options
     // reveals the next locally ranked candidates without a network request.
     setChoices(compatible.slice(0, 3));
     setLoadingMore(false);
@@ -19289,11 +19605,11 @@ function Replace({ exercise, state, update, close }) {
     });
     close();
   };
-  const pickerChoices = allAllowed.filter(
+  const pickerChoices = rankExerciseSearch(allAllowed.filter(
     (item) =>
       !query.trim() ||
       exerciseMatchesQuery(item, query),
-  );
+  ), query);
   const choiceButton = (choice, allowAnyAllowed = false) => (
     <button
       className="choice-row"
@@ -19340,7 +19656,7 @@ function Replace({ exercise, state, update, close }) {
                 setQuery("");
               }}
             >
-              ‹ Suggestions
+              ‹ Compatible options
             </button>
             <Eyebrow>CHOOSE ANOTHER EXERCISE</Eyebrow>
             <h2 id="replace-title">All available exercises</h2>
@@ -19404,10 +19720,10 @@ function Replace({ exercise, state, update, close }) {
                 onClick={more}
                 disabled={!suggestionsReady || loadingMore || noMore}
               >
-                {loadingMore ? "Checking…" : "More suggestions"}
+                {loadingMore ? "Checking…" : "More compatible options"}
               </button>
               <button disabled={!suggestionsReady} onClick={() => setPicker(true)}>
-                Choose another exercise
+                Search all exercises
               </button>
               {noMore && (
                 <small>All compatible exercises are already shown.</small>
@@ -19422,6 +19738,7 @@ function Replace({ exercise, state, update, close }) {
 
 export default function App() {
   const [state, update, persistenceFailed] = useLiftState();
+  const liveCompletion = useRef(null);
   useResolvedTheme(
     state.profile.appearancePreference,
     state.profile.stylePreference,
@@ -19565,6 +19882,7 @@ export default function App() {
       return (
         <PersistenceHost failed={persistenceFailed}>
           <Onboarding
+            initialUnits={state.profile.units}
             update={update}
             exit={() => setEntryMode(null)}
             onPlanAccepted={showGeneratedPlan}
@@ -19646,6 +19964,7 @@ export default function App() {
         update={update}
         setPage={setPage}
         setDetail={setDetail}
+        onLiveFinish={event=>{liveCompletion.current=event;}}
       />
     ) : page === "complete" ? (
       <Complete
@@ -19653,11 +19972,13 @@ export default function App() {
         update={update}
         setPage={setPage}
         setDetail={setDetail}
+        liveFinish={liveCompletion.current}
+        persistenceFailed={persistenceFailed}
       />
     ) : page === "coach" ? (
       <Coach state={state} update={update} setPage={setPage} />
     ) : page === "progress" ? (
-      <Progress state={state} update={update} setDetail={setDetail} />
+      <Progress state={state} update={update} setDetail={setDetail} setPage={setPage} />
     ) : (
       <Profile
         state={state}

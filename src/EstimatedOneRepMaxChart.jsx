@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { displayWeight, weightUnit } from './domain.js';
+import { displayEstimatedOneRepMax, estimatedOneRepMaxChangeLabel, weightUnit } from './domain.js';
 
 export function EstimatedOneRepMaxChart({ sessions, units }) {
   const ref = useRef(null);
@@ -11,7 +11,7 @@ export function EstimatedOneRepMaxChart({ sessions, units }) {
     return () => observer.disconnect();
   }, []);
   const unit = weightUnit(units);
-  const format = value => displayWeight(value, units);
+  const format = value => displayEstimatedOneRepMax(value, units);
   const date = value => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(`${value.slice(0, 10)}T12:00:00`));
   const values = sessions.map(s => s.estimatedOneRepMax);
   const min = Math.min(...values), max = Math.max(...values);
@@ -26,16 +26,18 @@ export function EstimatedOneRepMaxChart({ sessions, units }) {
   }));
   const delta = values.at(-1) - values[0];
   const summary = sessions.length === 1 ? 'Baseline · One session recorded'
-    : flat ? `Unchanged · ${format(values[0])} ${unit} across ${sessions.length} sessions`
-    : `Change ${delta > 0 ? '+' : delta < 0 ? '−' : ''}${format(Math.abs(delta))} ${unit} across ${sessions.length} sessions`;
+    : delta === 0 ? `Unchanged from first session · ${format(values.at(-1))} ${unit}`
+    : `${estimatedOneRepMaxChangeLabel(delta, units)} across ${sessions.length} sessions`;
+  const axisValues = [high, (high + low) / 2, low];
+  const axisLabels = axisValues.map(format);
   const active = points[selected];
   return <div className="exercise-e1rm-trend" ref={ref}>
     <div className="e1rm-heading"><strong>Estimated 1RM history</strong><small>{sessions.length ? `Last ${sessions.length} session${sessions.length === 1 ? '' : 's'}` : ''}</small></div>
     {points.length ? <>
       <svg viewBox={`0 0 ${width} 136`} aria-label={`Estimated 1RM history. ${summary}. Points are in session order.`}>
-        {[high, (high + low) / 2, low].map((v, i) => <g key={i} className="e1rm-axis">
+        {axisValues.map((v, i) => <g key={i} className="e1rm-axis">
           <line x1={left} x2={right} y1={top + i * (bottom - top) / 2} y2={top + i * (bottom - top) / 2} />
-          <text x={0} y={top + i * (bottom - top) / 2} dominantBaseline="middle">{format(v)}</text>
+          <text x={0} y={top + i * (bottom - top) / 2} dominantBaseline="middle">{axisLabels.indexOf(axisLabels[i]) === i ? axisLabels[i] : ''}</text>
         </g>)}
         <text x={0} y={10} className="e1rm-axis-unit">{unit}</text>
         {points.length > 1 && <polyline points={points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" />}

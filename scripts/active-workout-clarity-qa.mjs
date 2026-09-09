@@ -134,7 +134,7 @@ await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 const rirHelp = page.getByRole("button", { name: "What is RIR?" });
 assert.equal(await rirHelp.count(), 1, "active logging explains RIR once, at the column header");
 const rirHelpTarget = await rirHelp.boundingBox();
-assert.ok(rirHelpTarget.width >= 44 && rirHelpTarget.height >= 44, "RIR help keeps a 44px mobile target");
+assert.ok(rirHelpTarget.width >= 16 && rirHelpTarget.width <= 24 && rirHelpTarget.height >= 16 && rirHelpTarget.height <= 24, "RIR help target is the approved visible question mark, not its former 44px slot");
 const rirTerm = page.locator(".set-labels .help-popover-term");
 const rirTermTarget = await rirTerm.boundingBox();
 assert.ok(
@@ -149,7 +149,7 @@ assert.equal(
 );
 // Header geometry belongs to header-alignment-qa.mjs (12 width/theme cases).
 // Keep interaction coverage here, without duplicating old mark-gap/group-centering rules.
-await rirHelp.click();
+await rirHelp.locator('.help-popover-mark').click();
 const rirTooltip = page.getByRole("tooltip");
 await rirTooltip.waitFor();
 await page.waitForTimeout(50);
@@ -254,7 +254,7 @@ assert.equal(await noteButton.count(), 1, "the current exercise exposes one comp
 const noteButtonBox = await noteButton.boundingBox();
 assert.ok(noteButtonBox.width >= 44 && noteButtonBox.height >= 44, "the pencil keeps a 44px touch target");
 await noteButton.click();
-await page.getByRole("heading", { name: "Exercise note" }).waitFor();
+await page.getByRole("heading", { name: "Exercise notes", exact: true }).waitFor();
 await page.waitForTimeout(50);
 assert.equal(
   await page.getByRole("button", { name: "Close" }).evaluate((node) => document.activeElement === node),
@@ -436,8 +436,8 @@ assert.notEqual(stepperSurfaces.divider, "rgba(0, 0, 0, 0)");
 const checks = page.locator(".set-row .check");
 assert.equal(await checks.nth(0).isDisabled(), true, "missing required load keeps the active set unconfirmable");
 assert.equal(await checks.nth(1).isDisabled(), true);
-assert.equal(await checks.nth(0).innerText(), "", "disabled confirmation uses a neutral pending ring, not a dash");
-assert.equal(await checks.nth(0).locator('.check-pending').count(), 1);
+assert.equal(await checks.nth(0).innerText(), "✓", "disabled confirmation retains the shared checkmark");
+assert.equal(await checks.nth(0).locator('.check-mark').count(), 1);
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'current');
 assert.equal(await page.locator('.set-index-label small').count(), 0, 'set rows no longer render a NEXT text label');
 const activeSetNumberStyle = await page.locator('.set-row').nth(0).locator('.set-index-label b').evaluate(
@@ -460,8 +460,8 @@ assert.equal(Number(disabledStyle.opacity), 1);
 await weight.fill("135");
 assert.equal(await checks.nth(0).isEnabled(), true, "entering a valid load makes the active set confirmable");
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'ready');
-assert.equal(await checks.nth(0).innerText(), "", "a ready set keeps the pending ring until completion");
-assert.equal(await checks.nth(0).locator('.check-pending').count(), 1);
+assert.equal(await checks.nth(0).innerText(), "✓", "a ready set uses the outlined check control");
+assert.equal(await checks.nth(0).locator('.check-mark').count(), 1);
 await page.waitForTimeout(220);
 const readyStyle = await checks.nth(0).evaluate((node) => ({
   border: getComputedStyle(node).borderColor,
@@ -474,7 +474,7 @@ assert.equal(
   "a three-digit load does not introduce horizontal overflow",
 );
 
-await page.getByRole("button", { name: "Complete set 1" }).click();
+await page.getByRole("button", { name: "Log set 1" }).click();
 await page.waitForTimeout(220);
 assert.equal(await checks.nth(1).isEnabled(), true);
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'completed');
@@ -488,7 +488,7 @@ assert.equal(
   await checks.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor),
   "rgb(31, 107, 76)",
 );
-assert.equal(await checks.nth(0).getAttribute("aria-label"), "Reopen set 1");
+assert.equal(await checks.nth(0).getAttribute("aria-label"), "Undo logged set 1");
 
 const previous = page.getByRole("button", { name: "← PREVIOUS EXERCISE" });
 const next = page.getByRole("button", { name: "NEXT EXERCISE →" });

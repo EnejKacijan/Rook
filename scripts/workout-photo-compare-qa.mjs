@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { configureNewFeatureReview } from './new-feature-review-capture.mjs';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { createReturningUserFixture } from '../src/demoFixture.js';
@@ -6,6 +7,7 @@ import { buildBackupArchive } from '../src/backup.js';
 
 const out='artifacts/workout-photo-compare';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
+configureNewFeatureReview(browser, '02-workout-photo-compare');
 function fixture(count,appearance='light',style='standard',sameDate=false){
   const state=createReturningUserFixture(2);state.activeWorkout=null;
   Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
@@ -46,7 +48,7 @@ async function open(state,width=390,options={}){
   return {context,page,errors,outgoing};
 }
 async function timeline(page){await page.getByRole('button',{name:'PROGRESS',exact:true}).click();await page.locator('.workout-photo-entry-card').click();await page.getByRole('heading',{name:'Your training, over time.'}).waitFor();}
-async function enter(page){await page.locator('.workout-photo-compare-entry').click();await page.getByRole('heading',{name:'Choose first photo'}).waitFor();}
+async function enter(page){await page.locator('.workout-photo-compare-entry').click();await page.getByRole('heading',{name:'Choose a photo'}).waitFor();}
 async function selectTwo(page,second=1){const tiles=page.locator('.workout-photo-compare-screen .workout-photo-timeline-item');await tiles.nth(0).click();await tiles.nth(second).click();}
 async function compare(page){await page.getByRole('button',{name:'COMPARE PHOTOS',exact:true}).click();await page.waitForFunction(()=>[...document.querySelectorAll('.photo-compare-inspect img')].length===2&&[...document.querySelectorAll('.photo-compare-inspect img')].every(i=>i.complete&&i.naturalWidth));}
 const shot=async(page,name)=>{await page.waitForTimeout(180);await page.screenshot({path:`${out}/${name}.png`});};
@@ -55,7 +57,7 @@ try{
 for(const width of [320,390,430])for(const appearance of ['light','dark'])for(const style of ['standard','premium']){
   const state=fixture(6,appearance,style),run=await open(state,width),{page,context}=run,key=`${width}-${style}-${appearance}`;
   await timeline(page);await page.locator('.workout-photo-compare-entry:not([disabled])').waitFor();await shot(page,`${key}-entry`);await enter(page);await shot(page,`${key}-choose-first`);
-  await page.locator('.workout-photo-compare-screen .workout-photo-timeline-item').first().click();await shot(page,`${key}-choose-second`);
+  await page.locator('.workout-photo-compare-screen .workout-photo-timeline-item').first().click();assert.equal(await page.locator('.photo-compare-selection-mark').textContent(),'✓','selection does not imply display order');await shot(page,`${key}-choose-second`);
   const disabledColors=await page.locator('.photo-compare-selection-footer .primary').evaluate(button=>{const probe=document.createElement('span');probe.style.color='var(--rook-disabled-surface)';document.body.append(probe);const expected=getComputedStyle(probe).color;probe.remove();return {disabled:button.disabled,actual:getComputedStyle(button).backgroundColor,expected};});
   assert.equal(disabledColors.disabled,true);assert.equal(disabledColors.actual,disabledColors.expected,key+' neutral disabled surface');
   await page.locator('.workout-photo-compare-screen .workout-photo-timeline-item').nth(1).click();await shot(page,`${key}-two-selected`);assert.equal(await page.locator('.photo-compare-selection-footer .primary').isDisabled(),false);assert.notEqual(await page.locator('.photo-compare-selection-footer .primary').evaluate(b=>getComputedStyle(b).backgroundColor),disabledColors.expected);await compare(page);await verify(page);await shot(page,`${key}-portrait-pair`);
@@ -77,7 +79,7 @@ for(const scenario of ['zero','one','many','mixed','landscape','different-workou
     if(scenario==='many')assert.ok((await page.evaluate(()=>window.photoURLs.created))<50,'hundreds of originals are not materialized to enter selection');
     if(['missing','corrupt-selected'].includes(scenario)){
       await page.evaluate(async corrupt=>{const db=await new Promise(resolve=>{const r=indexedDB.open('rook-workout-media',3);r.onsuccess=()=>resolve(r.result);});const tx=db.transaction('photos','readwrite'),store=tx.objectStore('photos');if(corrupt){const r=store.get('photo-0');r.onsuccess=()=>store.put({...r.result,blob:new Blob(['broken'],{type:'image/jpeg'})});}else store.delete('photo-0');await new Promise(resolve=>tx.oncomplete=resolve);db.close();},scenario==='corrupt-selected');
-      await page.getByRole('button',{name:'COMPARE PHOTOS',exact:true}).click();await page.getByText('This photo is no longer available.',{exact:true}).waitFor();await shot(page,`320-${scenario}`);await page.getByRole('button',{name:'Choose another',exact:true}).click();await page.getByRole('heading',{name:'Choose second photo'}).waitFor();
+      await page.getByRole('button',{name:'COMPARE PHOTOS',exact:true}).click();await page.getByText('This photo is no longer available.',{exact:true}).waitFor();await shot(page,`320-${scenario}`);await page.getByRole('button',{name:'Choose another',exact:true}).click();await page.getByRole('heading',{name:'Choose another photo'}).waitFor();
     }else{
       if(scenario==='offline')await context.setOffline(true);await compare(page);await verify(page);await shot(page,`320-${scenario}`);
       if(scenario==='delete-selected'){
@@ -91,7 +93,7 @@ for(const scenario of ['zero','one','many','mixed','landscape','different-workou
     }
   }
   if(scenario==='same-date'){
-    await page.reload({waitUntil:'networkidle'});await timeline(page);await enter(page);await page.getByRole('heading',{name:'Choose first photo'}).waitFor();assert.equal(await page.locator('[aria-pressed="true"]').count(),0,'no persisted comparison selection');
+    await page.reload({waitUntil:'networkidle'});await timeline(page);await enter(page);await page.getByRole('heading',{name:'Choose a photo'}).waitFor();assert.equal(await page.locator('[aria-pressed="true"]').count(),0,'no persisted comparison selection');
   }
   assert.deepEqual(run.errors,[]);assert.deepEqual(run.outgoing,[]);await context.close();console.log(`${scenario}: passed`);
 }
@@ -100,6 +102,6 @@ for(const scenario of ['zero','one','many','mixed','landscape','different-workou
   const run=await open(fixture(2)),{page}=run;
   const original=await page.evaluate(async()=>{const state=JSON.parse(localStorage.getItem('lift-v2-state'));const db=await new Promise(resolve=>{const r=indexedDB.open('rook-workout-media',3);r.onsuccess=()=>resolve(r.result);});const records=await new Promise(resolve=>{const r=db.transaction('photos').objectStore('photos').getAll();r.onsuccess=()=>resolve(r.result);});db.close();return {state,photos:await Promise.all(records.map(async r=>({...r,blob:undefined,bytes:[...new Uint8Array(await r.blob.arrayBuffer())]})))};});
   const photos=original.photos.map(({bytes,...r})=>({...r,blob:new Blob([new Uint8Array(bytes)],{type:r.mimeType})}));const archive=await buildBackupArchive(original.state,photos);await run.context.close();
-  const clean=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),restored=await clean.newPage();await restored.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));await restored.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await restored.locator('.restore-backup-action').click();await restored.getByLabel('Choose ROOK backup file').setInputFiles({name:'photo-compare.zip',mimeType:'application/zip',buffer:Buffer.from(archive.bytes)});await restored.getByRole('button',{name:'RESTORE BACKUP',exact:true}).click();await restored.waitForFunction(()=>JSON.parse(localStorage.getItem('lift-v2-state')||'{}').workouts?.length===2);await restored.reload({waitUntil:'networkidle'});await timeline(restored);await enter(restored);await selectTwo(restored);await compare(restored);await verify(restored);await shot(restored,'390-backup-restored-pair');await clean.close();console.log('clean-profile ZIP/media restore and comparison: passed');
+  const clean=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),restored=await clean.newPage();await restored.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));await restored.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await restored.locator('.restore-backup-action').click();await restored.getByLabel('Choose ROOK backup file').setInputFiles({name:'photo-compare.zip',mimeType:'application/zip',buffer:Buffer.from(archive.bytes)});await restored.getByRole('button',{name:'RESTORE & REPLACE',exact:true}).click();await restored.waitForFunction(()=>JSON.parse(localStorage.getItem('lift-v2-state')||'{}').workouts?.length===2);await restored.reload({waitUntil:'networkidle'});await timeline(restored);await enter(restored);await selectTwo(restored);await compare(restored);await verify(restored);await shot(restored,'390-backup-restored-pair');await clean.close();console.log('clean-profile ZIP/media restore and comparison: passed');
 }
 }finally{await browser.close();}

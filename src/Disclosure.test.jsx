@@ -1,0 +1,22 @@
+import React, { act } from 'react';
+import { createRoot } from 'react-dom/client';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import { Disclosure, revealDisclosure } from './Disclosure.jsx';
+let root,host,animations,originalAnimate;
+beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;host=document.createElement('div');document.body.append(host);root=createRoot(host);vi.stubGlobal('matchMedia',()=>({matches:false}));animations=[];originalAnimate=Element.prototype.animate;Element.prototype.animate=vi.fn(()=>{const animation={cancel:vi.fn(),onfinish:null};animations.push(animation);return animation;});vi.spyOn(Element.prototype,'getBoundingClientRect').mockImplementation(function(){return {height:this.classList.contains('rook-disclosure-content')||this.style.height==='auto'?100:parseFloat(this.style.height)||0};});});
+afterEach(()=>{act(()=>root.unmount());host.remove();Element.prototype.animate=originalAnimate;vi.restoreAllMocks();vi.unstubAllGlobals();});
+const render=(open,text='Warm-up')=>act(()=>root.render(<Disclosure open={open}><button>{text}</button></Disclosure>));
+const end=()=>act(()=>animations.at(-2)?.onfinish?.());
+it('starts collapsed without mounting hidden content',()=>{render(false);expect(host.querySelector('button')).toBeNull();expect(host.firstChild.hasAttribute('inert')).toBe(true);});
+it('retains visible content until collapse geometry finishes',()=>{render(true);render(false,'Changed after closing');expect(host.textContent).toBe('Warm-up');expect(host.firstChild.getAttribute('aria-hidden')).toBe('true');end();expect(host.textContent).toBe('');});
+it('rapid reopening cancels collapse and exposes current content',()=>{render(true);render(false);const closing=animations[0];render(true,'Current warm-up');expect(closing.cancel).toHaveBeenCalled();end();expect(host.textContent).toBe('Current warm-up');expect(host.firstChild.hasAttribute('inert')).toBe(false);});
+it('updates dynamic long content while expanded without scroll calls',()=>{const scroll=vi.fn();host.scrollIntoView=scroll;render(true);render(true,'Long content '.repeat(200));expect(host.textContent.length).toBeGreaterThan(2000);expect(scroll).not.toHaveBeenCalled();});
+it('reduced motion removes closing content immediately',()=>{vi.stubGlobal('matchMedia',()=>({matches:true}));render(true);render(false);expect(host.textContent).toBe('');});
+it('reveals options above a fixed footer without changing focus',()=>{
+  host.style.overflowY='auto';host.scrollBy=vi.fn();
+  const panel=document.createElement('div'),footer=document.createElement('div');footer.className='sheet-action-footer';host.append(panel,footer);
+  host.getBoundingClientRect=()=>({top:80,bottom:760});footer.getBoundingClientRect=()=>({top:650});panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});
+  revealDisclosure(panel);expect(host.scrollBy).toHaveBeenCalledWith({top:102,behavior:'smooth'});
+  host.scrollBy.mockClear();panel.getBoundingClientRect=()=>({top:200,bottom:400,height:200});revealDisclosure(panel);expect(host.scrollBy).not.toHaveBeenCalled();
+  vi.stubGlobal('matchMedia',()=>({matches:true}));panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});revealDisclosure(panel);expect(host.scrollBy).toHaveBeenCalledWith({top:102,behavior:'auto'});
+});

@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -47,7 +48,7 @@ async function open(state, { permission = "default", viewport = { width: 390, he
 
 async function openLogging(run) {
   await run.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await run.page.getByRole("button", { name: /Logging & increments/ }).click();
+  await openProfileArea(run.page, 'preferences'); await run.page.getByRole("button", { name: /Logging & increments/ }).click();
   await run.page.getByText("REST TIMER", { exact: true }).waitFor();
 }
 

@@ -116,7 +116,7 @@ assert.equal(await optIn.page.locator(".weight-trend-chart").count(), 0);
 
 await optIn.page.getByRole("button", { name: "ADD WEIGHT" }).click();
 await optIn.page.getByRole("spinbutton", { name: "Weight kg" }).fill("82.1");
-await optIn.page.locator('input[type="date"]').fill("2026-09-01");
+await optIn.page.locator('input[type="date"]').fill(await optIn.page.evaluate(()=>{const d=new Date();d.setDate(d.getDate()-((d.getDay()+6)%7));return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;}));
 await optIn.page.getByRole("button", { name: "SAVE" }).click();
 await optIn.page.waitForTimeout(250);
 await optIn.page.screenshot({ path: output("weight-history-weekly-average.png") });

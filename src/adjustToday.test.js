@@ -443,7 +443,9 @@ describe("Adjust Today domain", () => {
     expect(history.adjustment.mode).toBe(ADJUST_TODAY_MODES.lessTime);
     expect(history.exercises).toHaveLength(template.exercises.length);
     expect(history.exercises).not.toHaveLength(6);
-    expect(progressionFor(history.exercises[0], completed.workouts, completed.profile)).toBeNull();
+    const advice = progressionFor(history.exercises[0], completed.workouts, completed.profile);
+    expect(advice).toMatchObject({ type: 'hold', title: 'Repeat to confirm' });
+    expect(advice).not.toHaveProperty('weight');
   });
 
   it("survives a complete Backup & Restore archive round trip", async () => {

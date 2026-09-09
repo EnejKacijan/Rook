@@ -1,0 +1,29 @@
+.rook-disclosure {
+  height: 0;
+  overflow: hidden;
+  opacity: .7;
+  overflow-anchor: none;
+}
+.rook-disclosure-content { display: flow-root; }
+:root :is(.workout-warmup-toggle,.specific-split-toggle,.plan-editor-summary,.plan-editor-picker-trigger,.profile-sex-trigger) i::before,
+:root .specific-split-toggle i {
+  transition: transform 200ms cubic-bezier(.2,0,0,1);
+}
+.plan-editor-picker-trigger[aria-expanded="true"] i::before { transform: rotate(225deg); }
+.screen:has(.rook-disclosure, .history-edit-exercise, .block-unchanged, .history-import-format), .onboarding:has(.rook-disclosure) { overflow-anchor: none; }
+/* Native details keep their existing summary/marker and keyboard semantics.
+   Browsers without intrinsic-size interpolation retain native immediate toggles. */
+@supports (interpolate-size: allow-keywords) {
+  :is(.history-edit-exercise,.block-unchanged,.history-import-format) { interpolate-size: allow-keywords; overflow-anchor: none; }
+  :is(.history-edit-exercise,.block-unchanged,.history-import-format)::details-content {
+    height: 0; overflow: clip; opacity: .7;
+    transition: height 200ms cubic-bezier(.2,0,0,1), opacity 160ms ease-out, content-visibility 200ms allow-discrete;
+  }
+  :is(.history-edit-exercise,.block-unchanged,.history-import-format)[open]::details-content { height: auto; opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .rook-disclosure { transition: none; }
+  :is(.history-edit-exercise,.block-unchanged,.history-import-format)::details-content { transition: none; }
+  :root :is(.workout-warmup-toggle,.specific-split-toggle,.plan-editor-summary,.plan-editor-picker-trigger,.profile-sex-trigger) i,
+  :root :is(.workout-warmup-toggle,.specific-split-toggle,.plan-editor-summary,.plan-editor-picker-trigger,.profile-sex-trigger) i::before { transition: none; }
+}

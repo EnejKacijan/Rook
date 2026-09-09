@@ -175,7 +175,7 @@ await screenshotState('320-initial-unscrolled', fixture(), { width: 320, height:
 });
 for (const appearance of ['light', 'dark']) for (const style of ['standard', 'premium']) {
   await screenshotState(`390-clear-${style}-${appearance}`, fixture({ appearance, style }), { width: 390, height: 844 }, async page => {
-    await page.getByRole('button', { name: 'Choose another exercise' }).click();
+    await page.getByRole('button', { name: 'Search all exercises' }).click();
     const field = page.getByRole('searchbox');
     const before = await field.boundingBox();
     await field.fill('Cable');
@@ -192,13 +192,13 @@ for (const appearance of ['light', 'dark']) for (const style of ['standard', 'pr
   });
 }
 await screenshotState("390-many-recommendations", fixture(), { width: 390, height: 844 }, async (page) => {
-  await page.getByRole("button", { name: "More suggestions" }).click();
+  await page.getByRole("button", { name: "More compatible options" }).click();
   await page.waitForTimeout(250);
   const count = await page.locator(".replace-sheet .choice-row").count();
   assert.ok(count > 3, `${count}: ${await page.locator(".replace-sheet").innerText()}`);
 });
 await screenshotState("320-densest-recommendations", fixture(), { width: 320, height: 700 }, async (page) => {
-  await page.getByRole("button", { name: "More suggestions" }).click();
+  await page.getByRole("button", { name: "More compatible options" }).click();
   await page.waitForTimeout(250);
   assert.equal(await page.locator(".sheet-scroll").evaluate((node) => node.scrollHeight > node.clientHeight), true);
 });
@@ -206,7 +206,7 @@ await screenshotState("390-no-valid-recommendation", fixture({ custom: true }), 
   await page.getByText("not enough compatible exercise metadata", { exact: false }).waitFor();
 });
 await screenshotState("390-manual-search", fixture({ custom: true }), { width: 390, height: 844 }, async (page) => {
-  await page.getByRole("button", { name: "Choose another exercise" }).click();
+  await page.getByRole("button", { name: "Search all exercises" }).click();
   await page.getByRole("searchbox").fill("Dumbbell Bench Press");
 });
 await screenshotState("390-preferred-replacement", fixture({ preferredId: "front-squat" }), { width: 390, height: 844 }, async (page) => {
@@ -256,7 +256,7 @@ await runtime.context.close();
 
 const offline = await open(fixture());
 await offline.context.setOffline(true);
-await offline.page.getByRole("button", { name: "More suggestions" }).click();
+await offline.page.getByRole("button", { name: "More compatible options" }).click();
 await offline.page.waitForTimeout(250);
 assert.ok(await offline.page.locator(".replace-sheet .choice-row").count() > 3, "local ranking works offline");
 await offline.context.setOffline(false);

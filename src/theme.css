@@ -3,6 +3,15 @@
    are independent. Dark structure follows brightness; Premium only changes
    the restrained accent/token layer. */
 
+/* Native Safari button colors must not supply navigation-arrow colors.
+   Low specificity preserves existing green/gold contextual action styles. */
+:where(.detail-header > button, .workout-header > button:first-child,
+  button[aria-label^="Back"], .week-navigation > button,
+  button:has(.back-chevron)) {
+  color: var(--rook-text, #171715);
+  -webkit-text-fill-color: currentColor;
+}
+
 :root {
   --rook-bg: #f6f5f2;
   --rook-page: #eceae5;
@@ -44,7 +53,6 @@
   --rook-selected-line: #191918;
   --rook-today-line: #6f6c68;
   --rook-on-success: #ffffff;
-  --rook-nav-active: #171715;
   --rook-progress: #191918;
   --rook-week-surface-line: #dedbd4;
   --rook-week-rest-surface: #ffffff;
@@ -167,7 +175,6 @@
   --rook-coach-badge-text: #4fbf87;
 
   --rook-nav-bg: rgba(14, 17, 16, .94);
-  --rook-nav-active: var(--rook-text);
   --rook-progress: var(--rook-text);
   --rook-dot: #798480;
   --rook-week-surface-line: #2f3532;
@@ -267,7 +274,6 @@
   --rook-coach-badge-text: var(--rook-premium-accent);
 
   --rook-nav-bg: rgba(20, 21, 15, .96);
-  --rook-nav-active: var(--rook-accent);
   --rook-progress: var(--rook-accent);
   --rook-dot: #9a8552;
   --rook-week-surface-line: #43443a;
@@ -368,7 +374,6 @@
   --rook-coach-badge-bg: #f1e8cf;
   --rook-coach-badge-text: #745509;
   --rook-nav-bg: rgba(247, 245, 240, .96);
-  --rook-nav-active: var(--rook-accent);
   --rook-progress: var(--rook-accent);
   --rook-dot: #8f877b;
   --rook-week-surface-line: #d8d2c7;
@@ -636,7 +641,7 @@
 :root[data-appearance="dark"] .onboarding-option.selected-option .option-card-copy small { color: var(--rook-on-selected); }
 :root[data-appearance="dark"] .onboarding-option.selected-option .option-card-copy small { opacity: .7; }
 :root[data-appearance="dark"] .week-strip .today-date:not(.selected-day) { border-color: var(--rook-today-line); }
-:root[data-appearance="dark"] :is(.secondary, .option-list button:not(.selected-option), .choice-row, .week-strip button:not(.selected-day), .prompt-list button, .action-card, .coach-message, .stepper, .check, .warmup-ramp button, .segmented .active, .move-preview span, .optional-field select, .optional-duration button, .existing-plan-action, .scratch-day-options button, .scratch-workout-day input, .scratch-exercise-results, .scratch-exercise-results button, .plan-editor-exercise, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger, .plan-editor-picker > div, .plan-editor-picker > div > button, .superset-picker > div > button, .photo-inputs label, .physique-suggestions button, .exercise-search, .training-safety-actions.clearance-reasons button + button) { background-color: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-border); }
+:root[data-appearance="dark"] :is(.secondary, .option-list button:not(.selected-option), .choice-row, .week-strip button:not(.selected-day), .prompt-list button, .action-card, .coach-message, .stepper, .check, .warmup-ramp button, .segmented .active, .move-preview span, .optional-field select, .optional-duration button, .existing-plan-action, .scratch-day-options button:not(.selected), .scratch-workout-day input, .scratch-exercise-results, .scratch-exercise-results button, .plan-editor-exercise, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger, .plan-editor-picker > div, .plan-editor-picker > div > button, .superset-picker > div > button, .photo-inputs label, .physique-suggestions button, .exercise-search, .training-safety-actions.clearance-reasons button + button) { background-color: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-border); }
 :root[data-appearance="dark"] .today-screen .week-strip button:not(.selected-day) { background-color: var(--rook-surface-muted); border-color: var(--rook-week-surface-line); }
 :root[data-appearance="dark"] .today-screen .week-strip .today-date:not(.selected-day) { border-color: var(--rook-today-line); }
 :root[data-appearance="dark"] .week-strip .workout-planned .workout-dot { background: var(--rook-dot); }
@@ -647,7 +652,7 @@
 :root[data-appearance="dark"] .logging-screen .unit-segmented::before { background: var(--rook-selected); border-color: var(--rook-selected-line); }
 :root[data-appearance="dark"] .logging-screen .unit-segmented .active { background: transparent; color: var(--rook-on-selected); border-color: transparent; }
 
-:root[data-appearance="dark"] :is(.bottom-nav, .coach-screen .coach-input) { background: var(--rook-nav-bg); border-color: var(--rook-border); }
+:root[data-appearance="dark"] .coach-screen .coach-input { background: var(--rook-nav-bg); border-color: var(--rook-border); }
 :root[data-appearance="dark"] .coach-screen .user-message {
   border: 1px solid var(--rook-border-strong);
   background: var(--rook-surface-raised);
@@ -664,11 +669,6 @@
   background: var(--rook-coach-badge-bg);
   color: var(--rook-coach-badge-text);
 }
-:root[data-appearance="dark"] .bottom-nav button { color: var(--rook-muted); }
-:root[data-appearance="dark"] .bottom-nav .nav-active { color: var(--rook-nav-active); }
-:root[data-appearance="dark"] .bottom-nav .nav-active::after { background: var(--rook-nav-active); }
-:root[data-appearance="light"][data-style="premium"] .bottom-nav .nav-active { color: var(--rook-nav-active); }
-:root[data-appearance="light"][data-style="premium"] .bottom-nav .nav-active::after { background: var(--rook-nav-active); }
 :root[data-appearance="dark"] :is(.list-row, .info-row, .toggle-row, .increment-row, .workout-header, .workout-warmup, .warmup-layer, .warmup-ramp, .up-next, .up-next button, .week-row, .coach-history-header, .coach-history-group button, .coach-screen .adapt-review-list > button, .coach-screen .action-card-reviewing .action-card-buttons, .plan-editor-summary, .appearance-credits, .scratch-plan-action, .rest-training-option, .move-workout-row) { border-color: var(--rook-border); }
 :root[data-appearance="dark"] :is(.list-row, .workout-warmup-toggle, .up-next button, .plan-editor-summary, .scratch-plan-action, .rest-training-option, .move-workout-row, .coach-history-group button, .coach-screen .adapt-review-list > button) { color: var(--rook-text); }
 :root[data-appearance="dark"] .profile-screen button.info-row { color: var(--rook-text); border-color: var(--rook-border); }
@@ -679,7 +679,10 @@
 
 /* Informational / accent-tinted surfaces. */
 :root[data-appearance="dark"] :is(.recommendation, .recommendation.applied, .active-workout-notice, .plan-ready-notice, .goal-plan-preview.has-selection, .setup-confirmation, .plan-conditioning-card, .personalization-summary, .superset-role, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); color: var(--rook-accent); border-color: var(--rook-accent-hairline); }
-:root[data-appearance="dark"] .personalization-summary dl > div { background: var(--rook-surface); }
+:root[data-appearance="dark"] .personalization-summary dl > div {
+  border: 1px solid var(--rook-border-strong);
+  background: var(--rook-surface-muted);
+}
 :root[data-appearance="dark"] .personalization-summary dt { color: var(--rook-secondary); }
 :root[data-appearance="dark"] .personalization-summary dd { color: var(--rook-text); }
 :root[data-appearance="dark"] .coach-screen .action-card-reviewing .action-card-buttons { background: var(--rook-surface); }
@@ -1037,7 +1040,7 @@
   .coach-history-group button.active strong,
   .workout-primary-action .workout-previous
 ) { color: var(--rook-accent) !important; }
-:root[data-style="premium"] .import-review-footer-actions button.import-review-remove { color: #d9837a !important; }
+:root[data-style="premium"] .import-review-footer-actions button.import-review-remove { color: var(--rook-error-text, #8c2f2a) !important; }
 :root[data-style="premium"] :is(
   .plan-conditioning-card p,
   .personalization-summary .split-adaptation-note,
@@ -1092,8 +1095,6 @@
   .active-workout-notice .eyebrow,
   .active-workout-notice > button,
   .plan-ready-notice .eyebrow,
-  .recommendation:not(.hold) strong,
-  .recommendation:not(.hold) p,
   .goal-plan-preview.has-selection > span,
   .goal-plan-preview.has-selection > strong,
   .setup-confirmation strong,
@@ -1129,6 +1130,12 @@
   .building-cancel
 ) {
   color: var(--rook-accent) !important;
+}
+
+/* Recommendation body copy is small; use the stronger existing accent role
+   so every theme keeps sufficient contrast on its accent-soft surface. */
+:root[data-appearance][data-style] .recommendation:not(.hold) :is(strong, p) {
+  color: var(--rook-accent-strong) !important;
 }
 
 :root[data-appearance="light"][data-style="premium"] :is(
@@ -1384,6 +1391,27 @@
 
   .modal-layer > .screen.detail-screen > .detail-header {
     margin-bottom: 16px;
+  }
+}
+
+/* iOS zooms focused form controls whose computed text is smaller than 16px.
+   Keep native pinch zoom available and prevent only the unintended focus zoom. */
+@media (hover: none) and (pointer: coarse) and (max-width: 768px) {
+  :root :is(
+    input:not([type]),
+    input[type="text"],
+    input[type="search"],
+    input[type="number"],
+    input[type="email"],
+    input[type="tel"],
+    input[type="url"],
+    input[type="password"],
+    input[type="date"],
+    input[type="time"],
+    select,
+    textarea
+  ) {
+    font-size: 16px !important;
   }
 }
 

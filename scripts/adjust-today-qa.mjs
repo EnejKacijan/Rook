@@ -205,10 +205,31 @@ async function assertCompactAdjustHeader(page, label) {
 }
 
 async function auditAdjustmentScreens(page, label) {
+  const before = await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('lift-v2-state'));
+    return { program: s.program, workouts: s.workouts, activeWorkout: s.activeWorkout, todayAdaptation: s.todayAdaptation };
+  });
   await page.getByRole("button", { name: "ADJUST TODAY", exact: true }).click();
   await page.getByRole("heading", { name: "What changed today?" }).waitFor();
+  const cards = page.locator('.adjust-option-list .choice-row');
+  assert.deepEqual(await cards.locator('strong').allTextContents(), ['Less time', 'Different equipment', 'Low energy', 'Specific exercise unavailable']);
+  assert.equal(await cards.nth(1).locator('small').innerText(), 'Rebuild today around the equipment at this location.');
+  assert.equal(await cards.nth(3).locator('small').innerText(), 'Replace one or more exercises before you start.');
   await assertCompactAdjustHeader(page, `${label} mode`);
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(document.getAnimations().filter(a => a.effect?.getTiming().iterations !== Infinity).map(a => a.finished.catch(() => {})));
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
   await page.screenshot({ path: output(`matrix-${label}-01-mode.png`) });
+  const note = page.locator('.adjust-today-note');
+  await note.scrollIntoViewIfNeeded();
+  const noteBounds = await note.boundingBox();
+  const closeBounds = await page.getByRole('button', { name: /Close Adjust today/i }).boundingBox();
+  const viewport = page.viewportSize();
+  assert.ok(noteBounds.y >= 0 && noteBounds.y + noteBounds.height <= viewport.height, 'Today-only note clears bottom edge');
+  assert.ok(closeBounds.y >= 0 && closeBounds.y + closeBounds.height <= viewport.height, 'Close remains reachable');
+  await page.screenshot({ path: output(`matrix-${label}-01-mode-bottom.png`) });
   await assertReadable(page.getByRole("heading", { name: "What changed today?" }), `${label} mode heading`);
   await assertReadable(page.locator(".adjust-option-list .choice-row strong").first(), `${label} mode title`);
   await assertReadable(page.locator(".adjust-option-list .choice-row small").first(), `${label} mode description`);
@@ -221,6 +242,8 @@ async function auditAdjustmentScreens(page, label) {
   await page.getByRole("button", { name: "Back" }).click();
 
   await page.getByRole("button", { name: /^Different equipment/ }).click();
+  assert.equal(await page.getByRole('group', { name: 'Saved gyms' }).count(), 1);
+  assert.equal(await page.getByRole('group', { name: 'Unavailable exercises' }).count(), 0);
   await assertCompactAdjustHeader(page, `${label} equipment`);
   await page.screenshot({ path: output(`matrix-${label}-03-equipment.png`) });
   const savedGym = page.locator(".adjust-saved-gyms > button").first();
@@ -237,12 +260,18 @@ async function auditAdjustmentScreens(page, label) {
   await assertReadable(page.locator(".adjust-calm-note"), `${label} low-energy note`);
   await page.getByRole("button", { name: "Back" }).click();
 
-  await page.getByRole("button", { name: /^Something is unavailable/ }).click();
+  await page.getByRole("button", { name: /^Specific exercise unavailable/ }).click();
+  assert.equal(await page.getByRole('group', { name: 'Saved gyms' }).count(), 0);
+  assert.equal(await page.getByRole('group', { name: 'Unavailable exercises' }).count(), 1);
   await assertCompactAdjustHeader(page, `${label} unavailable`);
   await page.screenshot({ path: output(`matrix-${label}-05-unavailable.png`) });
   await assertReadable(page.locator(".adjust-check-list > button > span").first(), `${label} unavailable exercise`);
   await page.getByRole("button", { name: /Close Adjust today/i }).click();
   await page.locator(".modal-layer").waitFor({ state: "detached" });
+  assert.deepEqual(await page.evaluate(() => {
+    const s = JSON.parse(localStorage.getItem('lift-v2-state'));
+    return { program: s.program, workouts: s.workouts, activeWorkout: s.activeWorkout, todayAdaptation: s.todayAdaptation };
+  }), before, 'Back/close from every configuration leaves the workout and permanent plan unchanged');
 }
 
 async function openMode(page, label) {
@@ -334,7 +363,7 @@ async function createLessTimeReview(page, captureLoading = false) {
 
 {
   const { context, page, errors } = await open(fixture());
-  await openMode(page, "Something is unavailable");
+  await openMode(page, "Specific exercise unavailable");
   await page.screenshot({ path: output("06-something-unavailable.png") });
   const rows = page.getByRole("group", { name: "Unavailable exercises" }).locator("button");
   await rows.nth(0).click();
@@ -349,7 +378,7 @@ async function createLessTimeReview(page, captureLoading = false) {
 {
   const state = fixture({ custom: true });
   const { context, page, errors } = await open(state, { width: 320, height: 720 });
-  await openMode(page, "Something is unavailable");
+  await openMode(page, "Specific exercise unavailable");
   await page.getByRole("group", { name: "Unavailable exercises" }).locator("button").first().click();
   await page.getByRole("button", { name: "FIND REPLACEMENTS" }).click();
   const unresolved = page.locator(".adjust-unresolved");
@@ -363,6 +392,8 @@ async function createLessTimeReview(page, captureLoading = false) {
 }
 
 const themes = [
+  ["light", "standard", 390, "standard-light-390"],
+  ["dark", "standard", 320, "standard-dark-320"],
   ["light", "standard", 320, "light"],
   ["dark", "standard", 390, "dark"],
   ["light", "premium", 430, "premium-light"],
@@ -402,11 +433,8 @@ for (const [appearance, style, width, label] of themes) {
   await applyButton.click();
   await page.getByText(/workout changed.*create the adjustment again/i).waitFor();
   assert.equal(await applyButton.isDisabled(), true, "stale review cannot be submitted again");
-  assert.notEqual(
-    await applyButton.evaluate((element) => getComputedStyle(element).backgroundColor),
-    "rgb(31, 107, 76)",
-    "stale CTA no longer retains the active primary treatment",
-  );
+  assert.ok(await applyButton.evaluate(element=>Number(getComputedStyle(element).opacity)<1),
+    "stale CTA uses the existing disabled opacity treatment");
   await page.screenshot({ path: output("17-stale-review.png") });
   assert.deepEqual(errors, []);
   await context.close();
@@ -438,7 +466,7 @@ for (const [appearance, style, width, label] of themes) {
   await applyButton.scrollIntoViewIfNeeded();
   await applyButton.click();
   await page.getByText(/couldn.t save this adjustment/i).waitFor();
-  assert.equal(await applyButton.isDisabled(), true, "failed persistence disables repeat apply");
+  assert.equal(await page.getByRole('button',{name:'TRY AGAIN',exact:true}).isEnabled(), true, "failed persistence offers explicit retry without applying changes");
   const after = await page.evaluate(() => localStorage.getItem("lift-v2-state"));
   assert.equal(after, before, "failed persistence leaves the durable original state untouched");
   assert.ok(

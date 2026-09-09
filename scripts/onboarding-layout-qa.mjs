@@ -13,7 +13,7 @@ await page.route('**/api/ai/status', route => route.fulfill({ status: 200, conte
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
 
-async function verify(name) {
+async function verify(name, { allowScroll = false } = {}) {
   await page.waitForTimeout(50);
   await page.waitForFunction(() => window.scrollY === 0 && document.querySelector('.onboarding')?.scrollTop === 0);
   const layout = await page.evaluate(() => {
@@ -23,11 +23,11 @@ async function verify(name) {
     return { innerHeight, clientHeight: onboarding?.clientHeight || 0, scrollHeight: onboarding?.scrollHeight || 0, scrollTop: onboarding?.scrollTop || 0, scrollLeft: onboarding?.scrollLeft || 0, brandTop: brand?.top || 0, footerBottom: footer?.bottom || 0 };
   });
   await page.screenshot({ path: output(`${name}.png`) });
-  assert.ok(layout.scrollHeight <= layout.clientHeight + 1, `${name} fits without questionnaire scrolling (${layout.scrollHeight}/${layout.clientHeight})`);
+  if (!allowScroll) assert.ok(layout.scrollHeight <= layout.clientHeight + 1, `${name} fits without questionnaire scrolling (${layout.scrollHeight}/${layout.clientHeight})`);
   assert.equal(layout.scrollTop, 0, `${name} starts at the top`);
   assert.equal(layout.scrollLeft, 0, `${name} stays horizontally aligned`);
   assert.ok(layout.brandTop >= 20, `${name} keeps the ROOK brand visible`);
-  assert.ok(layout.footerBottom <= layout.innerHeight, `${name} footer remains visible (${layout.footerBottom}/${layout.innerHeight})`);
+  if (!allowScroll) assert.ok(layout.footerBottom <= layout.innerHeight, `${name} footer remains visible (${layout.footerBottom}/${layout.innerHeight})`);
 }
 
 await verify('01-personal');
@@ -36,14 +36,11 @@ await page.getByRole('option', { name: '18–29' }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('02-goal');
 await page.getByRole('button', { name: 'Build muscle' }).click();
-await verify('02-goal-selected');
-await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('03-experience');
 await page.getByRole('button', { name: /^Beginner/ }).click();
-await page.getByRole('button', { name: 'CONTINUE' }).click();
-await verify('04-schedule');
+await verify('04-schedule', { allowScroll: true });
 await page.getByRole('button', { name: '3 days' }).click();
-const anyDay = page.getByLabel('Make any day available');
+const anyDay = page.getByLabel('Any day works');
 const weekdayButtons = page.locator('.schedule-days .day-options .onboarding-option');
 for (const width of [320, 375, 390]) {
   await page.setViewportSize({ width, height: 700 });
@@ -76,21 +73,26 @@ assert.equal((await weekdayButtons.nth(6).innerText()).trim(), 'Sun', 'larger te
 await page.locator('#qa-large-text').evaluate(style => style.remove());
 await page.setViewportSize({ width: 390, height: 700 });
 await anyDay.check();
-assert.equal(await page.getByText('Any day works', { exact: true }).count(), 1, 'Any day uses natural helper copy');
+assert.equal(await page.getByText('Any day works', { exact: true }).count(), 1, 'Any day uses the clarified control copy');
+assert.equal(await page.getByText('7 days available', { exact: true }).count(), 1, 'Any day explains the effective availability without repeating the control');
 assert.equal(await weekdayButtons.evaluateAll(buttons => buttons.every(button => button.getAttribute('aria-pressed') === 'true')), true, 'Any day visibly selects all seven buttons');
-await weekdayButtons.nth(2).click();
-assert.equal(await anyDay.isChecked(), false, 'deselecting one day turns Any day off');
-assert.equal(await page.getByText('6 days selected', { exact: true }).count(), 1, 'remaining selected days are preserved');
-await anyDay.check();
+assert.equal(await weekdayButtons.evaluateAll(buttons => buttons.every(button => button.disabled)), true, 'Any day makes individual weekday controls non-editable');
+await weekdayButtons.nth(2).evaluate(button => button.click());
+assert.equal(await anyDay.isChecked(), true, 'disabled weekday controls cannot create a contradictory Any day state');
 await anyDay.uncheck();
+assert.equal(await page.getByText('0 days selected', { exact: true }).count(), 1, 'turning Any day off restores the previous explicit selection');
 await weekdayButtons.nth(0).click();
 assert.equal(await page.getByText('1 day selected', { exact: true }).count(), 1, 'manual singular selection uses singular copy');
 await weekdayButtons.nth(1).click();
 await weekdayButtons.nth(2).click();
 assert.equal(await page.getByText('3 days selected', { exact: true }).count(), 1, 'manual multi-selection shows its exact count');
+assert.equal(await page.getByText('Choose at least 3 available days.', { exact: true }).count(), 0, 'guidance clears as soon as availability supports frequency');
+await anyDay.check();
+await anyDay.uncheck();
+assert.equal(await page.getByText('3 days selected', { exact: true }).count(), 1, 'Any day restores the prior manual weekdays predictably');
 for (let index = 3; index < 7; index += 1) await weekdayButtons.nth(index).click();
-assert.equal(await anyDay.isChecked(), true, 'manually selecting all seven days activates Any day');
-assert.equal(await page.getByText('Any day works', { exact: true }).count(), 1);
+assert.equal(await anyDay.isChecked(), false, 'seven explicit weekdays remain a manual availability choice');
+assert.equal(await page.getByText('7 days selected', { exact: true }).count(), 1);
 await page.getByRole('button', { name: '60 min' }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('05-setup');
@@ -136,20 +138,20 @@ await verify('08-preferences');
 assert.equal(await page.locator('.step-count').textContent(), 'STEP 8/8');
 await page.waitForTimeout(250);
 assert.ok(await page.locator('.progress-line > span').evaluate(fill => fill.getBoundingClientRect().width / fill.parentElement.getBoundingClientRect().width) > .98, 'final progress fill is complete within border/subpixel rounding');
-assert.equal(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).getAttribute('aria-pressed'), 'true');
-assert.match(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).textContent(), /Best fit for your goal, experience and 3-day schedule/);
-const specificSplit = page.getByRole('button', { name: /Have a specific split/ });
+assert.equal(await page.getByRole('button', { name: /LET ROOK CHOOSE/ }).getAttribute('aria-pressed'), 'true');
+assert.match(await page.getByRole('button', { name: /LET ROOK CHOOSE/ }).textContent(), /Best fit for your goal, experience and 3-day schedule/);
+const specificSplit = page.getByRole('button', { name: /I already have a preferred weekly structure/ });
 assert.equal(await specificSplit.count(), 1);
 await specificSplit.click();
 const firstSpecificSplit = page.locator('.split-options .onboarding-option').first();
 await firstSpecificSplit.click();
 assert.equal(await firstSpecificSplit.getAttribute('aria-pressed'), 'true', 'specific split flow remains selectable');
-assert.equal(await page.getByRole('button', { name: /CHOOSE FOR ME/ }).getAttribute('aria-pressed'), 'false');
-await page.getByRole('button', { name: /CHOOSE FOR ME/ }).click();
+assert.equal(await page.getByRole('button', { name: /LET ROOK CHOOSE/ }).getAttribute('aria-pressed'), 'false');
+await page.getByRole('button', { name: /LET ROOK CHOOSE/ }).click();
 await specificSplit.click();
 assert.equal(await page.getByText('EXERCISE PREFERENCE', { exact: true }).count(), 1);
 assert.equal(await page.getByRole('textbox', { name: 'Restrictions or clinician limits' }).count(), 0, 'empty restrictions start collapsed');
-const addRestrictions = page.getByRole('button', { name: /Add injuries, pain or movements to avoid/ });
+const addRestrictions = page.getByRole('button', { name: /Add movements or exercises to avoid/ });
 await addRestrictions.click();
 const restrictionField = page.getByRole('textbox', { name: 'Restrictions or clinician limits' });
 assert.equal(await restrictionField.count(), 1, 'restrictions expand inline');

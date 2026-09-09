@@ -75,6 +75,12 @@ function representativeState() {
   state.profile.rirEnabled = true;
   state.profile.restTimerSeconds = 105;
   state.profile.avoid = "No overhead pressing";
+  state.profile.priorities = ["Abs / core"];
+  state.profile.prioritySources = {
+    manual: ["Abs / core"],
+    physiqueSuggested: [],
+    physiqueConfirmed: [],
+  };
   state.program.source = "ai-import";
   state.program.importMetadata = { source: "notes", importedAt: 12345 };
   Object.assign(state.program.days[0].exercises[0], {
@@ -204,6 +210,10 @@ describe("ROOK backup archives", () => {
     expect(restored.state.program.days[0].exercises[0].personalNote).toBe("Keep the setup stable");
     expect(restored.state.workouts).toEqual(state.workouts);
     expect(restored.state.profile.units).toBe("lb");
+    expect(restored.state.profile.priorities).toEqual(["Abs / core"]);
+    expect(restored.state.profile.prioritySources.manual).toEqual([
+      "Abs / core",
+    ]);
     expect(restored.state.gymProfiles).toEqual(state.gymProfiles);
     expect(restored.state.defaultGymProfileId).toBe("gym-main-stable");
     expect(restored.state.substitutionPreferences).toEqual(state.substitutionPreferences);

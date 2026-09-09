@@ -79,7 +79,7 @@ async function open(state, viewport = { width: 390, height: 844 }) {
       body: JSON.stringify({ available: false }),
     }),
   );
-  await page.goto(`http://127.0.0.1:4173/?exercise-edit=${Date.now()}`, {
+  await page.goto(`${process.env.ROOK_QA_URL || 'http://127.0.0.1:4173'}/?exercise-edit=${Date.now()}`, {
     waitUntil: "networkidle",
   });
   return { context, page, errors };
@@ -92,6 +92,9 @@ for (const testCase of [
 ]) {
   const state = fixture(testCase.theme);
   const sourceWorkout = state.program.days.find((day) => day.weekday === weekday());
+  sourceWorkout.name = "Upper Body Strength and Shoulder Stability Session";
+  sourceWorkout.workoutName = sourceWorkout.name;
+  sourceWorkout.nameEdited = true;
   const { context, page, errors } = await open(state, testCase);
   await page.getByRole("button", { name: "START WORKOUT" }).waitFor();
 
@@ -102,12 +105,24 @@ for (const testCase of [
   );
   assert.equal(await page.locator(".today-exercise-drag-handle").count(), 0);
   assert.equal(await page.locator(".today-exercise-remove").count(), 0);
+  const label = page.getByRole("button", { name: "Edit exercises", exact: true });
+  const box = await label.boundingBox();
+  assert.ok(box.width > 0 && box.x >= 0 && box.x + box.width <= testCase.width, "scope label stays within viewport with long workout title");
+  await label.evaluate(element=>element.scrollIntoView({block:'center',behavior:'instant'}));
+  await page.waitForTimeout(300);
+  await page.screenshot({path: output(`${testCase.width}-${testCase.theme}-scope-label.png`)});
+  if (process.env.ROOK_QA_SCOPE_ONLY) {
+    assert.equal(await page.getByRole('button',{name:'Edit',exact:true}).count(),0);
+    assert.deepEqual(errors,[]);
+    await context.close();
+    continue;
+  }
   await page.locator(".exercise-list-row").first().click();
   assert.equal(await page.locator(".detail-screen").count(), 1);
   await page.getByRole("button", { name: /^Close/ }).click();
 
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
-  assert.equal(await page.getByText("EDIT WORKOUT", { exact: true }).count(), 1);
+  await page.getByRole("button", { name: "Edit exercises", exact: true }).click();
+  assert.equal(await page.getByText("EDIT EXERCISES", { exact: true }).count(), 1);
   assert.equal(await page.getByText("Drag to reorder. Tap × to remove.", { exact: true }).count(), 1);
   assert.equal(await page.locator(".today-start-region").getAttribute("aria-hidden"), "true");
   assert.equal(await page.getByRole("button", { name: "START WORKOUT" }).count(), 0, `${testCase.theme}: start CTA leaves the accessibility tree during editing`);
@@ -151,13 +166,18 @@ for (const testCase of [
   await context.close();
 }
 
+if (process.env.ROOK_QA_SCOPE_ONLY) {
+  await browser.close();
+  console.log('Today scope label passed: 320/390 widths, long workout titles, Light/Dark/Premium, no horizontal overflow.');
+  process.exit(0);
+}
 {
   const state = fixture();
   const sourceWorkout = state.program.days.find((day) => day.weekday === weekday());
   const originalOrder = sourceWorkout.exercises.map((exercise) => exercise.id);
   const { context, page, errors } = await open(state);
   const originalTemplate = await page.evaluate(id => JSON.parse(localStorage.getItem('lift-v2-state')).program.days.find(day => day.id === id).exercises, sourceWorkout.id);
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Edit exercises", exact: true }).click();
   await page.locator(".today-start-region").evaluate(async (element) => {
     await Promise.allSettled(element.getAnimations().map((animation) => animation.finished));
   });
@@ -322,7 +342,7 @@ for (const testCase of [
     "long-list fixture remains a valid imported plan",
   );
   const { context, page, errors } = await open(state, { width: 390, height: 600 });
-  await page.getByRole("button", { name: "Edit", exact: true }).click();
+  await page.getByRole("button", { name: "Edit exercises", exact: true }).click();
   assert.equal(await page.locator(".today-exercise-edit-row").count(), 13, "13-exercise fixture renders the complete long list");
   const firstHandle = page.locator(".today-exercise-drag-handle").first();
   await firstHandle.scrollIntoViewIfNeeded();
@@ -349,7 +369,7 @@ for (const testCase of [
   const activeExerciseIds = state.activeWorkout.exercises.map((exercise) => exercise.id);
   const { context, page, errors } = await open(state);
   await page.getByRole("button", { name: "RESUME WORKOUT" }).waitFor();
-  const edit = page.getByRole("button", { name: "Edit", exact: true });
+  const edit = page.getByRole("button", { name: "Edit exercises", exact: true });
   assert.equal(await edit.isDisabled(), true, "active workout structural editing is visibly locked");
   assert.match(await page.locator(".today-edit-lock-note").innerText(), /Finish the active workout/);
   assert.equal(await page.locator(".today-exercise-drag-handle").count(), 0);

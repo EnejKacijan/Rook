@@ -188,13 +188,12 @@ describe("Notes workout import corpus", () => {
     });
   });
 
-  it("uses the profile unit only when the shared rep label makes the sequence unambiguous", () => {
+  it("does not infer source load units from the profile even with a shared rep label", () => {
     const result = parseStructuredTrainingNotes(
       "Monday\nBench Press 176/176/165 5 reps",
       { ...profile, units: "lb" },
     );
-    expect(result.days[0].exercises[0].setWeightsKg).toEqual([
-      79.83, 79.83, 74.84,
-    ]);
+    expect(result.days[0].exercises[0].setWeightsKg).toBeNull();
+    expect(result.days[0].exercises[0].unitlessLoads).toEqual([176,176,165]);
   });
 });

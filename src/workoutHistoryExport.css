@@ -11,7 +11,7 @@
 .history-export-notes span { display:grid;gap:6px; }
 .history-export-notes small { color:var(--rook-secondary);line-height:1.4; }
 .history-export-notes input { appearance:none;width:26px;height:26px;flex-shrink:0;border:1px solid var(--rook-secondary);border-radius:8px;background:transparent;display:grid;place-items:center; }
-.history-export-notes input:checked { background:var(--rook-text);border-color:var(--rook-text); }
+:root[data-appearance] .history-export-notes input:checked { background:var(--rook-text);border-color:var(--rook-text); }
 .history-export-notes input:checked::after { content:'✓';color:var(--rook-surface);font-size:18px;font-weight:700; }
 .history-export-notes input:focus-visible { outline:2px solid var(--rook-accent);outline-offset:3px; }
 :root[data-appearance] .history-export-screen .button.primary:disabled { background:var(--rook-disabled-surface);color:var(--rook-disabled-text);border:1px solid var(--rook-border);opacity:1; }

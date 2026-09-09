@@ -1,0 +1,9 @@
+.weight-unit-choice { margin: 16px 0; }
+.weight-unit-choice .eyebrow { margin: 0; }
+.weight-unit-choice .segmented { margin: 8px 0; }
+.weight-unit-choice .privacy-note { margin: 0; }
+.weight-unit-choice.is-compact { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; margin:0; }
+.weight-unit-choice.is-compact .weight-unit-label { color:var(--rook-muted); font-size:12px; font-weight:650; }
+.weight-unit-choice.is-compact .segmented { flex:0 0 148px; width:148px; margin:0; padding:2px; }
+.weight-unit-choice.is-compact .segmented button { height:44px; }
+.weight-unit-choice.is-compact .privacy-note { flex:0 0 100%; }

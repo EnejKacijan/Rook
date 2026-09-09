@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -146,7 +147,7 @@ async function premiumSignals(page) {
       success: rootStyle.getPropertyValue("--rook-success").trim(),
       selected: rootStyle.getPropertyValue("--rook-selected").trim(),
       selectedLine: rootStyle.getPropertyValue("--rook-selected-line").trim(),
-      navActive: rootStyle.getPropertyValue("--rook-nav-active").trim(),
+      navActive: rootStyle.getPropertyValue("--rook-accent-text").trim(),
       progress: rootStyle.getPropertyValue("--rook-progress").trim(),
       artFilter: rootStyle.getPropertyValue("--rook-art-filter").trim(),
       overflow: document.documentElement.scrollWidth > innerWidth,
@@ -310,7 +311,7 @@ for (const tab of ["COACH", "PROGRESS", "PROFILE"]) {
   await screenshot(run.page, `390-${tab.toLowerCase()}-premium.png`);
   assert.deepEqual(await visibleGreenLeaks(run.page), [], `${tab} contains no ROOK green`);
 }
-await run.page.getByRole("button", { name: /Edit plan/ }).click();
+await openProfileArea(run.page, 'program'); await run.page.getByRole("button", { name: /Edit plan/ }).click();
 assert.deepEqual(
   await visibleGreenLeaks(run.page),
   [],
@@ -324,7 +325,8 @@ assert.deepEqual(
 );
 await screenshot(run.page, "390-plan-editor-premium.png");
 await run.page.getByRole("button", { name: "Close edit plan" }).click();
-await run.page.getByRole("button", { name: /^Appearance/ }).click();
+await run.page.locator('.modal-layer').waitFor({state:'detached'});
+await openProfileArea(run.page, 'preferences'); await run.page.getByRole("button", { name: /^Appearance/ }).click();
 assert.equal(
   await run.page.getByRole("button", { name: /Premium.*Warm gold/ }).getAttribute("aria-pressed"),
   "true",
@@ -353,7 +355,7 @@ for (const tab of ["TODAY", "COACH", "PROGRESS", "PROFILE"]) {
   );
 }
 
-await lightTabRun.page.getByRole("button", { name: /Export workout plan/ }).click();
+await openProfileArea(lightTabRun.page, 'program'); await lightTabRun.page.getByRole("button", { name: /Export workout plan/ }).click();
 await lightTabRun.page.getByText("Include notes", { exact: true }).click();
 assert.deepEqual(
   await visibleGreenLeaks(lightTabRun.page),
@@ -362,8 +364,9 @@ assert.deepEqual(
 );
 await screenshot(lightTabRun.page, "390-export-plan-premium-light.png");
 await lightTabRun.page.getByRole("button", { name: "Close export workout plan" }).click();
+await lightTabRun.page.locator('.modal-layer').waitFor({state:'detached'});
 
-await lightTabRun.page.getByRole("button", { name: /Edit plan/ }).click();
+await openProfileArea(lightTabRun.page, 'program'); await lightTabRun.page.getByRole("button", { name: /Edit plan/ }).click();
 assert.deepEqual(
   await visibleGreenLeaks(lightTabRun.page),
   [],
@@ -377,12 +380,14 @@ assert.deepEqual(
 );
 await screenshot(lightTabRun.page, "390-plan-editor-premium-light.png");
 await lightTabRun.page.getByRole("button", { name: "Close edit plan" }).click();
+await lightTabRun.page.locator('.modal-layer').waitFor({state:'detached'});
 
 for (const [entry, screenshotName] of [
   [/Training restrictions/, "390-restrictions-premium-light.png"],
   [/Logging & increments/, "390-logging-premium-light.png"],
   [/Appearance/, "390-appearance-settings-premium-light.png"],
 ]) {
+  await openProfileArea(lightTabRun.page, screenshotName.includes('restrictions')?'training':'preferences');
   await lightTabRun.page.getByRole("button", { name: entry }).click();
   assert.deepEqual(
     await visibleGreenLeaks(lightTabRun.page),
@@ -409,6 +414,7 @@ for (const [entry, screenshotName] of [
   }
   await screenshot(lightTabRun.page, screenshotName);
   await lightTabRun.page.getByRole("button", { name: /^Close/ }).click();
+  await lightTabRun.page.locator('.modal-layer').waitFor({state:'detached'});
 }
 assert.deepEqual(lightTabRun.errors, []);
 await lightTabRun.context.close();
@@ -447,7 +453,7 @@ await lightNoticeRun.context.close();
 
 const lightRestrictionRun = await openState(returningFixtureWithRestriction(), 390, "light");
 await lightRestrictionRun.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-await lightRestrictionRun.page.getByRole("button", { name: /Training restrictions/ }).click();
+await openProfileArea(lightRestrictionRun.page, 'training'); await lightRestrictionRun.page.getByRole("button", { name: /Training restrictions/ }).click();
 const restrictionSummary = lightRestrictionRun.page.locator(
   ".training-safety-summary.constraints-active",
 );
@@ -598,6 +604,7 @@ await lightActiveRun.context.close();
 
 const lightCoachRun = await openState(returningFixture(), 390, "light");
 await lightCoachRun.page.getByRole("button", { name: "COACH", exact: true }).click();
+await lightCoachRun.page.waitForTimeout(180);
 assert.equal(
   await lightCoachRun.page.locator(".coach-empty .eyebrow").evaluate(
     (node) => getComputedStyle(node).color,
@@ -605,20 +612,24 @@ assert.equal(
   "rgb(138, 103, 15)",
   "Premium Light Coach context uses the Premium gold accent",
 );
-assert.equal(
-  await lightCoachRun.page.locator(".bottom-nav .nav-active").evaluate(
-    (node) => getComputedStyle(node, "::after").backgroundColor,
-  ),
-  "rgb(138, 103, 15)",
-  "Premium Light active navigation uses gold rather than the light-theme black fallback",
+const premiumNavColors = await lightCoachRun.page.locator(".bottom-nav .nav-active").evaluate(
+  (node) => {
+    const probe = document.createElement('span');
+    probe.style.color = 'var(--rook-accent-text)';
+    document.body.append(probe);
+    const result = { actual: getComputedStyle(node).color, expected: getComputedStyle(probe).color };
+    probe.remove();
+    return result;
+  },
 );
 assert.equal(
-  await lightCoachRun.page.locator(".bottom-nav .nav-active").evaluate(
-    (node) => getComputedStyle(node).color,
-  ),
-  "rgb(138, 103, 15)",
-  "Premium Light active navigation label matches its gold indicator",
+  premiumNavColors.actual,
+  premiumNavColors.expected,
+  "Premium Light active navigation uses the existing restrained accent-text token",
 );
+assert.equal(await lightCoachRun.page.locator('.bottom-nav .nav-active .nav-icon-solid').evaluate(node=>getComputedStyle(node).display),'block','the selected tab uses its approved filled icon');
+assert.equal(await lightCoachRun.page.locator('.bottom-nav .nav-active .nav-icon-line').evaluate(node=>getComputedStyle(node).display),'none','the selected tab hides its outline icon');
+assert.equal(await lightCoachRun.page.locator('.bottom-nav .nav-active .nav-label').evaluate(node=>getComputedStyle(node).color),'rgb(29, 27, 24)','the selected tab label keeps Premium Light text contrast');
 assert.equal(
   await lightCoachRun.page.getByLabel("Ask Coach").isDisabled(),
   true,

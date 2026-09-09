@@ -5,6 +5,7 @@ import {
   exerciseCatalog,
   exerciseLoadRequirement,
   exerciseName,
+  rankExerciseSearch,
   isExerciseAllowed,
   isoDay,
   plannedWorkoutForDate,
@@ -411,12 +412,12 @@ export function manualReplacementChoices(
     .filter((item) => item.id !== entryId)
     .map((item) => item.exerciseId);
   const needle = String(query || "").trim().toLowerCase();
-  return userSelectableReplacementCandidates(source, temporaryProfile, occupied, {
+  return rankExerciseSearch(userSelectableReplacementCandidates(source, temporaryProfile, occupied, {
     preferences,
     gymProfileId: proposal.gymProfileId,
   })
     .filter((item) => !needle || item.name.toLowerCase().includes(needle))
-    .slice(0, 80);
+    .slice(0, 80), query);
 }
 
 export function resolveTodayAdjustment(

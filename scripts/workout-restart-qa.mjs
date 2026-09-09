@@ -41,7 +41,7 @@ async function open(themePreference) {
   assert.equal(await page.getByRole('button', { name: 'Workout options' }).count(), 0, 'restart stays hidden for a pristine workout');
   await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('42.5');
   assert.equal(await page.getByRole('button', { name: 'Workout options' }).count(), 1, 'a meaningful edit reveals workout-level options');
-  await page.getByRole('button', { name: 'Complete set 1' }).click();
+  await page.getByRole('button', { name: 'Log set 1' }).click();
   assert.equal(await page.locator('.rest-timer').isVisible(), true, 'a running rest timer exists before restart');
   await page.getByRole('button', { name: 'Workout options' }).click();
   await page.getByRole('heading', { name: 'Workout options' }).waitFor();

@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  BALANCED_TRAINING_PRIORITY,
   MAX_MANUAL_TRAINING_PRIORITIES,
+  TRAINING_EMPHASIS_PRIORITIES,
   nextManualPrioritySelection,
   normalizeManualPrioritySelection,
 } from "./prioritySelection.js";
@@ -26,6 +28,19 @@ describe("manual training priority selection", () => {
       "Back",
     ]);
     expect(nextManualPrioritySelection(["Chest"], "Chest")).toEqual([
+      "Balanced",
+    ]);
+  });
+
+  it("exposes Abs / core as an emphasis area instead of another Balanced state", () => {
+    expect(TRAINING_EMPHASIS_PRIORITIES).toContain("Abs / core");
+    expect(TRAINING_EMPHASIS_PRIORITIES).not.toContain(
+      BALANCED_TRAINING_PRIORITY,
+    );
+    expect(
+      nextManualPrioritySelection([BALANCED_TRAINING_PRIORITY], "Abs / core"),
+    ).toEqual(["Abs / core"]);
+    expect(nextManualPrioritySelection(["Abs / core"], "Balanced")).toEqual([
       "Balanced",
     ]);
   });

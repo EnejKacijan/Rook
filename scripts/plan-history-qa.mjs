@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { verifyLongContent } from './post-review-runtime-checks.mjs';
 import { mkdir } from "node:fs/promises";
@@ -102,7 +103,7 @@ async function open(state, viewport = { width: 390, height: 844 }) {
   await page.route("**/api/ai/status", (route) => route.fulfill({ status: 200, contentType: "application/json", body: '{"available":false}' }));
   await page.goto(`${baseUrl}/?plan-history=${Date.now()}`, { waitUntil: "networkidle" });
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Plan history/ }).click();
+  await openProfileArea(page, 'program'); await page.getByRole("button", { name: /Plan history/ }).click();
   await page.getByRole("heading", { name: "Plan versions" }).waitFor();
   return { context, page, errors };
 }
@@ -177,10 +178,10 @@ for (const [appearance, style, label] of [
 
 const manual = await open(fixture({ initialOnly: true }));
 await manual.page.getByRole("button", { name: "Close Plan history" }).click();
-await manual.page.getByRole("button", { name: /Edit plan/ }).click();
+await openProfileArea(manual.page, 'program'); await manual.page.getByRole("button", { name: /Edit plan/ }).click();
 await manual.page.locator(".workout-name-field input").first().fill("Updated Lower Strength Day");
 await manual.page.getByRole("button", { name: "SAVE CHANGES" }).click();
-await manual.page.getByRole("button", { name: /Plan history/ }).click();
+await openProfileArea(manual.page, 'program'); await manual.page.getByRole("button", { name: /Plan history/ }).click();
 await manual.page.getByText("2 saved versions", { exact: true }).waitFor().catch(() => {});
 const manualSaved = await manual.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 assert.equal(manualSaved.planVersions.length, 2, "a real manual plan edit creates a version");

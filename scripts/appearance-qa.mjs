@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -106,11 +107,12 @@ for (const [appearance, style, themeColor, accent] of combinations) {
   );
 
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
+  await openProfileArea(page, 'preferences');
   assert.match(
     await page.getByRole("button", { name: /^Appearance/ }).innerText(),
     new RegExp(`${appearance}.*${style}.*Illustrations on`, "i"),
   );
-  await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await page.locator(".theme-choice-layer").count(), 0);
   assert.equal(await page.getByRole("group", { name: "Theme" }).count(), 1);
   assert.equal(
@@ -228,7 +230,7 @@ for (const legacy of ["system", "light", "dark", "premium"]) {
 {
   const { context, page, errors } = await open(fixture("light", "standard"));
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
   const illustrations = page.getByRole("switch", { name: "Exercise illustrations" });
   await illustrations.uncheck({ force: true });
   await page.getByRole("button", { name: /Premium.*Warm gold/ }).click();
@@ -236,12 +238,12 @@ for (const legacy of ["system", "light", "dark", "premium"]) {
   assert.equal(await page.locator(".modal-layer").count(), 1, "style changes keep Appearance open");
   await page.getByRole("button", { name: "Close Appearance" }).click();
   assert.match(await page.getByRole("button", { name: /^Appearance/ }).innerText(), /Light.*Premium.*Illustrations off/i);
-  await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await illustrations.isChecked(), false, "illustration preference survives reopening");
   await page.reload({ waitUntil: "networkidle" });
   assert.equal(await page.locator("html").getAttribute("data-style"), "premium");
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await page.getByRole("switch", { name: "Exercise illustrations" }).isChecked(), false);
   assert.deepEqual(errors, []);
   await context.close();

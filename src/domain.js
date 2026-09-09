@@ -49,6 +49,7 @@ import {
   stimulusMutationPreservesPolicy,
   stimulusProfileForItem,
 } from "./trainingVolume.js";
+import { normalizeManualPrioritySelection } from "./prioritySelection.js";
 export {
   priorityProgrammingGroupsForProfile,
   priorityStimulusMusclesForProfile,
@@ -1899,6 +1900,7 @@ export const repRangeLabel = (minimum, maximum) =>
     ? String(minimum)
     : `${minimum}–${maximum}`;
 export const targetLabel = (exercise, showRir = true) => {
+  if (exercise.prescriptionSource === 'freestyle') return pluralize(exercise.sets.length, 'set');
   const timed = exerciseMeasure(exercise) === "seconds";
   const minimum = exercise.repMin ?? exercise.repRange?.[0];
   const maximum = exercise.repMax ?? exercise.repRange?.[1];
@@ -1906,6 +1908,7 @@ export const targetLabel = (exercise, showRir = true) => {
 };
 function normalizeTimedExercises(exercises, force = false) {
   for (const exercise of exercises || []) {
+    if (exercise.prescriptionSource === 'freestyle') continue;
     const item = exerciseCatalog[exercise.exerciseId];
     if (item?.measure !== "seconds") continue;
     const [minimum, maximum] = item.durationRange;
@@ -1925,6 +1928,23 @@ export const weightUnit = (units) => (units === "lb" ? "lb" : "kg");
 export function displayWeight(kg, units = "kg") {
   if (kg === null || kg === undefined || kg === "") return "";
   return Number((units === "lb" ? kg / KG_PER_LB : kg).toFixed(2));
+}
+// e1RM is an estimate, not a load prescription. Round only its presentation,
+// after unit conversion; keep ordinary loads and PR calculations untouched.
+export function displayEstimatedOneRepMax(kg, units = "kg") {
+  if (kg === null || kg === undefined || kg === "" || !Number.isFinite(Number(kg))) return "";
+  return Math.round(units === "lb" ? Number(kg) / KG_PER_LB : Number(kg));
+}
+export function estimatedOneRepMaxChangeLabel(deltaKg, units = "kg") {
+  if (deltaKg === null || deltaKg === undefined || deltaKg === "" || !Number.isFinite(Number(deltaKg))) return "";
+  const delta = units === "lb" ? Number(deltaKg) / KG_PER_LB : Number(deltaKg);
+  if (delta === 0) return "Unchanged";
+  // Remove subtraction noise at whole-unit boundaries, not real small changes.
+  const magnitude = Number(Math.abs(delta).toPrecision(12));
+  const unit = weightUnit(units);
+  return magnitude < 1
+    ? `${delta > 0 ? "Increase" : "Decrease"} <1 ${unit}`
+    : `Change ${delta > 0 ? "+" : "−"}${Math.round(magnitude)} ${unit}`;
 }
 export function storedWeight(value, units = "kg") {
   if (value === "" || value === null || value === undefined) return null;
@@ -2347,19 +2367,25 @@ export function deserializeState(input) {
       stylePreference =
         stored.profile.themePreference === "premium" ? "premium" : "standard";
     }
+    const normalizedPrioritySources = {
+      ...base.profile.prioritySources,
+      ...legacyPrioritySources,
+      manual: normalizeManualPrioritySelection(legacyPrioritySources.manual),
+    };
     const profile = {
       ...base.profile,
       ...(stored.profile || {}),
+      priorities: combinedTrainingPriorities(
+        normalizedPrioritySources.manual,
+        normalizedPrioritySources.physiqueConfirmed,
+      ),
       appearancePreference,
       stylePreference,
       // Keep the old value as a one-release compatibility alias for older
       // tabs and integrations that have not adopted the two-axis model yet.
       themePreference:
         stylePreference === "premium" ? "premium" : appearancePreference,
-      prioritySources: {
-        ...base.profile.prioritySources,
-        ...legacyPrioritySources,
-      },
+      prioritySources: normalizedPrioritySources,
       increments: {
         ...base.profile.increments,
         ...(stored.profile?.increments || {}),
@@ -3074,10 +3100,10 @@ function equipmentSet(profile) {
     if (selected.has(value)) result.add(value);
   return result;
 }
-export function isExerciseAllowed(item, profile) {
+export function isExerciseAllowed(item, profile, compiledTrainingSafety) {
   if (!item || isExerciseGloballyBlocked(item)) return false;
   if (!profile?.ignoreTrainingSafety) {
-    const trainingSafety = compileProfileTrainingSafety(
+    const trainingSafety = compiledTrainingSafety ?? compileProfileTrainingSafety(
       profile,
       Object.values(exerciseCatalog),
     );
@@ -4534,7 +4560,11 @@ export function candidateScore(
     profile.exercisePreference === "Prefer free weights" &&
     item.equipment.some((entry) => ["barbell", "dumbbells"].includes(entry))
   )
-    value += 5;
+    // An explicit equipment preference must outweigh the default catalog order
+    // and hypertrophy stability bonus. Keep it a bounded preference: candidates
+    // are still safety/equipment/experience filtered, and repeated high-fatigue
+    // lifts can still lose to a suitable machine alternative.
+    value += 18;
   if (
     profile.exercisePreference === "Prefer machines" &&
     item.equipment.some((entry) => ["machines", "cables"].includes(entry))
@@ -5903,6 +5933,216 @@ function directPriorityGroupSets(program, group) {
   );
 }
 
+function directPriorityExposureCount(program, group) {
+  return program.days.filter((day) =>
+    day.exercises.some((exercise) =>
+      priorityGroupMatchesDirectExercise(group, exercise),
+    ),
+  ).length;
+}
+
+function distributedPriorityExposureTarget(profile, group) {
+  if (group.exposureFrequency !== "distributed") return 0;
+  const frequency = Math.max(2, Math.min(6, Number(profile.daysPerWeek) || 3));
+  const minutes = Number(profile.sessionMinutes) || 45;
+  if (frequency === 2) return 2;
+  if (frequency === 3) return minutes >= 60 ? 3 : 2;
+  if (minutes >= 90) return Math.min(4, frequency);
+  if (minutes >= 45) return Math.min(3, frequency);
+  return Math.min(2, frequency);
+}
+
+function distributedPriorityExercise(group, profile, program) {
+  const existingCounts = new Map();
+  for (const day of program.days)
+    for (const exercise of day.exercises)
+      if (priorityGroupMatchesDirectExercise(group, exercise))
+        existingCounts.set(
+          exercise.exerciseId,
+          (existingCounts.get(exercise.exerciseId) || 0) + 1,
+        );
+  const allowed = Object.values(exerciseCatalog)
+    .filter((item) => isExerciseAutoGeneratable(item, profile))
+    .filter((item) =>
+      priorityGroupMatchesDirectExercise(group, { exerciseId: item.id }),
+    )
+    .sort(
+      (a, b) =>
+        (existingCounts.get(b.id) || 0) - (existingCounts.get(a.id) || 0) ||
+        Number(!b.bodyweight && b.progressionQuality === "load-and-repetition") -
+          Number(!a.bodyweight && a.progressionQuality === "load-and-repetition") ||
+        candidateScore(b, profile, new Map(), b.pattern, 0, "accessory", []) -
+          candidateScore(a, profile, new Map(), a.pattern, 0, "accessory", []) ||
+        a.name.localeCompare(b.name),
+    );
+  return allowed[0] || null;
+}
+
+function tryAddDistributedPriorityExposure(
+  day,
+  item,
+  profile,
+  program,
+  baseline = null,
+) {
+  const addition = makeProgramExercise(item, profile, {
+    prioritySet: true,
+    requiredRole: false,
+    slotPatterns: [item.pattern],
+  });
+  addition.sets = addition.sets.slice(0, Math.min(2, addition.sets.length));
+  addition.protectedPrioritySets = Math.min(1, addition.sets.length);
+  const requestedMinutes = Number(profile.sessionMinutes) || 45;
+  const originalMinutes = estimateSessionMinutes(day.exercises);
+  const budget = Math.max(requestedMinutes, originalMinutes);
+  const appended = [...day.exercises, addition];
+  if (
+    appended.length <= 8 &&
+    estimateSessionMinutes(appended) <= budget &&
+    requiredSessionRolesSatisfied(day, appended) &&
+    sessionNameMatchesExercises(day, appended)
+  ) {
+    day.exercises = appended;
+    day.estimatedMinutes = estimateSessionMinutes(appended);
+    return true;
+  }
+
+  const targets = hypertrophyVolumeTargets(profile);
+  const priorityMuscles = priorityStimulusMusclesForProfile(profile);
+  const volume = weeklyStimulusVolume(program);
+  const baselineVolume = baseline ? weeklyStimulusVolume(baseline) : {};
+  const donorMinimum = (muscle) =>
+    priorityMuscles.has(muscle)
+      ? targets[muscle]?.target || 0
+      : Math.min(
+          targets[muscle]?.floor || 0,
+          baselineVolume[muscle] ?? targets[muscle]?.floor ?? 0,
+        );
+  const borrowed = day.exercises.map((exercise) => ({
+    ...exercise,
+    sets: exercise.sets.map((set) => ({ ...set })),
+  }));
+  const donorRows = () => borrowed
+    .map((exercise, index) => ({
+      exercise,
+      index,
+      item: exerciseCatalog[exercise.exerciseId],
+    }))
+    .filter(({ exercise, item }) =>
+      item &&
+      !isPriorityExercise(item, profile) &&
+      exercise.sets.length > minimumWorkingSets(profile, exercise),
+    )
+    .filter(({ item }) =>
+      Object.entries(stimulusProfileForExercise(item)).every(
+        ([muscle, credit]) =>
+          (volume[muscle] || 0) - credit >=
+          donorMinimum(muscle),
+      ),
+    )
+    .sort((a, b) =>
+      Number(a.exercise.programmingRole === "main") -
+        Number(b.exercise.programmingRole === "main") ||
+      b.exercise.sets.length - a.exercise.sets.length ||
+      b.index - a.index,
+    );
+  const borrowedVolume = { ...volume };
+  let guard = 0;
+  while (
+    estimateSessionMinutes([...borrowed, addition]) > budget &&
+    guard++ < 12
+  ) {
+    const donor = donorRows().find(({ item }) =>
+      Object.entries(stimulusProfileForExercise(item)).every(
+        ([muscle, credit]) =>
+          (borrowedVolume[muscle] || 0) - credit >=
+          donorMinimum(muscle),
+      ),
+    );
+    if (!donor) break;
+    donor.exercise.sets.pop();
+    for (const [muscle, credit] of Object.entries(
+      stimulusProfileForExercise(donor.item),
+    ))
+      borrowedVolume[muscle] = (borrowedVolume[muscle] || 0) - credit;
+  }
+  const withBorrowedTime = [...borrowed, addition];
+  if (
+    withBorrowedTime.length <= 8 &&
+    estimateSessionMinutes(withBorrowedTime) <= budget &&
+    requiredSessionRolesSatisfied(day, withBorrowedTime) &&
+    sessionNameMatchesExercises(day, withBorrowedTime)
+  ) {
+    day.exercises = withBorrowedTime;
+    day.estimatedMinutes = estimateSessionMinutes(withBorrowedTime);
+    return true;
+  }
+
+  const replaceable = day.exercises
+    .map((exercise, index) => ({
+      exercise,
+      index,
+      item: exerciseCatalog[exercise.exerciseId],
+    }))
+    .filter(({ exercise, item }) =>
+      item &&
+      exercise.programmingRole !== "main" &&
+      !exercise.protectedPrioritySets &&
+      !isPriorityExercise(item, profile),
+    )
+    .sort((a, b) => Number(a.exercise.requiredRole) - Number(b.exercise.requiredRole) || b.index - a.index);
+  for (const donor of replaceable) {
+    const next = day.exercises.map((exercise, index) =>
+      index === donor.index ? addition : exercise,
+    );
+    if (
+      estimateSessionMinutes(next) <= budget &&
+      requiredSessionRolesSatisfied(day, next) &&
+      sessionNameMatchesExercises(day, next)
+    ) {
+      day.exercises = next;
+      day.estimatedMinutes = estimateSessionMinutes(next);
+      return true;
+    }
+  }
+  return false;
+}
+
+function ensureDistributedPriorityExposures(
+  program,
+  profile,
+  group,
+  baseline = null,
+) {
+  const target = distributedPriorityExposureTarget(profile, group);
+  if (!target || directPriorityExposureCount(program, group) >= target)
+    return true;
+  const item = distributedPriorityExercise(group, profile, program);
+  if (!item) return false;
+  const wantedIndexes = target === 1
+    ? [0]
+    : Array.from({ length: target }, (_, index) =>
+        Math.round((index * (program.days.length - 1)) / (target - 1)),
+      );
+  const candidates = program.days
+    .map((day, index) => ({ day, index }))
+    .filter(({ day }) =>
+      !day.exercises.some((exercise) =>
+        priorityGroupMatchesDirectExercise(group, exercise),
+      ),
+    )
+    .sort((a, b) =>
+      Math.min(...wantedIndexes.map((index) => Math.abs(a.index - index))) -
+        Math.min(...wantedIndexes.map((index) => Math.abs(b.index - index))) ||
+      a.index - b.index,
+    );
+  for (const { day } of candidates) {
+    if (directPriorityExposureCount(program, group) >= target) break;
+    tryAddDistributedPriorityExposure(day, item, profile, program, baseline);
+  }
+  return directPriorityExposureCount(program, group) >= target;
+}
+
 function prioritizeFirstRelevantExposure(program, profile, group) {
   const relevantDays = program.days.filter((day) =>
     group.muscles.some((muscle) => sessionSupportsStimulus(day, muscle)),
@@ -6173,6 +6413,7 @@ function enforceManualPriorityPostconditions(program, baseline, profile) {
   const bonus = Number(profile.daysPerWeek) >= 5 ? 3 : 2;
   for (const group of groups) {
     prioritizeFirstRelevantExposure(program, profile, group);
+    ensureDistributedPriorityExposures(program, profile, group, baseline);
     addProtectedPrioritySets(program, baseline, profile, group, bonus);
   }
   for (const day of program.days) {
@@ -6184,14 +6425,24 @@ function enforceManualPriorityPostconditions(program, baseline, profile) {
     );
     day.estimatedMinutes = estimateSessionMinutes(day.exercises);
   }
+  for (const group of groups)
+    ensureDistributedPriorityExposures(program, profile, group, baseline);
   for (const group of groups) {
     const target = directPriorityGroupSets(baseline, group) + bonus;
     const actual = directPriorityGroupSets(program, group);
-    if (actual >= target) continue;
+    const exposureTarget = distributedPriorityExposureTarget(profile, group);
+    const actualExposures = directPriorityExposureCount(program, group);
+    if (actual >= target && actualExposures >= exposureTarget) {
+      if (program.priorityConstrained) delete program.priorityConstrained[group.key];
+      continue;
+    }
     program.priorityConstrained ||= {};
     program.priorityConstrained[group.key] = {
       actual,
       target,
+      ...(exposureTarget
+        ? { actualExposures, targetExposures: exposureTarget }
+        : {}),
       reason: "time-recovery-or-volume",
     };
   }
@@ -6928,6 +7179,34 @@ export function exerciseMatchesQuery(item, query) {
     },
   );
 }
+// Ranking only: callers retain query membership and all eligibility filters.
+export function rankExerciseSearch(candidates, query) {
+  const normalized = normalizedExerciseName(query);
+  if (!normalized) return candidates;
+  const compact = compactExerciseName(normalized);
+  const tokens = normalized.split(' ');
+  const forms = value => [normalizedExerciseName(value), pluralizedExerciseName(value)];
+  const queryForms = new Set(forms(query).map(compactExerciseName));
+  const whole = value => forms(value).some(form => queryForms.has(compactExerciseName(form)));
+  const tier = item => {
+    if (whole(item.name)) return 0;
+    if ((item.aliases || []).some(whole)) return 1;
+    const names = catalogExerciseNames(item);
+    if (names.some(name => forms(name).some(form => form.startsWith(normalized) || compactExerciseName(form).startsWith(compact)))) return 2;
+    if (names.some(name => tokens.every(token => normalizedExerciseName(name).includes(token)))) return 3;
+    return 4;
+  };
+  // Whole-query equivalence only, not the importer's broader modifier rules.
+  // Prefer a unique canonical target only within a tied relevance tier.
+  const catalog = Object.values(exerciseCatalog);
+  const primary = catalog.filter(item => whole(item.name));
+  const fullMatches = primary.length ? primary : catalog.filter(item => (item.aliases || []).some(whole));
+  const canonical = fullMatches.filter(item => !item.id.startsWith('wg-'));
+  const target = canonical.length === 1 ? canonical[0].id : fullMatches.length === 1 ? fullMatches[0].id : null;
+  return candidates.map((item, index) => ({ item, index, tier: tier(item) }))
+    .sort((a, b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
+    .map(entry => entry.item);
+}
 function importedSourceName(value) {
   const cleaned = String(value || "")
     .trim()
@@ -7604,6 +7883,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
     preserveSchedule: preserve || expertReview,
     requireProgramQuality: !preserve && !expertReview,
     allowImportedExercises: preserve,
+    ignoreTrainingSafety: preserve && options.deferImportedSafetyReview === true,
   });
   if (!result.valid) throw new Error(result.errors.join(" "));
   return program;
@@ -7785,13 +8065,19 @@ export function previousExercise(workouts, exerciseId) {
 export function warmupForWorkout(workout, profile, program = null) {
   const warmupPlan = workout?.warmupPlan;
   if (warmupPlan?.mode === "none") return null;
+  const includeRecommendedWarmups =
+    program?.includeRecommendedWarmups ??
+    profile?.recommendedWarmupsEnabled !== false;
+  const includeRampUpSets = profile?.rampUpSetsEnabled !== false;
   if (warmupPlan?.mode === "custom")
-    return customWarmupForWorkout(workout, warmupPlan);
+    return customWarmupForWorkout(workout, {
+      ...warmupPlan,
+      items: includeRecommendedWarmups ? warmupPlan.items : [],
+      rampUpSets: includeRampUpSets ? warmupPlan.rampUpSets : [],
+    });
   return generateWarmup(workout, profile, exerciseCatalog, {
-    includeRecommendedWarmups:
-      program?.includeRecommendedWarmups ??
-      profile?.recommendedWarmupsEnabled !== false,
-    includeRampUpSets: profile?.rampUpSetsEnabled !== false,
+    includeRecommendedWarmups,
+    includeRampUpSets,
   });
 }
 function customWarmupMovementLabel(item) {
@@ -8205,6 +8491,7 @@ export function resumeCompletedWorkout(
 export function progressionFor(exercise, history, profile = null) {
   const min = exercise.repMin ?? exercise.repRange?.[0];
   const max = exercise.repMax ?? exercise.repRange?.[1];
+  if (!(min > 0) || !(max >= min)) return null;
   const timed = exerciseMeasure(exercise) === "seconds";
   const catalogItem = exerciseCatalog[exercise.exerciseId];
   const loadRequirement = exerciseLoadRequirement(exercise);
@@ -8243,9 +8530,14 @@ export function progressionFor(exercise, history, profile = null) {
         (set) =>
           set.rir === null ||
           set.rir === undefined ||
+          set.rir === "" ||
+          !Number.isFinite(Number(set.rir)) ||
           exercise.targetRir === null ||
           exercise.targetRir === undefined ||
           Number(set.rir) >= Number(exercise.targetRir),
+      );
+      const effortRecorded = completed.every(
+        (set) => set.rir !== null && set.rir !== undefined && set.rir !== "" && Number.isFinite(Number(set.rir)),
       );
       return {
         ...entry,
@@ -8265,6 +8557,11 @@ export function progressionFor(exercise, history, profile = null) {
           ? Math.max(...completed.map((set) => Number(effectiveSetReps(entry.item, set))))
           : null,
         effortOkay,
+        effortRecorded,
+        // Conservative advice thresholds, not measurements of form or readiness.
+        // A one-rep miss is rep-building work; review needs a repeated broad miss.
+        nearTarget: complete && completed.every((set) => Number(effectiveSetReps(entry.item, set)) >= min - 1),
+        broadlyBelow: complete && completed.filter((set) => Number(effectiveSetReps(entry.item, set)) <= min - 2).length > completed.length / 2,
         date: new Date(
           entry.workout.completedAt || entry.workout.endedAt || NaN,
         ),
@@ -8273,7 +8570,7 @@ export function progressionFor(exercise, history, profile = null) {
     .filter((entry) => entry.completed.length);
   if (!observations.length) return null;
   const latest = observations.at(-1);
-  if (!latest.complete) return null;
+  if (!latest.complete || latest.index !== appearances.at(-1)?.index) return null;
   const structurallyComparable = observations.filter(
     (entry) => entry.complete && entry.planned.length === latest.planned.length,
   );
@@ -8300,14 +8597,30 @@ export function progressionFor(exercise, history, profile = null) {
       detail:
         "The rep target was reached twice, but no external load was logged. Keep the prescription and record the load before increasing it.",
     };
-  if (previous && latest.anyBelowMin && previous.anyBelowMin)
+  if (previous && (timed
+    ? latest.anyBelowMin && previous.anyBelowMin
+    : latest.broadlyBelow && previous.broadlyBelow))
     return {
       type: "hold",
-      title: timed ? "Reduce the hold target slightly" : "Review the load",
+      title: timed ? "Reduce the hold target slightly" : loadRequirement !== "required" && !latest.hasLoad ? "Review the variation" : "Review the load",
       detail: timed
         ? `Two comparable sessions stayed below ${min} seconds. Use a slightly easier variation and rebuild.`
-        : `Two comparable sessions stayed below ${min} reps. Consider a small load reduction, then rebuild with stable form.`,
+        : loadRequirement !== "required" && !latest.hasLoad
+          ? `Most sets were at least two reps below ${min} in both sessions. Consider an easier variation.`
+          : `Most sets were at least two reps below ${min} in both sessions. Consider a lighter load.`,
     };
+  const sameSetup = loadRequirement !== "required" && !latest.hasLoad ? "same variation" : "same load";
+  if (!timed && !latest.effortOkay)
+    return {
+      type: "hold",
+      title: sameSetup === "same variation" ? "Hold the variation" : "Hold the load",
+      detail: "Logged effort was higher than planned. Prioritize your target reps in reserve before adding reps or weight.",
+    };
+  const effortUnconfirmed = exercise.targetRir !== null && exercise.targetRir !== undefined &&
+    (!latest.effortRecorded || !previous?.effortRecorded);
+  const progressionEvidence = effortUnconfirmed
+    ? `Rep target reached twice. Effort wasn't fully logged; progress only if it stayed within target.`
+    : `Two complete sessions reached ${max} reps${exercise.targetRir !== null && exercise.targetRir !== undefined ? " at the logged target effort" : ""}.`;
   if (
     previous &&
     latest.allAtTop &&
@@ -8336,8 +8649,8 @@ export function progressionFor(exercise, history, profile = null) {
         detail:
           loadRequirement === "none" &&
           catalogItem?.equipment?.includes("resistance bands")
-            ? "Two complete sessions reached the top of the range. Increase band resistance or progress the variation gradually."
-            : `Two complete sessions reached ${max} reps at the target effort. Progress the variation gradually.`,
+            ? `${progressionEvidence} Increase band resistance or progress the variation gradually.`
+            : `${progressionEvidence} Progress the variation gradually.`,
         evidenceExposures: 2,
       };
     if (!latest.hasLoad)
@@ -8375,12 +8688,18 @@ export function progressionFor(exercise, history, profile = null) {
       };
     return {
       type: "progress",
-      title: "Ready to progress",
-      detail: `Two complete sessions reached ${max} reps at the target effort.`,
+      title: effortUnconfirmed ? "Consider a small increase" : "Ready to progress",
+      detail: progressionEvidence,
       weight: Number((latest.weight + increment).toFixed(2)),
       evidenceExposures: 2,
     };
   }
+  if (!timed && latest.allAtTop && (loadRequirement !== "required" || latest.hasLoad))
+    return {
+      type: "hold",
+      title: "Repeat to confirm",
+      detail: `Rep target reached this time. Repeat at the ${sameSetup} before increasing.`,
+    };
   const completeRecent = observations.filter((entry) => entry.complete);
   const plateauWindow = completeRecent.slice(
     -Math.max(4, completeRecent.length >= 6 ? 6 : 4),
@@ -8420,6 +8739,16 @@ export function progressionFor(exercise, history, profile = null) {
           "At least four comparable complete exposures across two weeks show no rep or load gain. Review recovery or use a small exercise adjustment.",
       };
   }
+  if (!timed && (loadRequirement !== "required" || latest.hasLoad))
+    return latest.nearTarget ? {
+      type: "hold",
+      title: "Build reps first",
+      detail: `Keep the ${sameSetup}. Aim for one more rep on a set below ${max}${exercise.targetRir !== null && exercise.targetRir !== undefined ? ", within your target effort" : ""}.`,
+    } : {
+      type: "hold",
+      title: sameSetup === "same variation" ? "Repeat this variation" : "Repeat this load",
+      detail: `Keep the ${sameSetup}${exercise.targetRir !== null && exercise.targetRir !== undefined ? " and stay within your target effort" : ""}. Recheck after another session.`,
+    };
   return null;
 }
 export function workoutSetSummary(workout) {
@@ -8550,11 +8879,13 @@ export function normalizeSessionNote(value) {
 }
 export function completeWorkout(state) {
   if (!state.activeWorkout) return state;
+  if (state.activeWorkout.source === 'freestyle' && !workoutSetSummary(state.activeWorkout).completed) return state;
   const endedAt = Date.now();
   const summary = workoutSetSummary(state.activeWorkout);
   const endedEarly = summary.completed < summary.total;
   const completedActiveWorkout = structuredClone(state.activeWorkout);
   delete completedActiveWorkout.restartSnapshot;
+  if (completedActiveWorkout.source === 'freestyle') completedActiveWorkout.exercises = completedActiveWorkout.exercises.filter(exercise => exercise.sets.some(set => set.completed));
   const session = {
     ...completedActiveWorkout,
     id: uid("workout"),
@@ -8584,6 +8915,7 @@ export function completeWorkout(state) {
     optionalSessions,
     workouts: [...state.workouts, session],
   };
+  if (session.source === 'freestyle') return next;
   return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), Object.values(next.flexibleWeek?.sessions || {}).filter(record => record.blockId === next.program?.trainingBlock?.id));
 }
 export function optionalSessionElapsedSeconds(session, now = Date.now()) {
@@ -9572,7 +9904,7 @@ export function deterministicCoach(state, message) {
     );
     if (recommendation?.weight)
       return {
-        text: `${name} reached the top of its rep range in two comparable complete sessions. The conservative next target is ${displayWeight(recommendation.weight, state.profile.units)} ${weightUnit(state.profile.units)}.`,
+        text: `${name}: ${recommendation.detail} The next load to consider is ${displayWeight(recommendation.weight, state.profile.units)} ${weightUnit(state.profile.units)}.`,
         source: "deterministic",
       };
     return {
@@ -9863,6 +10195,7 @@ export function consistencyForCurrentWeek(state, date = new Date()) {
     return (
       workout.completedAt &&
       !workout.historicalImport &&
+      workout.source !== 'freestyle' &&
       planDate >= start &&
       planDate <= end &&
       workoutSetSummary(workout).completed > 0

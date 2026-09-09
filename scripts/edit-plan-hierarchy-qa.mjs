@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -44,7 +45,7 @@ for (const testCase of [
     waitUntil: 'domcontentloaded',
   });
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-  await page.getByRole('button', { name: /Edit plan/ }).click();
+  await openProfileArea(page, 'program'); await page.getByRole('button', { name: /Edit plan/ }).click();
   await page.getByRole('heading', { name: 'Edit your plan' }).waitFor();
 
   const firstDay = page.locator('.plan-edit-day-section').first();

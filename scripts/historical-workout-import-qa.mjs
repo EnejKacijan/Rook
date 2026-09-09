@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { verifyLongContent, verifySearchClear } from './post-review-runtime-checks.mjs';
 import { mkdir } from "node:fs/promises";
@@ -37,7 +38,7 @@ async function open(state, width = 390) {
   await page.route("**/api/**", (route) => route.abort("internetdisconnected"));
   await page.goto(`${baseUrl}/?history-import=${Date.now()}`, { waitUntil: "domcontentloaded" });
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Import workout history/ }).click();
+  await openProfileArea(page, 'data'); await page.getByRole("button", { name: /Import workout history/ }).click();
   await page.getByRole("heading", { name: "Choose source" }).waitFor();
   await page.waitForTimeout(260);
   return { context, page, errors };
@@ -68,19 +69,57 @@ async function assertLayout(page, label) {
   await run.context.close();
 }
 
-{
-  const run = await open(fixture());
+for (const width of [390, 320]) {
+  const run = await open(fixture({ appearance: width === 320 ? 'dark' : 'light' }), width);
+  const page=run.page;
+  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+  const original=await stored();
   const unknowns = Array.from({ length: 8 }, (_, index) => row("2024-05-02 18:00:00", "Machines", `Unknown Gym Machine ${index + 1}`, 1, 40 + index));
   await selectGeneric(run, csv(...unknowns), "unresolved.csv");
-  await run.page.getByRole("button", { name: "REVIEW", exact: true }).first().click();
-  await verifySearchClear(run.page);
-  await run.page.getByRole('searchbox').fill('Cable');
-  await run.page.screenshot({ path: output("04-exercise-mapping.png") });
-  await run.page.getByRole("button", { name: "Back", exact: true }).click();
-  await run.page.screenshot({ path: output("05-many-unresolved.png"), fullPage: true });
-  await assertLayout(run.page, "many unresolved");
-  assert.deepEqual(run.errors, []);
-  await run.context.close();
+  await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();
+  const shot=async name=>{await page.waitForTimeout(280);await page.screenshot({path:output(`${width}-${name}.png`)});};
+  await shot('many-unmatched');
+  assert.equal(await page.getByRole('button',{name:'MATCH',exact:true}).count(),8);
+  await page.getByRole('button',{name:'MATCH',exact:true}).first().click();
+  await verifySearchClear(page);
+  for(let index=0;index<8;index++) {
+    await page.getByText(`Exercise ${index+1} of 8`,{exact:true}).waitFor();
+    assert.equal(await page.getByRole('heading',{name:'Review import',exact:true}).count(),0,'no intermediate return to parent');
+    await page.getByRole('heading',{name:`Unknown Gym Machine ${index+1}`,exact:true}).waitFor();
+    const closeBox=await page.getByRole('button',{name:'Close Map exercise',exact:true}).boundingBox();
+    assert.ok(closeBox && closeBox.y>=0 && closeBox.y+closeBox.height<=844,'mapping close remains within the viewport');
+    if(index===0||index===2)await shot(`mapping-${index+1}`);
+    await page.getByRole('searchbox').fill('Bench Press');
+    await page.locator('.history-import-match-list button').first().click();
+    assert.deepEqual((await stored()).workouts,original.workouts,'matching never imports history');
+  }
+  await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'MATCH',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'CHANGE',exact:true}).count(),8);
+  await shot('all-matched');
+  await page.getByRole('button',{name:'CHANGE',exact:true}).first().click();
+  await page.getByRole('button',{name:'Back',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'CHANGE',exact:true}).count(),8,'back preserves draft mappings');
+  await page.getByRole('button',{name:'CHANGE',exact:true}).first().click();
+  await page.getByRole('searchbox').fill('Leg Press');
+  const choice=page.locator('.history-import-match-list button').first();
+  const correctedName=await choice.locator('strong').innerText();await choice.click();
+  assert.match(await page.locator('.history-import-mapping-row').first().innerText(),new RegExp(correctedName));
+  await page.locator('.remember-import-match input').first().check();
+  assert.deepEqual((await stored()).exerciseAliases,original.exerciseAliases,'remembered aliases also wait for import');
+  if(width===320) {
+    await page.getByRole('button',{name:'Close Import workout history',exact:true}).click();
+    assert.deepEqual((await stored()).workouts,original.workouts);
+    await openProfileArea(page, 'data'); await page.getByRole('button',{name:/Import workout history/}).click();
+    await page.getByRole('heading',{name:'Choose source',exact:true}).waitFor();
+  } else {
+    await page.getByRole('button',{name:'IMPORT 1 WORKOUT',exact:true}).click();
+    await page.getByRole('heading',{name:'1 workout imported',exact:true}).waitFor();
+    assert.equal((await stored()).workouts.length,original.workouts.length+1);
+    const imported=(await stored()).workouts.find(workout=>!original.workouts.some(previous=>previous.id===workout.id));
+    assert.equal(imported.exercises.length,8,'no unmatched data silently discarded');
+  }
+  await assertLayout(page,'continuous mapping');assert.deepEqual(run.errors,[]);await run.context.close();
 }
 
 {

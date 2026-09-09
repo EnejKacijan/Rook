@@ -48,11 +48,9 @@ async function reachRestrictions() {
   await page.getByRole("option", { name: "18–29" }).click();
   await page.getByRole("button", { name: "CONTINUE" }).click();
   await page.getByRole("button", { name: "Build muscle" }).click();
-  await page.getByRole("button", { name: "CONTINUE" }).click();
   await page.getByRole("button", { name: /^Beginner/ }).click();
-  await page.getByRole("button", { name: "CONTINUE" }).click();
   await page.getByRole("button", { name: "3 days" }).click();
-  await page.getByLabel("Make any day available").check();
+  await page.getByLabel("Any day works").check();
   await page.getByRole("button", { name: "60 min" }).click();
   await page.getByRole("button", { name: "CONTINUE" }).click();
   await page.getByRole("button", { name: "Commercial gym" }).click();
@@ -61,7 +59,7 @@ async function reachRestrictions() {
   await page.getByRole("button", { name: "CONTINUE" }).click();
   await page.getByRole("button", { name: /Balanced starting point/ }).click();
   await page.getByRole("button", { name: "CONTINUE" }).click();
-  await page.getByRole("button", { name: /Add injuries, pain or movements to avoid/ }).click();
+  await page.getByRole("button", { name: /Add movements or exercises to avoid/ }).click();
   return {
     context,
     page,

@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
 import { createReturningUserFixture } from "../src/demoFixture.js";
@@ -109,7 +110,7 @@ async function captureSetCommit(page) {
       observer.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['class'] });
     });
   });
-  await page.getByRole('button', { name: 'Complete set 2' }).click();
+  await page.getByRole('button', { name: 'Log set 2' }).click();
   return page.evaluate(() => window.__rookQaSetCommit);
 }
 
@@ -136,7 +137,7 @@ for (const theme of ["light", "dark", "premium"]) {
   assert.equal(await todayRun.page.locator(".day-selection-trace").count(), 0, `${theme} avoids rotating border decoration`);
 
   await todayRun.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await todayRun.page.getByRole("button", { name: /Logging & increments/ }).click();
+  await openProfileArea(todayRun.page, 'preferences'); await todayRun.page.getByRole("button", { name: /Logging & increments/ }).click();
   const units = todayRun.page.locator(".unit-segmented");
   assert.equal(
     await units.evaluate((node) => getComputedStyle(node, "::before").transitionDuration),
@@ -161,7 +162,8 @@ for (const theme of ["light", "dark", "premium"]) {
     `${theme} converted values use one restrained fade`,
   );
   await todayRun.page.getByRole("button", { name: /^Close/ }).click();
-  await todayRun.page.getByRole("button", { name: /Edit plan/ }).click();
+  await todayRun.page.locator('.modal-layer').waitFor({state:'detached'});
+  await openProfileArea(todayRun.page, 'program'); await todayRun.page.getByRole("button", { name: /Edit plan/ }).click();
   const firstEditor = todayRun.page.locator(".plan-editor-summary").first();
   await firstEditor.click();
   await todayRun.page.waitForTimeout(35);
@@ -254,7 +256,7 @@ const reducedSettings = await openState(fixture("dark"), {
   reducedMotion: "reduce",
 });
 await reducedSettings.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-await reducedSettings.page.getByRole("button", { name: /Logging & increments/ }).click();
+await openProfileArea(reducedSettings.page, 'preferences'); await reducedSettings.page.getByRole("button", { name: /Logging & increments/ }).click();
 assert.equal(
   await reducedSettings.page.locator(".unit-segmented").evaluate(
     (node) => getComputedStyle(node, "::before").transitionDuration,
@@ -293,7 +295,7 @@ await reducedSettings.page.evaluate(() => {
 assert.deepEqual(
   await reducedSettings.page.locator(".complete-screen").evaluate((screen) => ({
     mark: getComputedStyle(screen.querySelector(".complete-mark")).animationName,
-    ring: getComputedStyle(screen.querySelector(".complete-mark"), "::after").display,
+    ring: getComputedStyle(screen.querySelector(".complete-mark"), "::after").animationName,
     heading: getComputedStyle(screen.querySelector("h1")).animationName,
     stats: [...screen.querySelectorAll(".stat-grid > div")].map((item) => getComputedStyle(item).animationName),
   })),

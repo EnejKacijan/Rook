@@ -1,0 +1,18 @@
+.plan-import-issues { margin: 20px 0; padding: 16px; border: 1px solid var(--rook-border); border-radius: 16px; background: var(--rook-surface-muted); }
+.plan-import-issues > strong { display: block; margin-top: 8px; font-size: 15px; }
+.plan-import-issues p { font-size: 13px; line-height: 1.45; margin: 12px 0; }
+.plan-import-issue blockquote { margin: 8px 0 12px; padding: 10px; border-left: 2px solid var(--rook-border); font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.plan-import-issue label { display: grid; gap: 6px; margin: 12px 0; font-size: 12px; }
+.plan-import-issue :is(input:not([type="checkbox"]),select) { width: 100%; min-width: 0; min-height: 44px; padding: 8px; border: 1px solid var(--rook-border); border-radius: 10px; color: var(--rook-text); background: var(--rook-bg); }
+.plan-import-prescription { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 8px; }
+.plan-import-issue .plan-import-ack { display: flex; align-items: flex-start; line-height: 1.5; }
+.plan-import-ack input { flex: 0 0 20px; width: 20px; height: 20px; accent-color: var(--rook-accent); }
+.plan-import-notes > .plan-import-issue { border-top: 1px solid var(--rook-border); padding-top: 12px; margin-top: 12px; }
+.plan-import-notes + .plan-import-issue { border-top: 1px solid var(--rook-border); padding-top: 16px; margin-top: 20px; }
+.plan-import-issues { scroll-margin-top: 88px; }
+.import-review-remaining { font-size: 13px; }
+.plan-import-choice + .plan-import-choice { border-top: 1px solid var(--rook-border); padding-top: 16px; margin-top: 20px; }
+.plan-import-choice { scroll-margin-top: 88px; }
+.import-preserved-source { border-top: 1px solid var(--rook-border); margin-top: 16px; padding-top: 16px; }
+.import-preserved-source strong { font-size: 12px; }
+.plan-import-issues .choice-row { white-space: normal; overflow-wrap: anywhere; text-align: left; }

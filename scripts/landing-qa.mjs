@@ -317,10 +317,8 @@ await isolationPage.getByRole('option', { name: '18–29' }).click();
 await isolationPage.getByRole('button', { name: 'CONTINUE' }).click();
 await isolationPage.locator('.onboarding-option').first().waitFor();
 await isolationPage.locator('.onboarding-option').first().click();
-await isolationPage.getByRole('button', { name: 'CONTINUE' }).click();
 await isolationPage.locator('.onboarding-option').first().waitFor();
 await isolationPage.locator('.onboarding-option').first().click();
-await isolationPage.getByRole('button', { name: 'CONTINUE' }).click();
 await isolationPage.getByRole('heading', { name: 'What does a realistic training week look like?' }).waitFor();
 assert.equal(
   await isolationPage.getByRole('button', { name: '5 days' }).getAttribute('aria-pressed'),

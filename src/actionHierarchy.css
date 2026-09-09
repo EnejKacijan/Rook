@@ -1,0 +1,25 @@
+/* Semantic priority is independent of theme accent. Optional actions keep
+   secondary/quiet variants; only explicit destructive actions use these rules. */
+:root {
+  --rook-destructive-fill: #9b302a;
+  --rook-on-destructive: #fff;
+}
+:root[data-appearance] :is(.danger-text, .gym-delete-entry, .custom-exercise-delete, .weight-delete-action, .plan-conflict-remove, .custom-alias-row button, .exercise-note-remove, .workout-photo-delete, .workout-photo-delete-inline, .workout-photo-delete-confirm button:last-child):not(:disabled) {
+  color: var(--rook-error-text, #8c2f2a) !important;
+}
+.workout-photo-viewer { --rook-error-text: #ef8a82; }
+:root[data-appearance] .button.danger:not(:disabled) {
+  background: var(--rook-destructive-fill);
+  color: var(--rook-on-destructive);
+  border-color: transparent;
+}
+:root[data-appearance] .button.danger:disabled {
+  background: var(--rook-disabled-surface);
+  color: var(--rook-disabled-text);
+  border-color: var(--rook-border);
+  opacity: 1;
+}
+:root[data-appearance] .custom-delete-confirm button:last-child:not(:disabled) {
+  background: var(--rook-destructive-fill);
+  color: var(--rook-on-destructive);
+}

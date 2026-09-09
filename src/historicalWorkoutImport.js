@@ -2,6 +2,7 @@ import {
   exerciseCatalog,
   exerciseName,
   matchImportedExerciseName,
+  rankExerciseSearch,
   storedWeight,
   workoutPlanDate,
 } from "./domain.js";
@@ -535,11 +536,11 @@ export function historicalExerciseChoices(state, query = "") {
   const custom = (state.customExercises || [])
     .filter((item) => !item.deletedAt)
     .map((item) => ({ id: item.id, name: item.name, custom: true }));
-  return [...builtIn, ...custom]
+  return rankExerciseSearch([...builtIn, ...custom]
     .filter((item, index, values) => values.findIndex((value) => value.id === item.id) === index)
     .filter((item) => !normalized || normalizeExerciseAlias(item.name).includes(normalized))
     .sort((left, right) => left.name.localeCompare(right.name))
-    .slice(0, 30);
+    .slice(0, 30), query);
 }
 
 export function historicalExerciseLabel(state, exerciseId) {

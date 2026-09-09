@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -40,7 +41,7 @@ await page.goto(`http://127.0.0.1:4173/?plan-reorder-qa=${Date.now()}`, {
   waitUntil: 'domcontentloaded',
 });
 await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
-await page.getByRole('button', { name: /Edit plan/ }).click();
+await openProfileArea(page, 'program'); await page.getByRole('button', { name: /Edit plan/ }).click();
 await page.getByRole('heading', { name: 'Edit your plan' }).waitFor();
 await page.screenshot({
   path: fileURLToPath(new URL('edit-plan-reorder-390.png', artifactRoot)),
@@ -129,7 +130,7 @@ await dragPage.goto(`http://127.0.0.1:4173/?plan-reorder-drag-qa=${Date.now()}`,
   waitUntil: 'domcontentloaded',
 });
 await dragPage.getByRole('button', { name: 'PROFILE', exact: true }).click();
-await dragPage.getByRole('button', { name: /Edit plan/ }).click();
+await openProfileArea(dragPage, 'program'); await dragPage.getByRole('button', { name: /Edit plan/ }).click();
 await dragPage.getByRole('heading', { name: 'Edit your plan' }).waitFor();
 const dragDay = dragPage.locator('.import-day').first();
 const dragCards = dragDay.locator('.plan-editor-exercise');
@@ -245,7 +246,7 @@ await touchPage.goto(`http://127.0.0.1:4173/?plan-reorder-touch-qa=${Date.now()}
   waitUntil: 'domcontentloaded',
 });
 await touchPage.getByRole('button', { name: 'PROFILE', exact: true }).click();
-await touchPage.getByRole('button', { name: /Edit plan/ }).click();
+await openProfileArea(touchPage, 'program'); await touchPage.getByRole('button', { name: /Edit plan/ }).click();
 await touchPage.getByRole('heading', { name: 'Edit your plan' }).waitFor();
 const touchCards = touchPage.locator('.import-day').first().locator('.plan-editor-exercise');
 const touchIdsBefore = await touchCards.evaluateAll(cards => cards.map(card => card.id));

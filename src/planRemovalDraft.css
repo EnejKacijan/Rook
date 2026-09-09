@@ -1,0 +1,7 @@
+.edit-plan-screen .plan-removed-exercise { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:8px 16px; border-bottom:1px solid var(--rook-border); color:var(--rook-secondary); font-size:14px; }
+.edit-plan-screen .plan-removed-exercise > span { min-width:0; overflow-wrap:anywhere; }
+.edit-plan-screen .plan-removed-exercise button { flex-shrink:0; min-height:44px; color:var(--rook-text); }
+.edit-plan-screen .plan-editor-actions .plan-exercise-remove { color:var(--rook-error-text, #8c2f2a) !important; }
+.edit-plan-screen .plan-warmup-card { margin-block:5px 12px; padding-block:10px; }
+.edit-plan-screen .plan-warmup-eyebrow { text-align:left; margin:0 0 10px; }
+.edit-plan-screen .plan-warmup-card-header { text-align:left; }

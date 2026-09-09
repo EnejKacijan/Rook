@@ -1,3 +1,4 @@
+import { openAdjustWeek } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -34,7 +35,7 @@ const shot=async(page,name)=>{await page.waitForTimeout(350);await page.screensh
 }
 {
   const adjusted=structuredClone(state);adjusted.todayAdaptation={programDayId:source.workoutId,date:today};
-  const {page,context}=await open(adjusted);await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-week-sheet .choice-row').filter({hasText:source.workout.name}).first().click();
+  const {page,context}=await open(adjusted);await openAdjustWeek(page);await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-week-sheet .choice-row').filter({hasText:source.workout.name}).first().click();
   const label=new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(new Date(`${tomorrow}T12:00:00`));await page.getByRole('button',{name:label,exact:true}).click();
   assert.equal(await page.getByRole('radio',{name:'Restore original workout',exact:true}).isChecked(),true);
   for (const style of ['standard','premium']) for (const appearance of ['light','dark']) {

@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -81,7 +82,6 @@ await page.getByRole('button', { name: 'Paste workout notes from clipboard' }).c
 assert.equal(await page.getByPlaceholder('Paste your workout notes here...').inputValue(), 'Bench Press 3×8–10');
 assert.equal(await createPreview.isEnabled(), true, 'clipboard text enables Create Preview');
 await page.getByPlaceholder('Paste your workout notes here...').fill('   ');
-await page.waitForFunction(() => document.querySelector('button') && [...document.querySelectorAll('button')].some(button => button.textContent?.includes('CREATE PREVIEW') && button.disabled));
 assert.equal(await createPreview.isDisabled(), true, 'whitespace-only notes keep Create Preview disabled');
 for (const width of [375, 390, 430, 500]) {
   await page.setViewportSize({ width, height: 844 });
@@ -91,15 +91,6 @@ await page.setViewportSize({ width: 390, height: 844 });
 await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText);
 const previewStarted = Date.now();
 await page.getByRole('button', { name: 'CREATE PREVIEW' }).click();
-const buildingOverlay = page.locator('.building-overlay');
-await buildingOverlay.waitFor();
-assert.match(
-  await buildingOverlay.innerText(),
-  /IMPORTING YOUR PLAN[\s\S]*Structuring your plan[\s\S]*Matching exercises and checking your notes for review/i,
-  'imports use distinct, honest import progress language',
-);
-assert.doesNotMatch(await buildingOverlay.innerText(), /Building your training week|Applying your preferences/i);
-await page.screenshot({ path: output('390-import-building.png'), fullPage: false });
 await page.getByRole('heading', { name: 'Review your plan' }).waitFor();
 const reviewHeader = await importHeaderMetrics(page.locator('.import-plan-screen > .eyebrow'));
 assert.equal(reviewHeader.contentGap, composeHeader.contentGap, 'compose and review states use the same spacing below the shared header');
@@ -107,20 +98,30 @@ assert.deepEqual({ x: reviewHeader.header.x, width: reviewHeader.header.width },
 const previewMilliseconds = Date.now() - previewStarted;
 assert.equal(aiRequests, 0, 'clearly structured Notes use the local fast path');
 assert.ok(
-  previewMilliseconds >= 1500 && previewMilliseconds < 3000,
-  `structured preview uses the same deliberate plan-building transition (${previewMilliseconds} ms)`,
+  previewMilliseconds < 1500,
+  `structured preview avoids artificial loading delay (${previewMilliseconds} ms)`,
 );
 assert.equal(await page.getByRole('heading', { name: 'Bring your existing workout into Rook.' }).count(), 0);
 assert.equal(await page.getByText(/Paste it from Notes/).count(), 0);
 assert.equal(
-  await page.locator('.import-plan-meta h2').innerText(),
+  await page.getByRole('textbox', { name: 'Weekly plan name' }).inputValue(),
   'Imported plan',
-  'a goal line is not misrepresented as an explicit imported plan title',
+  'the editable final-review name does not misrepresent a goal line as an explicit imported plan title',
 );
 assert.equal(await page.getByText('4 days/week', { exact: true }).count(), 1);
 assert.equal(await page.getByText(/0 RIR/).count(), 0);
 assert.equal(await page.locator('.import-day').count(), 4);
-assert.match(await page.locator('.import-day').last().locator(':scope > strong').textContent(), /^Sat · LOWER B$/i);
+const lastImportedDay = page.locator('.import-day').last();
+assert.equal(
+  await lastImportedDay.getByRole('combobox', { name: /Calendar day for/i }).inputValue(),
+  'Sat',
+  'the final imported workout keeps its calendar day in the current editable review control',
+);
+assert.match(
+  await lastImportedDay.getByRole('textbox', { name: /Sat workout name/i }).inputValue(),
+  /^Lower B$/i,
+  'the final imported workout keeps its name in the current editable review control',
+);
 assert.equal(await page.locator('.plan-editor-fields').count(), 0, 'matched exercises stay collapsed in the compact preview');
 assert.ok((await page.locator('.plan-editor-exercise').first().boundingBox()).height < 90, 'collapsed exercise cards remain compact');
 for (const width of [375, 390, 430, 500]) {
@@ -136,22 +137,26 @@ await page.locator('.plan-editor-exercise').last().scrollIntoViewIfNeeded();
 const finalExerciseBox = await page.locator('.plan-editor-exercise').last().boundingBox();
 const readyActionBox = await page.getByRole('button', { name: 'USE THIS PLAN' }).boundingBox();
 assert.ok(finalExerciseBox.y + finalExerciseBox.height <= readyActionBox.y, 'the final imported exercise scrolls fully clear of the sticky action');
-await page.locator('.plan-editor-summary').first().click();
-await page.locator('.plan-editor-summary').first().getAttribute('aria-expanded').then(async value => {
-  if (value !== 'true') await page.locator('.plan-editor-summary[aria-expanded="true"]').first().waitFor();
+const exerciseSummaries = page.locator('.plan-editor-exercise > .plan-editor-summary');
+await exerciseSummaries.first().click();
+await exerciseSummaries.first().getAttribute('aria-expanded').then(async value => {
+  if (value !== 'true') await page.locator('.plan-editor-exercise > .plan-editor-summary[aria-expanded="true"]').first().waitFor();
 });
-assert.equal(await page.locator('.plan-editor-fields').count(), 1, 'Edit opens only one exercise form');
-await page.locator('.plan-editor-summary').nth(1).click();
-await page.locator('.plan-editor-summary').nth(1).getAttribute('aria-expanded').then(async value => {
-  if (value !== 'true') await page.locator('.plan-editor-summary[aria-expanded="true"]').first().waitFor();
+assert.equal(await page.locator('.plan-editor-fields:visible').count(), 1, 'Edit exposes only one exercise form');
+await exerciseSummaries.nth(1).click();
+await exerciseSummaries.nth(1).getAttribute('aria-expanded').then(async value => {
+  if (value !== 'true') await page.locator('.plan-editor-exercise > .plan-editor-summary[aria-expanded="true"]').first().waitFor();
 });
-assert.equal(await page.locator('.plan-editor-fields').count(), 1, 'opening another card closes the previous editor');
+await page.waitForTimeout(220);
+assert.equal(await page.locator('.plan-editor-fields:visible').count(), 1, 'opening another card closes the previous editor');
+assert.equal(await exerciseSummaries.first().getAttribute('aria-expanded'), 'false', 'the previous exercise editor is collapsed');
+assert.equal(await exerciseSummaries.nth(1).getAttribute('aria-expanded'), 'true', 'the requested exercise editor is expanded');
 await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
 await page.waitForFunction(() => JSON.parse(localStorage.getItem('lift-v2-state'))?.profile?.onboardingComplete === true);
 assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getAttribute('aria-current'), 'page', 'first-time import keeps its intended Today destination');
 assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'import does not show the generated-plan-only confirmation');
 assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program.source), 'ai-import');
-await page.getByRole('button', { name: 'PROFILE', exact: true }).click(); await page.getByRole('button', { name: 'Replace plan' }).click(); await page.getByRole('button', { name: /Import a different plan/ }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor(); await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
+await page.getByRole('button', { name: 'PROFILE', exact: true }).click(); await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click(); await page.getByRole('button', { name: /Import a different plan/ }).click(); await page.getByPlaceholder(/Paste your workout notes/).fill(sourceText); await page.getByRole('button', { name: 'CREATE PREVIEW' }).click(); await page.getByRole('heading', { name: 'Review your plan' }).waitFor(); await page.getByRole('button', { name: 'USE THIS PLAN' }).click();
 assert.equal(await page.getByRole('button', { name: 'TODAY', exact: true }).getAttribute('aria-current'), 'page', 'replacement import returns to Today');
 assert.equal(await page.locator('.plan-ready-notice').count(), 0, 'replacement import does not borrow the generated-plan success state');
 assert.deepEqual(errors, [], `preview console remains clean: ${errors.join('; ')}`);

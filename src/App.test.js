@@ -98,6 +98,32 @@ describe("restriction-aware plan review", () => {
 });
 
 describe("context-aware Coach home", () => {
+  it('uses eligible rest-day fallbacks and never promotes a completed workout for shortening',()=>{
+    const state=blankState();Object.assign(state.profile,{availableDays:['Mon','Wed'],daysPerWeek:2});state.program=buildProgram(state.profile);state.program.trainingBlock=null;
+    const tuesday=Date.parse('2026-09-08T12:00:00Z');
+    expect(contextualCoachPrompts(state,tuesday)).toEqual(['Move a workout this week','Explain my next workout','Explain my program']);
+    state.workouts=state.program.days.map(day=>({programDayId:day.id,workoutDateKey:day.weekday==='Mon'?'2026-09-07':'2026-09-09',completedAt:Date.parse('2026-09-09T12:00:00Z'),exercises:[{sets:[{completed:true,reps:8,weight:40}]}]}));
+    const prompts=contextualCoachPrompts(state,Date.parse('2026-09-09T13:00:00Z'));
+    expect(prompts).not.toContain('Shorten today’s workout');expect(prompts).not.toContain('Move a workout this week');
+    expect(prompts).toContain('Review logged progress');expect(new Set(prompts).size).toBe(3);
+  });
+  it('prioritizes eligible adaptations even before the first log, then conflict and active context', () => {
+    const now = Date.parse('2026-09-07T12:00:00Z');
+    const state = blankState();
+    Object.assign(state.profile,{availableDays:['Mon','Wed'],daysPerWeek:2});state.program=buildProgram(state.profile);state.program.trainingBlock=null;
+    expect(contextualCoachPrompts(state, now)).toEqual(['Shorten today’s workout','Move a workout this week','Explain today’s workout']);
+    state.workouts = [{completedAt:now-86400000,exercises:[{sets:[{completed:true,reps:8,weight:40}]}]}];
+    expect(contextualCoachPrompts(state, now)).toEqual(['Shorten today’s workout','Move a workout this week','Review logged progress']);
+    state.flexibleWeek = { sessions: { stale: { id: 'stale', scheduledDate: '2026-09-08', planFingerprint: 'old' } } };
+    expect(contextualCoachPrompts(state, now)[0]).toBe('Move a workout this week');
+    state.activeWorkout = { name: 'Upper', exercises: [] };
+    const snapshot = structuredClone(state);
+    expect(contextualCoachPrompts(state, now)).toEqual(['Explain today’s workout','Review logged progress','Explain my program']);
+    expect(state).toEqual(snapshot);
+    expect(contextualCoachPrompts(state, now).join(' ')).not.toMatch(/recover|fatigue|readiness/i);
+    state.flexibleWeek = { sessions: {} }; state.workouts = [{ exercises: [{ sets: [{ completed: false }] }] }];
+    expect(contextualCoachPrompts(state, now)[0]).toBe('Explain today’s workout');
+  });
   it("summarizes today's real workout and first-session context", () => {
     const state = blankState();
     state.activeWorkout = {
@@ -109,9 +135,9 @@ describe("context-aware Coach home", () => {
       secondary: "Your current plan and today’s workout are in context.",
     });
     expect(contextualCoachPrompts(state)).toEqual([
-      "Adapt today to 35 minutes.",
-      "How should I approach my first workout?",
-      "Explain how this program fits my goals.",
+      "Explain today’s workout",
+      "Explain my program",
+      "How my plan fits my goals",
     ]);
   });
 
@@ -129,9 +155,9 @@ describe("context-aware Coach home", () => {
       secondary: "1 workout logged · Recent working weights available",
     });
     expect(contextualCoachPrompts(state)).toEqual([
-      "Should I train today anyway?",
-      "How am I recovering this week?",
-      "Am I progressing on this program?",
+      "Explain my program",
+      "Review logged progress",
+      "How my plan fits my goals",
     ]);
   });
 
@@ -151,9 +177,10 @@ describe("context-aware Coach home", () => {
 });
 
 describe("training setup validation", () => {
-  it("keeps superset planning in Edit plan and out of previews", () => {
+  it("allows pairing in Edit plan and import review, not generated previews", () => {
     expect(planEditorAllowsSupersets("edit")).toBe(true);
-    for (const mode of ["review", "scratch", "import", "expert", "read-only"])
+    expect(planEditorAllowsSupersets("import")).toBe(true);
+    for (const mode of ["review", "scratch", "expert", "read-only"])
       expect(planEditorAllowsSupersets(mode)).toBe(false);
   });
 
@@ -174,9 +201,14 @@ describe("training setup validation", () => {
   it("uses only faithful exercise-specific art and no pattern fallback", () => {
     expect(exerciseArt({ exerciseId: "barbell-bench-press" })).toMatch(/wg-bench-press.*\.svg/);
     expect(exerciseArt({ exerciseId: "barbell-row" })).toMatch(/wg-barbell-row.*\.svg/);
-    expect(exerciseArt({ exerciseId: "single-leg-leg-press" })).toMatch(
-      /wg-rook-single-leg-leg-press.*\.svg/,
-    );
+    const singleLegPressArt = exerciseArt({ exerciseId: "single-leg-leg-press" });
+    expect(singleLegPressArt).toBeTruthy();
+    expect(
+      singleLegPressArt.includes("wg-rook-single-leg-leg-press") ||
+        decodeURIComponent(singleLegPressArt).includes(
+          "aria-label='Single Leg Press'",
+        ),
+    ).toBe(true);
     expect(exerciseArt({ exerciseId: "imported-custom-exercise", pattern: "horizontal-pull" })).toBeNull();
     expect(
       exerciseArt({

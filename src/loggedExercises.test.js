@@ -1,0 +1,12 @@
+import {it,expect} from 'vitest';
+import {loggedExercises,highestSimpleLoggedLoad} from './loggedExercises.js';
+const e=(id,...weights)=>({exerciseId:id,sets:[{completed:true,weight:weights.length?weights[0]:30}]});
+const w=(id,date,exercises)=>({id,canonicalPlanDate:date,completedAt:`${date}T12:00:00Z`,exercises});
+it('indexes all IDs by recorded dates without mutating unordered/imported history',()=>{const data=[w('new','2026-09-08',[e('a',40)]),w('old','2026-08-01',[e('a'),e('b')])],before=JSON.stringify(data);expect(loggedExercises(data).map(r=>[r.exercise.exerciseId,r.exercise.sets[0].weight])).toEqual([['a',40],['b',30]]);expect(JSON.stringify(data)).toBe(before);});
+it('includes freestyle, timed, custom and no-load but excludes unfinished/unperformed',()=>{const data=[w('f','2026-09-08',[e('custom',null),e('timer',null),{exerciseId:'skip',sets:[]}]),{id:'active',exercises:[e('active')]}];expect(loggedExercises(data)).toHaveLength(2);});
+it('does not borrow an older load when latest occurrence lacks load',()=>{expect(highestSimpleLoggedLoad(loggedExercises([w('a','2026-09-01',[e('x',80)]),w('b','2026-09-08',[e('x',null)])])[0].exercise)).toBe(null);});
+it('does not merge identical names or cap the full index at six',()=>{expect(loggedExercises([w('a','2026-09-08',Array.from({length:9},(_,i)=>({...e(String(i)),name:'Same'})))])).toHaveLength(9);});
+it('uses deterministic same-date ID ties',()=>{const a=w('a','2026-09-08',[e('x',10)]),b=w('b','2026-09-08',[e('x',20)]);expect(loggedExercises([a,b])).toEqual(loggedExercises([b,a]));});
+it('keeps undated records at the end',()=>{expect(loggedExercises([{id:'u',completedAt:'invalid',exercises:[e('u')]},w('d','2026-09-08',[e('d')])]).map(r=>r.exercise.exerciseId)).toEqual(['d','u']);});
+it('validates zero, missing and invalid loads; ignores incomplete sets',()=>{expect(highestSimpleLoggedLoad({sets:[{completed:true,weight:0},{completed:false,weight:100}]})).toBe(0);for(const value of [null,undefined,'',NaN,-1])expect(highestSimpleLoggedLoad(e('x',value))).toBe(null);});
+it('omits ambiguous per-side and advanced metrics',()=>{expect(highestSimpleLoggedLoad({...e('x'),loggingMode:'per_side'})).toBe(null);for(const type of ['drop','rest_pause','amrap'])expect(highestSimpleLoggedLoad({sets:[{completed:true,weight:30,setType:type}]})).toBe(null);});

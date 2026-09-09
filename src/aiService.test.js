@@ -250,7 +250,7 @@ Use double progression.`;
     };
     const result = await AIService.importTrainingPlan(
       profile,
-      "Monday — Push\nBench Press 80/80/75 5 reps\nCable Row 3x8",
+      "Weights in kg\nMonday — Push\nBench Press 80/80/75 5 reps\nCable Row 3x8",
     );
     expect(fetch).not.toHaveBeenCalled();
     expect(

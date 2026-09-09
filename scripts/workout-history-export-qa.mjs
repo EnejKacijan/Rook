@@ -1,9 +1,12 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
+import { configureNewFeatureReview } from './new-feature-review-capture.mjs';
 import {mkdir,readFile} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
 import {createReturningUserFixture} from '../src/demoFixture.js';
 const out='artifacts/workout-history-export';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
+configureNewFeatureReview(browser, '03-export-workout-history');
 const shot=async(page,name)=>{await page.waitForTimeout(180);await page.screenshot({path:`${out}/${name}.png`});};
 async function open(width,appearance,style,count=2){
  const state=createReturningUserFixture(2);state.activeWorkout=null;Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
@@ -13,10 +16,10 @@ async function open(width,appearance,style,count=2){
  await context.addInitScript(s=>{localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
  const page=await context.newPage(),errors=[],posts=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')posts.push(r.url());});
  await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
- await page.getByRole('button',{name:'PROFILE',exact:true}).click();await page.locator('.profile-data-actions').scrollIntoViewIfNeeded();
+ await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'data');
  return {page,context,errors,posts};
 }
-async function enter(page){await page.getByRole('button',{name:/Export workout history CSV/}).click();await page.locator('.history-export-screen').waitFor();}
+async function enter(page){await openProfileArea(page, 'data'); await page.getByRole('button',{name:/Export workout history CSV/}).click();await page.locator('.history-export-screen').waitFor();}
 try{
  for(const width of [320,390,430])for(const appearance of ['light','dark'])for(const style of ['standard','premium']){
   const {page,context,errors,posts}=await open(width,appearance,style),key=`${width}-${style}-${appearance}`;
@@ -25,8 +28,12 @@ try{
   assert.equal(await page.locator('.history-export-formats .is-selected').evaluate(b=>getComputedStyle(b).color!==getComputedStyle(b).backgroundColor),true,'selected label remains visible');
   await page.getByRole('radio',{name:'JSON',exact:true}).click();await shot(page,`${key}-json`);
   await page.getByRole('radio',{name:'JSON',exact:true}).press('ArrowLeft');assert.equal(await page.getByRole('radio',{name:'CSV',exact:true}).getAttribute('aria-checked'),'true');await page.getByRole('radio',{name:'CSV',exact:true}).press('ArrowRight');
-  await page.getByRole('checkbox').check();await shot(page,`${key}-notes`);
-  await page.getByRole('button',{name:'EXPORT',exact:true}).click();await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).waitFor();await shot(page,`${key}-ready`);
+  await page.getByRole('checkbox').check();
+  const checkedColors=await page.getByRole('checkbox').evaluate(el=>({surface:getComputedStyle(el).backgroundColor,mark:getComputedStyle(el,'::after').color,content:getComputedStyle(el,'::after').content}));
+  assert.ok(checkedColors.content.includes('✓'),'checked state has a visible check mark');
+  assert.notEqual(checkedColors.surface,checkedColors.mark,'checked mark must contrast with its surface in every theme');
+  await shot(page,`${key}-notes`);
+  await page.getByRole('button',{name:'PREPARE EXPORT',exact:true}).click();await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).waitFor();await shot(page,`${key}-ready`);
   const downloadPromise=page.waitForEvent('download');await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).click();const download=await downloadPromise;
   assert.match(download.suggestedFilename(),/^ROOK-workout-history-\d{4}-\d{2}-\d{2}\.json$/);
   const exported=JSON.parse(await readFile(await download.path(),'utf8'));assert.equal(exported.workouts.length,2);assert.equal(exported.metadata.notes_included,true);assert.equal(exported.workouts[0].session_note,'Synthetic QA private note');
@@ -39,14 +46,20 @@ try{
    // Slow only cooperative export yields to make the genuine busy state capturable.
    await page.evaluate(()=>{const original=window.setTimeout;window.setTimeout=(fn,ms,...args)=>original(fn,ms===0?40:ms,...args);});
   }
-  if(scenario==='error')await page.evaluate(()=>{HTMLAnchorElement.prototype.click=function(){throw Error('Synthetic denied download');};});
+  if(scenario==='error')await page.evaluate(()=>{window.qaAnchorClick=HTMLAnchorElement.prototype.click;HTMLAnchorElement.prototype.click=function(){throw Error('Synthetic denied download');};});
   if(['shared','cancelled'].includes(scenario))await page.evaluate(cancelled=>{Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>true});Object.defineProperty(navigator,'share',{configurable:true,value:async()=>{if(cancelled)throw new DOMException('Cancelled','AbortError');}});},scenario==='cancelled');
-  await page.getByRole('button',{name:'EXPORT',exact:true}).click();
+  await page.getByRole('button',{name:'PREPARE EXPORT',exact:true}).click();
   if(scenario==='large'){await page.getByRole('button',{name:'PREPARING…',exact:true}).waitFor();await shot(page,'320-loading-1200');}
   await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).waitFor();
   if(['error','shared','cancelled'].includes(scenario)){await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).click();await page.waitForTimeout(150);}
   if(['empty','large','offline'].includes(scenario)){const promise=page.waitForEvent('download');await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).click();const d=await promise;const csv=await readFile(await d.path(),'utf8');assert.ok(csv.includes('workout_id'));assert.ok(!csv.includes('Synthetic QA private note'));}
   if(scenario==='error')assert.match(await page.locator('.history-export-status').innerText(),/Couldn’t/);
-  await shot(page,`320-${scenario}`);await context.close();console.log(`${scenario}: passed`);
+  await shot(page,`320-${scenario}`);
+  if(['error','cancelled'].includes(scenario)){
+   if(scenario==='error')await page.evaluate(()=>HTMLAnchorElement.prototype.click=window.qaAnchorClick);
+   else {assert.equal(await page.getByRole('alert').count(),0);await page.evaluate(()=>Object.defineProperty(navigator,'canShare',{configurable:true,value:()=>false}));}
+   const download=page.waitForEvent('download');await page.getByRole('button',{name:'SHARE / DOWNLOAD'}).click();const recovered=await download;assert.ok((await readFile(await recovered.path(),'utf8')).includes('workout_id'));assert.equal(await page.getByRole('alert').count(),0);
+  }
+  await context.close();console.log(`${scenario}: passed`);
  }
 }finally{await browser.close();}

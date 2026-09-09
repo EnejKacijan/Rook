@@ -1,3 +1,4 @@
+import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -105,7 +106,7 @@ async function assertLayout(page, label) {
 
 async function openGymSettings(page) {
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await page.getByRole("button", { name: /Gym profiles/ }).click();
+  await openProfileArea(page, 'training'); await page.getByRole("button", { name: /Gym profiles/ }).click();
   await page.getByRole("heading", { name: "Your training environments" }).waitFor();
   await page.waitForTimeout(250);
 }
@@ -113,7 +114,7 @@ async function openGymSettings(page) {
 async function captureSettingsRow() {
   const run = await open(fixture());
   await run.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await run.page.getByRole("button", { name: /Gym profiles/ }).waitFor();
+  await openProfileArea(run.page, 'training'); await run.page.getByRole("button", { name: /Gym profiles/ }).waitFor();
   await run.page.screenshot({ path: output("01-settings-row.png"), fullPage: true });
   await assertLayout(run.page, "settings row");
   assert.deepEqual(run.errors, []);
@@ -242,7 +243,7 @@ async function runtimeCrudReloadOffline() {
   await run.context.setOffline(false);
   await run.page.reload({ waitUntil: "domcontentloaded" });
   await run.page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await run.page.getByRole("button", { name: /Gym profiles/ }).click();
+  await openProfileArea(run.page, 'training'); await run.page.getByRole("button", { name: /Gym profiles/ }).click();
   await run.page.getByRole("button", { name: /^Garage Strength/ }).waitFor();
   const stored = await run.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
   const garage = stored.gymProfiles.find((gym) => gym.name === "Garage Strength");

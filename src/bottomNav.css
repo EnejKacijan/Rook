@@ -1,0 +1,52 @@
+:root {
+  --bottom-nav-height: 56px;
+  --rook-nav-safe-bottom: env(safe-area-inset-bottom, 0px);
+  --bottom-nav-total-height: calc(var(--bottom-nav-height) + var(--rook-nav-safe-bottom));
+}
+.bottom-nav {
+  position: fixed;
+  z-index: 15;
+  bottom: 0;
+  left: 50%;
+  transform: translateX(-50%);
+  width: min(100%, 500px);
+  min-height: calc(var(--bottom-nav-height) + var(--rook-nav-safe-bottom));
+  padding: 0 0 var(--rook-nav-safe-bottom);
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  background: var(--rook-bg);
+  border-top: 1px solid var(--rook-border);
+}
+:root[data-appearance] .bottom-nav button {
+  min-width: 0;
+  min-height: calc(var(--bottom-nav-height) - 1px);
+  padding: 8px 0;
+  border: 0;
+  background: transparent;
+  color: var(--rook-secondary);
+  font-family: inherit;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  transition: color 150ms linear;
+}
+.nav-icon {
+  flex: 0 0 22px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+.nav-icon svg { width: 22px; height: 22px; }
+.nav-icon-line { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; }
+.nav-icon-solid { display: none; fill: currentColor; stroke: none; }
+.nav-icon-knockout { fill: var(--rook-bg); }
+.nav-active .nav-icon-line { display: none; }
+.nav-active .nav-icon-solid { display: block; }
+.nav-label { font-family: inherit; font-size: .59375rem; line-height: 1.052632; font-weight: 700; letter-spacing: .13em; max-width: 100%; overflow-wrap: anywhere; text-align: center; }
+:root[data-appearance] .bottom-nav .nav-active { color: var(--rook-accent-text); }
+.nav-active .nav-label { color: var(--rook-text); }
+:root[data-appearance] .bottom-nav button:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: -3px; border-radius: 9px; }
+@media (prefers-reduced-motion: reduce) { :root[data-appearance] .bottom-nav button { transition: none; } }

@@ -1,0 +1,52 @@
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from 'playwright-core';
+import { createReturningUserFixture } from '../src/demoFixture.js';
+const output = 'artifacts/delete-local-data';
+await mkdir(output, { recursive: true });
+const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google/Chrome/Application/chrome.exe', headless: true });
+try {
+  for (const width of [320, 390]) for (const appearance of ['light', 'dark']) {
+    const state = createReturningUserFixture(2);
+    Object.assign(state.profile, { appearancePreference: appearance, themePreference: appearance, stylePreference: 'standard' });
+    const context = await browser.newContext({ viewport: { width, height: 844 }, colorScheme: appearance, serviceWorkers: 'block' });
+    await context.addInitScript(s => { if (!sessionStorage.getItem('delete-fixture')) { localStorage.setItem('lift-v2-state', JSON.stringify(s)); sessionStorage.setItem('delete-fixture', '1'); } }, state);
+    const page = await context.newPage();
+    await page.route('**/api/**', r => r.fulfill({ json: { available: false } }));
+    await page.goto(process.env.ROOK_QA_URL || 'http://127.0.0.1:4175');
+    const snap = async name => { await page.waitForTimeout(300); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false); await page.screenshot({ path: `${output}/${width}-${appearance}-${name}.png` }); };
+    await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: /^(Sign out|Log out)$/i }).count(), 0, 'local-only Profile has no account action');
+    assert.equal(await page.getByRole('button', { name: /^Delete local data/ }).count(), 0, 'destructive action is not on Profile root');
+    await snap('profile-root-no-account');
+    await page.locator('[data-profile-area="data"]').click();
+    const entry = page.getByRole('button', { name: /^Delete local data/ });
+    await entry.scrollIntoViewIfNeeded(); await snap('data-backup');
+    assert.equal(await page.getByRole('button', { name: /^(Sign out|Log out)$/i }).count(), 0);
+    const before = await page.evaluate(() => localStorage.getItem('lift-v2-state'));
+    await entry.click();
+    const dialog = page.getByRole('alertdialog', { name: 'Delete local data?' });
+    await dialog.waitFor();
+    assert.match(await dialog.innerText(), /permanently removes/);
+    assert.match(await dialog.getByRole('button', { name: 'BACK UP FIRST' }).getAttribute('class'), /primary/);
+    assert.match(await dialog.getByRole('button', { name: 'DELETE LOCAL DATA', exact: true }).getAttribute('class'), /danger/);
+    await snap('confirmation');
+    await dialog.getByRole('button', { name: 'CANCEL', exact: true }).click();
+    assert.equal(await page.evaluate(() => localStorage.getItem('lift-v2-state')), before);
+    await entry.click(); await dialog.getByRole('button', { name: 'BACK UP FIRST' }).click();
+    await page.getByRole('button', { name: 'CREATE BACKUP', exact: true }).click();
+    await page.getByRole('button', { name: 'SAVE BACKUP', exact: true }).waitFor();
+    await snap('backup-first');
+    const downloaded = page.waitForEvent('download');
+    await page.getByRole('button', { name: 'SAVE BACKUP', exact: true }).click();
+    const download = await downloaded; assert.equal(await download.failure(), null);
+    await dialog.waitFor();
+    assert.ok(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).profile.onboardingComplete), 'backup never deletes automatically');
+    await dialog.getByRole('button', { name: 'DELETE LOCAL DATA', exact: true }).click();
+    await page.getByRole('button', { name: 'Restore from backup', exact: true }).waitFor();
+    assert.equal(await page.evaluate(() => localStorage.getItem('lift-v2-state')), null);
+    await snap('landing');
+    await context.close();
+    console.log(`PASS ${width} ${appearance}: Profile, confirmation, cancel, backup download, explicit deletion, landing`);
+  }
+} finally { await browser.close(); }

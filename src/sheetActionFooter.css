@@ -1,0 +1,50 @@
+/* One opaque action surface; no viewport-fixed controls or floating decoration. */
+:root {
+  --sheet-action-gap: 8px;
+  --sheet-action-padding: 12px;
+  --sheet-action-safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+.modal-layer > .has-sheet-action-footer {
+  scroll-padding-bottom: calc(var(--sheet-action-height, 126px) + 24px);
+}
+:root :is(.detail-screen, .sheet) .sheet-action-footer {
+  position: sticky;
+  bottom: calc(-1 * var(--rook-sheet-safe-bottom, 20px));
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sheet-action-gap);
+  margin-top: 24px;
+  margin-bottom: calc(-1 * var(--rook-sheet-safe-bottom, 20px));
+  padding: var(--sheet-action-padding) var(--sheet-action-inner-gutter, 0px) calc(var(--sheet-action-padding) + var(--sheet-action-safe-bottom));
+  background: var(--rook-bg);
+  box-shadow: none;
+  isolation: isolate;
+}
+:is(.detail-screen, .sheet) .sheet-action-footer::before {
+  content: '';
+  position: absolute;
+  inset: 0 calc(-1 * var(--sheet-action-gutter, 24px));
+  z-index: -1;
+  background: var(--rook-bg);
+  border-top: 1px solid var(--rook-border);
+  pointer-events: none;
+}
+:root :is(.detail-screen, .sheet) .sheet-action-footer > .button {
+  width: 100%;
+  margin: 0;
+  flex-shrink: 0;
+}
+:root :is(.detail-screen, .sheet) .sheet-action-footer > p { margin: 0; }
+:root :is(.detail-screen, .sheet) .sheet-action-footer[data-separate] {
+  position: relative;
+  bottom: auto;
+  margin: 0;
+  flex: 0 0 auto;
+  border-top: 0;
+}
+:root .sheet-action-footer > .import-ready-sticky-action {
+  position: static;
+  transform: none;
+  box-shadow: none;
+}

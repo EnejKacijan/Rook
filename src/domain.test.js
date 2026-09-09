@@ -2613,7 +2613,7 @@ ogrevalni set 12kg
         },
       ],
     });
-    expect(progressionFor(exercise, [exposure(true)])).toBeNull();
+    expect(progressionFor(exercise, [exposure(true)])).toMatchObject({ type: "hold", title: "Repeat to confirm" });
     expect(
       progressionFor(exercise, [exposure(true), exposure(true)]),
     ).toMatchObject({ type: "progress", weight: 21, evidenceExposures: 2 });
@@ -2668,12 +2668,12 @@ ogrevalni set 12kg
       ],
     });
     expect(
-      progressionFor(exercise, [exposure(exercise.repMin - 1)]),
-    ).toBeNull();
+      progressionFor(exercise, [exposure(exercise.repMin - 2)]),
+    ).toMatchObject({ type: "hold", title: "Repeat this load" });
     expect(
       progressionFor(exercise, [
-        exposure(exercise.repMin - 1),
-        exposure(exercise.repMin - 1),
+        exposure(exercise.repMin - 2),
+        exposure(exercise.repMin - 2),
       ]),
     ).toMatchObject({ type: "hold", title: "Review the load" });
   });

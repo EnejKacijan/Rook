@@ -1,0 +1,37 @@
+.import-resolution { display: flex; flex-direction: column; flex: 1; min-height: 0; width: 100%; }
+.initial-import-screen:has(.plan-editor.is-import-review) { height: 100dvh; overflow-y: auto; }
+:root .initial-import-screen:has(.plan-editor.is-import-review) { padding-bottom: 0; scroll-padding-bottom: calc(var(--sheet-action-height, 134px) + 16px); }
+:root .initial-import-screen:has(.plan-editor.is-import-review) > .sheet-action-footer { bottom: 0; margin-bottom: 0; }
+:root .detail-screen.has-import-decisions { display: flex; flex-direction: column; height: var(--import-viewport-height, 100dvh); max-height: var(--import-viewport-height, 100dvh); overflow: hidden; padding-bottom: 0; }
+:root .has-import-decisions > .detail-header { display: none; }
+.import-resolution > .detail-header.import-decision-header { flex: 0 0 auto; margin-bottom: 12px; }
+.import-resolution .step-progress .progress-line { margin-top: 0; }
+.import-decision-header > span { width: 40px; }
+.import-decision-scroll { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 24px; scroll-padding-block: 12px; }
+.import-decision-content[hidden] { display: none; }
+.import-decision-content { width: 100%; }
+.import-decision-scroll:has(> .step-progress) .import-decision-content { padding-top: 12px; }
+.import-resolution .import-decision-content h1 { outline: none; font-size: 24px; line-height: 28px; margin: 4px 0 0; overflow-wrap: anywhere; }
+.import-resolution .import-decision-content p { margin: 8px 0; }
+.import-decision-content blockquote { margin: 8px 0; overflow-wrap: anywhere; }
+.import-resolution .plan-import-choice { padding: 12px 0; }
+.import-resolution .plan-import-choice > p:first-child { margin-top: 0; }
+.import-resolution .plan-import-choice .choice-row { margin-top: 8px; justify-content: center; }
+.import-resolution .plan-import-choice :is(input,select) { font-size: 16px; }
+.import-resolution .plan-import-choice + .plan-import-choice { margin-top: 8px; }
+.import-resolution .plan-import-choice button { position: relative; white-space: normal; overflow-wrap: anywhere; padding-right: 38px; }
+:root .import-resolution .plan-import-choice button[aria-pressed="true"] { border-color: var(--rook-accent); color: var(--rook-accent); background: var(--rook-surface-muted); }
+.import-resolution .plan-import-choice button[aria-pressed="true"]::before { content: '✓'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
+.import-resolution-match h3 { overflow-wrap: anywhere; }
+.import-resolution-match label { display: grid; gap: 8px; }
+.import-resolution-match input { width: 100%; min-width: 0; min-height: 48px; padding: 12px; font: inherit; font-size: 16px; color: var(--rook-text); background: var(--rook-surface-muted); border: 1px solid var(--rook-border); border-radius: 10px; }
+/* This field meets the scrollport edges: draw focus inside, not into its clip. */
+:root .import-resolution .import-resolution-match input[type="search"]:focus-visible { outline-offset: -3px; }
+.import-resolution-options { display: grid; gap: 8px; margin: 12px 0; }
+.import-resolution-options .button { margin: 0; text-align: left; white-space: normal; }
+.import-resolution :is(.choice-row, .import-resolution-options .button) { font-family: inherit; font-size: 15px; font-weight: 600; line-height: 1.25; letter-spacing: normal; font-variant-numeric: tabular-nums; }
+.import-resolution .plan-import-choice > small { font-size: 13px; line-height: 1.4; }
+.import-resolution .import-decision-header > button { min-height: 44px; min-width: 44px; }
+.import-resolution-selected > div { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; }
+:root .import-resolution .sheet-action-footer[data-separate] { flex: 0 0 auto; margin: 0; bottom: 0; }
+.import-plan-screen .plan-import-issues > .text-button { display: block; min-height: 44px; padding: 8px 0; white-space: normal; text-align: left; }

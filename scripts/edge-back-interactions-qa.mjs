@@ -1,3 +1,4 @@
+import { openAdjustWeek } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { chromium } from 'playwright-core';
 import { blankState,buildProgram,isoDay,weekday,WEEKDAYS } from '../src/domain.js';
@@ -21,7 +22,7 @@ async function gesture({dx=180,dy=0,count=1,cancel=false,center=false,pause=140,
  await page.waitForTimeout(pause);await page.evaluate(cancel=>window.rookQaTouch(cancel?'touchcancel':'touchend',[]),cancel);await page.waitForTimeout(230);
  assert.equal(await page.locator('.rook-edge-back-preview').count(),0);
 }
-await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();await page.waitForTimeout(300);
+await openAdjustWeek(page);await page.waitForTimeout(300);
 await gesture();assert.equal(await title(),'What changed?');
 await page.getByRole('button',{name:/My available days changed/}).click();await page.waitForTimeout(300);
 const original=await page.evaluate(()=>localStorage.getItem('lift-v2-state'));
@@ -38,7 +39,7 @@ await gesture({end:false});await page.locator('.modal-layer:not(.rook-edge-back-
 await page.getByRole('button',{name:'Close Adjust today',exact:true}).click();
 // Controlled unknown imported exercise forces the real manual-resolution path.
 await page.evaluate(day=>{const s=JSON.parse(localStorage.getItem('lift-v2-state'));const e=s.program.days.find(d=>d.weekday===day).exercises[0];Object.assign(e,{exerciseId:'imported-custom-qa-unknown',exerciseSource:'imported-custom',importedName:'QA unknown exercise',originalImportedName:'QA unknown exercise',importedExercise:{id:'imported-custom-qa-unknown',name:'QA unknown exercise',pattern:null,muscles:null,equipment:null},matchStatus:'confirmed-custom'});s.program.source='ai-import';localStorage.setItem('lift-v2-state',JSON.stringify(s));},day);
-await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).click();await page.getByRole('button',{name:/Something is unavailable/}).click();await page.locator('.adjust-check-list button').first().click();await page.getByRole('button',{name:'FIND REPLACEMENTS',exact:true}).click();await page.getByRole('button',{name:'Choose replacement',exact:true}).first().click();
+await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).click();await page.getByRole('button',{name:/Specific exercise unavailable/}).click();await page.locator('.adjust-check-list button').first().click();await page.getByRole('button',{name:'FIND REPLACEMENTS',exact:true}).click();await page.getByRole('button',{name:'Choose replacement',exact:true}).first().click();
 const search=page.getByRole('searchbox',{name:'Search replacement exercises'});await search.fill('press');await search.blur();await gesture();assert.equal(await page.locator('.adjust-unresolved').count(),1);assert.equal(await page.getByRole('button',{name:'USE THIS WORKOUT',exact:true}).isDisabled(),true);
 await page.locator('.adjust-today-sheet').evaluate(el=>el.scrollTop=0);await gesture();assert.equal(await title(),'Choose affected exercises');assert.equal(await page.locator('.adjust-check-list [aria-pressed="true"]').count(),1);
 assert.deepEqual(errors,[]);console.log('Edge Back adversarial runtime passed: root/browser gates, direction, diagonal, vertical, multitouch, cancel, fast flick, reduced motion, scrolled view, input, state interruption and manual replacement preservation.');

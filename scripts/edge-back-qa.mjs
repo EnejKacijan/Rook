@@ -1,3 +1,4 @@
+import { openProfileArea, openAdjustWeek } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
@@ -28,7 +29,7 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
    await cdp.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});await page.waitForTimeout(280);
    assert.equal(await page.locator('.rook-edge-back-preview').count(),0);assert.equal(await page.locator('[data-edge-back-active]').count(),0);
  };
- await page.getByRole('button',{name:'ADJUST WEEK',exact:true}).click();await page.getByRole('button',{name:/My available days changed/}).click();await page.waitForTimeout(300);
+ await openAdjustWeek(page);await page.getByRole('button',{name:/My available days changed/}).click();await page.waitForTimeout(300);
  await shot('flexible-before');await swipe(45,'flexible-cancel');assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'When can you train?');await shot('flexible-cancelled');
  await swipe(width*.5,'flexible-commit');assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'What changed?');await shot('flexible-destination');
  await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-week-sheet .choice-row').first().click();await swipe(width*.5);assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'Choose a workout');
@@ -38,7 +39,7 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
  await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).click();await page.getByRole('button',{name:/Less time Shorten/}).click();await page.waitForTimeout(300);
  await shot('adjust-before');await swipe(45,'adjust-cancel');await shot('adjust-cancelled');await swipe(width*.5,'adjust-commit');assert.equal(await page.locator('.adjust-today-sheet h1').innerText(),'What changed today?');await shot('adjust-destination');
  if(width===390 && style==='standard' && appearance==='light') {
-   for(const mode of ['Different equipment','Low energy','Something is unavailable']) {
+   for(const mode of ['Different equipment','Low energy','Specific exercise unavailable']) {
      await page.getByRole('button',{name:new RegExp(`^${mode}`)}).click();
      if(mode==='Different equipment')await page.getByRole('button',{name:/Choose equipment/}).click();
      if(mode==='Low energy') {
@@ -52,7 +53,7 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
    }
  }
  await page.getByRole('button',{name:'Close Adjust today',exact:true}).click();
- await page.getByRole('button',{name:'PROFILE',exact:true}).click();await page.getByRole('button',{name:/Plan history/}).click();
+ await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'program'); await page.getByRole('button',{name:/Plan history/}).click();
  await page.locator('.plan-history-list button').first().click();await page.waitForTimeout(300);
  await shot('plan-before');await swipe(45,'plan-cancel');await shot('plan-cancelled');await swipe(width*.5,'plan-commit');assert.equal(await page.locator('.plan-version-detail').count(),0);await shot('plan-destination');
  assert.deepEqual(errors,[]);await context.close();console.log(`${width} ${style} ${appearance}: three nested flows passed`);
