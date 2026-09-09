@@ -125,17 +125,23 @@ describe("Training Blocks", () => {
   });
 
   it("keeps Flexible Week placement separate from stable block-workout identity", () => {
-    const state = stateWithBlock();
-    const schedule = currentWeekSchedule(state, new Date("2026-09-07T12:00:00"));
-    const source = schedule[0];
-    const openDate = ["2026-09-08", "2026-09-10", "2026-09-12", "2026-09-13"]
-      .find((date) => !schedule.some((item) => item.scheduledDate === date));
-    const identity = source.workout.trainingBlock.blockWorkoutId;
-    applyWeekScheduleChanges(state, [{ workoutId: source.workoutId, fromDate: source.scheduledDate, toDate: openDate }], new Date("2026-09-07T12:00:00"));
-    const moved = currentWeekSchedule(state, new Date("2026-09-07T12:00:00")).find((item) => item.workoutId === source.workoutId);
-    expect(moved.scheduledDate).toBe(openDate);
-    expect(moved.workout.trainingBlock.blockWorkoutId).toBe(identity);
-    expect(moved.workout.trainingBlock.blockWeekNumber).toBe(1);
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-07T12:00:00"));
+    try {
+      const state = stateWithBlock();
+      const schedule = currentWeekSchedule(state, new Date("2026-09-07T12:00:00"));
+      const source = schedule[0];
+      const openDate = ["2026-09-08", "2026-09-10", "2026-09-12", "2026-09-13"]
+        .find((date) => !schedule.some((item) => item.scheduledDate === date));
+      const identity = source.workout.trainingBlock.blockWorkoutId;
+      applyWeekScheduleChanges(state, [{ workoutId: source.workoutId, fromDate: source.scheduledDate, toDate: openDate }], new Date("2026-09-07T12:00:00"));
+      const moved = currentWeekSchedule(state, new Date("2026-09-07T12:00:00")).find((item) => item.workoutId === source.workoutId);
+      expect(moved.scheduledDate).toBe(openDate);
+      expect(moved.workout.trainingBlock.blockWorkoutId).toBe(identity);
+      expect(moved.workout.trainingBlock.blockWeekNumber).toBe(1);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("advances only after every block-week workout and does not advance on a calendar boundary", () => {

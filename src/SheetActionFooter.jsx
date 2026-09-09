@@ -15,7 +15,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
     const reveal = () => {
       const input = document.activeElement;
       if (!screen.contains(input) || !input.matches('input, textarea, select')) return;
-      const scroller = input.closest('.profile-setting-scroll, .superset-partner-options') || screen;
+      const scroller = input.closest('.profile-setting-scroll, .superset-partner-options, .import-decision-scroll') || screen;
       const bounds = input.getBoundingClientRect();
       const bottom = footer.getBoundingClientRect().top - 12;
       if (pageScroll) {

@@ -6,7 +6,7 @@ import { chromium } from 'playwright-core';
 import { createReturningUserFixture } from '../src/demoFixture.js';
 
 const browser = await chromium.launch({
-  executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+  channel: 'chrome',
   headless: true,
 });
 const artifactRoot = new URL('../artifacts/plan-reorder/', import.meta.url);
@@ -87,10 +87,10 @@ const moveWorkoutLast = page.locator('.import-day').first().locator('.plan-worko
   .getByRole('button', { name: 'MOVE LAST' });
 await moveWorkoutLast.focus();
 await page.keyboard.press('Enter');
-const draftWeekdayLabels = await page.locator('.plan-workout-drag-surface > span').allTextContents();
+const draftWeekdayLabels = await page.locator('.plan-workout-day-label').allTextContents();
 assert.deepEqual(
   draftWeekdayLabels,
-  originalWeekdays.map(day => `${day.toUpperCase()} WORKOUT`),
+  originalWeekdays.map(day => day.toUpperCase()),
   'weekday slots stay fixed after workout reorder',
 );
 

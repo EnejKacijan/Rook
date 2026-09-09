@@ -4,8 +4,8 @@ import {chromium} from 'playwright-core';
 import {createReturningUserFixture} from '../src/demoFixture.js';
 import {startWorkout} from '../src/domain.js';
 const out='artifacts/profile-hub';await mkdir(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
-const groups={program:[/Training block/,/Edit plan/,/Plan history/,/Export workout plan/,/Replace plan/],training:[/Personal details/,/Availability/,/Gym profiles/,/Training restrictions/,/Training priorities/,/Custom exercises/],preferences:[/Logging & increments/,/Appearance/,/Notifications/],data:[/Import workout history/,/Export workout history/,/Back up ROOK/,/Restore backup/,/Delete local data/]};
+const browser=await chromium.launch({channel: 'chrome',headless:true});
+const groups={program:[/Training block/,/Edit plan/,/Plan history/,/Export workout plan/,/Replace plan/],training:[/Personal details/,/Availability/,/Gym profiles/,/Training restrictions/,/Training priorities/,/Custom exercises/],preferences:[/Logging & increments/,/Appearance/],data:[/Import workout history/,/Export workout history/,/Back up ROOK/,/Restore backup/,/Delete local data/]};
 try{for(const [width,appearance,style,active,complete] of [[390,'light','standard',false,false],[320,'dark','standard',false,false],[390,'light','premium',false,true],[390,'dark','premium',false,true],[320,'dark','premium',false,true],[390,'light','standard',true,true]]){
  const state=createReturningUserFixture(2);state.activeWorkout=active?startWorkout(state,state.program.days[0]):null;state.profile.ageRange=complete?'25–34':null;
  if(complete)Object.assign(state.profile,{name:'Alex',ageRange:'18–29',sex:'Male'});
@@ -18,6 +18,7 @@ try{for(const [width,appearance,style,active,complete] of [[390,'light','standar
  const shot=async name=>{await page.waitForTimeout(150);await page.screenshot({path:`${prefix}-${name}.png`});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);};await shot('main');
  for(const [area,labels] of Object.entries(groups)){
   await root.locator(`[data-profile-area="${area}"]`).click();await root.locator('.profile-subpage-header').waitFor();assert.equal(await root.locator('h1').count(),0);assert.equal(await page.getByRole('button',{name:'PROFILE',exact:true}).getAttribute('aria-current'),'page');await shot(area);
+  if(area==='preferences')assert.equal(await root.getByRole('button',{name:/Notifications/}).count(),0,'standalone Notifications entry is absent');
   if(area==='training'){
     assert.equal(await root.getByRole('button',{name:/Personal details/}).count(),1);
     if(complete)assert.match(await root.getByRole('button',{name:/Personal details/}).textContent(),/Alex · 18–29 · Male/);
@@ -30,9 +31,6 @@ try{for(const [width,appearance,style,active,complete] of [[390,'light','standar
    if(active&&String(label)==='/Edit plan/'){assert.equal(await row.isDisabled(),true);assert.match(await row.innerText(),/Finish your active workout first/);continue;}
    await row.click();await page.locator('.modal-layer').waitFor();assert.ok(await page.locator('.modal-layer').innerText(),`${label}: destination rendered`);
    if(String(label)==='/Logging & increments/')await page.getByText('Rest timer notifications',{exact:true}).waitFor();
-   if(String(label)==='/Notifications/'){
-     await page.waitForTimeout(300);const notification=page.getByText('Rest timer notifications',{exact:true});await notification.waitFor();const r=await notification.boundingBox();assert.ok(r.y>=0&&r.y+r.height<844,'notification deep link is visible');
-   }
    if(String(label)==='/Delete local data/')await page.getByRole('button',{name:'BACK UP FIRST',exact:true}).waitFor();
    await page.waitForTimeout(250);await page.keyboard.press('Escape');await page.locator('.modal-layer').waitFor({state:'detached'});assert.equal(await root.locator('[data-profile-area]').count(),0,`close returns to same category: ${label}`);
   }

@@ -48,7 +48,7 @@ describe("advanced logging integration", () => {
 
   it("exports special type and unilateral asymmetry without raw data", () => {
     const exercise = { exerciseId: "barbell-bench-press", loggingMode: "per_side" };
-    const text = formatExportSet(exercise, { ...standard("u"), sides: { left: { reps: 10 }, right: { reps: 9 } } });
+    const text = formatExportSet(exercise, { ...standard("u"), sides: { left: { reps: 10 }, right: { reps: 9 } } }, { completed:true });
     expect(text).toContain("L 10 · R 9");
     expect(text).not.toContain("[object Object]");
   });

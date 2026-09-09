@@ -57,7 +57,9 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
   const [unit,setUnit]=useState(resolved?.unit||'kg');
   const [setIndex,setSetIndex]=useState(String(resolved?.setIndex??Math.max(0,(exercise?.sets.length||1)-1)));
   const [edited,setEdited]=useState(Boolean(resolved));
-  const [sets,setSets]=useState(String(exercise?.sets.length??''));
+  const partial=issue.partialPrescription;
+  const openKnown=partial&&!partial.missing.includes('reps')&&exercise?.repMin==null;
+  const [sets,setSets]=useState(String(exercise?.sets.length||''));
   const [min,setMin]=useState(String(exercise?.repMin??''));
   const [max,setMax]=useState(String(exercise?.repMax??''));
   const numbers=Number.isInteger(Number(sets))&&Number(sets)>=1&&Number(sets)<=20&&Number.isInteger(Number(min))&&Number.isInteger(Number(max))&&Number(min)>=1&&Number(max)>=Number(min);
@@ -70,8 +72,8 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
     setter(raw);setEdited(true);
     const next=payload({[key]:raw});
     const accepted=issue.field==='load'?(raw===''||Number.isFinite(Number(raw))&&Number(raw)>=0):
-      ['sets','repMin','repMax'].every(field=>next[field]!==''&&Number.isInteger(Number(next[field]))&&Number(next[field])>=1)&&Number(next.sets)<=20&&Number(next.repMax)>=Number(next.repMin);
-    onResolve(accepted?{...next,sets:Number(next.sets),repMin:Number(next.repMin),repMax:Number(next.repMax)}:null);
+      (openKnown?['sets']:['sets','repMin','repMax']).every(field=>next[field]!==''&&Number.isInteger(Number(next[field]))&&Number(next[field])>=1)&&Number(next.sets)<=20&&(openKnown||Number(next.repMax)>=Number(next.repMin));
+    onResolve(accepted?{...next,sets:Number(next.sets),repMin:openKnown?null:Number(next.repMin),repMax:openKnown?null:Number(next.repMax)}:null);
   };
   return <div className="plan-import-issue plan-import-choice" data-unresolved={!resolved} tabIndex={-1}>
     <p>{issue.message}</p><span className="eyebrow">SOURCE</span><blockquote>{issue.source}</blockquote>
@@ -82,7 +84,7 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
     {issue.field==='loggingMode'&&<label>Logging mode<select aria-label="Reviewed logging mode" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose logging mode</option><option value="normal">One representative value</option><option value="per_side">Left and right separately</option></select></label>}
     {issue.field==='advanced'&&<><label>Set<select aria-label="Reviewed special set" value={setIndex} onChange={e=>{setSetIndex(e.target.value);if(edited&&valid)onResolve(payload({setIndex:Number(e.target.value)}));}}>{exercise?.sets.map((set,index)=><option key={set.id} value={index}>Set {index+1}</option>)}</select></label><label>Method<select aria-label="Reviewed set method" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose method</option><option value="drop">Drop set</option><option value="rest_pause">Rest-pause</option><option value="amrap">AMRAP</option><option value="failure">Failure · 0 RIR</option><option value="note">Keep as note only</option></select></label></>}
     {issue.field==='load'&&<><label>Load · optional<input aria-label="Reviewed load" type="text" inputMode="decimal" value={value==='__choose'?'':value} onChange={e=>inputChange(setValue,'value',e.target.value)}/></label><label>Unit<select aria-label="Reviewed load unit" value={unit} onChange={e=>{setUnit(e.target.value);if(edited&&valid)onResolve(payload({unit:e.target.value}));}}><option>kg</option><option>lb</option></select></label><button type="button" className="button quiet" onClick={()=>choose("")}>Leave load unspecified</button></>}
-    {issue.field==='prescription'&&<div className="plan-import-prescription">{[['Sets',sets,setSets,'sets'],['Min reps',min,setMin,'repMin'],['Max reps',max,setMax,'repMax']].map(([label,v,set,key])=><label key={label}>{label}<input aria-label={`Reviewed ${label}`} aria-invalid={focused&&edited&&invalidFields.includes(key)||undefined} aria-describedby={!resolved?helpId:undefined} type="text" inputMode="numeric" value={v} onChange={e=>inputChange(set,key,e.target.value)}/></label>)}</div>}
+    {issue.field==='prescription'&&<div className="plan-import-prescription">{[['Sets',sets,setSets,'sets'],['Min reps',min,setMin,'repMin'],['Max reps',max,setMax,'repMax']].filter(([, , ,key])=>!openKnown||key==='sets').map(([label,v,set,key])=><label key={label}>{exercise?.measure==='seconds'?label.replace('reps','seconds'):label}<input aria-label={`Reviewed ${label}`} readOnly={Boolean(partial&&!partial.missing.includes(key==='sets'?'sets':'reps'))} aria-invalid={focused&&edited&&invalidFields.includes(key)||undefined} aria-describedby={!resolved?helpId:undefined} type="text" inputMode="numeric" value={v} onChange={e=>inputChange(set,key,e.target.value)}/></label>)}{openKnown&&<span>AMRAP</span>}</div>}
     {issue.field==='alternative'&&<>
       {(issue.options||[]).map((option,index)=><button type="button" className="choice-row button secondary" key={index} aria-pressed={value===String(index)} onClick={()=>{setValue(String(index));onResolve({option});}}>{option.name} · {option.sets} × {option.repMin}{option.repMax!==option.repMin?`–${option.repMax}`:''}{option.measure==='seconds'?' sec':''}{option.weight!==null?` · ${Number((option.sourceWeight??option.weight).toFixed(2))} ${option.sourceUnit||'kg'}`:''}{option.targetRir!=null?` · ${option.targetRir} RIR`:''}</button>)}
       {!issue.options?.length&&<p role="alert">These alternatives need clearer source details. Go Back to edit your notes, and give each exercise its own sets × reps and explicit load unit where applicable. Nothing has been chosen automatically.</p>}
@@ -90,7 +92,7 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
     {issue.field==='grouping'&&<button type="button" className="button secondary" aria-pressed={Boolean(resolved)} onClick={()=>onResolve({value:'separate'})}>KEEP AS SEPARATE EXERCISES</button>}
     {issue.field==='load'&&resolved&&value===''&&<small role="status">✓ Load unspecified</small>}
     {issue.field==='prescription'&&!resolved&&<>
-      <small id={helpId} aria-live={focused?'polite':undefined}>{focused?prescriptionHelp:issue.requiresReps?'Enter the intended min and max reps to resolve this decision.':'Enter the intended sets and reps, or explicitly accept the values shown.'}</small>
+      <small id={helpId} aria-live={focused?'polite':undefined}>{partial?`Enter the missing ${partial.missing.join(' and ')}. Known source values stay unchanged.`:focused?prescriptionHelp:issue.requiresReps?'Enter the intended min and max reps to resolve this decision.':'Enter the intended sets and reps, or explicitly accept the values shown.'}</small>
       {!focused&&!issue.requiresReps&&<button type="button" className="button primary" disabled={!valid} onClick={()=>onResolve(payload())}>USE THESE SETS &amp; REPS</button>}
     </>}
   </div>;

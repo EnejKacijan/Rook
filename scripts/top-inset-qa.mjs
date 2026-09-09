@@ -4,7 +4,7 @@ import { chromium } from 'playwright-core';
 import { createReturningUserFixture } from '../src/demoFixture.js';
 const phase=process.argv.includes('--before')?'before':'after';
 const out=`artifacts/top-inset-visible/${phase}`;await mkdir(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+const browser=await chromium.launch({channel: 'chrome',headless:true});
 const results=[];
 const before=phase==='after'?JSON.parse(await readFile('artifacts/top-inset-visible/before/geometry.json','utf8')):null;
 try {
@@ -21,7 +21,7 @@ try {
    await page.evaluate(()=>document.fonts.ready);
    await page.evaluate(()=>{window.scrollTo(0,0);document.querySelectorAll('main.screen').forEach(e=>e.scrollTop=0);});
    const data=await screen.evaluate((el,tab)=>{
-    const label=[...el.querySelectorAll('.eyebrow')].find(e=>e.textContent.trim()===(tab==='TODAY'?'WEEKLY WORKOUT PLAN':tab));
+    const label=tab==='TODAY'?el.querySelector('.week-calendar-trigger span'):[...el.querySelectorAll('.eyebrow')].find(e=>e.textContent.trim()===tab);
     if(!label)throw new Error('Missing first header '+tab);
     const row=tab==='TODAY'?label.closest('.screen-top'):label;
     const css=getComputedStyle(el),r=row.getBoundingClientRect(),l=label.getBoundingClientRect();
@@ -36,10 +36,10 @@ try {
    assert.equal(data.paddingTop,24,'Browser viewport uses the shared 24px page inset');
    assert.equal(data.firstChildTop,data.pageTop+data.paddingTop,'No tab-specific space precedes the first content block');
    for(const hit of data.hitTargets){assert.ok(hit.height>=44&&hit.width>=44,'Preserve accessible week targets');assert.ok(hit.top>=0,'No clipped target');}
-   if(phase==='after')assert.ok(Math.abs(data.labelTop-24)<2,'Actual eyebrow begins at shared top rhythm');
+   if(phase==='after')assert.ok(Math.abs((tab==='TODAY'?data.rowTop:data.labelTop)-24)<2,'Header begins at shared top rhythm');
    if(before){
     const previous=before.find(r=>r.width===width&&r.appearance===appearance&&r.style===style&&r.tab===tab);
-    if(tab!=='TODAY'||width===320){assert.equal(data.textTop,previous.textTop);assert.deepEqual(data.heading,previous.heading,'Other layouts remain unchanged');}
+    if(tab!=='TODAY'){assert.equal(data.textTop,previous.textTop);assert.deepEqual(data.heading,previous.heading,'Other layouts remain unchanged');}
     if(tab==='TODAY'&&width>350)for(const hit of data.hitTargets)assert.ok(hit.bottom<=data.heading.top,'Expanded hit target does not overlap program name');
    }
    if(tab==='TODAY')assert.ok(data.ancestors.every(p=>p.marginTop==='0px'&&p.paddingTop==='0px'),'Today adds no extra top inset');

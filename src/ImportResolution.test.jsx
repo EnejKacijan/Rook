@@ -57,6 +57,8 @@ it('back preserves logging choice, schedule stays unresolved, only top Back exis
 it('custom choices advance once each, with no redundant Continue and final review still separate',()=>{
  const source=structuredClone(program);source.days[0].exercises=[1,2,3].map(n=>({...source.days[0].exercises[0],id:`e${n}`,importedName:`Unknown ${n}`,matchStatus:'unresolved'}));
  const {done,match}=setup([],source);
+ expect(button('KEEP AS CUSTOM').closest('.sheet-action-footer')).not.toBeNull();
+ expect(host.querySelector('.import-decision-scroll').contains(button('KEEP AS CUSTOM'))).toBe(false);
  for(let i=1;i<=3;i++){expect(host.querySelector('.step-count').textContent).toContain(`STEP ${i}/3`);expect(button('CONTINUE')).toBeUndefined();expect(button('REVIEW PLAN')).toBeUndefined();act(()=>button('KEEP AS CUSTOM').click());expect(match).toHaveBeenCalledTimes(i);}
  expect(done).toHaveBeenCalledOnce();
 });

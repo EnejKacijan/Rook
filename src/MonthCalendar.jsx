@@ -1,4 +1,4 @@
-import {useLayoutEffect,useMemo,useRef,useState} from 'react';
+import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {isoDay} from './domain.js';
 import {calendarRange,calendarLocalDate,monthDays,shiftMonth,calendarDayStates} from './workoutCalendar.js';
 import './monthCalendar.css';
@@ -7,6 +7,7 @@ export function CalendarIcon(){return <svg viewBox="0 0 24 24" width="18" height
 export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()}) {
   const [month,setMonth]=useState(()=>`${selectedDate.slice(0,7)}-01`);
   const [focused,setFocused]=useState(selectedDate),focusRequested=useRef(false),gridRef=useRef(null);
+  const drag=useRef(null),suppressClick=useRef(false),motion=useRef(null),enterDirection=useRef(0);
   const {min,max}=calendarRange(state,today),available=key=>key>=min&&key<=max;
   const dates=useMemo(()=>monthDays(month),[month]);
   const statuses=useMemo(()=>calendarDayStates(state,dates),[state,dates]);
@@ -18,6 +19,41 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
     const next=shiftMonth(month,direction);
     if(next.slice(0,7)<min.slice(0,7)||next.slice(0,7)>max.slice(0,7))return;
     setMonth(next);
+  };
+  const reducedMotion=()=>window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const canMove=direction=>{const next=shiftMonth(month,direction).slice(0,7);return next>=min.slice(0,7)&&next<=max.slice(0,7);};
+  useEffect(()=>()=>motion.current?.cancel(),[]);
+  useLayoutEffect(()=>{
+    if(!enterDirection.current)return;
+    const direction=enterDirection.current;enterDirection.current=0;
+    if(!reducedMotion())motion.current=gridRef.current?.animate([{transform:`translateX(${direction*24}px)`},{transform:'translateX(0)'}],{duration:200,easing:'ease-out'});
+  },[month]);
+  const startDrag=event=>{
+    if(!event.isPrimary||event.button!==0)return;
+    event.target.closest('button:not(:disabled)')?.focus({preventScroll:true});
+    motion.current?.cancel();suppressClick.current=false;
+    drag.current={id:event.pointerId,x:event.clientX,y:event.clientY,dx:0,lock:null};
+  };
+  const moveDrag=event=>{
+    const current=drag.current;if(!current||current.id!==event.pointerId)return;
+    const dx=event.clientX-current.x,dy=event.clientY-current.y;
+    if(!current.lock&&Math.max(Math.abs(dx),Math.abs(dy))>=12){
+      current.lock=Math.abs(dx)>Math.abs(dy)*1.5?'horizontal':'vertical';
+      if(current.lock==='horizontal')event.currentTarget.setPointerCapture(event.pointerId);
+    }
+    if(current.lock!=='horizontal')return;
+    current.dx=dx;suppressClick.current=true;
+    if(!reducedMotion())event.currentTarget.style.transform=canMove(dx<0?1:-1)?`translateX(${Math.max(-28,Math.min(28,dx*.25))}px)`:'none';
+  };
+  const endDrag=(event,cancelled=false)=>{
+    const current=drag.current;if(!current||current.id!==event.pointerId)return;drag.current=null;
+    const grid=event.currentTarget,from=grid.style.transform||'translateX(0)';grid.style.transform='';
+    if(grid.hasPointerCapture(event.pointerId))grid.releasePointerCapture(event.pointerId);
+    if(current.lock!=='horizontal')return;
+    const direction=current.dx<0?1:-1;
+    if(!cancelled&&Math.abs(current.dx)>=50&&canMove(direction)){
+      enterDirection.current=direction;moveMonth(direction);
+    }else if(!reducedMotion()&&from!=='none')motion.current=grid.animate([{transform:from},{transform:'translateX(0)'}],{duration:180,easing:'ease-out'});
   };
   const choose=key=>{const latest=calendarRange(state,today);if(key>=latest.min&&key<=latest.max)onSelect(key);};
   const keydown=(event,key)=>{
@@ -37,7 +73,10 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
       <h2 id="workout-calendar-month" aria-live="polite">{monthLabel}</h2>
       <button type="button" aria-label="Next month" disabled={month.slice(0,7)>=max.slice(0,7)} onClick={()=>moveMonth(1)}>›</button>
     </div>
-    <div className="month-calendar-grid" role="grid" aria-labelledby="workout-calendar-month" ref={gridRef}>
+    <div className="month-calendar-grid" role="grid" aria-labelledby="workout-calendar-month" ref={gridRef}
+      onPointerDown={startDrag} onPointerMove={moveDrag} onPointerUp={endDrag}
+      onPointerCancel={event=>endDrag(event,true)}
+      onClickCapture={event=>{if(suppressClick.current&&event.detail!==0){event.preventDefault();event.stopPropagation();suppressClick.current=false;}}}>
       <div role="row" className="month-calendar-weekdays">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day=><span role="columnheader" key={day}>{day}</span>)}</div>
       {Array.from({length:dates.length/7},(_,row)=><div role="row" key={row}>{dates.slice(row*7,row*7+7).map(key=>{
         const {complete,planned,active}=statuses[key],status=active?'active':complete?'completed':planned?'planned':null;
@@ -55,7 +94,6 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
       })}</div>)}
     </div>
     <div className="month-calendar-legend" aria-label="Calendar legend"><span><i className="month-calendar-mark is-planned" aria-hidden="true"/>Planned</span><span><i className="month-calendar-mark is-completed" aria-hidden="true">✓</i>Completed</span><span><i className="month-calendar-mark is-active" aria-hidden="true"/>In progress</span></div>
-    <p className="month-calendar-range">Browse recorded weeks and your current schedule.</p>
-    <button type="button" className="month-calendar-today" disabled={!available(today)} onClick={()=>choose(today)}>TODAY</button>
+    {selectedDate !== today && <button type="button" className="month-calendar-today" onClick={()=>choose(today)}>TODAY</button>}
   </main>;
 }

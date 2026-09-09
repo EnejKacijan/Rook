@@ -7,7 +7,7 @@ import { WEEKDAYS, blankState, buildProgram, isoDay, weekDate, weekday } from '.
 const outputRoot = new URL('../artifacts/week-strip/', import.meta.url);
 await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
-const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
 
 function contrastRatio(first, second) {
   const luminance = value => {
@@ -44,10 +44,10 @@ for (const todayState of ['rest', 'planned', 'completed']) {
   await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
   const strip = page.locator('.week-strip'); const todayTile = strip.locator('[aria-current="date"]');
   const weekLabel = page.locator('.week-navigation span');
-  const [headerBox, eyebrowBox, programBox, navigationBox, labelBox] = await Promise.all([page.locator('.screen-top').boundingBox(), page.locator('.screen-top > .eyebrow').boundingBox(), page.locator('.today-program-name').boundingBox(), page.locator('.week-navigation').boundingBox(), weekLabel.boundingBox()]);
+  const [headerBox, programBox, navigationBox, labelBox] = await Promise.all([page.locator('.screen-top').boundingBox(), page.locator('.today-program-name').boundingBox(), page.locator('.week-navigation').boundingBox(), weekLabel.boundingBox()]);
   const navigationCenter = navigationBox.x + navigationBox.width / 2; const labelCenter = labelBox.x + labelBox.width / 2;
   assert.ok(Math.abs(navigationCenter - labelCenter) < 1, `week label is centered inside its grouped control: ${JSON.stringify({ navigationCenter, labelCenter })}`);
-  assert.ok(navigationBox.x >= eyebrowBox.x + eyebrowBox.width, 'eyebrow does not collide with the right-aligned week control');
+  assert.equal(await page.locator('.screen-top > .eyebrow').count(),0);
   assert.ok(programBox.y >= navigationBox.y + navigationBox.height - 1, 'full program name receives its own row below the compact controls');
   assert.ok(Math.abs((navigationBox.x + navigationBox.width) - (headerBox.x + headerBox.width)) < 1, 'week navigation is aligned to the right edge');
   assert.equal(await strip.locator('button').count(), 7, 'all seven days render as buttons');

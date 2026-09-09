@@ -44,32 +44,12 @@
 }
 .today-screen .screen-top {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  column-gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   row-gap: 3px;
   align-items: center;
 }
-.today-screen .screen-top > .eyebrow {
-  grid-column: 1;
-  min-width: 0;
-  max-width: none;
-  line-height: 1.25;
-  white-space: nowrap;
-}
-.today-screen .screen-top > .week-navigation { grid-column: 2; justify-self: end; }
-/* Let the eyebrow size the visual row, not the 44px week controls.
-   Grid centers the full hit targets around that row; the following gap keeps
-   their lower edges clear of the program name. The stacked mobile layout
-   retains its independent navigation row. */
-@media (min-width: 351px) {
-  .today-screen .screen-top { row-gap: 16px; }
-  .today-screen .screen-top > .week-navigation {
-    height: 0;
-    grid-template-rows: 0;
-    align-self: center;
-  }
-}
-.today-program-name { grid-column: 1 / -1; min-width: 0; color: #1b1a19; font-size: 15px; line-height: 1.3; overflow-wrap: anywhere; }
+.today-screen .screen-top > .week-navigation { grid-column: 1; justify-self: end; }
+:root[data-appearance] .today-screen .today-program-name { grid-column: 1 / -1; min-width: 0; color: var(--rook-secondary); font-size: 15px; font-weight: 600; line-height: 1.3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .active-workout-hero > p { margin: 10px 0 0; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .active-workout-hero > .button { margin-top: 22px; }
 .active-workout-notice { margin-top: 16px; padding: 12px 8px 12px 13px; border: 1px solid rgba(31,107,76,.15); border-radius: 14px; background: #eaf2ee; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 12px; }
@@ -235,15 +215,6 @@
 .today-screen .workout-title-context { margin-top: 3px; color: #8a8783; font-size: 14px; font-weight: 550; line-height: 1.35; }
 
 @media (max-width: 390px) {
-  .today-screen .screen-top { column-gap: 4px; }
   .week-navigation { grid-template-columns: 44px minmax(72px, auto) 44px; }
   .week-navigation span { font-size: 11px; }
-}
-/* The icon plus a cross-month range needs its own row at phone widths.
-   Keep the complete control group intact instead of shrinking its targets. */
-@media (max-width: 410px) {
-  .today-screen .screen-top { row-gap: 3px; }
-  .today-screen .screen-top > .eyebrow { grid-column: 1 / -1; grid-row: 1; }
-  .today-program-name { grid-row: 3; }
-  .today-screen .screen-top > .week-navigation { grid-column: 1 / -1; grid-row: 2; height:44px; grid-template-rows:44px; }
 }

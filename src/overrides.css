@@ -64,8 +64,15 @@
 }
 .modal-layer > .detail-screen { padding-bottom: var(--rook-sheet-safe-bottom); }
 .modal-layer > .detail-screen.export-sheet {
+  height: min(92dvh, calc(100dvh - max(12px, env(safe-area-inset-top))));
+  display: flex;
+  flex-direction: column;
   padding-bottom: var(--rook-sheet-safe-bottom);
 }
+.export-sheet > * { flex-shrink: 0; }
+.export-sheet > .export-preview { flex: 1 1 auto; min-height: 80px; }
+:root .export-sheet .export-action-footer { margin-top: 12px; }
+.export-action-footer .export-actions { margin-top: 0; }
 .export-sheet > .export-plan-label {
   display: block;
   margin-top: 6px;
@@ -175,8 +182,9 @@
 .weekly-review-metrics dt,
 .exercise-performance-metrics dt { color: var(--rook-muted, #8a8783); font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .weekly-review-metrics dd { margin: 0; color: var(--rook-text, #1b1a19); font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums; }
-.weekly-review-metrics dd.weekly-review-adjustments { font-size: 13px; line-height: 1.45; }
+.weekly-review-metrics dd.weekly-review-adjustments { align-self: flex-start; display: inline-flex; align-items: baseline; column-gap: 0.25em; font-size: 13px; line-height: 1.45; white-space: nowrap; }
 .weekly-review-adjustments > span { display: inline-block; white-space: nowrap; }
+.weekly-review-adjustments .weekly-review-adjustment-tail { display: inline-flex; align-items: baseline; gap: 0.25em; }
 .onboarding-start-brand { position: relative; }
 .onboarding-start-brand .brand { padding-left: 44px; }
 .onboarding-start-back { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-text); -webkit-text-fill-color: currentColor; font-size: 28px; }
@@ -318,6 +326,7 @@
 .exercise-performance-insights { margin-top: 24px !important; padding-top: 18px; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .exercise-performance-metrics { margin: 13px 0 0; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
 .exercise-performance-metrics > div { min-width: 0; padding: 12px 10px; border: 1px solid var(--rook-border, rgba(27,26,25,.08)); border-radius: 12px; background: var(--rook-surface-muted, rgba(27,26,25,.035)); }
+.exercise-performance-metrics dt { font-size: 8.5px; letter-spacing: .06em; white-space: nowrap; }
 .exercise-performance-metrics dd { margin: 5px 0 0; color: var(--rook-text, #1b1a19); font-size: 15px; font-weight: 750; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .exercise-e1rm-trend { margin-top: 17px; }
 .exercise-e1rm-trend > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
@@ -820,6 +829,43 @@
 .detail-header > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; text-align: center; white-space: nowrap; }
 .detail-header > span { width: 44px; min-width: 44px; text-align: right; }
 .detail-header > .detail-header-back { justify-self: start; text-align: left; }
+.detail-header.has-trailing-action { grid-template-columns: 88px minmax(0, 1fr) 44px 44px; }
+.edit-plan-expand { background: transparent; border: 0; }
+.edit-plan-screen { --edit-plan-gutter: 24px; }
+@media (max-width: 374px) { .edit-plan-screen { --edit-plan-gutter: 17px; } }
+:root .modal-layer > .screen.detail-screen.edit-plan-screen > .detail-header {
+  margin-inline: calc(-1 * var(--edit-plan-gutter));
+  padding-inline: var(--edit-plan-gutter);
+}
+:root .modal-layer > .screen.detail-screen.edit-plan-screen > .detail-header > strong {
+  opacity: 1;
+  transform: none;
+  transition: none;
+}
+/* Same mounted editor and scroll owner; only its presentation changes. */
+:root[data-appearance] .modal-layer.edit-plan-page-layer {
+  background: var(--rook-bg);
+  animation: none;
+  transition: none;
+  align-items: stretch;
+  overflow: clip;
+}
+:root .edit-plan-page-layer > .screen.detail-screen.edit-plan-screen {
+  height: 100%;
+  max-height: 100%;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+  scroll-padding-top: calc(68px + env(safe-area-inset-top, 0px));
+}
+:root .edit-plan-page-layer > .screen.detail-screen.edit-plan-screen > .detail-header {
+  position: sticky;
+  top: 0;
+  min-height: calc(60px + env(safe-area-inset-top, 0px));
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+  padding-bottom: 8px;
+}
 .detail-header > .detail-header-close {
   justify-self: end;
   color: var(--rook-text, #1b1a19);
@@ -1049,12 +1095,21 @@
 .today-exercise-list-heading > .text-button {
   min-width: 44px;
   min-height: 44px;
-  padding: 0;
+  padding: 0 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
   color: var(--rook-secondary, #6f6c68);
   font-size: 12px;
   font-weight: 700;
   text-align: right;
 }
+.today-exercise-edit-toggle svg { flex-shrink: 0; }
+.today-exercise-edit-toggle:active:not(:disabled) { opacity: .75; }
 .today-exercise-list-heading > .text-button:disabled {
   color: var(--rook-muted, #a3a09b);
   opacity: .58;
@@ -1861,7 +1916,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .workout-photo-viewer-context small { color: #929994; font-size: 10px; line-height: 1.4; }
 .workout-photo-viewer-actions {
   width: 100%;
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   align-items: center;
   justify-content: space-between;
   gap: 12px;
@@ -1876,7 +1932,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   font-weight: 800;
   letter-spacing: .08em;
 }
-.workout-photo-viewer-actions > .workout-photo-delete { color: #ef8a82; }
+.workout-photo-viewer-actions > .workout-photo-delete { color: #ef8a82; grid-column: 1 / -1; justify-self: center; }
+.workout-photo-export-status { color: #c8ccc9; font-size: 12px; text-align: center; }
 :root[data-appearance="dark"][data-style="premium"] .workout-photo-viewer-actions > .workout-photo-delete {
   color: #ef8a82;
 }

@@ -7,7 +7,7 @@ import { WEEKDAYS, blankState, buildProgram, estimateSessionMinutes, exerciseCat
 const outputRoot = new URL('../artifacts/planned-today/', import.meta.url); await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
 const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
-const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const today = weekday(); const todayIndex = WEEKDAYS.indexOf(today); const offsetDay = offset => WEEKDAYS[(todayIndex + offset) % 7];
 
 function fixture({ daysPerWeek = 2, sessionMinutes = 45, completed = false, longTitle = false } = {}) {
@@ -30,11 +30,10 @@ async function open(state, viewport) {
 
 const lineCount = locator => locator.evaluate(element => { const range = document.createRange(); range.selectNodeContents(element); return [...range.getClientRects()].filter(rect => rect.width > 0 && rect.height > 0).length; });
 async function headerMetrics(page) {
-  const eyebrow = page.locator('.screen-top > .eyebrow'); const program = page.locator('.today-program-name'); const navigation = page.locator('.week-navigation'); const [eyebrowBox, programBox, navigationBox, headerBox] = await Promise.all([eyebrow.boundingBox(), program.boundingBox(), navigation.boundingBox(), page.locator('.screen-top').boundingBox()]);
-  assert.equal(await eyebrow.innerText(), 'WEEKLY WORKOUT PLAN'); assert.equal(await program.innerText(), 'Full Body A / B / C', 'full active program identity is visible below the eyebrow');
-  const eyebrowAndNavSeparated = eyebrowBox.x + eyebrowBox.width <= navigationBox.x || eyebrowBox.y + eyebrowBox.height <= navigationBox.y + .5;
+  const program = page.locator('.today-program-name'); const navigation = page.locator('.week-navigation'); const [programBox, navigationBox, headerBox] = await Promise.all([program.boundingBox(), navigation.boundingBox(), page.locator('.screen-top').boundingBox()]);
+  assert.equal(await page.locator('.screen-top > .eyebrow').count(),0); assert.equal(await program.innerText(), 'Full Body A / B / C', 'full active program identity is visible below navigation');
   const programAndNavSeparated = programBox.y >= navigationBox.y + navigationBox.height - 1 || programBox.y + programBox.height <= navigationBox.y + .5;
-  assert.ok(eyebrowAndNavSeparated, 'eyebrow and grouped week navigation do not collide'); assert.ok(programAndNavSeparated, 'program name has its own untruncated row');
+  assert.ok(programAndNavSeparated, 'program name has its own untruncated row');
   assert.ok(Math.abs(navigationBox.x + navigationBox.width - (headerBox.x + headerBox.width)) < 1, 'week navigation stays right-aligned');
   return navigationBox;
 }

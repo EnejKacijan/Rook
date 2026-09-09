@@ -28,11 +28,14 @@
 .plan-reorder-help { margin: 13px 0 2px; color: var(--rook-secondary); font-size: 13px; line-height: 1.4; }
 .plan-workout-reorder-bar { position: relative; min-height: 44px; margin: -2px 0 14px; display: flex; align-items: center; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .plan-workout-reorder-bar:has(.plan-reorder-a11y:focus-within) { z-index: 20; }
-.plan-workout-drag-surface { min-width: 0; min-height: 44px; flex: 1; display: flex; align-items: center; gap: 10px; color: var(--rook-secondary, #6f6c68); cursor: grab; touch-action: pan-y; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
-.plan-workout-drag-surface:focus-visible { outline: 2px solid var(--rook-accent, #1f6b4c); outline-offset: 2px; border-radius: 8px; }
-.plan-workout-drag-surface > i { width: 18px; height: 16px; flex: 0 0 18px; background: repeating-linear-gradient(to bottom, currentColor 0 1.5px, transparent 1.5px 6px); opacity: .72; }
-.plan-workout-drag-surface > span { color: var(--rook-text, #1b1a19); font-size: 10px; font-weight: 820; letter-spacing: .11em; }
-.plan-workout-drag-surface > small { margin-left: auto; color: inherit; font-size: 8px; font-weight: 750; letter-spacing: .08em; text-align: right; opacity: .8; }
+:is(.plan-workout-drag-surface, .plan-exercise-drag-handle) { width: 44px; min-height: 44px; flex: 0 0 44px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: var(--rook-secondary, #6f6c68); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
+:is(.plan-workout-drag-surface, .plan-exercise-drag-handle):focus-visible { outline: 2px solid var(--rook-accent, #1f6b4c); outline-offset: 2px; border-radius: 8px; }
+:is(.plan-workout-drag-surface, .plan-exercise-drag-handle) > i { width: 18px; height: 16px; flex: 0 0 18px; background: repeating-linear-gradient(to bottom, currentColor 0 1.5px, transparent 1.5px 6px); opacity: .72; }
+.plan-editor-card-header { display: flex; align-items: center; }
+.plan-editor-card-header.is-static { display: contents; }
+.plan-editor-card-header:not(.is-static) > .plan-editor-summary { flex: 1; min-width: 0; padding-left: 0; }
+.plan-editor.is-reordering .plan-exercise-drag-handle { cursor: grabbing; }
+.plan-workout-day-label { color: var(--rook-secondary); font-size: 11px; font-weight: 700; letter-spacing: .1em; white-space: nowrap; }
 .plan-reorder-a11y { position: absolute; z-index: 8; top: 100%; right: 0; width: 1px; height: 1px; overflow: hidden; opacity: 0; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; border: 1px solid var(--rook-border, rgba(27,26,25,.12)); border-radius: 10px; background: var(--rook-surface, #fff); box-shadow: 0 8px 22px rgba(27,26,25,.12); pointer-events: none; }
 .plan-reorder-a11y:focus-within { width: min(250px, calc(100vw - 52px)); height: auto; padding: 4px; overflow: visible; opacity: 1; pointer-events: auto; }
 .plan-reorder-a11y button { min-height: 38px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--rook-text, #1b1a19); font: inherit; font-size: 8.5px; font-weight: 800; letter-spacing: .06em; }
@@ -156,6 +159,13 @@
 .plan-editor.is-reordering :is(.import-day,.plan-editor-exercise) { transition: transform var(--rook-motion-layout, 190ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)); will-change: transform; }
 .plan-editor .reorder-placeholder { opacity: .08; }
 .plan-editor .reorder-live-source { visibility: hidden; pointer-events: none; }
+.plan-workout-compact-summary { display:none; }
+.plan-editor.is-week-reordering [data-reorder-workout-section] > :not(.plan-workout-reorder-bar) { display:none !important; }
+.plan-editor.is-week-reordering [data-reorder-workout-section] { margin-block:8px;padding:8px 12px;min-height:76px;transition:none; }
+.is-week-reordering .plan-workout-reorder-bar { display:grid;grid-template-columns:44px minmax(0,1fr);gap:0 8px;margin:0;border:0; }
+.is-week-reordering .plan-workout-drag-surface { grid-row:1 / 3; }
+.is-week-reordering .plan-workout-day-label { grid-column:2; }
+.is-week-reordering .plan-workout-compact-summary { display:block;grid-column:2;font-size:12px;line-height:1.4;color:var(--rook-secondary);overflow-wrap:anywhere; }
 .plan-editor .reorder-drop-before::before,
 .plan-editor .reorder-drop-after::after { content: ''; position: absolute; z-index: 5; left: 2px; right: 2px; height: 2px; border-radius: 2px; background: var(--rook-accent, #1f6b4c); pointer-events: none; }
 .plan-editor .reorder-drop-before::before { top: -6px; }

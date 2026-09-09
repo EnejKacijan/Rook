@@ -16,6 +16,11 @@
   grid-template-columns: repeat(4, minmax(0, 1fr));
   background: var(--rook-bg);
   border-top: 1px solid var(--rook-border);
+  animation: bottom-nav-enter 180ms ease-out;
+}
+@keyframes bottom-nav-enter {
+  from { transform: translate(-50%, 12px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
 }
 :root[data-appearance] .bottom-nav button {
   min-width: 0;
@@ -50,3 +55,4 @@
 .nav-active .nav-label { color: var(--rook-text); }
 :root[data-appearance] .bottom-nav button:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: -3px; border-radius: 9px; }
 @media (prefers-reduced-motion: reduce) { :root[data-appearance] .bottom-nav button { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .bottom-nav { animation: none; } }

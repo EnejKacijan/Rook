@@ -43,10 +43,12 @@ export function ImportResolution({review, program, resolved, matchIds, onResolve
   useLayoutEffect(()=>{scroll.current.scrollTop=0;root.current.querySelector('[data-active="true"] h1')?.focus({preventScroll:true});},[step]);
   const title=item=>{
     if(item.entry)return 'Match this exercise';
+    if(item.issue.field==='roundGroup')return 'Review circuit structure';
     if(item.issue.field==='sourceUnit')return 'What unit is this weight?';
     return item.issue.field==='alternative'?'Choose a prescription':item.issue.field==='prescription'?'Set the prescription':item.issue.field==='load'?'Set the load':item.issue.field==='rir'?'Set the effort':item.issue.field==='day'?'Choose the workout day':item.group==='exclusions'?'Review this source exclusion':'Choose how to log this exercise';
   };
   if(!current)return null;
+  const currentExercise=exerciseFor(current);
   return <section ref={root} className="import-resolution" aria-label="Resolve imported plan" onKeyDownCapture={event=>{if(event.repeat&&event.target.tagName==='BUTTON'&&['Enter',' '].includes(event.key))event.preventDefault();}}>
     <header className="detail-header import-decision-header"><button type="button" className="icon-button" aria-label="Back" onClick={back}>‹</button><strong>Import plan</strong><span aria-hidden="true"/></header>
     <div ref={scroll} className="import-decision-scroll" onFocusCapture={event=>requestAnimationFrame(()=>{const box=event.target.getBoundingClientRect(),bounds=scroll.current?.getBoundingClientRect();if(bounds&&box.bottom>bounds.bottom-12)scroll.current.scrollTop+=box.bottom-bounds.bottom+12;})}>
@@ -65,11 +67,11 @@ export function ImportResolution({review, program, resolved, matchIds, onResolve
             <label>Search exercises<input type="search" value={query} onChange={event=>setQueries(values=>({...values,[item.id]:event.target.value}))} placeholder="Search exercises"/></label>
             <div className="import-resolution-options">{available.map(option=><button className="button secondary" key={option.id} aria-pressed={!needsImportMatch(active)&&active.exerciseId===option.id} onClick={event=>chooseMatch(event,item,active,query,option.id)}>{option.name}{!needsImportMatch(active)&&active.exerciseId===option.id?' ✓':''}</button>)}</div>
             {available.length===0&&<p role="status">No matching exercises. Try another name, or keep the source as custom.</p>}
-            <button className="button secondary" aria-pressed={active.matchStatus==='confirmed-custom'} disabled={!String(active.originalImportedName||active.importedName||'').trim()} onClick={event=>chooseMatch(event,item,active,query,null)}>KEEP AS CUSTOM</button>
           </div>}
         </div>;
       })}
     </div>
-    {!current.entry&&<SheetActionFooter separate><button className="button primary" disabled={!isResolved(current)} onClick={()=>nextIndex<0?onDone():setStep(nextIndex)}>{nextIndex<0?'REVIEW PLAN':'CONTINUE'}</button></SheetActionFooter>}
+    {current.entry&&currentExercise&&<SheetActionFooter separate className="import-match-footer"><button className="button secondary" aria-pressed={currentExercise.matchStatus==='confirmed-custom'} disabled={!String(currentExercise.originalImportedName||currentExercise.importedName||'').trim()} onClick={event=>chooseMatch(event,current,currentExercise,queries[current.id]||'',null)}>KEEP AS CUSTOM</button></SheetActionFooter>}
+    {!current.entry&&<SheetActionFooter separate>{current.issue?.field==='roundGroup'?<button className="button secondary" onClick={onBack}>EDIT NOTES</button>:<button className="button primary" disabled={!isResolved(current)} onClick={()=>nextIndex<0?onDone():setStep(nextIndex)}>{nextIndex<0?'REVIEW PLAN':'CONTINUE'}</button>}</SheetActionFooter>}
   </section>;
 }

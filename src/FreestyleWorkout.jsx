@@ -5,10 +5,10 @@ import { startFreestyleWorkout, addFreestyleExercise, freestyleCatalog, freestyl
 import './freestyleWorkout.css';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
 
-export function FreestyleEntry({ state, update, setPage, setDetail, date, historyOnly = false, hideHistory = false }) {
+export function FreestyleEntry({ state, update, setPage, setDetail, date, historyOnly = false, hideHistory = false, representedWorkoutId = null }) {
   const [error, setError] = useState('');
   const today = date === isoDay();
-  const records = hideHistory ? [] : completedWorkoutsForDate(state.workouts, date);
+  const records = hideHistory ? [] : completedWorkoutsForDate(state.workouts, date).filter(workout => workout.id !== representedWorkoutId);
   const available = !historyOnly && today && !state.activeWorkout && !state.activeOptionalSession;
   if (!available && !records.length) return null;
   return <div className="freestyle-entry">
@@ -24,7 +24,7 @@ export function FreestyleEntry({ state, update, setPage, setDetail, date, histor
       {error && <p role="alert">{error}</p>}
     </>}
     {records.length > 0 && <section className="today-completed-workouts" aria-label="Completed workouts">
-      <div className="eyebrow">Completed workouts · {records.length}</div>
+      {records.length > 1 && <div className="eyebrow">Completed workouts · {records.length}</div>}
       {records.map(w => <button className="list-row" key={w.id} data-workout-id={w.id} onClick={() => setDetail({ completedWorkout: w.id })}><span>{w.name || 'Workout'}<small>{w.source === 'freestyle' ? 'Freestyle' : 'Planned'} · Finished {new Date(w.completedAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</small></span><span aria-hidden="true">›</span></button>)}
     </section>}
   </div>;

@@ -7,7 +7,7 @@ import {completeWorkout,buildProgram} from '../src/domain.js';
 import {startFreestyleWorkout,addFreestyleExercise} from '../src/freestyleWorkout.js';
 const out = new URL('../artifacts/progress-order/', import.meta.url);
 await mkdir(out, { recursive: true });
-const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
 for (const width of [320, 390, 430]) for (const appearance of ['light', 'dark']) for (const style of ['standard', 'premium']) for (const mature of [false, true]) {
   let state = createReturningUserFixture(4);
   state.activeWorkout = null;
@@ -33,7 +33,7 @@ for (const width of [320, 390, 430]) for (const appearance of ['light', 'dark'])
   await page.waitForTimeout(300);
   const order = await page.locator('.progress-screen > section').evaluateAll(nodes => nodes.slice(0, 4).map(n => n.className));
   assert.deepEqual(order, mature ? ['weekly-review-section', 'goal-progress-section', 'progression-overview', 'workout-photo-entry-section'] : ['weekly-review-section','progress-lower','working-weights-section','progression-overview']);
-  if(!mature){assert.equal(await page.locator('.progress-screen h1').textContent(),'Your first baseline is set.');assert.match(await page.locator('.goal-progress-section').textContent(),/PROGRESS FOCUS/);assert.match(await page.locator('.weekly-review-adjustments').textContent(),/0 adjusted · 0 moved/);assert.match(await page.locator('.consistency strong').textContent(),/^0 \/ /);assert.match(await page.locator('.recent-session-row').textContent(),/Freestyle/);assert.equal(await page.locator('.recent-session-row .navigation-chevron').count(),1);}
+  if(!mature){assert.equal(await page.locator('.progress-screen h1').textContent(),'Your first baseline is set.');assert.match(await page.locator('.goal-progress-section').textContent(),/PROGRESS FOCUS/);assert.equal(await page.locator('.weekly-review-adjustments').getAttribute('aria-label'),'0 adjusted · 0 moved');assert.match(await page.locator('.consistency strong').textContent(),/^0 \/ /);assert.match(await page.locator('.recent-session-row').textContent(),/Freestyle/);assert.equal(await page.locator('.recent-session-row .navigation-chevron').count(),1);}
   assert.equal(await page.locator('.progress-lede + .weekly-review-section').count(), 1);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
   const unchanged = await page.evaluate(() => {

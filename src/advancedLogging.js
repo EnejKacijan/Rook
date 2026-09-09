@@ -10,6 +10,15 @@ export const LOGGING_MODES = Object.freeze({
   per_side: "Per side",
 });
 
+// Open targets are prescriptions; achieved reps belong to completed set results.
+export function hasOpenRepTarget(exercise) {
+  return Boolean(exercise?.failureTarget && exercise.repMin == null && exercise.repMax == null);
+}
+
+export function openRepTargetLabel(exercise) {
+  return exercise?.sets?.some(set => setTypeOf(set) === 'amrap') ? 'AMRAP' : 'failure';
+}
+
 export function setTypeOf(set) {
   return Object.hasOwn(SET_TYPES, set?.setType) ? set.setType : "standard";
 }

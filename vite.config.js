@@ -1,5 +1,6 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
+import { configDefaults } from 'vitest/config';
 
 function rookLocalApi() {
   let handlerPromise;
@@ -43,6 +44,8 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react(), rookLocalApi()],
     define: { __ROOK_APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0') },
-    test: { environment: 'jsdom', globals: true, testTimeout: 10000 },
+    test: { environment: 'jsdom', globals: true, testTimeout: 10000,
+      exclude: [...configDefaults.exclude, 'artifacts/**', 'tmp/**', 'output/**'],
+    },
   };
 });

@@ -1,0 +1,20 @@
+import assert from 'node:assert/strict';
+import {chromium} from 'playwright-core';
+import {createReturningUserFixture} from '../src/demoFixture.js';
+import {buildProgram} from '../src/domain.js';
+import {openProfileArea} from './qa-current-navigation.mjs';
+const browser=await chromium.launch({channel: 'chrome',headless:true});
+try{for(const width of [320,390])for(const style of ['standard','premium'])for(const appearance of ['light','dark']){
+ const s=createReturningUserFixture(3);s.activeWorkout=null;Object.assign(s.profile,{daysPerWeek:5,availableDays:['Mon','Tue','Wed','Thu','Fri'],stylePreference:style,appearancePreference:appearance,themePreference:style==='premium'?'premium':appearance});s.program=buildProgram(s.profile);s.program.days[0].exercises[0].importedName='Single-Arm Behind-the-Body Cable Lateral Raise';const c=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',reducedMotion:'reduce'});await c.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},s);const p=await c.newPage();await p.route('**/api/**',r=>r.fulfill({json:{available:false}}));await p.goto('http://127.0.0.1:4173');await p.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(p,'program');await p.getByRole('button',{name:/Edit plan/}).click();await p.getByRole('heading',{name:'Edit your plan'}).waitFor();
+ assert.equal(await p.locator('.plan-workout-day-label').count(),5);assert.equal(await p.getByText('HOLD TO MOVE',{exact:true}).count(),0);const grip=p.locator('.plan-workout-drag-surface').first();assert.equal(await grip.evaluate(e=>e.tagName),'BUTTON');assert.ok((await grip.boundingBox()).width>=44);assert.equal(await p.locator('.plan-workout-day-label').first().getAttribute('data-reorder-kind'),null);
+ const day=p.locator('.import-day').first(),ids=()=>day.locator('.plan-editor-exercise').evaluateAll(es=>es.map(e=>e.id));const initial=await ids();
+ for(const action of ['MOVE LATER','MOVE LAST','MOVE FIRST']){const index=action==='MOVE FIRST'?(await ids()).length-1:0;const b=day.locator('.exercise-reorder-a11y').nth(index).getByRole('button',{name:action,exact:true});await b.focus();await p.keyboard.press('Enter');assert.deepEqual((await ids()).slice().sort(),initial.slice().sort());}
+ await day.locator('.plan-editor-summary').first().click();const sets=day.getByRole('textbox',{name:/^Sets for/});await sets.fill('4');await sets.press('Tab');const before=await ids();const source=day.locator('.plan-exercise-drag-handle').first();await source.scrollIntoViewIfNeeded();const r=await source.boundingBox();await p.mouse.move(r.x+r.width/2,r.y+r.height/2);await p.mouse.down();await p.mouse.move(r.x+r.width/2,r.y+r.height/2+6);await p.locator('.plan-reorder-preview').waitFor();await p.mouse.move(r.x+r.width/2,Math.min(730,r.y+260),{steps:8});await p.mouse.up();assert.deepEqual((await ids()).slice().sort(),before.slice().sort());
+ await p.locator('.plan-reorder-preview').waitFor({state:'detached'});
+ const expected=await ids();await p.locator('.edit-plan-screen').evaluate(e=>e.scrollTop=0);
+ await p.screenshot({path:`artifacts/ROOK-BASELINE-CORRECTION-REVIEW/screenshots/edit-plan-header-${width}-${style}-${appearance}.png`});await p.waitForTimeout(550);
+ assert.deepEqual(await ids(),expected);
+ await p.getByRole('button',{name:'SAVE CHANGES',exact:true}).click();await p.locator('.edit-plan-screen').waitFor({state:'detached'});
+ assert.deepEqual(await p.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')).program.days[0].exercises.map(e=>`import-exercise-${e.id}`)),expected);
+ await p.reload();await p.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(p,'program');await p.getByRole('button',{name:/Edit plan/}).click();await p.getByRole('heading',{name:'Edit your plan'}).waitFor();assert.deepEqual(await ids(),expected);assert.deepEqual(await p.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')).workouts),JSON.parse(JSON.stringify(s.workouts)));console.log(`PASS ${width} ${style} ${appearance}`);await c.close();
+}}finally{await browser.close();}

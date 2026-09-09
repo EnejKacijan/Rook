@@ -504,6 +504,31 @@ describe("personalized training domain", () => {
       ),
     ).toBe(true);
   });
+  it("starts canonical timed no-load work without carrying a fake kilogram value", () => {
+    const state = stateFor();
+    const template = structuredClone(state.program.days[0]);
+    const exercise = template.exercises[0];
+    exercise.exerciseId = "bosu-balance";
+    exercise.loadRequirement = "required";
+    exercise.measure = "seconds";
+    exercise.repMin = 45;
+    exercise.repMax = 45;
+    exercise.sets = exercise.sets.slice(0, 2).map((set) => ({
+      ...set,
+      weight: 0,
+      reps: 45,
+      completed: false,
+    }));
+    const history = structuredClone(state.workouts);
+
+    const active = startWorkout(state, template);
+
+    expect(active.exercises[0].loadRequirement).toBe("none");
+    expect(active.exercises[0].sets.map((set) => set.weight)).toEqual([null, null]);
+    expect(active.exercises[0].sets.map((set) => set.weightProvenance)).toEqual([null, null]);
+    expect(workingSetCanComplete(active.exercises[0], active.exercises[0].sets[0])).toBe(true);
+    expect(state.workouts).toEqual(history);
+  });
   it("starts onboarding with Balanced selected as the default priority", () => {
     const state = blankState();
     expect(state.profile.priorities).toEqual(["Balanced"]);

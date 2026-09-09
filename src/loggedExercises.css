@@ -6,5 +6,14 @@
 .logged-exercises-all { width:100%;text-align:left;color:var(--rook-accent);font-size:13px;min-height:48px;gap:12px; }
 .logged-exercises-preview > h3 { margin-bottom:6px; }
 .logged-exercises-preview > p { color:var(--rook-secondary);font-size:13px; }
+.progress-screen .logged-exercises-preview.is-empty { padding-bottom:24px; }
+.progress-screen .logged-exercises-preview.is-empty:has(+ .progression-overview) { padding-bottom:0; }
+.progress-screen:has(.logged-exercises-preview.is-empty) > .workout-photo-entry-section:last-child { padding-bottom:18px; }
+.recent-improvements-group { margin-top:12px;padding:0 14px;background:var(--rook-surface);border:1px solid var(--rook-border);border-radius:16px; }
+.recent-improvements-group .list-row { color:var(--rook-text);border-color:var(--rook-border); }
+.recent-improvements-group .list-row:last-child { border-bottom:0; }
+.recent-improvements-group .list-row small { color:var(--rook-secondary);line-height:1.45; }
+.recent-improvements-group .improvement-delta { color:var(--rook-accent);font-weight:600; }
+.progress-screen .recent-improvements-section + .logged-exercises-preview { margin-top:32px; }
 .logged-exercises-sheet .rook-search-field { display:block;margin:16px 0; }
 .logged-exercises-sheet input[type="search"] { width:100%;min-height:48px;padding:12px 44px 12px 12px;background:var(--rook-surface);color:var(--rook-text);border:1px solid var(--rook-control-border);border-radius:12px; }

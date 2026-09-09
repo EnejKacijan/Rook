@@ -27,6 +27,8 @@
 .import-resolution-match input { width: 100%; min-width: 0; min-height: 48px; padding: 12px; font: inherit; font-size: 16px; color: var(--rook-text); background: var(--rook-surface-muted); border: 1px solid var(--rook-border); border-radius: 10px; }
 /* This field meets the scrollport edges: draw focus inside, not into its clip. */
 :root .import-resolution .import-resolution-match input[type="search"]:focus-visible { outline-offset: -3px; }
+/* Prescription edge fields share that scrollport; keep their focus ring inside. */
+:root .import-resolution .plan-import-prescription input:focus-visible { outline-offset: -3px; }
 .import-resolution-options { display: grid; gap: 8px; margin: 12px 0; }
 .import-resolution-options .button { margin: 0; text-align: left; white-space: normal; }
 .import-resolution :is(.choice-row, .import-resolution-options .button) { font-family: inherit; font-size: 15px; font-weight: 600; line-height: 1.25; letter-spacing: normal; font-variant-numeric: tabular-nums; }
@@ -34,4 +36,5 @@
 .import-resolution .import-decision-header > button { min-height: 44px; min-width: 44px; }
 .import-resolution-selected > div { display: flex; gap: 12px; align-items: center; justify-content: space-between; padding: 12px 0; }
 :root .import-resolution .sheet-action-footer[data-separate] { flex: 0 0 auto; margin: 0; bottom: 0; }
+.import-resolution .import-match-footer .button { min-height: 56px; }
 .import-plan-screen .plan-import-issues > .text-button { display: block; min-height: 44px; padding: 8px 0; white-space: normal; text-align: left; }

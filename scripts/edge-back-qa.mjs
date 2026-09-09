@@ -4,7 +4,7 @@ import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { blankState, buildProgram, isoDay, weekday, WEEKDAYS } from '../src/domain.js';
 const out = 'artifacts/edge-back'; await mkdir(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
+const browser=await chromium.launch({channel: 'chrome',headless:true});
 try {
 for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(const style of ['standard','premium']) {
  const state=blankState(),day=weekday();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:[day,WEEKDAYS[(WEEKDAYS.indexOf(day)+2)%7],WEEKDAYS[(WEEKDAYS.indexOf(day)+4)%7]],sessionMinutes:60,environment:'Commercial gym',equipment:['full gym'],priorities:['Balanced'],onboardingComplete:true,appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});state.program=buildProgram(state.profile);state.selectedDate=isoDay();state.selectedDay=day;
@@ -22,8 +22,8 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
    const y=heading.y+heading.height/2,x=box.x+4;
    await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x,y}]});
    for(let i=1;i<=8;i++){await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x+distance*i/8,y}]});await page.waitForTimeout(25);}
-   if(await page.locator('.rook-edge-back-preview').count()!==1){console.log(await page.evaluate(({x,y})=>({target:document.elementFromPoint(x,y)?.outerHTML,focus:document.activeElement?.outerHTML,selection:String(getSelection()),box:document.querySelector('.modal-layer > main')?.getBoundingClientRect().toJSON()}),{x,y}));await shot('FAILED-gesture');}
-   assert.equal(await page.locator('.rook-edge-back-preview').count(),1);
+   assert.equal(await page.locator('[data-edge-back-active]').count(),1);
+   assert.equal(await page.locator('.rook-edge-back-preview').count(),0,'no cloned editor tree');
    if(name) await shot(`${name}-partial`);
    await page.waitForTimeout(130);
    await cdp.send('Input.dispatchTouchEvent',{type:cancel?'touchCancel':'touchEnd',touchPoints:[]});await page.waitForTimeout(280);

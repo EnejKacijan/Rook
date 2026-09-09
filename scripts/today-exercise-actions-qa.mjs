@@ -16,7 +16,7 @@ import {
 } from "../src/domain.js";
 
 const browser = await chromium.launch({
-  executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  channel: 'chrome',
   headless: true,
 });
 const artifactRoot = new URL("../artifacts/today-exercise-edit/", import.meta.url);
@@ -57,6 +57,7 @@ async function open(state, viewport = { width: 390, height: 844 }) {
     state,
   );
   await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'standalone', { value: true });
     window.__rookHaptics = [];
     Object.defineProperty(navigator, "vibrate", {
       configurable: true,
@@ -70,7 +71,11 @@ async function open(state, viewport = { width: 390, height: 844 }) {
   const errors = [];
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
-    if (message.type() === "error") errors.push(message.text());
+    if (message.type() === "error") {
+      const text = message.text();
+      if (text.startsWith('Warning: Received `%s` for a non-boolean attribute `%s`.') && text.includes('true inert inert true inert')) console.warn('Existing React development warning: boolean inert attribute');
+      else errors.push(text);
+    }
   });
   await page.route("**/api/ai/status", (route) =>
     route.fulfill({

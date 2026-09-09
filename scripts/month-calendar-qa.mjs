@@ -7,7 +7,7 @@ import {calendarRange} from '../src/workoutCalendar.js';
 const mode=process.env.ROOK_CALENDAR_STATE||'active';
 const output=`artifacts/month-calendar-states/${mode}`;await mkdir(output,{recursive:true});
 const contrast=(a,b)=>{const luminance=color=>{const rgb=color.match(/[\d.]+/g).slice(0,3).map(Number).map(n=>{n/=255;return n<=.04045?n/12.92:((n+.055)/1.055)**2.4;});return rgb[0]*.2126+rgb[1]*.7152+rgb[2]*.0722;};const x=luminance(a),y=luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);};
-const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
+const browser=await chromium.launch({channel: 'chrome',headless:true});
 try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split(',').map(Number))for(const style of ['standard','premium'])for(const appearance of ['light','dark']){
  const state=createReturningUserFixture(3),today=isoDay();state.activeWorkout=startWorkout(state,state.program.days[0]);state.selectedDate=today;state.selectedDay=weekday(today);
  if(mode!=='active'){
@@ -26,10 +26,10 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  const original=keep(await stored());
  const shot=async label=>{await page.waitForTimeout(300);await page.screenshot({path:`${output}/${width}-${style}-${appearance}-${label}.png`,animations:'disabled'});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);};
  await shot('today');
- const geometry=await page.locator('.screen-top').evaluate(root=>{const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};return {label:rect(root.querySelector('.eyebrow')),nav:rect(root.querySelector('.week-navigation')),buttons:[...root.querySelectorAll('.week-navigation button')].map(rect)};});
+ const geometry=await page.locator('.screen-top').evaluate(root=>{const rect=e=>{const r=e.getBoundingClientRect();return {x:r.x,y:r.y,right:r.right,bottom:r.bottom,width:r.width,height:r.height};};return {label:rect(root.querySelector('.today-program-name')),nav:rect(root.querySelector('.week-navigation')),buttons:[...root.querySelectorAll('.week-navigation button')].map(rect)};});
  assert.ok(geometry.buttons.every(b=>b.height>=44&&b.width>=44));
  assert.ok(geometry.buttons[0].right<=geometry.buttons[1].x+.5&&geometry.buttons[1].right<=geometry.buttons[2].x+.5,`touch targets overlap ${JSON.stringify(geometry)}`);
- assert.ok(geometry.label.right<=geometry.buttons[0].x+1||geometry.label.bottom<=geometry.buttons[0].y+1,`heading/control overlap ${JSON.stringify(geometry)}`);
+ assert.ok(geometry.label.y>=geometry.nav.bottom,`heading/control overlap ${JSON.stringify(geometry)}`);
  const triggerBox=await trigger.boundingBox();
  await trigger.locator('svg').click();await dialog.waitFor();await shot('month');
  console.log('AUDIT',width,style,appearance,await page.evaluate(()=>{
@@ -53,14 +53,14 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  assert.ok((await dialog.locator('[role=grid] button').evaluateAll(es=>es.map(e=>e.getBoundingClientRect().height))).every(h=>h>=44));
  const alignment=await dialog.locator('[role=grid]').evaluate(grid=>{const center=e=>{const r=e.getBoundingClientRect();return r.x+r.width/2;},headers=[...grid.querySelectorAll('[role=columnheader]')].map(center);return [...grid.querySelectorAll('.month-calendar-number')].map((e,i)=>Math.abs(center(e)-headers[i%7]));});assert.ok(alignment.every(error=>error<1),`calendar column alignment ${alignment}`);
  await dialog.locator('.month-calendar-legend').screenshot({path:`${output}/${width}-${style}-${appearance}-legend.png`});
- const todayBox=await dialog.getByRole('button',{name:'TODAY',exact:true}).boundingBox();assert.ok(todayBox.y>=0&&todayBox.y+todayBox.height<=844,'Today remains within viewport');
+ assert.equal(await dialog.getByRole('button',{name:'TODAY',exact:true}).count(),0,'no redundant Today action when selected');
  const marks=await dialog.locator('[data-date]').evaluateAll(es=>es.map(e=>[e.dataset.date,e.querySelector('.month-calendar-mark').className]));
  const preferred=`${today.slice(0,7)}-10`;
  const other=await dialog.locator(`[data-date="${preferred}"]:not(:disabled):not(.is-today)`).count()?preferred:await dialog.locator('button[data-date]:not(:disabled):not(.is-today):not(.is-other-month)').last().getAttribute('data-date');
  await dialog.locator(`[data-date="${other}"]`).click();await dialog.waitFor({state:'detached'});assert.equal((await stored()).selectedDate,other);
  await trigger.locator('span').click();await dialog.waitFor();await shot('another-selected');
- const todayStyle=await dialog.locator(`[data-date="${today}"] .month-calendar-number`).evaluate(e=>{const s=getComputedStyle(e),badge=getComputedStyle(e,'::before'),r=e.getBoundingClientRect(),mark=e.nextElementSibling.getBoundingClientRect();return {color:s.color,bg:badge.backgroundColor,width:badge.width,height:badge.height,gap:mark.top-(r.top+r.height/2+9),underline:getComputedStyle(e,'::after').content};});
- assert.equal(todayStyle.width,'22px');assert.equal(todayStyle.height,'18px');assert.ok(todayStyle.gap>=2);assert.equal(todayStyle.underline,'none');assert.ok(contrast(todayStyle.color,todayStyle.bg)>=4.5,'Today badge text contrast');
+ const todayStyle=await dialog.locator(`[data-date="${today}"] .month-calendar-number`).evaluate(e=>{const s=getComputedStyle(e);return {weight:s.fontWeight,bg:s.backgroundColor,border:s.borderTopWidth,before:getComputedStyle(e,'::before').content,after:getComputedStyle(e,'::after').content};});
+ assert.equal(todayStyle.weight,'700');assert.equal(todayStyle.before,'none');assert.equal(todayStyle.after,'none');assert.equal(todayStyle.border,'0px');assert.equal(todayStyle.bg,'rgba(0, 0, 0, 0)');
  assert.equal(await dialog.locator('.month-calendar-legend > span').count(),3);
  assert.match(await dialog.locator(`[data-date="${today}"]`).getAttribute('aria-label'),/today/);
  assert.equal(await dialog.locator(`[data-date="${today}"] .month-calendar-mark.is-${mode==='active'?'active':mode}`).count(),1);
@@ -83,7 +83,7 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  await trigger.click();await dialog.waitFor();assert.equal(await page.evaluate(()=>document.activeElement.dataset.date),min);
  await dialog.getByRole('button',{name:'TODAY',exact:true}).click();await dialog.waitFor({state:'detached'});assert.equal((await stored()).selectedDate,today);assert.equal(keep(await stored()),original);
  const crossMonth=isoDay(weekDate('Mon',`${today.slice(0,7)}-01`));
- if(crossMonth>=min){await trigger.click();await dialog.waitFor();await dialog.locator(`[data-date="${crossMonth}"]`).click();await dialog.waitFor({state:'detached'});const fits=await page.locator('.screen-top').evaluate(root=>{const range=document.createRange();range.selectNodeContents(root.querySelector('.eyebrow'));const label=range.getBoundingClientRect(),button=root.querySelector('.week-navigation button').getBoundingClientRect();return label.right<=button.x||label.bottom<=button.y;});assert.ok(fits,'cross-month range must not collide with the heading');await shot('cross-month');await trigger.click();await dialog.waitFor();await dialog.getByRole('button',{name:'TODAY',exact:true}).click();await dialog.waitFor({state:'detached'});}
+ if(crossMonth>=min){await trigger.click();await dialog.waitFor();await dialog.locator(`[data-date="${crossMonth}"]`).click();await dialog.waitFor({state:'detached'});const fits=await page.locator('.screen-top').evaluate(root=>root.querySelector('.today-program-name').getBoundingClientRect().top>=root.querySelector('.week-navigation').getBoundingClientRect().bottom);assert.ok(fits,'cross-month range must not collide with the heading');await shot('cross-month');await trigger.click();await dialog.waitFor();await dialog.getByRole('button',{name:'TODAY',exact:true}).click();await dialog.waitFor({state:'detached'});}
  await trigger.click();await dialog.waitFor();await page.keyboard.press('ArrowLeft');assert.notEqual(await page.evaluate(()=>document.activeElement.dataset.date),today);assert.equal((await stored()).selectedDate,today);await page.keyboard.press('Escape');await dialog.waitFor({state:'detached'});await page.waitForTimeout(50);assert.equal(await trigger.evaluate(e=>e===document.activeElement),true);
  await trigger.click();await dialog.waitFor();await page.mouse.click(5,5);await dialog.waitFor({state:'detached'});assert.equal((await stored()).selectedDate,today);assert.equal(keep(await stored()),original);
  await page.getByRole('button',{name:'Previous week',exact:true}).click();

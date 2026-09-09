@@ -58,7 +58,9 @@
 .coach-screen .coach-shortcut-helper { margin: 6px 0 8px; color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
 .coach-screen .prompt-list > div { display: flex; flex-direction: column; }
 .coach-screen .prompt-list button { min-height: 48px; margin-top: 6px; padding: 12px 15px; }
+:root[data-appearance] .coach-screen .prompt-list button[type="button"] { color: var(--rook-accent-text); }
 .coach-screen .prompt-list button:disabled { opacity: .48; cursor: default; }
+.coach-screen .prompt-list button:active:not(:disabled) { opacity: .75; }
 
 .coach-screen .conversation { margin-top: 24px; padding-bottom: 0; gap: 24px; }
 .coach-active .conversation { margin-top: 8px; }

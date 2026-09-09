@@ -66,7 +66,6 @@ const accepted = [
   ["tab table", "Monday\nExercise\tSets\tReps\tRIR\nCable Row\t4\t10\t2", "Mon", "Cable Row", 4],
   ["CSV table", "Monday\nExercise,Sets,Reps,Weight\nLeg Press,3,12,140 kg", "Mon", "Leg Press", 3],
   ["localized table", "Ponedeljek\nVaja | Serije | Ponovitve | Teža\nPočep | 3 | 8-10 | 60 kg", "Mon", "Počep", 3],
-  ["circuit rounds", "Workout A\nCircuit x3 rounds\nSquat 12 reps\nPush-up 10 reps", "Mon", "Squat", 3],
   ["ISO date heading", "2026-09-04 — Legs\nLeg Press 3x10", "Fri", "Leg Press", 3],
   ["EU date heading", "04.09.2026\nRomanian Deadlift 3x8", "Fri", "Romanian Deadlift", 3],
   ["single workout no heading", "Bench Press 3x8\nCable Row 3x10", "Mon", "Bench Press", 3],
@@ -136,6 +135,14 @@ describe("Notes workout import corpus", () => {
       sourceName: exercise,
       sets,
     });
+  });
+
+  it('preserves unsupported circuit work for the mandatory structure decision',()=>{
+    const source='Workout A\nCircuit x3 rounds\nSquat 12 reps\nPush-up 10 reps';
+    const result=parseStructuredTrainingNotes(source,profile,{review:true});
+    expect(result.days).toEqual([]);
+    expect(result.parseReview.roundGroups).toHaveLength(1);
+    expect(result.parseReview.roundGroups[0].source).toBe('Circuit x3 rounds\nSquat 12 reps\nPush-up 10 reps');
   });
 
   it.each(rejected.map((source, index) => [`negative ${index + 1}`, source]))(

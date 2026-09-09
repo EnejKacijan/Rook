@@ -1,4 +1,5 @@
 import { effectiveWeekSchedule } from './flexibleWeek.js';
+import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import {
   BASELINE_TEMPLATE_BY_FREQUENCY,
   TRAINING_STRUCTURES,
@@ -28,6 +29,8 @@ import { normalizePlanHistoryState } from "./planHistory.js";
 import { normalizeCustomExercisesState } from "./customExercises.js";
 import {
   advancedSetCanComplete,
+  hasOpenRepTarget,
+  openRepTargetLabel,
   effectiveSetReps,
   normalizeAdvancedLoggingState,
   progressionComparableSet,
@@ -1904,7 +1907,7 @@ export const targetLabel = (exercise, showRir = true) => {
   const timed = exerciseMeasure(exercise) === "seconds";
   const minimum = exercise.repMin ?? exercise.repRange?.[0];
   const maximum = exercise.repMax ?? exercise.repRange?.[1];
-  return `${exercise.sets.filter((set) => set.planned !== false && !set.added).length} × ${exercise.failureTarget ? "failure" : repRangeLabel(minimum, maximum)}${timed ? " sec" : ""}${!timed && showRir && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}`;
+  return `${exercise.sets.filter((set) => set.planned !== false && !set.added).length} × ${exercise.failureTarget ? openRepTargetLabel(exercise) : repRangeLabel(minimum, maximum)}${timed ? " sec" : ""}${!timed && showRir && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}`;
 };
 function normalizeTimedExercises(exercises, force = false) {
   for (const exercise of exercises || []) {
@@ -2250,10 +2253,17 @@ function migrateMissingExerciseRest(stored) {
   return stored;
 }
 function migrateExerciseLoadContracts(stored) {
-  const migrateWorkout = (workout) => {
+  const migrateWorkout = (workout, { clearNoLoad = false } = {}) => {
     for (const exercise of workout?.exercises || []) {
       const requirement = exerciseLoadRequirement(exercise);
       exercise.loadRequirement = requirement;
+      if (requirement === "none" && clearNoLoad) {
+        for (const set of exercise.sets || []) {
+          set.weight = null;
+          set.weightProvenance = null;
+        }
+        continue;
+      }
       if (requirement !== "optional") continue;
       for (const set of exercise.sets || []) {
         if (Number(set.weight) !== 0) continue;
@@ -2262,8 +2272,8 @@ function migrateExerciseLoadContracts(stored) {
       }
     }
   };
-  stored.program?.days?.forEach(migrateWorkout);
-  migrateWorkout(stored.activeWorkout);
+  stored.program?.days?.forEach((day) => migrateWorkout(day, { clearNoLoad: true }));
+  migrateWorkout(stored.activeWorkout, { clearNoLoad: true });
   for (const session of stored.optionalSessions || [])
     migrateWorkout(session?.workout);
   for (const workout of stored.workouts || []) migrateWorkout(workout);
@@ -5139,7 +5149,7 @@ function adaptConsecutiveSessionRecovery(days, profile) {
 function repairProgramSchedule(program) {
   if (!program || !Array.isArray(program.days) || program.days.length < 2)
     return program;
-  if (program.source === "ai-import") return program;
+  if (program.source === "ai-import" || program.scheduleOrderEdited === true) return program;
   const chronological = [...program.days].sort(
     (a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday),
   );
@@ -6982,11 +6992,12 @@ export function validateProgram(program, profile = null, options = {}) {
       const validRest =
         (allowImportedExercises && exercise.restSeconds === null) ||
         (exercise.restSeconds >= 30 && exercise.restSeconds <= 300);
+      const partialAllowed=allowImportedExercises && options.allowPartialImported && exercise.partialPrescription;
       if (
         !Array.isArray(exercise.sets) ||
-        exercise.sets.length < 1 ||
+        (!partialAllowed && exercise.sets.length < 1) ||
         exercise.sets.length > (allowImportedExercises ? 20 : 6) ||
-        !(min > 0 && max >= min) ||
+        (!partialAllowed && !(allowImportedExercises && hasOpenRepTarget(exercise)) && !(min > 0 && max >= min)) ||
         !(exercise.defaultIncrement > 0) ||
         !validRest ||
         (exercise.targetRir !== undefined &&
@@ -7613,8 +7624,10 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
         ? trainingPrescription(profile, item, programmingRole)
         : { targetRir: null };
       const count = Number(value.sets);
-      const repMin = Number(value.repMin);
-      const repMax = Number(value.repMax);
+      const partial = preserve && options.deferImportedSafetyReview && value.partialPrescription;
+      const openReps = preserve && hasOpenRepTarget(value);
+      const repMin = openReps || partial && value.repMin == null ? null : Number(value.repMin);
+      const repMax = openReps || partial && value.repMax == null ? null : Number(value.repMax);
       const targetRir =
         !preserve && item?.kind === "power"
           ? null
@@ -7627,7 +7640,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
       const restSeconds = preserve
         ? importedRestWasProvided
           ? Number(value.restSeconds)
-          : item?.restSeconds || 90
+          : partial ? null : item?.restSeconds || 90
         : Number(value.restSeconds);
       const commonWeight =
         preserve && value.weightKg !== null && value.weightKg !== undefined
@@ -7639,12 +7652,12 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
           : null;
       if (
         !Number.isInteger(count) ||
-        count < 1 ||
+        (count < 1 && !(partial && value.sets == null)) ||
         count > (preserve ? 20 : 6) ||
-        !Number.isInteger(repMin) ||
+        (!openReps && !partial && (!Number.isInteger(repMin) ||
         repMin < 1 ||
         !Number.isInteger(repMax) ||
-        repMax < repMin ||
+        repMax < repMin)) ||
         (targetRir !== null &&
           (!Number.isInteger(targetRir) || targetRir < 0 || targetRir > 4)) ||
         (restSeconds !== null && !Number.isFinite(restSeconds)) ||
@@ -7685,6 +7698,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
           : null;
       return {
         id: uid("program-exercise"),
+        ...(partial ? {partialPrescription:{...partial,weight:commonWeight,setType:value.setType}} : {}),
         exerciseId,
         loadRequirement: exerciseLoadRequirement(
           item || {
@@ -7738,6 +7752,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
           reps: repMin,
           completed: false,
           rir: null,
+          ...(preserve && value.setType === 'amrap' ? { setType: 'amrap' } : {}),
         })),
         repMin,
         repMax,
@@ -7770,7 +7785,9 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
               Number(item.seconds) > 0
                 ? Math.min(1800, Number(item.seconds))
                 : null,
-            minutes: Math.max(1, Math.min(30, Number(item.minutes) || 1)),
+            minutes: Number(item.minutes) > 0 ? Number(item.minutes) : null,
+            prescriptionText: item.prescriptionText || null,
+            sourceText: item.sourceText || null,
             notes: item.notes ? String(item.notes).slice(0, 160) : null,
             provenance: "imported",
           };
@@ -7884,6 +7901,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
     requireProgramQuality: !preserve && !expertReview,
     allowImportedExercises: preserve,
     ignoreTrainingSafety: preserve && options.deferImportedSafetyReview === true,
+    allowPartialImported: preserve && options.deferImportedSafetyReview === true,
   });
   if (!result.valid) throw new Error(result.errors.join(" "));
   return program;
@@ -8080,20 +8098,13 @@ export function warmupForWorkout(workout, profile, program = null) {
     includeRampUpSets,
   });
 }
-function customWarmupMovementLabel(item) {
-  const name = String(item?.label || item?.name || "Warm-up movement").trim();
-  const sets = Math.max(1, Number(item?.sets) || 1);
-  if (Number(item?.seconds) > 0)
-    return `${name} · ${sets} × ${Number(item.seconds)} sec`;
-  if (Number(item?.reps) > 0)
-    return `${name} · ${sets} × ${Number(item.reps)}`;
-  return name;
-}
 function customWarmupForWorkout(workout, plan) {
   const general = (plan.items || []).map((item, index) => ({
+    ...item,
     id: item.id || `custom-warmup-${index}`,
-    label: customWarmupMovementLabel(item),
-    minutes: Math.max(1, Number(item.minutes) || 1),
+    label: String(item.label || item.name || 'Warm-up movement'),
+    prescriptionText: warmupPrescriptionLabel(item),
+    minutes: Number(item.seconds) > 0 ? Number(item.seconds) * (Number(item.sets) || 1) / 60 : Number(item.minutes) > 0 && !(item.provenance === 'imported' && Number(item.minutes) === 1 && !item.sourceText) ? Number(item.minutes) : null,
     custom: true,
     completed: false,
   }));
@@ -8145,7 +8156,7 @@ function customWarmupForWorkout(workout, plan) {
         general: exerciseIndex === 0 ? general : [],
         movementPreparation: [],
         rampUpSets: ramps,
-        estimatedMinutes: Math.max(
+        estimatedMinutes: exerciseIndex === 0 && general.some(item => item.minutes === null) ? null : Math.max(
           1,
           (exerciseIndex === 0
             ? general.reduce((sum, item) => sum + item.minutes, 0)
@@ -8164,7 +8175,7 @@ function customWarmupForWorkout(workout, plan) {
     rampUpSets,
     stages,
     nonRampMinutes: general.reduce((sum, item) => sum + item.minutes, 0),
-    estimatedMinutes: stages.reduce((sum, stage) => sum + stage.estimatedMinutes, 0),
+    estimatedMinutes: stages.some(stage => stage.estimatedMinutes === null) ? null : stages.reduce((sum, stage) => sum + stage.estimatedMinutes, 0),
     safetyMessage: null,
     conservative: false,
     skipped: false,
@@ -8322,6 +8333,7 @@ export function startWorkout(state, template) {
       ? structuredClone(template.warmupPlan)
       : { mode: "auto" },
     exercises: template.exercises.map((base) => {
+      const loadRequirement = exerciseLoadRequirement(base);
       const reviewedStart = base.nextBlockStartingLoad && template.trainingBlock && base.nextBlockStartingLoad.blockId === template.trainingBlock.blockId &&
         !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
         ? base.nextBlockStartingLoad.weight : null;
@@ -8337,7 +8349,9 @@ export function startWorkout(state, template) {
             setTypeOf(candidatePreviousSet) === setTypeOf(set)
               ? candidatePreviousSet
               : null;
-          const weight = reviewedStart ?? previousSet?.weight ?? set.weight ?? null;
+          const weight = loadRequirement === "none"
+            ? null
+            : reviewedStart ?? previousSet?.weight ?? set.weight ?? null;
           return {
             ...set,
             id: uid("set"),
@@ -8346,15 +8360,16 @@ export function startWorkout(state, template) {
             completed: false,
             weight,
             weightProvenance:
-              reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0
+              loadRequirement === "none" ? null : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0
                 ? "history"
                 : Number(weight) > 0
                   ? set.weightProvenance || "explicit-plan"
                   : null,
-            reps: reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
+            reps: hasOpenRepTarget(base) ? null : reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
             rir: null,
           };
         }),
+        loadRequirement,
       };
     }),
   };

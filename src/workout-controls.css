@@ -156,6 +156,7 @@
   white-space: nowrap;
 }
 .workout-screen button.warmup-check-row > i {
+  grid-column: 3;
   width: 24px;
   height: 24px;
   border: 1px solid var(--rook-control-border, rgba(27, 26, 25, .18));
@@ -213,6 +214,9 @@
   gap: 12px;
 }
 .exercise-heading-topline .eyebrow { min-width: 0; }
+.exercise-position-topline { flex-wrap: wrap; column-gap: 8px; row-gap: 4px; }
+.exercise-position-topline .eyebrow { white-space: nowrap; }
+.exercise-position-topline .workout-exercise-actions { flex-shrink: 0; }
 .workout-screen .exercise-heading h1 {
   max-width: 100%;
   margin-top: 4px;
@@ -239,6 +243,7 @@
   font-weight: 600;
 }
 .exercise-options-button {
+  position: relative;
   width: 32px;
   height: 28px;
   padding: 0;
@@ -249,6 +254,7 @@
   font-size: 10px;
   letter-spacing: 1px;
 }
+.exercise-options-button .exercise-note-present { position: absolute; top: 2px; right: 2px; width: 4px; height: 4px; border-radius: 50%; background: var(--rook-accent); pointer-events: none; }
 .exercise-options-button:is(:hover, :focus-visible) { background: rgba(31, 107, 76, .07); color: #1f6b4c; }
 .exercise-options-button:disabled { color: #b9b6b1; }
 .exercise-heading .exercise-meta {
@@ -431,6 +437,19 @@
 .set-row.with-rir {
   grid-template-columns: 38px minmax(0, 1fr) minmax(0, 1fr) 62px 46px;
 }
+
+.set-labels.no-load,
+.set-row.no-load {
+  grid-template-columns: 38px minmax(0, 1fr) 46px;
+}
+
+.set-labels.no-load.with-rir,
+.set-row.no-load.with-rir {
+  grid-template-columns: 38px minmax(0, 1fr) 62px 46px;
+}
+
+.set-row.no-load.with-rir > :is(select, .rir-display) { grid-column: 3; }
+.set-row.no-load.with-rir .check { grid-column: 4; }
 
 .set-row.with-rir select {
   grid-column: 4;
@@ -659,6 +678,10 @@
   .set-row.with-rir { grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr) 54px 42px; }
   .set-labels,
   .set-row { grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr) 42px; }
+  .set-labels.no-load,
+  .set-row.no-load { grid-template-columns: 34px minmax(0, 1fr) 42px; }
+  .set-labels.no-load.with-rir,
+  .set-row.no-load.with-rir { grid-template-columns: 34px minmax(0, 1fr) 54px 42px; }
   .extra-set-label { width: 34px; }
   .set-row.with-rir select { width: 54px; padding-left: 3px; padding-right: 2px; font-size: 10px; }
 }

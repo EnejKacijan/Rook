@@ -8,7 +8,7 @@ const outputRoot = new URL('../artifacts/rest-day/', import.meta.url);
 const appUrl = process.env.ROOK_QA_URL || 'http://127.0.0.1:4173';
 await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
-const browser = await chromium.launch({ executablePath: 'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe', headless: true });
+const browser = await chromium.launch({ channel: 'chrome', headless: true });
 const today = weekday(); const todayIndex = WEEKDAYS.indexOf(today); const offsetDay = offset => WEEKDAYS[(todayIndex + offset) % 7];
 
 function fixture(availableDays) {
@@ -31,9 +31,8 @@ async function pageFor(state, viewport, colorScheme = ['dark', 'premium'].includ
 }
 
 async function verifyHeader(page) {
-  const [eyebrow, program, nav] = await Promise.all([page.locator('.screen-top > .eyebrow').boundingBox(), page.locator('.today-program-name').boundingBox(), page.locator('.week-navigation').boundingBox()]);
-  const eyebrowAndNavSeparated = eyebrow.x + eyebrow.width <= nav.x || eyebrow.y + eyebrow.height <= nav.y + .5;
-  assert.ok(eyebrowAndNavSeparated, 'eyebrow does not collide with grouped week navigation');
+  const [program, nav] = await Promise.all([page.locator('.today-program-name').boundingBox(), page.locator('.week-navigation').boundingBox()]);
+  assert.equal(await page.locator('.screen-top > .eyebrow').count(),0);
   const programAndNavSeparated = program.y >= nav.y + nav.height - 1 || program.y + program.height <= nav.y + .5;
   assert.ok(programAndNavSeparated, 'full program title receives its own non-colliding row');
   assert.equal(await page.locator('.week-navigation button').count(), 2);

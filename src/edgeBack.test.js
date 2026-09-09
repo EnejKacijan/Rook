@@ -13,12 +13,12 @@ it('uses displacement or a meaningful fast flick, not tiny movements', () => {
   expect(commitBack(130,390,0)).toBe(true); expect(commitBack(60,390,.8)).toBe(true);
   expect(commitBack(20,390,2)).toBe(false); expect(commitBack(70,390,0)).toBe(false);
 });
-function setup(enabled = true) {
+function setup(enabled = true, options = {}) {
   vi.useFakeTimers();
   const surface = document.createElement('main'); document.body.append(surface);
   surface.getBoundingClientRect = () => ({ left:0,width:390 });
   const onBack=vi.fn(), render=vi.fn(), clear=vi.fn();
-  const dispose=bindEdgeBack(surface,{enabled:()=>enabled,onBack,render,clear});
+  const dispose=bindEdgeBack(surface,{enabled:()=>enabled,onBack,render,clear,...options});
   const fire=(type,x,y=100,count=1,target=surface)=>{
     const event=new Event(type,{bubbles:true,cancelable:true});
     Object.defineProperty(event,'touches',{value:Array.from({length:count},(_,i)=>({identifier:i,clientX:x+i,clientY:y}))});
@@ -26,6 +26,11 @@ function setup(enabled = true) {
   };
   return {surface,onBack,render,clear,dispose,fire};
 }
+it('threshold-only Back executes on release with no settle timer',()=>{
+ const s=setup(true,{duration:0});s.fire('touchstart',4);s.fire('touchmove',180);
+ expect(s.onBack).not.toHaveBeenCalled();s.fire('touchend',180,100,0);
+ expect(s.onBack).toHaveBeenCalledTimes(1);expect(vi.getTimerCount()).toBe(0);s.dispose();
+});
 it('calls the same guarded Back exactly once, even repeated end events',()=>{
   const s=setup();s.fire('touchstart',4);s.fire('touchmove',160);s.fire('touchend',160,100,0);s.fire('touchend',160,100,0);
   expect(s.onBack).not.toHaveBeenCalled();vi.runAllTimers();expect(s.onBack).toHaveBeenCalledTimes(1);s.dispose();

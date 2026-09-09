@@ -19,6 +19,21 @@ it('retains a defensive empty state when eligible work disappears after navigati
   render(fixture('2026-08-31'));act(()=>missed().click());render(fixture());expect(document.body.textContent).toContain('No unstarted sessions need moving.');expect(document.querySelectorAll('.adjust-option-list .choice-row').length).toBe(0);
 });
 const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.includes(text));
+it('immediately persists only a missed occurrence skip, once, without review',()=>{
+ const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn(),close=vi.fn();render(state,{sessionId:id},update,close);
+ act(()=>{button('Skip this session').click();button('Skip this session').click();});
+ expect(update).toHaveBeenCalledTimes(1);expect(close).toHaveBeenCalledTimes(1);expect(document.body.textContent).not.toContain('Review your schedule');
+ const next=update.mock.calls[0][0]();expect(next.program).toEqual(state.program);expect(next.workouts).toEqual(state.workouts);expect(next.profile).toEqual(state.profile);
+ expect(missedFlexibleSessions(next).some(s=>s.logicalSessionId===id)).toBe(false);
+ expect(flexibleSessions(next).filter(s=>s.logicalSessionId!==id).map(s=>[s.logicalSessionId,s.scheduledDate])).toEqual(flexibleSessions(state).filter(s=>s.logicalSessionId!==id).map(s=>[s.logicalSessionId,s.scheduledDate]));
+ expect(JSON.parse(localStorage.getItem('lift-v2-state')).flexibleWeek).toEqual(next.flexibleWeek);
+});
+it('failed skip persistence leaves the missed session and sheet recoverable',()=>{
+ const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn(),close=vi.fn();render(state,{sessionId:id},update,close);
+ const write=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('full');});
+ act(()=>button('Skip this session').click());expect(update).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();expect(document.querySelector('[role="alert"]').textContent).toContain('still missed');
+ write.mockRestore();act(()=>button('Skip this session').click());expect(update).toHaveBeenCalledTimes(1);expect(close).toHaveBeenCalledTimes(1);
+});
 it('offers today only when empty and renders only authoritative valid destinations',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,before=JSON.stringify(state);
  const valid=missedSessionDestinations(state,id);

@@ -55,6 +55,21 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
     if (!saveState(result.state)) { setPersistenceFailed(true); setError('ROOK couldn’t save the schedule. Your previous schedule is unchanged. Try again.'); return; }
     applied.current = true; update(() => result.state); close();
   };
+  const skipMissed = () => {
+    if (applied.current || item?.status !== 'missed') return;
+    setError('');
+    const proposed = proposeFlexibleWeek(state, { mode: 'skip', sessionId }, today);
+    if (proposed.status !== 'ready') { setError(proposed.error); return; }
+    const result = applyFlexibleWeek(state, proposed, { adaptationChoice: 'restore' });
+    if (result.status !== 'applied') { setError(result.error); return; }
+    if (!saveState(result.state)) {
+      setError('ROOK couldn’t save the skip. This session is still missed. Try Skip this session again.');
+      return;
+    }
+    applied.current = true;
+    update(() => result.state, { persistedState: result.state });
+    close();
+  };
   return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}`}>
     <Header title="Adjust week" onClose={close} onBack={steps.length > 1 ? goBack : undefined} />
     <p className="eyebrow">TEMPORARY SCHEDULE</p>
@@ -88,7 +103,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
         return <button key={d} disabled={occupied || d === item.scheduledDate} aria-label={`${dateLabel(d)}${occupied ? ', another workout scheduled' : ''}`} onClick={() => review({ mode: 'move', sessionId, toDate: d })}>{dateLabel(d)}</button>;
       })}</div></>}
       <button className="text-button" onClick={() => setStep('available')}>Adjust remaining week</button>
-      <button className="text-button" onClick={() => review({ mode: 'skip', sessionId })}>Skip this session</button>
+      <button className="text-button" onClick={missedDestination ? skipMissed : () => review({ mode: 'skip', sessionId })}>Skip this session</button>
     </>}
     {step === 'available' && <>
       <h1>When can you train?</h1><p>Select the days you're available over the next {expandedAvailability ? 14 : 7} days.</p>

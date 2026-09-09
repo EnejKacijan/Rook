@@ -5,6 +5,10 @@ export function buildPlanImportReview(parsed, program, catalog) {
   const lines = parsed.parseReview?.lines || [];
   const issues = [];
   const add = (field, message, source, dayId = null, exerciseId = null) => issues.push({ id: `import-issue-${issues.length}`, field, message, source, dayId, exerciseId, status: 'NEEDS_REVIEW' });
+  for(const group of parsed.parseReview?.roundGroups||[]) {
+    add('roundGroup',`${group.weekday ? `${group.weekday} · ` : ''}${group.workoutName}: ROOK cannot preserve this circuit's repeated group order. Edit the source to specify a supported executable structure; do not treat rounds as independent sets unless that is your intent.`,group.source);
+    Object.assign(issues.at(-1),{requiresSourceEdit:true});
+  }
   const usedDays = new Set();
   for (const [dayIndex, rawDay] of parsed.days.entries()) {
     const day = program.days[dayIndex];
@@ -17,11 +21,11 @@ export function buildPlanImportReview(parsed, program, catalog) {
     usedDays.add(rawDay.weekday);
     const pairs = new Map();
     for (const [index, raw] of rawDay.exercises.entries()) {
-      const source = lines.find(line => line.line === raw.sourceLine)?.text || '';
+      const source = raw.sourceSpan?.text || lines.find(line => line.line === raw.sourceLine)?.text || '';
       const marker = source.match(/^\s*(?:[•*-]\s*)?([A-Z])([12])\s*[.):\-]?\s+/i);
-      if (marker) {
-        const key = marker[1].toUpperCase();
-        pairs.set(key, [...(pairs.get(key) || []), { index, number: Number(marker[2]), source }]);
+      if (marker || raw.sourceSpan?.supersetMarker) {
+        const key = raw.sourceSpan?.supersetMarker?.key || marker[1].toUpperCase();
+        pairs.set(key, [...(pairs.get(key) || []), { index, number: raw.sourceSpan?.supersetMarker?.number || Number(marker[2]), source }]);
       }
     }
     for (const [key, members] of pairs) {
@@ -34,17 +38,18 @@ export function buildPlanImportReview(parsed, program, catalog) {
     const nextDayLine = parsed.days[dayIndex + 1]?.sourceLine || Infinity;
     const namedGroups = lines.filter(line => line.line > (rawDay.sourceLine || 0) && line.line < nextDayLine && /^\s*(?:superset|super set|ss)\s*:?\s*$/i.test(line.text));
     for (const [groupIndex, marker] of namedGroups.entries()) {
+      marker.status = 'superset';
       const end = namedGroups[groupIndex + 1]?.line || nextDayLine;
-      const members = rawDay.exercises.map((raw,index)=>({raw,index})).filter(({raw})=>raw.sourceLine > marker.line && raw.sourceLine < end);
+      const members = rawDay.exercises.map((raw,index)=>({raw,index})).filter(({raw})=>raw.sourceLine > marker.line && raw.sourceLine < end).slice(0,2);
       if (members.length === 2 && day.exercises[members[0].index].sets.length === day.exercises[members[1].index].sets.length) {
         for (const member of members) day.exercises[member.index].supersetId = `${day.id}-named-superset-${groupIndex}`;
         marker.status = 'superset';
-      }
+      } else add('grouping','This superset grouping is incomplete or has unequal rounds. Keep these as separate exercises, or edit the pairing below.',[marker.text,...members.map(({raw})=>lines.find(line=>line.line===raw.sourceLine)?.text||'')].join('\n'),day.id);
     }
     for (const [index, raw] of rawDay.exercises.entries()) {
       const exercise = day.exercises[index];
       if (!exercise) continue;
-      const source = (raw.sourceLines || [raw.sourceLine]).map(n => lines.find(l => l.line === n)?.text || '').join('\n');
+      const source = (raw.sourceLines || [raw.sourceLine]).map(n => n === raw.sourceLine && raw.sourceSpan ? raw.sourceSpan.text : lines.find(l => l.line === n)?.text || '').join('\n');
       const alternatives=analyzeImportAlternatives(source);
       if(alternatives.detected){
         add('alternative', 'Which exercise and prescription should ROOK use? The full source stays preserved.', source, day.id, exercise.id);
@@ -60,7 +65,10 @@ export function buildPlanImportReview(parsed, program, catalog) {
         exercise.targetRir = null;
         add('rir', 'The @ notation is unclear. Choose RIR or leave it unspecified.', source, day.id, exercise.id);
       }
-      if(raw.missingPrescription){
+      if(raw.partialPrescription){
+        add('prescription',`Enter the missing ${raw.partialPrescription.missing.join(' and ')}. Values already provided by the source are preserved.`,source,day.id,exercise.id);
+        Object.assign(issues.at(-1),{requiresReps:true,partialPrescription:exercise.partialPrescription});
+      } else if(raw.missingPrescription){
         add('prescription','The source gives a load but no sets or reps. Enter the intended prescription.',source,day.id,exercise.id);
         issues.at(-1).requiresReps=true;
         exercise.repMin=null;exercise.repMax=null;exercise.sets.forEach(set=>{set.reps=null;});
@@ -134,6 +142,7 @@ export function buildPlanImportReview(parsed, program, catalog) {
   // Scope the complete original source, not only warnings. This protects text
   // classified as context/formatting as well as imperfect structural matches.
   program.importMetadata={...program.importMetadata,source:'notes',sourceNotes:[]};
+  if(parsed.parseReview?.roundGroups?.length) program.importMetadata.unresolvedRoundGroups=parsed.parseReview.roundGroups;
   let note=null;
   for(const line of lines){
     const rawIndex=parsed.days.findIndex(day=>day.sourceLine===line.line);

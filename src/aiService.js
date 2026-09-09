@@ -500,6 +500,12 @@ function parsedDayHeading(value) {
   }
   return { weekday, name };
 }
+function explicitNoteLocation(value) {
+  const token = foldNoteText(value);
+  if (token === 'home' || token === 'home gym') return 'Home';
+  if (token === 'gym' || token === 'commercial gym') return 'Commercial gym';
+  return null;
+}
 function weekdayForDateHeading(value) {
   const cleaned = cleanNoteItem(value);
   let match = cleaned.match(/\b(20\d{2})[-/.](\d{1,2})[-/.](\d{1,2})\b/u);
@@ -592,28 +598,43 @@ function parseWarmupNoteItem(value) {
     )
     .trim();
   if (!raw) return null;
-  const duration = raw.match(/(?:^|\s)(\d+)\s*(sec(?:ond)?s?|s|min(?:ute)?s?)\b/iu);
+  const duration = raw.match(/(?<![\d\w])(?:(\d+)\s*[x×*]\s*)?(\d+(?:[.,]\d+)?)(?:\s*[-–—]\s*(\d+(?:[.,]\d+)?))?\s*(sec(?:ond)?s?|s|min(?:ute)?s?)\b/iu);
+  const distance = raw.match(/(?<![\d\w])(?:(\d+)\s*[x×*]\s*)?(\d+(?:[.,]\d+)?)\s*(km|m|metres?|meters?)\b/iu);
   const prescription = parseNotePrescription(raw);
   let label = raw;
   let sets = 1;
   let reps = null;
   let seconds = null;
-  let minutes = 1;
+  let minutes = null;
+  let prescriptionText = null;
   if (prescription) {
     sets = prescription.count;
     reps = prescription.repMin;
-    label = raw
-      .slice(0, prescription.index)
-      .replace(/[\s:|,\-–—]+$/gu, "")
-      .trim();
+    const originalPrescription = raw.slice(prescription.index, prescription.index + prescription.length).trim();
+    if (prescription.repMin !== prescription.repMax || /round|krog|rund|ronda/iu.test(originalPrescription))
+      prescriptionText = originalPrescription;
+    label = `${raw.slice(0, prescription.index)} ${raw.slice(prescription.index + prescription.length)}`
+      .replace(/^[\s:|,·\-–—]+|[\s:|,·\-–—]+$/gu, '').trim();
+    if (/\d+:\d{2}/u.test(originalPrescription)) {
+      seconds = prescription.repMin;
+      minutes = seconds * sets / 60;
+      reps = null;
+    }
   }
   if (duration) {
-    const amount = Number(duration[1]);
-    const isMinutes = /^min/iu.test(duration[2]);
-    seconds = isMinutes ? amount * 60 : amount;
-    minutes = Math.max(1, Math.ceil(seconds / 60));
+    const amount = Number(duration[2].replace(',', '.'));
+    const isMinutes = /^min/iu.test(duration[4]);
+    sets = Number(duration[1]) || 1;
+    seconds = duration[3] ? null : isMinutes ? amount * 60 : amount;
+    minutes = seconds ? seconds * sets / 60 : null;
+    if (duration[3]) prescriptionText = `${sets > 1 ? `${sets} × ` : ''}${duration[2]}–${duration[3]} ${isMinutes ? 'min' : 'sec'}`;
     reps = null;
-    label = raw.replace(duration[0], " ").replace(/^[\s:|,\-–—]+|[\s:|,\-–—]+$/gu, "").trim();
+    label = raw.replace(duration[0], " ").replace(/^[\s:|,·\-–—]+|[\s:|,·\-–—]+$/gu, "").trim();
+  } else if (distance) {
+    sets = Number(distance[1]) || 1;
+    prescriptionText = `${sets > 1 ? `${sets} × ` : ''}${distance[2]} ${distance[3].toLowerCase() === 'km' ? 'km' : 'm'}`;
+    label = raw.replace(distance[0], '').replace(/^[\s:|,·\-–—]+|[\s:|,·\-–—]+$/gu, '').trim();
+    reps = null;
   }
   if (!label) label = "Warm-up movement";
   return {
@@ -622,6 +643,8 @@ function parseWarmupNoteItem(value) {
     reps,
     seconds,
     minutes,
+    prescriptionText,
+    sourceText: raw,
     provenance: "imported",
   };
 }
@@ -747,8 +770,9 @@ function parseNotePrescription(value) {
       index: failure.index,
       length: failure[0].length,
       count: Number(failure[1]),
-      repMin: 1,
-      repMax: 1,
+      setType: /amrap/i.test(failure[0]) ? 'amrap' : undefined,
+      repMin: null,
+      repMax: null,
       suffix: source.slice(failure.index + failure[0].length),
       failure: true,
     };
@@ -889,15 +913,15 @@ function parsedLoggedSetLine(value) {
   return null;
 }
 function noteTableCells(value) {
-  const line = String(value || "").trim();
+  const line = String(value || "").replace(/\r$/u, "");
   let cells = null;
-  if (line.includes("\t")) cells = line.split(/\t+/u);
+  if (line.includes("\t")) cells = line.split("\t");
   else if ((line.match(/\|/g) || []).length >= 2)
-    cells = line.replace(/^\||\|$/g, "").split("|");
-  else if (/^(?:exercise|vaja|ubung|übung|ejercicio)\s*,/iu.test(line))
+    cells = line.trim().replace(/^\||\|$/g, "").split("|");
+  else if (/^\s*(?:day|weekday|dan|exercise|vaja|ubung|übung|ejercicio)\s*,/iu.test(line))
     cells = line.split(",");
   else if (
-    /^(?:exercise|vaja|ubung|übung|ejercicio)\s*;/iu.test(line) &&
+    /^\s*(?:day|weekday|dan|exercise|vaja|ubung|übung|ejercicio)\s*;/iu.test(line) &&
     (line.match(/;/g) || []).length >= 2
   )
     cells = line.split(";");
@@ -906,6 +930,7 @@ function noteTableCells(value) {
 function noteTableHeader(cells) {
   if (!cells) return null;
   const aliases = {
+    day: /^(?:day|weekday|dan)$/i,
     name: /^(?:exercise|movement|vaja|ubung|übung|ejercicio|name)$/i,
     sets: /^(?:sets?|serije?|satze|sätze|series?)$/i,
     reps: /^(?:reps?|ponovitve?|wdh|repeticiones?)$/i,
@@ -918,6 +943,7 @@ function noteTableHeader(cells) {
   cells.forEach((cell, index) => {
     const key = Object.entries(aliases).find(([, pattern]) => pattern.test(cell))?.[0];
     if (key && header[key] === undefined) header[key] = index;
+    if (key === 'rir' && /^rpe$/i.test(cell)) header.effortMode = 'RPE';
   });
   return header.name !== undefined && (header.sets !== undefined || header.reps !== undefined)
     ? header
@@ -930,27 +956,62 @@ function tableExerciseLine(cells, header) {
   const name = at("name");
   const sets = Number(at("sets"));
   const reps = at("reps").replace(/^x\s*/i, "");
-  if (!name || !Number.isInteger(sets) || sets < 1 || sets > 20 || !/^\d+(?:\s*[–—-]\s*\d+)?$/u.test(reps))
+  if (!name || !Number.isInteger(sets) || sets < 1 || sets > 20 || !/^(?:\d+(?:\s*[–—-]\s*\d+)?|AMRAP|max reps|failure|to failure|do odpovedi)$/iu.test(reps))
     return null;
   return [
     name,
     `${sets}x${reps}`,
     at("weight"),
-    at("rir") && /r(?:ir|pe)/i.test(at("rir")) ? at("rir") : at("rir") ? `RIR ${at("rir")}` : "",
+    at("rir") && /r(?:ir|pe)/i.test(at("rir")) ? at("rir") : at("rir") ? `${header.effortMode || 'RIR'} ${at("rir")}` : "",
     at("rest") ? `rest: ${at("rest")}` : "",
     at("notes"),
   ]
     .filter(Boolean)
     .join(" | ");
 }
-function expandStructuredNoteLines(sourceText, sourceMap = []) {
+// Split only explicit section headers and boundaries before another prescription.
+// Decimal points, exercise-name punctuation and instruction-only tails stay intact.
+function inlineNoteFragments(line) {
+  const headerPattern = /(^\s*|[.;]\s+)([\p{L}]+|Workout\s+[A-Z])\s*:\s*/giu;
+  const headers = [...line.matchAll(headerPattern)].filter(match =>
+    NOTE_WEEKDAYS[foldNoteText(match[2])] || genericWorkoutHeading(match[2]));
+  if (!headers.length) return null;
+  const fragments = [];
+  const add = (start, end) => {
+    while (start < end && /\s/u.test(line[start])) start++;
+    while (end > start && /[\s.;]/u.test(line[end - 1])) end--;
+    if (end > start) fragments.push({text:line.slice(start,end),start,end});
+  };
+  for (const [i, header] of headers.entries()) {
+    const headerStart = header.index + header[1].length;
+    const bodyStart = header.index + header[0].length;
+    const end = headers[i + 1]?.index ?? line.length;
+    const body = line.slice(bodyStart,end);
+    // Preserve existing named headings, e.g. Monday: Upper, unchanged.
+    if (!parseNotePrescription(body)) { add(headerStart,end); continue; }
+    add(headerStart,headerStart + header[2].length);
+    let start = bodyStart;
+    for (const boundary of body.matchAll(/;\s*|\.\s+/gu)) {
+      const next = bodyStart + boundary.index + boundary[0].length;
+      const tail = line.slice(next,end);
+      const nextPrescription = parseNotePrescription(tail.split(/;|\.\s+/u)[0]);
+      if (nextPrescription?.index > 0 && parseNotePrescription(line.slice(start,next))) {
+        add(start,bodyStart + boundary.index); start = next;
+      }
+    }
+    add(start,end);
+  }
+  return fragments.length > 1 && headers[0].index === 0 ? fragments : null;
+}
+function expandStructuredNoteLines(sourceText, sourceMap = [], tableDays = new Map(), sourceFragments = new Map()) {
   const rawLines = String(sourceText || "").split(/\r?\n/u);
   const expanded = [];
   let tableHeader = null;
+  let tableId = 0;
   for (const [sourceIndex, rawLine] of rawLines.entries()) {
     const line = rawLine.trim();
     if (!line) continue;
-    let cells = noteTableCells(line);
+    let cells = noteTableCells(rawLine);
     if (!cells && tableHeader && line.includes(";"))
       cells = line.split(";").map((cell) => cell.trim());
     if (!cells && tableHeader && line.includes(","))
@@ -958,16 +1019,47 @@ function expandStructuredNoteLines(sourceText, sourceMap = []) {
     const header = noteTableHeader(cells);
     if (header) {
       tableHeader = header;
+      tableId++;
       continue;
     }
     if (tableHeader && /^\s*:?-{2,}/u.test(line.replace(/^\|/u, ""))) continue;
     const tableLine = tableExerciseLine(cells, tableHeader);
     if (tableLine) {
+      if (tableHeader.day !== undefined) {
+        const sourceDay = String(cells[tableHeader.day] || '').trim();
+        const weekday = NOTE_WEEKDAYS[foldNoteText(sourceDay)] || null;
+        tableDays.set(expanded.length, {
+          weekday, name: sourceDay || 'Workout',
+          // Blank cells have no implied fill-down relationship.
+          key: `${tableId}:${weekday || (sourceDay ? `unknown:${sourceDay}` : `missing:${sourceIndex}`)}`,
+        });
+      }
       expanded.push(tableLine);
       sourceMap.push(sourceIndex);
       continue;
     }
     if (cells && tableHeader) tableHeader = null;
+    const explicitPair = line.match(/^(?:superset|super set|ss)\s*:\s*(.+)$/iu);
+    const pairMembers = explicitPair?.[1].split(/\s+\+\s+/u);
+    if (pairMembers?.length === 2 && pairMembers.every(member => parseNotePrescription(member)?.index > 0)) {
+      const lineStart = rawLines.slice(0,sourceIndex).reduce((sum,value)=>sum+value.length+1,0);
+      let cursor=rawLine.indexOf(':')+1;
+      pairMembers.forEach((member,number)=>{
+        const start=rawLine.indexOf(member,cursor); cursor=start+member.length;
+        sourceFragments.set(expanded.length,{text:member,start:lineStart+start,end:lineStart+cursor,supersetMarker:{key:`inline-${sourceIndex}`,number:number+1}});
+        expanded.push(member);sourceMap.push(sourceIndex);
+      });
+      continue;
+    }
+    const fragments = inlineNoteFragments(rawLine);
+    if (fragments) {
+      const lineStart = rawLines.slice(0,sourceIndex).reduce((sum,value)=>sum+value.length+1,0);
+      for (const fragment of fragments) {
+        sourceFragments.set(expanded.length,{...fragment,start:lineStart+fragment.start,end:lineStart+fragment.end});
+        expanded.push(fragment.text); sourceMap.push(sourceIndex);
+      }
+      continue;
+    }
     const semicolonParts = line.split(/\s*;\s*/u).filter(Boolean);
     if (
       semicolonParts.length > 1 &&
@@ -1028,12 +1120,28 @@ function prescribedSourceCandidates(lines) {
   return names;
 }
 export function parseStructuredTrainingNotes(sourceText, profile = {}, { review = false } = {}) {
+  const partialPrescription = line => {
+    const text=cleanNoteItem(line);
+    const match=text.match(/^(.+?)\s+(?:(\d+)\s*(sets?|serije?|serij|reps?|ponovitve|sec|seconds?|sek|kg|lbs?)\b|(?:(\d+)\s*[x×]\s*$)|(AMRAP)\b)(.*)$/iu);
+    const name=match?.[1]||text;
+    if(!matchImportedExerciseName(name).exerciseId)return null;
+    if(!match&&parseNotePrescription(text))return null;
+    const unit=(match?.[3]||'').toLowerCase(),amount=match?Number(match[2]||match[4]):null;
+    const sets=Boolean(match?.[4])||/^(?:set|serij)/.test(unit),timed=/^(?:sec|second|sek)/.test(unit),reps=/^(?:rep|ponovit)/.test(unit),load=/^(?:kg|lb)/.test(unit),amrap=Boolean(match?.[5]);
+    return {name,count:sets?amount:null,repMin:reps||timed?amount:null,repMax:reps||timed?amount:null,
+      failure:amrap,setType:amrap?'amrap':undefined,partialWeight:load?Number((amount*(unit.startsWith('lb')?0.45359237:1)).toFixed(2)):null,
+      suffix:[timed?'sec':'',load?`${amount} ${unit}`:'',match?.[6]||''].filter(Boolean).join(' '),
+      partial:{missing:[...(!sets?['sets']:[]),...(!reps&&!timed&&!amrap?['reps']:[])]}};
+  };
   const bareLoad = line => {
     const match=cleanNoteItem(line).match(/^(.+?)\s+(\d+(?:[.,]\d+)?)(?:\s*(kg|kgs|lb|lbs))?$/iu);
     return match&&matchImportedExerciseName(match[1]).exerciseId?match:null;
   };
   const sourceMap = [];
-  const lines = expandStructuredNoteLines(sourceText, sourceMap);
+  const tableDays = new Map();
+  const tableGroups = new Map();
+  const sourceFragments = new Map();
+  const lines = expandStructuredNoteLines(sourceText, sourceMap, tableDays, sourceFragments);
   if (!lines.length) return null;
   const goal = lines
     .find((line) => /^goal\s*:/i.test(line))
@@ -1041,7 +1149,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     .trim();
   const firstDayIndex = lines.findIndex(
     (line, index) =>
-      parsedDayHeading(line) ||
+      tableDays.has(index) || parsedDayHeading(line) ||
       weekdayForDateHeading(line) ||
       genericWorkoutHeading(line) ||
       contextualWorkoutHeading(line, lines[index + 1]),
@@ -1079,8 +1187,34 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
   const classified = new Map();
   const mark = (index, status) => classified.set(sourceMap[index], status);
   let circuitSets = null;
+  const roundGroups = [];
+  const roundDirective = value => /^(?:\d+\s*(?:rounds?|krogi|kroge|kroga|krogov)|(?:circuit|krog|circuito|zirkel|giant set)\s*(?:[a-z]\s*)?(?:x|×|:|-)?\s*\d+(?:\s*(?:rounds?|krogi|kroge|kroga|krogov))?)\s*:?[\s]*$/iu.test(cleanNoteItem(value));
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
+    const partial = review ? partialPrescription(line) : null;
+    if (roundDirective(line)) {
+      let end = index + 1;
+      while (end < lines.length && !roundDirective(lines[end]) && !parsedDayHeading(lines[end]) &&
+        !weekdayForDateHeading(lines[end]) && !genericWorkoutHeading(lines[end]) && !noteSectionMode(lines[end]) && !tableDays.has(end)) end++;
+      roundGroups.push({source:lines.slice(index,end).join('\n'),sourceLine:sourceMap[index]+1,workoutName:current?.name||'Workout',weekday:current?.weekday||null});
+      for(let cursor=index;cursor<end;cursor++)mark(cursor,'round-group');
+      index=end-1; circuitSets=null;
+      continue;
+    }
+    const tableDay = tableDays.get(index);
+    if (tableDay) {
+      current = tableGroups.get(tableDay.key);
+      if (!current) {
+        current = { weekday: tableDay.weekday,
+          location: 'Commercial gym', name: tableDay.name, estimatedMinutes: 60,
+          exercises: [], warmup: null,
+          ...(review ? { sourceLine: sourceMap[index] + 1, scheduleExplicit: Boolean(tableDay.weekday) } : {}),
+        };
+        days.push(current);
+        tableGroups.set(tableDay.key, current);
+      }
+      sectionMode = 'exercises'; recoverySection = false; pendingWarmupExercise = null; circuitSets = null;
+    }
     const bare=review?bareLoad(line):null;
     if(declaredSourceWeightUnit(line)){mark(index,'comment');continue;}
     if (/^(?:goal|schedule|frequency|days?\s+per\s+week)\s*:/i.test(line) || /^(?:weekly workout plan|training plan|workout plan)$/i.test(foldNoteText(line))) {
@@ -1088,10 +1222,10 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       continue;
     }
     if (explicitTitle && index < firstDayIndex && line === explicitTitle) { mark(index, 'title'); continue; }
-    const explicitHeading = parsedDayHeading(line);
-    const dateWeekday = explicitHeading ? null : weekdayForDateHeading(line);
+    const explicitHeading = tableDay ? null : parsedDayHeading(line);
+    const dateWeekday = tableDay || explicitHeading ? null : weekdayForDateHeading(line);
     const genericHeading =
-      explicitHeading || dateWeekday
+      tableDay || explicitHeading || dateWeekday
         ? null
         : genericWorkoutHeading(line) ||
           contextualWorkoutHeading(line, lines[index + 1]);
@@ -1112,6 +1246,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       recoverySection = false;
       const weekday = heading.weekday;
       const headingName = heading.name;
+      const sourceLocation = explicitNoteLocation(headingName);
       if (
         /^(?:rest|rest day|recovery|off|pocitek|aktivni recovery|active recovery|regeneracija)(?:\s|$)/.test(
           foldNoteText(headingName),
@@ -1125,8 +1260,9 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       if (!current) {
         current = {
           weekday,
-          location: "Commercial gym",
-          name: normalizeWorkoutName(headingName || "Workout", weekday),
+          location: sourceLocation || "Commercial gym",
+          ...(sourceLocation ? { sourceLocation } : {}),
+          name: normalizeWorkoutName(sourceLocation ? "Workout" : headingName || "Workout", weekday),
           estimatedMinutes: 60,
           exercises: [],
           warmup: null,
@@ -1144,7 +1280,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     if (
       !current &&
       !unresolvedDayMarker &&
-      (bare || startsExerciseWarmup || parseNotePrescription(cleanNoteItem(line)) ||
+      (partial || bare || startsExerciseWarmup || parseNotePrescription(cleanNoteItem(line)) ||
         parseNotePrescription(cleanNoteItem(lines[index + 1])))
     ) {
       const weekday = sequentialImportWeekdays(profile)[0] || "Mon";
@@ -1275,6 +1411,9 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
         consumedPrescriptionLines = 0;
       }
     }
+    if(partial && (!prescription || prescription.implicitReps)) {
+      sourceName=partial.name;prescription=partial;consumedPrescriptionLines=0;
+    }
     if(!prescription&&bare){
       sourceName=bare[1];prescription={count:1,repMin:1,repMax:1,suffix:`${bare[2]} ${bare[3]||''}`,missingPrescription:true};consumedPrescriptionLines=0;
     }
@@ -1304,7 +1443,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       .replace(/\b(?:RPE\s*[:=]?\s*(?:[6-9]|10)|(?:[6-9]|10)\s*RPE)\b/gi, "")
       .replace(/^[\s\u00b7,|;]+|[\s\u00b7,|;]+$/gu, "")
       .trim();
-    if (count < 1 || count > 20 || repMin < 1 || repMax < repMin) continue;
+    if (!prescription.partial && (count < 1 || count > 20 || (!prescription.failure && (repMin < 1 || repMax < repMin)))) continue;
     const importedLabel = splitImportedExerciseLabel(sourceName);
     const parsedNote = prescription.failure
       ? ["To failure", note].filter(Boolean).join(" · ")
@@ -1332,6 +1471,8 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       ...(review ? { sourceLine: pendingWarmupExercise?.line || sourceMap[index] + 1, sourceLines: [...(pendingWarmupExercise ? [pendingWarmupExercise.line] : []), ...Array.from({length: consumedPrescriptionLines + 1}, (_,offset) => sourceMap[index + offset] + 1)] } : {}),
       exerciseId: null,
       sourceName: importedLabel.name,
+      ...(sourceFragments.has(index) ? { sourceSpan: sourceFragments.get(index) } : {}),
+      ...(prescription.partial ? {partialPrescription:prescription.partial} : {}),
       sets: count,
       repMin,
       repMax,
@@ -1343,11 +1484,12 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       restSeconds: inlineRest,
       measure: timed ? "seconds" : null,
       failureTarget: prescription.failure,
+      setType: prescription.setType,
       notes:
         [...new Set([importedLabel.note, parsedNote].filter(Boolean))].join(
           " · ",
         ) || null,
-      weightKg: null,
+      weightKg: prescription.partialWeight ?? null,
       setWeightsKg: parsedSetWeights,
       sourceLoadUnit: prescriptionUnit,
       unitlessLoads: unitlessPrescriptionLoads(prescription),
@@ -1359,11 +1501,15 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     if (consumedPrescriptionLines) index += consumedPrescriptionLines;
   }
   const trainingDays = days.filter((day) => day.exercises.length);
-  if (!trainingDays.length) return null;
+  if (!trainingDays.length && !roundGroups.length) return null;
   const parsedNameCounts = new Map();
   for (const name of trainingDays.flatMap((day) => [
     ...day.exercises.map((exercise) => exercise.sourceName),
-    ...(day.warmup?.items || []).map((item) => item.label),
+    ...(day.warmup?.items || []).map((item) => {
+      // Coverage compares exercise names, not preserved trailing intensity cues.
+      const prescription = parseNotePrescription(item.sourceText || '');
+      return prescription?.index > 0 ? item.sourceText.slice(0, prescription.index).trim() : item.label;
+    }),
   ])) {
     const key = foldNoteText(name);
     parsedNameCounts.set(key, (parsedNameCounts.get(key) || 0) + 1);
@@ -1378,8 +1524,10 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     parsedNameCounts.set(key, remaining - 1);
     return false;
   });
-  if (missingPrescribedSource && !review) return null;
+  if (missingPrescribedSource && !review && !roundGroups.length) return null;
   for (const day of trainingDays) {
+    // Explicit source context outranks catalog associations and profile defaults.
+    if (day.sourceLocation) { day.location = day.sourceLocation; continue; }
     const requiresCommercialGym = day.exercises.some((exercise) => {
       const match = matchImportedExerciseName(exercise.sourceName);
       return exerciseCatalog[match.exerciseId]?.equipment?.some(
@@ -1404,11 +1552,17 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       ? String(explicitTitle).trim().slice(0, 80)
       : "Imported plan",
     days: trainingDays,
-    ...(review ? { parseReview: { version: 1, lines: sourceLines } } : {}),
+    ...((review || roundGroups.length) ? { parseReview: { version: 1, lines: sourceLines, roundGroups } } : {}),
   };
 }
 
 function finalizeImportedPlan(profile, existingPlanText, data, { review = false } = {}) {
+  if (!data.days?.length && data.parseReview?.roundGroups?.length && review) {
+    // Transient blocked draft only; no fabricated executable exercise or plan.
+    const program={id:'unresolved-round-import',name:data.name||'Imported plan',source:'ai-import',days:[]};
+    const sourceReview=buildPlanImportReview(data,program,exerciseCatalog);
+    return {program,profile,source:'ai-import',sourceReview};
+  }
   if (!Array.isArray(data.days) || data.days.length < 1 || data.days.length > 7)
     throw new Error(
       "The imported plan must contain between 1 and 7 calendar days.",
@@ -1455,7 +1609,7 @@ function finalizeImportedPlan(profile, existingPlanText, data, { review = false 
       return { name: alignedSourceNames[index], exact: true };
     try {
       return {
-        name: authoritativeImportedExerciseNames(existingPlanText, [name])[0],
+        name: authoritativeImportedExerciseNames(verifiedData.days.flatMap(day=>day.exercises)[index]?.sourceSpan?.text || existingPlanText, [name])[0],
         exact: true,
       };
     } catch {
@@ -1487,11 +1641,11 @@ function finalizeImportedPlan(profile, existingPlanText, data, { review = false 
       const weights = alignedWeights
         ? alignedWeights[sourceIndex]
         : sourceMatch.exact
-        ? authoritativeImportedWeights(review ? (exercise.sourceLines || []).map(number => data.parseReview.lines.find(line => line.line === number)?.text || '').join('\n') : existingPlanText, [
+        ? authoritativeImportedWeights(review ? (exercise.sourceLines || []).map(number => number===exercise.sourceLine && exercise.sourceSpan ? exercise.sourceSpan.text : data.parseReview.lines.find(line => line.line === number)?.text || '').join('\n') : existingPlanText, [
             proposedExercises[sourceIndex],
           ], exercise.sourceLoadUnit || null)[0]
         : { weightKg: null, setWeightsKg: null };
-      exercise.weightKg = weights.weightKg;
+      exercise.weightKg = weights.weightKg ?? (exercise.partialPrescription ? exercise.weightKg : null);
       exercise.setWeightsKg = weights.setWeightsKg;
       if(exercise.unitlessLoads?.length){
         exercise.weightKg=null;
@@ -1819,6 +1973,8 @@ export const AIService = {
       { review },
     );
     if (locallyParsed) {
+      if (!review && locallyParsed.parseReview?.roundGroups?.length)
+        throw new Error('Round/circuit groups require source review before this plan can be used.');
       onStage?.('checking');
       if (review) {
         try { return finalizeImportedPlan(profile, existingPlanText, locallyParsed, { review }); }
