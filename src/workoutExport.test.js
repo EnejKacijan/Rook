@@ -24,7 +24,7 @@ describe("workout text export", () => {
     expect(exportLoadLabel(exercise(), null, "kg")).toBe("Load not logged");
     expect(exportLoadLabel(exercise(), 0, "lb")).toBe("Load not logged");
     expect(formatExportSet(exercise(), { reps: 8, weight: 0 }, { units: "kg" }))
-      .toContain("Load not logged");
+      .toContain("Load not specified");
     expect(formatExportSet(exercise(), { reps: 8, weight: 0 }, { units: "kg" }))
       .not.toMatch(/0 (kg|lb)/);
   });

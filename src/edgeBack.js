@@ -13,21 +13,30 @@ export function commitBack(distance, width, velocity) {
 
 // Scoped native touch events allow vertical scrolling until horizontal intent is
 // established (pointer pan-y would let the browser cancel horizontal tracking).
-export function bindEdgeBack(surface, { enabled, onBack, render, clear, getBounds, duration = 180 }) {
+export function bindEdgeBack(surface, options) {
+  return bindEdgeNavigation(surface, { ...options, edge: 'left', onNavigate: options.onBack });
+}
+
+// The questionnaire's Forward gesture mirrors the same intent, cancellation,
+// input ownership and motion policy. Distances stay positive for thresholds;
+// only physical input/output direction changes.
+export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear, getBounds, duration = 180, edge = 'left' }) {
+  const direction = edge === 'right' ? -1 : 1;
   let touch = null, timer = null, settling = false, suppressUntil = 0, suppressTarget = null;
   const blocked = target => target?.closest?.('input, textarea, select, button, a, [contenteditable], [role="slider"], [role="tablist"], canvas, svg, img, .modal-drag-handle, [data-no-edge-back]');
   const reset = () => { clearTimeout(timer); timer = null; touch = null; settling = false; delete surface.dataset.edgeBackActive; clear(); };
   const start = event => {
     if (event.touches.length !== 1) { reset(); return; }
-    if (settling || !enabled(event) || blocked(event.target) || document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || String(window.getSelection?.() || '')) return;
+    if (settling || document.querySelector('[data-edge-back-active]') || !enabled(event) || blocked(event.target) || document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || String(window.getSelection?.() || '')) return;
     const point = event.touches[0], bounds = getBounds?.() || surface.getBoundingClientRect();
-    if (point.clientX < bounds.left || point.clientX > bounds.left + EDGE_BACK.edge) return;
+    const edgeDistance = edge === 'right' ? bounds.left + bounds.width - point.clientX : point.clientX - bounds.left;
+    if (edgeDistance < 0 || edgeDistance > EDGE_BACK.edge) return;
     touch = { target: event.target, id: point.identifier, x: point.clientX, y: point.clientY, lastX: point.clientX, at: performance.now(), velocity: 0, distance: 0, width: bounds.width, active: false };
   };
   const move = event => {
     if (!touch) return;
     if (!enabled() || event.touches.length !== 1 || event.touches[0].identifier !== touch.id) { reset(); return; }
-    const point = event.touches[0], dx = point.clientX - touch.x, dy = point.clientY - touch.y;
+    const point = event.touches[0], dx = (point.clientX - touch.x) * direction, dy = point.clientY - touch.y;
     if (!touch.active) {
       const intent = backIntent(dx, dy);
       if (intent === 'ignore') { touch = null; return; }
@@ -39,10 +48,10 @@ export function bindEdgeBack(surface, { enabled, onBack, render, clear, getBound
     event.preventDefault();
     event.stopPropagation();
     const now = performance.now();
-    touch.velocity = (point.clientX - touch.lastX) / Math.max(1, now - touch.at);
+    touch.velocity = (point.clientX - touch.lastX) * direction / Math.max(1, now - touch.at);
     touch.lastX = point.clientX; touch.at = now;
     touch.distance = Math.max(0, Math.min(touch.width, dx));
-    render(touch.distance, 0);
+    render(touch.distance * direction, 0);
   };
   const finish = event => {
     if (!touch) return;
@@ -54,10 +63,10 @@ export function bindEdgeBack(surface, { enabled, onBack, render, clear, getBound
     const commit = event.type !== 'touchcancel' && enabled() && commitBack(gesture.distance, gesture.width, performance.now() - gesture.at > 100 ? 0 : gesture.velocity);
     settling = true;
     const ms = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : typeof duration === 'function' ? duration(gesture, commit) : duration;
-    render(commit ? gesture.width : 0, ms);
+    render(commit ? gesture.width * direction : 0, ms);
     const complete = () => {
       reset();
-      if (commit && enabled()) onBack();
+      if (commit && enabled()) onNavigate();
     };
     if (ms === 0) complete();
     else timer = setTimeout(complete, ms);

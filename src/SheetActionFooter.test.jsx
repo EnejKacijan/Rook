@@ -41,3 +41,55 @@ it('uses native page scrolling only for the opted-in full-page input', () => {
   view.container.querySelector('footer').getBoundingClientRect=()=>({top:320});
   act(()=>input.focus());expect(input.scrollIntoView).toHaveBeenCalledWith({block:'center',behavior:'instant'});
 });
+it('keeps the opted-in sheet anchored across keyboard pan, zoom and restoration without remounting', () => {
+  const original=window.visualViewport, viewport=new EventTarget();
+  Object.assign(viewport,{height:420,offsetTop:0,scale:1});
+  Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+  try {
+    const view=render(<div className="modal-layer"><main className="sheet"><div className="sheet-scroll"><textarea defaultValue="Retain me"/></div><SheetActionFooter containViewport separate><button>Save</button></SheetActionFooter></main></div>);
+    const layer=view.container.firstChild, panel=layer.firstChild, input=panel.querySelector('textarea');
+    expect(layer.style.height).toBe('420px');
+    for (const [height,offsetTop,scale,type] of [[420,115,1,'scroll'],[360,70,1.2,'resize'],[window.innerHeight,0,1,'resize'],[400,0,1,'resize']]) {
+      Object.assign(viewport,{height,offsetTop,scale});act(()=>viewport.dispatchEvent(new Event(type)));
+      expect(layer.style.top).toBe(`${offsetTop}px`);expect(layer.style.height).toBe(`${height}px`);
+      expect(layer.firstChild).toBe(panel);expect(panel.querySelector('textarea')).toBe(input);expect(input.value).toBe('Retain me');
+    }
+    act(()=>root.unmount());root=null;
+    expect(layer.style.top).toBe('');expect(layer.style.bottom).toBe('');expect(panel.style.maxHeight).toBe('');
+    viewport.offsetTop=180;viewport.dispatchEvent(new Event('scroll'));expect(layer.style.top).toBe('');
+  } finally {Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
+it('uses one full-page import scroll owner, includes labels, and handles offset-only changes',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:400,offsetTop:100,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try {
+   const view=render(<main className="detail-screen initial-import-screen"><header className="detail-header"/><div className="import-decision-scroll"><label>Reps<input defaultValue="8"/></label></div><SheetActionFooter importViewport separate><button>Continue</button></SheetActionFooter></main>);
+   const panel=view.container.firstChild,scroller=panel.querySelector('.import-decision-scroll'),label=panel.querySelector('label'),input=panel.querySelector('input');
+   scroller.getBoundingClientRect=()=>({top:200,bottom:420});panel.querySelector('footer').getBoundingClientRect=()=>({top:420});
+   label.getBoundingClientRect=()=>({top:195,bottom:270});input.getBoundingClientRect=()=>({top:225,bottom:270});
+   scroller.scrollTop=80;act(()=>input.focus());expect(scroller.scrollTop).toBe(63); // includes the label above the input
+   label.getBoundingClientRect=()=>({top:220,bottom:290});const prior=scroller.scrollTop;
+   Object.assign(viewport,{offsetTop:130});act(()=>viewport.dispatchEvent(new Event('scroll')));
+   expect(panel.style.top).toBe('130px');expect(panel.style.height).toBe('400px');expect(scroller.scrollTop).toBe(prior);
+   expect(panel.querySelector('input')).toBe(input);expect(input.value).toBe('8');
+   act(()=>root.unmount());root=null;expect(panel.style.top).toBe('');expect(panel.style.height).toBe('');
+   viewport.offsetTop=200;viewport.dispatchEvent(new Event('scroll'));expect(panel.style.top).toBe('');
+ }finally{Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
+
+it('opts plan editors into visible-viewport containment without changing other footers',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try {
+   const view=render(<main className="detail-screen scratch-editor-screen"><div>Plan contents</div><SheetActionFooter anchorPlanViewport><button disabled>Use plan</button></SheetActionFooter></main>);
+   const panel=view.container.firstChild,footer=panel.querySelector('footer');
+   expect(panel.classList.contains('has-anchored-plan-footer')).toBe(true);
+   for(const [height,offsetTop] of [[420,0],[420,85],[844,0]]){
+     Object.assign(viewport,{height,offsetTop});act(()=>viewport.dispatchEvent(new Event('resize')));
+     expect(panel.style.height).toBe(`${height}px`);expect(panel.style.top).toBe(`${offsetTop}px`);
+     expect(panel.querySelector('footer')).toBe(footer);
+   }
+   view.rerender(<main className="detail-screen scratch-editor-screen"><div>New content</div><SheetActionFooter anchorPlanViewport><button>Use plan</button></SheetActionFooter></main>);
+   expect(panel.querySelector('footer')).toBe(footer);expect(panel.querySelector('button').disabled).toBe(false);
+   view.rerender(<main className="detail-screen"><SheetActionFooter><button>Other action</button></SheetActionFooter></main>);
+   expect(panel.classList.contains('has-anchored-plan-footer')).toBe(false);expect(panel.style.height).toBe('');expect(panel.style.top).toBe('');
+ } finally {Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});

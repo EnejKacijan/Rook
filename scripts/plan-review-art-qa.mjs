@@ -2,16 +2,20 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
 import { blankState } from '../src/domain.js';
-const out='artifacts/plan-review-art';await mkdir(out,{recursive:true});
+const out=process.env.ART_PLAN_QA_DIR||'artifacts/plan-review-art';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
 try{for(const width of [320,390,430])for(const appearance of ['light','dark'])for(const style of ['standard','premium']){
  const context=await browser.newContext({viewport:{width,height:844},reducedMotion:'reduce',serviceWorkers:'block'});
  const state=blankState();Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
  await context.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);
  const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));
- await page.goto('http://127.0.0.1:4173');const next=()=>page.getByRole('button',{name:'CONTINUE',exact:true}).click();
- await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();await page.getByRole('combobox',{name:'Age range'}).click();await page.getByRole('option',{name:'18–29'}).click();await next();
- await page.getByRole('button',{name:'Build muscle',exact:true}).click();await page.getByRole('button',{name:/^Beginner/}).click();
+ await page.goto(process.env.ROOK_QA_URL||'http://127.0.0.1:4173');const next=()=>page.getByRole('button',{name:'CONTINUE',exact:true}).click();
+  if(await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).isVisible())await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();
+  await page.getByRole('combobox',{name:'Age range'}).click();await page.getByRole('option',{name:'18–29'}).click();await next();
+ await page.getByRole('button',{name:'Build muscle',exact:true}).click();
+ // Existing choice steps protect against accidental double taps for 350ms.
+ await page.waitForTimeout(360);
+ await page.getByRole('button',{name:/^Beginner/}).click();
  await page.getByRole('button',{name:'3 days',exact:true}).click();await page.getByLabel('Any day works').check();await page.getByRole('button',{name:'60 min',exact:true}).click();await next();
  await page.getByRole('button',{name:'Commercial gym',exact:true}).click();await next();await page.getByRole('button',{name:'Balanced',exact:true}).click();await next();await page.getByRole('button',{name:/Balanced starting point/}).click();await next();
  await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();await page.getByRole('heading',{name:'Your week is ready.'}).waitFor({timeout:30000});

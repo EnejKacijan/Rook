@@ -1,3 +1,5 @@
+import { isImportedHistorySet, importedSetComparable, importedHistoryDescriptor } from './historicalSetSemantics.js';
+
 export const SET_TYPES = Object.freeze({
   standard: { label: "Standard", shortLabel: null },
   amrap: { label: "AMRAP", shortLabel: "AMRAP" },
@@ -13,6 +15,18 @@ export const LOGGING_MODES = Object.freeze({
 // Open targets are prescriptions; achieved reps belong to completed set results.
 export function hasOpenRepTarget(exercise) {
   return Boolean(exercise?.failureTarget && exercise.repMin == null && exercise.repMax == null);
+}
+
+// Explicitly accepted absence, not AMRAP/failure and not a malformed old target.
+export function hasUnspecifiedRepTarget(exercise) {
+  return exercise?.repTarget === 'unspecified' && !exercise.failureTarget && exercise.repMin == null && exercise.repMax == null;
+}
+
+// The immutable source count records provenance. Current logger slots live in
+// sets[] as usual; editing their count must not rewrite what the source said.
+export function loggingUnit(exercise) {
+  const count=exercise?.importedRoundPrescription?.count;
+  return Number.isInteger(count)&&count>0&&count<=20 ? 'round' : 'set';
 }
 
 export function openRepTargetLabel(exercise) {
@@ -60,8 +74,36 @@ export function sideAsymmetry(set) {
   return { left, right, difference: Math.abs(left - right) };
 }
 
+export function updatePerSideReps(set, side, value) {
+  if (!set || !['left', 'right'].includes(side)) return;
+  set.sides ||= { left: { reps: null }, right: { reps: null } };
+  set.sides[side] = { reps: value };
+  set.sideRepsEntryMode = { ...set.sideRepsEntryMode, [side]: 'manual' };
+  set.reps = unilateralSetReps(set);
+  set.touched = true;
+}
+
+// Carry suggestions, never completion credit; each side keeps its own intent.
+export function carryPerSideSet(exercise, index) {
+  if (loggingModeOf(exercise) !== 'per_side') return;
+  const previous = exercise.sets[index], next = exercise.sets[index + 1];
+  if (!previous?.completed || !next || next.completed) return;
+  next.sides ||= { left: { reps: null }, right: { reps: null } };
+  for (const side of ['left', 'right']) {
+    const mode = next.sideRepsEntryMode?.[side];
+    if (mode === 'manual' || (!mode && next.sides[side]?.reps != null)) continue;
+    next.sides[side] = { reps: previous.sides?.[side]?.reps ?? null };
+    next.sideRepsEntryMode = { ...next.sideRepsEntryMode, [side]: 'auto' };
+  }
+  next.reps = unilateralSetReps(next);
+  if (next.rirEntryMode !== 'manual' && next.rir == null && previous.rir != null) {
+    next.rir = previous.rir;
+    next.rirEntryMode = 'auto';
+  }
+}
+
 export function progressionComparableSet(set) {
-  return setTypeOf(set) === "standard";
+  return setTypeOf(set) === "standard" && importedSetComparable(set);
 }
 
 export function prComparableSet(exercise, set) {
@@ -152,6 +194,7 @@ export function setEffortCount(set) {
 }
 
 export function historySetDescriptor(exercise, set) {
+  if (isImportedHistorySet(set)) return importedHistoryDescriptor(set);
   const type = setTypeLabel(set);
   const asymmetry = sideAsymmetry(set);
   const perSide = loggingModeOf(exercise) === "per_side";

@@ -346,10 +346,10 @@
 .set-row.per-side > .check,
 .set-row.per-side.with-rir > .check { grid-column: 3; grid-row: 1; }
 .unilateral-reps { grid-column: 2 / 4; grid-row: 2; display: grid; grid-template-columns: 1fr 1fr; gap: 7px; padding-top: 2px; }
-.unilateral-reps label { min-width: 0; height: 39px; display: grid; grid-template-columns: 24px minmax(0, 1fr); align-items: center; border: 1px solid var(--rook-border, rgba(27,26,25,.11)); border-radius: 10px; background: var(--rook-surface, #fff); overflow: hidden; }
-.unilateral-reps span { color: var(--rook-secondary, #77736f); font-size: 9px; font-weight: 850; text-align: center; }
-.unilateral-reps input { min-width: 0; width: 100%; height: 100%; padding: 0 8px; border: 0; border-left: 1px solid var(--rook-border, rgba(27,26,25,.08)); background: transparent; color: var(--rook-text, #1b1a19); font: inherit; font-size: 15px; font-weight: 700; text-align: center; font-variant-numeric: tabular-nums; }
-.unilateral-reps input::-webkit-inner-spin-button { appearance: none; }
+.unilateral-side { min-width: 0; display: grid; gap: 4px; }
+.unilateral-side > span { color: var(--rook-secondary, #77736f); font-size: 10px; font-weight: 850; text-align: center; }
+.unilateral-side .stepper { width: 100%; min-width: 0; grid-template-columns: 30px minmax(0, 1fr) 30px; }
+.unilateral-side .stepper input { min-width: 0; padding-inline: 0; }
 .set-row.per-side.with-rir > select { grid-column: 2 / 4; grid-row: 3; width: 100%; height: 36px; }
 
 .set-segments { margin: -2px 8px 7px 52px; padding: 7px 9px; border-left: 2px solid color-mix(in srgb, var(--rook-accent, #1f6b4c) 30%, transparent); border-radius: 0 10px 10px 0; background: var(--rook-surface-muted, rgba(27,26,25,.035)); display: grid; gap: 6px; }
@@ -395,6 +395,10 @@
 .exercise-note-button > i { position: absolute; top: 8px; right: 8px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
 .exercise-note-button:is(:hover, :focus-visible) { background: rgba(31, 107, 76, .07); color: #1f6b4c; }
 .exercise-note-sheet { padding-bottom: var(--rook-sheet-safe-bottom); }
+.modal-layer > .sheet.exercise-note-sheet { padding: 0; }
+.exercise-note-sheet > .sheet-scroll { padding-bottom: 12px; }
+.exercise-note-sheet > .sheet-header-chrome { margin: 0; }
+.exercise-note-sheet > .sheet-header-chrome > .sheet-close { top: 2px; }
 .exercise-note-sheet .exercise-note-exercise { margin: 7px 0 0; color: #6f6c68; font-size: 13px; font-weight: 650; }
 .exercise-note-field { display: block; margin-top: 20px; }
 .exercise-note-field textarea { width: 100%; min-height: 104px; max-height: 180px; padding: 14px 15px; resize: vertical; border: 1px solid rgba(27, 26, 25, .14); border-radius: 14px; background: #fff; color: #1b1a19; font: inherit; font-size: 15px; line-height: 1.45; }
@@ -570,7 +574,7 @@
 }
 .exercise-visual-stage img {
   display: block;
-  width: min(92vw, 560px);
+  width: min(100%, 560px);
   height: min(calc(100dvh - 116px - env(safe-area-inset-top) - env(safe-area-inset-bottom)), 620px);
   object-fit: contain;
 }
@@ -654,6 +658,8 @@
 .workout-confirm .button { min-height: 50px; padding: 0 10px; font-size: 11px; }
 .active-workout-options-sheet > p { margin-bottom: 18px; }
 .active-workout-options-sheet .workout-restart-option { margin-top: 0; }
+:root .active-exercise-note-action { min-height: 48px; padding: 10px 0; margin-top: 8px; color: var(--rook-secondary); background: transparent; border-radius: 0; font-size: 14px; font-weight: 600; }
+:root .active-exercise-note-action > span:first-child { display: block; color: var(--rook-secondary); }
 .workout-restart-confirm-actions { display: grid; grid-template-columns: .8fr 1.2fr; gap: 8px; margin-top: 22px; }
 .workout-restart-confirm-actions .button { min-height: 50px; padding-inline: 10px; font-size: 10px; }
 .workout-restart-confirm-actions .workout-restart-danger { background: #873a34; color: #fff; }

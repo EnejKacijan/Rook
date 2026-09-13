@@ -6,10 +6,18 @@ import {
   weightUnit,
 } from "./domain.js";
 import { historySetDescriptor, loggingModeOf, setTypeLabel } from "./advancedLogging.js";
+import {isImportedHistorySet} from './historicalSetSemantics.js';
 
 export function sessionLogSetParts(exercise, set, index, units) {
   const number = String(index + 1);
   if (!set.completed) return [number, "Not logged"];
+  if (isImportedHistorySet(set)) {
+    const parts=[number,historySetDescriptor(exercise,set)];
+    const kind=set.rawImport.loadKind;
+    if(set.weight!=null)parts.push(`${kind==='assisted'?'Assistance ':kind==='added'?'+':kind==='bodyweight'?'Bodyweight ':kind==='none'?'Source (not external load) ':''}${displayWeight(set.weight,units)} ${weightUnit(units)}`);
+    else if(set.rawImport.weight!=null)parts.push(`Source load ${set.rawImport.weight} ${set.rawImport.weightUnit}`);
+    return parts;
+  }
 
   const timed = exerciseMeasure(exercise) === "seconds";
   const reps = Number(set.reps);

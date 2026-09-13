@@ -1,6 +1,8 @@
 .onboarding:not(.entry-screen):not(.physique-review-screen) { padding-top: calc(24px + env(safe-area-inset-top)); padding-left: 24px; padding-right: 24px; }
 .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) { overflow: clip; }
 .onboarding-setup { overflow-anchor: none; }
+.onboarding:is(.onboarding-goal, .onboarding-experience).is-acknowledging .selected-option { transition: none; }
+.onboarding-schedule .onboarding-footer > .primary { scroll-margin-bottom: calc(12px + env(safe-area-inset-bottom)); }
 .step-progress { display: flex; flex-direction: column; flex: 0 0 auto; }
 .step-progress .progress-line { margin-top: 20px; }
 .step-progress .progress-line > span { transition: width 220ms cubic-bezier(.2, 0, 0, 1); }
@@ -241,7 +243,13 @@
 .onboarding-preferences .split-options .option-card-copy { align-items: center; }
 .onboarding-preferences .split-options strong { font-size: 11.5px; text-align: center; }
 .onboarding-preferences .split-options .option-card-check { display: none; }
-.onboarding-preferences .split-other-answer { min-height: 66px; margin-top: 7px; }
+.onboarding-preferences .split-other-answer { min-height: 66px; max-height: 144px; margin-top: 7px; padding-block: 10px; line-height: 1.4; resize: none; overflow-y: auto; }
+:root .onboarding-preferences textarea.split-other-answer[aria-invalid="true"] { border-color: var(--rook-error-text, #8c2f2a); background: var(--rook-surface); }
+.onboarding-preferences .custom-split-error { margin: 6px 0 0; padding: 0; border: 0; border-radius: 0; background: transparent; color: var(--rook-error-text, #8c2f2a); font-size: 12px; line-height: 1.4; }
+/* Disclosure/scroll containers intentionally clip during motion. Keep the
+   existing semantic focus ring inside Build controls, like age/sex controls,
+   so their edge is visible without changing container geometry or overflow. */
+:root .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) :is(button, input, select, textarea):focus-visible { outline-offset: -3px; }
 .restriction-preference { min-width: 0; }
 .restriction-collapse { min-height: 36px; padding: 0 2px; border: 0; background: transparent; color: var(--rook-accent, #1f6b4c); font-size: 10px; font-weight: 750; letter-spacing: .08em; }
 .restriction-disclosure { width: 100%; min-height: 50px; margin-top: 6px; padding: 9px 2px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.09)); background: transparent; color: var(--rook-text, #1b1a19); text-align: left; }

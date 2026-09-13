@@ -31,6 +31,7 @@ import {
   deterministicCoach,
   displayWeight,
   estimateSessionMinutes,
+  estimateWorkoutMinutes,
   exerciseCatalog,
   exerciseLoadRequirement,
   exerciseMatchesQuery,
@@ -645,7 +646,7 @@ describe("personalized training domain", () => {
       "wg-standing-calf-raise",
     );
     expect(exerciseCatalog["high-to-low-cable-fly"].artId).toBe(
-      "wg-cable-fly",
+      "wg-rook-high-to-low-cable-fly",
     );
     expect(exerciseCatalog["close-grip-push-up"].artId).toBe(
       "wg-diamond-push-up",
@@ -653,7 +654,7 @@ describe("personalized training domain", () => {
     expect(exerciseCatalog["reverse-lunge"].artId).toBe("wg-reverse-lunge");
     expect(exerciseCatalog["preacher-curl"].artId).toBe("wg-preacher-curl");
     expect(exerciseCatalog["machine-preacher-curl"].artId).toBe(
-      "wg-preacher-curl",
+      "wg-rook-machine-preacher-curl",
     );
     expect(matchImportedExerciseName("Cable Low Row")).toEqual({
       exerciseId: "seated-cable-row",
@@ -746,6 +747,12 @@ describe("personalized training domain", () => {
     for (const item of illustratedCanonicalExercises) {
       for (const label of [item.name, pluralize(item.name)]) {
         const match = matchImportedExerciseName(label);
+        // These names are literal identities in two equipment-distinct catalog
+        // entries. Shared import policy now preserves the source, not a guess.
+        if (['reverse-lunge','calf-raise','preacher-curl'].includes(item.id)) {
+          expect(match, label).toEqual({exerciseId:null,status:'unresolved'});
+          continue;
+        }
         expect(match.exerciseId, label).toBeTruthy();
         expect(exerciseCatalog[match.exerciseId].artId, label).toBeTruthy();
       }
@@ -4603,7 +4610,11 @@ ogrevalni set 12kg
     ).toBeLessThan(
       balanced.reduce((sum, exercise) => sum + exercise.sets.length, 0),
     );
-    expect(moderate.length).toBeLessThanOrEqual(balanced.length);
+    // Exercise count can differ after truthful unilateral/warm-up timing.
+    // Preserve the effort choice itself: more work per exercise, not a quota
+    // of exercise names derived from the old flat-time estimator.
+    const setsPerExercise = rows => rows.reduce((sum, row) => sum + row.sets.length, 0) / rows.length;
+    expect(setsPerExercise(moderate)).toBeGreaterThan(setsPerExercise(balanced));
   });
   it("adds recoverable cardio only to fat-loss plans and scales it around frequency, time, environment, and age", () => {
     expect(
@@ -4921,7 +4932,7 @@ ogrevalni set 12kg
           );
           expect(patterns).toContain("horizontal-pull");
           expect(patterns).toContain("vertical-pull");
-          expect(estimateSessionMinutes(day.exercises)).toBeLessThanOrEqual(
+          expect(estimateWorkoutMinutes(day, user)).toBeLessThanOrEqual(
             sessionMinutes + 5,
           );
         }
@@ -5303,7 +5314,7 @@ ogrevalni set 12kg
         workouts: "bad",
       }),
     );
-    expect(loadState().program).toBeNull();
+    expect(() => loadState()).toThrow(/safely loaded/);
     const state = stateFor({ daysPerWeek: 2, availableDays: ["Mon", "Fri"] });
     state.workouts = [
       {

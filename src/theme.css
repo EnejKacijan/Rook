@@ -51,7 +51,6 @@
   --rook-success-line: rgba(31, 107, 76, .18);
   --rook-focus-ring: rgba(31, 107, 76, .35);
   --rook-selected-line: #191918;
-  --rook-today-line: #6f6c68;
   --rook-on-success: #ffffff;
   --rook-progress: #191918;
   --rook-week-surface-line: #dedbd4;
@@ -137,10 +136,9 @@
   --rook-focus-ring-soft: rgba(79, 191, 135, .58);
   --rook-on-accent: #04140c;
 
-  --rook-selected: #ebeeec;
-  --rook-selected-line: #ebeeec;
-  --rook-today-line: #89918c;
-  --rook-on-selected: #111413;
+  --rook-selected: var(--rook-accent-soft);
+  --rook-selected-line: var(--rook-accent);
+  --rook-on-selected: var(--rook-accent-text);
 
   --rook-success: #2f9e6b;
   --rook-success-soft: #12231b;
@@ -217,7 +215,7 @@
   --rook-muted: #aaa49a;
   --rook-border: var(--rook-premium-border);
   --rook-border-strong: #48443a;
-  --rook-control-border: #686154;
+  --rook-control-border: #6d6659;
   --rook-workout-secondary-action: #c5c0b5;
 
   --rook-accent: var(--rook-premium-accent);
@@ -238,7 +236,6 @@
 
   --rook-selected: #242016;
   --rook-selected-line: #9b7d38;
-  --rook-today-line: #7a6c43;
   --rook-on-selected: #f0d589;
 
   --rook-success: var(--rook-premium-accent-muted);
@@ -266,7 +263,7 @@
   --rook-error-text: #f09a8d;
 
   --rook-disabled-surface: #1a1b14;
-  --rook-disabled-text: #837d6d;
+  --rook-disabled-text: #8c8677;
 
   --rook-coach-surface: #1e1f17;
   --rook-coach-text: #dcd6c8;
@@ -341,7 +338,6 @@
 
   --rook-selected: #f1e8cf;
   --rook-selected-line: #8a670f;
-  --rook-today-line: #8d8060;
   --rook-on-selected: #5e4507;
 
   --rook-success: var(--rook-premium-accent-muted);
@@ -639,13 +635,12 @@
 :root[data-appearance="dark"] :is(.dark, .option-list .selected-option, .onboarding-option.selected-option, .physique-suggestions button.selected) { background: var(--rook-selected); color: var(--rook-on-selected); border-color: var(--rook-selected-line); }
 :root[data-appearance="dark"] .onboarding-preferences .exercise-preference-options .onboarding-option.selected-option { background: var(--rook-accent-soft); color: var(--rook-accent); border-color: transparent; }
 :root[data-appearance="dark"] .onboarding-option.selected-option .option-card-copy small { color: var(--rook-on-selected); }
-:root[data-appearance="dark"] .onboarding-option.selected-option .option-card-copy small { opacity: .7; }
-:root[data-appearance="dark"] .week-strip .today-date:not(.selected-day) { border-color: var(--rook-today-line); }
-:root[data-appearance="dark"] :is(.secondary, .option-list button:not(.selected-option), .choice-row, .week-strip button:not(.selected-day), .prompt-list button, .action-card, .coach-message, .stepper, .check, .warmup-ramp button, .segmented .active, .move-preview span, .optional-field select, .optional-duration button, .existing-plan-action, .scratch-day-options button:not(.selected), .scratch-workout-day input, .scratch-exercise-results, .scratch-exercise-results button, .plan-editor-exercise, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger, .plan-editor-picker > div, .plan-editor-picker > div > button, .superset-picker > div > button, .photo-inputs label, .physique-suggestions button, .exercise-search, .training-safety-actions.clearance-reasons button + button) { background-color: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-border); }
-:root[data-appearance="dark"] .today-screen .week-strip button:not(.selected-day) { background-color: var(--rook-surface-muted); border-color: var(--rook-week-surface-line); }
-:root[data-appearance="dark"] .today-screen .week-strip .today-date:not(.selected-day) { border-color: var(--rook-today-line); }
-:root[data-appearance="dark"] .week-strip .workout-planned .workout-dot { background: var(--rook-dot); }
+:root[data-appearance="dark"] .onboarding-option.selected-option .option-card-copy small { opacity: 1; }
+:root[data-appearance="dark"] :is(.secondary, .option-list button:not(.selected-option), .choice-row, .prompt-list button, .action-card, .coach-message, .stepper, .check, .warmup-ramp button, .segmented .active, .move-preview span, .optional-field select, .optional-duration button, .existing-plan-action, .scratch-day-options button:not(.selected), .scratch-workout-day input, .scratch-exercise-results, .scratch-exercise-results button, .plan-editor-exercise, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger, .plan-editor-picker > div, .plan-editor-picker > div > button, .superset-picker > div > button, .photo-inputs label, .physique-suggestions button, .exercise-search, .training-safety-actions.clearance-reasons button + button) { background-color: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-border); }
 :root[data-appearance="dark"] .import-format-examples code { background: var(--rook-surface); color: var(--rook-secondary); border-color: var(--rook-border); }
+/* Interactive field boundaries are not decorative card dividers. Keep the
+   control role after the shared surface rule above in the cascade. */
+:root[data-appearance="dark"] :is(.stepper, .exercise-search, .optional-field select, .optional-duration button, .plan-editor input, .plan-editor select, .plan-editor-picker-trigger) { border-color: var(--rook-control-border); }
 :root[data-appearance="dark"] .segmented { background: var(--rook-surface-muted); }
 :root[data-appearance="dark"] .segmented button { color: var(--rook-muted); }
 :root[data-appearance="dark"] .logging-screen .segmented .active { background: var(--rook-selected); color: var(--rook-on-selected); box-shadow: none; }
@@ -717,6 +712,15 @@
 :root[data-appearance="dark"] .bulk-match-review > button { color: var(--rook-text); }
 :root[data-appearance="dark"] .bulk-match-review > button > i { background: var(--rook-surface); border-color: var(--rook-accent-hairline); color: var(--rook-accent); }
 :root[data-appearance="dark"] .bulk-match-review small { color: var(--rook-secondary); }
+/* Shared editor/source summaries must not inherit the legacy light palette.
+   These consumers are used by Edit Plan, Scratch and Import review alike. */
+:root[data-appearance="dark"] :is(.plan-editor-heading > small, .plan-editor-custom-name > small, .plan-editor-picker > div > small, .plan-editor-starting-weight > small, .plan-editor-starting-weight > div > strong, .import-review-summary small, .schedule-selection-count, .schedule-duration-note, .session-log-summary > span, .scratch-add-exercise > small, .plan-warmup-status, .thinking-reduced-label) { color: var(--rook-secondary); }
+:root[data-appearance="dark"] .plan-warmup-card-header > span > small { color: var(--rook-muted); }
+:root[data-appearance="dark"] :is(.physique-caution, .photo-guidance) { color: var(--rook-secondary); }
+:root[data-appearance="dark"] .photo-inputs label i { color: var(--rook-accent-text); }
+:root[data-appearance="dark"] .physique-suggestions small { color: var(--rook-accent-text); }
+:root[data-appearance="dark"] .physique-suggestions em { color: var(--rook-secondary); }
+:root[data-appearance="dark"] .physique-suggestions .selected :is(small, em) { color: var(--rook-on-selected); }
 :root[data-appearance="dark"] .bulk-match-review.is-complete { background: var(--rook-surface-muted); border-color: var(--rook-border); }
 :root[data-appearance="dark"] .bulk-match-review-complete > i { border-color: var(--rook-border-strong); color: var(--rook-secondary); }
 :root[data-appearance="dark"] .bulk-match-review-complete strong { color: var(--rook-secondary); }
@@ -837,13 +841,16 @@
 :root[data-appearance="dark"] .workout-screen .set-row.set-ready .set-index-label > b { color: var(--rook-accent); }
 :root[data-appearance="dark"] .workout-screen .set-row.set-ready { box-shadow: none; }
 :root[data-appearance="dark"] .workout-screen .set-row.set-done { box-shadow: none; }
-:root[data-style="premium"] .logging-screen .segmented .active { border: 1px solid var(--rook-selected-line); }
+:root[data-appearance="dark"] .logging-screen .segmented .active,
+:root[data-appearance="light"][data-style="premium"] .logging-screen .segmented .active { border: 1px solid var(--rook-selected-line); }
+:root[data-appearance="dark"] .logging-screen .unit-segmented .active,
 :root[data-style="premium"] .logging-screen .unit-segmented .active { border-color: transparent; }
 :root[data-style="premium"] .week-navigation span {
   color: var(--rook-week-range);
 }
-/* Week-strip states use one visual grammar in every theme. Palette tokens vary;
-   the meaning of surface, ring, underline and marker never does. */
+/* Canonical week-strip state rules for both styles/appearances. Selection owns
+   the stronger border; today adds only the underline, never another border.
+   Workout markers remain independent. Theme layers supply palette tokens only. */
 :root .today-screen .week-strip button.selected-day {
   background: var(--rook-week-selected-surface);
   color: var(--rook-week-selected-text);
@@ -862,6 +869,7 @@
   color: var(--rook-week-rest-text);
 }
 .today-screen .week-strip button {
+  border: 1px solid var(--rook-week-rest-line);
   position: relative;
   transform-origin: center;
   transition:
@@ -1040,7 +1048,11 @@
   .coach-history-group button.active strong,
   .workout-primary-action .workout-previous
 ) { color: var(--rook-accent) !important; }
+:root[data-appearance="dark"] .import-review-footer-actions button.import-review-remove,
 :root[data-style="premium"] .import-review-footer-actions button.import-review-remove { color: var(--rook-error-text, #8c2f2a) !important; }
+:root[data-appearance="dark"] .history-import-success-mark { background: var(--rook-accent-soft); }
+:root[data-appearance="dark"] .coach-quick-questions button { background: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-control-border); }
+:root[data-appearance="dark"] .coach-quick-questions button:disabled { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border-color: var(--rook-border); opacity: 1; }
 :root[data-style="premium"] :is(
   .plan-conditioning-card p,
   .personalization-summary .split-adaptation-note,

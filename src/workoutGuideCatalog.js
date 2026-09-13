@@ -5660,7 +5660,7 @@ export const workoutGuideExercises = [
   {
     "sourceSlug": "single-leg-calf-raise",
     "name": "Single-Leg Calf Raise",
-    "aliases": [],
+    "aliases": ["Single-Leg Standing Calf Raise"],
     "pattern": "calf",
     "muscles": [
       "Calves",

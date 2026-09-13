@@ -64,7 +64,12 @@ const exercises = manifest.map((item) => {
   const source = path.join(sourceRoot, item.frames.find((frame) => frame.index === 2)?.path || item.frames[0].path);
   const target = path.join(artDir, `${artId}.svg`);
   let svg = fs.readFileSync(source, "utf8").replaceAll('fill="#fff"', 'fill="#1f6b4c"').replaceAll('fill="#ffffff"', 'fill="#1f6b4c"');
-  fs.writeFileSync(target, svg);
+  // A source-library refresh must not resurrect an illustration superseded by
+  // a reviewed ROOK master. Catalog data still comes from the source manifest.
+  const reviewed = ["consistent-masters", "corrected-masters"]
+    .map((directory) => path.join(artDir, directory, `${artId}.svg`))
+    .find((file) => fs.existsSync(file));
+  fs.writeFileSync(target, reviewed ? fs.readFileSync(reviewed, "utf8") : svg);
   const muscles = [...new Set([item.primaryMuscle, ...(item.secondaryMuscles || [])].map((value) => muscleMap[value]).filter(Boolean))];
   return {
     sourceSlug: item.slug, name: item.name, aliases: [], pattern: patternFor(item),

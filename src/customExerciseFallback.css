@@ -1,0 +1,34 @@
+:root .custom-exercise-fallback {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0 6px;
+  margin: 2px 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--rook-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+:root[data-appearance] .custom-exercise-fallback > button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 44px;
+  min-width: 44px;
+  max-width: 100%;
+  padding: 6px 2px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--rook-accent);
+  font: inherit;
+  font-weight: 600;
+  letter-spacing: normal;
+  text-transform: none;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+:root .custom-exercise-fallback > button:active { opacity: .7; }
+:root .custom-exercise-fallback > button:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; }

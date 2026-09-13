@@ -3,8 +3,20 @@ import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import { isoDay, saveState, weekKey, weekday } from './domain.js';
 import { addCalendarDays, applyFlexibleWeek, flexibleSessions, flexibleWeekConflict, proposeFlexibleWeek } from './flexibleWeek.js';
+import './flexibleWeekChooser.css';
 
 const dateLabel = date => new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+export function groupRescheduleCandidates(candidates, today) {
+  const thisWeek=weekKey(today), nextWeek=addCalendarDays(thisWeek,7);
+  const groups=new Map();
+  for (const session of candidates) {
+    const week=weekKey(session.scheduledDate);
+    const label=week<thisWeek?'EARLIER':week===thisWeek?'THIS WEEK':week===nextWeek?'NEXT WEEK':'LATER';
+    if(!groups.has(label))groups.set(label,[]);
+    groups.get(label).push(session);
+  }
+  return [...groups].map(([label,sessions])=>({label,sessions}));
+}
 export function missedSessionDestinations(state, sessionId, today=isoDay()) {
   const item=flexibleSessions(state,today).find(s=>s.logicalSessionId===sessionId);
   if(!item || item.status!=='missed')return [];
@@ -85,8 +97,16 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {} }
       {state.flexibleWeek && <button className="text-button" onClick={() => review({ mode: 'restore' })}>Restore original schedule</button>}
     </>}
     {['pick', 'missed'].includes(step) && <>
-      <h1>{step === 'missed' ? 'Choose a missed session' : 'Choose a workout'}</h1>
-      <div className={step === 'pick' ? 'flexible-workout-list' : 'adjust-option-list'}>{candidates.filter(s => step !== 'missed' || s.status === 'missed').map(s => <button className="choice-row" key={s.logicalSessionId} onClick={() => { setSessionId(s.logicalSessionId); setStep('destination'); }}><strong>{s.workout.name}</strong><small>{dateLabel(s.scheduledDate)}{s.moved ? ` · Originally ${dateLabel(s.originalDate)}` : ''}</small></button>)}</div>
+      <h1>{step === 'missed' ? 'Choose a missed session' : 'Move a workout'}</h1>
+      {step === 'pick' ? <>
+        <p>Choose which workout you want to reschedule.</p>
+        <div className="flexible-workout-list">{groupRescheduleCandidates(candidates,today).map(group=><section className="flexible-workout-group" key={group.label}>
+          <h2>{group.label}</h2>
+          {group.sessions.map(s=><button className="list-row" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={()=>{setSessionId(s.logicalSessionId);setStep('destination');}}>
+            <span><strong>{s.workout.name}</strong><small>{dateLabel(s.scheduledDate)}{s.moved?` · Originally ${dateLabel(s.originalDate)}`:''}</small></span><span aria-hidden="true">›</span>
+          </button>)}
+        </section>)}</div>
+      </> : <div className="adjust-option-list">{candidates.filter(s => s.status === 'missed').map(s => <button className="choice-row" key={s.logicalSessionId} onClick={() => { setSessionId(s.logicalSessionId); setStep('destination'); }}><strong>{s.workout.name}</strong><small>{dateLabel(s.scheduledDate)}{s.moved ? ` · Originally ${dateLabel(s.originalDate)}` : ''}</small></button>)}</div>}
       {!candidates.some(s => step !== 'missed' || s.status === 'missed') && <p>No unstarted sessions need moving.</p>}
     </>}
     {step === 'destination' && item && <>

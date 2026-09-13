@@ -40,7 +40,10 @@ self.addEventListener('fetch', event => {
     event.respondWith(
       fetch(request)
         .then(response => {
-          if (response.ok) caches.open(CACHE).then(cache => cache.put('/index.html', response.clone()));
+          if (response.ok) {
+            const cacheResponse = response.clone();
+            event.waitUntil(caches.open(CACHE).then(cache => cache.put('/index.html', cacheResponse)));
+          }
           return response;
         })
         .catch(() => caches.match('/index.html', { ignoreVary: true }))
@@ -56,10 +59,14 @@ self.addEventListener('fetch', event => {
       caches.match(request, { ignoreVary: true }).then(cached => {
         if (cached) return cached;
         return fetch(request).then(response => {
-          if (response.ok)
+          if (response.ok) {
+            // Clone before returning the response to the image consumer. Opening
+            // CacheStorage is async; by then the original body may be consumed.
+            const cacheResponse = response.clone();
             event.waitUntil(
-              caches.open(CACHE).then(cache => cache.put(request, response.clone()))
+              caches.open(CACHE).then(cache => cache.put(request, cacheResponse))
             );
+          }
           return response;
         });
       })
@@ -70,7 +77,10 @@ self.addEventListener('fetch', event => {
   event.respondWith(
     fetch(request)
       .then(response => {
-        if (response.ok) caches.open(CACHE).then(cache => cache.put(request, response.clone()));
+        if (response.ok) {
+          const cacheResponse = response.clone();
+          event.waitUntil(caches.open(CACHE).then(cache => cache.put(request, cacheResponse)));
+        }
         return response;
       })
       .catch(() => caches.match(request, { ignoreVary: true }))

@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { backIntent, bindEdgeBack, commitBack, standaloneNavigation } from './edgeBack.js';
+import { backIntent, bindEdgeBack, bindEdgeNavigation, commitBack, standaloneNavigation } from './edgeBack.js';
 afterEach(() => { document.body.innerHTML = ''; vi.useRealTimers(); vi.restoreAllMocks(); });
 it('gates browser mode and permits standalone only', () => {
   expect(standaloneNavigation({ navigator: {}, matchMedia: () => ({ matches: false }) })).toBe(false);
@@ -18,7 +18,9 @@ function setup(enabled = true, options = {}) {
   const surface = document.createElement('main'); document.body.append(surface);
   surface.getBoundingClientRect = () => ({ left:0,width:390 });
   const onBack=vi.fn(), render=vi.fn(), clear=vi.fn();
-  const dispose=bindEdgeBack(surface,{enabled:()=>enabled,onBack,render,clear,...options});
+  const dispose=options.edge === 'right'
+    ? bindEdgeNavigation(surface,{enabled:()=>enabled,onNavigate:onBack,render,clear,...options})
+    : bindEdgeBack(surface,{enabled:()=>enabled,onBack,render,clear,...options});
   const fire=(type,x,y=100,count=1,target=surface)=>{
     const event=new Event(type,{bubbles:true,cancelable:true});
     Object.defineProperty(event,'touches',{value:Array.from({length:count},(_,i)=>({identifier:i,clientX:x+i,clientY:y}))});
@@ -56,4 +58,24 @@ it('an existing unsaved guard may refuse navigation; gesture never writes data',
 });
 it('interruptions clear a partial drag without navigation',()=>{
  const s=setup();s.fire('touchstart',4);s.fire('touchmove',160);window.dispatchEvent(new Event('resize'));s.fire('touchend',160,100,0);vi.runAllTimers();expect(s.onBack).not.toHaveBeenCalled();expect(s.surface.dataset.edgeBackActive).toBeUndefined();s.dispose();
+});
+it('mirrors Forward at the right edge using the same thresholds and negative finger-follow',()=>{
+ const s=setup(true,{edge:'right'});s.fire('touchstart',386);s.fire('touchmove',210);
+ expect(s.render).toHaveBeenLastCalledWith(-176,0);expect(s.onBack).not.toHaveBeenCalled();
+ s.fire('touchend',210,100,0);expect(s.render).toHaveBeenLastCalledWith(-390,180);
+ vi.runAllTimers();expect(s.onBack).toHaveBeenCalledOnce();s.dispose();
+});
+for(const reason of ['left','center','short','wrong','vertical','cancel','input','button','disabled'])it(`Forward preserves ownership for ${reason}`,()=>{
+ const s=setup(reason!=='disabled',{edge:'right'});let target=s.surface;
+ if(['input','button'].includes(reason)){target=document.createElement(reason);s.surface.append(target);}
+ const x=reason==='left'?4:reason==='center'?260:386;
+ s.fire('touchstart',x,100,1,target);
+ s.fire('touchmove',reason==='short'?370:reason==='wrong'?405:210,reason==='vertical'?300:100,1,target);
+ s.fire(reason==='cancel'?'touchcancel':'touchend',210,100,0,target);vi.runAllTimers();
+ expect(s.onBack).not.toHaveBeenCalled();s.dispose();
+});
+it('another edge direction cannot take ownership during an active gesture/settle',()=>{
+ const s=setup(true,{edge:'right'}),other=setup();s.fire('touchstart',386);s.fire('touchmove',210);s.fire('touchend',210,100,0);
+ other.fire('touchstart',4);other.fire('touchmove',180);other.fire('touchend',180,100,0);vi.runAllTimers();
+ expect(s.onBack).toHaveBeenCalledOnce();expect(other.onBack).not.toHaveBeenCalled();s.dispose();other.dispose();
 });

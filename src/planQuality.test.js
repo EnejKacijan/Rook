@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { generatedSessionTiming } from './durationPlanning.js';
 import { WEEKDAYS, buildProgram, defaultProfile, exerciseCatalog, weeklyStimulusVolume } from './domain.js';
 import { buildProgrammingContext, plannerCatalog, rawPlanStimulusVolume, summarizeTrainingHistory, validateRawPlan, verifiedRawCoverageConstraintReason } from './planQuality.js';
 
@@ -231,11 +232,8 @@ describe('deterministic programming context and plan validation', () => {
         exercise('front-raise', 1),
       ],
     };
-    const byId = new Map(catalog.map(item => [item.id, item]));
-    const minutes = 5 + (day.exercises.length - 1) * 2 + day.exercises.reduce((sum, item) => {
-      const setup = byId.get(item.exerciseId)?.kind === 'compound' ? 3 : 1;
-      return sum + Math.max(3, Math.ceil((item.sets * 45 + Math.max(0, item.sets - 1) * item.restSeconds) / 60 + setup));
-    }, 0);
+    const minutes = generatedSessionTiming(day.exercises.map(item => ({ ...item,
+      sets: Array.from({ length: item.sets }, () => ({ reps: item.repMin })) })), profile(), exerciseCatalog).minutes;
     day.estimatedMinutes = minutes;
     const user = profile({ daysPerWeek: 2, availableDays: ['Mon', 'Thu'], sessionMinutes: minutes });
     const plan = { name: 'Transfer proof', days: [day] };
@@ -251,8 +249,8 @@ describe('deterministic programming context and plan validation', () => {
       exercise('machine-row', 2, false), exercise('barbell-curl'), exercise('cable-rear-delt-fly'),
       exercise('cable-crunch'), exercise('reverse-crunch'),
     ] };
-    const byId = new Map(catalog.map(item => [item.id, item]));
-    day.estimatedMinutes = 5 + (day.exercises.length - 1) * 2 + day.exercises.reduce((sum, item) => sum + Math.max(3, Math.ceil((item.sets * 45 + Math.max(0, item.sets - 1) * item.restSeconds) / 60 + (byId.get(item.exerciseId)?.kind === 'compound' ? 3 : 1))), 0);
+    day.estimatedMinutes = generatedSessionTiming(day.exercises.map(item => ({ ...item,
+      sets: Array.from({ length: item.sets }, () => ({ reps: item.repMin })) })), profile({ experience: 'Advanced' }), exerciseCatalog).minutes;
     const user = profile({ experience: 'Advanced', daysPerWeek: 2, availableDays: ['Mon', 'Thu'], sessionMinutes: day.estimatedMinutes });
     const plan = { name: 'Pull structure proof', days: [day] };
     const context = buildProgrammingContext(user, catalog);

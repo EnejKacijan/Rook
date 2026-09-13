@@ -199,6 +199,18 @@ describe("training setup validation", () => {
   });
 
   it("uses only faithful exercise-specific art and no pattern fallback", () => {
+    for (const [id, alias, artId] of [
+      ["step-down", "Step-down", "wg-step-down"],
+      ["hip-adduction-machine", "Adductor", "wg-hip-adduction-machine"],
+      ["high-to-low-cable-fly", "High-to-Low Cable Fly", "wg-rook-high-to-low-cable-fly"],
+      ["preacher-curl", "EZ-Bar Preacher Curl", "wg-preacher-curl"],
+      ["machine-preacher-curl", "Machine Biceps Curl", "wg-rook-machine-preacher-curl"],
+      ["bodyweight-split-squat", "Bodyweight Split Squat", "wg-rook-bodyweight-split-squat"],
+    ]) {
+      const canonical = exerciseArt({ exerciseId: id, artId: "stale-art-id" });
+      expect(canonical).toMatch(new RegExp(`${artId}.*\\.svg`));
+      expect(exerciseArt({ exerciseId: "unknown-import-id", importedName: alias })).toBe(canonical);
+    }
     expect(exerciseArt({ exerciseId: "barbell-bench-press" })).toMatch(/wg-bench-press.*\.svg/);
     expect(exerciseArt({ exerciseId: "barbell-row" })).toMatch(/wg-barbell-row.*\.svg/);
     const singleLegPressArt = exerciseArt({ exerciseId: "single-leg-leg-press" });

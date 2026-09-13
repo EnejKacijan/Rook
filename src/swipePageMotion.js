@@ -13,6 +13,9 @@ export function rememberSwipeParent(surface) { profileParent = snapshotParent(su
 
 export function pageBackMotion(surface) {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return null;
+  const content = surface.querySelector(':scope > [data-swipe-back-content]');
+  if (content) return liveBackMotion(content);
+  if (surface.matches('.coach-history-surface,.coach-content-surface')) return liveBackMotion(surface);
   const editor = surface.closest('.edit-plan-page-layer');
   if (!surface.matches('.profile-management-screen') && !editor) return null;
   const snapshot = editor ? snapshotParent(document.querySelector('.profile-management-screen')) : profileParent;
@@ -48,6 +51,46 @@ export function pageBackMotion(surface) {
     clear() {
       cancelAnimationFrame(frame); parent.remove();
       if (mounted) { if (original === null) surface.removeAttribute('style'); else surface.setAttribute('style', original); }
+    },
+  };
+}
+
+// Animate live content, never copies of form/message state. A scoped content
+// target keeps the surrounding shell stable and clips the drag inside it.
+// Coach additionally keeps its history parent mounted behind the conversation.
+function liveBackMotion(surface) {
+  const parent = surface.matches('.coach-content-surface') ? surface.parentElement.querySelector('.coach-history-parent') : null;
+  const original = surface.getAttribute('style'), parentStyle = parent?.getAttribute('style');
+  const width = surface.getBoundingClientRect().width;
+  let frame = 0, mounted = false, nextX = 0;
+  const paint = (x, ms) => {
+    const transition = ms ? `transform ${ms}ms cubic-bezier(.2,.8,.2,1)` : 'none';
+    surface.style.transition = transition;
+    surface.style.transform = `translate3d(${x}px,0,0)`;
+    if (parent) { parent.style.transition = transition; parent.style.transform = `translate3d(${-16 * (1-x/width)}px,0,0)`; }
+  };
+  return {
+    render(x, ms) {
+      if (!mounted) {
+        mounted = true;
+        for (const animation of surface.getAnimations()) animation.cancel();
+        // Cancelling the entrance animation releases transform ownership without
+        // toggling animation:none (which would replay entrance on swipe cancel).
+        Object.assign(surface.style, { willChange:'transform' });
+        if (parent) {
+          Object.assign(surface.style, { position:'relative', zIndex:'62', background:'var(--rook-bg)' });
+          Object.assign(parent.style, { visibility:'visible', zIndex:'61', animation:'none', willChange:'transform' });
+        }
+      }
+      nextX=x;
+      if(ms) { cancelAnimationFrame(frame); frame=0; paint(x,ms); }
+      else if(!frame) frame=requestAnimationFrame(()=>{frame=0;paint(nextX,0);});
+    },
+    clear() {
+      cancelAnimationFrame(frame);
+      if (!mounted) return;
+      if(original===null)surface.removeAttribute('style');else surface.setAttribute('style',original);
+      if(parent) { if(parentStyle===null)parent.removeAttribute('style');else parent.setAttribute('style',parentStyle); }
     },
   };
 }

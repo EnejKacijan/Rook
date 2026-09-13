@@ -80,7 +80,7 @@ await newUserPage.route("**/api/ai/status", (route) =>
 await newUserPage.goto(appUrl, { waitUntil: "networkidle" });
 await newUserPage.getByRole("alert").filter({ hasText: "couldn’t safely reopen your data" }).waitFor();
 assert.equal(
-  await newUserPage.getByRole("button", { name: "RELOAD APP" }).count(),
+  await newUserPage.getByRole("button", { name: "RETRY" }).count(),
   1,
   "a blocked read fails closed instead of assuming there is no interrupted restore",
 );

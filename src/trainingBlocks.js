@@ -1,4 +1,4 @@
-import { hasOpenRepTarget } from './advancedLogging.js';
+import { hasOpenRepTarget, hasUnspecifiedRepTarget } from './advancedLogging.js';
 export const TRAINING_BLOCK_SCHEMA_VERSION = 1;
 export const DEFAULT_TRAINING_BLOCK_WEEKS = 6;
 
@@ -216,7 +216,7 @@ export function prescribeTrainingBlockWorkout(state, template) {
         ? Math.round(baseSetCount * week.setMultiplier)
         : baseSetCount + setDelta,
     );
-    if (!hasOpenRepTarget(next)) {
+    if (!hasOpenRepTarget(next) && !hasUnspecifiedRepTarget(next)) {
       next.repMin = Math.max(1, Number(next.repMin || 1) + week.repOffset);
       next.repMax = Math.max(next.repMin, Number(next.repMax || next.repMin) + week.repOffset);
     }

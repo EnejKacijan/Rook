@@ -53,6 +53,8 @@ async function selectGeneric(run, content, name = "workouts.csv", captureParse =
     await run.page.screenshot({ path: output(captureParse) });
   }
   await action;
+  await run.page.getByRole('heading',{name:/^(Check columns & units|Review import)$/}).waitFor();
+  if (await run.page.getByRole('heading',{name:'Check columns & units'}).count()) await run.page.getByRole('button',{name:'REVIEW IMPORT',exact:true}).click();
 }
 async function assertLayout(page, label) {
   await verifyLongContent(page, label);
@@ -105,7 +107,8 @@ for (const width of [390, 320]) {
   const choice=page.locator('.history-import-match-list button').first();
   const correctedName=await choice.locator('strong').innerText();await choice.click();
   assert.match(await page.locator('.history-import-mapping-row').first().innerText(),new RegExp(correctedName));
-  await page.locator('.remember-import-match input').first().check();
+  await page.locator('.remember-import-match input').first().click();
+  await page.waitForFunction(()=>document.querySelector('.remember-import-match input')?.checked);
   assert.deepEqual((await stored()).exerciseAliases,original.exerciseAliases,'remembered aliases also wait for import');
   if(width===320) {
     await page.getByRole('button',{name:'Close Import workout history',exact:true}).click();

@@ -13,6 +13,7 @@ import {
   uid,
 } from "./domain.js";
 import { validateSupersetExercises } from "./supersets.js";
+import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
 
 export const TODAY_ADJUSTMENT_VERSION = 1;
 
@@ -309,6 +310,7 @@ export function buildTodayAdjustment(
   },
 ) {
   const targetDate = isoDay(date);
+  if(combinedAdjustment(state))return {status:'unavailable',reason:'Finish or cancel the combined workout before preparing another adjustment.'};
   if (targetDate !== isoDay())
     return { status: "unavailable", reason: "Adjust Today is available for the current day only." };
   if (state.activeWorkout || state.activeOptionalSession)
@@ -457,6 +459,7 @@ export function resolveTodayAdjustment(
 }
 
 export function todayAdjustmentConflict(state, proposal) {
+  if(combinedAdjustment(state))return 'workout-changed';
   if (!proposal || proposal.date !== isoDay()) return "workout-changed";
   if (state.activeWorkout || state.activeOptionalSession) return "workout-started";
   const current = plannedWorkoutForDate(state, new Date(`${proposal.date}T12:00:00`));

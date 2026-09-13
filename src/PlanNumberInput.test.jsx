@@ -31,6 +31,7 @@ it('Enter commits without submitting; Escape discards the text edit', () => {
   expect(input.value).toBe('2'); expect(changed).toHaveBeenCalledTimes(1);
 });
 it('unchanged blur does not rewrite the prescription', () => { const {changed,blur} = setup(); blur(); expect(changed).not.toHaveBeenCalled(); });
+it('an unspecified target stays empty on focus/blur; only a valid deliberate edit commits',()=>{const {input,changed,blur,fill}=setup(null);expect(input.value).toBe('');blur();expect(changed).not.toHaveBeenCalled();act(()=>input.focus());fill('8');blur();expect(changed).toHaveBeenCalledExactlyOnceWith(8);});
 it('save registry commits a focused draft once, without relying on blur', () => {
   const commits = new Set(), {fill,input,changed,blur} = setup(3,commits);
   fill('4'); act(() => [...commits].forEach(commit => commit()));

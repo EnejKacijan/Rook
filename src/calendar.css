@@ -89,9 +89,6 @@
     color 180ms cubic-bezier(.2, 0, 0, 1);
 }
 .week-strip button:active { transform: scale(.98); }
-.week-strip .workout-planned .workout-dot { background: #b9b5af; }
-.week-strip .workout-completed .completed-dot { background: #1f6b4c; }
-.week-strip .today-date:not(.selected-day) { border: 1px solid var(--rook-today-line); }
 @media (prefers-reduced-motion: reduce) {
   .week-transition-next :is(.week-navigation span, .week-strip),
   .week-transition-previous :is(.week-navigation span, .week-strip) {

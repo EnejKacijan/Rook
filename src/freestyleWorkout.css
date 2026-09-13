@@ -1,6 +1,10 @@
 .freestyle-entry { margin-top: 16px; }
 .today-completed-workouts { margin-top: 20px; }
 .today-completed-workouts .list-row { min-height: 64px; text-align: left; gap: 12px; }
+.today-completed-workouts > .list-row:last-child { border-bottom: 0; }
+/* The final row already has 15px bottom padding; keep the total breathing room
+   before Up next at 31px, without changing rows or other section boundaries. */
+.freestyle-entry:has(> .today-completed-workouts) + .rest-up-next { margin-top: 16px; }
 .today-completed-workouts .list-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .freestyle-entry > .button { width: 100%; min-height: 48px; text-transform: none; letter-spacing: 0; }
 .freestyle-entry > small { display: block; margin-top: 8px; color: var(--rook-secondary); font-size: 13px; line-height: 1.5; }

@@ -50,6 +50,7 @@ export function buildPlanImportReview(parsed, program, catalog) {
       const exercise = day.exercises[index];
       if (!exercise) continue;
       const source = (raw.sourceLines || [raw.sourceLine]).map(n => n === raw.sourceLine && raw.sourceSpan ? raw.sourceSpan.text : lines.find(l => l.line === n)?.text || '').join('\n');
+      if(source)exercise.sourceSpan=raw.sourceSpan?{...raw.sourceSpan,text:source}:{line:raw.sourceLine,text:source};
       const alternatives=analyzeImportAlternatives(source);
       if(alternatives.detected){
         add('alternative', 'Which exercise and prescription should ROOK use? The full source stays preserved.', source, day.id, exercise.id);
@@ -65,19 +66,13 @@ export function buildPlanImportReview(parsed, program, catalog) {
         exercise.targetRir = null;
         add('rir', 'The @ notation is unclear. Choose RIR or leave it unspecified.', source, day.id, exercise.id);
       }
-      if(raw.partialPrescription){
-        add('prescription',`Enter the missing ${raw.partialPrescription.missing.join(' and ')}. Values already provided by the source are preserved.`,source,day.id,exercise.id);
+      if(exercise.partialPrescription){
+        add('prescription',exercise.partialPrescription.roundCount!=null?`The notes specify ${exercise.partialPrescription.roundCount} rounds. How should ROOK record them?`:`Enter the missing ${exercise.partialPrescription.missing.join(' and ')}. Values already provided by the source are preserved.`,source,day.id,exercise.id);
         Object.assign(issues.at(-1),{requiresReps:true,partialPrescription:exercise.partialPrescription});
       } else if(raw.missingPrescription){
         add('prescription','The source gives a load but no sets or reps. Enter the intended prescription.',source,day.id,exercise.id);
         issues.at(-1).requiresReps=true;
         exercise.repMin=null;exercise.repMax=null;exercise.sets.forEach(set=>{set.reps=null;});
-      }
-      if (/\b(?:rounds?|krogi?|kroga|krogov)\b/i.test(source) && !/\d\s*[x×*]\s*\d/i.test(source)) {
-        add('prescription', 'The source gives rounds, not reps. ROOK requires a rep target; enter the intended prescription. The original instruction is preserved.', source, day.id, exercise.id);
-        issues.at(-1).requiresReps=true;
-        exercise.repMin=null;exercise.repMax=null;exercise.sets.forEach(set=>{set.reps=null;});
-        exercise.notes=[exercise.notes,source].filter(Boolean).join('\n');
       }
       if (/\d\s*\/\s*\d\s*\/\s*\d|(?:^|\n)\s*(?:Set\s*\d\s*:|\d+(?:[.,]\d+)?\s*(?:kg|lb)\s*[x×]\s*\d)/i.test(source)) add('prescription', 'This may be a past session log. Review the future prescription; use Import workout history for completed sets.', source, day.id, exercise.id);
       const extraAmrap = source.match(/\+\s*(\d+)\s*AMRAP\b/i);

@@ -1,3 +1,5 @@
+import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
+import {flexibleSessions} from './flexibleWeek.js';
 import {
   HOME_EQUIPMENT,
   PHYSIQUE_PRIORITY_OPTIONS,
@@ -28,6 +30,8 @@ import {
 } from "./domain.js";
 import { plannerCatalog, summarizeTrainingHistory } from "./planQuality.js";
 import { buildPlanImportReview } from './planImportReview.js';
+import {analyzeHybridImport,mergeHybridInterpretation} from './hybridImport.js';
+import {compileHybridImport,finalizeHybridReview} from './hybridImportReview.js';
 import { declaredSourceWeightUnit, sourceWeightUnitAt, unitlessPrescriptionLoads, sourceLoadsInKg } from './importSourceUnits.js';
 import {
   compileProfileTrainingSafety,
@@ -649,7 +653,7 @@ function parseWarmupNoteItem(value) {
   };
 }
 const NOTE_SET_WORD =
-  "(?:sets?|serije?|seriji|serij|series?|rounds?|krogi?|kroga|krogov|satz|satze|sätze|runden?|series?|rondas?)";
+  "(?:sets?|serije?|seriji|serij|series?|rounds?|krog(?:ov|a|i|e)?|satz|satze|sätze|runden?|series?|rondas?)";
 const NOTE_REP_WORD =
   "(?:reps?|repov|ponovitev|ponovitve|ponavljanj|wdh|repeticiones?)";
 function parseNotePrescription(value) {
@@ -738,6 +742,7 @@ function parseNotePrescription(value) {
   );
   if (setsOf)
     return {
+      ...(/\d+\s*(?:round|krog|rund|ronda)/iu.test(setsOf[0])?{importedRoundPrescription:{count:Number(setsOf[1])}}:{}),
       index: setsOf.index,
       length: setsOf[0].length,
       count: Number(setsOf[1]),
@@ -754,6 +759,7 @@ function parseNotePrescription(value) {
   );
   if (standard)
     return {
+      ...(/\d+\s*(?:round|krog|rund|ronda)/iu.test(standard[0])?{importedRoundPrescription:{count:Number(standard[1])}}:{}),
       index: standard.index,
       length: standard[0].length,
       count: Number(standard[1]),
@@ -805,12 +811,17 @@ function parseNotePrescription(value) {
       index: rounds.index,
       length: rounds[0].length,
       count: Number(rounds[1]),
-      repMin: Number(rounds[3] || 1),
-      repMax: Number(rounds[3] || 1),
+      repMin: rounds[3] ? Number(rounds[3]) : null,
+      repMax: rounds[3] ? Number(rounds[3]) : null,
       suffix: source.slice(rounds.index + rounds[0].length),
       failure: false,
       implicitReps: !rounds[3],
       setUnit: foldNoteText(rounds[2]),
+      // Inline rounds belong to this one exercise, not a repeated circuit group.
+      ...(/^(?:round|krog|rund|ronda)/i.test(foldNoteText(rounds[2]))?{
+        importedRoundPrescription:{count:Number(rounds[1])},
+        ...(!rounds[3]?{partial:{missing:['reps']}}:{}),
+      }:{}),
     };
   return null;
 }
@@ -956,11 +967,11 @@ function tableExerciseLine(cells, header) {
   const name = at("name");
   const sets = Number(at("sets"));
   const reps = at("reps").replace(/^x\s*/i, "");
-  if (!name || !Number.isInteger(sets) || sets < 1 || sets > 20 || !/^(?:\d+(?:\s*[–—-]\s*\d+)?|AMRAP|max reps|failure|to failure|do odpovedi)$/iu.test(reps))
+  if (!name || !Number.isInteger(sets) || sets < 1 || sets > 20 || reps && !/^(?:\d+(?:\s*[–—-]\s*\d+)?|AMRAP|max reps|failure|to failure|do odpovedi)$/iu.test(reps))
     return null;
   return [
     name,
-    `${sets}x${reps}`,
+    reps?`${sets}x${reps}`:`${sets} sets`,
     at("weight"),
     at("rir") && /r(?:ir|pe)/i.test(at("rir")) ? at("rir") : at("rir") ? `${header.effortMode || 'RIR'} ${at("rir")}` : "",
     at("rest") ? `rest: ${at("rest")}` : "",
@@ -1191,7 +1202,10 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
   const roundDirective = value => /^(?:\d+\s*(?:rounds?|krogi|kroge|kroga|krogov)|(?:circuit|krog|circuito|zirkel|giant set)\s*(?:[a-z]\s*)?(?:x|×|:|-)?\s*\d+(?:\s*(?:rounds?|krogi|kroge|kroga|krogov))?)\s*:?[\s]*$/iu.test(cleanNoteItem(value));
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
-    const partial = review ? partialPrescription(line) : null;
+    const candidatePartial = partialPrescription(line);
+    // Outside the decision flow, only a known set structure is executable.
+    // Merely recognizing a movement in a list of ideas is not a ready plan.
+    const partial = review || candidatePartial?.count > 0 ? candidatePartial : null;
     if (roundDirective(line)) {
       let end = index + 1;
       while (end < lines.length && !roundDirective(lines[end]) && !parsedDayHeading(lines[end]) &&
@@ -1473,6 +1487,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       sourceName: importedLabel.name,
       ...(sourceFragments.has(index) ? { sourceSpan: sourceFragments.get(index) } : {}),
       ...(prescription.partial ? {partialPrescription:prescription.partial} : {}),
+      ...(prescription.importedRoundPrescription ? {importedRoundPrescription:prescription.importedRoundPrescription} : {}),
       sets: count,
       repMin,
       repMax,
@@ -1961,7 +1976,7 @@ export const AIService = {
         : null,
     };
   },
-  async importTrainingPlan(profile, existingPlanText, { signal = null, review = false, onStage } = {}) {
+  async importTrainingPlan(profile, existingPlanText, { signal = null, review = false, onStage, interpretWithAI = false } = {}) {
     onStage?.('reading');
     if (review && String(existingPlanText).length > 100000) throw new Error('This note is too long. Import one weekly plan at a time.');
     if (review && new Set([...String(existingPlanText).matchAll(/^[^\p{L}\p{N}\r\n]*(?:week|teden)\s+(\d+)\b/gimu)].map(match => match[1])).size > 1)
@@ -1972,7 +1987,33 @@ export const AIService = {
       profile,
       { review },
     );
+    if(review){
+      let analysis=analyzeHybridImport(existingPlanText,locallyParsed,{heading:parsedDayHeading,workoutHeading:genericWorkoutHeading,matchName:matchImportedExerciseName});
+      if(analysis.useHybrid){
+        let interpretationError=null;
+        if(interpretWithAI&&analysis.needsAI){
+          onStage?.('reading');
+          try{
+            const data=await request('interpret-import',{
+              consent:true,fragments:analysis.fragments.map(({id,text,executable})=>({id,text,executable})),
+              importAttemptId:globalThis.crypto?.randomUUID?.()||`interpret-${Date.now()}`,
+            },{timeoutMs:IMPORT_PLAN_TIMEOUT_MS,signal});
+            analysis=mergeHybridInterpretation(analysis,data);
+            if(analysis.validation.rejected.length)interpretationError='Some AI interpretation was not supported by the source. Your local draft is preserved for manual review.';
+          }catch(error){if(signal?.aborted)throw error;interpretationError=error.message||'AI interpretation is unavailable. Your local draft is preserved.';}
+        }
+        if(signal?.aborted)throw new Error('Import cancelled. Your notes are still here.');
+        onStage?.('checking');
+        const raw=compileHybridImport(analysis);
+        if(raw.days.length){
+          const result=finalizeHybridReview(finalizeImportedPlan(profile,existingPlanText,raw,{review:true}),raw,analysis);
+          return {...result,hybrid:{...result.hybrid,attemptedAI:interpretWithAI,error:interpretationError}};
+        }
+      }
+    }
     if (locallyParsed) {
+      if(!review&&locallyParsed.days.some(day=>day.exercises.some(e=>e.partialPrescription?.missing.some(key=>key!=='reps')||e.partialPrescription&&e.measure==='seconds')))
+        throw new Error('This source needs a structure or prescription decision. Import with source review; no missing target was guessed.');
       if (!review && locallyParsed.parseReview?.roundGroups?.length)
         throw new Error('Round/circuit groups require source review before this plan can be used.');
       onStage?.('checking');
@@ -2003,12 +2044,14 @@ export const AIService = {
     );
     return finalizeImportedPlan(profile, existingPlanText, data);
   },
-  async coach(state, message) {
-    const deterministic = deterministicCoach(state, message);
+  async coach(state, message, combineOptions = {}) {
     const responseLanguage = preferredCoachLanguage(
       message,
       state.conversations,
     );
+    const combined=await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload)});
+    if(combined)return combined;
+    const deterministic = deterministicCoach(state, message);
     if (deterministic.final) return deterministic;
     try {
       const status = await this.status();
@@ -2016,7 +2059,7 @@ export const AIService = {
       const payload = {
         message,
         responseLanguage,
-        context: coachContext(state),
+        context: {...coachContext(state),combineRevisionContext:combineRevisionContext(state),combineSessions:flexibleSessions(state).map(s=>({id:s.logicalSessionId,name:s.workout.name,date:s.scheduledDate,status:s.status}))},
         deterministicAnalysis:
           deterministic.source === "offline" ? null : deterministic,
       };
@@ -2027,6 +2070,10 @@ export const AIService = {
           previousLanguageMismatch: `The previous reply was not in ${responseLanguage}. Rewrite the answer and any explanation entirely in ${responseLanguage}.`,
         });
       data.text = normalizeCoachText(data.text);
+      if(data.action?.type==='combine-workouts')return coachCombineReply(state,message,{
+        selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,
+      });
+      if(data.action?.type==='revise-combined-workout')return coachCombineReply(state,message,{revisionIntent:data.action,language:responseLanguage});
       const aiAction = validateAIAction(data.action, state);
       const fallbackAction = validateAIAction(deterministic.action, state);
       if (!aiAction && fallbackAction?.type === "add-today-workout")

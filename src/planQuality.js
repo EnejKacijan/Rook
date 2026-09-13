@@ -1,4 +1,5 @@
 import { selectStructuralTemplate } from './splitPreferences.js';
+import { generatedSessionTiming } from './durationPlanning.js';
 import { compileProfileTrainingSafety, exerciseAllowedByTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
 import { fewerHardRepRange, inferredProgrammingRole, minimumWorkingSetsForExercise } from './prescriptionPolicy.js';
 import { accumulateStimulus, hypertrophyTargetsForProfile, priorityProgrammingGroupsForProfile, priorityStimulusMusclesForProfile, stimulusMutationPreservesPolicy, stimulusProfileForItem } from './trainingVolume.js';
@@ -197,12 +198,13 @@ export function summarizeTrainingHistory(workouts = [], program = null, { now = 
   };
 }
 
-function estimatedMinutes(exercises, byId) {
-  if (!exercises?.length) return 0;
-  return 5 + Math.max(0, exercises.length - 1) * 2 + exercises.reduce((sum, exercise) => {
-    const sets = Number(exercise.sets) || 0; const workSeconds = sets * 45; const rests = Math.max(0, sets - 1) * (Number(exercise.restSeconds) || 90); const setup = byId.get(exercise.exerciseId)?.kind === 'compound' ? 3 : 1;
-    return sum + Math.max(3, Math.ceil((workSeconds + rests) / 60 + setup));
-  }, 0);
+function estimatedMinutes(exercises, byId, profile) {
+  // The raw provider shape stores a set count; estimate the same prescription
+  // as the local generator rather than maintaining a second timing formula.
+  if ((exercises || []).some(row => !Number.isInteger(Number(row.sets)) || Number(row.sets) < 0 || Number(row.sets) > 20)) return Infinity;
+  const rows = (exercises || []).map(row => ({ ...row,
+    sets: Array.from({ length: Number(row.sets) }, () => ({ reps: row.repMin, weight: row.weightKg ?? null })) }));
+  return generatedSessionTiming(rows, profile, Object.fromEntries(byId)).minutes;
 }
 function dayFocus(day, byId) {
   const patterns = (day.exercises || []).map(exercise => byId.get(exercise.exerciseId)?.pattern).filter(Boolean);
@@ -338,7 +340,7 @@ export function verifiedRawCoverageConstraintReason(plan, profile, catalog, prog
     priorityMuscles,
   });
   const byId = new Map(catalog.map(item => [item.id, item]));
-  const fits = (day, exercises) => estimatedMinutes(exercises, byId) <= Number(profile.sessionMinutes || day.estimatedMinutes);
+  const fits = (day, exercises) => estimatedMinutes(exercises, byId, profile) <= Number(profile.sessionMinutes || day.estimatedMinutes);
   for (const day of supportedDays) {
     const compatible = compatibleByDay.get(day) || [];
     const existing = (day.exercises || []).filter(exercise =>
@@ -453,7 +455,7 @@ export function validateRawPlan(plan, profile = {}, catalog = [], programmingCon
       if (effortPolicy?.mode === 'more-moderate' && exercise.targetRir > 3) add('effort_intensity', `${exercise.exerciseId} is easier than the selected moderate-set range.`, day.weekday, exercise.exerciseId);
     }
     for (const [pattern, count] of patternCounts) if (count > 1) add('interchangeable_redundancy', `Multiple interchangeable ${pattern} compounds occur in one session.`, day.weekday);
-    const calculated = estimatedMinutes(day.exercises || [], byId); const available = Number(profile.sessionMinutes || day.estimatedMinutes); const durationLimit = Math.max(available + 5, Math.ceil(available * 1.15)); if (!Number.isFinite(Number(day.estimatedMinutes)) || Math.abs(Number(day.estimatedMinutes) - calculated) > 5 || calculated > durationLimit) add('duration', `Estimated duration is unrealistic on ${day.weekday}.`, day.weekday);
+    const calculated = estimatedMinutes(day.exercises || [], byId, profile); const available = Number(profile.sessionMinutes || day.estimatedMinutes); const durationLimit = Math.max(available + 5, Math.ceil(available * 1.15)); if (!Number.isFinite(Number(day.estimatedMinutes)) || Math.abs(Number(day.estimatedMinutes) - calculated) > 5 || calculated > durationLimit) add('duration', `Estimated duration is unrealistic on ${day.weekday}.`, day.weekday);
     const focus = dayFocus(day, byId); if (contradiction(day, focus)) add('name_content_conflict', `Session name and exercise content conflict on ${day.weekday}.`, day.weekday);
     signatures.push({ weekday: day.weekday, ids: new Set((day.exercises || []).map(exercise => exercise.exerciseId)), focus });
   }

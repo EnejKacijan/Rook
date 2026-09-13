@@ -175,9 +175,8 @@ describe("Notes workout import corpus", () => {
   });
 
   it("does not invent repetitions when only a set count is supplied", () => {
-    expect(
-      parseStructuredTrainingNotes("Monday\nBench Press — 1 set", profile),
-    ).toBeNull();
+    const result = parseStructuredTrainingNotes("Monday\nBench Press — 1 set", profile);
+    expect(result.days[0].exercises[0]).toMatchObject({sourceName:'Bench Press',sets:1,repMin:null,repMax:null,weightKg:null});
   });
 
   it("preserves safe slash-separated loads and the shared rep target", () => {

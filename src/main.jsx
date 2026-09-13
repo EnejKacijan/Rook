@@ -2,6 +2,8 @@ import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { RookRoot } from './App.jsx';
 import { recoverInterruptedRestore } from './restoreTransaction.js';
+import { StartupRecovery } from './StartupBoundary.jsx';
+import { bindNavigationFocus } from './navigationFocus.js';
 import './styles.css';
 import './overrides.css';
 import './overlay.css';
@@ -12,25 +14,21 @@ import './import-plan.css';
 import './coach.css';
 import './landing.css';
 import './theme.css';
+import './navigationFocus.css';
+
+const releaseNavigationFocus = bindNavigationFocus();
+if (import.meta.hot) import.meta.hot.dispose(releaseNavigationFocus);
 
 if ('serviceWorker' in navigator) window.addEventListener('load', () => navigator.serviceWorker.register('/sw.js').catch(() => {}));
 
+const root = createRoot(document.getElementById('root'));
 async function bootRook() {
-  const root = createRoot(document.getElementById('root'));
+  root.render(<StartupRecovery loading/>);
   try {
     await recoverInterruptedRestore();
     root.render(<React.StrictMode><RookRoot /></React.StrictMode>);
   } catch {
-    root.render(
-      <main className="fatal-error-screen" role="alert">
-        <p className="eyebrow">ROOK</p>
-        <h1>ROOK couldn’t safely reopen your data.</h1>
-        <p>Keep this tab open and try reloading the app.</p>
-        <button className="button primary" onClick={() => location.reload()}>
-          RELOAD APP
-        </button>
-      </main>,
-    );
+    root.render(<StartupRecovery restoreError onRetry={bootRook}/>);
   }
 }
 

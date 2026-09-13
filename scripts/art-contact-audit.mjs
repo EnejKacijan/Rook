@@ -1,6 +1,6 @@
 import {readdir,readFile,mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
-const dir='src/assets/exercise-art',out='artifacts/art-contact-audit';await mkdir(out,{recursive:true});
+const dir=process.env.ART_AUDIT_DIR || 'src/assets/exercise-art',out=process.env.ART_AUDIT_OUT || 'artifacts/art-contact-audit';await mkdir(out,{recursive:true});
 const files=(await readdir(dir)).filter(f=>f.startsWith('wg-')&&f.endsWith('.svg')).sort();
 const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
 try{const page=await browser.newPage({viewport:{width:1400,height:1500}});

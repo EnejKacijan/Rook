@@ -108,7 +108,7 @@ try {
       await page.getByRole("button", { name: "PROFILE", exact: true }).click();
       await openProfileArea(page, 'program'); await page.getByRole("button", { name: /^Edit plan/ }).click();
       const sheet = page.locator(".edit-plan-screen");
-      await sheet.getByRole("button", { name: "+ ADD EXERCISE", exact: true }).first().click();
+      await sheet.getByRole("button", { name: "+ Add exercise", exact: true }).first().click();
       const search = sheet.getByRole("searchbox", { name: /Search exercise for/ });
       assert.equal(await search.evaluate((node) => getComputedStyle(node).fontSize), "16px");
       await search.focus();

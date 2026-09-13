@@ -2,6 +2,9 @@ import { useId, useState } from 'react';
 import { pendingImportIssues, importDecisionSummary, isImportAcknowledgement } from './planImportReview.js';
 import './planImportIssues.css';
 import { Disclosure } from './Disclosure.jsx';
+import { partialPrescriptionSourceFields } from './importPartialPrescription.js';
+import { exerciseMeasure } from './domain.js';
+import {hasUnspecifiedRepTarget,loggingUnit} from './advancedLogging.js';
 const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 export function PlanImportIssues({ review, resolved, program, onResolve, reviewRequest = 0, summaryOnly = false, onChange, decisionGroups=[] }) {
   const [detailsOpen,setDetailsOpen]=useState(false);
@@ -34,7 +37,7 @@ export function PlanImportIssues({ review, resolved, program, onResolve, reviewR
           })}
           <button type="button" className="button primary" onClick={()=>notes.forEach(note=>onResolve(note,{}))}>CONFIRM EXCLUSIONS ({notes.length})</button>
         </div>}
-        {allChoices.map(issue=><ImportIssue key={issue.id} issue={issue} program={program} resolved={!!resolved[issue.id]} onResolve={value=>onResolve(issue,value)}/>)}
+        {allChoices.map(issue=><ImportIssue key={issue.id} issue={issue} program={program} resolved={resolved[issue.id]} onResolve={value=>onResolve(issue,value)}/>)}
       </>}
     </>
     </>}
@@ -46,10 +49,10 @@ export function PlanImportIssues({ review, resolved, program, onResolve, reviewR
     </div>}
   </section>;
 }
-export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
+export function ImportIssue({issue,program,resolved,onResolve,focused=false,grouped=false,fallbackExercise}){
   const helpId=useId();
   const day=program.days.find(d=>d.id===issue.dayId);
-  const exercise=day?.exercises.find(e=>e.id===issue.exerciseId);
+  const exercise=day?.exercises.find(e=>e.id===issue.exerciseId)||fallbackExercise;
   const context=day ? `${day.name}${exercise?` · ${exercise.importedName||exercise.exerciseId}`:''}` : '';
   const comparable=value=>String(value).toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
   const selectedOption=issue.options?.findIndex(option=>JSON.stringify(option)===JSON.stringify(resolved?.option));
@@ -59,32 +62,56 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
   const [edited,setEdited]=useState(Boolean(resolved));
   const partial=issue.partialPrescription;
   const openKnown=partial&&!partial.missing.includes('reps')&&exercise?.repMin==null;
+  const sourceFields=partialPrescriptionSourceFields(partial).filter(key=>(!openKnown||key==='sets')&&!(key==='sets'&&exercise?.supersetId));
+  const [correctingSource,setCorrectingSource]=useState(false);
+  const correctedFields=Object.keys(exercise?.importPrescriptionCorrections?.values||{});
+  const isLocked=key=>Boolean(key==='sets'&&exercise?.supersetId||!correctingSource&&sourceFields.includes(key)&&!(key==='sets'&&partial?.setRange));
   const [sets,setSets]=useState(String(exercise?.sets.length||''));
   const [min,setMin]=useState(String(exercise?.repMin??''));
   const [max,setMax]=useState(String(exercise?.repMax??''));
   const numbers=Number.isInteger(Number(sets))&&Number(sets)>=1&&Number(sets)<=20&&Number.isInteger(Number(min))&&Number.isInteger(Number(max))&&Number(min)>=1&&Number(max)>=Number(min);
-  const invalidFields=[...(!Number.isInteger(Number(sets))||Number(sets)<1||Number(sets)>20?['sets']:[]),...(!Number.isInteger(Number(min))||Number(min)<1?['repMin']:[]),...(!Number.isInteger(Number(max))||Number(max)<1?['repMax']:[]),...(min!==''&&max!==''&&Number(min)>Number(max)?['repMin','repMax']:[])];
+  const sourceCountInvalid=!correctingSource&&!correctedFields.includes('sets')&&partial?.setRange&&(Number(sets)<partial.setRange[0]||Number(sets)>partial.setRange[1]);
+  const invalidFields=[...(!Number.isInteger(Number(sets))||Number(sets)<1||Number(sets)>20||sourceCountInvalid?['sets']:[]),...(!Number.isInteger(Number(min))||Number(min)<1?['repMin']:[]),...(!Number.isInteger(Number(max))||Number(max)<1?['repMax']:[]),...(min!==''&&max!==''&&Number(min)>Number(max)?['repMin','repMax']:[])];
   const prescriptionHelp=!edited?'Enter the intended sets and reps.':invalidFields.includes('sets')?'Enter a whole number of sets between 1 and 20.':min===''?'Enter minimum reps.':max===''?'Enter maximum reps.':Number(min)>Number(max)?'Maximum reps must be at least minimum reps.':'Enter positive whole numbers for reps.';
   const valid=issue.field==='advanced'?['drop','rest_pause','amrap','failure','note'].includes(value)&&Boolean(exercise?.sets[Number(setIndex)]):issue.field==='loggingMode'?['normal','per_side'].includes(value):issue.field==='day'?days.includes(value):issue.field==='load'?(value===''||Number.isFinite(Number(value))&&Number(value)>=0):issue.field==='prescription'?numbers:issue.field==='rir'?value===''||/^[0-4]$/.test(value):false;
-  const payload=(overrides={})=>({value,unit,setIndex:Number(setIndex),sets:Number(sets),repMin:Number(min),repMax:Number(max),...overrides});
+  const payload=(overrides={})=>({value,unit,setIndex:Number(setIndex),sets:sets===''?'':Number(sets),repMin:min===''?'':Number(min),repMax:max===''?'':Number(max),...(correctingSource?{sourceCorrections:sourceFields}:{}),...overrides});
   const choose=(next)=>{setValue(next);setEdited(true);onResolve(payload({value:next}));};
   const inputChange=(setter,key,raw)=>{
     setter(raw);setEdited(true);
     const next=payload({[key]:raw});
     const accepted=issue.field==='load'?(raw===''||Number.isFinite(Number(raw))&&Number(raw)>=0):
-      (openKnown?['sets']:['sets','repMin','repMax']).every(field=>next[field]!==''&&Number.isInteger(Number(next[field]))&&Number(next[field])>=1)&&Number(next.sets)<=20&&(openKnown||Number(next.repMax)>=Number(next.repMin));
+      (openKnown?['sets']:['sets','repMin','repMax']).every(field=>next[field]!==''&&Number.isInteger(Number(next[field]))&&Number(next[field])>=1)&&Number(next.sets)<=20&&(openKnown||Number(next.repMax)>=Number(next.repMin))&&
+      (correctingSource||correctedFields.includes('sets')||!partial?.setRange||Number(next.sets)>=partial.setRange[0]&&Number(next.sets)<=partial.setRange[1])&&
+      (correctingSource||correctedFields.includes('repMin')||partial?.repFloor==null||Number(next.repMin)===partial.repFloor)&&
+      (correctingSource||correctedFields.includes('repMax')||partial?.repCeiling==null||Number(next.repMax)===partial.repCeiling);
     onResolve(accepted?{...next,sets:Number(next.sets),repMin:openKnown?null:Number(next.repMin),repMax:openKnown?null:Number(next.repMax)}:null);
   };
+  const numericNext=(event,key)=>{
+    if(event.key!=='Enter')return;
+    event.preventDefault();setEdited(true);
+    if(invalidFields.includes(key))return;
+    const inputs=[...event.currentTarget.closest('.plan-import-prescription').querySelectorAll('input')],index=inputs.indexOf(event.currentTarget);
+    const invalid=inputs.find(input=>invalidFields.includes(input.dataset.prescriptionField));
+    if(inputs[index+1])inputs[index+1].focus();else if(invalid)invalid.focus();else event.currentTarget.blur();
+  };
   return <div className="plan-import-issue plan-import-choice" data-unresolved={!resolved} tabIndex={-1}>
-    <p>{issue.message}</p><span className="eyebrow">SOURCE</span><blockquote>{issue.source}</blockquote>
-    {context&&comparable(context)!==comparable(issue.source)&&<small>{context}</small>}
+    <p>{correctingSource?'Correct the source values and fill any missing targets. Your original notes stay unchanged.':partial?.repFloor!=null?'The source gives a minimum rep target. ROOK currently needs an upper limit too; choose the maximum for this plan.':grouped&&issue.field==='prescription'?`Set the ${partial?.missing.join(' and ')||'reps'} target${partial?.setRange?' within the source range':''}.`:issue.message}</p>
+    {!grouped&&<><span className="eyebrow">SOURCE</span><blockquote>{issue.source}</blockquote>{context&&comparable(context)!==comparable(issue.source)&&<small>{context}</small>}{exercise?.importRole&&<strong className="import-source-role">{exercise.importRole}</strong>}</>}
+    {partial?.setRange&&<small>Source: {partial.setRange[0]}–{partial.setRange[1]} sets.{!correctingSource&&!correctedFields.includes('sets')?' Choose a count in this range.':''}</small>}
+    {issue.field==='optional'&&<div className="import-resolution-options">{[['include','INCLUDE IN THIS PLAN'],['exclude','KEEP IN SOURCE NOTES ONLY']].map(([value,label])=><button type="button" key={value} className="button secondary" aria-pressed={resolved?.value===value} onClick={()=>onResolve({value})}>{label}</button>)}</div>}
     {issue.field==='sourceUnit'&&<div className="import-resolution-options">{['kg','lb'].map(unit=><button type="button" className="button secondary" key={unit} aria-pressed={resolved?.unit===unit} onClick={()=>onResolve({unit})}>{unit}</button>)}</div>}
     {issue.field==='day'&&<label>Workout day<select aria-label="Workout day" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose day</option>{days.map(d=><option key={d} value={d} disabled={program.days.some(other=>other.id!==day.id&&other.weekday===d)}>{d}</option>)}</select></label>}
     {issue.field==='rir'&&<label>RIR<select aria-label="Reviewed RIR" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose RIR</option><option value="">Unspecified</option>{[0,1,2,3,4].map(n=><option key={n}>{n}</option>)}</select></label>}
     {issue.field==='loggingMode'&&<label>Logging mode<select aria-label="Reviewed logging mode" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose logging mode</option><option value="normal">One representative value</option><option value="per_side">Left and right separately</option></select></label>}
     {issue.field==='advanced'&&<><label>Set<select aria-label="Reviewed special set" value={setIndex} onChange={e=>{setSetIndex(e.target.value);if(edited&&valid)onResolve(payload({setIndex:Number(e.target.value)}));}}>{exercise?.sets.map((set,index)=><option key={set.id} value={index}>Set {index+1}</option>)}</select></label><label>Method<select aria-label="Reviewed set method" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose method</option><option value="drop">Drop set</option><option value="rest_pause">Rest-pause</option><option value="amrap">AMRAP</option><option value="failure">Failure · 0 RIR</option><option value="note">Keep as note only</option></select></label></>}
     {issue.field==='load'&&<><label>Load · optional<input aria-label="Reviewed load" type="text" inputMode="decimal" value={value==='__choose'?'':value} onChange={e=>inputChange(setValue,'value',e.target.value)}/></label><label>Unit<select aria-label="Reviewed load unit" value={unit} onChange={e=>{setUnit(e.target.value);if(edited&&valid)onResolve(payload({unit:e.target.value}));}}><option>kg</option><option>lb</option></select></label><button type="button" className="button quiet" onClick={()=>choose("")}>Leave load unspecified</button></>}
-    {issue.field==='prescription'&&<div className="plan-import-prescription">{[['Sets',sets,setSets,'sets'],['Min reps',min,setMin,'repMin'],['Max reps',max,setMax,'repMax']].filter(([, , ,key])=>!openKnown||key==='sets').map(([label,v,set,key])=><label key={label}>{exercise?.measure==='seconds'?label.replace('reps','seconds'):label}<input aria-label={`Reviewed ${label}`} readOnly={Boolean(partial&&!partial.missing.includes(key==='sets'?'sets':'reps'))} aria-invalid={focused&&edited&&invalidFields.includes(key)||undefined} aria-describedby={!resolved?helpId:undefined} type="text" inputMode="numeric" value={v} onChange={e=>inputChange(set,key,e.target.value)}/></label>)}{openKnown&&<span>AMRAP</span>}</div>}
+    {issue.field==='prescription'&&<>
+      <div className="plan-import-prescription">{[['Sets',sets,setSets,'sets'],['Min reps',min,setMin,'repMin'],['Max reps',max,setMax,'repMax']].filter(([, , ,key])=>!openKnown||key==='sets').map(([label,v,set,key])=>{
+        const text=key==='sets'&&loggingUnit(exercise)==='round'?'Rounds':exerciseMeasure(exercise)==='seconds'?label.replace('reps','seconds'):label;
+        return isLocked(key)?<div key={label} className="import-source-value" aria-label={`Source ${text}`}><span>{text}</span><strong>{v}</strong><small>{correctedFields.includes(key)?'Your correction':'From source'}</small></div>:<label key={label}>{text}<input aria-label={`Reviewed ${label}`} aria-invalid={focused&&edited&&invalidFields.includes(key)||undefined} aria-describedby={!resolved&&edited?helpId:undefined} type="text" inputMode="numeric" enterKeyHint={key==='repMax'||openKnown?'done':'next'} data-prescription-field={key} value={v} onKeyDown={e=>numericNext(e,key)} onChange={e=>inputChange(set,key,e.target.value)}/></label>;
+      })}{openKnown&&<div className="import-source-value import-open-target"><span>Target</span><strong>{hasUnspecifiedRepTarget(exercise)?'Reps not specified':exercise?.sets?.some(set=>set.setType==='amrap')||partial.setType==='amrap'?'AMRAP':'To failure'}</strong><small>From source</small></div>}</div>
+      {sourceFields.length>0&&!correctingSource&&<button type="button" className="text-button import-edit-source" onClick={()=>setCorrectingSource(true)}>Edit source values</button>}
+    </>}
     {issue.field==='alternative'&&<>
       {(issue.options||[]).map((option,index)=><button type="button" className="choice-row button secondary" key={index} aria-pressed={value===String(index)} onClick={()=>{setValue(String(index));onResolve({option});}}>{option.name} · {option.sets} × {option.repMin}{option.repMax!==option.repMin?`–${option.repMax}`:''}{option.measure==='seconds'?' sec':''}{option.weight!==null?` · ${Number((option.sourceWeight??option.weight).toFixed(2))} ${option.sourceUnit||'kg'}`:''}{option.targetRir!=null?` · ${option.targetRir} RIR`:''}</button>)}
       {!issue.options?.length&&<p role="alert">These alternatives need clearer source details. Go Back to edit your notes, and give each exercise its own sets × reps and explicit load unit where applicable. Nothing has been chosen automatically.</p>}
@@ -92,7 +119,7 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false}){
     {issue.field==='grouping'&&<button type="button" className="button secondary" aria-pressed={Boolean(resolved)} onClick={()=>onResolve({value:'separate'})}>KEEP AS SEPARATE EXERCISES</button>}
     {issue.field==='load'&&resolved&&value===''&&<small role="status">✓ Load unspecified</small>}
     {issue.field==='prescription'&&!resolved&&<>
-      <small id={helpId} aria-live={focused?'polite':undefined}>{partial?`Enter the missing ${partial.missing.join(' and ')}. Known source values stay unchanged.`:focused?prescriptionHelp:issue.requiresReps?'Enter the intended min and max reps to resolve this decision.':'Enter the intended sets and reps, or explicitly accept the values shown.'}</small>
+      {edited&&<small id={helpId} aria-live={focused?'polite':undefined}>{!correctingSource&&!correctedFields.includes('sets')&&partial?.setRange&&(Number(sets)<partial.setRange[0]||Number(sets)>partial.setRange[1])?`Choose between ${partial.setRange[0]} and ${partial.setRange[1]} sets, or edit source values.`:prescriptionHelp}</small>}
       {!focused&&!issue.requiresReps&&<button type="button" className="button primary" disabled={!valid} onClick={()=>onResolve(payload())}>USE THESE SETS &amp; REPS</button>}
     </>}
   </div>;

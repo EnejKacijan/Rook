@@ -3,6 +3,7 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { gzipSync } from "node:zlib";
+import {hybridInterpretationSchema,hybridInterpretationInstructions,hybridInterpretationRoleRules,validateHybridInterpretation} from './src/hybridImport.js';
 import {
   applyExpertPolicyToPlan,
   expertExamplesForProfile,
@@ -591,7 +592,17 @@ schemas.coach.schema.properties.action.anyOf.splice(2, 0, {
   ],
 });
 
+schemas['combine-intent']={name:'combined_workout_intent',schema:{type:'object',additionalProperties:false,
+  properties:{sourceIds:{type:'array',items:{type:'string'},maxItems:2},minutes:{type:['number','null']},unambiguous:{type:'boolean'}},
+  required:['sourceIds','minutes','unambiguous']}};
+schemas.coach.schema.properties.action.anyOf.push({type:'object',additionalProperties:false,
+  properties:{type:{type:'string',const:'combine-workouts'},sourceSessionIds:{type:'array',items:{type:'string'},minItems:2,maxItems:2},minutes:{type:['number','null']}},
+  required:['type','sourceSessionIds','minutes']});
+schemas.coach.schema.properties.action.anyOf.push({type:'object',additionalProperties:false,
+  properties:{type:{type:'string',const:'revise-combined-workout'},targetWorkoutId:{type:'string'},timeMode:{type:'string',enum:['total','delta','no-limit','unknown']},minutes:{type:['number','null']}},
+  required:['type','targetWorkoutId','timeMode','minutes']});
 const instructions = {
+  'combine-intent':'Interpret a request to combine exactly two real planned workout occurrences. Use only supplied session IDs and dates. Never choose completed, active, skipped or reserved sessions. Resolve names and relative dates against today. If a name matches multiple dates without a uniquely stated date/week, or fewer/more than two sources are specified, return unambiguous false and no IDs. Never infer extra sessions just to fill two slots. Extract minutes only when explicitly stated; absence is null. Do not invent a workout, exercises, sets, prescriptions, medical constraints or schedule changes. This is intent extraction only, not approval to apply anything.',
   "follow-ups":
     "You are a strength-program onboarding assistant. Ask zero to four questions only when the structured profile lacks information that would materially change exercise or schedule selection. Each question must be one concise sentence of at most 14 words. Never put examples, alternatives, explanations, or parentheses in question; place useful examples in hint instead. hint must be null when no clarification is needed. Never ask for facts already present.",
   plan: "Design an evidence-informed resistance-training week from the supplied profile and only the supplied catalog exercise IDs. programmingContext.structuralTemplate and baselineProgram provide a safe frequency-based starting point, not an immutable answer. Preserve that structure when there is no clear split preference. programmingContext.trainingStyle is the normalized interpretation of the user text: structure is the weekly organization, styleOverlays modify emphasis, progression and periodization describe loading behavior, and namedProgram identifies a branded request. Never collapse these independent fields or infer a branded method from a generic label. The fidelity field is authoritative: exact may use the canonical structure, adapted must preserve its recognizable identity while fitting the requested frequency, inspired may borrow principles but must not claim exact implementation, and incompatible must fall back transparently. When programmingContext.preferredSplit is present and requiresMaterialAdaptation is true, the final plan must materially reflect it instead of returning the unchanged baseline. Arnold uses recognizable Chest & Back, Shoulders & Arms, and Legs sessions. Upper / Lower, Push / Pull / Legs, Full Body, two-way Push / Pull, Torso / Limbs, Body-part, and PPLUL preferences must use recognizable matching session structure when feasible. In Torso / Limbs, direct arm work belongs primarily on Limbs days; in two-way Push / Pull, lower-body knee-dominant work belongs with Push and posterior-chain work with Pull. PPLUL must contain distinct Push, Pull, Legs, Upper, and Lower sessions. A preference is soft only when it conflicts with equipment, restrictions, recovery, available time, or safe workload; never ignore a feasible explicit split preference. Do not present an unavailable named-program progression as exact merely because its broad split resembles a supported template. Select exactly daysPerWeek distinct weekdays from availableDays and place recovery intelligently. For environment Commercial gym, every day location is Commercial gym and equipment full gym means normal commercial-gym access. For Home gym, every day location is Home and you may use only selected equipment. For Both, full gym means commercial access while other equipment describes home access. Treat equipment, restrictions and explicit avoidances as hard constraints. Treat exercisePreference as a ranking among otherwise suitable exercises: prefer machines/cables or free weights as requested without forcing an incompatible movement. For Build muscle, machines and free weights are both valid; rank exercises by target fit, stability, comfortable range of motion, progression quality, and the user preference rather than treating barbell lifts as mandatory. When Chest is a priority and compatible commercial-gym equipment is available, start at least one chest-focused session with a stable incline press, then use a complementary horizontal press elsewhere in the week; do not default to Barbell Bench Press unless a strength or free-weight preference justifies it. When a stable bilateral row is available, use Chest-Supported Row, T-Bar Row, Machine Row, Low Row, or Seated Cable Row as the primary horizontal pull. Single-Arm Cable Row may be accessory work or a limited-equipment fallback, but must not be the default main back exercise. Priorities may add 2–4 bounded weekly sets and influence order, but must not exceed programmingContext.volumePolicy or create redundant same-pattern compounds. Count primary-muscle sets as 1.0 and secondary-muscle sets as 0.5. One session may contain at most one interchangeable upper-body compound for each horizontal-push, vertical-push, horizontal-pull or vertical-pull pattern. A session named Push must be predominantly pressing, Pull pulling, Lower or Legs lower-body, Upper upper-body, and Full Body must contain upper and lower work. programmingContext.effortPolicy is authoritative: fewer-hard means exactly two challenging working sets without requiring failure; more-moderate means three to four sets at the supplied RIR range; balanced uses the goal-appropriate middle ground. For general fitness use mostly 2–3 sets, 6–15 reps and 2–3 RIR. For hypertrophy use mostly 2–4 sets, compounds 6–15, isolations 8–20 and 1–3 RIR. For Lose fat, preserve muscle with repeatable resistance training, moderate recoverable volume, mostly 6–15 reps and about 2–3 RIR; do not turn strength sessions into cardio circuits or add cardio movements to the exercise list because Rook attaches the separate conditioning prescription from baselineProgram. For strength put the main lift first, use 2–4 sets of 3–6 for priority lifts, accessories 5–12 and 2–3 RIR. For athletic performance put a low-skill power slot first when supported, 2–4 sets of 2–5 at at least 3 RIR, followed by strength work. Never require failure. Beginners receive stable low-complexity exercises and low initial volume; intermediates may use planned A/B variation; advanced users receive complexity only when justified. Use sessionMinutes to optimize exercise count and sets, never to prescribe harder RIR. Never create copied sessions, incompatible equipment, avoidable adjacent overlap or more than 20 fractional sets for any muscle. Use age and sex only as secondary context and never stereotype exercise selection or automatically reduce load. For age 60+, use the supplied conservative-start RIR floors, prefer stable lower-fatigue equivalents when they satisfy the same movement purpose, and improve spacing when availability permits; do not assume frailty or reduce load solely because of age. If previousValidationError is present, correct every defect. Do not invent starting weights. Return a coherent plan that the application can validate without silently replacing its decisions.",
@@ -604,6 +615,8 @@ const instructions = {
   "physique-review":
     "Provide an optional, neutral fitness-programming second opinion from the supplied user photos. This is not a body rating, attractiveness assessment, body-fat estimate, symmetry score, medical or postural diagnosis. Never describe a body part as bad, weak, lacking, deficient, underdeveloped, disproportionate, or objectively unbalanced. Lighting, pose, camera angle, pump, clothing, framing, and body composition can distort visual estimates. Return only 2 to 4 reasonably supported possible training priorities, using cautious language such as may, could emphasize, or if this matches your goals. Use only the allowed priority IDs. If image quality, framing, obstruction, or available angles do not support a useful review, return status insufficient, zero suggestions, and a concise neutral retryMessage. Suggestions are advisory and will not be applied without user confirmation.",
 };
+instructions.coach += ' For an explicit request to combine, condense, merge or roll two planned sessions into one today, return combine-workouts. Use exactly two distinct IDs from combineSessions with status planned or missed, respecting names and dates. Never include completed, active, reserved or skipped sessions. A duplicated name without an unambiguous date/week requires clarification, not guessing. Return only sourceSessionIds and explicitly requested minutes (null if missing); never generate the combined exercises or sets. ROOK deterministically builds and validates the prescription after intent resolution. Three or more sources require choosing two first. The action is only a proposal; do not claim it is applied.';
+instructions.coach += ' Combining two existing workouts is NEVER add-today-workout, even on a rest day. Missing total time requires a question, not a short workout inferred from profile defaults. For a follow-up changing the time of a combined workout, use revise-combined-workout with the exact ID from combineRevisionContext. If several references genuinely fit, ask which one rather than picking. timeMode total means an explicitly requested new TOTAL; delta means an explicitly signed change such as +15 minutes; no-limit requires explicit absence of a strict limit; unknown means time was not provided. minutes is null for unknown/no-limit. Never infer total minutes from estimated duration. Use this revision action rather than add-today-workout, adapt-today, or a fresh combine-workouts for the same candidate. Existing own source reservations are not new available sources. The domain validates and builds the revision and asks for time if needed; do not generate exercise/set changes or claim that anything has been applied. Active/completed workouts cannot be replaced. Legacy standalone added workouts without two source links require explicit source clarification; never invent their origins.';
 instructions.plan +=
   " Treat training structure, session sequence, calendar placement, exercise programming, progression, and recovery as separate layers. A split defines session identity and logical order, never fixed Monday-to-Sunday positions. Preserve structuralTemplate.userRequestedSequence when present and practical; otherwise preserve canonicalSessionSequence. Map that sequence onto availableDays, use rest days intelligently, and when overlapping sessions must be adjacent adapt exercise variation or recoverable per-session volume rather than silently turning the requested split into another split.";
 instructions["training-safety"] =
@@ -666,7 +679,7 @@ function developmentLog(stage, details = {}) {
     );
 }
 function operationConfiguration(operation, payload = {}) {
-  if (operation === "import-plan")
+  if (operation === "import-plan" || operation === 'interpret-import')
     return {
       selectedModel: importModel,
       effort: reasoningEffort(importReasoning),
@@ -689,7 +702,7 @@ function operationConfiguration(operation, payload = {}) {
 }
 
 async function callProvider(operation, payload) {
-  const schema = schemas[operation];
+  const schema = operation==='interpret-import'?{name:'source_backed_import_fragments',schema:hybridInterpretationSchema}:schemas[operation];
   if (!schema) throw new Error("Unknown AI operation.");
   const input =
     operation === "physique-review"
@@ -720,9 +733,10 @@ async function callProvider(operation, payload) {
     "plan-review",
     "plan-repair",
     "import-plan",
+    "interpret-import",
     "physique-review",
   ].includes(operation)
-    ? operation === "import-plan"
+    ? operation === "import-plan" || operation === 'interpret-import'
       ? 45_000
       : 110_000
     : 55_000;
@@ -730,7 +744,7 @@ async function callProvider(operation, payload) {
   const requestBody = {
     model: selectedModel,
     store: false,
-    instructions: instructions[operation],
+    instructions: operation==='interpret-import'?`${hybridInterpretationInstructions}\n${hybridInterpretationRoleRules}`:instructions[operation],
     input,
     text: {
       format: {
@@ -981,6 +995,17 @@ async function generatePlan(payload) {
 }
 
 async function openAI(operation, payload) {
+  if(operation==='interpret-import'){
+    if(payload?.consent!==true||!Array.isArray(payload.fragments)||!payload.fragments.length||payload.fragments.length>80)throw new Error('Explicit import interpretation consent and bounded source fragments are required.');
+    const fragments=payload.fragments.map(f=>({id:String(f.id||''),text:String(f.text||''),executable:f.executable!==false}));
+    if(fragments.some(f=>!f.id||!f.text||f.text.length>12000)||fragments.reduce((n,f)=>n+f.text.length,0)>60000)throw new Error('Interpret one bounded workout plan at a time.');
+    // Whitelist the payload: never forward profile, history, keys, or arbitrary
+    // client fields. No source logging or durable server-side import storage.
+    const data=await callProvider(operation,{fragments});
+    const checked=validateHybridInterpretation(data,fragments);
+    if(checked.rejected.length)throw new Error('AI interpretation could not be verified against the source. The local draft remains available.');
+    return data;
+  }
   if (operation === "plan") return generatePlan(payload);
   if (operation === "import-plan") {
     const attemptId = String(payload?.importAttemptId || "").trim();

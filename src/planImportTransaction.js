@@ -4,6 +4,7 @@ import { addPlanVersion } from './planHistory.js';
 import { normalizeAdvancedLoggingState } from './advancedLogging.js';
 import { normalizeGymProfilesState } from './gymProfiles.js';
 import { normalizeCustomExercisesState } from './customExercises.js';
+import { persistPlanImportMatches, planImportSafetyIssues } from './planImportMatching.js';
 
 // Construct independently; callers persist this value before publishing it.
 export function preparePlanImport(state, program, importedProfile, { date, weekday, initial = false } = {}) {
@@ -11,6 +12,10 @@ export function preparePlanImport(state, program, importedProfile, { date, weekd
     throw new Error('Finish or discard your active workout before replacing your plan.');
   const next = structuredClone(state);
   const candidate = structuredClone(program);
+  if(candidate.importMetadata?.pendingHybrid?.length)throw new Error('Resolve the source prescriptions and optional work before importing.');
+  if(candidate.days.some(day=>day.exercises.some(ex=>ex.hybridSource&&['unresolved','needs-name-review'].includes(ex.matchStatus))))throw new Error('Resolve the source exercise choices before importing.');
+  const safetyIssues=planImportSafetyIssues(candidate,state.profile);
+  if(safetyIssues.length)throw new Error(safetyIssues[0]);
   const profile = { ...state.profile, environment: importedProfile.environment,
     equipment: importedProfile.equipment, onboardingComplete: true,
     rirEnabled: Boolean(state.profile.rirEnabled || candidate.days.some(day => day.exercises.some(exercise => Number.isFinite(exercise.targetRir)))),
@@ -19,7 +24,8 @@ export function preparePlanImport(state, program, importedProfile, { date, weekd
   const checked = validateProgram(candidate, { ...profile, sessionMinutes: null }, {
     allowImportedExercises: true, preserveSchedule: true, ignoreTrainingSafety: true,
   });
-  // Restrictions remain a start-time, fail-closed review, not an automatic rewrite.
+  // Apply safety above and existing start-time safety both remain fail-closed;
+  // neither rewrites the user's prescription automatically.
   if (!checked.valid) throw new Error('Review the workout days and prescriptions before importing.');
   next.profile = profile;
   next.program = { ...candidate, goalAtCreation: null };
@@ -31,6 +37,7 @@ export function preparePlanImport(state, program, importedProfile, { date, weekd
   next.workoutOccurrenceOverrides = {};
   normalizeAdvancedLoggingState(next);
   normalizeGymProfilesState(next);
+  persistPlanImportMatches(next,candidate);
   normalizeCustomExercisesState(next);
   normalizeTrainingBlocksState(next);
   addPlanVersion(next, { previousProgram: state.program, source: 'Imported plan',

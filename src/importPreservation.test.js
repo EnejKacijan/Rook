@@ -7,16 +7,17 @@ import {buildBackupArchive,parseBackupArchive} from './backup.js';
 const parse=text=>AIService.importTrainingPlan(blankState().profile,text,{review:true});
 it('complex five-day source has only executable blockers and every source line preserved',async()=>{
  const result=await parse(complexPreservationNotes),review=result.sourceReview,exercises=result.program.days.flatMap(day=>day.exercises);
- expect(result.program.days).toHaveLength(5);expect(exercises.filter(exercise=>['unresolved','needs-name-review'].includes(exercise.matchStatus)).length).toBeGreaterThanOrEqual(3);
- expect(pendingImportIssues(review).map(issue=>issue.field)).toEqual(['alternative','prescription','prescription']);
+ expect(result.program.days).toHaveLength(5);expect(exercises.filter(exercise=>['original','needs-name-review'].includes(exercise.matchStatus)).length).toBeGreaterThanOrEqual(3);
+ expect(pendingImportIssues(review).map(issue=>issue.field)).toEqual(['alternative']);
  expect(review.issues.filter(issue=>issue.category==='preserved')).toHaveLength(10);
  expect(exercises.some(exercise=>exercise.importedName==='Y Balance Reach')).toBe(true);
  expect(exercises.some(exercise=>/Kolo/.test(exercise.importedName))).toBe(false);
  const preserved=result.program.importMetadata.sourceNotes.map(note=>note.text).join('\n');
  for(const line of complexPreservationNotes.split('\n').filter(line=>line.trim()))expect(preserved).toContain(line);
  expect(review.issues.some(issue=>issue.category==='exclusion')).toBe(false);
- for(const issue of pendingImportIssues(review).filter(issue=>issue.requiresReps)){
-   const exercise=exercises.find(exercise=>exercise.id===issue.exerciseId);
+ const rounds=exercises.filter(exercise=>exercise.importedRoundPrescription);
+ expect(rounds.map(e=>e.sets.length)).toEqual([2,3]);
+ for(const exercise of rounds){
    expect(exercise.repMin).toBeNull();expect(exercise.repMax).toBeNull();expect(exercise.sets.every(set=>set.reps===null)).toBe(true);
  }
  const options=review.issues.find(issue=>issue.field==='alternative').options;

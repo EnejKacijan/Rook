@@ -13,7 +13,7 @@ try {
   Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
   await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
-  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
+  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));page.on('dialog',d=>d.accept());
   await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));
   await page.goto('http://127.0.0.1:4173');
   await page.getByRole('button',{name:'PROFILE',exact:true}).click();
@@ -25,10 +25,10 @@ try {
    await page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
    await page.screenshot({path:`${output}/${width}-${style}-${appearance}-${suffix}.png`,animations:'disabled'});
   };
-  assert.equal(await sheet.getByRole('button',{name:'+ ADD EXERCISE',exact:true}).count(),state.program.days.length);
-  await sheet.getByRole('button',{name:'+ ADD EXERCISE',exact:true}).first().click();
+  assert.equal(await sheet.getByRole('button',{name:'+ Add exercise',exact:true}).count(),state.program.days.length);
+  await sheet.getByRole('button',{name:'+ Add exercise',exact:true}).first().click();
   await shot('add');
-  await sheet.getByRole('button',{name:'CREATE CUSTOM EXERCISE',exact:true}).click();
+  await sheet.getByRole('button',{name:'Create custom exercise',exact:true}).click();
   const editor=page.locator('.custom-exercise-editor');await editor.getByLabel('Exercise name').fill('My cable press');
   await editor.getByLabel('Primary target muscle').selectOption('Chest');
   await editor.getByLabel('Exercise movement').selectOption('horizontal-push');
@@ -48,8 +48,8 @@ try {
   await openProfileArea(page, 'program'); await page.getByRole('button',{name:/^Edit plan/}).click();
   assert.ok((await sheet.innerText()).includes('My cable press'));
   const savedPlan=JSON.stringify((await stored()).program);
-  await sheet.getByRole('button',{name:'+ ADD EXERCISE',exact:true}).last().click();
-  await sheet.getByRole('button',{name:'CREATE CUSTOM EXERCISE',exact:true}).click();
+  await sheet.getByRole('button',{name:'+ Add exercise',exact:true}).last().click();
+  await sheet.getByRole('button',{name:'Create custom exercise',exact:true}).click();
   await editor.getByLabel('Exercise name').fill('Library only press');
   await editor.getByLabel('Primary target muscle').selectOption('Chest');
   await editor.getByRole('button',{name:'CREATE & ADD',exact:true}).click();

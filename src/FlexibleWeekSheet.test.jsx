@@ -1,7 +1,7 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { FlexibleWeekSheet, missedSessionDestinations } from './FlexibleWeekSheet.jsx';
+import { FlexibleWeekSheet, missedSessionDestinations, groupRescheduleCandidates } from './FlexibleWeekSheet.jsx';
 import { blankState, buildProgram, startWorkout } from './domain.js';
 import { missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek } from './flexibleWeek.js';
 let root;
@@ -62,7 +62,7 @@ it('Back pops review to destination to picker to root without applying changes',
  const title=document.querySelector('h1').textContent;
  act(()=>document.querySelector('.flexible-week-dates button:not([disabled])').click());expect(document.querySelector('h1').textContent).toBe('Review your schedule');
  act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe(title);
- act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe('Choose a workout');
+ act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe('Move a workout');
  act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe('What changed?');expect(button('Back')).toBeUndefined();expect(JSON.stringify(state)).toBe(before);
 });
 for(const date of ['2026-09-07','2026-09-09','2026-09-06']) it(`initial window has exactly seven local dates on ${date}`,()=>{
@@ -96,4 +96,12 @@ it('restoring the profile baseline disables Review again without changing profil
 });
 it('missing profile availability uses an empty deterministic UI baseline',()=>{
  const state=fixture();delete state.profile.availableDays;render(state);act(()=>button('My available days changed').click());expect(document.querySelectorAll('[aria-pressed="true"]')).toHaveLength(0);expect(button('REVIEW SCHEDULE').disabled).toBe(true);
+});
+it('groups only actual candidate dates and preserves every session identity and order',()=>{
+ const candidates=['2026-09-04','2026-09-07','2026-09-11','2026-09-14','2026-09-21'].map((scheduledDate,i)=>({scheduledDate,logicalSessionId:`session-${i}`}));
+ const groups=groupRescheduleCandidates(candidates,'2026-09-11');
+ expect(groups.map(g=>g.label)).toEqual(['EARLIER','THIS WEEK','NEXT WEEK','LATER']);
+ const flattened=groups.flatMap(g=>g.sessions);expect(flattened).toEqual(candidates);flattened.forEach((s,i)=>expect(s).toBe(candidates[i]));
+ expect(groupRescheduleCandidates(candidates.slice(1,3),'2026-09-11').map(g=>g.label)).toEqual(['THIS WEEK']);
+ expect(groupRescheduleCandidates([],'2026-09-11')).toEqual([]);
 });

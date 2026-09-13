@@ -95,7 +95,7 @@ it('opens the canonical custom editor only through its explicit action', async (
   const onCreateCustom=vi.fn();await render({onCreateCustom});
   await click('CHOOSE REPLACEMENT');
   expect(onCreateCustom).not.toHaveBeenCalled();
-  await click('CREATE CUSTOM EXERCISE');
+  await act(async () => host.querySelector('button[aria-label="Create custom exercise"]').click());
   expect(onCreateCustom).toHaveBeenCalledWith('');
 });
 it('keeps custom exercises without sufficient metadata out of restricted plans', () => {

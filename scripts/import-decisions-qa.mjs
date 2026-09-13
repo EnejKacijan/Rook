@@ -1,16 +1,17 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
-import {blankState} from '../src/domain.js';
 import {importResolutionNotes} from '../src/importResolutionFixture.js';
 const out=process.env.ROOK_PROGRESS_QA?'artifacts/import-step-progress':'artifacts/import-decisions';await mkdir(out,{recursive:true});
 const progressStyle=page=>page.locator('.step-progress').evaluate(el=>{const line=getComputedStyle(el.querySelector('.progress-line')),fill=getComputedStyle(el.querySelector('.progress-line span')),text=getComputedStyle(el.querySelector('.step-count'));return {height:line.height,radius:line.borderRadius,track:line.backgroundColor,fill:fill.backgroundColor,margin:line.marginTop,font:text.fontFamily,size:text.fontSize,color:text.color,gap:text.marginTop,align:text.textAlign,transition:fill.transitionDuration,easing:fill.transitionTimingFunction};});
 const browser=await chromium.launch({channel: 'chrome',headless:true});
 async function open(width,appearance,style,notes){
  const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'});
- const state=blankState();Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
- await context.addInitScript(s=>{localStorage.setItem('lift-v2-state',JSON.stringify(s));window.qaWrites=0;const original=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='lift-v2-state'&&JSON.parse(value).program)window.qaWrites++;return original.call(this,key,value);};},state);
+ // A persisted incomplete profile now correctly resumes its questionnaire.
+ // This tests first-run Import: start genuinely fresh, not with a resume draft.
+ await context.addInitScript(()=>{window.qaWrites=0;const original=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='lift-v2-state'&&JSON.parse(value).program)window.qaWrites++;return original.call(this,key,value);};});
  const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto('http://127.0.0.1:4173');
+ await page.evaluate(({appearance,style})=>{document.documentElement.dataset.appearance=appearance;document.documentElement.dataset.style=style;},{appearance,style});
  let onboardingStyle;
  if(process.env.ROOK_PROGRESS_QA){await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();onboardingStyle=await progressStyle(page);assert.equal(await page.getByRole('progressbar').getAttribute('aria-valuetext'),'Step 1 of 8');await page.waitForTimeout(250);await page.screenshot({path:`${out}/${width}-${style}-${appearance}-onboarding.png`});await page.emulateMedia({reducedMotion:'reduce'});assert.equal((await progressStyle(page)).transition,'0.08s');await page.emulateMedia({reducedMotion:'no-preference'});await page.goto('http://127.0.0.1:4173');}
  await page.locator('.existing-plan-action').click();await page.getByPlaceholder(/Paste your workout notes/).fill(notes);await page.getByRole('button',{name:'CREATE PREVIEW',exact:true}).click();return {page,context,onboardingStyle};

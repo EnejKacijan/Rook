@@ -62,6 +62,16 @@ export function normalizeExerciseAlias(value) {
     .replace(/\s+/g, " ");
 }
 
+export const historicalSourceKey = (source, name) => JSON.stringify([source || 'generic', normalizeExerciseAlias(name)]);
+// Reversible identity, not a short collision-prone name hash. Equipment and
+// muscle metadata are deliberately absent for unmapped historical exercises.
+export function importedHistoricalExercise(source, name, state = {}) {
+  const key=historicalSourceKey(source,name);
+  const existing=(state.customExercises||[]).find(e=>!e.deletedAt&&e.historicalIdentity?.key===key);
+  return existing || createCustomExerciseRecord({id:`custom-import-${encodeURIComponent(key)}`,name,
+    historicalIdentity:{key,source:source||'generic',sourceName:name},equipment:[],primaryMuscle:null});
+}
+
 function stableId(prefix, now = Date.now()) {
   const random = globalThis.crypto?.randomUUID?.() ||
     `${now}-${Math.random().toString(36).slice(2, 10)}`;
@@ -93,6 +103,7 @@ const MUSCLE_ALIASES = new Map([
 const canonicalMuscle = (value) => MUSCLE_ALIASES.get(normalizeExerciseAlias(value)) || "Full body";
 
 function normalizeRecord(value, now) {
+  const historical=value?.historicalIdentity;
   const id = String(value?.id || "").trim();
   const name = String(value?.name || "").trim().replace(/\s+/g, " ").slice(0, 100);
   const equipment = cleanArray(value?.equipment).slice(0, 4);
@@ -102,14 +113,15 @@ function normalizeRecord(value, now) {
     .slice(0, 5);
   const loggingType = CUSTOM_EXERCISE_LOGGING_TYPES.some(([key]) => key === value?.loggingType)
     ? value.loggingType
-    : "weight_reps";
+    : historical ? null : "weight_reps";
   const loggingMode = value?.loggingMode === "per_side" ? "per_side" : "normal";
   return {
     schemaVersion: CUSTOM_EXERCISE_SCHEMA_VERSION,
     id,
-    name,
-    equipment: equipment.length ? equipment : ["machines"],
-    primaryMuscle,
+    name:historical?String(value.name||historical.sourceName):name,
+    ...(historical?{historicalIdentity:{...historical,key:historicalSourceKey(historical.source,historical.sourceName)}}:{}),
+    equipment: historical?equipment:equipment.length ? equipment : ["machines"],
+    primaryMuscle:historical&&!value.primaryMuscle?null:primaryMuscle,
     secondaryMuscles,
     pattern: CUSTOM_EXERCISE_PATTERNS.some(([key]) => key && key === value?.pattern)
       ? value.pattern
@@ -124,12 +136,15 @@ function normalizeRecord(value, now) {
 }
 
 function normalizeAliasRecord(value, now) {
-  const alias = String(value?.alias || "").trim().replace(/\s+/g, " ").slice(0, 100);
+  const alias = String(value?.alias || "").trim().replace(/\s+/g, " ").slice(0,value?.scope==='historical-import'?Infinity:100);
   return {
     schemaVersion: CUSTOM_EXERCISE_SCHEMA_VERSION,
     id: String(value?.id || "").trim(),
     alias,
     normalizedAlias: normalizeExerciseAlias(alias),
+    ...(['historical-import','plan-import'].includes(value?.scope) ? { scope: value.scope } : {}),
+    ...(value?.scope==='plan-import'?{keepOriginal:Boolean(value.keepOriginal)}:{}),
+    ...(value?.scope === 'historical-import'&&value.source?{source:value.source}:{}),
     exerciseId: String(value?.exerciseId || "").trim(),
     createdAt: value?.createdAt || now,
     updatedAt: value?.updatedAt || value?.createdAt || now,
@@ -151,8 +166,9 @@ export function normalizeCustomExercisesState(state, now = new Date().toISOStrin
   for (const value of Array.isArray(state.exerciseAliases) ? state.exerciseAliases : []) {
     const record = normalizeAliasRecord(value, now);
     if (!record.id || !record.alias || !record.normalizedAlias || !record.exerciseId) continue;
-    const previous = aliases.get(record.normalizedAlias);
-    if (!previous || String(record.updatedAt) >= String(previous.updatedAt)) aliases.set(record.normalizedAlias, record);
+    const key = `${record.scope || 'global'}:${record.source||''}:${record.normalizedAlias}`;
+    const previous = aliases.get(key);
+    if (!previous || String(record.updatedAt) >= String(previous.updatedAt)) aliases.set(key, record);
   }
   state.exerciseAliases = [...aliases.values()];
   return state;
@@ -207,7 +223,7 @@ export function deleteCustomExercise(state, exerciseId, now = new Date().toISOSt
   exercise.deletedAt = now;
   exercise.updatedAt = now;
   for (const alias of state.exerciseAliases) {
-    if (alias.exerciseId === exerciseId && !alias.deletedAt) {
+    if (alias.exerciseId === exerciseId && !alias.deletedAt && alias.scope !== 'historical-import') {
       alias.deletedAt = now;
       alias.updatedAt = now;
     }
@@ -217,7 +233,7 @@ export function deleteCustomExercise(state, exerciseId, now = new Date().toISOSt
 
 export function customExerciseCatalogItem(record) {
   if (!record) return null;
-  const loggingType = record.loggingType || "weight_reps";
+  const loggingType = record.loggingType || (record.historicalIdentity ? null : "weight_reps");
   const equipment = cleanArray(record.equipment);
   const repsOnly = loggingType === "reps";
   const duration = loggingType === "duration";
@@ -230,14 +246,14 @@ export function customExerciseCatalogItem(record) {
     equipment,
     pattern: record.pattern || null,
     muscles: [record.primaryMuscle, ...(record.secondaryMuscles || [])].filter(Boolean),
-    kind: record.pattern === "conditioning" ? "conditioning" : "isolation",
-    measure: duration ? "seconds" : "reps",
+    kind: record.historicalIdentity&&!record.pattern?null:record.pattern === "conditioning" ? "conditioning" : "isolation",
+    measure: loggingType == null ? null : duration ? "seconds" : "reps",
     exerciseType: loggingType,
     bodyweight: repsOnly && equipment.includes("bodyweight"),
-    loadRequirement: loggingType === "weight_reps" ? "required" : "none",
-    increment: 1,
-    restSeconds: 90,
-    trackingSupport: loggingType === "weight_reps" ? "reps-and-load" : duration ? "duration" : loggingType,
+    loadRequirement: record.historicalIdentity?'unknown':loggingType === "weight_reps" ? "required" : "none",
+    increment: record.historicalIdentity?null:1,
+    restSeconds: record.historicalIdentity?null:90,
+    trackingSupport: record.historicalIdentity?'history-only':loggingType === "weight_reps" ? "reps-and-load" : duration ? "duration" : loggingType,
     loggingMode: record.loggingMode === "per_side" ? "per_side" : "normal",
     notes: record.notes || null,
   };
@@ -268,7 +284,7 @@ export function rememberExerciseAlias(state, aliasValue, exerciseId, { builtInCa
   ];
   const canonical = canonicalNames.find(([name]) => name === normalizedAlias);
   if (canonical && canonical[1] !== exerciseId) return { status: "conflict", exerciseId: canonical[1] };
-  const existing = state.exerciseAliases.find((item) => item.normalizedAlias === normalizedAlias && !item.deletedAt);
+  const existing = state.exerciseAliases.find((item) => !item.scope && item.normalizedAlias === normalizedAlias && !item.deletedAt);
   if (existing?.exerciseId === exerciseId) return { status: "unchanged", alias: existing };
   if (existing) return { status: "conflict", exerciseId: existing.exerciseId };
   const record = normalizeAliasRecord({ id: stableId("exercise-alias"), alias, exerciseId, createdAt: now, updatedAt: now }, now);
@@ -309,12 +325,26 @@ export function removeExerciseAlias(state, aliasId, now = new Date().toISOString
   return { status: "deleted", alias };
 }
 
+// An explicit historical mapping may override a catalog alias without changing
+// PLAN parsing or the canonical library. Reuse durable alias records/backup.
+export function rememberHistoricalExerciseAlias(state, aliasValue, exerciseId, { builtInCatalog = {}, now = new Date().toISOString(), source } = {}) {
+  normalizeCustomExercisesState(state, now);
+  const target = exerciseDefinition(state, exerciseId, builtInCatalog);
+  if (!target || target.deleted) throw new Error('The chosen exercise is no longer available. Review this match again.');
+  const normalizedAlias = normalizeExerciseAlias(aliasValue);
+  const existing = state.exerciseAliases.find(item => item.scope === 'historical-import' && (item.source||null)===(source||null) && item.normalizedAlias === normalizedAlias);
+  const record = normalizeAliasRecord({ ...existing, id: existing?.id || stableId('exercise-alias'), alias: aliasValue, exerciseId,
+    scope: 'historical-import', ...(source?{source}:{}), createdAt: existing?.createdAt || now, updatedAt: now, deletedAt: null }, now);
+  if (existing) Object.assign(existing, record); else state.exerciseAliases.push(record);
+  return record;
+}
+
 export function resolveRememberedExercise(state, value, builtInCatalog = {}) {
   const normalized = normalizeExerciseAlias(value);
   if (!normalized) return null;
   const custom = (state?.customExercises || []).filter((item) => !item.deletedAt && normalizeExerciseAlias(item.name) === normalized);
   if (custom.length === 1) return { exerciseId: custom[0].id, status: "custom" };
-  const alias = (state?.exerciseAliases || []).filter((item) => !item.deletedAt && item.normalizedAlias === normalized);
+  const alias = (state?.exerciseAliases || []).filter((item) => !item.scope && !item.deletedAt && item.normalizedAlias === normalized);
   if (alias.length !== 1) return null;
   const target = exerciseDefinition(state, alias[0].exerciseId, builtInCatalog);
   return target && !target.deleted ? { exerciseId: target.id, status: "remembered-alias", aliasId: alias[0].id } : null;

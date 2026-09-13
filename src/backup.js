@@ -66,6 +66,7 @@ function countsFor(state, photos = []) {
     workoutPhotos: photos.length,
     coachConversations: Array.isArray(state.conversations) ? state.conversations.length : 0,
     weightCheckins: Array.isArray(state.weightCheckins) ? state.weightCheckins.length : 0,
+    importedMeasurementSources: Array.isArray(state.importedMeasurementSources) ? state.importedMeasurementSources.length : 0,
   };
 }
 
@@ -128,7 +129,7 @@ function validateDurableState(raw) {
   }
   asObject(state.profile, "Training profile");
   if (state.program !== null) asObject(state.program, "Training plan");
-  for (const key of ["workouts", "optionalSessions", "workoutCorrections", "programChangeHistory", "conversations", "weightCheckins"])
+  for (const key of ["workouts", "optionalSessions", "workoutCorrections", "programChangeHistory", "conversations", "weightCheckins", "importedMeasurementSources"])
     if (state[key] !== undefined && !Array.isArray(state[key]))
       fail("invalid-backup", `${key} is invalid.`);
   if (state.planVersions !== undefined && !Array.isArray(state.planVersions))

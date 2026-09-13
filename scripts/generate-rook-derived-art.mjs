@@ -12,5 +12,12 @@ for(const file of files){
  if(await readFile(target,'utf8').catch(()=>null)!==source)await writeFile(target,source);
  console.log(`${file} <- reviewed correction master`);
 }
-// Other existing illustrations are intentionally preserved, not regenerated
-// from a merely similar movement or apparatus.
+// The catalog-wide style pass has its own reviewed masters. Restore exact
+// approved bytes, never recreate a schematic or copy a similar exercise.
+const consistentDir=path.join(artDir,'consistent-masters');
+for(const file of (await readdir(consistentDir).catch(()=>[])).filter(file=>/^wg-.*\.svg$/.test(file)).sort()){
+ const source=await readFile(path.join(consistentDir,file),'utf8');
+ const target=path.join(artDir,file);
+ if(await readFile(target,'utf8').catch(()=>null)!==source)await writeFile(target,source);
+ console.log(`${file} <- reviewed consistency master`);
+}

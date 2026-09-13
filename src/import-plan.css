@@ -26,6 +26,18 @@
 .plan-editor .workout-name-field > input { height: 42px; font-size: 14px; font-weight: 680; }
 .workout-name-fields { display: grid; gap: 0; }
 .plan-reorder-help { margin: 13px 0 2px; color: var(--rook-secondary); font-size: 13px; line-height: 1.4; }
+/* Generated acceptance preview only; other PlanEditor consumers keep their UI. */
+.generated-reorder-preview .plan-preview-mode-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.generated-reorder-preview .plan-preview-mode-row > small { margin: 0; }
+.generated-reorder-preview .plan-preview-mode-row > button { min-width: 64px; min-height: 44px; flex: 0 0 auto; }
+.generated-reorder-preview .plan-preview-mode-status { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; min-width: 64px; padding: 4px; color: var(--rook-secondary); font-size: 13px; }
+.generated-reorder-preview .import-plan-meta h2 { overflow-wrap: anywhere; }
+.generated-reorder-preview.is-preview-reorder .plan-editor-summary { cursor: default; touch-action: pan-y; }
+.generated-reorder-preview.is-preview-reorder .plan-editor-heading > strong { white-space: normal; overflow-wrap: anywhere; }
+/* Keep expanded editors and raw input state mounted, but out of interaction/layout. */
+.generated-reorder-preview.is-preview-reorder .plan-editor-exercise > .rook-disclosure,
+.generated-reorder-preview.is-preview-reorder .plan-removed-exercise,
+.generated-reorder-preview.is-preview-reorder .scratch-add-exercise { display: none; }
 .plan-workout-reorder-bar { position: relative; min-height: 44px; margin: -2px 0 14px; display: flex; align-items: center; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .plan-workout-reorder-bar:has(.plan-reorder-a11y:focus-within) { z-index: 20; }
 :is(.plan-workout-drag-surface, .plan-exercise-drag-handle) { width: 44px; min-height: 44px; flex: 0 0 44px; padding: 0; border: 0; background: transparent; display: flex; align-items: center; justify-content: center; color: var(--rook-secondary, #6f6c68); cursor: grab; touch-action: none; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
@@ -114,10 +126,29 @@
 .scratch-plan-screen > .button { margin-top: 28px; }
 .scratch-plan-screen > .button.quiet { margin-top: 4px; }
 .scratch-editor-screen { min-height: 100dvh; }
-.scratch-editor-screen .plan-warmup-preference { margin: 16px 0 4px; padding: 0 2px; }
-.scratch-editor-screen .plan-warmup-preference .setting-switch { min-height: 42px; padding-block: 7px; font-size: 12px; }
-.scratch-editor-screen .plan-warmup-preference > small { margin-top: 5px; font-size: 10px; line-height: 1.4; }
-.scratch-editor-screen .import-preview { margin-top: 20px; }
+.scratch-editor-screen .plan-warmup-preference { margin: 12px 0 0; padding: 0 2px; }
+.scratch-editor-screen .plan-warmup-preference .setting-switch { min-height: 44px; padding-block: 7px; font-size: 14px; }
+.scratch-editor-screen .plan-warmup-preference > small { margin-top: 2px; font-size: 12px; line-height: 1.4; }
+.scratch-editor-screen .import-preview { margin-top: 12px; }
+:root .scratch-editor-screen > h1 { margin-block: 12px 8px; }
+:root .scratch-editor-screen > h1 + p { margin-block: 0 20px; }
+:root .scratch-editor-screen > .plan-name-field { gap: 6px; }
+:root .scratch-editor-screen > .plan-name-field > span { color: var(--rook-secondary); font-size: 14px; font-weight: 600; letter-spacing: 0; }
+:root .scratch-editor-screen > .plan-name-field > input { width: 100%; min-height: 46px; padding-inline: 12px; border: 1px solid var(--rook-border); border-radius: 10px; background: var(--rook-surface); color: var(--rook-text); font: inherit; font-size: 16px; font-weight: 650; }
+:root .scratch-editor-screen > .plan-name-field > input:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
+:root .scratch-editor-screen .plan-workout-reorder-bar { margin-block: 0 8px; border-bottom: 0; }
+:root .scratch-editor-screen .plan-workout-reorder-bar > .plan-workout-overflow { margin-left: auto; flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-secondary); font: inherit; font-size: 18px; letter-spacing: 1px; }
+:root .scratch-editor-screen .plan-workout-overflow:active { opacity: .7; }
+:root .scratch-editor-screen .plan-workout-overflow:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; border-radius: 8px; }
+:root .scratch-editor-screen .is-week-reordering .plan-workout-overflow { display: none; }
+:root .scratch-editor-screen .workout-name-field > input { font-size: 16px; }
+:root .scratch-editor-screen .scratch-day-status { min-height: 0; margin: 0 2px 8px; }
+:root .scratch-editor-screen .scratch-day-status > small { color: var(--rook-secondary); font-size: 12px; font-weight: 500; }
+:root .scratch-editor-screen .scratch-warmup-row { margin: 4px 2px 0; padding: 0; border: 0; background: transparent; }
+:root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header { min-height: 44px; gap: 8px; }
+:root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header > strong { min-width: 0; color: var(--rook-secondary); font-size: 14px; font-weight: 500; line-height: 1.4; }
+:root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header > button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0 8px 8px; color: var(--rook-accent); font-size: 14px; letter-spacing: 0; }
+:root .scratch-editor-screen .sheet-action-footer > .scratch-readiness { color: var(--rook-secondary); font-size: 13px; line-height: 1.4; text-align: center; }
 .scratch-workout-day { padding: 15px 0; }
 .scratch-workout-day .workout-name-field { margin-bottom: 7px; }
 .scratch-workout-day .workout-name-field > input { height: 44px; border-color: rgba(31,107,76,.2); background: #fff; box-shadow: 0 1px 0 rgba(27,26,25,.02); }
@@ -129,13 +160,36 @@
 .scratch-workout-day.is-collapsed { padding-bottom: 12px; }
 .scratch-add-exercise { margin-top: 9px; }
 .scratch-add-exercise > button { width: 100%; min-height: 48px; border: 1px dashed rgba(31,107,76,.3); border-radius: 13px; background: transparent; color: #1f6b4c; font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
-.scratch-day-tools { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 14px; }
-.scratch-day-tools > button { min-height: 30px; padding: 0; border: 0; background: transparent; color: #6f6c68; font: inherit; font-size: 9px; font-weight: 800; letter-spacing: .07em; }
-.scratch-day-tools > button:first-child { color: #1f6b4c; }
-.scratch-copy-targets { margin-top: 7px; padding: 10px 11px; border: 1px solid rgba(31,107,76,.14); border-radius: 11px; background: #f3f7f5; display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.scratch-workout-day .scratch-copy-targets > small { color: #617168; font-size: 10px; text-align: left; }
-.scratch-copy-targets > div { display: flex; gap: 5px; }
-.scratch-copy-targets button { min-width: 34px; height: 30px; padding: 0 8px; border: 1px solid rgba(31,107,76,.18); border-radius: 8px; background: #fff; color: #1f6b4c; font: inherit; font-size: 9px; font-weight: 800; }
+:root .plan-workout-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+:root[data-appearance] .plan-workout-tools > button { min-height: 44px; min-width: 44px; padding: 8px 2px; border: 0; background: transparent; color: var(--rook-accent); font: inherit; font-size: 12px; font-weight: 650; text-align: left; }
+:root .plan-workout-tools > .plan-workout-add { min-width: 0; overflow-wrap: anywhere; }
+:root[data-appearance] .plan-workout-tools > .plan-workout-overflow { flex: 0 0 44px; color: var(--rook-secondary); text-align: center; font-size: 18px; letter-spacing: 1px; }
+:root .plan-workout-tools > button:disabled { opacity: .45; }
+:root .plan-workout-tools > button:active { opacity: .7; }
+:root .plan-workout-tools > button:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; }
+:root .plan-workout-actions-sheet { display: flex; flex-direction: column; max-height: min(80dvh, 640px); background: var(--rook-bg); color: var(--rook-text); }
+:root[data-appearance] .plan-workout-actions-sheet { --workout-utility-gutter: 24px; padding-inline: var(--workout-utility-gutter); }
+:root .modal-layer > .screen.detail-screen.plan-workout-actions-sheet > .detail-header { margin-inline: calc(-1 * var(--workout-utility-gutter)); padding-inline: var(--workout-utility-gutter); }
+@media (max-width: 360px) { :root[data-appearance] .plan-workout-actions-sheet { --workout-utility-gutter: 18px; } }
+:root .plan-workout-actions-body { min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 16px; }
+:root .plan-workout-actions-body h2 { margin: 16px 0 12px; font-size: 22px; }
+:root .plan-workout-action-source { margin: 12px 0; color: var(--rook-secondary); font-size: 13px; overflow-wrap: anywhere; }
+:root[data-appearance] .plan-workout-actions-body > .choice-row { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 12px; min-height: 56px; color: var(--rook-text); background: transparent; }
+:root .plan-workout-actions-body > .choice-row > [aria-hidden] { flex: 0 0 auto; }
+:root .plan-workout-actions-body > .choice-row span { min-width: 0; overflow-wrap: anywhere; }
+:root .plan-workout-actions-body > .choice-row small { display: block; margin-top: 4px; color: var(--rook-secondary); }
+:root .plan-workout-actions-body > .choice-row:disabled { opacity: .5; }
+:root .plan-copy-destinations { display: grid; gap: 8px; }
+:root .plan-copy-destinations > button { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 58px; padding: 10px 12px; border: 1px solid var(--rook-border); border-radius: 12px; background: var(--rook-surface); color: var(--rook-text); font: inherit; text-align: left; }
+:root .plan-copy-destinations > button > span { min-width: 0; }
+:root .plan-copy-destinations strong { font-size: 14px; overflow-wrap: anywhere; }
+:root .plan-copy-destinations small { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 12px; }
+:root .plan-copy-destinations i { flex: 0 0 18px; color: var(--rook-accent); font-style: normal; }
+:root .plan-copy-destinations > button[aria-checked="true"] { border-color: var(--rook-accent); }
+:root[data-appearance] .plan-copy-destinations > button:disabled { opacity: 1; color: var(--rook-secondary); background: var(--rook-bg); }
+:root[data-appearance] .plan-copy-destinations > button:disabled strong { color: var(--rook-secondary); }
+:root .plan-picker-empty { margin: 8px 0; color: var(--rook-secondary); font-size: 13px; }
+:root .scratch-exercise-results:empty { display: none; }
 .scratch-exercise-search { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 7px; }
 .scratch-exercise-search input { height: 42px; }
 .scratch-exercise-search button { padding: 0 5px; border: 0; background: transparent; color: #6f6c68; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
@@ -158,6 +212,7 @@
 .plan-editor.is-reordering :is(.plan-workout-drag-surface,.plan-editor-summary[data-reorder-kind]) { cursor: grabbing; }
 .plan-editor.is-reordering :is(.import-day,.plan-editor-exercise) { transition: transform var(--rook-motion-layout, 190ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)); will-change: transform; }
 .plan-editor .reorder-placeholder { opacity: .08; }
+.plan-editor .reorder-placeholder .plan-exercise-drag-handle > i { visibility: hidden; }
 .plan-editor .reorder-live-source { visibility: hidden; pointer-events: none; }
 .plan-workout-compact-summary { display:none; }
 .plan-editor.is-week-reordering [data-reorder-workout-section] > :not(.plan-workout-reorder-bar) { display:none !important; }
@@ -322,3 +377,10 @@
   .import-plan-text-wrap,.import-plan-text { min-height: 112px; }
   .import-plan-compose > .button { min-height: 54px; margin-top: 10px; }
 }
+.import-source-role { display: block; margin-block: 6px; }
+.import-plan-screen .import-interpretation-offer { position: static; flex: 0 0 auto; margin-top: 20px; padding: 16px 0 calc(12px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--rook-border); }
+.import-plan-screen .import-interpretation-offer h2 { margin: 0; color: var(--rook-text); font-size: 18px; line-height: 1.3; }
+.import-plan-screen .import-interpretation-offer p { margin: 8px 0 14px; color: var(--rook-secondary); font-size: 14px; line-height: 1.45; }
+.import-plan-screen .import-interpretation-offer > .button { width: 100%; min-height: 52px; margin: 0; padding: 12px; font-size: 12px; }
+.import-plan-screen .import-interpretation-offer > .import-local-review { display: block; width: 100%; min-height: 44px; margin: 4px 0 8px; padding: 10px; background: transparent; color: var(--rook-accent); font-size: 14px; font-weight: 600; letter-spacing: normal; text-transform: none; }
+.import-plan-screen .import-interpretation-offer > small { display: block; color: var(--rook-secondary); font-size: 13px; line-height: 1.45; }

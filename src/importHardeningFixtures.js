@@ -19,5 +19,7 @@ export const importHardeningFixtures = [
   {name:'Q history-like unlabelled load',text:'Bench\n70x8\n70x8\n70x7',unsupported:true},
   {name:'R custom machine',text:'Monday\nPrime Plate Loaded Incline Press 3x8',days:1,exercises:1,issues:[]},
   {name:'S long plan',text:['Monday','Tuesday','Wednesday','Thursday','Friday'].map(day=>`${day}\n${['Bench Press','Cable Fly','Cable Row','Lat Pulldown','Dumbbell Curl','Leg Press','Leg Curl','Calf Raise'].map(name=>`${name} 2x8`).join('\n')}`).join('\n'),days:5,exercises:40,issues:[]},
-  {name:'T malformed partial',text:'Monday\nBench Press 3x8\n???\nCable Fly - missing sets\nunknown meaningful instruction',days:1,exercises:1,issues:['source']},
+  // Hybrid import now preserves this explicitly incomplete exercise instead of
+  // excluding it. Unknown prose is retained in source notes, not executable work.
+  {name:'T malformed partial',text:'Monday\nBench Press 3x8\n???\nCable Fly - missing sets\nunknown meaningful instruction',days:1,exercises:2,issues:['prescription']},
 ];

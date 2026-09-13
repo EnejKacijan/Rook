@@ -1,9 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useExerciseSearchSheet } from './useExerciseSearchSheet.js';
 import { SearchInput } from './SearchInput.jsx';
 import { exerciseMatchesQuery, rankExerciseSearch, exerciseMeasure, displayWeight, workoutSetSummary, isoDay } from './domain.js';
 import { startFreestyleWorkout, addFreestyleExercise, freestyleCatalog, freestylePreviousSets, copyFreestylePrevious, cancelUnloggedFreestyle, freestyleEffortLimit } from './freestyleWorkout.js';
 import './freestyleWorkout.css';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
+import { importedSessionTimeLabel } from './historicalSetSemantics.js';
 
 export function FreestyleEntry({ state, update, setPage, setDetail, date, historyOnly = false, hideHistory = false, representedWorkoutId = null }) {
   const [error, setError] = useState('');
@@ -25,12 +27,14 @@ export function FreestyleEntry({ state, update, setPage, setDetail, date, histor
     </>}
     {records.length > 0 && <section className="today-completed-workouts" aria-label="Completed workouts">
       {records.length > 1 && <div className="eyebrow">Completed workouts · {records.length}</div>}
-      {records.map(w => <button className="list-row" key={w.id} data-workout-id={w.id} onClick={() => setDetail({ completedWorkout: w.id })}><span>{w.name || 'Workout'}<small>{w.source === 'freestyle' ? 'Freestyle' : 'Planned'} · Finished {new Date(w.completedAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</small></span><span aria-hidden="true">›</span></button>)}
+      {records.map(w => <button className="list-row" key={w.id} data-workout-id={w.id} onClick={() => setDetail({ completedWorkout: w.id })}><span>{w.name || 'Workout'}<small>{w.historicalImport?.version===2?`Imported · ${importedSessionTimeLabel(w)}`:<>{w.source === 'freestyle' ? 'Freestyle' : 'Planned'} · Finished {new Date(w.completedAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</>}</small></span><span aria-hidden="true">›</span></button>)}
     </section>}
   </div>;
 }
 
 export function FreestyleExercisePicker({ state, update, close, Header }) {
+  const sheetRef = useRef(null);
+  useExerciseSearchSheet(sheetRef, true, { focusedSearch: true });
   const [query, setQuery] = useState('');
   const [error, setError] = useState('');
   const catalog = useMemo(() => freestyleCatalog(state), [state]);
@@ -50,14 +54,16 @@ export function FreestyleExercisePicker({ state, update, close, Header }) {
       catch (e) { setError(e.message); }
     }}><span>{item.name}<small>{item.equipment?.join(' · ')}{item.custom ? ' · Custom' : ''}</small></span><span>{added ? 'Added' : '+'}</span></button>;
   };
-  return <main className="screen detail-screen freestyle-picker">
+  return <main ref={sheetRef} className="screen detail-screen freestyle-picker">
     <Header title="Add exercise" onClose={close} />
     <SearchInput className="exercise-search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)} onClear={() => setQuery('')} />
+    <div data-exercise-search-scroll>
     {error && <p role="alert">{error}</p>}
     {!query && recent.length > 0 && <section><h3>Recent</h3>{recent.map(row)}</section>}
     <section><h3>{query ? 'Matching exercises' : 'All exercises'}</h3>{matches.map(row)}
       {!matches.length && <p>No compatible exercises found. Try another search or review your equipment and restrictions in Profile.</p>}
     </section>
+    </div>
   </main>;
 }
 

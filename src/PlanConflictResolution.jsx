@@ -3,6 +3,7 @@ import { compatibleReplacementCandidates, exerciseMatchesQuery, exerciseName, ra
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 export { planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './exerciseEligibility.js';
 import { SearchInput } from './SearchInput.jsx';
+import { CustomExerciseFallback } from './CustomExerciseFallback.jsx';
 import { Disclosure } from './Disclosure.jsx';
 
 export function conflictReplacementCandidates(exercise, day, profile, conflict) {
@@ -51,10 +52,10 @@ export function PlanConflictResolution({ exercise, day, profile, conflict, minim
       <Disclosure open={open}><div className="plan-editor-picker" id={`conflict-picker-${exercise.id}`}>
         {broad && <p>Other exercises may change this workout’s focus. Saved restrictions still apply; these are not equivalent replacements.</p>}
         {(broad || candidates.length > 0) && <SearchInput aria-label={`Search replacement for ${exerciseName(exercise)}`} placeholder={broad ? 'Search exercises' : 'Search similar exercises'} value={query} onChange={event => setQuery(event.target.value)} onClear={() => setQuery('')} />}
+        {onCreateCustom && <CustomExerciseFallback onCreate={() => { setBroad(true); setQuery(''); onCreateCustom(query); }} />}
         {matches.length > 0 ? <div role="listbox" aria-label={broad ? 'Other exercises' : 'Similar replacements'}>{matches.map(item => <button type="button" role="option" aria-selected={false} key={item.id} onClick={() => onReplace(item.id)}>{item.name}</button>)}</div>
           : <div className="plan-conflict-empty" role="status"><strong>{broad ? 'No eligible exercises match your search.' : candidates.length ? 'No similar exercises match your search.' : 'No matching replacement found'}</strong>{!broad && !candidates.length && <p>Search other exercises that do not conflict with your restrictions{canRemove ? ', or remove this exercise.' : '. A workout must keep at least one exercise.'}</p>}</div>}
         <button type="button" className="text-button" onClick={() => { setBroad(!broad); setQuery(''); }}>{broad ? 'SHOW SIMILAR EXERCISES' : 'SEARCH OTHER EXERCISES'}</button>
-        {onCreateCustom && <button type="button" className="text-button" onClick={() => { setBroad(true); setQuery(''); onCreateCustom(query); }}>CREATE CUSTOM EXERCISE</button>}
         {broad && <small>Custom exercises that ROOK cannot verify against your restrictions are not offered.</small>}
       </div></Disclosure>
       {conflict.context === 'pain' && <p>Review your training restrictions before choosing another movement, or remove this exercise from the plan.</p>}

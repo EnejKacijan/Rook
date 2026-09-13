@@ -61,7 +61,7 @@ for (const width of [320,390]) for (const style of ['standard','premium']) for (
   };
   const add=async(name)=>{
     const day=page.locator('.import-day').first(); const count=await day.locator('.plan-editor-exercise').count();
-    await day.getByRole('button',{name:'+ ADD EXERCISE',exact:true}).click(); await shot(`${name}-add`);
+    await day.getByRole('button',{name:'+ Add exercise',exact:true}).click(); await shot(`${name}-add`);
     await day.locator('.scratch-exercise-results [role=option]').first().click();
     await page.waitForFunction(n=>document.querySelector('.import-day').querySelectorAll('.plan-editor-exercise').length===n,count+1);
     assert.equal(JSON.stringify((await stored()).program),original,'add is draft only');

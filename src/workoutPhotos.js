@@ -5,6 +5,19 @@ const RESTORE_SNAPSHOT_STORE = "restore-snapshot";
 const RESTORE_SNAPSHOT_MARKER = "__rook_restore_snapshot__";
 const MAX_SOURCE_BYTES = 15_000_000;
 const MAX_EDGE = 1600;
+const photoChangeListeners = new Set();
+
+export function subscribeWorkoutPhotoChanges(listener) {
+  photoChangeListeners.add(listener);
+  return () => photoChangeListeners.delete(listener);
+}
+
+// Publish only committed writes, never pending previews or staged restores.
+export function notifyWorkoutPhotoChanges() {
+  for (const listener of photoChangeListeners) {
+    try { listener(); } catch { /* A view must not turn a committed save into a failure. */ }
+  }
+}
 
 function requestResult(request) {
   return new Promise((resolve, reject) => {
@@ -50,6 +63,7 @@ async function usePhotoStore(mode, operation) {
     try {
       const result = await operation(transaction.objectStore(PHOTO_STORE));
       await completed;
+      if (mode === "readwrite") notifyWorkoutPhotoChanges();
       return result;
     } catch (error) {
       try { transaction.abort(); } catch { /* The browser may already have aborted it. */ }
@@ -160,7 +174,7 @@ export function getAllWorkoutPhotos() {
   );
 }
 
-export function listWorkoutPhotoMetadata() {
+export function listWorkoutPhotoMetadata({ savedAssetsOnly = false } = {}) {
   return usePhotoStore("readonly", (store) => new Promise((resolve, reject) => {
     const records = [];
     const request = store.openCursor();
@@ -172,7 +186,8 @@ export function listWorkoutPhotoMetadata() {
         return;
       }
       const { blob, ...metadata } = cursor.value;
-      records.push(metadata);
+      // Existence/size only: counting saved assets never decodes the image.
+      if (!savedAssetsOnly || blob?.size > 0) records.push(metadata);
       cursor.continue();
     };
   }));

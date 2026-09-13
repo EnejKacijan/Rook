@@ -24,7 +24,7 @@ export function PlanNumberInput({ value, onCommit, commits, min = 1, max, ...pro
     return () => commits.delete(commit);
   }, [commits]);
   return <input {...props} type="text" inputMode="numeric"
-    value={draft ?? value}
+    value={draft ?? value ?? ''}
     onFocus={event => { raw.current = event.currentTarget.value; setDraft(raw.current); }}
     onChange={event => { raw.current = event.currentTarget.value; setDraft(raw.current); }}
     onBlur={() => commitRef.current()}

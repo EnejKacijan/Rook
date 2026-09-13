@@ -8,21 +8,27 @@ const text = value => typeof value === 'string' ? value : null;
 const timestamp = value => value != null && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString() : null;
 export const completedExportWorkouts = state => (state.workouts || []).filter(w => timestamp(w.completedAt));
 function dateOf(w) {
+  if (w.historicalImport?.version === 2 && w.sourceDate?.day) return w.sourceDate.day;
   const date = new Date(timestamp(w.startedAt) || w.completedAt);
   if (Number.isFinite(w.utcOffsetMinutesAtStart)) return new Date(date.getTime() - w.utcOffsetMinutesAtStart * 60000).toISOString().slice(0,10);
   return date.toISOString().slice(0,10);
 }
 function performance(s, measure) {
-  return { weight: number(s.weight), unit: 'kg', reps: measure === 'seconds' ? null : number(s.reps),
+  const imported = s.rawImport?.version === 2;
+  return { weight: number(s.weight), unit: 'kg', reps: imported ? number(s.reps) : measure === 'seconds' ? null : number(s.reps),
     original_import_weight: number(s.rawImport?.weight), original_import_unit: ['kg','lb'].includes(s.rawImport?.weightUnit) ? s.rawImport.weightUnit : null,
-    duration_seconds: measure === 'seconds' ? number(s.durationSeconds ?? s.reps) : number(s.durationSeconds),
+    duration_seconds: imported ? number(s.durationSeconds) : measure === 'seconds' ? number(s.durationSeconds ?? s.reps) : number(s.durationSeconds),
+    distance: number(s.distance), distance_unit: text(s.distanceUnit), rpe: number(s.rpe),
+    source_set_order: number(s.rawImport?.setOrder), load_kind: text(s.rawImport?.loadKind),
     rir: number(s.rir), left_reps: number(s.sides?.left?.reps), right_reps: number(s.sides?.right?.reps) };
 }
 function portableWorkout(w, index, includeNotes, names) {
   return {
     workout_id: text(w.id) || `legacy-workout-${index + 1}`, workout_date: dateOf(w),
-    started_at: timestamp(w.startedAt), completed_at: timestamp(w.completedAt),
-    date_basis: Number.isFinite(w.utcOffsetMinutesAtStart) ? 'recorded_start_offset' : 'UTC',
+    started_at: w.historicalImport?.version === 2 ? text(w.startedAt) : timestamp(w.startedAt),
+    completed_at: w.historicalImport?.version === 2 ? text(w.sourceEnd?.value) : timestamp(w.completedAt),
+    date_basis: w.historicalImport?.version === 2 ? 'source_local_date' : Number.isFinite(w.utcOffsetMinutesAtStart) ? 'recorded_start_offset' : 'UTC',
+    workout_duration_seconds: number(w.durationSeconds), source_time_precision: text(w.sourceDate?.precision),
     scheduled_date: text(w.canonicalPlanDate || w.workoutDateKey), original_scheduled_date: text(w.originalScheduledDate),
     workout_name: text(w.name), adjusted: Boolean(w.adjustment), moved: Boolean(w.flexibleWeekMoved),
     source: text(w.historicalImport?.source) || 'rook', has_workout_photo: Boolean(w.photoId),
@@ -32,19 +38,20 @@ function portableWorkout(w, index, includeNotes, names) {
     exercises: (w.exercises || []).map((e, ei) => ({
       exercise_id: text(e.exerciseId), exercise_number: ei + 1, exercise_name: names(e),
       logging_mode: loggingModeOf(e),
+      superset_id: text(e.supersetId), source_superset_id: text(e.sourceSupersetId), source_exercise_order: number(e.sourceExerciseOrder),
       ...(includeNotes ? { exercise_note: [...new Set([text(e.personalNote), text(e.notes)].filter(Boolean))].join('\n') || null } : {}),
       sets: (e.sets || []).flatMap((s, si) => {
         const segments = (s.segments || []).flatMap((segment, i) => segment.completed ? [{
           segment_number: i + 1, segment_type: text(segment.kind) || text(s.setType), ...performance(segment, exerciseMeasure(e)),
         }] : []);
         if (!s.completed && !segments.length) return [];
-        return [{ set_number: si + 1, set_type: text(s.setType) || text(s.importSetType) || 'standard',
+        return [{ set_number: si + 1, set_type: s.rawImport?.version === 2 ? text(s.importSetType) : text(s.setType) || text(s.importSetType) || 'standard',
           performed: Boolean(s.completed), ...(s.completed ? performance(s, exerciseMeasure(e)) : {}), segments }];
       }),
     })),
   };
 }
-export const CSV_COLUMNS = ['workout_id','workout_date','started_at','completed_at','date_basis','scheduled_date','original_scheduled_date','workout_name','block_name','block_week','block_phase','adjusted','moved','source','has_workout_photo','exercise_id','exercise_number','exercise_name','logging_mode','set_number','set_type','row_type','segment_number','segment_type','weight','unit','original_import_weight','original_import_unit','reps','duration_seconds','rir','left_reps','right_reps'];
+export const CSV_COLUMNS = ['workout_id','workout_date','started_at','completed_at','date_basis','scheduled_date','original_scheduled_date','workout_name','block_name','block_week','block_phase','adjusted','moved','source','has_workout_photo','exercise_id','exercise_number','exercise_name','logging_mode','set_number','set_type','row_type','segment_number','segment_type','weight','unit','original_import_weight','original_import_unit','reps','duration_seconds','rir','left_reps','right_reps','workout_duration_seconds','source_time_precision','distance','distance_unit','rpe','source_set_order','load_kind','superset_id','source_superset_id','source_exercise_order'];
 // Prevent spreadsheet formula execution in user-authored text; JSON remains verbatim.
 export function csvCell(value) {
   if (value == null) return '';
@@ -76,7 +83,9 @@ export async function createWorkoutHistoryExport(state, { format = 'csv', includ
       for (const row of rows) parts.push(columns.map(key => csvCell(row[key])).join(',') + '\r\n');
     }
   }
-  if (format === 'json') parts.push(']}');
+  // CSV remains a one-set-per-row workout export. JSON also carries body
+  // check-ins and nullable source-only measurements without flattening them.
+  if (format === 'json') parts.push(`],"body_weight_checkins":${JSON.stringify(state.weightCheckins||[])},"imported_measurement_sources":${JSON.stringify(state.importedMeasurementSources||[])}}`);
   return new File(parts, `ROOK-workout-history-${new Date(now).toISOString().slice(0,10)}.${format}`, {type:format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json'});
 }
 

@@ -26,7 +26,7 @@ try {
    },method);
    assert.equal(metrics.overlap,true,'navigation mounts during sheet exit');
    assert.equal(metrics.inert,true,'returning nav cannot receive input until dismissal completes');
-   assert.equal(metrics.animation,reducedMotion==='reduce'?'none':'bottom-nav-enter');
+   assert.equal(metrics.animation,'none','persistent navigation restores without its own entrance motion');
    await sheet.waitFor({state:'detached'});
    assert.equal(await page.locator('.bottom-nav').evaluate(e=>e===window.qaReturningNav),true,'no second mount/animation after exit');
    assert.equal(await page.locator('.app-content').evaluate(e=>e.inert),false);

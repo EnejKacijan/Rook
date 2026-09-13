@@ -20,8 +20,10 @@ it('shares onboarding step fractions through five decisions and Back without a l
  setup(Array.from({length:5},(_,i)=>({id:`a${i}`,category:'exclusion',field:'source',source:'Preserved note'})));
  const progress=()=>host.querySelector('[role="progressbar"]');
  expect(progress().getAttribute('aria-valuetext')).toBe('Step 1 of 5');expect(progress().firstChild.style.width).toBe('20%');
+ expect(host.querySelector('.import-resolution').dataset.importStepBack).toBe('true');
  act(()=>button('ACKNOWLEDGE EXCLUSION').click());act(()=>button('CONTINUE').click());expect(progress().getAttribute('aria-valuetext')).toBe('Step 2 of 5');expect(progress().firstChild.style.width).toBe('40%');
- act(()=>button('Back').click());expect(progress().getAttribute('aria-valuenow')).toBe('1');act(()=>button('CONTINUE').click());
+ expect(host.querySelector('.import-resolution').dataset.importStepBack).toBe('true');
+ act(()=>button('Back').click());expect(progress().getAttribute('aria-valuenow')).toBe('1');expect(host.querySelector('.import-resolution').dataset.importStepBack).toBe('true');act(()=>button('CONTINUE').click());
  for(let i=2;i<5;i++){act(()=>button('ACKNOWLEDGE EXCLUSION').click());act(()=>button('CONTINUE').click());}
  expect(host.querySelector('.step-count').textContent).toBe('STEP 5/5');expect(progress().firstChild.style.width).toBe('100%');expect(progress().hasAttribute('aria-live')).toBe(false);
 });
@@ -38,13 +40,14 @@ it('identifies only the incomplete field without stealing keyboard focus',()=>{
  fill('Reviewed Max reps','6');expect(min.getAttribute('aria-invalid')).toBe('true');expect(max.getAttribute('aria-invalid')).toBe('true');
  fill('Reviewed Max reps','10');expect(max.getAttribute('aria-invalid')).toBeNull();expect(max.getAttribute('aria-describedby')).toBeNull();
 });
-it('same-type choices are separate focused decisions and partial form answers survive Back',()=>{
- setup([prescription,{...prescription,id:'p2'}, {id:'l',field:'loggingMode',dayId:'d',exerciseId:'e'}]);
- expect(host.querySelector('.step-count').textContent).toContain('STEP 1/3');expect(visible().querySelectorAll('.plan-import-choice')).toHaveLength(1);
- fill('Reviewed Min reps','8');fill('Reviewed Max reps','10');act(()=>button('CONTINUE').click());
- expect(host.querySelector('.step-count').textContent).toContain('STEP 2/3');fill('Reviewed Min reps','6');expect(button('CONTINUE').disabled).toBe(true);
- act(()=>button('Back').click());expect(visible().querySelector('[aria-label="Reviewed Max reps"]').value).toBe('10');
- act(()=>button('CONTINUE').click());expect(visible().querySelector('[aria-label="Reviewed Min reps"]').value).toBe('6');
+it('groups prescription and logging together and retains raw answers across Back',()=>{
+ setup([prescription,{id:'l',field:'loggingMode',dayId:'d',exerciseId:'e'},{id:'day',field:'day',dayId:'d'}]);
+ expect(host.querySelector('.step-count').textContent).toContain('STEP 1/2');expect(visible().querySelectorAll('.plan-import-choice')).toHaveLength(2);
+ fill('Reviewed Min reps','8');fill('Reviewed Max reps','10');expect(button('CONTINUE').disabled).toBe(true);
+ const select=visible().querySelector('select');act(()=>{select.value='per_side';select.dispatchEvent(new Event('change',{bubbles:true}));});
+ act(()=>button('CONTINUE').click());expect(host.querySelector('.step-count').textContent).toContain('STEP 2/2');
+ act(()=>button('Back').click());fill('Reviewed Min reps','');expect(button('CONTINUE').disabled).toBe(true);expect(select.value).toBe('per_side');
+ expect(visible().querySelector('[aria-label="Reviewed Max reps"]').value).toBe('10');
 });
 it('back preserves logging choice, schedule stays unresolved, only top Back exists',()=>{
  const {back}=setup([{id:'l',field:'loggingMode',dayId:'d',exerciseId:'e'},{id:'day',field:'day',dayId:'d'}]);
@@ -74,5 +77,5 @@ it('catalog choice advances, focuses the next heading and remains selected when 
  act(()=>button('Back').click());expect(button('BOSU Balance ✓').getAttribute('aria-pressed')).toBe('true');expect(done).not.toHaveBeenCalled();act(()=>button('KEEP AS CUSTOM').click());expect(host.querySelector('.step-count').textContent).toContain('STEP 2/2');
 });
 it('does not advance if the parent rejects a catalog choice',()=>{
- const source=structuredClone(program);source.days[0].exercises[0].matchStatus='unresolved';const {done}=setup([],source,false);act(()=>button('BOSU Balance').click());expect(done).not.toHaveBeenCalled();expect(visible().querySelector('h1').textContent).toBe('Match this exercise');
+ const source=structuredClone(program);source.days[0].exercises[0].matchStatus='unresolved';const {done}=setup([],source,false);act(()=>button('BOSU Balance').click());expect(done).not.toHaveBeenCalled();expect(visible().querySelector('h1').textContent).toBe('Y Balance Reach');
 });

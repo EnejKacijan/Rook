@@ -50,7 +50,8 @@ describe("historical workout import", () => {
       source: "strong", strongUnit: "lb", state: blankState(),
       text: strong.replace(",1,80,8,", ",W1,80,8,"),
     });
-    expect(preview.workouts[0].exercises[0].sets[0].setType).toBe("warmup");
+    expect(preview.workouts[0].exercises[0].sets[0].importSetType).toBe("warmup");
+    expect(preview.workouts[0].exercises[0].sets[0].planned).toBe(false);
     expect(preview.workouts[0].exercises[0].sets[0].weight).toBeCloseTo(36.29, 2);
   });
 
@@ -95,14 +96,15 @@ describe("historical workout import", () => {
     expect(preview.exerciseMappings.every((item) => item.exerciseId === state.customExercises[0].id)).toBe(true);
   });
 
-  it("requires review for unknown exercises and can remember a manual match", () => {
+  it("preserves unknown exercises automatically and can remember an optional manual match", () => {
     const state = blankState();
     let preview = parseHistoricalWorkoutCsv({
       source: "generic",
       state,
       text: generic(["2025-03-28,Upper,Prime Chest Machine,1,80,kg,8,,,"]),
     });
-    expect(preview.summary.reviewExercises).toBe(1);
+    expect(preview.summary.reviewExercises).toBe(0);
+    expect(preview.exerciseMappings[0].exerciseId).toMatch(/^custom-import-/);
     preview = resolveHistoricalExercise(preview, state, "Prime Chest Machine", {
       type: "match", exerciseId: "barbell-bench-press", rememberMatch: true,
     });
@@ -118,6 +120,7 @@ describe("historical workout import", () => {
       text: generic(["2025-03-28,Upper,Unknown Machine,1,80,kg,8,,,"]),
     });
     preview = resolveHistoricalExercise(preview, state, "Unknown Machine", { type: "custom" });
+    preview = resolveHistoricalExercise(preview, state, "Unknown Machine", { type: "load", loadKind: "external" });
     expect(state.customExercises).toHaveLength(0);
     const applied = applyHistoricalWorkoutImport(state, preview);
     expect(applied.state.customExercises[0].name).toBe("Unknown Machine");
@@ -197,6 +200,7 @@ describe("historical workout import", () => {
       text: generic(["2025-03-28,Upper,Prime Machine,1,220.462,lb,8,,,Good day"]),
     });
     preview = resolveHistoricalExercise(preview, state, "Prime Machine", { type: "custom" });
+    preview = resolveHistoricalExercise(preview, state, "Prime Machine", { type: "load", loadKind: "external" });
     const applied = applyHistoricalWorkoutImport(state, preview).state;
     const archive = await buildBackupArchive(applied, []);
     const restored = await parseBackupArchive(archive.bytes);

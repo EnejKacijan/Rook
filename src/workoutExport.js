@@ -13,7 +13,7 @@ import {
   workoutPlanDate,
   workoutSetSummary,
 } from "./domain.js";
-import { historySetDescriptor, loggingModeOf, setTypeLabel, hasOpenRepTarget, openRepTargetLabel } from "./advancedLogging.js";
+import { historySetDescriptor, loggingModeOf, setTypeLabel, hasOpenRepTarget, openRepTargetLabel, hasUnspecifiedRepTarget, loggingUnit } from "./advancedLogging.js";
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import { supersetMeta } from './supersets.js';
 const customWarmupLines = workout => workout?.warmupPlan?.mode === 'custom' && workout.warmupPlan.items?.length
@@ -67,7 +67,7 @@ function planSetDescriptor(exercise, set, timed) {
   const min=exercise.repMin,max=exercise.repMax;
   const ranged=Number.isFinite(min)&&min>0&&Number.isFinite(max)&&max>min;
   const value=Number(perSide||method ? min : set?.reps);
-  const target=open?openRepTargetLabel(exercise):ranged?`${min}–${max}${timed?' sec':' reps'}`:
+  const target=open?openRepTargetLabel(exercise):hasUnspecifiedRepTarget(exercise)?'Reps not specified':ranged?`${min}–${max}${timed?' sec':' reps'}`:
     Number.isFinite(value)&&value>0?`${value}${timed?' sec':' reps'}`:'Target unspecified';
   return `${method&&method!==target?`${method} · `:''}${target}${perSide?' / side':''}`;
 }
@@ -79,7 +79,8 @@ export function formatExportSet(
 ) {
   const value = Number(set?.reps);
   const timed = exerciseMeasure(exercise) === "seconds";
-  const load = exportLoadLabel(exercise, set?.weight, units);
+  const rawLoad = exportLoadLabel(exercise, set?.weight, units);
+  const load = !completed&&rawLoad==='Load not logged'?'Load not specified':rawLoad;
   const advanced = loggingModeOf(exercise) === "per_side" || Boolean(setTypeLabel(set));
   let result = !completed
     ? planSetDescriptor(exercise,set,timed)
@@ -108,9 +109,11 @@ export function formatExportSet(
 
 const exerciseLines = (exercise, options) => {
   const lines = [`${options.pair ? `${options.pair.role} ` : ''}${exerciseName(exercise)}`];
-  if (!options.completed && hasOpenRepTarget(exercise)) lines.push(`  ${exercise.sets.length} × ${openRepTargetLabel(exercise)}`);
+  const rounds=loggingUnit(exercise)==='round';
+  if (!options.completed && rounds) lines.push(`  ${exercise.sets.length} rounds`);
+  else if (!options.completed && hasOpenRepTarget(exercise)) lines.push(`  ${exercise.sets.length} × ${openRepTargetLabel(exercise)}`);
   (exercise.sets || []).forEach((set, index) => {
-    lines.push(`  ${index + 1}. ${formatExportSet(exercise, set, options)}`);
+    lines.push(`  ${rounds?'Round ':''}${index + 1}. ${formatExportSet(exercise, set, options)}`);
   });
   if (options.includeNotes && exercise.notes)
     lines.push(`  Note: ${String(exercise.notes).trim()}`);
@@ -139,6 +142,7 @@ export function buildWorkoutExport({
   completed = false,
   includeNotes = false,
 }) {
+  if(!completed&&workout.exercises.some(exercise=>exercise.partialPrescription))throw new Error('Resolve the imported workout structure before exporting.');
   const planDate = date || workoutPlanDate(workout) || isoDay();
   const summary = workoutSetSummary(workout);
   const lines = [
@@ -212,9 +216,12 @@ export function buildWeeklyPlanExport({
       const pair=supersetMeta(workout.exercises,exerciseIndex);
       if(pair?.memberIndex===0)lines.push(`  Superset · ${pair.roundCount} rounds · A1 → A2`);
       lines.push(`  ${pair ? `${pair.role} ` : ''}${exerciseName(exercise)}`);
-      if (hasOpenRepTarget(exercise)) lines.push(`    ${exercise.sets.length} × ${openRepTargetLabel(exercise)}`);
+      if(exercise.importRole)lines.push(`    ${exercise.importRole}`);
+      const rounds=loggingUnit(exercise)==='round';
+      if (rounds) lines.push(`    ${exercise.sets.length} rounds`);
+      else if (hasOpenRepTarget(exercise)) lines.push(`    ${exercise.sets.length} × ${openRepTargetLabel(exercise)}`);
       (exercise.sets || []).forEach((set, index) =>
-        lines.push(`    ${index + 1}. ${formatExportSet(exercise, set, { units })}`),
+        lines.push(`    ${rounds?'Round ':''}${index + 1}. ${formatExportSet(exercise, set, { units })}`),
       );
       if (includeNotes && exercise.notes)
         lines.push(`    Note: ${String(exercise.notes).trim()}`);

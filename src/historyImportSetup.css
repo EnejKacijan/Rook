@@ -1,0 +1,11 @@
+.history-import-setup { display:grid; gap:16px; margin:20px 0; min-width:0; }
+.history-import-setup label,.history-import-load-choice { display:grid; gap:7px; font-size:12px; min-width:0; }
+.history-import-setup select,.history-import-load-choice select { width:100%; min-width:0; min-height:44px; font:inherit; font-size:16px; color:var(--rook-text); background:var(--rook-surface); border:1px solid var(--rook-border); border-radius:9px; padding:8px; }
+.history-import-setup :is(p,small),.history-import-warnings { color:var(--rook-secondary); font-size:12px; line-height:1.5; }
+.history-import-setup details { min-width:0; border-block:1px solid var(--rook-border); padding:12px 0; }
+.history-import-setup details label { margin-block:14px; }
+.history-import-setup summary { min-height:32px; cursor:pointer; }
+.history-import-sample { overflow:auto; max-height:230px; margin-top:12px; }
+.history-import-sample :is(th,td) { padding:7px; text-align:left; min-width:100px; font-size:11px; white-space:pre-wrap; }
+.history-import-load-choice { margin-block:12px; }
+.history-import-warnings { padding-left:18px; }

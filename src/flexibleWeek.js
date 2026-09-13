@@ -1,5 +1,6 @@
 import { baseWeekSchedule, exerciseCatalog, isoDay, weekKey, workoutPlanDate } from './domain.js';
 import { prescribeTrainingBlockWorkout, resolveTrainingBlockSkips } from './trainingBlocks.js';
+import { combinedOccurrenceState, combinedAdjustment } from './combinedWorkoutLifecycle.js';
 
 export const addCalendarDays = (date, amount) => {
   const value = new Date(`${String(date).slice(0, 10)}T12:00:00`);
@@ -26,6 +27,8 @@ export function flexibleWeekConflict(state) {
   return records(state).some(record => !['completed', 'active'].includes(flexibleSessionStatus(state, record)) && record.planFingerprint !== flexiblePlanFingerprint(state));
 }
 export function flexibleSessionStatus(state, item, today = isoDay()) {
+  const combined=combinedOccurrenceState(state,item);
+  if(combined)return combined;
   const id = item.logicalSessionId || item.id || identity(item);
   const matches = workout => workout && (workout.logicalSessionId === id ||
     (!workout.logicalSessionId && workout.programDayId === item.workoutId && [item.originalDate, item.scheduledDate].includes(workoutPlanDate(workout))));
@@ -51,13 +54,13 @@ function materialize(state, record) {
   return { ...record, logicalSessionId: record.id, moved: record.scheduledDate !== record.originalDate,
     workout: { ...prescribed, logicalSessionId: record.id, originalScheduledDate: record.originalDate, flexibleWeekMoved: record.scheduledDate !== record.originalDate } };
 }
-export function effectiveWeekSchedule(state, date) {
+export function effectiveWeekSchedule(state, date, {includeCombined=false} = {}) {
   const start = weekKey(date), end = addCalendarDays(start, 6);
   const stored = records(state), ids = new Set(stored.map(r => r.id));
   const base = baseWeekSchedule(state, date).filter(item => !ids.has(identity(item))).map(item => ({ ...item, logicalSessionId: identity(item) }));
   // Invalid references are quarantined, never rebound to a new/deleted template.
   const moved = stored.filter(r => !r.skipped && r.scheduledDate >= start && r.scheduledDate <= end).map(r => materialize(state, r)).filter(Boolean);
-  return [...base, ...moved].sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
+  return [...base, ...moved].filter(item=>includeCombined || !combinedOccurrenceState(state,item)).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 export function flexibleSourceForDate(state, date) {
   return records(state).filter(r => r.originalDate === date && (r.skipped || r.scheduledDate !== date));
@@ -66,7 +69,7 @@ export function flexibleSessions(state, today = isoDay()) {
   const first = addCalendarDays(weekKey(today), -7), last = addCalendarDays(today, 13);
   const all = new Map();
   for (let cursor = first; cursor <= last; cursor = addCalendarDays(cursor, 7)) {
-    for (const item of effectiveWeekSchedule(state, cursor)) if (item.originalDate <= last) all.set(item.logicalSessionId, item);
+    for (const item of effectiveWeekSchedule(state, cursor,{includeCombined:true})) if (item.originalDate <= last) all.set(item.logicalSessionId, item);
   }
   for (const record of records(state)) {
     const item = materialize(state, record);
@@ -84,6 +87,7 @@ function overlap(a, b) {
   return [...first].some(m => second.has(m)) || (/lower|legs/i.test(a.workout.name) && /lower|legs/i.test(b.workout.name));
 }
 export function proposeFlexibleWeek(state, request, today = isoDay()) {
+  if (combinedAdjustment(state)) return {status:'conflict',error:'Finish or cancel the combined workout before changing its source schedule.'};
   const fail = error => ({ status: 'conflict', error });
   if (!validDate(today) || !state.program) return fail('No current plan is available.');
   if (flexibleWeekConflict(state) && request.mode !== 'restore') return fail('Your plan changed. Review and clear the old temporary schedule first.');

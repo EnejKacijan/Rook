@@ -1,11 +1,26 @@
+/* Scoped ownership: the chat, not the document or app shell, owns scrolling.
+   Fixed body/root also avoids relying solely on Safari overscroll containment.
+   These rules disappear immediately when Coach unmounts. */
+html:has(.app-content > .coach-screen),
+body:has(.app-content > .coach-screen) { overflow: hidden; overscroll-behavior-y: none; }
+body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
+.app-shell:has(> .app-content > .coach-screen),
+.app-content:has(> .coach-screen) { overflow: clip; }
 .coach-screen {
+  position: fixed;
+  inset: 0 0 auto;
+  width: min(100%, 500px);
+  margin-inline: auto;
   height: 100dvh;
   min-height: 0;
   padding-bottom: var(--bottom-nav-total-height);
-  overflow: hidden;
+  overflow: clip;
   display: flex;
   flex-direction: column;
 }
+/* Fixed Coach establishes a stacking context. Its modal history still owns the
+   full viewport above navigation, just as it did before the root was anchored. */
+.coach-screen.coach-menu-open { z-index: 60; }
 
 .coach-scroll {
   min-height: 0;
@@ -16,8 +31,15 @@
   scrollbar-width: none;
   padding-bottom: 4px;
 }
+.coach-content-surface { --coach-gutter: 24px; min-height: 0; flex: 1; display: flex; flex-direction: column; overflow: clip; margin-inline: calc(-1 * var(--coach-gutter)); padding-inline: var(--coach-gutter); }
+@media (max-width: 374px) { .coach-content-surface { --coach-gutter: 17px; } }
+:root .coach-content-surface > .coach-input { margin-inline: calc(-1 * var(--coach-gutter)); padding-inline: var(--coach-gutter); }
+.coach-header > .coach-header-context { flex-direction: row; align-items: center; gap: 8px; }
+.coach-header-context > div { display: flex; flex-direction: column; gap: 6px; }
+.coach-conversation-back { flex: 0 0 44px; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-text); font-size: 31px; line-height: 1; }
+.coach-screen > .coach-history-parent { visibility: hidden; pointer-events: none; animation: none; }
 .coach-scroll::-webkit-scrollbar { display: none; }
-.coach-header { position: sticky; z-index: 19; top: 0; width: calc(100% + 48px); min-height: 48px; margin: 0 -24px; padding: 0 24px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; background: #f6f5f2; }
+.coach-header { position: relative; z-index: 19; flex: 0 0 auto; width: calc(100% + 48px); min-height: 48px; margin: 0 -24px; padding: 0 24px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; background: #f6f5f2; }
 .coach-header > div { display: flex; flex-direction: column; gap: 6px; }
 .coach-header strong { font-size: 13px; }
 .coach-header > .coach-history-trigger { width: auto; min-width: 88px; height: 44px; flex: 0 0 auto; margin-top: -12px; padding: 0 2px 0 8px; border: 0; background: transparent; color: #55524e; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
@@ -82,6 +104,7 @@
 
 .coach-screen .coach-input { position: static; flex: 0 0 auto; align-items: flex-end; margin: 0 -24px; padding: 6px 24px; border-top: 1px solid rgba(27, 26, 25, .08); background: rgba(246, 245, 242, .97); backdrop-filter: blur(14px); }
 .coach-screen .coach-input textarea { height: 54px; min-height: 54px; max-height: 124px; flex: 1; min-width: 0; padding: 15px 16px; overflow-y: hidden; resize: none; border: 1px solid rgba(27, 26, 25, .1); border-radius: 14px; outline: none; background: #fff; color: #1b1a19; box-shadow: 0 1px 4px rgba(27, 26, 25, .025); font: inherit; font-size: 16px; line-height: 22px; overflow-wrap: anywhere; }
+.coach-screen .coach-input textarea { overscroll-behavior-y: contain; }
 .coach-screen .coach-input textarea:focus { border-color: rgba(31, 107, 76, .5); box-shadow: 0 0 0 3px rgba(31, 107, 76, .14); }
 .coach-screen .coach-input textarea:disabled { color: #8a8783; background: #f1f0ec; }
 .coach-screen .coach-input .button { width: 54px; height: 54px; min-height: 54px; max-height: 54px; flex: 0 0 54px; align-self: flex-end; padding: 0; border-radius: 14px; font-size: 19px; line-height: 1; letter-spacing: 0; }
@@ -145,13 +168,18 @@
 .coach-screen .resume-workout-action-card .button { margin-top: 18px; }
 
 @media (min-width: 501px) {
-  .coach-screen { height: calc(100dvh - 40px); }
+  .coach-screen { top: 20px; width: min(calc(100% - 40px), 500px); height: calc(100dvh - 40px); }
 }
-@media (max-width: 500px) and (pointer: coarse) {
-  .coach-screen:has(.coach-input textarea:focus) {
-    padding-bottom: env(safe-area-inset-bottom);
+@media (max-width: 500px) {
+  /* visualViewport already excludes the keyboard/accessory area. There is no
+     nav or device-bottom inset to reserve above it, even during focus handoff. */
+  .coach-screen[data-coach-keyboard-open] {
+    padding-bottom: 0;
   }
-  .coach-screen:has(.coach-input textarea:focus) + .bottom-nav {
+  .coach-screen[data-coach-keyboard-open] .coach-input {
+    padding-bottom: var(--sheet-action-gap);
+  }
+  .coach-screen[data-coach-keyboard-open] + .bottom-nav {
     display: none;
   }
 }

@@ -19,7 +19,7 @@ export async function startFreestyle(page) {
  const entry=page.locator('.freestyle-entry').getByRole('button',{name:'Start freestyle workout',exact:true});
  if(!await entry.isVisible()){
   await page.getByRole('button',{name:'Today options',exact:true}).click();
-  await page.locator('.today-actions-sheet').getByRole('button',{name:'Start freestyle workout',exact:true}).click();
+  await page.locator('.today-actions-sheet').getByRole('button',{name:/^Start (another )?freestyle workout$/}).click();
  }
  await entry.click();
 }

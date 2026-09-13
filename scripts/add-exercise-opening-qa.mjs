@@ -15,7 +15,7 @@ try {
     const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
     const times=[];
     for(let run=0;run<3;run++) {
-      const ms=await page.getByRole('button',{name:'+ ADD EXERCISE',exact:true}).first().evaluate(async el=>{
+      const ms=await page.getByRole('button',{name:'+ Add exercise',exact:true}).first().evaluate(async el=>{
         const start=performance.now();el.click();
         await new Promise(resolve=>{const poll=()=>document.querySelector('.scratch-exercise-results')?requestAnimationFrame(()=>requestAnimationFrame(resolve)):requestAnimationFrame(poll);poll();});
         return performance.now()-start;

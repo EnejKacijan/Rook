@@ -246,16 +246,19 @@ for (const [appearancePreference, stylePreference, width, label] of [
     localStorage.setItem("lift-v2-state", JSON.stringify(state));
   }, themedState);
   const run = await pageIn(context, `theme-${label}`);
-  await run.page.getByRole("button", { name: "Restore from backup" }).waitFor();
+  // Persisted incomplete setup is not an EMPTY first launch. Resume its setup
+  // without showing Landing or discarding the stored preferences.
+  await run.page.getByRole("button", { name: "Back to plan options" }).waitFor();
+  assert.equal(await run.page.locator('.entry-screen').count(),0);
   assert.equal(
     await run.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     true,
-    `${label} landing has no horizontal overflow`,
+    `${label} resumed setup has no horizontal overflow`,
   );
-  await run.page.screenshot({ path: output(`${width}-landing-${label}.png`), fullPage: true });
+  await run.page.screenshot({ path: output(`${width}-resumed-setup-${label}.png`), fullPage: true });
   assert.deepEqual(run.errors, []);
   await context.close();
 }
 
 await browser.close();
-console.log("Recovery-path QA passed: clean-install restore, logout recovery, full state/photo recovery, invalid and cancelled clean-state safety, backup-first cancellation/success behavior, and all four landing themes.");
+console.log("Recovery-path QA passed: clean-install restore, explicit deletion/recovery, full state/photo recovery, invalid and cancelled clean-state safety, backup-first behavior, and four preserved-draft themes.");

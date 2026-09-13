@@ -8,6 +8,7 @@ const outputRoot = new URL('../artifacts/week-strip/', import.meta.url);
 await mkdir(outputRoot, { recursive: true });
 const output = name => fileURLToPath(new URL(name, outputRoot));
 const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const baseUrl = process.env.QA_URL || 'http://127.0.0.1:4173';
 
 function contrastRatio(first, second) {
   const luminance = value => {
@@ -41,7 +42,7 @@ for (const todayState of ['rest', 'planned', 'completed']) {
   const page = await context.newPage(); const errors = [];
   await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) }));
   page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.goto(baseUrl, { waitUntil: 'networkidle' });
   const strip = page.locator('.week-strip'); const todayTile = strip.locator('[aria-current="date"]');
   const weekLabel = page.locator('.week-navigation span');
   const [headerBox, programBox, navigationBox, labelBox] = await Promise.all([page.locator('.screen-top').boundingBox(), page.locator('.today-program-name').boundingBox(), page.locator('.week-navigation').boundingBox(), weekLabel.boundingBox()]);
@@ -89,7 +90,7 @@ for (const todayState of ['rest', 'planned', 'completed']) {
 const selectedTodayContext = await browser.newContext({ viewport: { width: 390, height: 844 } });
 const selectedToday = fixture('planned'); selectedToday.selectedDay = weekday(); selectedToday.selectedDate = isoDay();
 await selectedTodayContext.addInitScript(state => localStorage.setItem('lift-v2-state', JSON.stringify(state)), selectedToday);
-const selectedTodayPage = await selectedTodayContext.newPage(); await selectedTodayPage.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) })); await selectedTodayPage.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+const selectedTodayPage = await selectedTodayContext.newPage(); await selectedTodayPage.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) })); await selectedTodayPage.goto(baseUrl, { waitUntil: 'networkidle' });
 const selectedTodayTile = selectedTodayPage.locator('.week-strip [aria-current="date"]');
 assert.equal(await selectedTodayTile.getAttribute('aria-pressed'), 'true');
 assert.equal((await selectedTodayTile.getAttribute('class')).includes('today-date'), true, 'selected today preserves the independent today indicator');
@@ -124,7 +125,7 @@ for (const variant of themeVariants) {
   await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.stringify(value)), state);
   const page = await context.newPage();
   await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false, provider: null }) }));
-  await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.goto(baseUrl, { waitUntil: 'networkidle' });
   const strip = page.locator('.week-strip');
   const today = strip.locator('[aria-current="date"]');
   const planned = strip.locator('.workout-planned:not(.selected-day)').first();

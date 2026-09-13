@@ -71,10 +71,10 @@ await capture("06-unilateral-320", fixture({ perSide: true, longName: true }), {
 await capture("07-premium-drop", fixture({ kind: "drop", appearance: "dark", style: "premium" }));
 
 const reload = await open(fixture({ perSide: true }));
-await reload.page.getByLabel("right reps for set 1").fill("8");
+await reload.page.getByLabel("right reps for set 1", { exact: true }).fill("8");
 await reload.page.reload({ waitUntil: "networkidle" });
 await reload.page.getByRole("button", { name: "RESUME WORKOUT" }).click();
-assert.equal(await reload.page.getByLabel("right reps for set 1").inputValue(), "8", "per-side value survives reload");
+assert.equal(await reload.page.getByLabel("right reps for set 1", { exact: true }).inputValue(), "8", "per-side value survives reload");
 assert.deepEqual(reload.errors, []);
 await reload.context.close();
 

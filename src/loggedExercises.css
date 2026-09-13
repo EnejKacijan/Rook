@@ -4,6 +4,8 @@
 .logged-exercise-row small { color:var(--rook-secondary);font-size:12px;line-height:1.4; }
 .logged-exercise-row .navigation-chevron { flex:0 0 auto;color:var(--rook-secondary); }
 .logged-exercises-all { width:100%;text-align:left;color:var(--rook-accent);font-size:13px;min-height:48px;gap:12px; }
+:root .logged-exercises-all { border-bottom: 0; font-weight: 650; }
+:root .logged-exercises-all > span:first-child { color: var(--rook-accent); }
 .logged-exercises-preview > h3 { margin-bottom:6px; }
 .logged-exercises-preview > p { color:var(--rook-secondary);font-size:13px; }
 .progress-screen .logged-exercises-preview.is-empty { padding-bottom:24px; }

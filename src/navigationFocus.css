@@ -1,0 +1,8 @@
+/* Only an explicitly pointer-origin, ROOK-managed navigation focus is quiet.
+   All native :focus-visible rules remain intact for keyboard/unknown focus.
+   Text inputs and user-agent forced-color accessibility remain untouched. */
+@media (forced-colors: none) {
+  :root :is(button, a[href], [role="button"])[data-rook-pointer-focus="true"]:focus-visible {
+    outline: none !important;
+  }
+}

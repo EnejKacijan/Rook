@@ -22,7 +22,7 @@ try {
     await openProfileArea(page, 'program'); await page.getByRole('button', { name: /^Edit plan/ }).click();
     const sheet = page.locator('.edit-plan-screen');
     const original = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program);
-    await sheet.getByRole('button', { name: '+ ADD EXERCISE', exact: true }).first().click();
+    await sheet.getByRole('button', { name: '+ Add exercise', exact: true }).first().click();
     const search = sheet.getByRole('searchbox');
     const options = sheet.locator('.scratch-exercise-results [role="option"]');
     const defaultOrder = await options.allTextContents();

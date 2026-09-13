@@ -1055,7 +1055,7 @@ Use double progression.`;
       "Potisk s prsi",
       "Veslanje z oporo prsi",
     ]);
-    expect(exercises.every((item) => item.matchStatus === "unresolved")).toBe(
+    expect(exercises.every((item) => item.matchStatus === "original")).toBe(
       true,
     );
     expect(exercises[0].sets.map((set) => set.weight)).toEqual([
@@ -1660,6 +1660,7 @@ zadnja čista ponovitev = konec serije`;
       const result = await AIService.importTrainingPlan(
         blankState().profile,
         example.source,
+        { review: true },
       );
       expect(result.program.days.map((day) => day.weekday)).toEqual(
         example.days,

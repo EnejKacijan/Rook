@@ -37,8 +37,11 @@
 .modal-drag-handle { position: absolute; z-index: 0; inset: 0; width: 100%; height: 100%; box-sizing: border-box; padding-top: 12px; display: flex; align-items: flex-start; justify-content: center; touch-action: none; cursor: default; }
 .modal-drag-handle i { width: 38px; height: 4px; border-radius: 999px; background: #aaa7a2; pointer-events: none; }
 
-/* Every secondary surface scrolls independently while the app behind it stays locked. */
-.modal-layer > :is(.screen, .sheet:not(.replace-sheet)) {
+/* One scroll contract for editor panels and secondary surfaces. Scratch's
+   full-page panel must own scrolling too, not an expanding overflow ancestor
+   whose document scroll bypasses the shared footer/reorder scroll owner. */
+.modal-layer > :is(.screen, .sheet:not(.replace-sheet)),
+.screen.scratch-editor-screen {
   min-height: 0;
   max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
   overflow-x: hidden;
@@ -49,7 +52,13 @@
   scrollbar-width: none;
   scroll-padding-bottom: var(--rook-sheet-safe-bottom);
 }
-.modal-layer > :is(.screen, .sheet:not(.replace-sheet))::-webkit-scrollbar { display: none; }
+.modal-layer > :is(.screen, .sheet:not(.replace-sheet))::-webkit-scrollbar,
+.screen.scratch-editor-screen::-webkit-scrollbar { display: none; }
+:root .screen.scratch-editor-screen {
+  height: 100dvh;
+  max-height: 100dvh;
+  padding-bottom: var(--rook-sheet-safe-bottom);
+}
 .modal-layer > .screen {
   height: auto;
   max-height: min(92dvh, calc(100dvh - max(12px, env(safe-area-inset-top))));
@@ -63,6 +72,11 @@
   padding-bottom: var(--rook-sheet-safe-bottom);
 }
 .modal-layer > .detail-screen { padding-bottom: var(--rook-sheet-safe-bottom); }
+/* Compact menus keep their headers inside the responsive content gutters. */
+:root .modal-layer > .screen:is(.today-actions-sheet, .completed-workout-delete-confirm) > .detail-header {
+  margin-inline: 0;
+  padding-inline: 0;
+}
 .modal-layer > .detail-screen.export-sheet {
   height: min(92dvh, calc(100dvh - max(12px, env(safe-area-inset-top))));
   display: flex;
@@ -1499,11 +1513,11 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .training-block-complete-actions { display: grid; gap: 10px; margin-top: 24px; }
 .training-block-complete-actions .button { margin: 0; }
 .training-block-name { display: flex; flex-direction: column; gap: 7px; margin-top: 24px; color: var(--rook-secondary, #6f6c68); font-size: 11px; font-weight: 700; }
-.training-block-name input { width: 100%; min-height: 52px; padding: 0 14px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 13px; background: var(--rook-control, #fff); color: var(--rook-text, #1b1a19); font-size: 15px; font-weight: 650; }
+.training-block-name input { width: 100%; min-height: 52px; padding: 0 14px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 13px; background: var(--rook-surface); color: var(--rook-text); font-size: 15px; font-weight: 650; }
 .training-block-field { margin-top: 24px; }
 .training-block-length { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; margin-top: 10px; }
-.training-block-length button { min-height: 50px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 13px; background: var(--rook-control, #fff); color: var(--rook-text, #1b1a19); font-weight: 700; }
-.training-block-length button.is-selected { border-color: var(--rook-accent); background: var(--rook-selected-surface, rgba(31,107,76,.08)); color: var(--rook-accent-text, var(--rook-accent)); }
+.training-block-length button { min-height: 50px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 13px; background: var(--rook-surface); color: var(--rook-text); font-weight: 700; }
+.training-block-length button.is-selected { border-color: var(--rook-accent); background: var(--rook-accent-soft); color: var(--rook-accent-text); }
 .training-block-deload { width: 100%; min-height: 70px; margin-top: 18px; padding: 12px 2px; border: 0; border-top: 1px solid var(--rook-border, rgba(27,26,25,.09)); border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.09)); background: transparent; color: var(--rook-text, #1b1a19); display: flex; align-items: center; justify-content: space-between; gap: 14px; text-align: left; }
 .training-block-deload > span { display: flex; flex-direction: column; gap: 4px; }
 .training-block-deload small { color: var(--rook-secondary, #6f6c68); font-size: 10px; line-height: 1.35; }
@@ -1749,6 +1763,9 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 }
 .session-note-editor > small { display: block; margin-top: 7px; }
 .completed-workout-detail h1 { overflow-wrap: anywhere; }
+.completed-workout-detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+:root[data-appearance] .completed-workout-detail-actions > .text-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 4px; color: var(--rook-secondary); background: transparent; border: 0; }
+.completed-workout-detail-actions svg { flex-shrink: 0; }
 .completed-workout-summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; }
 .completed-workout-summary > span { display: flex; flex-direction: column; gap: 5px; }
 .completed-workout-summary strong { color: var(--rook-text); font-size: 20px; font-variant-numeric: tabular-nums; }
@@ -1890,20 +1907,27 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   inset: 0;
   width: min(100%, 500px);
   margin: 0 auto;
-  padding: max(18px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom));
+  padding: calc(12px + env(safe-area-inset-top)) 18px calc(20px + env(safe-area-inset-bottom));
   display: grid;
-  place-items: center;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+  place-items: stretch;
   background: rgba(8, 9, 8, .94);
 }
 .workout-photo-viewer-panel {
   position: relative;
   width: 100%;
   max-height: 100%;
+  min-height: 0;
+  align-self: center;
+  overflow-y: auto;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 14px;
 }
+.workout-photo-viewer-chrome { display: flex; justify-content: flex-end; }
+.workout-photo-viewer-panel > :not(img) { flex-shrink: 0; }
 .workout-photo-viewer-context {
   width: 100%;
   display: grid;
@@ -1940,7 +1964,9 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .workout-photo-viewer-panel > img {
   width: 100%;
   max-width: 100%;
-  max-height: calc(100dvh - 150px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
+  max-height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   display: block;
   border-radius: 14px;
   object-fit: contain;
@@ -1960,10 +1986,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 }
 .workout-photo-viewer-error p { margin: 0; color: #b8bdb9; font-size: 12px; }
 .workout-photo-viewer-close {
-  position: fixed;
+  position: static;
   z-index: 2;
-  top: max(18px, env(safe-area-inset-top));
-  right: max(18px, calc((100vw - 500px) / 2 + 18px));
   width: 46px;
   height: 46px;
   border: 0;
@@ -2256,7 +2280,10 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .history-import-mapping-row > span { min-width: 0; display: grid; gap: 4px; }
 .history-import-mapping-row > span strong { font-size: 13px; overflow-wrap: anywhere; }
 .history-import-mapping-row > span small { color: var(--rook-secondary, #6f6c68); font-size: 10px; overflow-wrap: anywhere; }
-.history-import-mapping-row > button { min-height: 34px; padding: 0; border: 0; background: transparent; color: var(--rook-accent-text, #1f6b4c); font: inherit; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.history-import-mapping-row > button { min-height: 44px; min-width: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-accent-text, #1f6b4c); font: inherit; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.history-import-suggestion { display: grid; gap: 10px; margin: 20px 0 8px; padding-block: 16px; border-block: 1px solid var(--rook-border); }
+.history-import-suggestion > strong { overflow-wrap: anywhere; color: var(--rook-text); }
+.history-import-resolved > summary { min-height: 44px; align-content: center; }
 .history-import-mapping-row.needs-review > span small { color: var(--rook-warning-text, #7a5d18); font-weight: 700; }
 .history-import-mapping-row .remember-import-match { grid-column: 1 / -1; margin: 3px 0 0; padding: 10px 0 0; }
 .history-import-duplicates > p { margin: 10px 0; padding: 12px 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); display: grid; gap: 4px; }

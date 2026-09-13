@@ -3,6 +3,7 @@ import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { availableCustomExerciseItems, customExerciseSnapshot } from './customExercises.js';
 import { effectiveGymContext } from './gymProfiles.js';
 import { compileProfileTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
+import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
 
 export function freestyleCatalog(state) {
   const profile = effectiveGymContext(state, state.activeWorkout || {}).profile;
@@ -16,6 +17,7 @@ export function freestyleEffortLimit(state, exerciseId) {
 }
 
 export function startFreestyleWorkout(state, now = Date.now()) {
+  if(combinedAdjustment(state))throw new Error('Finish or cancel the combined workout before starting another session.');
   if (state.activeWorkout || state.activeOptionalSession) throw new Error('A workout is already in progress. Resume or finish it first.');
   const safety = compileProfileTrainingSafety(state.profile, Object.values(exerciseCatalog));
   if (trainingSafetyBlocks(safety.status)) throw new Error(safety.message || 'Review your training restrictions first.');

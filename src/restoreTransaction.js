@@ -2,6 +2,7 @@ import { STORAGE_KEY, serializeState } from "./domain.js";
 import {
   discardWorkoutPhotoRestoreSnapshot,
   rollbackWorkoutPhotoRestore,
+  notifyWorkoutPhotoChanges,
 } from "./workoutPhotos.js";
 
 export const RESTORE_JOURNAL_KEY = "rook-restore-journal-v1";
@@ -59,6 +60,7 @@ export async function recoverInterruptedRestore({
   else storage.setItem(STORAGE_KEY, journal.previousState);
   storage.removeItem(RESTORE_JOURNAL_KEY);
   await discardSnapshot().catch(() => {});
+  notifyWorkoutPhotoChanges();
   return "recovered";
 }
 
@@ -70,4 +72,5 @@ export async function finishRestoreTransaction({
   // new JSON and photo dataset are authoritative; a leftover snapshot is inert.
   storage.removeItem(RESTORE_JOURNAL_KEY);
   await discardSnapshot().catch(() => {});
+  notifyWorkoutPhotoChanges();
 }

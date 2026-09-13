@@ -4,6 +4,15 @@ import { blankState } from './domain.js';
 import { importAdversarialFixtures } from './importAdversarialFixtures.js';
 for(const fixture of importAdversarialFixtures)it(`adversarial: ${fixture.name}`,async()=>{
   const parsing=AIService.importTrainingPlan(blankState().profile,fixture.text,{review:true});
+  if(fixture.name==='malformed load-only'){
+    const result=await parsing;
+    expect(result.program.days.flatMap(d=>d.exercises)).toHaveLength(1);
+    const exercise=result.program.days[0].exercises[0];
+    expect(exercise.sets).toEqual([]);expect(exercise.repMin).toBeNull();expect(exercise.repMax).toBeNull();
+    expect(result.sourceReview.issues.some(i=>i.field==='prescription')).toBe(true);
+    expect(result.program.importMetadata.pendingHybrid.length).toBeGreaterThan(0);
+    return;
+  }
   if(!fixture.days){await expect(parsing).rejects.toThrow();return;}
   const result=await parsing;
   expect(result.program.days).toHaveLength(fixture.days);

@@ -4,7 +4,8 @@
   --sheet-action-padding: 12px;
   --sheet-action-safe-bottom: env(safe-area-inset-bottom, 0px);
 }
-.modal-layer > .has-sheet-action-footer {
+.modal-layer > .has-sheet-action-footer,
+.scratch-editor-screen.has-sheet-action-footer {
   scroll-padding-bottom: calc(var(--sheet-action-height, 126px) + 24px);
 }
 :root :is(.detail-screen, .sheet) .sheet-action-footer {
@@ -48,3 +49,19 @@
   transform: none;
   box-shadow: none;
 }
+/* Scratch and direct PlanEditor opt in. Keep their existing panel scroll owner;
+   flex free space anchors short content, sticky bottom anchors overflowing work.
+   The real footer remains in flow, reserving its own footprint without a late spacer. */
+:root .has-anchored-plan-footer { display: flex; flex-direction: column; }
+:root .has-anchored-plan-footer > * { flex-shrink: 0; }
+:root .has-anchored-plan-footer > .sheet-action-footer { margin-top: auto; }
+/* overflow:hidden still permits scrollIntoView to pan a backdrop. This layer
+   must not become a second scroll owner when a picker result receives focus. */
+:root .modal-layer:has(> .has-anchored-plan-footer) { overflow: clip; }
+:root .scratch-editor-screen.has-anchored-plan-footer { position: fixed; inset-inline: 0; top: 0; }
+:root .modal-layer:not(.edit-plan-page-layer) > .has-anchored-plan-footer {
+  height: min(92dvh, calc(var(--sheet-visible-height, 100dvh) - max(12px, env(safe-area-inset-top))));
+}
+/* Expanded Edit Plan fills the contained viewport; it is not a sheet with a
+   12px top clearance. Override that shared binder cap only in this presentation. */
+:root .edit-plan-page-layer > .has-anchored-plan-footer { max-height: 100% !important; }
