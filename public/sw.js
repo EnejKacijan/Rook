@@ -7,9 +7,11 @@ async function precacheCurrentBuild() {
   if (!response.ok) throw new Error('App shell unavailable');
   const html = await response.clone().text();
   const assets = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(match => match[1]).filter(path => path.startsWith('/'));
+  await cache.addAll([...new Set([...APP_SHELL, ...assets])]);
+  // Publish the new shell only after its entry assets are cached. A partial
+  // update must leave the previous offline shell usable.
   await cache.put('/index.html', response.clone());
   await cache.put('/', response);
-  await cache.addAll([...new Set([...APP_SHELL, ...assets])]);
 }
 
 self.addEventListener('install', event => {
@@ -19,7 +21,7 @@ self.addEventListener('install', event => {
 self.addEventListener('activate', event => {
   event.waitUntil(
     caches.keys()
-      .then(keys => Promise.all(keys.filter(key => key !== CACHE).map(key => caches.delete(key))))
+      .then(keys => Promise.all(keys.filter(key => /^rook-v\d+$/.test(key) && key !== CACHE).map(key => caches.delete(key))))
       .then(() => self.clients.claim())
   );
 });
@@ -42,7 +44,13 @@ self.addEventListener('fetch', event => {
         .then(response => {
           if (response.ok) {
             const cacheResponse = response.clone();
-            event.waitUntil(caches.open(CACHE).then(cache => cache.put('/index.html', cacheResponse)));
+            event.waitUntil((async () => {
+              const cache = await caches.open(CACHE);
+              const html = await cacheResponse.clone().text();
+              const assets = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map(match => match[1]).filter(path => path.startsWith('/'));
+              if (assets.length) await cache.addAll([...new Set(assets)]);
+              await cache.put('/index.html', cacheResponse);
+            })().catch(() => {}));
           }
           return response;
         })

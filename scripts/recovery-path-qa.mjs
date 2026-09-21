@@ -50,6 +50,8 @@ async function pageIn(context, label) {
 }
 
 async function putPhoto(page) {
+  // Initialize the actual schema, including the transactional restore store.
+  await page.evaluate(async()=>{const media=await import('/src/workoutPhotos.js');await media.getAllWorkoutPhotos();});
   await page.evaluate(({ id, workoutId }) => new Promise((resolve, reject) => {
     const request = indexedDB.open("rook-workout-media", 3);
     request.onupgradeneeded = () => {
@@ -80,6 +82,7 @@ async function putPhoto(page) {
 }
 
 async function countPhotos(page) {
+  await page.evaluate(async()=>{const media=await import('/src/workoutPhotos.js');await media.getAllWorkoutPhotos();});
   return page.evaluate(() => new Promise((resolve, reject) => {
     const request = indexedDB.open("rook-workout-media", 3);
     request.onupgradeneeded = () => {
@@ -249,7 +252,7 @@ for (const [appearancePreference, stylePreference, width, label] of [
   // Persisted incomplete setup is not an EMPTY first launch. Resume its setup
   // without showing Landing or discarding the stored preferences.
   await run.page.getByRole("button", { name: "Back to plan options" }).waitFor();
-  assert.equal(await run.page.locator('.entry-screen').count(),0);
+  assert.equal(await run.page.locator('.first-run-page:not([hidden]) .entry-screen').count(),0);
   assert.equal(
     await run.page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
     true,

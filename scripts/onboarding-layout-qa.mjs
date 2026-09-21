@@ -1,3 +1,4 @@
+import { chooseOnboardingAnswer, waitForOnboardingStep } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -14,12 +15,12 @@ await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
 
 async function verify(name, { allowScroll = false } = {}) {
-  await page.waitForTimeout(50);
-  await page.waitForFunction(() => window.scrollY === 0 && document.querySelector('.onboarding')?.scrollTop === 0);
+  await page.locator('.first-run-page:not([hidden]) .first-run-step-motion > .onboarding').waitFor();await page.evaluate(async()=>{await document.fonts.ready;await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
+  await page.waitForFunction(() => window.scrollY === 0 && document.querySelector('.first-run-page:not([hidden]) .first-run-step-motion > .onboarding')?.scrollTop === 0);
   const layout = await page.evaluate(() => {
-    const onboarding = document.querySelector('.onboarding');
-    const footer = document.querySelector('.onboarding-footer')?.getBoundingClientRect();
-    const brand = document.querySelector('.brand')?.getBoundingClientRect();
+    const onboarding = document.querySelector('.first-run-page:not([hidden]) .first-run-step-motion > .onboarding');
+    const footer = document.querySelector('.first-run-page:not([hidden]) .onboarding-footer')?.getBoundingClientRect();
+    const brand = document.querySelector('.first-run-page:not([hidden]) .brand')?.getBoundingClientRect();
     return { innerHeight, clientHeight: onboarding?.clientHeight || 0, scrollHeight: onboarding?.scrollHeight || 0, scrollTop: onboarding?.scrollTop || 0, scrollLeft: onboarding?.scrollLeft || 0, brandTop: brand?.top || 0, footerBottom: footer?.bottom || 0 };
   });
   await page.screenshot({ path: output(`${name}.png`) });
@@ -35,9 +36,9 @@ await page.getByRole('combobox', { name: 'Age range' }).click();
 await page.getByRole('option', { name: '18–29' }).click();
 await page.getByRole('button', { name: 'CONTINUE' }).click();
 await verify('02-goal');
-await page.getByRole('button', { name: 'Build muscle' }).click();
+await chooseOnboardingAnswer(page,'Build muscle',3);
 await verify('03-experience');
-await page.getByRole('button', { name: /^Beginner/ }).click();
+await chooseOnboardingAnswer(page,/^Beginner/,4);
 await verify('04-schedule', { allowScroll: true });
 await page.getByRole('button', { name: '3 days' }).click();
 const anyDay = page.getByLabel('Any day works');

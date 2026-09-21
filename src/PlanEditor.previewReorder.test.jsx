@@ -81,6 +81,8 @@ it.each(['touchcancel','pointercancel','Escape','Done reordering','Back'])('canc
   const {source,saved} = await mount(); await click('Reorder');
   const handle = host.querySelector('.plan-workout-drag-surface'), point = {identifier:5,clientX:30,clientY:200};
   await act(async () => event(handle,'touchstart',{touches:[point]}));
+  expect(host.querySelector('.is-week-reordering')).toBeNull();
+  await act(async () => event(handle,'touchmove',{touches:[{...point,clientY:220}]}));
   expect(host.querySelector('.is-week-reordering')).not.toBeNull();
   if (reason === 'Done reordering' || reason === 'Back') await click(reason);
   else await act(async () => reason === 'Escape' ? event(window,'keydown',{key:reason}) : event(window,reason,{pointerType:'touch',changedTouches:[point],touches:[]}));

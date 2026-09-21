@@ -1,0 +1,23 @@
+<!doctype html><html><head><title>ROOK freestyle row review</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>
+<section id="fixture"><h1>Isolated freestyle row review</h1>
+<label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label>
+<label>Variant <select id="variant"><option>weighted</option><option>bodyweight</option><option>timed</option><option>per-side</option></select></label>
+<label><input id="rir" type="checkbox" checked>RIR</label><label><input id="long" type="checkbox">Long exercise name</label>
+<button id="seed" disabled>Start synthetic row review</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {startFreestyleWorkout,addFreestyleExercise} from '/src/freestyleWorkout.js';
+import {serializeState,STORAGE_KEY,isoDay} from '/src/domain.js';
+if(!import.meta.env.DEV||location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development review only');
+if(new URLSearchParams(location.search).has('run')){document.querySelector('#fixture').remove();await import('/src/main.jsx');}
+else {const el=id=>document.getElementById(id);el('seed').disabled=false;el('seed').onclick=()=>{
+ let state=createReturningUserFixture(0);state.activeWorkout=null;state.selectedDate=isoDay();
+ const theme=el('theme').value,kind=el('variant').value;
+ Object.assign(state.profile,{rirEnabled:el('rir').checked,showExerciseImages:true,restTimerEnabled:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ state=startFreestyleWorkout(state);state=addFreestyleExercise(state,kind==='bodyweight'?'pull-up':kind==='timed'?'plank':kind==='per-side'?'split-squat':'barbell-bench-press');
+ const exercise=state.activeWorkout.exercises[0];if(kind==='per-side')exercise.loggingMode='per_side';
+ if(el('long').checked)exercise.importedName='Alternating incline dumbbell bench press with controlled eccentric';
+ Object.assign(exercise.sets[0],{weight:kind==='weighted'||kind==='per-side'?52.5:null,reps:kind==='timed'?30:12,rir:2,completed:false,...(kind==='per-side'?{sides:{left:{reps:11,completed:false},right:{reps:12,completed:false}}}:{})});
+ localStorage.setItem(STORAGE_KEY,serializeState(state));location.href='/scripts/freestyle-row-review.html?run=1';
+};}
+</script></body></html>

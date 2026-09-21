@@ -1,0 +1,9 @@
+.startup-recovery{max-width:36rem;margin-inline:auto;min-height:100dvh;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;padding: max(28px,env(safe-area-inset-top)) 24px max(28px,env(safe-area-inset-bottom));gap:16px;background:var(--rook-bg);color:var(--rook-text)}
+.startup-recovery h1{font-size:clamp(28px,7vw,38px);line-height:1.12;margin:0;overflow-wrap:break-word}
+.startup-recovery p{line-height:1.5;margin:0}
+.startup-recovery-actions,.startup-confirm{display:flex;flex-direction:column;gap:12px}
+.startup-recovery .button{min-height:48px;white-space:normal}
+.storage-diagnostics{margin-top:24px;font-size:13px;color:var(--rook-secondary);text-align:left}
+.storage-diagnostics summary{cursor:pointer;min-height:44px;display:flex;align-items:center;text-decoration:underline}
+.storage-diagnostics p{margin:8px 0}
+.storage-diagnostics pre{font-size:12px;line-height:1.45;white-space:pre-wrap;overflow-wrap:anywhere;max-height:280px;overflow:auto;padding:12px;background:var(--rook-surface);border:1px solid var(--rook-border);border-radius:12px}

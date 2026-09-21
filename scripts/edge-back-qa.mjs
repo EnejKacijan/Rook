@@ -32,8 +32,8 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
  await openAdjustWeek(page);await page.getByRole('button',{name:/My available days changed/}).click();await page.waitForTimeout(300);
  await shot('flexible-before');await swipe(45,'flexible-cancel');assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'When can you train?');await shot('flexible-cancelled');
  await swipe(width*.5,'flexible-commit');assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'What changed?');await shot('flexible-destination');
- await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-week-sheet .choice-row').first().click();await swipe(width*.5);assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'Choose a workout');
- await page.locator('.flexible-week-sheet .choice-row').first().click();await page.locator('.flexible-week-dates button:not([disabled])').first().click();await swipe(width*.5);assert.match(await page.locator('.flexible-week-sheet h1').innerText(),/^Move /);
+ await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-workout-list [data-session-id]').first().click();await swipe(width*.5);assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'Choose a workout');
+ await page.locator('.flexible-workout-list [data-session-id]').first().click();await page.locator('.flexible-week-dates button:not([disabled])').first().click();await swipe(width*.5);assert.match(await page.locator('.flexible-week-sheet h1').innerText(),/^Move /);
  await page.getByRole('button',{name:'Back',exact:true}).click();assert.equal(await page.locator('.flexible-week-sheet h1').innerText(),'Choose a workout');
  await page.getByRole('button',{name:'Close Adjust week',exact:true}).click();
  await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).click();await page.getByRole('button',{name:/Less time Shorten/}).click();await page.waitForTimeout(300);

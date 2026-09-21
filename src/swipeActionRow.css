@@ -1,0 +1,39 @@
+.swipe-action-row { position:relative; overflow:clip; isolation:isolate; }
+/* One opaque foreground owns the name, prescription and row separator. */
+.swipe-action-row > [data-swipe-content] { position:relative; z-index:1; background:inherit; }
+/* Remove intent reveals red. Canonical armed state affects only the icon,
+   threshold feedback and release; Add retains its separate grey/green cue. */
+.swipe-action-row > .swipe-remove-background {
+ position:absolute;z-index:0;inset:0;border-radius:inherit;
+ background:var(--rook-destructive-swipe-bg);color:var(--rook-destructive-swipe-fg);
+ visibility:hidden;transition:visibility 0s var(--swipe-settle-duration);pointer-events:none;
+}
+.swipe-action-row[data-swipe-active] > .swipe-remove-background { visibility:visible;transition:none; }
+.swipe-remove-affordance {
+ position:absolute;top:50%;right:0;width:20px;height:20px;
+ transform:translate3d(calc(50% - var(--swipe-distance,0px) * .5),-50%,0);
+ transition:transform var(--swipe-settle-duration) var(--rook-ease-standard,ease-out);
+}
+.swipe-action-row[data-swipe-active] .swipe-remove-affordance { transition:none; }
+.swipe-action-row[data-removing] .swipe-remove-affordance { transition:transform 120ms var(--rook-ease-standard,ease-out); }
+.swipe-remove-background svg {
+ display:block;width:20px;height:20px;transform:scale(1);transition:transform 90ms ease-out;
+ fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;
+}
+.swipe-action-row[data-swipe-armed] > .swipe-remove-background svg { transform:scale(1.08); }
+.swipe-action-row[data-swipe-active] { user-select:none;-webkit-user-select:none; }
+.swipe-action-row[data-removing] { pointer-events:none;overflow:clip!important; }
+.swipe-action-row:has([data-swipe-fallback]:focus-visible) { outline:2px solid var(--rook-accent);outline-offset:2px; }
+/* Transfer the editor frame to the moving foreground, retaining its theme
+   border color/background and identical closed geometry. */
+:root .plan-editor .swipe-action-row.plan-editor-exercise { border-width:0; }
+:root .plan-editor .swipe-action-row.plan-editor-exercise > [data-swipe-content] { border:1px solid;border-color:inherit;border-radius:inherit;background:inherit;overflow:clip; }
+:root .plan-editor-summary-action.swipe-editor-edit { border:0;background:transparent;padding:0;min-width:44px;min-height:44px;justify-content:flex-end; }
+.up-next .swipe-action-row { background:var(--rook-bg); }
+.up-next .swipe-up-next-body { position:relative;min-height:48px;padding:11px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:12px;border-bottom:1px solid var(--rook-border);cursor:pointer; }
+.swipe-up-next-body:focus-within { outline:2px solid var(--rook-accent);outline-offset:-2px;border-radius:8px; }
+.swipe-up-next-body[data-row-pressed] { background:color-mix(in srgb,var(--rook-accent) 5%,transparent); }
+.swipe-up-next-body > .up-next-main { font-weight:600;overflow-wrap:anywhere; }
+:root .exercise-remove-undo { z-index:125;bottom:calc(90px + env(safe-area-inset-bottom,0px)); }
+:root .exercise-remove-undo button { min-height:44px; }
+@media(prefers-reduced-motion:reduce) { .swipe-action-row,.swipe-action-row > [data-swipe-content],.swipe-remove-background,.swipe-remove-affordance,.swipe-remove-background svg { transition:none!important; } }

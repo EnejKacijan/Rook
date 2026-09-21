@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import {isoDay,weekday} from '../src/domain.js';
 import { createReturningUserFixture } from "../src/demoFixture.js";
 
 const artifactRoot = new URL("../artifacts/persistence-failure/", import.meta.url);
@@ -21,7 +22,7 @@ await context.addInitScript((state) => {
   Storage.prototype.setItem = () => {
     throw new DOMException("Storage blocked", "QuotaExceededError");
   };
-}, createReturningUserFixture(2));
+}, (()=>{const state=createReturningUserFixture(2);state.program.days[0].weekday=weekday();state.selectedDay=weekday();state.selectedDate=isoDay();return state;})());
 const page = await context.newPage();
 const errors = [];
 page.on("pageerror", (error) => errors.push(error.message));
@@ -41,7 +42,7 @@ await page.getByRole("alert").filter({ hasText: "Changes can’t be saved" }).wa
 const plannedDay = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).program.days[0].weekday);
 await page.getByRole("button", { name: new RegExp(`^${plannedDay} `) }).click();
 assert.equal(
-  await page.getByRole("button", { name: /START WORKOUT|WORKOUT COMPLETE/ }).count(),
+  await page.getByRole("button", { name: /START WORKOUT|WORKOUT COMPLETE|REVIEW MISSED WORKOUT/ }).count(),
   1,
   "the app remains usable when persistence is unavailable",
 );
@@ -78,9 +79,9 @@ await newUserPage.route("**/api/ai/status", (route) =>
   }),
 );
 await newUserPage.goto(appUrl, { waitUntil: "networkidle" });
-await newUserPage.getByRole("alert").filter({ hasText: "couldn’t safely reopen your data" }).waitFor();
+await newUserPage.getByRole("alert").filter({ hasText: "couldn’t load your local data" }).waitFor();
 assert.equal(
-  await newUserPage.getByRole("button", { name: "RETRY" }).count(),
+  await newUserPage.getByRole("button", { name: "TRY AGAIN" }).count(),
   1,
   "a blocked read fails closed instead of assuming there is no interrupted restore",
 );

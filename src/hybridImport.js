@@ -92,6 +92,33 @@ export function validateHybridInterpretation(payload,fragments){
 const cleanName=value=>String(value).replace(/^\s*(?:[-*•]|\d+[.)])\s*/,'').replace(/\s*\([^)]*\)\s*/g,' ').replace(/\s*[-–—:]\s*$/,'').trim();
 const naturalSyntax=text=>new RegExp(`\\b(?:seti|seta|setov|repi|repov)\\b|\\d+\\s*[–—-]\\s*\\d+\\s*${SET}\\b|warm[ -]?up.*top|top\\s+set|back[ -]?off|po\\s+zelji|\\boptional\\b|(?:kera|keri|katera|kateri)\\s*koli|any\\s+(?:exercise|variation)|choose (?:one|an)|vsaj|at least|najvec|at most`,'i').test(foldImport(text).replace(/optional\s+(?:added\s+)?(?:load|weight)/g,''));
 
+// Group physical source regions before reading numeric facts. No catalogue
+// match is needed: a bounded name followed by prescription evidence is enough.
+export function multilineExerciseBlocks(source,{heading,workoutHeading}={}) {
+ const lines=sourceLines(source),blocks=[];
+ const clean=text=>text.trim().replace(/^(?:[-*•]|\d+[.)])\s*/, '').trim();
+ const continuation=text=>/^(?:\+\s*)?(?:\d+(?:[.,]\d+)?(?:\s*[-–—]\s*\d+)?\s*(?:[x×]|sets?\b|seti\b|seta\b|setov\b|serij(?:e|a)?\b|reps?\b|repi\b|repov\b|ponovit(?:ve|ev)\b|warm[ -]?up\b|top\b|working\b|back[ -]?off\b|ogrevaln|delovn|kg\b|lbs?\b|rir\b|rpe\b|rounds?\b|krog|sec\b|seconds?\b|sek|drop)|RIR\b|RPE\b|to failure\b|do odpovedi\b|AMRAP\b|slow (?:eccentric|down)|full ROM\b|tempo\b|po[cč]as|poln obseg|rest\b|po[cč]itek\b|last set\b|final set\b)/iu.test(text);
+ for(let i=0;i<lines.length;i++){
+  const line=lines[i],name=clean(line.text);
+  if(!name||continuation(name)||bodyPartRE.test(name)||heading?.(name)||workoutHeading?.(name)||/^(?:optional|po [zž]elji|warm[ -]?up|ogrevanje|superset|circuit|notes?|opomba|progression|goal|schedule)\s*:?/i.test(name)||hasExecutableEvidence(name))continue;
+  if(!/[\p{L}]/u.test(name)||name.length>150||/[.!?]$/.test(name))continue;
+  let cursor=i+1,last=i;
+  while(cursor<lines.length){const text=clean(lines[cursor].text);if(!text){cursor++;continue;}if(!continuation(text))break;last=cursor++;}
+  if(last===i)continue;
+  // Logged load × reps rows are already represented by the established parser.
+  if(/^\d+(?:[.,]\d+)?\s*(?:kg|lbs?)\s*[x×]/i.test(clean(lines[i+1]?.text||'')))continue;
+  const block={line:line.line,endLine:lines[last].line,name,sourceSpan:span(source,line.start,lines[last].end)};
+  const facts=lines.slice(i+1,last+1).filter(l=>l.text.trim()).map(l=>factsFor(l.text));
+  const roles=facts.some(f=>f.role),conflicts=[];
+  for(const key of ['sets','reps','rir','load']){const values=new Set(facts.map(f=>f[key]).filter(v=>v!=null).map(v=>JSON.stringify(v)));if(values.size>1&&!(roles&&['sets','reps','load'].includes(key)))conflicts.push(key);}
+  if(conflicts.length)block.unsupported='Conflicting '+conflicts.join(' / ')+' in this exercise block. Edit the source to choose the intended values; no value was selected.';
+  if(/\b(?:rounds?|krogi|kroge|kroga|krogov)\b/i.test(block.sourceSpan.text))block.unsupported='Rounds are preserved as source structure. Clarify the executable prescription; they were not converted to sets.';
+  if(/^\s*\+\s*\d+\s*drop[ -]?set/im.test(block.sourceSpan.text))block.unsupported='Additional drop work is preserved. Clarify which set uses the method; it was not applied to every working set.';
+  block.conflicts=conflicts;blocks.push(block);i=last;
+ }
+ return blocks;
+}
+
 // Sidecar intermediate representation for source regions the established parser
 // cannot faithfully cover. Ordinary accepted grammar remains on its old path.
 export function analyzeHybridImport(source,legacy,{heading,workoutHeading,matchName}={}){
@@ -99,7 +126,8 @@ export function analyzeHybridImport(source,legacy,{heading,workoutHeading,matchN
   const legacyEntries=new Map();
   for(const d of legacy?.days||[])for(const raw of d.exercises){const entries=legacyEntries.get(raw.sourceLine)||[];entries.push({raw,day:d});legacyEntries.set(raw.sourceLine,entries);}
   const coveredLines=new Set([...legacyEntries.values()].flat().flatMap(({raw})=>raw.sourceLines||[raw.sourceLine]));
-  const natural=lines.some(l=>!['recovery','comment','rest','load','warmup','warmup-review','round-group','formatting'].includes(statuses.get(l.line))&&!/^(?:opomba|notes?|cue|napredovanje|progression)\s*:/i.test(l.text.trim())&&(naturalSyntax(l.text)||!coveredLines.has(l.line)&&hasExecutableEvidence(l.text)&&!heading?.(l.text)&&!tableHeaderRE.test(l.text)));
+  const multiline=multilineExerciseBlocks(source,{heading,workoutHeading}).filter(block=>!['recovery','comment','rest','load','warmup','warmup-review','round-group'].includes(statuses.get(block.line)));
+  const natural=multiline.length>0||lines.some(l=>!['recovery','comment','rest','load','warmup','warmup-review','round-group','formatting'].includes(statuses.get(l.line))&&!/^(?:opomba|notes?|cue|napredovanje|progression)\s*:/i.test(l.text.trim())&&(naturalSyntax(l.text)||!coveredLines.has(l.line)&&hasExecutableEvidence(l.text)&&!heading?.(l.text)&&!tableHeaderRE.test(l.text)));
   const meaningful=lines.some(l=>/\b(?:day|dan)\s*\d|\b(?:sets?|seti|seta|reps?|repi|failure|amrap|press|squat|curl|dvig|vaja)\b/i.test(foldImport(l.text)));
   if(!natural&&legacy)return {useHybrid:false,needsAI:false,legacy,fragments:[],blocks:[]};
   if(!natural&&!meaningful)return {useHybrid:false,needsAI:false,legacy,fragments:[],blocks:[],rejected:true};
@@ -113,6 +141,8 @@ export function analyzeHybridImport(source,legacy,{heading,workoutHeading,matchN
     if(tableHeaderRE.test(text))continue;
     // One physical line can contain several already-parsed exercises/days.
     // Preserve ALL of them before interpreting new headings or natural language.
+    const grouped=multiline.find(b=>b.line===line.line);
+    if(grouped){addBlock(line,grouped.sourceSpan.end,grouped.name,{multiline:true,conflicts:grouped.conflicts,unsupported:grouped.unsupported,optional});optional=null;while(lines[i+1]?.line<=grouped.endLine)i++;continue;}
     const old=legacyEntries.get(line.line);
     if(old&&!naturalSyntax(text)&&!text.startsWith('(')&&!text.startsWith('+')&&!optional){
       for(const entry of old){
@@ -160,7 +190,7 @@ export function analyzeHybridImport(source,legacy,{heading,workoutHeading,matchN
     const fragment={id:`fragment-${line.line}`,text,sourceSpan:span(source,line.start,line.end),day:ensureDay(line).id,section,optional,executable:!/^\W*$/.test(text)};
     fragments.push(fragment);addBlock(line,line.end,null,{fragmentId:fragment.id,optional});optional=null;
   }
-  return {useHybrid:true,legacy,source,days,blocks,fragments,needsAI:fragments.length>0,knownCount:blocks.filter(b=>b.name).length};
+  return {useHybrid:true,multiline:multiline.length>0,legacy,source,days,blocks,fragments,needsAI:fragments.length>0,knownCount:blocks.filter(b=>b.name).length};
 }
 
 export function mergeHybridInterpretation(analysis,payload){

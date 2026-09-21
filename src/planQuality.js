@@ -1,3 +1,4 @@
+import {workoutPerformedDate} from './workoutDates.js';
 import { selectStructuralTemplate } from './splitPreferences.js';
 import { generatedSessionTiming } from './durationPlanning.js';
 import { compileProfileTrainingSafety, exerciseAllowedByTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
@@ -140,7 +141,7 @@ export function buildProgrammingContext(profile = {}, catalog = [], historySumma
 
 function completedSets(exercise) { return (exercise?.sets || []).filter(set => set?.completed); }
 function weekKey(value) {
-  const date = new Date(value); if (!Number.isFinite(date.getTime())) return null;
+  const date = new Date(/^\d{4}-\d{2}-\d{2}$/.test(value) ? value+'T12:00:00' : value); if (!Number.isFinite(date.getTime())) return null;
   const day = (date.getDay() + 6) % 7; date.setHours(12, 0, 0, 0); date.setDate(date.getDate() - day);
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
 }
@@ -148,12 +149,12 @@ function weekKey(value) {
 export function summarizeTrainingHistory(workouts = [], program = null, { now = new Date(), maxSessions = 24, catalog = [] } = {}) {
   const cutoff = new Date(now); cutoff.setDate(cutoff.getDate() - 84);
   const recent = (Array.isArray(workouts) ? workouts : []).filter(workout => {
-    const date = new Date(workout?.completedAt || workout?.endedAt || 0); return Number.isFinite(date.getTime()) && date >= cutoff && date <= now;
-  }).sort((a, b) => new Date(a.completedAt || a.endedAt) - new Date(b.completedAt || b.endedAt)).slice(-maxSessions);
+    const date = new Date(workoutPerformedDate(workout)+'T12:00:00'); return Number.isFinite(date.getTime()) && date >= cutoff && date <= now;
+  }).sort((a, b) => String(workoutPerformedDate(a)).localeCompare(String(workoutPerformedDate(b)))).slice(-maxSessions);
   if (!recent.length) return null;
   const weekly = new Map(); const exercises = new Map(); const volumeByWeek = new Map(); const substitutions = new Map(); const byId = new Map(catalog.map(item => [item.id, item])); const programDays = new Map((program?.days || []).map(day => [day.id, day])); let completedSessions = 0; let endedEarly = 0;
   for (const workout of recent) {
-    const key = weekKey(workout.completedAt || workout.endedAt); if (key) weekly.set(key, (weekly.get(key) || 0) + 1);
+    const key = weekKey(workoutPerformedDate(workout)); if (key) weekly.set(key, (weekly.get(key) || 0) + 1);
     const allSets = (workout.exercises || []).flatMap(exercise => exercise.sets || []); const hasWork = allSets.some(set => set.completed);
     if (hasWork) completedSessions++; if (workout.endedEarly || workout.status === 'ended-early') endedEarly++;
     for (const exercise of workout.exercises || []) {

@@ -1,3 +1,4 @@
+import {chooseOnboardingAnswer,waitForOnboardingStep} from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { chromium } from "playwright-core";
 import {
@@ -19,7 +20,9 @@ const testProfile = {
   equipment: ["full gym"],
   priorities: ["Chest", "Back"],
   trainingPreferences:
-    "I enjoy Upper/Lower, but use whatever structure best fits my goal.",
+    "Upper / Lower / Full body",
+  trainingSplitChoice: "other",
+  specificSplitConfirmed: true,
 };
 const fixture = buildProgram(testProfile);
 const authoredWeekdays = ["Tue", "Thu", "Sun"];
@@ -97,7 +100,7 @@ await page.getByRole("button", { name: "BUILD MY PLAN" }).click();
 await page.getByRole("combobox", { name: "Age range" }).click();
 await page.getByRole("option", { name: "30–39" }).click();
 await page.getByRole("button", { name: "CONTINUE" }).click();
-await page.getByRole("button", { name: "Build muscle" }).click();
+await chooseOnboardingAnswer(page,'Build muscle',3);
 const beginnerOption = page.getByRole("button", { name: /Beginner/ });
 assert.equal(
   await beginnerOption
@@ -111,21 +114,21 @@ assert.ok(
   beginnerBox.height >= 58 && beginnerBox.height <= 76,
   "experience guidance keeps a comfortable compact touch target",
 );
-await beginnerOption.click();
+await chooseOnboardingAnswer(page,/Beginner/,4);
 await page.getByRole('heading', {name:'What does a realistic training week look like?',exact:true}).waitFor();
-await page.getByRole('button', {name:'Back',exact:true}).click();
+await page.getByRole('button', {name:'Back',exact:true}).click();await waitForOnboardingStep(page,3);
 assert.equal(
   (await beginnerOption.getAttribute("class")).includes("selected-option"),
   true,
   "selected state applies to the whole experience option",
 );
-await beginnerOption.click();
+await chooseOnboardingAnswer(page,/Beginner/,4);
 await page.getByRole("button", { name: "3 days" }).click();
 await page.getByRole("checkbox", { name: "Any day works" }).check();
 await page.getByRole("button", { name: "60 min" }).click();
 await page.getByRole("button", { name: "CONTINUE" }).click();
 assert.equal(
-  await page.locator(".step-count").textContent(),
+  await page.getByText("STEP 5/8",{exact:true}).textContent(),
   "STEP 5/8",
   "schedule choices share one consolidated step",
 );
@@ -169,7 +172,7 @@ assert.equal(
   await page.getByText("TRAINING PRIORITIES", { exact: true }).count(),
   1,
 );
-assert.equal(await page.locator(".step-count").textContent(), "STEP 6/8");
+await waitForOnboardingStep(page,6);
 const priorityArea = page.locator(".onboarding-content");
 await priorityArea.getByRole("button", { name: "Shoulders" }).click();
 await priorityArea.getByRole("button", { name: "Chest" }).click();
@@ -235,7 +238,7 @@ assert.equal(
 assert.equal(
   saved.profile.trainingPreferences,
   testProfile.trainingPreferences,
-  "soft split preference reaches the personalized generator",
+  "explicit custom split reaches the personalized generator",
 );
 assert.deepEqual(
   saved.profile.equipment,
@@ -287,7 +290,7 @@ importedFixture.days.forEach((day) =>
     exercise.notes = null;
   }),
 );
-importedFixture.days[0].exercises[0].sourceName = "Rotating Iso Cable Sweep";
+importedFixture.days[0].exercises[0].sourceName = "Zorblax Custom Movement";
 importedFixture.days[0].exercises[0].exerciseId = "seated-cable-row";
 await importPage.route("**/api/ai/status", (route) =>
   route.fulfill({
@@ -325,13 +328,14 @@ await importPage
   .getByPlaceholder(/Paste your workout notes/)
   .fill(importSourceText);
 await importPage.getByRole("button", { name: "CREATE PREVIEW" }).click();
-await importPage.getByRole('heading',{name:'Match this exercise',exact:true}).waitFor();
-await importPage.getByRole('button',{name:'KEEP AS CUSTOM',exact:true}).click();
+await importPage.getByRole('button',{name:'Review exercise matches · Optional',exact:true}).click();
+await importPage.getByRole('heading',{name:'Zorblax Custom Movement',exact:true}).waitFor();
+await importPage.getByRole('button',{name:'KEEP ORIGINAL',exact:true}).click();
 await importPage.getByRole("button", { name: "USE THIS PLAN" }).waitFor();
 assert.equal(
   await importPage
     .locator(".import-exercise")
-    .filter({ hasText: "Rotating Iso Cable Sweep" })
+    .filter({ hasText: "Zorblax Custom Movement" })
     .count(),
   1,
   "preview preserves an exact custom source name",
@@ -365,7 +369,7 @@ let imported = await importPage.evaluate(() =>
 assert.equal(imported.program.source, "ai-import");
 assert.equal(
   imported.program.days[0].exercises[0].importedName,
-  "Rotating Iso Cable Sweep",
+  "Zorblax Custom Movement",
 );
 assert.match(
   imported.program.days[0].exercises[0].exerciseId,
@@ -384,7 +388,7 @@ assert.equal(
 );
 assert.equal(
   imported.program.days[0].exercises[0].importedName,
-  "Rotating Iso Cable Sweep",
+  "Zorblax Custom Movement",
   "custom identity persists after reload",
 );
 await importContext.close();

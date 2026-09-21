@@ -49,7 +49,7 @@ describe("workout text export", () => {
     );
   });
 
-  it("exports completed and incomplete sets with the canonical plan date", () => {
+  it("exports completed and incomplete sets with the actual workout date", () => {
     const workout = {
       name: "Upper Body",
       canonicalPlanDate: "2026-09-02",
@@ -64,7 +64,7 @@ describe("workout text export", () => {
       ],
     };
     const result = buildWorkoutExport({ workout, completed: true });
-    expect(result.filename).toBe("rook-upper-body-2026-09-02-completed.txt");
+    expect(result.filename).toBe("rook-upper-body-2026-09-03-completed.txt");
     expect(result.text).toContain("Completed 1 / 2 sets");
     expect(result.text).toContain("✓ 8 reps - 20 kg - RIR 2");
     expect(result.text).toContain("○ 8 reps - Load not logged - RIR 2 - Not completed");

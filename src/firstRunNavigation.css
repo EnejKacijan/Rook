@@ -1,0 +1,11 @@
+.first-run-navigation, .first-run-page, .first-run-step-motion { display: contents; }
+.first-run-page[hidden] { display: none !important; }
+.first-run-navigation { overflow-anchor: none; }
+.first-run-page:not([hidden]) > main { overflow-anchor: none; }
+:root .first-run-page:not([hidden]) main { overflow-x: clip; }
+.first-run-visual { position: fixed; inset: 0; z-index: 200; pointer-events: none; overflow: clip; contain: strict; }
+/* The shared transition replaces the old zero-opacity keyed entrance only here. */
+.first-run-step-motion .onboarding-content { animation: none !important; }
+.persistence-host > .first-run-navigation > .first-run-page > :is(.onboarding,.initial-import-screen) {
+  min-height: calc(100dvh - 74px - env(safe-area-inset-top));
+}

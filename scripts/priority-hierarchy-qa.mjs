@@ -1,3 +1,4 @@
+import {openFirstRunLanding} from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
@@ -8,7 +9,7 @@ try{for(const [width,appearance,style] of [[390,'light','standard'],[320,'dark',
 const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'});
 const state=blankState();Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
 await context.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);
-const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto(process.env.ROOK_QA_URL || 'http://127.0.0.1:4175');await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();
+const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto(process.env.ROOK_QA_URL || 'http://127.0.0.1:4175'); await openFirstRunLanding(page);await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();
 const next=()=>page.getByRole('button',{name:'CONTINUE',exact:true}).click();
 await page.getByRole('combobox',{name:'Age range'}).click();await page.getByRole('option',{name:'18–29',exact:true}).click();await next();
 await page.getByRole('button',{name:'Build muscle',exact:true}).click();await page.getByRole('button',{name:/^Beginner/}).click();

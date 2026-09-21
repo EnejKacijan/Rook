@@ -1,0 +1,43 @@
+.saved-workouts{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px}
+.saved-workouts .saved-workout-preview,.saved-workout-list{min-height:0;overflow-y:auto;overscroll-behavior-y:contain}
+.saved-workouts h1,.saved-workouts strong,.saved-workouts p{overflow-wrap:anywhere}
+.saved-template-name{display:flex;flex-direction:column;gap:8px}
+.saved-template-name input{min-height:44px;width:100%;box-sizing:border-box;font-size:16px;border:1px solid var(--rook-border);border-radius:12px;padding:12px;background:var(--rook-surface-muted);color:var(--rook-text);appearance:none}
+.saved-template-exercises{list-style:none;margin:12px 0;padding:0}
+.saved-template-exercises li{padding:12px 0;border-bottom:1px solid var(--rook-border);min-width:0}
+.saved-template-exercises strong,.saved-template-exercises small{display:block;overflow-wrap:anywhere}
+.saved-template-exercises small{color:var(--rook-muted);margin-top:4px}
+.saved-template-overlaps{min-width:0;padding:12px 0;color:var(--rook-secondary);font-size:14px;line-height:1.45}
+.saved-template-overlap-context{display:grid;gap:8px;overflow-wrap:anywhere}
+.saved-workouts .saved-template-overlap-context p,.saved-workouts .saved-template-overlap-context ul{margin:0}
+.saved-template-overlap-heading{font-weight:600}
+.saved-template-overlap-context ul{padding-left:20px}
+.saved-template-overlap-confirm{display:flex;gap:12px;align-items:center;min-height:44px;margin-top:8px;color:var(--rook-text);cursor:pointer}
+.saved-template-overlap-confirm input{flex:0 0 24px;width:24px;height:24px;margin:0;accent-color:var(--rook-accent)}
+.saved-template-overlap-confirm input:focus-visible{outline:2px solid var(--rook-accent);outline-offset:2px}
+.saved-workouts .saved-template-copy-note{margin-bottom:0}
+.saved-template-save-actions{display:flex;flex-direction:column;gap:10px;margin-top:18px}
+.saved-template-save-actions>.text-button{align-self:flex-start;min-height:44px;padding:0;display:inline-flex;align-items:center;text-align:left;white-space:normal}
+.saved-template-title{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:12px;align-items:start}
+.saved-template-title h1{min-width:0}
+.saved-template-options-trigger{width:44px;height:44px;margin-top:8px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--rook-secondary);font-size:18px;letter-spacing:1px;display:grid;place-items:center}
+.saved-template-options-trigger:active{opacity:.7}
+.saved-template-options-trigger:focus-visible{outline:2px solid var(--rook-accent);outline-offset:2px}
+:root .modal-layer>.saved-template-options>.detail-header{margin-inline:0;padding-inline:0}
+.saved-template-options>.list-row{min-height:48px}
+.saved-template-delete{display:grid;gap:var(--sheet-action-gap,8px);margin-top:16px}
+.saved-template-delete>p{margin:0 0 4px}
+.queue-search-scopes{display:flex;gap:8px;flex-shrink:0}
+:root .queue-search-scopes button{flex:1;min-height:44px;border:0;border-bottom:2px solid transparent;background:transparent;color:var(--rook-secondary);font:inherit}
+.queue-search-scopes button[aria-pressed=true]{border-bottom-color:var(--rook-accent);color:var(--rook-accent)}
+.freestyle-queue-picker>.saved-workouts{flex:1;overflow:hidden}
+.freestyle-queue-picker>.saved-workouts[hidden]{display:none}
+.freestyle-queue-picker.is-template-editing{display:flex;overflow-y:auto}
+.freestyle-queue-picker.is-template-editing>.saved-workouts{display:contents}
+.freestyle-queue-picker.is-template-editing>.saved-workouts>*{flex-shrink:0}
+.freestyle-queue-picker.is-template-editing .sheet-action-footer{margin-top:auto}
+.saved-workouts .plan-editor-heading strong,.workout-preparation .plan-editor-heading strong{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+/* These single-workout editors share one intro/list group, without week-level spacing. */
+.screen .plan-editor[data-workout-only]{margin-top:12px}
+.plan-editor[data-workout-only]>.plan-reorder-help{margin:0 0 12px}
+.plan-editor[data-workout-only]>.plan-edit-day-section{padding-top:4px}

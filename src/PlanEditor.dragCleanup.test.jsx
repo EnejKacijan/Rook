@@ -15,7 +15,7 @@ async function mount(mode='scratch'){
 }
 function event(target,type,fields={}){const e=new Event(type,{bubbles:true,cancelable:true});Object.assign(e,fields);target.dispatchEvent(e);return e;}
 const point={identifier:5,clientX:25,clientY:200};
-async function start(handle){await act(async()=>event(handle,'touchstart',{touches:[point]}));expect(document.querySelector('.is-week-reordering')).not.toBeNull();}
+async function start(handle){await act(async()=>event(handle,'touchstart',{touches:[point]}));expect(document.querySelector('.is-week-reordering')).toBeNull();await act(async()=>event(handle,'touchmove',{touches:[{...point,clientY:220}]}));expect(document.querySelector('.is-week-reordering')).not.toBeNull();}
 function idle(){expect(document.querySelector('.is-reordering,.is-week-reordering,.plan-reorder-preview,.reorder-live-source')).toBeNull();expect(host.querySelector('.plan-editor').style.minHeight).toBe('');expect(host.querySelector('.plan-editor').style.paddingTop).toBe('');}
 it.each(['touchend','touchcancel','pointercancel','Escape','blur','visibilitychange'])('Scratch releases the touch gesture on %s',async reason=>{
  const add=vi.spyOn(window,'addEventListener'),remove=vi.spyOn(window,'removeEventListener'),handle=await mount();await start(handle);

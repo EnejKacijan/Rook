@@ -1,3 +1,4 @@
+import {openFirstRunLanding} from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
@@ -7,7 +8,7 @@ const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chr
 try{for(const width of [320,390])for(const style of ['standard','premium'])for(const appearance of ['dark','light']){
  const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'}),state=blankState();Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
  await context.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);
- const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto('http://127.0.0.1:4173');await page.getByRole('button',{name:/Start from scratch/i}).click();
+ const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto('http://127.0.0.1:4173');await openFirstRunLanding(page);await page.getByRole('button',{name:/Start from scratch/i}).click();
  const days=page.locator('.scratch-day-options');
  for(const name of ['Mon','Wed','Fri'])await days.getByRole('button',{name,exact:true}).click();
  assert.equal(await days.locator('.selected').count(),3);

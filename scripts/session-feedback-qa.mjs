@@ -1,3 +1,4 @@
+import {addWorkoutExercise} from '../src/freestyleWorkout.js';
 import assert from 'node:assert/strict';
 import { configureNewFeatureReview } from './new-feature-review-capture.mjs';
 import {mkdir} from 'node:fs/promises';
@@ -9,17 +10,17 @@ const out='artifacts/session-feedback';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
 configureNewFeatureReview(browser, '04-post-workout-feedback');
 function fixture(appearance='light',style='standard',long=false){
- const s=blankState(),today=weekday();Object.assign(s.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:[...new Set([today,'Tue','Sat','Mon'])].slice(0,3),sessionMinutes:60,environment:'Commercial gym',equipment:['full gym'],priorities:['Balanced'],onboardingComplete:true,rirEnabled:true,appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
+ let s=blankState();const today=weekday();Object.assign(s.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:[...new Set([today,'Tue','Sat','Mon'])].slice(0,3),sessionMinutes:60,environment:'Commercial gym',equipment:['full gym'],priorities:['Balanced'],onboardingComplete:true,rirEnabled:true,appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
  s.program=buildProgram(s.profile);s.selectedDate=isoDay();s.selectedDay=today;s.ai.planUpgradeDismissed=true;s.activeWorkout=startWorkout(s,s.program.days.find(d=>d.weekday===today));s.activeWorkout.startedAt=Date.now()-3600000;
  for(const e of s.activeWorkout.exercises)for(const set of e.sets)Object.assign(set,{weight:70,reps:8,rir:1,completed:true});
- if(long){s.activeWorkout.sessionNote='A long synthetic session note with useful training context. '.repeat(7);s.activeWorkout.exercises.push(...structuredClone(s.activeWorkout.exercises).map((e,i)=>({...e,id:`long${i}`,importedName:'Long gym-specific exercise name with independent handles and adjustable seat'})));}
+ if(long){s.activeWorkout.sessionNote='A long synthetic session note with useful training context. '.repeat(7);for(const e of [...s.activeWorkout.exercises]){s=addWorkoutExercise(s,e.exerciseId,{allowDuplicate:true});const added=s.activeWorkout.exercises.at(-1);added.importedName='Long gym-specific exercise name with independent handles and adjustable seat';for(const set of added.sets)Object.assign(set,{weight:70,reps:8,rir:1,completed:true});}}
  return s;
 }
 async function open(width,appearance,style,long=false){
  const context=await browser.newContext({viewport:{width,height:844},colorScheme:appearance,serviceWorkers:'block'});
  await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},fixture(appearance,style,long));
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));
- await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await page.getByRole('button',{name:'RESUME WORKOUT',exact:true}).click();await page.getByRole('button',{name:'Finish',exact:true}).click();await page.locator('.complete-screen').waitFor();
+ await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await page.getByRole('button',{name:'RESUME WORKOUT',exact:true}).click().catch(async error=>{throw new Error(`${error.message}\nStartup: ${await page.locator('body').innerText()}`);});await page.getByRole('button',{name:'Finish',exact:true}).click();await page.locator('.complete-screen').waitFor();
  return {page,context,errors};
 }
 async function shot(page,name,fullPage=false){await page.waitForTimeout(200);assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));await page.screenshot({path:`${out}/${name}.png`,fullPage});}
@@ -43,7 +44,7 @@ try{
   await page.getByRole('button',{name:'Remove feedback',exact:true}).click();assert.equal((await saved(page)).workouts.at(-1).sessionFeedback,'skipped');await shot(page,`${key}-skipped`);
   await page.getByRole('button',{name:'About right',exact:true}).click();
   await page.getByRole('button',{name:'DONE',exact:true}).click();await page.getByRole('button',{name:'WORKOUT COMPLETE · VIEW HISTORY'}).click();await page.locator('.session-feedback-history').scrollIntoViewIfNeeded();await shot(page,`${key}-history`);
-  await page.getByRole('button',{name:'EDIT',exact:true}).click();await page.locator('.session-feedback-choices').scrollIntoViewIfNeeded();await page.getByRole('button',{name:'Harder than expected',exact:true}).click();await shot(page,`${key}-correction`);await page.getByRole('button',{name:'REVIEW CHANGES',exact:true}).click();await page.getByRole('button',{name:'SAVE CHANGES',exact:true}).click();await page.locator('.completed-workout-detail').waitFor();assert.match(await page.locator('.session-feedback-history').innerText(),/Harder than expected/);
+  await page.getByRole('button',{name:'Workout options',exact:true}).click();await page.getByRole('button',{name:'Edit history',exact:true}).click();await page.locator('.session-feedback-choices').scrollIntoViewIfNeeded();await page.getByRole('button',{name:'Harder than expected',exact:true}).click();await shot(page,`${key}-correction`);await page.getByRole('button',{name:'REVIEW CHANGES',exact:true}).click();await page.getByRole('button',{name:'SAVE CHANGES',exact:true}).click();await page.locator('.completed-workout-detail').waitFor();assert.match(await page.locator('.session-feedback-history').innerText(),/Harder than expected/);
   restoreState=await saved(page);await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'WORKOUT COMPLETE · VIEW HISTORY'}).click();assert.match(await page.locator('.session-feedback-history').innerText(),/Harder than expected/);assert.deepEqual(errors,[]);await context.close();console.log(`${key}: completion, options/skip, History correction, reload passed`);
  }
  for(const scenario of process.env.ROOK_FEEDBACK_BLOCK_ONLY?[]:['ignored','offline','failure','long']){

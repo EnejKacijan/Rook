@@ -1,0 +1,7 @@
+.exercise-picker-identity, .list-row > span.exercise-picker-identity:first-child { display:flex; flex-direction:row; align-items:center; gap:12px; min-width:0; flex:1; text-align:left; white-space:normal; }
+.exercise-picker-thumbnail { display:grid; place-items:center; width:44px; height:44px; min-width:44px; flex:0 0 44px; overflow:hidden; border-radius:8px; background:var(--surface, transparent); }
+.exercise-picker-thumbnail img { display:block; width:44px; height:44px; object-fit:contain; }
+.exercise-picker-placeholder { opacity:.35; font-size:18px; }
+.exercise-picker-label { display:block; min-width:0; overflow-wrap:anywhere; }
+.exercise-picker-label > strong,.exercise-picker-label > small { display:block; }
+.exercise-picker-label > small { margin-top:3px; }

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import {moveWorkoutCandidates} from "../src/flexibleWeek.js";
 import {
   WEEKDAYS,
   blankState,
@@ -109,17 +110,20 @@ if (today !== "Sun") {
     text: "Unused deterministic fallback.",
     action: null,
   });
-  const upcoming = original.program.days[0];
-  await page.getByRole("button", { name: "Train today instead" }).click();
+  const upcoming = moveWorkoutCandidates(original)[0];
+  await page.getByRole("button", { name: "Today options" }).click();
+  await page.getByRole("button", { name: "Rest-day activities" }).click();
   await page
-    .getByRole("button", { name: /MOVE A PLANNED WORKOUT HERE/ })
+    .getByRole("button", { name: /MOVE A WORKOUT Choose/ })
     .click();
-  await page.locator(".move-workout-row").first().click();
+  await page.locator(`[data-session-id="${upcoming.logicalSessionId}"]`).click();
   await page
-    .getByRole("heading", { name: new RegExp(`Move ${upcoming.name}`) })
+    .getByRole("heading", { name: `Move ${upcoming.workout.name}`, exact: true })
     .waitFor();
   await page.screenshot({ path: output("390-move-preview.png") });
-  await page.getByRole("button", { name: "MOVE WORKOUT" }).click();
+  await page.getByRole("button", { name: "Move to today", exact: true }).click();
+  await page.getByRole("button", { name: "APPLY MOVE", exact: true }).click();
+  await page.getByRole("button", { name: "DONE", exact: true }).click();
   await page.getByRole("button", { name: "START WORKOUT" }).waitFor();
   assert.equal(
     await page.getByRole("button", { name: "START WORKOUT" }).count(),
@@ -135,11 +139,10 @@ if (today !== "Sun") {
     "recurring program is unchanged",
   );
   assert.equal(
-    stored.weekScheduleOverrides[Object.keys(stored.weekScheduleOverrides)[0]][
-      upcoming.id
-    ],
+    stored.flexibleWeek.sessions[upcoming.logicalSessionId].scheduledDate,
     isoDay(),
   );
+  assert.equal(stored.flexibleWeek.sessions[upcoming.logicalSessionId].originalDate, upcoming.originalDate);
   await page.reload({ waitUntil: "networkidle" });
   const reloadedState = await page.evaluate(() =>
     JSON.parse(localStorage.getItem("lift-v2-state")),

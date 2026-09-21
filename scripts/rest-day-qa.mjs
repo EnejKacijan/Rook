@@ -43,13 +43,14 @@ async function verifyRest(page, expectedDistance, screenshot) {
   await page.getByRole('heading', { name: 'Rest day' }).waitFor(); await verifyHeader(page);
   assert.equal(await page.getByText('NOTHING HERE YET', { exact: true }).count(), 0);
   assert.equal(await page.getByText('UP NEXT', { exact: true }).count(), 1);
-  assert.equal(await page.getByRole('button', { name: 'VIEW WORKOUT' }).count(), 1);
+  assert.equal(await page.getByRole('button', { name: 'VIEW WORKOUT' }).count(), 0);
+  assert.equal(await page.locator('button.rest-up-next-row').count(), 1);
   assert.equal(await page.getByRole('button', { name: 'VIEW NEXT WORKOUT' }).count(), 0);
   const expectedDate = new Date(); expectedDate.setDate(expectedDate.getDate() + expectedDistance);
   const expected = new Intl.DateTimeFormat('en', { weekday: 'long', month: 'short', day: 'numeric' }).format(expectedDate);
   assert.equal(await page.getByText(expected, { exact: true }).count(), 1, 'Up next shows the actual scheduled date');
-  assert.match(await page.locator('.rest-up-next > span').innerText(), /^\d+ exercises · ~\d+ min$/);
-  const buttonBox = await page.getByRole('button', { name: 'VIEW WORKOUT' }).boundingBox(); const contentBox = await page.locator('.today-screen').boundingBox(); assert.ok(buttonBox.width < contentBox.width * .75, 'View Workout remains a restrained secondary action');
+  assert.match(await page.locator('.rest-up-next-summary').innerText(), /^\d+ exercises · ~\d+ min$/);
+  const buttonBox = await page.locator('.rest-up-next-row').boundingBox(); assert.ok(buttonBox.width >= 44 && buttonBox.height >= 44, 'The full Up Next row is a comfortable interactive target');
   await page.screenshot({ path: output(screenshot), fullPage: false });
 }
 
@@ -121,7 +122,7 @@ for (const theme of ['light', 'dark', 'premium']) {
   await page.locator(`.week-strip button[aria-label^="Sun ${selectedSunday.getDate()}"]`).click();
   await page.getByRole('heading', { name: 'Rest day' }).waitFor();
   assert.equal(await page.locator('.rest-up-next time').getAttribute('datetime'), expectedDate, 'Up next can point into the following calendar week');
-  await page.getByRole('button', { name: 'VIEW WORKOUT' }).click();
+  await page.locator('.rest-up-next-row').click();
   await page.getByRole('heading', { name: mondayWorkout.name }).waitFor();
   const selectedChip = page.locator('.week-strip .selected-day');
   assert.match(await selectedChip.getAttribute('aria-label'), new RegExp(`^Mon ${expectedMonday.getDate()}`), 'the next week strip selects the same date as the workout');

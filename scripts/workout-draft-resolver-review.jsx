@@ -1,0 +1,32 @@
+import React,{StrictMode} from 'react';
+import {createRoot} from 'react-dom/client';
+import App from '/src/App.jsx';
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {saveState,deserializeState,STORAGE_KEY} from '/src/domain.js';
+import {startFreestyleWorkout,addFreestyleExercise} from '/src/freestyleWorkout.js';
+import {bindNavigationFocus} from '/src/navigationFocus.js';
+import {observeVisibleViewport} from '/src/sheetVisibleViewport.js';
+import '/src/styles.css';import '/src/overrides.css';import '/src/overlay.css';import '/src/calendar.css';import '/src/workout-controls.css';import '/src/onboarding-controls.css';import '/src/import-plan.css';import '/src/coach.css';import '/src/landing.css';import '/src/theme.css';import '/src/navigationFocus.css';import '/src/activeLoggerTouch.css';
+if(!import.meta.env.DEV||location.origin!=='http://127.0.0.1:4198')throw Error('Isolated review only');
+const params=new URLSearchParams(location.search),storage=window.localStorage,prefix='rook-draft-resolver:',writes=[],events=[];
+Object.defineProperty(window,'localStorage',{configurable:true,value:{getItem:k=>storage.getItem(prefix+k),setItem:(k,v)=>{storage.setItem(prefix+k,v);if(k===STORAGE_KEY)writes.push({ms:performance.now(),state:deserializeState(v)});},removeItem:k=>storage.removeItem(prefix+k),get length(){return Object.keys(storage).filter(k=>k.startsWith(prefix)).length;},key:i=>Object.keys(storage).filter(k=>k.startsWith(prefix))[i]?.slice(prefix.length)}});
+const kind=params.get('kind')||'weighted',id=kind==='timed'?'plank':kind==='bodyweight'?'pull-up':kind==='assisted'?'assisted-pull-up':'hack-squat',theme=params.get('theme')||'premium-dark';
+let state=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),id);state=addFreestyleExercise(state,'leg-press');
+Object.assign(state.profile,{showExerciseImages:true,restTimerEnabled:false,rirEnabled:!params.has('rirOff'),units:'kg',appearancePreference:theme.endsWith('dark')?'dark':'light',stylePreference:theme.startsWith('premium')?'premium':'standard',themePreference:theme.startsWith('premium')?'premium':theme.endsWith('dark')?'dark':'light'});
+const exercise=state.activeWorkout.exercises[0],first=exercise.sets[0];exercise.loggingMode=kind==='per-side'?'per_side':'normal';
+exercise.sets=Array.from({length:3},(_,i)=>({...structuredClone(first),id:first.id+'-'+i,...(kind==='per-side'?{sides:{left:{reps:null},right:{reps:null}}}:{})}));
+if(kind==='matching')Object.assign(exercise.sets[0],{weight:90,reps:7});
+state.workouts=[{id:'previous',completedAt:new Date(Date.now()-86400000).toISOString(),exercises:[{...structuredClone(exercise),sets:[{weight:kind==='timed'||kind==='bodyweight'?null:90,reps:kind==='timed'?45:7,rir:2,completed:true,...(kind==='per-side'?{sides:{left:{reps:7},right:{reps:9}}}:{})}]}]}];
+if(kind==='recommendation'){
+ state.activeWorkout.source='plan';exercise.repMin=6;exercise.repMax=8;exercise.defaultIncrement=2.5;
+ for(const key of Object.keys(state.profile.increments))state.profile.increments[key]=2.5;
+ Object.assign(state.workouts[0].exercises[0].sets[0],{planned:true,added:false,weight:87.5,reps:8});
+ state.workouts.push({...structuredClone(state.workouts[0]),id:'previous-2'});
+}
+state.activeWorkout.startedAt-=120000;saveState(state);writes.length=0;
+const probe=event=>{if(!event.target.closest?.('[data-active-workout]'))return;events.push({type:event.type,phase:event.eventPhase,ms:performance.now(),target:event.target.tagName,field:event.target.closest('[data-workout-field]')?.dataset.workoutField,resolver:event.target.closest('[data-workout-replaces]')?.dataset.workoutReplaces,related:event.relatedTarget?.tagName});};
+for(const type of ['pointerdown','pointercancel','blur','click'])document.addEventListener(type,probe,true);
+document.addEventListener('click',probe);
+window.draftReview={read:()=>({state:deserializeState(storage.getItem(prefix+STORAGE_KEY)),writes,events}),clearEvents:()=>{events.length=0;}};
+const releaseFocus=bindNavigationFocus(),releaseViewport=observeVisibleViewport(),root=createRoot(document.getElementById('root'));root.render(<StrictMode><App/></StrictMode>);
+if(import.meta.hot)import.meta.hot.dispose(()=>{root.unmount();releaseFocus();releaseViewport();for(const type of ['pointerdown','pointercancel','blur','click'])document.removeEventListener(type,probe,true);document.removeEventListener('click',probe);Object.defineProperty(window,'localStorage',{configurable:true,value:storage});delete window.draftReview;});

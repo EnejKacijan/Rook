@@ -66,6 +66,7 @@ await page.route('**/api/ai', route => { aiRequests += 1; return route.fulfill({
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: /Already have a plan/i }).click();
 async function importHeaderMetrics(eyebrow) {
+  await page.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
   const [header, title, firstContent] = await Promise.all([page.locator('.import-plan-screen .detail-header').boundingBox(), page.locator('.import-plan-screen .detail-header > strong').boundingBox(), eyebrow.boundingBox()]);
   assert.ok(Math.abs(title.x + title.width / 2 - (header.x + header.width / 2)) < 1, 'Import plan title is geometrically centered in its header');
   return { header, title, contentGap: firstContent.y - (header.y + header.height) };
@@ -81,7 +82,7 @@ assert.equal(await createPreview.isDisabled(), true, 'Create Preview starts disa
 await page.getByRole('button', { name: 'Paste workout notes from clipboard' }).click();
 assert.equal(await page.getByPlaceholder('Paste your workout notes here...').inputValue(), 'Bench Press 3×8–10');
 assert.equal(await createPreview.isEnabled(), true, 'clipboard text enables Create Preview');
-await page.getByPlaceholder('Paste your workout notes here...').fill('   ');
+await page.getByPlaceholder('Paste your workout notes here...').fill('   ');assert.equal(await page.getByPlaceholder('Paste your workout notes here...').inputValue(), '   ', 'typing replaces pasted notes');await page.waitForFunction(()=>document.querySelector('.import-compose-footer .primary').disabled);
 assert.equal(await createPreview.isDisabled(), true, 'whitespace-only notes keep Create Preview disabled');
 for (const width of [375, 390, 430, 500]) {
   await page.setViewportSize({ width, height: 844 });
@@ -137,15 +138,15 @@ await page.locator('.plan-editor-exercise').last().scrollIntoViewIfNeeded();
 const finalExerciseBox = await page.locator('.plan-editor-exercise').last().boundingBox();
 const readyActionBox = await page.getByRole('button', { name: 'USE THIS PLAN' }).boundingBox();
 assert.ok(finalExerciseBox.y + finalExerciseBox.height <= readyActionBox.y, 'the final imported exercise scrolls fully clear of the sticky action');
-const exerciseSummaries = page.locator('.plan-editor-exercise > .plan-editor-summary');
+const exerciseSummaries = page.locator('.plan-editor-exercise > [data-swipe-content] > .plan-editor-card-header > .plan-editor-summary');
 await exerciseSummaries.first().click();
 await exerciseSummaries.first().getAttribute('aria-expanded').then(async value => {
-  if (value !== 'true') await page.locator('.plan-editor-exercise > .plan-editor-summary[aria-expanded="true"]').first().waitFor();
+  if (value !== 'true') await page.locator('.plan-editor-exercise > [data-swipe-content] > .plan-editor-card-header > .plan-editor-summary[aria-expanded="true"]').first().waitFor();
 });
 assert.equal(await page.locator('.plan-editor-fields:visible').count(), 1, 'Edit exposes only one exercise form');
 await exerciseSummaries.nth(1).click();
 await exerciseSummaries.nth(1).getAttribute('aria-expanded').then(async value => {
-  if (value !== 'true') await page.locator('.plan-editor-exercise > .plan-editor-summary[aria-expanded="true"]').first().waitFor();
+  if (value !== 'true') await page.locator('.plan-editor-exercise > [data-swipe-content] > .plan-editor-card-header > .plan-editor-summary[aria-expanded="true"]').first().waitFor();
 });
 await page.waitForTimeout(220);
 assert.equal(await page.locator('.plan-editor-fields:visible').count(), 1, 'opening another card closes the previous editor');

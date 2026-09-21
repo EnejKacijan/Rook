@@ -1,3 +1,4 @@
+import { enterCoachConversation } from '../src/coachConversations.js';
 import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
@@ -37,7 +38,7 @@ for (const [appearance, style, width] of [
   ['light', 'premium', 390],
   ['dark', 'premium', 430],
 ]) {
-  const state = fixture();
+  const state = enterCoachConversation(fixture());
   state.coachDraft = 'Remember my left shoulder note';
   state.profile.appearancePreference = appearance;
   state.profile.stylePreference = style;

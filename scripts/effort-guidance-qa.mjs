@@ -1,3 +1,4 @@
+import {chooseOnboardingAnswer,waitForOnboardingStep} from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -17,14 +18,14 @@ async function reachEffortStep(experience) {
   await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
   await page.getByRole('combobox', { name: 'Age range' }).click(); await page.getByRole('option', { name: '18–29' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
-  await page.getByRole('button', { name: 'Build muscle' }).click();
-  await page.getByRole('button', { name: new RegExp(`^${experience}`) }).click();
+  await chooseOnboardingAnswer(page,'Build muscle',3);
+  await chooseOnboardingAnswer(page,new RegExp(`^${experience}`),4);
   await page.getByRole('button', { name: '3 days' }).click();
   await page.getByLabel('Any day works').check();
   await page.getByRole('button', { name: '60 min' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Commercial gym' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
   await page.getByRole('button', { name: 'Balanced' }).click(); await page.getByRole('button', { name: 'CONTINUE' }).click();
-  assert.equal(await page.locator('.step-count').textContent(), 'STEP 7/8');
+  await waitForOnboardingStep(page,7);
   return { context, page, errors };
 }
 

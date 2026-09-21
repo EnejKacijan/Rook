@@ -17,20 +17,46 @@
 .app-content { min-height: inherit; }
 .app-content[inert] { user-select: none; }
 .modal-layer {
+  --rook-sheet-enter-duration: 180ms;
+  --rook-sheet-enter-play-state: running;
   overflow: hidden;
   overscroll-behavior: none;
   transition: background-color 160ms ease;
 }
+/* Focus may scroll overflow:hidden ancestors even with a locked document.
+   The modal coverage layer is a boundary, never a second sheet scroller. */
+.modal-layer:has(> [data-sheet-keyboard-open]) { overflow: clip; }
+/* A tall details sheet owns focus scrolling from the first focus frame, before
+   viewport shrink crosses the keyboard threshold. Its backdrop never scrolls. */
+.modal-layer:has(> [data-sheet-viewport="stable-top"]) { overflow: clip; }
+/* Extend the opaque sheet surface below the interactive area. A dimmed scrim
+   alone still lets page text show through translucent iOS keyboard chrome.
+   Follow geometry even during the first/last keyboard frames, before the
+   keyboard threshold is crossed. No inset means zero paint height. This adds
+   no content, scroll owner or gesture target and does not prevent zoom. */
+.modal-layer:not(.exercise-visual-layer)::after {
+  content: '';
+  position: absolute;
+  inset: auto 0 0;
+  height: var(--sheet-obscured-bottom, 0px);
+  background: var(--rook-bg);
+  pointer-events: none;
+}
+.modal-layer[data-sheet-entry] { --rook-sheet-enter-play-state: paused; }
 .modal-layer:not(.exercise-visual-layer) {
-  animation: rook-sheet-backdrop-in 200ms ease-out;
+  animation: rook-sheet-backdrop-in min(180ms, var(--rook-sheet-enter-duration, 180ms)) ease-out;
+  animation-play-state: var(--rook-sheet-enter-play-state, running);
 }
 .modal-layer:not(.exercise-visual-layer) > :is(.screen, .sheet) {
-  animation: rook-sheet-enter 200ms var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1));
+  animation: rook-sheet-enter var(--rook-sheet-enter-duration, 180ms) var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1));
+  animation-play-state: var(--rook-sheet-enter-play-state, running);
 }
 @keyframes rook-sheet-backdrop-in {
   from { background-color: rgba(27, 26, 25, 0); }
 }
 @keyframes rook-sheet-enter {
+  /* Keep the entire panel below the clipped modal boundary at frame zero.
+     Mount-time duration accounts for distance without exposing an intermediate pose. */
   from { transform: translate3d(0, calc(100% + 24px), 0); }
   to { transform: translate3d(0, 0, 0); }
 }
@@ -196,7 +222,7 @@
 .weekly-review-metrics dt,
 .exercise-performance-metrics dt { color: var(--rook-muted, #8a8783); font-size: 9px; font-weight: 750; letter-spacing: .1em; text-transform: uppercase; }
 .weekly-review-metrics dd { margin: 0; color: var(--rook-text, #1b1a19); font-size: 17px; font-weight: 750; font-variant-numeric: tabular-nums; }
-.weekly-review-metrics dd.weekly-review-adjustments { align-self: flex-start; display: inline-flex; align-items: baseline; column-gap: 0.25em; font-size: 13px; line-height: 1.45; white-space: nowrap; }
+.weekly-review-metrics dd.weekly-review-adjustments { align-self: flex-start; max-width: 100%; display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 0.25em; font-size: 13px; line-height: 1.45; }
 .weekly-review-adjustments > span { display: inline-block; white-space: nowrap; }
 .weekly-review-adjustments .weekly-review-adjustment-tail { display: inline-flex; align-items: baseline; gap: 0.25em; }
 .onboarding-start-brand { position: relative; }
@@ -891,17 +917,13 @@
 
 @media (prefers-reduced-motion: reduce) {
   .modal-layer:not(.exercise-visual-layer) {
-    animation: rook-sheet-backdrop-in 80ms linear;
+    animation: none;
+    transition: none;
   }
   .modal-layer:not(.exercise-visual-layer) > :is(.screen, .sheet) {
-    animation: rook-sheet-reduced-enter 80ms linear;
+    animation: none;
     transform: none;
   }
-}
-
-@keyframes rook-sheet-reduced-enter {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 .week-navigation > button { border: 0; background: transparent; color: #1f6b4c; font-size: 24px; }
 .workout-confirm-actions { grid-template-columns: 1.25fr 1fr; }
@@ -921,54 +943,19 @@
   isolation: isolate;
   pointer-events: none;
 }
-.is-live-completion .complete-mark { animation: rook-workout-complete-mark 200ms cubic-bezier(.2,.8,.2,1) both; }
+.is-live-completion .complete-mark { animation: rook-workout-complete-mark var(--rook-motion-state, 200ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)) both; }
 .complete-mark > span { position: relative; z-index: 1; }
-.complete-screen.is-live-completion:not(.ended-early) .complete-mark::after {
-  content: "";
-  position: absolute;
-  z-index: -1;
-  inset: 0;
-  border: 1px solid var(--rook-success, var(--rook-accent, #1f6b4c));
-  border-radius: inherit;
-  pointer-events: none;
-  animation: rook-workout-complete-ring 240ms cubic-bezier(.2,.8,.2,1) 60ms both;
-}
-.complete-screen.is-live-completion > h1 {
-  animation: rook-workout-complete-copy 160ms cubic-bezier(.2,.8,.2,1) 120ms both;
-}
-.complete-screen.is-live-completion > .stat-grid > div {
-  animation: rook-workout-complete-stat 140ms cubic-bezier(.2,.8,.2,1) both;
-}
-.complete-screen > .stat-grid > div:nth-child(1) { animation-delay: 170ms; }
-.complete-screen > .stat-grid > div:nth-child(2) { animation-delay: 210ms; }
-.complete-screen > .stat-grid > div:nth-child(3) { animation-delay: 250ms; }
+/* The screen transition presents the whole hero and secondary content together. */
 .complete-screen > .completion-recognition { margin: 20px 0 0; font-size: 13px; line-height: 1.5; overflow-wrap: anywhere; }
 .completion-recognition > strong { display: block; color: var(--rook-text); font-weight: 700; }
 .completion-recognition > span { display: block; color: var(--rook-secondary); }
 :root[data-appearance="light"] .complete-screen :is(.stat-grid small, .workout-photo-heading > p > small, .session-note-editor > small) { color: var(--rook-secondary); }
-.complete-screen.is-live-completion > .completion-recognition { animation: rook-workout-complete-stat 160ms ease-out 300ms both; }
 @keyframes rook-workout-complete-mark {
-  from { opacity: 0; transform: scale(.92); }
-  to { opacity: 1; transform: scale(1); }
-}
-@keyframes rook-workout-complete-ring {
-  from { opacity: .18; transform: scale(1); }
-  to { opacity: 0; transform: scale(1.45); }
-}
-@keyframes rook-workout-complete-copy {
-  from { opacity: 0; transform: translateY(3px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-@keyframes rook-workout-complete-stat {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  from { transform: scale(.96); }
+  to { transform: scale(1); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .complete-screen .complete-mark,
-  .complete-screen.is-live-completion > h1,
-  .complete-screen.is-live-completion > .completion-recognition,
-  .complete-screen.is-live-completion > .stat-grid > div { animation: none; }
-  .complete-screen.is-live-completion:not(.ended-early) .complete-mark::after { display: none; animation: none; }
+  .complete-screen .complete-mark { animation: none; }
 }
 .complete-screen.ended-early .workout-photo-memory {
   padding-bottom: 15px;
@@ -1157,10 +1144,6 @@
   -webkit-touch-callout: none;
   -webkit-user-select: none;
   user-select: none;
-}
-.today-screen .exercise-list-row:active { background: rgba(27, 26, 25, .035); }
-@media (hover: hover) and (pointer: fine) {
-  .today-screen .exercise-list-row:hover { background: rgba(27, 26, 25, .025); }
 }
 .today-screen .exercise-list-row:focus-visible {
   position: relative;
@@ -1402,8 +1385,9 @@
 .plate-calculator-entry b:nth-child(1), .plate-calculator-entry b:nth-child(3) { height: 9px; }
 .plate-calculator-entry b:nth-child(2) { height: 12px; }
 .plate-calculator-entry:focus-visible { outline-offset: 0; }
-.plate-calculator-sheet { min-height: 0; padding: 28px 22px var(--rook-sheet-safe-bottom); }
-.plate-calculator-sheet > h2 { margin-top: 15px; font-size: 36px; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
+.plate-calculator-sheet { min-height: 0; padding: 0 22px var(--rook-sheet-safe-bottom); }
+:root .modal-layer > .screen:is(.plate-calculator-sheet, .plate-calculator-setup) > .detail-header { margin-inline: 0; padding-inline: 0; }
+.plate-calculator-sheet > h2 { margin: 15px 0 0; padding-right: 30px; font-size: 36px; font-variant-numeric: tabular-nums; letter-spacing: -.035em; }
 .plate-gym-context { margin-top: 4px !important; color: var(--rook-secondary, #6f6c68); font-size: 12px !important; }
 .plate-result { margin-top: 26px; padding-top: 19px; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .plate-combination { min-height: 74px; margin-top: 13px; display: flex; align-items: stretch; flex-wrap: wrap; gap: 8px; }
@@ -1471,7 +1455,7 @@
 .plan-history-empty { margin-top: 24px; padding: 24px 18px; border: 1px solid var(--rook-border, rgba(27,26,25,.08)); border-radius: 16px; background: var(--rook-surface-muted, rgba(27,26,25,.035)); text-align: center; }
 .plan-history-empty p, .plan-history-empty-copy { margin: 6px 0 0 !important; color: var(--rook-secondary, #6f6c68); font-size: 12px !important; }
 
-.today-block-week { display: block; margin-top: 9px; color: var(--rook-secondary, #6f6c68); font-size: 11px; font-weight: 700; letter-spacing: .045em; }
+.today-block-week { display: block; margin-top: 9px; color: var(--rook-secondary, #6f6c68); font-size: 11px; line-height: 1.65; font-weight: 700; letter-spacing: .045em; }
 button.today-block-week { position: relative; width: 100%; appearance: none; border: 0; background: transparent; padding: 0; font-family: inherit; text-align: left; cursor: pointer; text-decoration: none; }
 /* Expand the hit area without moving the surrounding title or summary. */
 button.today-block-week::before { content: ""; position: absolute; inset-inline: 0; top: 50%; height: max(100%, 44px); transform: translateY(-50%); }
@@ -1480,7 +1464,7 @@ button.today-block-week::before { content: ""; position: absolute; inset-inline:
 .today-block-week .today-block-phase { overflow-wrap: anywhere; }
 .today-block-week .today-block-phase-end { display: inline-block; max-width: 100%; padding-inline-end: 14px; position: relative; }
 .today-block-week .today-block-chevron { display: inline-block; margin-inline-start: 7px; color: var(--rook-muted, #8a8783); font-size: 16px; font-weight: 400; line-height: 0; vertical-align: baseline; pointer-events: none; }
-.today-block-phase-end .today-block-chevron { position: absolute; inset-inline-end: 0; bottom: .45em; }
+.today-block-phase-end .today-block-chevron { position: absolute; inset-inline-end: 0; top: 50%; }
 button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 4px; border-radius: 2px; }
 .today-block-week.is-deload { color: var(--rook-accent-text, var(--rook-accent, #1f6b4c)); }
 .block-complete-card { margin: 18px 0 4px; padding: 16px; border: 1px solid var(--rook-border, rgba(27,26,25,.09)); border-radius: 16px; background: var(--rook-surface-muted, rgba(27,26,25,.035)); }
@@ -1609,21 +1593,12 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   .today-screen .exercise-list-row { grid-template-columns: minmax(0, 1fr); row-gap: 5px; }
   .today-screen .exercise-list-row > .navigation-row-end { justify-self: start; font-size: 11px; }
 }
-@media (max-width: 374px) {
-  .exercise-heading.has-illustration .exercise-heading-art-button { width: 60px; height: 60px; }
-  .exercise-heading.has-illustration.long-title .exercise-heading-art-button { width: 52px; height: 52px; }
-}
 .exercise-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; column-gap: 10px; }
-.exercise-heading.has-illustration { grid-template-columns: 72px minmax(0, 1fr) auto; column-gap: 12px; }
 .exercise-heading > div { min-width: 0; }
 .exercise-heading > .text-button { align-self: start; }
 .workout-exercise-actions { min-width: 76px; display: grid; justify-items: end; align-content: start; gap: 7px; }
 .workout-exercise-actions .text-button { min-height: 24px; padding: 0; white-space: nowrap; font-size: 11px; }
-.exercise-heading-art-button { width: 72px; height: 72px; margin: 1px 0 0; padding: 6px; border: 0; border-radius: 18px; background: #f1eee8; display: grid; place-items: center; color: inherit; }
-.exercise-heading-art { display: block; width: 100%; height: 100%; object-fit: contain; }
 @media (max-width: 350px) {
-  .exercise-heading.has-illustration { grid-template-columns: 60px minmax(0, 1fr) auto; column-gap: 9px; }
-  .exercise-heading-art-button { width: 60px; height: 60px; padding: 5px; border-radius: 15px; }
   .exercise-heading > .text-button { padding-left: 1px; padding-right: 1px; }
   .workout-exercise-actions { min-width: 68px; gap: 5px; }
   .workout-exercise-actions .text-button { white-space: normal; text-align: right; line-height: 1.25; }
@@ -1763,9 +1738,19 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 }
 .session-note-editor > small { display: block; margin-top: 7px; }
 .completed-workout-detail h1 { overflow-wrap: anywhere; }
-.completed-workout-detail-actions { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
-:root[data-appearance] .completed-workout-detail-actions > .text-button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-width: 44px; min-height: 44px; padding: 4px; color: var(--rook-secondary); background: transparent; border: 0; }
-.completed-workout-detail-actions svg { flex-shrink: 0; }
+.completed-workout-options-trigger { width: 44px; height: 44px; background: transparent; border: 0; border-radius: 9px; color: var(--rook-secondary); }
+/* Equal action targets, with a small gap; Close and the title center stay put. */
+.completed-workout-detail > .detail-header.has-trailing-action { grid-template-columns: 94px minmax(0, 1fr) 44px 44px; column-gap: 6px; }
+.completed-workout-options-trigger:active { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root[data-appearance] .completed-workout-options-trigger:focus-visible { outline: 2px solid var(--rook-focus-ring, var(--rook-accent)); outline-offset: -2px; }
+:root .modal-layer > .screen:is(.completed-workout-detail, .completed-workout-options-sheet) > .detail-header { margin-inline: 0; padding-inline: 0; }
+.completed-workout-options-sheet > .list-row { min-height: 48px; }
+.completed-workout-options-sheet > .list-row > span { font: inherit; color: inherit; }
+.completed-workout-options-sheet > .list-row:disabled { opacity: 1; color: var(--rook-muted); }
+/* Transfer the existing scrim to the options layer, without stacking two scrims
+   or exposing Today during entry/exit. The shared panel motion stays unchanged. */
+:root[data-appearance] .modal-layer:has(> .completed-workout-detail[data-options-open]) { background: transparent; animation: none; transition: none; }
+:root[data-appearance] .modal-layer:has(> .completed-workout-options-sheet) { background: var(--rook-scrim, rgba(27,26,25,.35)) !important; animation: none; transition: none; }
 .completed-workout-summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; }
 .completed-workout-summary > span { display: flex; flex-direction: column; gap: 5px; }
 .completed-workout-summary strong { color: var(--rook-text); font-size: 20px; font-variant-numeric: tabular-nums; }

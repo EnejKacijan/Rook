@@ -9,6 +9,7 @@ import {
   buildProgram,
   completeWorkout,
   estimateSessionMinutes,
+  estimateWorkoutMinutes,
   isoDay,
   startWorkout,
   validateProgram,
@@ -75,11 +76,11 @@ function fixture({ appearance = "light", style = "standard", custom = false } = 
     };
     state.program.source = "ai-import";
   }
-  selected.estimatedMinutes = estimateSessionMinutes(selected.exercises);
+  selected.estimatedMinutes = estimateWorkoutMinutes(selected);
   state.selectedDay = today;
   state.selectedDate = isoDay();
   state.ai.planUpgradeDismissed = true;
-  assert.equal(validateProgram(state.program, state.profile).valid, true);
+  const validity=validateProgram(state.program,state.profile);assert.equal(validity.valid,true,validity.errors.join("; "));
   return state;
 }
 
@@ -212,9 +213,9 @@ async function auditAdjustmentScreens(page, label) {
   await page.getByRole("button", { name: "ADJUST TODAY", exact: true }).click();
   await page.getByRole("heading", { name: "What changed today?" }).waitFor();
   const cards = page.locator('.adjust-option-list .choice-row');
-  assert.deepEqual(await cards.locator('strong').allTextContents(), ['Less time', 'Different equipment', 'Low energy', 'Specific exercise unavailable']);
-  assert.equal(await cards.nth(1).locator('small').innerText(), 'Rebuild today around the equipment at this location.');
-  assert.equal(await cards.nth(3).locator('small').innerText(), 'Replace one or more exercises before you start.');
+  assert.deepEqual(await cards.locator('strong').allTextContents(), ["Edit today's exercises", 'Less time', 'Different equipment', 'Low energy', 'Specific exercise unavailable']);
+  assert.equal(await cards.nth(2).locator('small').innerText(), 'Rebuild today around the equipment at this location.');
+  assert.equal(await cards.nth(4).locator('small').innerText(), 'Replace one or more exercises before you start.');
   await assertCompactAdjustHeader(page, `${label} mode`);
   await page.evaluate(async () => {
     await document.fonts.ready;

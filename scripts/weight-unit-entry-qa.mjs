@@ -1,4 +1,4 @@
-import { openProfileArea } from './qa-current-navigation.mjs';
+import { openProfileArea, openFirstRunLanding, waitForOnboardingStep } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
@@ -13,10 +13,10 @@ for(const [width,appearance,style] of [[320,'dark','standard'],[390,'light','sta
  await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
  const page=await context.newPage();await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));
  await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
- await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();
+ await openFirstRunLanding(page);await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();await waitForOnboardingStep(page,1);
  const group=page.getByRole('group',{name:'Weight units'});
  assert.equal(await group.getByRole('button',{name:'lb',exact:true}).getAttribute('aria-pressed'),'true');
- await group.getByRole('button',{name:'kg',exact:true}).click();
+ await group.getByRole('button',{name:'kg',exact:true}).click();assert.equal(await group.getByRole('button',{name:'kg',exact:true}).getAttribute('aria-pressed'),'true','kg selection takes effect in the UI');await page.waitForFunction(()=>JSON.parse(localStorage.getItem('lift-v2-state'))?.profile.units==='kg');
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state'))?.profile.units || 'kg'),'kg');
  await group.getByRole('button',{name:'lb',exact:true}).click();
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -29,9 +29,9 @@ for(const [width,appearance,style] of [[320,'dark','standard'],[390,'light','sta
  await page.getByRole('combobox',{name:'Age range'}).click();await page.getByRole('option',{name:'18–29',exact:true}).click();
  await page.getByRole('button',{name:'CONTINUE',exact:true}).click();await page.getByRole('button',{name:/Back/}).click();
  assert.equal(await group.getByRole('button',{name:'lb',exact:true}).getAttribute('aria-pressed'),'true');
- await page.reload();await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();
+ await page.reload();await openFirstRunLanding(page);await page.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();await waitForOnboardingStep(page,1);
  assert.equal(await group.getByRole('button',{name:'lb',exact:true}).getAttribute('aria-pressed'),'true');
- await page.reload();
+ await page.reload();await openFirstRunLanding(page);
  const importButton=page.locator('.existing-plan-action');
  await importButton.first().click();
  assert.equal(await group.count(),0);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')).profile.units),'lb');
@@ -51,6 +51,6 @@ await freshPage.getByRole('button',{name:'BUILD MY PLAN',exact:true}).click();
 assert.equal(await freshPage.getByRole('group',{name:'Weight units'}).getByRole('button',{name:'kg',exact:true}).getAttribute('aria-pressed'),'true');
 await freshPage.getByRole('combobox',{name:'Age range'}).click();await freshPage.getByRole('option',{name:'18–29',exact:true}).click();
 await freshPage.getByRole('button',{name:'CONTINUE',exact:true}).click();
-assert.equal(await freshPage.locator('.weight-unit-choice').count(),0,'continuing needs no unit interaction');
+await waitForOnboardingStep(freshPage,2);assert.equal(await freshPage.locator('.first-run-step-motion > .onboarding .weight-unit-choice').count(),0,'continuing needs no unit interaction');
 await fresh.close();console.log('Default kg and Continue without unit interaction passed');
 }finally{await browser.close();}

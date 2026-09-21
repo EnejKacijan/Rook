@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {afterEach,expect,it,vi} from 'vitest';
 import {MonthCalendar} from './MonthCalendar.jsx';
 import {blankState,buildProgram} from './domain.js';
+import {calendarDayPresentation} from './workoutCalendar.js';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let root,host;
 afterEach(()=>{act(()=>root?.unmount());host?.remove();});
@@ -14,7 +15,7 @@ function setup(selectedDate='2026-09-07'){
 const button=label=>[...host.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===label||b.textContent===label);
 it('keeps all supported statuses in the legend without an active session',()=>{
  setup();
- expect([...host.querySelectorAll('.month-calendar-legend > span')].map(e=>e.textContent)).toEqual(['Planned','✓Completed','In progress']);
+ expect([...host.querySelectorAll('.month-calendar-legend > span')].map(e=>e.textContent)).toEqual(['Planned','Completed','In progress']);
 });
 it('keeps today independent of another selected date',()=>{
  setup('2026-09-10');
@@ -33,3 +34,17 @@ it('month browsing never selects; boundary months disable navigation',()=>{const
 it('arrows cross a month without committing and Enter can select the focused date',()=>{const {onSelect}=setup('2026-09-01');const day=host.querySelector('[data-date="2026-09-01"]');act(()=>{day.focus();day.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));});expect(host.querySelector('h2').textContent).toBe('August 2026');expect(document.activeElement.dataset.date).toBe('2026-08-31');expect(onSelect).not.toHaveBeenCalled();act(()=>document.activeElement.click());expect(onSelect).toHaveBeenCalledExactlyOnceWith('2026-08-31');});
 it('unavailable dates cannot select; Today selects only today',()=>{const {onSelect}=setup('2026-09-08');const outside=host.querySelector('[data-date="2026-09-14"]');expect(outside.disabled).toBe(true);act(()=>outside.click());expect(onSelect).not.toHaveBeenCalled();act(()=>button('TODAY').click());expect(onSelect).toHaveBeenCalledExactlyOnceWith('2026-09-07');});
 it('omits Today action and helper copy when today is selected, including month browsing',()=>{setup();expect(button('TODAY')).toBeUndefined();expect(host.querySelector('.month-calendar-range')).toBeNull();act(()=>button('Previous month').click());expect(button('TODAY')).toBeUndefined();});
+it('keeps canonical labels/markers for enabled days and no workout presentation outside the bounds',()=>{
+ const {state}=setup();
+ const days=[...host.querySelectorAll('[data-date]')],expected=calendarDayPresentation(state,days.map(day=>day.dataset.date));
+ for(const day of days){
+  if(day.disabled){expect(day.getAttribute('aria-label')).toContain('outside available dates');expect(day.querySelectorAll('.calendar-status-mark')).toHaveLength(0);}
+  else{expect(day.getAttribute('aria-label')).toContain(expected[day.dataset.date].label);expect(day.querySelectorAll('.calendar-status-mark')).toHaveLength(expected[day.dataset.date].markers.length);}
+ }
+});
+it('populates newly available dates when bounds extend with the same state/month identity',()=>{
+ const {state,onSelect}=setup();const later=()=>host.querySelector('[data-date="2026-09-14"]');expect(later().disabled).toBe(true);
+ act(()=>root.render(<MonthCalendar state={state} today="2026-09-21" selectedDate="2026-09-07" header={<header>Calendar</header>} onSelect={onSelect}/>));
+ expect(later().disabled).toBe(false);expect(later().getAttribute('aria-label')).toContain(calendarDayPresentation(state,['2026-09-14'])['2026-09-14'].label);
+ act(()=>later().click());expect(onSelect).toHaveBeenCalledExactlyOnceWith('2026-09-14');
+});

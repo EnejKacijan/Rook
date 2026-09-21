@@ -1,18 +1,37 @@
 import {useEffect,useLayoutEffect,useMemo,useRef,useState} from 'react';
 import {isoDay} from './domain.js';
-import {calendarRange,calendarLocalDate,monthDays,shiftMonth,calendarDayStates} from './workoutCalendar.js';
+import {calendarRange,calendarLocalDate,monthDays,shiftMonth,calendarDayPresentation} from './workoutCalendar.js';
 import './monthCalendar.css';
 
 export function CalendarIcon(){return <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M4 10h16m-11 4h3v3H9z"/></svg>;}
+// Status descriptions stay on the day control (or in the legend text).
+// Both calendars use the same decorative ring / check / filled-dot rendering.
+export function CalendarStatusMark({status, className = 'month-calendar-mark'}) {
+  return <svg className={`calendar-status-mark ${className} is-${status}`} viewBox="0 0 10 10" width="8" height="8" aria-hidden="true" focusable="false">
+    {status==='planned'&&<circle cx="5" cy="5" r="4" fill="none" stroke="currentColor" className="calendar-status-ring"/>}
+    {status==='active'&&<circle cx="5" cy="5" r="4.25" fill="currentColor"/>}
+    {status==='completed'&&<path d="M1.2 5 4 7.8 8.8 2.2" fill="none" stroke="currentColor" strokeLinecap="round" strokeLinejoin="round" className="calendar-status-check"/>}
+  </svg>;
+}
+export function CalendarStatusSlot({statuses,week=false}) {
+  const classes={active:'in-progress-dot',completed:'completed-dot',planned:'workout-dot'};
+  return <span className="calendar-status-slot" aria-hidden="true">{statuses.map(status=><CalendarStatusMark key={status} status={status} className={week?classes[status]:'month-calendar-mark'}/>)}</span>;
+}
 export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()}) {
   const [month,setMonth]=useState(()=>`${selectedDate.slice(0,7)}-01`);
   const [focused,setFocused]=useState(selectedDate),focusRequested=useRef(false),gridRef=useRef(null);
   const drag=useRef(null),suppressClick=useRef(false),motion=useRef(null),enterDirection=useRef(0);
   const {min,max}=calendarRange(state,today),available=key=>key>=min&&key<=max;
   const dates=useMemo(()=>monthDays(month),[month]);
-  const statuses=useMemo(()=>calendarDayStates(state,dates),[state,dates]);
-  const monthLabel=new Intl.DateTimeFormat('en',{month:'long',year:'numeric'}).format(calendarLocalDate(month));
-  const dateLabel=key=>new Intl.DateTimeFormat('en',{weekday:'long',month:'long',day:'numeric',year:'numeric'}).format(calendarLocalDate(key));
+  // Disabled cells show only their date and "outside available dates". Avoid
+  // deriving workout occurrences for days the calendar cannot display/select.
+  const statuses=useMemo(()=>calendarDayPresentation(state,dates.filter(key=>key>=min&&key<=max)),[state,dates,min,max]);
+  const formatters=useMemo(()=>({
+    month:new Intl.DateTimeFormat('en',{month:'long',year:'numeric'}),
+    day:new Intl.DateTimeFormat('en',{weekday:'long',month:'long',day:'numeric',year:'numeric'}),
+  }),[]);
+  const monthLabel=formatters.month.format(calendarLocalDate(month));
+  const dateLabel=key=>formatters.day.format(calendarLocalDate(key));
   const tabDate=dates.includes(focused)&&available(focused)?focused:dates.find(key=>available(key)&&key.slice(0,7)===month.slice(0,7));
   useLayoutEffect(()=>{if(focusRequested.current){gridRef.current?.querySelector(`[data-date="${tabDate}"]`)?.focus();focusRequested.current=false;}},[tabDate,month]);
   const moveMonth=direction=>{
@@ -79,9 +98,8 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
       onClickCapture={event=>{if(suppressClick.current&&event.detail!==0){event.preventDefault();event.stopPropagation();suppressClick.current=false;}}}>
       <div role="row" className="month-calendar-weekdays">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day=><span role="columnheader" key={day}>{day}</span>)}</div>
       {Array.from({length:dates.length/7},(_,row)=><div role="row" key={row}>{dates.slice(row*7,row*7+7).map(key=>{
-        const {complete,planned,active}=statuses[key],status=active?'active':complete?'completed':planned?'planned':null;
+        const {markers=[],label:stateLabel}=statuses[key]||{};
         const enabled=available(key),selected=key===selectedDate,isToday=key===today;
-        const stateLabel=status==='active'?'workout in progress':status==='completed'?'completed workout':status==='planned'?'planned workout':'rest day';
         return <div role="gridcell" aria-selected={selected} key={key}><button type="button" data-date={key}
           data-sheet-initial-focus={key===tabDate?'true':undefined} tabIndex={key===tabDate?0:-1}
           disabled={!enabled} aria-current={isToday?'date':undefined} aria-pressed={selected}
@@ -89,11 +107,11 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
           className={`${selected?'is-selected ':''}${isToday?'is-today ':''}${key.slice(0,7)!==month.slice(0,7)?'is-other-month':''}`}
           onFocus={()=>setFocused(key)} onKeyDown={event=>keydown(event,key)} onClick={()=>choose(key)}>
           <span className="month-calendar-number">{calendarLocalDate(key).getDate()}</span>
-          <span className={`month-calendar-mark ${enabled&&status?`is-${status}`:''}`} aria-hidden="true">{enabled&&status==='completed'?'✓':''}</span>
+          <CalendarStatusSlot statuses={enabled ? markers : []}/>
         </button></div>;
       })}</div>)}
     </div>
-    <div className="month-calendar-legend" aria-label="Calendar legend"><span><i className="month-calendar-mark is-planned" aria-hidden="true"/>Planned</span><span><i className="month-calendar-mark is-completed" aria-hidden="true">✓</i>Completed</span><span><i className="month-calendar-mark is-active" aria-hidden="true"/>In progress</span></div>
+    <div className="month-calendar-legend" aria-label="Calendar legend"><span><CalendarStatusMark status="planned"/>Planned</span><span><CalendarStatusMark status="completed"/>Completed</span><span><CalendarStatusMark status="active"/>In progress</span></div>
     {selectedDate !== today && <button type="button" className="month-calendar-today" onClick={()=>choose(today)}>TODAY</button>}
   </main>;
 }

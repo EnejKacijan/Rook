@@ -22,6 +22,9 @@ for (const width of [320,390,430]) {
   await shot('01-missed');
   await openAdjustWeek(page);
   await page.getByRole('button',{name:/My available days changed/}).click();
+  // The chooser starts with profile availability selected. Make this a real
+  // two-day capacity request rather than toggling two arbitrary baseline days.
+  while(await page.locator('.flexible-week-dates button[aria-pressed="true"]:not(:disabled)').count())await page.locator('.flexible-week-dates button[aria-pressed="true"]:not(:disabled)').first().click();
   await page.locator('.flexible-week-dates').getByRole('button',{name:label(today),exact:true}).click();
   await page.locator('.flexible-week-dates').getByRole('button',{name:label(addCalendarDays(today,1)),exact:true}).click();
   await shot('02-available');
@@ -38,7 +41,7 @@ for (const width of [320,390,430]) {
   await shot('05-carry-footer');
   await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).click(); await shot('06-applied-bridge');
   await openAdjustWeek(page); await page.getByRole('button',{name:/Move a workout Choose/}).click();
-  await page.locator('.flexible-week-sheet .choice-row').first().click();
+  await page.locator('.flexible-workout-list [data-session-id]').first().click();
   await page.getByRole('button',{name:'Skip this session',exact:true}).click(); await shot('07-skip-review');
   await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).click();
   const saved = await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
@@ -51,9 +54,9 @@ for (const width of [320,390,430]) {
 {
   const state=blankState();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:2,availableDays:[weekday(),WEEKDAYS[(WEEKDAYS.indexOf(weekday())+2)%7]],sessionMinutes:60,environment:'Commercial gym',equipment:['full gym'],priorities:['Balanced'],onboardingComplete:true});state.program=buildProgram(state.profile);
   const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'});await context.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);const page=await context.newPage();await page.route('**/api/ai/status',r=>r.fulfill({status:200,contentType:'application/json',body:'{"available":false}'}));await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
-  await openAdjustWeek(page);await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-week-sheet .choice-row').first().click();await page.locator('.flexible-week-dates button:not(:disabled)').first().click();
+  await openAdjustWeek(page);await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-workout-list [data-session-id]').first().click();await page.locator('.flexible-week-dates button:not(:disabled)').first().click();
   await page.evaluate(()=>{ const original=Storage.prototype.setItem;Storage.prototype.setItem=function(key,value){if(key==='lift-v2-state' && JSON.parse(value).flexibleWeek)throw new DOMException('Full','QuotaExceededError');return original.call(this,key,value);};});
-  await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).click();assert.match(await page.getByRole('alert').innerText(),/couldn’t save/);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')).flexibleWeek),null);await page.screenshot({path:fileURLToPath(new URL('390-persistence-failure.png',out))});await context.close();
+  await page.getByRole('button',{name:'APPLY MOVE',exact:true}).click();assert.match(await page.getByRole('alert').innerText(),/couldn’t save/);assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')).flexibleWeek),null);await page.screenshot({path:fileURLToPath(new URL('390-persistence-failure.png',out))});await context.close();
 }
 {
   const archive = await buildBackupArchive(recoveryState, []);

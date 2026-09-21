@@ -209,7 +209,7 @@ describe('combine special prescriptions, recovery and profile constraints',()=>{
  });
  it('previous normal single-source records reload without a new source-array requirement',()=>{
   const s=combineFixture();s.todayAdaptation={schemaVersion:1,mode:'less-time',date:'2026-09-12',programDayId:s.program.days[0].id,workout:{...s.program.days[0]}};
-  expect(readStartupState({getItem:()=>serializeState(s)}).status).toBe('ready');
+  expect(readStartupState({getItem:key=>key==='lift-v2-state'?serializeState(s):null}).status).toBe('ready');
  });
  it('equipment changed after Apply cannot start the obsolete combined proposal',()=>{
   const s=combineExample(),a=applyCombinedProposal(s,buildCombinedProposal(s,exampleRequest(s)).proposal,()=>true);

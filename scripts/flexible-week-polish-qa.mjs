@@ -26,10 +26,10 @@ for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(
     const overflow=page.getByRole('button',{name:'Today options',exact:true});
     assert.ok((await overflow.boundingBox()).height>=44,'Today overflow retains a mobile touch target');
   }
-  if(rest){const action=page.getByRole('button',{name:'Train today instead',exact:true});if(!before){assert.equal(await action.evaluate(e=>getComputedStyle(e).textDecorationLine),'none');assert.ok((await action.boundingBox()).height>=44);}await action.click();await page.getByRole('heading',{name:"Choose today's activity"}).waitFor();await page.getByRole('button',{name:/Close/}).click();}
+  if(rest){await page.getByRole('button',{name:'Today options',exact:true}).click();const action=page.getByRole('button',{name:'Rest-day activities',exact:true});if(!before){assert.equal(await action.evaluate(e=>getComputedStyle(e).textDecorationLine),'none');assert.ok((await action.boundingBox()).height>=44);}await action.click();await page.getByRole('heading',{name:"Choose today's activity"}).waitFor();await page.getByRole('button',{name:/Close/}).click();}
   await openAdjustWeek(page);await shot('root-no-missed');
   const missed=page.getByRole('button',{name:/I missed a workout/});if(!before){assert.equal(await missed.isDisabled(),true);await missed.evaluate(e=>e.click());assert.equal(await page.getByRole('heading',{name:'What changed?'}).count(),1);}
-  await page.getByRole('button',{name:/Move a workout Choose/}).click();const rows=page.locator('.flexible-week-sheet .choice-row');assert.ok(await rows.count()>=6);await shot('choose');
+  await page.getByRole('button',{name:/Move a workout Choose/}).click();const rows=page.locator('.flexible-workout-list [data-session-id]');assert.ok(await rows.count()>=6);await shot('choose');
   const firstName=await rows.first().locator('strong').innerText();await rows.first().click();await page.getByRole('heading',{name:`Move ${firstName}`,exact:true}).waitFor();await shot('dates');await page.getByRole('button',{name:'Close Adjust week',exact:true}).click();
   await openAdjustWeek(page);await page.getByRole('button',{name:/My available days changed/}).click();await shot('available');await context.close();
   if(width===390&&!rest){

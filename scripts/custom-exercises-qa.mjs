@@ -214,8 +214,8 @@ async function assertLayout(page, label) {
   await run.page.getByPlaceholder(/Paste your workout notes/).fill("MONDAY — PUSH\nAtlas Converging Press 3 x 8 reps @ 55 kg");
   await run.page.getByRole("button", { name: "CREATE PREVIEW" }).click();
   const card = run.page.locator(".import-decision-content:visible");
-  await card.getByRole('heading', { name: 'Match this exercise', exact: true }).waitFor();
-  await card.getByRole('searchbox', { name: 'Search exercises', exact: true }).fill("Machine Chest Press");
+  await run.page.getByRole('button',{name:'Review exercise matches · Optional',exact:true}).click();await card.getByRole('heading',{name:'Atlas Converging Press',exact:true}).waitFor();await run.page.getByRole('button',{name:'CHOOSE ANOTHER',exact:true}).click();
+  await card.getByRole('searchbox', { name: 'Search exercise matches', exact: true }).fill("Machine Chest Press");
   await run.page.screenshot({ path: output("09-import-exercise-match.png"), fullPage: false });
   await card.getByRole("button", { name: "Machine Chest Press", exact: true }).click();
   await run.page.getByRole('heading', { name: 'Review your plan', exact: true }).waitFor();
@@ -229,7 +229,7 @@ async function assertLayout(page, label) {
   const stored = await run.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
   assert.equal(stored.program.days[0].exercises[0].matchStatus, 'confirmed-match');
   assert.equal(stored.program.days[0].exercises[0].importedName, 'Machine Chest Press');
-  assert.equal(stored.exerciseAliases.some((item) => item.alias === "Atlas Converging Press" && !item.deletedAt), false, 'A one-off match does not silently create a remembered alias');
+  const remembered=stored.exerciseAliases.filter(item=>item.alias==='Atlas Converging Press'&&!item.deletedAt);assert.equal(remembered.length,1);assert.equal(remembered[0].scope,'plan-import','the explicit decision is remembered only for future plan imports');assert.equal(remembered[0].exerciseId,stored.program.days[0].exercises[0].exerciseId);
   assert.deepEqual(run.errors, []);
   await run.context.close();
 }

@@ -1,0 +1,33 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body>
+<section id="fixture"><h1>Isolated exercise-row feedback QA</h1><label>Theme <select id="theme"><option>premium-dark</option><option>premium-light</option><option>dark</option><option>light</option></select></label><label>Reduced motion <input id="reduce" type="checkbox"></label><button id="seed">Load synthetic row review</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,startWorkout,isoDay} from '/src/domain.js';
+if(location.port!=='4198')throw Error('Isolated QA port required');
+const params=new URLSearchParams(location.search);
+if(!params.has('run'))document.querySelector('#seed').onclick=()=>{
+ const s=createReturningUserFixture(2),theme=document.querySelector('#theme').value;
+ Object.assign(s.profile,{rirEnabled:true,showExerciseImages:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});s.selectedDate=isoDay();
+ const t=structuredClone(s.program.days[0]);t.name='Synthetic exercise-row review';t.exercises=t.exercises.slice(0,3);t.exercises.forEach((e,i)=>{e.exerciseId=['leg-press','romanian-deadlift','pull-up'][i];delete e.importedName;});
+ s.activeWorkout=startWorkout(s,t);s.activeWorkout.startedAt=Date.now()-185000;s.activeWorkout.exercises.forEach(e=>e.sets.forEach((set,i)=>Object.assign(set,{weight:e.exerciseId==='pull-up'?null:40,reps:9,completed:i===0})));
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/exercise-row-feedback-review.html?run=1'+(document.querySelector('#reduce').checked?'&reduce=1':'');
+};
+else{
+ const realMatch=window.matchMedia.bind(window);window.matchMedia=q=>q==='(display-mode: standalone)'||q==='(prefers-reduced-motion: reduce)'?{matches:q.includes('standalone')||params.has('reduce'),media:q,addEventListener(){},removeEventListener(){},addListener(){},removeListener(){}}:realMatch(q);
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+ const qa=document.createElement('details');qa.id='row-qa';qa.style.cssText='position:fixed;right:0;top:0;z-index:99999;background:#ddd;color:#111;font:11px system-ui;max-width:190px';
+ qa.innerHTML='<summary>Row QA</summary><label>Preview <select id="preview"><option>normal</option><option>hover</option><option>pressed</option></select></label><button id="apply">Preview audited CSS state</button><label>End press <select id="ending"><option>pointercancel</option><option>vertical move</option><option>leave bounds</option><option>pointerleave</option><option>pointerup</option><option>scroll</option><option>window blur</option></select></label><button id="end-press">Replay cancellation</button><button id="inspect">Inspect persisted workout</button><pre id="proof" style="white-space:pre-wrap;max-height:140px;overflow:auto"></pre>';document.body.append(qa);
+ const target=()=>[...document.querySelectorAll('.exercise-list-row,.up-next>button,.logged-exercise-row')].find(e=>e.textContent.includes('Romanian Deadlift'))||document.querySelector('.logged-exercise-row');
+ // QA-only pseudo-state mirror: real :active/:hover declarations retain their
+ // original cascade/media conditions. This is a state capture, not native touch.
+ const previewStyle=document.createElement('style');document.head.append(previewStyle);
+ function mirror(){const collect=rules=>[...rules].map(rule=>{
+  if(rule.selectorText&&/exercise-list-row|exercise-row-feedback/.test(rule.selectorText)&&/:active|:hover/.test(rule.selectorText))return rule.cssText.replaceAll(':active','[data-qa-active]').replaceAll(':hover','[data-qa-hover]');
+  if(rule.cssRules&&rule.conditionText){if(params.has('reduce')&&rule.conditionText.includes('prefers-reduced-motion: reduce'))return [...rule.cssRules].filter(r=>r.selectorText?.includes('exercise-row-feedback')).map(r=>r.cssText).join('\n');return `@media ${rule.conditionText}{${collect(rule.cssRules)}}`;}return '';
+ }).join('\n');previewStyle.textContent=[...document.styleSheets].filter(s=>s!==previewStyle.sheet).map(s=>collect(s.cssRules)).join('\n');}
+ const fire=(type,x,y,pointerType='touch')=>{const e=target();e?.dispatchEvent(new PointerEvent(type,{bubbles:true,pointerId:77,pointerType,isPrimary:true,button:0,clientX:x,clientY:y,relatedTarget:type==='pointerout'?document.body:null}));};
+ qa.querySelector('#apply').onclick=()=>{const e=target();if(!e)return;fire('pointercancel',0,0);e.removeAttribute('data-qa-active');e.removeAttribute('data-qa-hover');mirror();const mode=qa.querySelector('#preview').value;if(mode==='hover'){fire('pointermove',0,0,'mouse');e.setAttribute('data-qa-hover','');}if(mode==='pressed'){e.setAttribute('data-qa-active','');const r=e.getBoundingClientRect();fire('pointerdown',r.left+r.width/2,r.top+r.height/2);}qa.open=false;};
+ qa.querySelector('#end-press').onclick=()=>{const e=target();if(!e)return;const r=e.getBoundingClientRect(),kind=qa.querySelector('#ending').value;if(kind==='vertical move')fire('pointermove',r.left+r.width/2,r.top+r.height/2+25);else if(kind==='leave bounds')fire('pointermove',r.right+4,r.top+r.height/2);else if(kind==='scroll')document.dispatchEvent(new Event('scroll'));else if(kind==='window blur')window.dispatchEvent(new Event('blur'));else fire(kind==='pointerleave'?'pointerout':kind,0,0);e.removeAttribute('data-qa-active');qa.querySelector('#proof').textContent=JSON.stringify({ending:kind,pressed:e.hasAttribute('data-row-pressed'),background:getComputedStyle(e).backgroundColor});};
+ qa.querySelector('#inspect').onclick=()=>{qa.querySelector('#proof').textContent=JSON.stringify(JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}').activeWorkout);};
+}
+</script></body></html>

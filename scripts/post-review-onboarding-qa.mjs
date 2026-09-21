@@ -1,3 +1,4 @@
+import { chooseOnboardingAnswer, waitForOnboardingStep } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -17,9 +18,8 @@ for (const width of [320, 390, 430]) {
   assert.equal(await page.evaluate(() => window.cleanInstallStorage.saved), null, 'no saved application state before boot');
   await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).click();
   const step = async (n, name) => {
-    await page.waitForTimeout(350);
-    assert.equal(await page.locator('.step-count').innerText(), `STEP ${n}/8`);
-    assert.equal((await page.locator('.brand').innerText()).replace(/\s/g, ''), 'ROOK');
+    await waitForOnboardingStep(page,n);
+    assert.equal((await page.locator('.first-run-page:not([hidden]) .brand').innerText()).replace(/\s/g, ''), 'ROOK');
     assert.equal(await page.getByText('LIFT', { exact: true }).count(), 0);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
     await page.screenshot({ path: fileURLToPath(new URL(`${width}-${n}-${name}.png`, dir)) });
@@ -28,8 +28,8 @@ for (const width of [320, 390, 430]) {
   await step(1, 'personal');
   await page.getByRole('combobox', { name: 'Age range' }).click();
   await page.getByRole('option', { name: '18–29' }).click(); await next();
-  await step(2, 'goal'); await page.getByRole('button', { name: 'Build muscle', exact: true }).click();
-  await step(3, 'experience'); await page.getByRole('button', { name: /^Beginner/ }).click();
+  await step(2, 'goal'); await chooseOnboardingAnswer(page,'Build muscle',3);
+  await step(3, 'experience'); await chooseOnboardingAnswer(page,/^Beginner/,4);
   await step(4, 'schedule'); await page.getByRole('button', { name: '3 days', exact: true }).click();
   await page.getByLabel('Any day works').check(); await page.getByRole('button', { name: '60 min', exact: true }).click(); await next();
   await step(5, 'setup');

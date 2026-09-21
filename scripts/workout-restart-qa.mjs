@@ -38,26 +38,28 @@ async function open(themePreference) {
 {
   const { context, page, errors } = await open('light');
   const initial = await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-v2-state')); return { startedAt: state.activeWorkout.startedAt, exercises: state.activeWorkout.restartSnapshot.exercises, warmup: state.activeWorkout.restartSnapshot.warmup, program: state.program, historyCount: state.workouts.length }; });
-  assert.equal(await page.getByRole('button', { name: 'Workout options' }).count(), 0, 'restart stays hidden for a pristine workout');
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('42.5');
-  assert.equal(await page.getByRole('button', { name: 'Workout options' }).count(), 1, 'a meaningful edit reveals workout-level options');
+  await page.getByRole('button', { name: 'Workout options', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: 'Restart workout', exact: true }).isDisabled(), true, 'pristine workout keeps its menu with Restart disabled');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('42.5');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Tab');
   await page.getByRole('button', { name: 'Log set 1' }).click();
   assert.equal(await page.locator('.rest-timer').isVisible(), true, 'a running rest timer exists before restart');
   await page.getByRole('button', { name: 'Workout options' }).click();
   await page.getByRole('heading', { name: 'Workout options' }).waitFor();
-  const restartRow = page.getByRole('button', { name: /Restart workout Clear this session/ });
+  const restartRow = page.getByRole('button', { name: 'Restart workout', exact: true });
   assert.equal(await restartRow.isVisible(), true);
   await restartRow.click();
   await page.getByRole('heading', { name: 'Restart workout?' }).waitFor();
-  assert.equal(await page.getByText('This will clear all progress from this workout and start it again from the beginning. This can’t be undone.', { exact: true }).count(), 1);
-  const danger = page.getByRole('button', { name: 'RESTART WORKOUT' });
+  assert.equal(await page.getByText('Logged sets will be cleared, the starting exercises and values restored, and the timer reset. This can’t be undone.', { exact: true }).count(), 1);
+  const danger = page.getByRole('button', { name: 'Restart workout', exact: true });
   const dangerColor = await danger.evaluate(node => getComputedStyle(node).backgroundColor.match(/[\d.]+/g).map(Number));
   assert.ok(dangerColor[0] > dangerColor[1] * 1.8 && dangerColor[0] > dangerColor[2] * 1.6, `confirmation uses a restrained destructive red: ${dangerColor}`);
-  await page.getByRole('button', { name: 'CANCEL' }).click();
+  await page.getByRole('button', { name: 'Cancel', exact: true }).click();
   assert.equal(await page.getByRole('heading', { name: 'Workout options' }).count(), 1, 'cancel returns without mutation');
   assert.equal((await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises[0].sets[0].completed)), true);
-  await page.getByRole('button', { name: /Restart workout Clear this session/ }).click();
-  await page.getByRole('button', { name: 'RESTART WORKOUT' }).click();
+  await page.getByRole('button', { name: 'Restart workout', exact: true }).click();
+  await page.getByRole('button', { name: 'Restart workout', exact: true }).click();
   await page.locator('.active-workout-options-sheet').waitFor({ state: 'detached' });
   const restarted = await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-v2-state')); return { active: state.activeWorkout, program: state.program, historyCount: state.workouts.length, scrollTop: document.querySelector('.workout-screen').scrollTop }; });
   assert.ok(restarted.active.startedAt > initial.startedAt, 'elapsed time restarts from a new timestamp');
@@ -68,7 +70,9 @@ async function open(themePreference) {
   assert.deepEqual(restarted.program, initial.program, 'restart does not change the recurring plan');
   assert.equal(restarted.historyCount, initial.historyCount, 'restart creates no abandoned history record');
   assert.equal(restarted.scrollTop, 0);
-  assert.equal(await page.getByRole('button', { name: 'Workout options' }).count(), 0, 'restart becomes unavailable again once pristine');
+  await page.getByRole('button', { name: 'Workout options', exact: true }).click();
+  assert.equal(await page.getByRole('button', { name: 'Restart workout', exact: true }).isDisabled(), true, 'Restart becomes unavailable again once pristine');
+  await page.getByRole('button', { name: 'Close', exact: true }).click();
   await page.waitForTimeout(240);
   await page.screenshot({ path: output('390-light-restarted.png'), fullPage: false });
   assert.deepEqual(errors, []);
@@ -77,9 +81,10 @@ async function open(themePreference) {
 
 {
   const { context, page, errors } = await open('dark');
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('30');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('30');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Tab');
   await page.getByRole('button', { name: 'Workout options' }).click();
-  await page.getByRole('button', { name: /Restart workout Clear this session/ }).click();
+  await page.getByRole('button', { name: 'Restart workout', exact: true }).click();
   await page.screenshot({ path: output('390-dark-confirmation.png'), fullPage: false });
   const sheet = await page.locator('.active-workout-options-sheet').evaluate(node => ({ background: getComputedStyle(node).backgroundColor, color: getComputedStyle(node).color }));
   assert.notEqual(sheet.background, 'rgb(246, 245, 242)');
@@ -89,4 +94,4 @@ async function open(themePreference) {
 }
 
 await browser.close();
-console.log('Workout restart QA passed: hidden pristine state, guarded confirmation, cancel safety, atomic session reset, plan/history isolation, timer reset, scroll reset, and Light/Dark presentation are correct.');
+console.log('Workout restart QA passed: compact pristine menu, guarded confirmation, cancel safety, atomic session reset, plan/history isolation, timer reset, scroll reset, and Light/Dark presentation are correct.');

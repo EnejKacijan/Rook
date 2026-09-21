@@ -22,7 +22,8 @@ export function compileHybridImport(analysis){
         if(group.role==='warmup'){
           out.warmup.items.push({label:name,sets:group.count?.min??null,reps:group.facts.reps?.min??null,seconds:null,prescriptionText:`${group.count?.min??''} warm-up sets`.trim(),sourceText:block.sourceSpan.text,notes:group.evidence});continue;
         }
-        const f=group.facts,open=f.failure||f.amrap,range=group.count;
+        const f={...group.facts};for(const key of block.conflicts||[])f[key]=null;
+        const open=f.failure||f.amrap,range=block.conflicts?.includes('sets')?null:group.count;
         const count=range&&range.min===range.max?range.min:null;
         const min=open||f.repCeiling!=null?null:f.seconds??f.reps?.min??null;
         const max=open?null:f.repFloor!=null?null:f.secondsMax??f.reps?.max??null;
@@ -40,7 +41,7 @@ export function compileHybridImport(analysis){
           hybrid:{blockId:block.id,group:index,role:group.role,optional:facts.optional,choice:facts.choice||block.family,unresolved:!block.name,
             method,tailDrop,repFloor:f.repFloor,sourceSpan:block.sourceSpan,evidence:group.evidence,aiEvidence:block.aiEvidence||null,
             // Ambiguous ranges/modes remain bounded required decisions.
-            unsupported:multipleTargets?'This fragment contains multiple prescriptions. Put each exercise on its own line so all of the work stays explicit.':f.load?.value<0?'Negative/assisted load needs explicit source clarification; no positive load was assumed.':f.distance?'Distance targets need a supported execution prescription. Edit these source details; no reps were assumed.':f.rpe!=null?'RPE is preserved as source guidance; choose an explicit RIR target or leave it unspecified.':null},
+            unsupported:block.unsupported|| (multipleTargets?'This fragment contains multiple prescriptions. Put each exercise on its own line so all of the work stays explicit.':f.load?.value<0?'Negative/assisted load needs explicit source clarification; no positive load was assumed.':f.distance?'Distance targets need a supported execution prescription. Edit these source details; no reps were assumed.':f.rpe!=null?'RPE is preserved as source guidance; choose an explicit RIR target or leave it unspecified.':null)},
         });
       }
     }

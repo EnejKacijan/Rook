@@ -4,6 +4,7 @@
 :root .initial-import-screen:has(.plan-editor.is-import-review) > .sheet-action-footer { bottom: 0; margin-bottom: 0; }
 :root .detail-screen.has-import-decisions { display: flex; flex-direction: column; min-height: 0; height: var(--sheet-visible-height, 100dvh); max-height: var(--sheet-visible-height, 100dvh); overflow: hidden; padding-bottom: 0; }
 :root .initial-import-screen.has-import-decisions { position: fixed; top: 0; width: 100%; }
+:root .modal-layer > .initial-import-screen.has-import-decisions[data-sheet-keyboard-open] { position: relative; top: auto; }
 :root .has-import-decisions > .detail-header { display: none; }
 .import-resolution > .detail-header.import-decision-header { flex: 0 0 auto; margin-bottom: 12px; }
 .import-resolution .step-progress .progress-line { margin-top: 0; }

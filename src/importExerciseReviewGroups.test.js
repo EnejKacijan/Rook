@@ -14,8 +14,12 @@ it('presents five genuine owner source groups plus schedule; optional names add 
  expect(groups[0].members.map(m=>m.source.importRole)).toEqual(['Top set','Working sets']);
  const optionalIds=r.program.days.flatMap(d=>d.exercises).filter(e=>e.matchStatus==='original').map(e=>e.id);
  const withExplicitIdentityReview=importExerciseReviewGroups(r.sourceReview,r.program,optionalIds);
- expect(withExplicitIdentityReview).toHaveLength(9);
- expect(withExplicitIdentityReview[2].members[0].source.hybridSource.blockId).not.toBe(withExplicitIdentityReview[2].members[1].source.hybridSource.blockId);
+ expect(withExplicitIdentityReview).toHaveLength(8);
+ const incline=withExplicitIdentityReview.find(group=>group.members.some(member=>member.source.importedName==='Incline bench'));
+ expect(incline.members).toHaveLength(2);
+ expect(incline.members[0].source.hybridSource.blockId).not.toBe(incline.members[1].source.hybridSource.blockId);
+ const fly=r.program.days.flatMap(day=>day.exercises).find(exercise=>exercise.exerciseId==='pec-deck');
+ expect(fly.matchStatus).toBe('alias');expect(optionalIds).not.toContain(fly.id);
  expect(r.program.days[0].warmupPlan.items[0]).toMatchObject({sets:2,seconds:null});
  expect(r.program).toEqual(before);expect(groups.at(-1).items[0].issue.field).toBe('day');
 });
@@ -28,7 +32,7 @@ it('does not manufacture a parent for legacy source metadata without a structura
  const r=await AIService.importTrainingPlan(blankState().profile,hybridOwnerNotes,{review:true});
  const optionalIds=r.program.days.flatMap(d=>d.exercises).filter(e=>e.matchStatus==='original').map(e=>e.id);
  r.program.importMetadata.hybrid.sourceBlocks.forEach(b=>delete b.reviewParentBlockId);
- expect(importExerciseReviewGroups(r.sourceReview,r.program,optionalIds)).toHaveLength(10);
+ expect(importExerciseReviewGroups(r.sourceReview,r.program,optionalIds)).toHaveLength(9);
 });
 it('does not reparse or call AI when grouping a persisted draft',async()=>{
  const r=await AIService.importTrainingPlan(blankState().profile,hybridOwnerNotes,{review:true});

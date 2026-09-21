@@ -1,0 +1,51 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="fixture"><h1>Isolated ROOK review fixtures</h1><p>Local synthetic data only, on port 4198.</p><button id="seed">Load deletion fixture</button><button id="move">Load Monday move</button><button id="repeat">Load Monday repeat</button><button id="photos">Load photo failure fixture</button><pre id="result"></pre></div><div id="root"></div><script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,isoDay,startWorkout,completeWorkout} from '/src/domain.js';
+import {flexibleSessions} from '/src/flexibleWeek.js';
+import {saveWorkoutPhoto,getAllWorkoutPhotos} from '/src/workoutPhotos.js';
+import {GENERIC_HISTORY_CSV_HEADER,parseHistoricalWorkoutCsv,resolveHistoricalExercise,applyHistoricalWorkoutImport} from '/src/historicalWorkoutImport.js';
+const kind=new URLSearchParams(location.search).get('case');
+if(!kind){const button=document.createElement('button');button.textContent='Load imported deletion fixture';document.querySelector('#fixture').append(button);button.onclick=()=>{
+ if(location.port!=='4198')throw Error('Isolated review port required');fixedClock();const state=createReturningUserFixture(0);state.program.trainingBlock.startDate='2026-09-01';
+ let preview=parseHistoricalWorkoutCsv({source:'generic',state,text:GENERIC_HISTORY_CSV_HEADER+'\n2026-09-17,Imported deletion test,Review custom press,1,20,kg,8,,,'});
+ preview=resolveHistoricalExercise(preview,state,'Review custom press',{type:'custom'});preview=resolveHistoricalExercise(preview,state,'Review custom press',{type:'load',loadKind:'external'});
+ const result=applyHistoricalWorkoutImport(state,preview);localStorage.setItem(STORAGE_KEY,serializeState(result.state));location.href='/scripts/owner-review.html?case=imported';
+};}
+function fixedClock(now='2026-09-17T12:00:00'){const RealDate=Date;window.Date=class extends RealDate {constructor(...args){super(...(args.length?args:[now]));}static now(){return new RealDate(now).getTime();}};}
+if(kind){
+ fixedClock();
+ const params=new URLSearchParams(location.search),theme=params.get('theme');
+ if(theme){const state=JSON.parse(localStorage.getItem(STORAGE_KEY));Object.assign(state.profile,{stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});localStorage.setItem(STORAGE_KEY,serializeState(state));}
+ if(['delete','apply'].includes(params.get('fault'))){
+  const original=Storage.prototype.setItem;let injected=false;const before=JSON.parse(localStorage.getItem(STORAGE_KEY));
+  Storage.prototype.setItem=function(key,value){if(!injected && key===STORAGE_KEY){const next=JSON.parse(value);const trigger=params.get('fault')==='delete'?next.workouts.length<before.workouts.length:JSON.stringify(next.flexibleWeek)!==JSON.stringify(before.flexibleWeek)||JSON.stringify(next.todayAdaptation)!==JSON.stringify(before.todayAdaptation);if(trigger){injected=true;throw new DOMException('Synthetic test-only failure','QuotaExceededError');}}return original.call(this,key,value);};
+ }
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+}
+else for(const mode of ['move','repeat'])document.querySelector('#'+mode).onclick=()=>{
+ if(location.port!=='4198')throw Error('Isolated review port required');
+ fixedClock();let state=createReturningUserFixture(2);state.workouts=[];state.program.trainingBlock.startDate='2026-09-01';state.todayAdaptation=null;
+ const monday=flexibleSessions(state).find(s=>s.originalDate==='2026-09-14');
+ state.selectedDate='2026-09-14';state.selectedDay='Mon';
+ if(mode==='repeat'){fixedClock('2026-09-14T10:00:00');state.activeWorkout=startWorkout(state,{...monday.workout,logicalSessionId:monday.logicalSessionId});for(const e of state.activeWorkout.exercises)for(const s of e.sets){s.completed=true;s.reps=8;s.weight=20;}fixedClock('2026-09-14T10:45:00');state=completeWorkout(state);fixedClock();}
+ localStorage.setItem(STORAGE_KEY,serializeState(state));location.href='/scripts/owner-review.html?case='+mode;
+};
+if(!kind)
+document.querySelector('#seed').onclick=()=>{
+ if(location.port!=='4198')throw Error('Isolated review port required');
+ const state=createReturningUserFixture(2);
+ state.program.trainingBlock.startDate='2026-09-01';
+ state.selectedDate=isoDay();
+ for(const [index,w] of state.workouts.slice(0,2).entries()){w.canonicalPlanDate=isoDay();w.workoutDateKey=isoDay();w.startedAt=Date.now()-(90-index*45)*60000;w.endedAt=w.startedAt+30*60000;w.durationSeconds=30*60;w.completedAt=new Date(w.endedAt).toISOString();w.name='Freestyle workout';w.source='freestyle';w.logicalSessionId=null;}
+ localStorage.setItem(STORAGE_KEY,serializeState(state));location.href='/';
+};
+if(!kind)document.querySelector('#photos').onclick=async()=>{
+ if(location.port!=='4198')throw Error('Isolated review port required');
+ fixedClock();const state=createReturningUserFixture(1);state.program.trainingBlock.startDate='2026-09-01';
+ state.selectedDate=isoDay();state.selectedDay='Thu';
+ const w=state.workouts[0];w.canonicalPlanDate=isoDay();w.workoutDateKey=isoDay();w.startedAt=Date.now()-45*60000;w.endedAt=Date.now();w.durationSeconds=45*60;w.completedAt=new Date().toISOString();w.source='freestyle';w.logicalSessionId=null;w.name='Photo deletion test';
+ const canvas=document.createElement('canvas');canvas.width=40;canvas.height=40;canvas.getContext('2d').fillRect(0,0,40,40);
+ const blob=await new Promise(done=>canvas.toBlob(done,'image/png'));const photo=await saveWorkoutPhoto(w.id,new File([blob],'synthetic.png',{type:'image/png'}));w.photoId=photo.id;
+ localStorage.setItem(STORAGE_KEY,serializeState(state));location.href='/scripts/owner-review.html?case=photos&fault=delete';
+};
+</script></body></html>

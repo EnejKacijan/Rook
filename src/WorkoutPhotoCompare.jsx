@@ -12,6 +12,7 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
   const [deleteError, setDeleteError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const root = useRef(null);
+  const photoTrigger = useRef(null);
   const groups = useMemo(() => groupWorkoutPhotoTimeline(entries), [entries]);
   const pair = useMemo(() => chronologicalPhotoPair(selection), [selection]);
   const availableIds = entries.filter(entry => entry.metadataAvailable).map(entry => entry.id).join('|');
@@ -74,7 +75,7 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
         </div>)}
         {pair.map(entry => <div className="photo-compare-frame" key={entry.id}>
           {images[entry.id]?.unavailable ? <div className="photo-compare-unavailable" role="status"><p>This photo is no longer available.</p><button className="text-button" onClick={() => chooseAnother(entry.id)}>Choose another</button></div> :
-            <button className="photo-compare-inspect" aria-labelledby={`compare-${entry.id}`} disabled={!images[entry.id]?.ready} onClick={() => {setDeleteError('');setInspecting(entry.id);}}>
+            <button className="photo-compare-inspect" aria-labelledby={`compare-${entry.id}`} disabled={!images[entry.id]?.ready} onClick={event => {photoTrigger.current=event.currentTarget;setDeleteError('');setInspecting(entry.id);}}>
               {images[entry.id]?.url && <img src={images[entry.id].url} alt={`Private workout photo, ${entry.workoutName}, ${entry.day}`} onLoad={() => setImages(value => ({ ...value, [entry.id]: { ...value[entry.id], ready: true } }))} onError={() => {setImages(value => ({ ...value, [entry.id]: { unavailable: true } }));onAvailability(entry.id, false);}} />}
               {!images[entry.id]?.ready && <span role="status">Loading photo…</span>}
             </button>}
@@ -90,6 +91,6 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
       </div>
       <footer className="photo-compare-selection-footer"><p role="status">{selection.length} of 2 selected</p><button className="button primary" disabled={!ready} onClick={() => setComparing(true)}>COMPARE PHOTOS</button><button className="button quiet" onClick={onBack}>CANCEL</button></footer>
     </>}
-    {inspected && images[inspected.id]?.ready && <Viewer photoUrl={images[inspected.id].url} workout={inspected.workout} busy={busy} error={deleteError} onClose={() => setInspecting(null)} onViewWorkout={() => onViewWorkout(inspected.workoutId)} onDelete={async () => { setDeleteError('');if (await onDeletePhoto(inspected)) setInspecting(null);else setDeleteError('Photo couldn’t be deleted. Try again.'); }} />}
+    {inspected && images[inspected.id]?.ready && <Viewer returnFocusRef={photoTrigger} photoUrl={images[inspected.id].url} workout={inspected.workout} busy={busy} error={deleteError} onClose={() => setInspecting(null)} onViewWorkout={() => onViewWorkout(inspected.workoutId)} onDelete={async () => { setDeleteError('');if (await onDeletePhoto(inspected)) setInspecting(null);else setDeleteError('Photo couldn’t be deleted. Try again.'); }} />}
   </main>;
 }

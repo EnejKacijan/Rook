@@ -20,14 +20,14 @@ export function bindEdgeBack(surface, options) {
 // The questionnaire's Forward gesture mirrors the same intent, cancellation,
 // input ownership and motion policy. Distances stay positive for thresholds;
 // only physical input/output direction changes.
-export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear, getBounds, duration = 180, edge = 'left' }) {
+export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear, getBounds, duration = 180, edge = 'left', allowFocusedInput = () => false }) {
   const direction = edge === 'right' ? -1 : 1;
   let touch = null, timer = null, settling = false, suppressUntil = 0, suppressTarget = null;
   const blocked = target => target?.closest?.('input, textarea, select, button, a, [contenteditable], [role="slider"], [role="tablist"], canvas, svg, img, .modal-drag-handle, [data-no-edge-back]');
   const reset = () => { clearTimeout(timer); timer = null; touch = null; settling = false; delete surface.dataset.edgeBackActive; clear(); };
   const start = event => {
     if (event.touches.length !== 1) { reset(); return; }
-    if (settling || document.querySelector('[data-edge-back-active]') || !enabled(event) || blocked(event.target) || document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') || String(window.getSelection?.() || '')) return;
+    if (settling || document.querySelector('[data-edge-back-active]') || !enabled(event) || blocked(event.target) || (document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') && !allowFocusedInput(document.activeElement)) || String(window.getSelection?.() || '')) return;
     const point = event.touches[0], bounds = getBounds?.() || surface.getBoundingClientRect();
     const edgeDistance = edge === 'right' ? bounds.left + bounds.width - point.clientX : point.clientX - bounds.left;
     if (edgeDistance < 0 || edgeDistance > EDGE_BACK.edge) return;

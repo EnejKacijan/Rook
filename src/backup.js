@@ -7,11 +7,15 @@ import {
   unzipSync,
 } from "fflate";
 import { validSessionFeedback } from './sessionFeedback.js';
+import { canonicalBackupCounts, compareBackupCounts } from './backupCounts.js';
+import {flexibleSessionStatus} from './flexibleWeek.js';
 import {
   STORAGE_KEY,
   deserializeState,
   serializeState,
+  saveSerializedState,
 } from "./domain.js";
+import { inspectStorageProtection, withStorageTransaction } from './localStateStorage.js';
 import {
   getWorkoutPhoto,
   listWorkoutPhotoMetadata,
@@ -24,7 +28,7 @@ import {
 } from "./restoreTransaction.js";
 
 export const BACKUP_TYPE = "rook-backup";
-export const BACKUP_SCHEMA_VERSION = 1;
+export const BACKUP_SCHEMA_VERSION = 2;
 export const DATA_FORMAT_VERSION = 3;
 export const APP_VERSION =
   typeof __ROOK_APP_VERSION__ !== "undefined" ? __ROOK_APP_VERSION__ : "1.0.0";
@@ -46,28 +50,6 @@ function asObject(value, label) {
   if (!value || typeof value !== "object" || Array.isArray(value))
     fail("invalid-backup", `${label} is missing or invalid.`);
   return value;
-}
-
-function countsFor(state, photos = []) {
-  const workouts = Array.isArray(state.workouts) ? state.workouts : [];
-  const completedSets = workouts.reduce(
-    (total, workout) =>
-      total + (workout.exercises || []).reduce(
-        (exerciseTotal, exercise) =>
-          exerciseTotal + (exercise.sets || []).filter((set) => set.completed).length,
-        0,
-      ),
-    0,
-  );
-  return {
-    programDays: state.program?.days?.length || 0,
-    workouts: workouts.length,
-    completedSets,
-    workoutPhotos: photos.length,
-    coachConversations: Array.isArray(state.conversations) ? state.conversations.length : 0,
-    weightCheckins: Array.isArray(state.weightCheckins) ? state.weightCheckins.length : 0,
-    importedMeasurementSources: Array.isArray(state.importedMeasurementSources) ? state.importedMeasurementSources.length : 0,
-  };
 }
 
 async function sha256(bytes) {
@@ -142,8 +124,9 @@ function validateDurableState(raw) {
     const validCalendarDate = value => typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) && new Date(`${value}T12:00:00Z`).toISOString().slice(0, 10) === value;
     for (const [id, record] of Object.entries(sessions)) {
       if (!record || record.id !== id || id !== `${record.workoutId}:${record.originalDate}` || typeof record.workoutId !== 'string' || !validCalendarDate(record.originalDate) || !validCalendarDate(record.scheduledDate) || typeof record.planFingerprint !== 'string' || typeof record.skipped !== 'boolean') fail("invalid-backup", "Invalid Flexible Week session.");
-      if (!record.skipped && dates.has(record.scheduledDate)) fail("invalid-backup", "Conflicting Flexible Week dates.");
-      if (!record.skipped) dates.add(record.scheduledDate);
+      const pending=!record.skipped && flexibleSessionStatus(state,record)!=='completed';
+      if (pending && dates.has(record.scheduledDate)) fail("invalid-backup", "Conflicting Flexible Week dates.");
+      if (pending) dates.add(record.scheduledDate);
     }
   }
   if (state.completedTrainingBlocks !== undefined && !Array.isArray(state.completedTrainingBlocks))
@@ -169,7 +152,7 @@ function validateDurableState(raw) {
     fail("invalid-backup", "customExercises is invalid.");
   if (state.exerciseAliases !== undefined && !Array.isArray(state.exerciseAliases))
     fail("invalid-backup", "exerciseAliases is invalid.");
-  const hydrated = deserializeState(state);
+  const hydrated = deserializeState(state, { strict: true });
   for (const workout of state.workouts || []) {
     if (!validSessionFeedback(workout.sessionFeedback)) fail('invalid-backup', 'Invalid session feedback.');
     if (workout.correctedAt !== undefined && (typeof workout.correctedAt !== 'string' || !Number.isFinite(Date.parse(workout.correctedAt)))) fail('invalid-backup', 'Invalid workout correction timestamp.');
@@ -205,10 +188,10 @@ export function migrateBackupManifest(manifest) {
     if (!photo.id || !photo.reason || (photo.workoutId !== null && !photo.workoutId))
       fail("invalid-backup", "Unavailable workout photo metadata is invalid.");
   }
-  // v1 is the first format. Future migrations are applied here in sequence.
+  // Keep the source version: archive counters are validated before migration.
   return {
     ...value,
-    schemaVersion: BACKUP_SCHEMA_VERSION,
+    schemaVersion: version,
     photosComplete: value.photosComplete ?? omittedPhotos.length === 0,
     omittedPhotos,
   };
@@ -360,7 +343,8 @@ export async function buildBackupArchive(
       createdAt: record.createdAt || null,
     });
   }
-  const counts = countsFor(durableState, photos);
+  const serializedState = serializeState(durableState);
+  const counts = canonicalBackupCounts(JSON.parse(serializedState), photos);
   const manifest = {
     type: BACKUP_TYPE,
     schemaVersion: BACKUP_SCHEMA_VERSION,
@@ -378,7 +362,7 @@ export async function buildBackupArchive(
   manifestEntry.push(strToU8(JSON.stringify(manifest, null, 2)), true);
   const stateEntry = new ZipDeflate("data/state.json", { level: 6 });
   zip.add(stateEntry);
-  stateEntry.push(strToU8(serializeState(durableState)), true);
+  stateEntry.push(strToU8(serializedState), true);
   zip.end();
   const output = await completedZip;
   return {
@@ -468,11 +452,12 @@ export async function parseBackupArchive(source) {
   for (const path of Object.keys(entries))
     if (!allowedPaths.has(path) && !path.endsWith("/"))
       fail("invalid-backup", "This backup contains unexpected data.");
-  const actualCounts = countsFor(state, photos);
-  for (const [key, value] of Object.entries(actualCounts))
-    if (Number(manifest.counts?.[key]) !== value)
-      fail("corrupted-backup", "Backup validation counts do not match its contents.");
-  return { manifest, state, photos };
+  const countValidation = compareBackupCounts(manifest.counts, rawState, photos,{schemaVersion:manifest.schemaVersion});
+  const mismatchedFields = countValidation.filter(row => !['match', 'legacy-zero'].includes(row.status)).map(row => row.field);
+  if (mismatchedFields.length)
+    throw new BackupError("corrupted-backup", `Backup validation counts do not match its contents (${mismatchedFields.join(', ')}).`,
+      { countValidation, mismatchedFields });
+  return { manifest, state, photos, countValidation };
 }
 
 export async function createBackup(state, options) {
@@ -484,46 +469,41 @@ export async function createBackup(state, options) {
   });
 }
 
-export async function commitPreparedRestore(prepared, {
+export function commitPreparedRestore(prepared, options = {}) {
+  return withStorageTransaction(() => commitPreparedRestoreLocked(prepared, options));
+}
+async function commitPreparedRestoreLocked(prepared, {
   currentState,
   storage = globalThis.localStorage,
   beginRestore = beginRestoreTransaction,
   stagePhotos = stageWorkoutPhotoRestore,
   recoverRestore = recoverInterruptedRestore,
   finishRestore = finishRestoreTransaction,
+  reason = 'backup-restore:user-confirmed',
 } = {}) {
+  // Validate again at the transaction boundary, including non-file callers.
+  validateDurableState(prepared.state);
   const journal = beginRestore(currentState, storage);
   const restoredState = serializeState(prepared.state);
   try {
     await stagePhotos(prepared.photos, journal.id);
-    storage.setItem(STORAGE_KEY, restoredState);
+    if (!saveSerializedState(restoredState, { storage, reason, replacement: true })) throw new Error('Restore could not be saved.');
     await finishRestore({ storage });
   } catch (error) {
     try {
-      await recoverRestore({ storage });
+      await recoverRestore({ storage, lockHeld: true });
     } catch {
       fail("rollback-failed", "Restore failed and ROOK could not verify the rollback. Keep this app open and try again.");
     }
     throw error instanceof BackupError
       ? error
-      : new BackupError("restore-write-failed", "Restore failed. Your current ROOK data is unchanged.");
+      : new BackupError("restore-write-failed", "Restore failed. Your current ROOK data is unchanged.", {causeName:error?.name || 'Error'});
   }
   return prepared.state;
 }
 
-let persistentStorageRequest;
-export function requestPersistentStorage() {
-  if (persistentStorageRequest) return persistentStorageRequest;
-  persistentStorageRequest = (async () => {
-    try {
-      if (!navigator.storage?.persisted || !navigator.storage?.persist) return "unsupported";
-      if (await navigator.storage.persisted()) return "granted";
-      return (await navigator.storage.persist()) ? "granted" : "not-granted";
-    } catch {
-      return "unsupported";
-    }
-  })();
-  return persistentStorageRequest;
+export async function requestPersistentStorage() {
+  return (await inspectStorageProtection({ request: true })).result;
 }
 
 export function backupUserMessage(error, action = "restore") {

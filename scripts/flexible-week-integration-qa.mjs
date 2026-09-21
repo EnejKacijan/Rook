@@ -35,13 +35,15 @@ const shot=async(page,name)=>{await page.waitForTimeout(350);await page.screensh
 }
 {
   const adjusted=structuredClone(state);adjusted.todayAdaptation={programDayId:source.workoutId,date:today};
-  const {page,context}=await open(adjusted);await openAdjustWeek(page);await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-week-sheet .choice-row').filter({hasText:source.workout.name}).first().click();
-  const label=new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(new Date(`${tomorrow}T12:00:00`));await page.getByRole('button',{name:label,exact:true}).click();
-  assert.equal(await page.getByRole('radio',{name:'Restore original workout',exact:true}).isChecked(),true);
+  const {page,context}=await open(adjusted);await openAdjustWeek(page);await page.getByRole('button',{name:/Move a workout Choose/}).click();
+  assert.equal(await page.locator(`.flexible-week-sheet [data-session-id="${source.logicalSessionId}"]`).count(),0,'the current chooser excludes today-adjusted occurrences');
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+  assert.deepEqual(stored.todayAdaptation,adjusted.todayAdaptation,'opening Move preserves the adjustment');
+  assert.deepEqual(stored.flexibleWeek,adjusted.flexibleWeek,'opening Move leaves schedule unchanged');
   for (const style of ['standard','premium']) for (const appearance of ['light','dark']) {
     await page.evaluate(({style,appearance})=>{document.documentElement.dataset.style=style;document.documentElement.dataset.appearance=appearance;},{style,appearance});
     await shot(page,`adjustment-choice-${style}-${appearance}`);
   }
   await context.close();
 }
-await browser.close();console.log('Flexible Week: moved Adjust Today entry, start/reload identity, completed History, Weekly Review and adjustment-choice screenshots passed.');
+await browser.close();console.log('Flexible Week: moved Adjust Today entry, start/reload identity, completed History, Weekly Review and adjusted-occurrence exclusion passed.');

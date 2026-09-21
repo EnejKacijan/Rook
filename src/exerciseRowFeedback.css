@@ -1,0 +1,30 @@
+/* Only exercise navigation rows opt in. Selection rows and action buttons keep
+   their own state semantics, focus styling, dimensions and content. */
+:root button.exercise-row-feedback {
+ position:relative;
+ isolation:isolate;
+ background-color:transparent;
+ -webkit-tap-highlight-color:transparent;
+}
+:root button.exercise-row-feedback::before {
+ content:"";
+ position:absolute;
+ inset:0;
+ z-index:-1;
+ pointer-events:none;
+ border-radius:8px;
+ background-color:transparent;
+ transition:background-color var(--rook-motion-press-out,120ms) var(--rook-ease-release,ease-out);
+}
+@media (hover:hover) and (pointer:fine) {
+ :root button.exercise-row-feedback:where(:not(:disabled):not([data-row-touch]):hover)::before {
+  background-color:color-mix(in srgb,var(--rook-accent) 2.5%,transparent);
+ }
+}
+:root button.exercise-row-feedback:not(:disabled)[data-row-pressed]::before {
+ background-color:color-mix(in srgb,var(--rook-accent) 5%,transparent);
+ transition-duration:0ms;
+}
+@media (prefers-reduced-motion:reduce) {
+ :root button.exercise-row-feedback::before { transition:none; }
+}

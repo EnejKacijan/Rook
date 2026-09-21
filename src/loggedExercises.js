@@ -1,9 +1,9 @@
-import {workoutPlanDate} from './domain.js';
+import {workoutPerformedDate} from './domain.js';
 import {isImportedHistorySet,importedSetComparable} from './historicalSetSemantics.js';
 // Read-only index. Recorded date takes precedence over array/import order.
 export function loggedExercises(workouts = []) {
   const records=workouts.filter(w=>w.completedAt).map(workout=>{
-    const date=workoutPlanDate(workout);
+    const date=workoutPerformedDate(workout);
     const raw=workout.completedAt||workout.endedAt||workout.startedAt;
     const time=raw===true?NaN:new Date(raw).getTime();
     return {workout,date,time:Number.isFinite(time)?time:0};

@@ -14,7 +14,7 @@
         let stylePreference = "standard";
         try {
           const stored = JSON.parse(localStorage.getItem("lift-v2-state"));
-          if (stored?.schemaVersion === 2) {
+          if ([2, 3].includes(stored?.schemaVersion)) {
             const legacy = ["system", "light", "dark", "premium"].includes(
               stored.profile?.themePreference,
             )

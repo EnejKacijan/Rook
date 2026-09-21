@@ -18,7 +18,7 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  Object.assign(state.profile,{stylePreference:style,appearancePreference:appearance,themePreference:style==='premium'?'premium':appearance});
  const context=await browser.newContext({viewport:{width,height:844},timezoneId:process.env.ROOK_CALENDAR_TIMEZONE||(width===430?'America/Los_Angeles':'Europe/Ljubljana'),serviceWorkers:'block',reducedMotion:width===320?'reduce':'no-preference'});
  await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
- const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));await page.goto(process.env.ROOK_QA_URL||'http://127.0.0.1:4173');
+ const page=await context.newPage(),errors=[];await page.clock.setFixedTime(new Date(`${today}T19:00:00Z`));page.on('pageerror',e=>errors.push(e.message));await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));await page.goto(process.env.ROOK_QA_URL||'http://127.0.0.1:4173');
  const trigger=page.getByRole('button',{name:/^Open calendar,/}),dialog=page.getByRole('dialog',{name:'Workout calendar',exact:true});
  await trigger.waitFor().catch(async error=>{console.log(errors,await page.locator('body').innerText());throw error;});
  const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
@@ -54,11 +54,11 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  const alignment=await dialog.locator('[role=grid]').evaluate(grid=>{const center=e=>{const r=e.getBoundingClientRect();return r.x+r.width/2;},headers=[...grid.querySelectorAll('[role=columnheader]')].map(center);return [...grid.querySelectorAll('.month-calendar-number')].map((e,i)=>Math.abs(center(e)-headers[i%7]));});assert.ok(alignment.every(error=>error<1),`calendar column alignment ${alignment}`);
  await dialog.locator('.month-calendar-legend').screenshot({path:`${output}/${width}-${style}-${appearance}-legend.png`});
  assert.equal(await dialog.getByRole('button',{name:'TODAY',exact:true}).count(),0,'no redundant Today action when selected');
- const marks=await dialog.locator('[data-date]').evaluateAll(es=>es.map(e=>[e.dataset.date,e.querySelector('.month-calendar-mark').className]));
+ const marks=await dialog.locator('[data-date]').evaluateAll(es=>es.map(e=>[e.dataset.date,[...e.querySelectorAll('.month-calendar-mark')].map(m=>m.getAttribute('class'))]));
  const preferred=`${today.slice(0,7)}-10`;
  const other=await dialog.locator(`[data-date="${preferred}"]:not(:disabled):not(.is-today)`).count()?preferred:await dialog.locator('button[data-date]:not(:disabled):not(.is-today):not(.is-other-month)').last().getAttribute('data-date');
  await dialog.locator(`[data-date="${other}"]`).click();await dialog.waitFor({state:'detached'});assert.equal((await stored()).selectedDate,other);
- await trigger.locator('span').click();await dialog.waitFor();await shot('another-selected');
+ await trigger.click();await dialog.waitFor();await shot('another-selected');
  const todayStyle=await dialog.locator(`[data-date="${today}"] .month-calendar-number`).evaluate(e=>{const s=getComputedStyle(e);return {weight:s.fontWeight,bg:s.backgroundColor,border:s.borderTopWidth,before:getComputedStyle(e,'::before').content,after:getComputedStyle(e,'::after').content};});
  assert.equal(todayStyle.weight,'700');assert.equal(todayStyle.before,'none');assert.equal(todayStyle.after,'none');assert.equal(todayStyle.border,'0px');assert.equal(todayStyle.bg,'rgba(0, 0, 0, 0)');
  assert.equal(await dialog.locator('.month-calendar-legend > span').count(),3);
@@ -66,7 +66,7 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  assert.equal(await dialog.locator(`[data-date="${today}"] .month-calendar-mark.is-${mode==='active'?'active':mode}`).count(),1);
  assert.equal(await dialog.locator(`[data-date="${today}"]`).getAttribute('aria-current'),'date');
  assert.equal(await dialog.locator(`[data-date="${other}"]`).getAttribute('aria-pressed'),'true');
- assert.deepEqual(await dialog.locator('[data-date]').evaluateAll(es=>es.map(e=>[e.dataset.date,e.querySelector('.month-calendar-mark').className])),marks);
+ assert.deepEqual(await dialog.locator('[data-date]').evaluateAll(es=>es.map(e=>[e.dataset.date,[...e.querySelectorAll('.month-calendar-mark')].map(m=>m.getAttribute('class'))])),marks);
  assert.equal(keep(await stored()),original);
  await dialog.getByRole('button',{name:'TODAY',exact:true}).click();await dialog.waitFor({state:'detached'});
  await trigger.click();await dialog.waitFor();
@@ -79,8 +79,8 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  await dialog.locator(`[data-date="${min}"]`).click();await dialog.waitFor({state:'detached'});
  assert.equal((await stored()).selectedDate,min);assert.equal(keep(await stored()),original,'date selection leaves active workout, history and plan untouched');
  assert.equal((await stored()).selectedDay,weekday(new Date(`${min}T12:00:00`)),'selected weekday uses the local date, not UTC midnight');
- assert.ok((await page.locator('.week-strip [aria-pressed="true"]').innerText()).includes(String(Number(min.slice(8)))));
- await trigger.click();await dialog.waitFor();assert.equal(await page.evaluate(()=>document.activeElement.dataset.date),min);
+ assert.ok((await page.locator('[data-week-offset="0"] .week-strip [aria-pressed="true"]').innerText()).includes(String(Number(min.slice(8)))));
+ await trigger.click();await dialog.waitFor();await page.waitForFunction(date=>document.activeElement.dataset.date===date,min);assert.equal(await page.evaluate(()=>document.activeElement.dataset.date),min);
  await dialog.getByRole('button',{name:'TODAY',exact:true}).click();await dialog.waitFor({state:'detached'});assert.equal((await stored()).selectedDate,today);assert.equal(keep(await stored()),original);
  const crossMonth=isoDay(weekDate('Mon',`${today.slice(0,7)}-01`));
  if(crossMonth>=min){await trigger.click();await dialog.waitFor();await dialog.locator(`[data-date="${crossMonth}"]`).click();await dialog.waitFor({state:'detached'});const fits=await page.locator('.screen-top').evaluate(root=>root.querySelector('.today-program-name').getBoundingClientRect().top>=root.querySelector('.week-navigation').getBoundingClientRect().bottom);assert.ok(fits,'cross-month range must not collide with the heading');await shot('cross-month');await trigger.click();await dialog.waitFor();await dialog.getByRole('button',{name:'TODAY',exact:true}).click();await dialog.waitFor({state:'detached'});}
@@ -88,7 +88,8 @@ try{for(const width of (process.env.ROOK_CALENDAR_WIDTHS||'320,390,430').split('
  await trigger.click();await dialog.waitFor();await page.mouse.click(5,5);await dialog.waitFor({state:'detached'});assert.equal((await stored()).selectedDate,today);assert.equal(keep(await stored()),original);
  await page.getByRole('button',{name:'Previous week',exact:true}).click();
  const previousDate=new Date(`${today}T12:00:00`);previousDate.setDate(previousDate.getDate()-7);
+ await page.waitForFunction(date=>JSON.parse(localStorage.getItem('lift-v2-state')).selectedDate===date,isoDay(previousDate));
  assert.equal((await stored()).selectedDate,isoDay(previousDate));assert.equal(await dialog.count(),0);
- await page.getByRole('button',{name:'Next week',exact:true}).click();assert.equal((await stored()).selectedDate,today);assert.equal(keep(await stored()),original);
+ await page.getByRole('button',{name:'Next week',exact:true}).click();await page.waitForFunction(date=>JSON.parse(localStorage.getItem('lift-v2-state')).selectedDate===date,today);assert.equal((await stored()).selectedDate,today);assert.equal(keep(await stored()),original);
  assert.deepEqual(errors,[]);console.log(`PASS ${width} ${style} ${appearance}: geometry, month/date selection, bounds, Today, keyboard, dismiss, active preservation`);await context.close();
 }}finally{await browser.close();}

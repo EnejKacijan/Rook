@@ -36,6 +36,9 @@ export function createReturningUserFixture(weeks = 6) {
       active.workoutDateKey = planDate;
       active.canonicalPlanDate = planDate;
       active.sourcePlanSlotId = `${day.id}:${planDate}`;
+      active.logicalSessionId = active.sourcePlanSlotId;
+      active.originalScheduledDate = planDate;
+      active.updatedAt = date.getTime();
       active.exercises.forEach((exercise, exerciseIndex) =>
         exercise.sets.forEach((set, setIndex) => {
           set.weight = exerciseCatalog[exercise.exerciseId]?.bodyweight
@@ -50,7 +53,11 @@ export function createReturningUserFixture(weeks = 6) {
       );
       state.activeWorkout = active;
       state = completeWorkout(state);
-      state.workouts.at(-1).completedAt = date.toISOString();
+      Object.assign(state.workouts.at(-1), {
+        completedAt: date.toISOString(),
+        endedAt: date.getTime(),
+        durationSeconds: 45 * 60,
+      });
     }
   }
   return state;

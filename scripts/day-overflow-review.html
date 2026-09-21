@@ -1,0 +1,35 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>ROOK day overflow review</title></head><body>
+<section id="fixture"><h1>Isolated day overflow review</h1>
+<label>Completed workouts <select id="count"><option>0</option><option>1</option><option selected>2</option><option>3</option><option>4</option></select></label>
+<label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label>
+<label>Workout types <select id="kind"><option>mixed</option><option>planned</option><option>freestyle</option></select></label>
+<label><input type="checkbox" id="same">Same names</label><label><input type="checkbox" id="past">Historical date</label><label><input type="checkbox" id="planned">Planned day</label><label><input type="checkbox" id="active">Active workout</label>
+<label>Write failure <select id="fail"><option>none</option><option>repeat</option><option>delete</option></select></label>
+<button id="seed">START SYNTHETIC REVIEW</button></section><div id="root"></div>
+<script type="module">
+import {dayOverflowFixture} from '/src/dayOverflow.fixture.js';
+import {STORAGE_KEY,serializeState} from '/src/domain.js';
+if(!import.meta.env.DEV || location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development review only');
+const params=new URLSearchParams(location.search),NativeDate=Date;
+let fixed=params.has('planned')?'2026-09-17T18:00:00':'2026-09-20T18:00:00';
+window.Date=class extends NativeDate{constructor(...args){super(...(args.length?args:[fixed]));}static now(){return new NativeDate(fixed).getTime();}};
+if(params.has('run')){
+ document.querySelector('#fixture').remove();
+ const nativeSet=Storage.prototype.setItem;
+ let failed=false;
+ Storage.prototype.setItem=function(key,value){
+  if(key===STORAGE_KEY && !failed){const previous=JSON.parse(localStorage.getItem(key)||'{}'),next=JSON.parse(value);if(params.get('fail')==='repeat' && next.todayAdaptation?.mode==='repeat' && !previous.todayAdaptation || params.get('fail')==='delete' && next.workouts?.length<previous.workouts?.length){failed=true;throw new DOMException('Synthetic write failure','QuotaExceededError');}}
+  return nativeSet.call(this,key,value);
+ };
+ const tools=document.createElement('details');tools.style.cssText='position:fixed;right:4px;top:4px;z-index:20000;font:10px monospace;background:#fff;color:#000;max-width:290px';tools.innerHTML='<summary>QA proof</summary><button>SHOW SAVED RECORDS</button><pre style="white-space:pre-wrap"></pre>';document.body.append(tools);
+ tools.querySelector('button').onclick=()=>{const s=JSON.parse(localStorage.getItem(STORAGE_KEY));tools.querySelector('pre').textContent=JSON.stringify({records:s.workouts.map(w=>({id:w.id,name:w.name,completedAt:w.completedAt})),repeatSource:s.todayAdaptation?.sourceWorkoutId,selectedDate:s.selectedDate,activeId:s.activeWorkout?.id,allNewSetsUnlogged:s.activeWorkout?s.activeWorkout.exercises.every(e=>e.sets.every(x=>!x.completed)):null},null,2);};
+ await import('/src/main.jsx');
+}else document.querySelector('#seed').onclick=()=>{
+ const value=id=>document.getElementById(id).value,checked=id=>document.getElementById(id).checked;
+ fixed=checked('planned')?'2026-09-17T18:00:00':'2026-09-20T18:00:00';
+ let s=dayOverflowFixture({count:Number(value('count')),kind:value('kind'),sameName:checked('same'),date:checked('past')?'2026-09-16':fixed.slice(0,10),active:checked('active')});
+ const theme=value('theme');Object.assign(s.profile,{stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ for(const key of ['lift-v2-state','rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/day-overflow-review.html?run=1&fail='+value('fail')+(checked('planned')?'&planned=1':'');
+};
+</script></body></html>

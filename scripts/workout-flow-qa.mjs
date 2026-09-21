@@ -34,8 +34,8 @@ function activeFixture() {
 }
 
 async function openWorkout(state = activeFixture(), width = 390) {
-  const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'no-preference' });
-  await context.addInitScript(value => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem('lift-v2-state', JSON.stringify(value)); }, state);
+  const context = await browser.newContext({ viewport: { width, height: 844 }, reducedMotion: 'no-preference', hasTouch:true });
+  await context.addInitScript(value => { if (!localStorage.getItem('lift-v2-state') && !localStorage.getItem('rook-install-meta-v1')) localStorage.setItem('lift-v2-state', JSON.stringify(value)); }, state);
   const page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -60,8 +60,8 @@ async function completeCurrentExercise(page) {
     const activeRow = page.locator('.set-row.set-active').first();
     const activeCheck = activeRow.locator('button.check');
     if (await activeCheck.isDisabled()) {
-      const weight = activeRow.getByRole('spinbutton', { name: /Weight in/ });
-      if (await weight.count()) await weight.fill('20');
+      const weight = activeRow.getByRole('textbox', { name: /Weight in/ });
+      if (await weight.count()) {await weight.fill('20');await weight.press('Enter');}
     }
     const current = page.locator('.set-row:not(.set-done) button.check:not([disabled])');
     if (!(await current.count())) break;
@@ -77,9 +77,9 @@ async function completeCurrentExercise(page) {
   state.activeWorkout.exercises[0].sets = [state.activeWorkout.exercises[0].sets[0]];
   const { context, page, errors } = await openWorkout(state, 320);
   assert.match(await page.locator('.workout-header small').innerText(), /0 \/ 1 set · \d{2}:\d{2}/);
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('135');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('135'); await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Enter');
   await page.getByRole('button', { name: 'Log set 1' }).click();
-  assert.equal(await page.getByRole('button', { name: 'Undo logged set 1' }).textContent(), '✓', 'only a completed set receives the checkmark');
+  assert.equal(await page.getByRole('button', { name: 'Undo logged set 1' }).locator('svg').count(), 1, 'only a completed set receives the checkmark');
   await skipRest(page);
   assert.match(await page.locator('.workout-header small').innerText(), /1 \/ 1 set · \d{2}:\d{2}/);
   assert.equal(await page.locator('.set-row').count(), 1, 'completing a one-set exercise does not add a set implicitly');
@@ -92,44 +92,44 @@ async function completeCurrentExercise(page) {
 // Sequential sets, persistence, extra sets, direct next navigation, and full completion.
 {
   const { context, page, errors } = await openWorkout();
-  const activeExerciseName = await page.locator('.exercise-heading h1').innerText();
+  const activeExerciseName = await page.getByRole('heading',{level:1}).innerText();
   assert.equal(await page.locator('.workout-warmup-toggle small').innerText(), `For ${activeExerciseName}`, 'collapsed warm-up derives its target name from the current active exercise entry');
   for (const width of [375, 390, 430, 500]) await snap(page, 'first-exercise', width);
   await page.setViewportSize({ width: 390, height: 844 });
 
   const heading = await page.locator('.exercise-heading p').boundingBox();
   const labels = await page.locator('.set-labels').boundingBox();
-  assert.ok(labels.y - (heading.y + heading.height) <= 35, 'set controls sit close to exercise metadata');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).getAttribute('placeholder'), 'Enter weight');
+  const preceding=await page.locator('.sets').evaluate(node=>node.previousElementSibling.getBoundingClientRect().bottom);assert.ok(labels.y-preceding>=0 && labels.y-preceding<=44, 'set controls retain their spacing after the existing helper content');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).getAttribute('placeholder'), 'Enter weight');
   assert.equal(await page.getByRole('button', { name: 'Log set 1' }).isDisabled(), true);
   assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isDisabled(), true);
   assert.equal(await page.getByRole('button', { name: 'Log set 3' }).isDisabled(), true);
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('secondary')), true, 'Next Exercise stays secondary while prescribed sets are incomplete');
 
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('20'); await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Enter');
   assert.equal(await page.getByRole('button', { name: 'Log set 1' }).isEnabled(), true);
-  assert.equal((await page.getByRole('button', { name: 'Log set 1' }).textContent()).trim(), '✓', 'a ready set keeps the approved visible completion affordance');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).inputValue(), '20', 'first entered load fills the next empty set');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '20', 'first entered load fills every remaining empty set');
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('22.5');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).inputValue(), '22.5', 'changing the source set updates the next auto-filled set');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '22.5', 'changing the source set updates the full auto-filled chain');
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).fill('17.5');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '22.5', 'editing an individual set does not overwrite another set');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '17.5', 'an auto-filled later set follows the newly customized previous set');
+  assert.equal(await page.getByRole('button', { name: 'Log set 1' }).locator('svg').count(), 1, 'a ready set keeps the approved visible completion affordance');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 2/ }).inputValue(), '20', 'first entered load fills the next empty set');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 3/ }).inputValue(), '20', 'first entered load fills every remaining empty set');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('22.5'); await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Enter');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 2/ }).inputValue(), '22.5', 'changing the source set updates the next auto-filled set');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 3/ }).inputValue(), '22.5', 'changing the source set updates the full auto-filled chain');
+  await page.getByRole('textbox', { name: /Weight in kg for set 2/ }).fill('17.5'); await page.getByRole('textbox', { name: /Weight in kg for set 2/ }).press('Enter');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).inputValue(), '22.5', 'editing an individual set does not overwrite another set');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 3/ }).inputValue(), '17.5', 'an auto-filled later set follows the newly customized previous set');
   await page.getByRole('button', { name: 'Log set 1' }).click();
   assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isEnabled(), true);
   assert.equal(await page.getByRole('button', { name: 'Log set 3' }).isDisabled(), true);
   assert.equal(await page.locator('.rest-timer').isVisible(), true);
   await snap(page, 'after-set-1');
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('25');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 2/ }).inputValue(), '17.5', 'later edits do not cascade over a customized set');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 3/ }).inputValue(), '17.5', 'the following auto-filled set continues to follow its immediate customized predecessor');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('25'); await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Enter');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 2/ }).inputValue(), '17.5', 'later edits do not cascade over a customized set');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 3/ }).inputValue(), '17.5', 'the following auto-filled set continues to follow its immediate customized predecessor');
 
   await page.reload({ waitUntil: 'networkidle' });
   await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
   assert.equal(await page.locator('.workout-warmup-toggle small').innerText(), `For ${activeExerciseName}`, 'reload cannot restore a stale cached warm-up target name');
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '25');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).inputValue(), '25');
   assert.equal(await page.getByRole('button', { name: 'Log set 2' }).isEnabled(), true);
   assert.equal(await page.locator('.rest-timer').isVisible(), true, 'active rest timer survives reload');
   await page.getByRole('button', { name: 'Undo logged set 1' }).click();
@@ -142,7 +142,7 @@ async function completeCurrentExercise(page) {
   const extraRemove = page.getByRole('button', { name: /^Remove extra set / });
   await extraRemove.waitFor();
   assert.equal(await extraRemove.count(), 1);
-  assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 4/ }).inputValue(), '17.5', 'a new set inherits the immediately previous set rather than the first set');
+  assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 4/ }).inputValue(), '17.5', 'a new set inherits the immediately previous set rather than the first set');
   await snap(page, 'extra-set');
   await extraRemove.click();
   await extraRemove.waitFor({ state: 'detached' });
@@ -164,16 +164,16 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.getByRole('button', { name: 'NEXT EXERCISE →' }).getAttribute('class').then(value => value.includes('primary')), true, 'completing the added set restores the ready exercise state');
   await snap(page, 'all-first-exercise-sets');
 
-  const nextName = (await page.locator('.up-next button').first().locator('span').textContent()).trim();
+  const nextName = (await page.locator('.up-next .swipe-up-next-body').first().locator('.up-next-title').textContent()).trim();
   assert.equal(await page.locator('.workout-primary-action small').count(), 0, 'next exercise name is not duplicated below the primary action');
   assert.equal(await page.locator('.up-next').textContent().then(text => text.includes('Single-Arm Incline Dumbbell Bench Press')), false);
-  const completedExerciseName = await page.locator('.exercise-heading h1').textContent();
+  const completedExerciseName = await page.getByRole('heading',{level:1}).textContent();
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
   await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent === name, nextName);
-  assert.notEqual(await page.locator('.exercise-heading h1').textContent(), completedExerciseName, 'completed navigation reaches the next exercise');
+  assert.notEqual(await page.getByRole('heading',{level:1}).textContent(), completedExerciseName, 'completed navigation reaches the next exercise');
   assert.equal(await page.evaluate(() => document.getAnimations().some((animation) => String(animation.animationName || '').startsWith('rook-exercise-panel-'))), false, 'exercise content has no panel transition or fade');
   assert.equal(await page.getByRole('dialog').count(), 0);
-  assert.equal(await page.locator('.exercise-heading h1').textContent(), nextName);
+  assert.equal(await page.getByRole('heading',{level:1}).textContent(), nextName);
   assert.match(await page.locator('[role="status"].visually-hidden').first().textContent(), new RegExp(`Exercise complete\\. Next: ${nextName}`), 'assistive technology receives the completion and next-exercise announcement');
   await snap(page, 'second-exercise');
   const firstCompletedSets = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises[0].sets.filter(set => set.completed).length);
@@ -185,13 +185,13 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.locator('.set-row.set-done').count(), firstCompletedSets, 'returning preserves completed sets');
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
   await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent === name, nextName);
-  assert.equal(await page.locator('.exercise-heading h1').textContent(), nextName);
+  assert.equal(await page.getByRole('heading',{level:1}).textContent(), nextName);
 
   while (true) {
     await completeCurrentExercise(page);
     const next = page.getByRole('button', { name: 'NEXT EXERCISE →' });
     if (await next.count()) {
-      const currentName = await page.locator('.exercise-heading h1').textContent();
+      const currentName = await page.getByRole('heading',{level:1}).textContent();
       await next.click();
       await page.waitForFunction(name => document.querySelector('.exercise-heading h1')?.textContent !== name, currentName);
     }
@@ -202,12 +202,12 @@ async function completeCurrentExercise(page) {
   assert.equal(await page.getByRole('dialog').count(), 0);
   await page.getByRole('heading', { name: 'Workout complete' }).waitFor();
   assert.equal(await page.locator('.complete-mark').evaluate((mark) => getComputedStyle(mark).animationName), 'rook-workout-complete-mark');
-  assert.equal(await page.locator('.complete-mark').evaluate((mark) => getComputedStyle(mark, '::after').animationName), 'rook-workout-complete-ring');
-  assert.equal(await page.getByRole('heading', { name: 'Workout complete' }).evaluate((heading) => getComputedStyle(heading).animationName), 'rook-workout-complete-copy');
+  assert.equal(await page.locator('.complete-mark').evaluate((mark) => getComputedStyle(mark, '::after').animationName), 'none');
+  assert.equal(await page.getByRole('heading', { name: 'Workout complete' }).evaluate((heading) => getComputedStyle(heading).animationName), 'none');
   assert.deepEqual(
     await page.locator('.stat-grid > div').evaluateAll((items) => items.map((item) => getComputedStyle(item).animationName)),
-    ['rook-workout-complete-stat', 'rook-workout-complete-stat', 'rook-workout-complete-stat'],
-    'completion stats share the restrained staggered entrance',
+    ['none', 'none', 'none'],
+    'completion content appears immediately while the checkmark carries the restrained acknowledgement',
   );
   await page.waitForFunction(() => document.activeElement?.matches('.complete-screen > h1'));
   const doneDock = await page.locator('.complete-done-dock').boundingBox();
@@ -333,6 +333,7 @@ async function completeCurrentExercise(page) {
   await page.getByRole('button', { name: 'Close workout details', exact: true }).click();
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
   await openProfileArea(page, 'data'); await page.getByRole('button', { name: /^Delete local data/ }).click();
+  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-funnel-events-v1')).some(event => event.name === 'first_workout_completed')), true, 'first completed workout closes the measurable activation funnel');
   await page.getByRole('button', { name: 'DELETE LOCAL DATA', exact: true }).click();
   await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).waitFor();
   const mediaAfterLogout = await page.evaluate(() => new Promise((resolve, reject) => {
@@ -346,7 +347,7 @@ async function completeCurrentExercise(page) {
     };
   }));
   assert.equal(mediaAfterLogout, 0, 'logging out clears every private workout photo blob');
-  assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-funnel-events-v1')).some(event => event.name === 'first_workout_completed')), true, 'first completed workout closes the measurable activation funnel');
+  assert.equal(await page.evaluate(() => localStorage.getItem('lift-funnel-events-v1')), null, 'Delete local data also clears local funnel events');
   assert.deepEqual(errors, [], `full-flow console errors: ${errors.join('; ')}`);
   await context.close();
 }
@@ -354,7 +355,7 @@ async function completeCurrentExercise(page) {
 // Incomplete exercise navigation keeps skipped sets incomplete.
 {
   const { context, page, errors } = await openWorkout();
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('20'); await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Enter');
   await page.getByRole('button', { name: 'Log set 1' }).click();
   const originalId = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises[0].id);
   await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
@@ -363,21 +364,20 @@ async function completeCurrentExercise(page) {
   const dragHandle = page.getByRole('button', { name: 'Drag down or tap to close' });
   assert.equal(await dragHandle.count(), 1, 'incomplete-exercise confirmation has one functional drag handle');
   await snap(page, 'incomplete-next-confirmation');
-  const sheet = page.locator('.workout-confirm'); const initialSheetBox = await sheet.boundingBox(); const titleBox = await page.getByRole('heading', { name: /still incomplete/ }).boundingBox();
-  await page.mouse.move(titleBox.x + titleBox.width / 2, titleBox.y + titleBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(titleBox.x + titleBox.width / 2, titleBox.y + 18, { steps: 3 });
-  await page.waitForTimeout(90);
-  assert.notEqual(await sheet.evaluate(element => getComputedStyle(element).transform), 'none', 'the full sheet follows a drag started away from the handle');
-  await page.mouse.up();
-  await page.waitForTimeout(220);
-  assert.equal(await page.getByRole('dialog').count(), 1, 'a short surface drag springs back');
-  assert.ok(Math.abs((await sheet.boundingBox()).y - initialSheetBox.y) < 1, 'the sheet returns to its resting position');
-  const actionBox = await page.getByRole('button', { name: 'RETURN TO EXERCISE' }).boundingBox();
-  await page.mouse.move(actionBox.x + actionBox.width / 2, actionBox.y + actionBox.height / 2);
-  await page.mouse.down();
-  await page.mouse.move(actionBox.x + actionBox.width / 2, actionBox.y + 120, { steps: 6 });
-  await page.mouse.up();
+  const sheet = page.locator('.workout-confirm'); await sheet.evaluate(async el=>{await new Promise(r=>requestAnimationFrame(r));await Promise.all(el.getAnimations({subtree:true}).filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));}); const initialSheetBox = await sheet.boundingBox(); const titleBox = await page.getByRole('heading', { name: /still incomplete/ }).boundingBox();
+  const touch=await context.newCDPSession(page);
+  const finger=(type,x,y)=>touch.send('Input.dispatchTouchEvent',{type,touchPoints:type==='touchEnd'?[]:[{x,y}]});
+  const x=titleBox.x+titleBox.width/2,y=titleBox.y+titleBox.height/2;
+  await finger('touchStart',x,y);await finger('touchMove',x,y+24);
+  assert.notEqual(await sheet.evaluate(element=>getComputedStyle(element).transform),'none','the full sheet follows a real touch drag away from the handle');
+  await finger('touchEnd');await page.waitForTimeout(220);
+  assert.equal(await page.getByRole('dialog').count(),1,'a short surface drag springs back');
+  assert.ok(Math.abs((await sheet.boundingBox()).y-initialSheetBox.y)<1,JSON.stringify({message:'the sheet returns to its resting position',before:initialSheetBox,after:await sheet.boundingBox()}));
+  const actionBox=await page.getByRole('button',{name:'RETURN TO EXERCISE'}).boundingBox();
+  const actionX=actionBox.x+actionBox.width/2,actionY=actionBox.y+actionBox.height/2;
+  await finger('touchStart',actionX,actionY);
+  for(let i=1;i<=5;i++)await finger('touchMove',actionX,actionY+i*24);
+  await finger('touchEnd');
   await page.getByRole('dialog').waitFor({ state: 'detached' });
   assert.equal(await page.evaluate(id => { const active = JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout; return active.exerciseIndex === 0 && active.exercises[0].id === id; }, originalId), true, 'dragging down returns to the current exercise without changing workout state');
   await page.locator('.workout-primary-action .button').click();
@@ -400,7 +400,7 @@ async function completeCurrentExercise(page) {
 // Header Finish confirms and records a truthful early ending.
 {
   const { context, page, errors } = await openWorkout();
-  await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20');
+  await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).fill('20'); await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).press('Enter');
   await page.getByRole('button', { name: 'Log set 1' }).click();
   await skipRest(page);
   const planned = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises.flatMap(item => item.sets).length);

@@ -1,4 +1,4 @@
-import { openProfileArea } from './qa-current-navigation.mjs';
+import { openProfileArea, openFirstRunLanding } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -139,7 +139,7 @@ async function geometry(page) {
 }
 
 async function weekStateSignals(page) {
-  return page.locator(".week-strip").evaluate((strip) => {
+  return page.locator('.week-pager-page[data-week-offset="0"] .week-strip').evaluate((strip) => {
     const planned = strip.querySelector(".workout-planned:not(.selected-day)");
     const rest = strip.querySelector(".workout-rest:not(.selected-day)");
     const selected = strip.querySelector(".selected-day");
@@ -159,8 +159,8 @@ async function weekStateSignals(page) {
       selected: style(selected),
       selectedState: selected?.classList.contains("workout-rest") ? "rest" : "workout",
       selectedHasMarker: Boolean(selected?.querySelector(".workout-dot, .completed-dot")),
-      plannedDotFill: plannedDot ? getComputedStyle(plannedDot).backgroundColor : null,
-      plannedDotBorder: plannedDot ? getComputedStyle(plannedDot).borderStyle : null,
+      plannedDotFill: plannedDot ? getComputedStyle(plannedDot.querySelector('circle')).fill : null,
+      plannedDotBorder: plannedDot ? getComputedStyle(plannedDot.querySelector('circle')).stroke : null,
       todayMarkerWidth: today ? getComputedStyle(today, "::after").width : null,
       minimumHeight: Math.min(
         ...[...strip.querySelectorAll("button")].map(
@@ -222,8 +222,8 @@ for (const [theme, page] of [
   );
   assert.equal(signals.selectedState, "workout");
   assert.equal(signals.selectedHasMarker, true);
-  assert.equal(signals.plannedDotFill, "rgba(0, 0, 0, 0)");
-  assert.equal(signals.plannedDotBorder, "solid");
+  assert.equal(signals.plannedDotFill, "none");
+  assert.notEqual(signals.plannedDotBorder, "none", "planned circle has a visible stroke");
   assert.equal(signals.todayMarkerWidth, "12px");
   assert.ok(signals.minimumHeight >= 44, `${theme} day targets remain at least 44px high`);
 
@@ -245,8 +245,8 @@ const weekChips = darkRun.page.locator(".week-strip button");
 const todayChip = darkRun.page.locator('.week-strip button[aria-current="date"]');
 if (await todayChip.evaluate((chip) => chip.classList.contains("workout-planned"))) {
   assert.equal(
-    await todayChip.locator(".workout-dot").evaluate((dot) => getComputedStyle(dot).borderStyle),
-    "solid",
+    await todayChip.locator(".workout-dot").evaluate((dot) => getComputedStyle(dot.querySelector("circle")).fill),
+    "none",
     "the pending-workout marker remains hollow inside the selected chip",
   );
 }
@@ -305,8 +305,8 @@ const loggingStates = await darkRun.page.locator(".logging-screen").evaluate((sc
   };
 });
 assert.equal(loggingStates.selected.background, "rgba(0, 0, 0, 0)");
-assert.equal(loggingStates.selected.color, "rgb(17, 20, 19)");
-assert.equal(loggingStates.unitIndicator, "rgb(235, 238, 236)");
+assert.equal(loggingStates.selected.color, "rgb(79, 191, 135)");
+assert.equal(loggingStates.unitIndicator, await darkRun.page.evaluate(()=>{const p=document.createElement('i');p.style.background='var(--rook-selected)';document.body.append(p);const color=getComputedStyle(p).backgroundColor;p.remove();return color;}));
 assert.equal(loggingStates.unselected.color, "rgb(137, 145, 140)");
 assert.equal(loggingStates.select.border, "rgb(98, 108, 102)");
 await screenshot(darkRun.page, "390-logging-dark.png");
@@ -403,8 +403,8 @@ const setStates = await activeRun.page.locator(".sets").evaluate((sets) => {
     return { background: current.backgroundColor, border: current.borderColor, color: current.color };
   };
   return {
-    ready: style(checks.find((check) => !check.disabled)),
-    future: style(checks.find((check) => check.disabled)),
+    ready: style(sets.querySelector(".set-active .check-mark")),
+    future: style(sets.querySelector(".set-row:not(.set-active) .check-mark")),
     inputBackground: getComputedStyle(sets.querySelector("input")).backgroundColor,
     stepperDivider: getComputedStyle(sets.querySelector(".stepper button")).borderRightColor,
     rirBackground: sets.querySelector("select")
@@ -412,19 +412,19 @@ const setStates = await activeRun.page.locator(".sets").evaluate((sets) => {
       : null,
   };
 });
-assert.equal(setStates.ready.border, "rgba(79, 191, 135, 0.6)");
-assert.equal(setStates.future.color, "rgb(126, 135, 129)");
+assert.equal(setStates.ready.color, "rgb(79, 191, 135)");
+assert.equal(setStates.future.color, "rgb(166, 175, 170)");
 assert.equal(setStates.inputBackground, "rgba(0, 0, 0, 0)");
-assert.notEqual(setStates.stepperDivider, "rgba(0, 0, 0, 0)");
+assert.equal(await activeRun.page.locator(".stepper").first().evaluate(node=>getComputedStyle(node).borderRightWidth), "0px");
 if (setStates.rirBackground)
   assert.equal(setStates.rirBackground, "rgb(28, 32, 30)");
 await activeRun.page.getByRole("button", { name: "Log set 1" }).click();
 await activeRun.page.waitForTimeout(220);
 assert.equal(
-  await activeRun.page.locator(".set-row.set-done .check").first().evaluate(
-    (button) => getComputedStyle(button).backgroundColor,
+  await activeRun.page.locator(".set-row.set-done .check-mark").first().evaluate(
+    (button) => getComputedStyle(button).color,
   ),
-  "rgb(47, 158, 107)",
+  "rgb(79, 191, 135)",
 );
 if (await activeRun.page.locator(".rest-timer").count())
   await screenshot(activeRun.page, "320-rest-timer-dark.png");
@@ -435,7 +435,7 @@ await activeRun.context.close();
 const freshState = blankState();
 freshState.profile.themePreference = "dark";
 const freshRun = await openState(freshState, { width: 375 });
-await screenshot(freshRun.page, "375-entry-dark.png");
+await openFirstRunLanding(freshRun.page);await screenshot(freshRun.page, "375-entry-dark.png");
 await freshRun.page.getByRole("button", { name: "BUILD MY PLAN" }).click();
 const onboardingProgress = await freshRun.page.locator(".progress-line").evaluate((track) => {
   const fill = track.querySelector("span");
@@ -461,7 +461,7 @@ for (const [buttonName, fileName, expected] of [
 ]) {
   const state = blankState();
   state.profile.themePreference = "dark";
-  const run = await openState(state);
+  const run = await openState(state);await openFirstRunLanding(run.page);
   await run.page.getByRole("button", { name: new RegExp(buttonName, "i") }).click();
   assert.match(await run.page.locator("body").innerText(), expected);
   await screenshot(run.page, fileName);

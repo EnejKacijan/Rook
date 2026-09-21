@@ -81,8 +81,9 @@ for (const width of [390, 320]) {
   await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();
   const shot=async name=>{await page.waitForTimeout(280);await page.screenshot({path:output(`${width}-${name}.png`)});};
   await shot('many-unmatched');
-  assert.equal(await page.getByRole('button',{name:'MATCH',exact:true}).count(),8);
-  await page.getByRole('button',{name:'MATCH',exact:true}).first().click();
+  await page.locator('.history-import-custom summary').click();await page.getByRole('button',{name:'CHANGE',exact:true}).first().waitFor();
+  assert.equal(await page.getByRole('button',{name:'CHANGE',exact:true}).count(),8);
+  await page.getByRole('button',{name:'CHANGE',exact:true}).first().click();
   await verifySearchClear(page);
   for(let index=0;index<8;index++) {
     await page.getByText(`Exercise ${index+1} of 8`,{exact:true}).waitFor();
@@ -97,15 +98,17 @@ for (const width of [390, 320]) {
   }
   await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'MATCH',exact:true}).count(),0);
+  await page.locator('.history-import-resolved summary').click();await page.getByRole('button',{name:'CHANGE',exact:true}).first().waitFor();
   assert.equal(await page.getByRole('button',{name:'CHANGE',exact:true}).count(),8);
   await shot('all-matched');
   await page.getByRole('button',{name:'CHANGE',exact:true}).first().click();
   await page.getByRole('button',{name:'Back',exact:true}).click();
+  await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();await page.locator('.history-import-resolved summary').click();await page.getByRole('button',{name:'CHANGE',exact:true}).first().waitFor();
   assert.equal(await page.getByRole('button',{name:'CHANGE',exact:true}).count(),8,'back preserves draft mappings');
   await page.getByRole('button',{name:'CHANGE',exact:true}).first().click();
   await page.getByRole('searchbox').fill('Leg Press');
   const choice=page.locator('.history-import-match-list button').first();
-  const correctedName=await choice.locator('strong').innerText();await choice.click();
+  const correctedName=await choice.locator('strong').innerText();await choice.click();await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();await page.locator('.history-import-resolved summary').click();await page.getByRole('button',{name:'CHANGE',exact:true}).first().waitFor();
   assert.match(await page.locator('.history-import-mapping-row').first().innerText(),new RegExp(correctedName));
   await page.locator('.remember-import-match input').first().click();
   await page.waitForFunction(()=>document.querySelector('.remember-import-match input')?.checked);

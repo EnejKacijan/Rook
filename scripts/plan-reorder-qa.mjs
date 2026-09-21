@@ -49,14 +49,14 @@ await page.screenshot({
 });
 
 assert.equal(
-  await page.getByText('Press and hold a workout or exercise to reorder.').count(),
+  await page.getByText('Drag a handle to reorder workouts or exercises.').count(),
   1,
   'reorder instruction is shown once rather than repeated on every row',
 );
 assert.equal(
   await page.locator('[data-reorder-kind="exercise"]').count() > 0,
   true,
-  'exercise summaries expose a long-press drag surface',
+  'exercise rows expose dedicated drag handles',
 );
 assert.equal(
   await page.locator('[data-reorder-kind="workout"]').count(),
@@ -135,8 +135,8 @@ await dragPage.getByRole('heading', { name: 'Edit your plan' }).waitFor();
 const dragDay = dragPage.locator('.import-day').first();
 const dragCards = dragDay.locator('.plan-editor-exercise');
 const dragIdsBefore = await dragCards.evaluateAll(cards => cards.map(card => card.id));
-const sourceSummary = dragCards.nth(0).locator('.plan-editor-summary');
-const nextSummary = dragCards.nth(1).locator('.plan-editor-summary');
+const sourceSummary = dragCards.nth(0).locator('.plan-exercise-drag-handle');
+const nextSummary = dragCards.nth(1).locator('.plan-exercise-drag-handle');
 await sourceSummary.scrollIntoViewIfNeeded();
 const sourceBox = await sourceSummary.boundingBox();
 const nextBox = await nextSummary.boundingBox();
@@ -250,39 +250,23 @@ await openProfileArea(touchPage, 'program'); await touchPage.getByRole('button',
 await touchPage.getByRole('heading', { name: 'Edit your plan' }).waitFor();
 const touchCards = touchPage.locator('.import-day').first().locator('.plan-editor-exercise');
 const touchIdsBefore = await touchCards.evaluateAll(cards => cards.map(card => card.id));
-const touchSource = touchCards.first().locator('.plan-editor-summary');
-const touchTarget = touchCards.nth(1).locator('.plan-editor-summary');
+const touchSource = touchCards.first().locator('.plan-exercise-drag-handle');
+const touchTarget = touchCards.nth(1).locator('.plan-exercise-drag-handle');
 await touchSource.scrollIntoViewIfNeeded();
 const touchSourceBox = await touchSource.boundingBox();
 const touchTargetBox = await touchTarget.boundingBox();
-const fireTouch = async (type, x, y) => touchSource.evaluate((element, payload) => {
-  const touch = new Touch({
-    identifier: 42,
-    target: element,
-    clientX: payload.x,
-    clientY: payload.y,
-    screenX: payload.x,
-    screenY: payload.y,
-    pageX: payload.x + window.scrollX,
-    pageY: payload.y + window.scrollY,
-  });
-  const active = payload.type === 'touchend' || payload.type === 'touchcancel' ? [] : [touch];
-  element.dispatchEvent(new TouchEvent(payload.type, {
-    bubbles: true,
-    cancelable: true,
-    touches: active,
-    targetTouches: active,
-    changedTouches: [touch],
-  }));
-}, { type, x, y });
+const touchClient=await touchContext.newCDPSession(touchPage);
+const fireTouch=(type,x,y)=>touchClient.send('Input.dispatchTouchEvent',{type:({touchstart:'touchStart',touchmove:'touchMove',touchend:'touchEnd',touchcancel:'touchCancel'})[type],touchPoints:type==='touchend'||type==='touchcancel'?[]:[{x,y}]});
+await touchPage.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
 await fireTouch('touchstart', touchSourceBox.x + 24, touchSourceBox.y + touchSourceBox.height / 2);
-await touchPage.waitForTimeout(380);
-assert.equal(await touchPage.locator('.plan-reorder-preview').count(), 1, '350 ms stationary touch hold activates reorder');
+await fireTouch('touchmove', touchSourceBox.x + 24, touchSourceBox.y + touchSourceBox.height / 2 + 24);
+await touchPage.locator('.plan-reorder-preview').waitFor();
+assert.equal(await touchPage.locator('.plan-reorder-preview').count(), 1, 'vertical movement on the dedicated handle activates reorder');
 await fireTouch('touchmove', touchTargetBox.x + 24, touchTargetBox.y + touchTargetBox.height - 2);
 await fireTouch('touchend', touchTargetBox.x + 24, touchTargetBox.y + touchTargetBox.height - 2);
 await touchPage.waitForTimeout(50);
 const touchIdsAfter = await touchCards.evaluateAll(cards => cards.map(card => card.id));
-assert.notDeepEqual(touchIdsAfter, touchIdsBefore, 'touch long-press drag changes block order');
+assert.notDeepEqual(touchIdsAfter, touchIdsBefore, 'touch handle drag changes block order');
 assert.deepEqual([...touchIdsAfter].sort(), [...touchIdsBefore].sort(), 'touch drag preserves stable IDs');
 assert.equal(await touchPage.locator('.plan-editor-fields').count(), 0, 'touch drop does not also open the exercise editor');
 await touchContext.close();

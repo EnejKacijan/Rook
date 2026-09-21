@@ -1,5 +1,6 @@
 import {
   adaptTodayProposal,
+  adaptedTemplateForToday,
   compatibleReplacementCandidates,
   estimateSessionMinutes,
   exerciseCatalog,
@@ -14,6 +15,10 @@ import {
 } from "./domain.js";
 import { validateSupersetExercises } from "./supersets.js";
 import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
+import { flexibleOccurrenceForDate } from './flexibleWeek.js';
+import { availableCustomExerciseItems } from './customExercises.js';
+import {effectiveGymContext} from './gymProfiles.js';
+import {planEditorExerciseAllowed} from './exerciseEligibility.js';
 
 export const TODAY_ADJUSTMENT_VERSION = 1;
 
@@ -310,7 +315,7 @@ export function buildTodayAdjustment(
   },
 ) {
   const targetDate = isoDay(date);
-  if(combinedAdjustment(state))return {status:'unavailable',reason:'Finish or cancel the combined workout before preparing another adjustment.'};
+  if(combinedAdjustment(state) || state.todayAdaptation?.mode==='repeat')return {status:'unavailable',reason:'Finish or cancel the pending workout before preparing another adjustment.'};
   if (targetDate !== isoDay())
     return { status: "unavailable", reason: "Adjust Today is available for the current day only." };
   if (state.activeWorkout || state.activeOptionalSession)
@@ -459,7 +464,7 @@ export function resolveTodayAdjustment(
 }
 
 export function todayAdjustmentConflict(state, proposal) {
-  if(combinedAdjustment(state))return 'workout-changed';
+  if(combinedAdjustment(state)||state.todayAdaptation?.mode==='repeat')return 'workout-changed';
   if (!proposal || proposal.date !== isoDay()) return "workout-changed";
   if (state.activeWorkout || state.activeOptionalSession) return "workout-started";
   const current = plannedWorkoutForDate(state, new Date(`${proposal.date}T12:00:00`));
@@ -474,7 +479,7 @@ export function todayAdjustmentConflict(state, proposal) {
   return null;
 }
 
-function adjustedWorkoutIsValid(proposal) {
+function adjustedWorkoutIsValid(proposal, state) {
   const exercises = proposal?.workout?.exercises;
   if (!Array.isArray(exercises) || !exercises.length || proposal.unresolved?.length)
     return false;
@@ -487,7 +492,7 @@ function adjustedWorkoutIsValid(proposal) {
     if (
       !exercise?.id ||
       seenEntries.has(exercise.id) ||
-      seenExercises.has(exercise.exerciseId) ||
+      proposal.mode!=='manual'&&seenExercises.has(exercise.exerciseId) ||
       !Array.isArray(exercise.sets) ||
       !exercise.sets.length ||
       exercise.sets.length > 20 ||
@@ -498,7 +503,12 @@ function adjustedWorkoutIsValid(proposal) {
     )
       return false;
     const original = originalByEntry.get(exercise.id);
-    if (!exerciseCatalog[exercise.exerciseId] && original?.exerciseId !== exercise.exerciseId)
+    if(proposal.mode==='manual'){
+      const item=exerciseCatalog[exercise.exerciseId]||availableCustomExerciseItems(state).find(item=>item.id===exercise.exerciseId);
+      if(item&&!planEditorExerciseAllowed(item,effectiveGymContext(state,{adjustment:proposal}).profile))return false;
+    }
+    if (!exerciseCatalog[exercise.exerciseId] && original?.exerciseId !== exercise.exerciseId &&
+      !(proposal.mode==='manual'&&availableCustomExerciseItems(state).some(item=>item.id===exercise.exerciseId)))
       return false;
     seenEntries.add(exercise.id);
     seenExercises.add(exercise.exerciseId);
@@ -509,7 +519,8 @@ function adjustedWorkoutIsValid(proposal) {
 export function applyTodayAdjustment(state, proposal, appliedAt = Date.now()) {
   const conflict = todayAdjustmentConflict(state, proposal);
   if (conflict) return { status: "conflict", reason: conflict, state };
-  if (!proposal.meaningful || !adjustedWorkoutIsValid(proposal))
+  if (proposal.mode==='manual' && manualTodayEligibility(state,proposal.date)) return {status:'conflict',reason:'workout-changed',state};
+  if (!proposal.meaningful || !adjustedWorkoutIsValid(proposal,state))
     return { status: "invalid", reason: "invalid-adjustment", state };
   const next = clone(state);
   next.todayAdaptation = {
@@ -520,6 +531,29 @@ export function applyTodayAdjustment(state, proposal, appliedAt = Date.now()) {
     originalSessionIdentity: `${proposal.programDayId}:${proposal.date}`,
   };
   return { status: "applied", state: next };
+}
+
+export function manualTodayEligibility(state,date=isoDay()) {
+  if(date!==isoDay())return 'Prepare the workout on its scheduled day, or move it to today first.';
+  if(state.activeWorkout||state.activeOptionalSession)return 'Finish the active session before preparing this workout.';
+  if(combinedAdjustment(state)||state.todayAdaptation?.mode==='repeat')return 'Finish or cancel the pending workout first.';
+  const workout=plannedWorkoutForDate(state,new Date(`${date}T12:00:00`));
+  const occurrence=workout&&flexibleOccurrenceForDate(state,date,workout.id);
+  if(!workout||!occurrence||!['planned','missed'].includes(occurrence.status))return 'This occurrence is no longer available to prepare.';
+  return null;
+}
+
+// A draft of the existing todayAdaptation transaction, never a second store.
+export function createManualTodayPreparation(state,date=isoDay()) {
+  const error=manualTodayEligibility(state,date);if(error)throw Error(error);
+  const original=plannedWorkoutForDate(state,new Date(`${date}T12:00:00`));
+  const workout=clone(adaptedTemplateForToday(state,new Date(`${date}T12:00:00`)));
+  delete workout.todayOnlyAdjustment;delete workout.adapted;
+  return {schemaVersion:TODAY_ADJUSTMENT_VERSION,id:uid('today-adjustment-proposal'),date,programDayId:original.id,mode:'manual',
+    baseProgramVersion:Number(state.program?.version||1),baseWorkoutFingerprint:todayWorkoutFingerprint(original,state.program?.version),
+    replacesAdaptationId:state.todayAdaptation?.id||null,originalWorkout:clone(original),workout,
+    temporaryEquipment:state.todayAdaptation?.temporaryEquipment||null,gymProfileId:state.todayAdaptation?.gymProfileId||null,
+    gymProfileName:state.todayAdaptation?.gymProfileName||null,changes:[],unresolved:[],meaningful:true};
 }
 
 export function restoreOriginalTodayWorkout(state, date = new Date()) {

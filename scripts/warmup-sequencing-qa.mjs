@@ -111,84 +111,28 @@ assert.equal(
   "the expanded checklist does not repeat a vague timed practice block",
 );
 const generalStep = warmup.locator(".warmup-checklist-section .warmup-check-row").first();
-assert.equal(await generalStep.getAttribute("aria-pressed"), "false");
+assert.equal(await generalStep.getAttribute("aria-checked"), "false");
 await generalStep.click();
-assert.equal(await generalStep.getAttribute("aria-pressed"), "true");
+assert.equal(await generalStep.getAttribute("aria-checked"), "true");
 assert.equal(await warmup.locator(".warmup-ramp .warmup-check-row.current").count(), 1);
 await page.waitForTimeout(250);
 await page.screenshot({ path: output("00-first-exercise-expanded-dark.png") });
-await page.evaluate(() => {
-  const startedAt = performance.now();
-  window.__warmupRemovalDuration = new Promise((resolve) => {
-    const observer = new MutationObserver(() => {
-      if (document.querySelector(".workout-warmup")) return;
-      observer.disconnect();
-      resolve(performance.now() - startedAt);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
-});
-await page.evaluate(() => {
-  window.__warmupFrames = [];
-  const sample = () => {
-    const node = document.querySelector('.workout-warmup');
-    if (!node) return;
-    if (node.classList.contains('completing')) {
-      const status = node.querySelector('.warmup-complete-status');
-      const details = node.querySelector('.warmup-details');
-      window.__warmupFrames.push({
-        height: node.getBoundingClientRect().height,
-        status: !!status && getComputedStyle(status).opacity === '1',
-        retained: !!details && details.textContent.includes('RAMP-UP'),
-        opacity: getComputedStyle(node).opacity,
-      });
-    }
-    requestAnimationFrame(sample);
-  };
-  requestAnimationFrame(sample);
-});
-await warmup.getByRole("button", { name: "FINISH WARM-UP" }).click();
-await warmup.getByRole("status").getByText("Warm-up complete").waitFor();
-assert.equal(await warmup.evaluate((element) => element.classList.contains("completing")), true);
-assert.equal(await warmup.evaluate((element) => element.classList.contains("dismissing")), false);
-assert.equal(
-  await page.evaluate(() => {
-    const state = JSON.parse(localStorage.getItem("lift-v2-state"));
-    return state.activeWorkout.warmup.stages[0].completed;
-  }),
-  true,
-  "warm-up completion persists before the visual acknowledgment ends",
-);
-assert.equal(
-  await warmup.locator(".warmup-details").evaluate(element => element.inert),
-  true,
-  "completion feedback cannot be triggered repeatedly",
-);
-await page.screenshot({ path: output("01-warmup-complete-ack-dark.png") });
-await page.waitForFunction(() => document.querySelector('.workout-warmup')?.classList.contains('dismissing'));
-await page.screenshot({ path: output("01-warmup-mid-collapse-dark.png") });
-await warmup.waitFor({ state: "detached" });
-const frames = await page.evaluate(() => window.__warmupFrames);
-assert.ok(frames.length > 2, 'sample actual completion frames');
-assert.ok(frames.every(frame => frame.status && frame.retained && frame.opacity === '1'), 'visible acknowledgement and checklist remain throughout collapse');
-assert.ok(frames.some(frame => frame.height < frames[0].height - 20), 'height collapses together with retained content');
-const completionDuration = await page.evaluate(() => window.__warmupRemovalDuration);
-assert.ok(completionDuration >= 350, `completion acknowledgment was only ${completionDuration}ms`);
-assert.ok(completionDuration < 900, `completion acknowledgment took ${completionDuration}ms`);
-await page.waitForTimeout(30);
-assert.equal(
-  await page.locator(".sets .set-row:not(.set-done) .check").first().evaluate(
-    (button) => button === document.activeElement,
-  ),
-  true,
-  "finishing warm-up moves focus to the first working-set action",
-);
+assert.equal(await warmup.getByRole('button', {name:'Skip remaining'}).count(), 1);
+for (const step of await warmup.locator('.warmup-check-row[aria-checked="false"]').all()) await step.click();
+assert.equal(await warmup.locator('.workout-warmup-toggle').getAttribute('aria-expanded'), 'true');
+await warmup.getByRole('button', {name:'Continue to workout'}).click();
+await warmup.locator('.warmup-details').waitFor({state:'detached'});
+assert.equal(await warmup.locator('.workout-warmup-toggle').innerText(), '✓Warm-up complete');
+assert.equal(await warmup.count(), 1, 'completed summary remains reviewable');
+assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.warmup.stages[0].completed), true);
+assert.equal(await warmup.locator('.workout-warmup-toggle').evaluate(button => button === document.activeElement), true);
 await page.screenshot({ path: output("01-first-exercise-complete-dark.png") });
 
 await page
-  .locator(".up-next button")
+  .locator(".up-next .swipe-up-next-body")
   .filter({ hasText: "Chest Supported Row" })
   .click();
+await page.locator(".workout-motion-paint").waitFor({state:"detached"});
 await page.locator(".workout-warmup").getByText("For Chest Supported Row").waitFor();
 await page.locator(".workout-warmup-toggle").click();
 assert.equal(await page.locator(".workout-warmup .warmup-checklist-section").count(), 0);
@@ -196,10 +140,11 @@ assert.equal(
   await page.locator(".workout-warmup").getByText(/Chest Supported Row · RAMP-UP/i).count(),
   1,
 );
-await page.locator(".workout-warmup").getByRole("button", { name: "FINISH RAMP-UP" }).waitFor();
+await page.locator(".workout-warmup").getByRole("button", { name: "Skip warm-up" }).waitFor();
 await page.screenshot({ path: output("02-second-exercise-ramp-dark.png") });
 
-await page.locator(".up-next button").filter({ hasText: "Leg Press" }).click();
+await page.locator(".up-next .swipe-up-next-body").filter({ hasText: "Leg Press" }).click();
+await page.locator(".workout-motion-paint").waitFor({state:"detached"});
 assert.equal(await page.locator(".workout-warmup").count(), 0);
 assert.equal(
   await page.getByRole("heading", { name: exerciseCatalog["leg-press"].name }).count(),
@@ -241,7 +186,7 @@ assert.equal(
 await skipPage.screenshot({ path: output("03-expanded-light-320.png") });
 await skipPage.locator(".workout-warmup-toggle").click();
 await skipPage.locator(".workout-warmup").getByRole("button", { name: "Skip" }).click();
-await skipPage.locator(".workout-warmup").waitFor({ state: "detached" });
+await skipPage.locator(".workout-warmup-toggle").getByText("Warm-up skipped").waitFor();
 assert.equal(await skipPage.locator(".exercise-heading-art-button").count(), 1);
 await skipPage.screenshot({ path: output("04-warmup-skipped-light-320.png") });
 assert.deepEqual(skipErrors, []);
@@ -271,23 +216,10 @@ await reducedPage.route("**/api/ai/status", (route) =>
 );
 await openActive(reducedPage);
 await reducedPage.locator(".workout-warmup-toggle").click();
-await reducedPage.evaluate(() => {
-  const startedAt = performance.now();
-  window.__warmupRemovalDuration = new Promise((resolve) => {
-    const observer = new MutationObserver(() => {
-      if (document.querySelector(".workout-warmup")) return;
-      observer.disconnect();
-      resolve(performance.now() - startedAt);
-    });
-    observer.observe(document.body, { childList: true, subtree: true });
-  });
-});
-await reducedPage.getByRole("button", { name: "FINISH WARM-UP" }).click();
-assert.equal(await reducedPage.locator(".warmup-complete-status").count(), 0);
-await reducedPage.locator(".workout-warmup").waitFor({ state: "detached" });
-const reducedDuration = await reducedPage.evaluate(() => window.__warmupRemovalDuration);
-await reducedPage.screenshot({ path: output("reduced-motion-settled.png") });
-assert.ok(reducedDuration < 400, `reduced-motion acknowledgment took ${reducedDuration}ms`);
+await reducedPage.getByRole('button', {name:'Skip warm-up'}).click();
+assert.equal(await reducedPage.locator('.warmup-details').count(), 0);
+assert.equal(await reducedPage.locator('.workout-warmup-toggle').innerText(), 'Warm-up skipped');
+await reducedPage.screenshot({path:output('reduced-motion-settled.png')});
 assert.deepEqual(reducedErrors, []);
 await reducedContext.close();
 
@@ -331,5 +263,5 @@ await premiumContext.close();
 
 await browser.close();
 console.log(
-  "Warm-up sequencing QA passed: the first exercise gets a compact actionable checklist, completion advances state and working-set focus, the second distinct compound gets just-in-time ramp sets, and Skip stays clean at 320 px.",
+  "Warm-up sequencing QA passed: the first exercise gets a compact actionable checklist, explicit completion retains a reviewable summary, the second distinct compound gets just-in-time ramp sets, and Skip stays clean at 320 px.",
 );

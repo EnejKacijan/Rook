@@ -26,24 +26,22 @@ for(const width of before?[390]:[320,390,430]) for(const style of ['standard','p
  assert.equal(await page.locator('html').getAttribute('data-appearance'),appearance);
  assert.equal(await page.locator('html').getAttribute('data-style'),style);
  const row=page.locator('.set-row').first();
- console.log(width,style,appearance,await row.locator('select').evaluate(el=>({font:getComputedStyle(el).fontSize,height:el.getBoundingClientRect().height})));
+ console.log(width,style,appearance,await row.locator('.rir-trigger').evaluate(el=>({font:getComputedStyle(el).fontSize,height:el.getBoundingClientRect().height})));
  await page.screenshot({path:`${output}/${before?'before':'after'}-${width}-${style}-${appearance}.png`});
  if(!before){
-   assert.equal(await row.getByRole('button',{name:'Log set 1',exact:true}).innerText(),'✓');
-   assert.equal(await page.locator('.set-done-heading').innerText(),'DONE');
+   assert.equal(await row.getByRole('button',{name:'Log set 1',exact:true}).locator('.check-mark svg path').count(),1);
+   assert.equal(await page.locator('.set-done-heading').count(),0,'the current logger omits the redundant DONE heading');
    assert.equal(await page.locator('.check-log').count(),0);
    const check=row.locator('.check'), future=page.locator('.set-row').nth(1).locator('.check');
-   assert.equal(await future.isDisabled(),true);assert.equal(await future.getAttribute('aria-label'),'Log set 2');assert.equal(await future.innerText(),'✓');
-   const geometry=()=>row.locator('.stepper, .rir-native, .check').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,width:r.width,height:r.height};}));
-   const beforeGeometry=await geometry();const checkBox=await check.boundingBox(),headingBox=await page.locator('.set-done-heading').boundingBox();
-   assert.ok(Math.abs(checkBox.x+checkBox.width/2-headingBox.x-headingBox.width/2)<2);
-   assert.ok(headingBox.width>=await page.locator('.set-done-heading').evaluate(n=>{const r=document.createRange();r.selectNodeContents(n);return r.getBoundingClientRect().width;}));
-   assert.equal(await row.locator('.rir-value').innerText(),'RIR');
-   await row.locator('select').selectOption('2');
-   assert.equal(await row.locator('.rir-value').innerText(),'2 RIR');
-   assert.ok(await row.locator('select').evaluate(el=>parseFloat(getComputedStyle(el).fontSize)>=16));
+   assert.equal(await future.isDisabled(),true);assert.equal(await future.getAttribute('aria-label'),'Log set 2');assert.equal(await future.locator('.check-mark svg path').count(),1);
+   const geometry=()=>row.locator('.stepper, .rir-trigger, .check').evaluateAll(nodes=>nodes.map(n=>{const r=n.getBoundingClientRect();return {x:r.x,width:r.width,height:r.height};}));
+   const beforeGeometry=await geometry();
+   assert.equal(await row.locator('.rir-value').innerText(),'—');
+   await row.locator('.rir-trigger').click();await page.getByRole('button',{name:'2 RIR',exact:true}).click();await page.locator('.rir-sheet').waitFor({state:'detached'});
+   assert.equal(await row.locator('.rir-value').innerText(),'2');
+   assert.ok(await row.locator('.rir-trigger').evaluate(el=>el.getBoundingClientRect().height>=44));
    const label=row.locator('.stepper-empty-label');
-   assert.equal(await label.innerText(),'Bodyweight');
+   assert.equal(await label.innerText(),'BW');
    assert.ok(await label.evaluate(el=>{const a=el.getBoundingClientRect(),b=el.parentElement.getBoundingClientRect();return Math.abs(a.y+a.height/2-b.y-b.height/2)<1;}));
    await check.evaluate(button=>{button.click();button.click();});
    assert.equal(await row.getByRole('button',{name:'Undo logged set 1'}).getAttribute('aria-pressed'),'true');
@@ -56,7 +54,7 @@ for(const width of before?[390]:[320,390,430]) for(const style of ['standard','p
    await page.screenshot({path:`${output}/logged-${width}-${style}-${appearance}.png`});
    await page.waitForTimeout(750); // Existing double-tap guard, not a UI delay regression.
    await row.getByRole('button',{name:'Undo logged set 1'}).click();
-   assert.equal(await row.getByRole('button',{name:'Log set 1'}).innerText(),'✓');
+   assert.equal(await row.getByRole('button',{name:'Log set 1'}).locator('.check-mark svg path').count(),1);
    await check.focus();await check.press('Space');
    assert.equal(await row.locator('.check').getAttribute('aria-label'),'Undo logged set 1');
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);

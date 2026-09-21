@@ -1,3 +1,4 @@
+import {openFirstRunLanding,chooseOnboardingAnswer} from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir, writeFile } from "node:fs/promises";
 import { chromium } from "playwright-core";
@@ -54,7 +55,7 @@ async function contextFor({
   );
   await page.goto("http://127.0.0.1:4173", {
     waitUntil: "domcontentloaded",
-  });
+  }); if(!state.profile.onboardingComplete)await openFirstRunLanding(page);
   return { context, page, errors };
 }
 
@@ -65,8 +66,8 @@ async function reachPriorities(page, { days = 4, minutes = 60 } = {}) {
   await page.getByRole("combobox", { name: "Age range" }).click();
   await page.getByRole("option", { name: "18–29" }).click();
   await next();
-  await page.getByRole("button", { name: "Build muscle", exact: true }).click();
-  await page.getByRole("button", { name: /^Intermediate/ }).click();
+  await chooseOnboardingAnswer(page,'Build muscle',3);
+  await chooseOnboardingAnswer(page,/^Intermediate/,4);
   await page.getByRole("button", { name: `${days} days`, exact: true }).click();
   const dayOptions = page.locator(".schedule-days .onboarding-option");
   for (const index of [0, 1, 3, 5].slice(0, days))

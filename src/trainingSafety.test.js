@@ -22,6 +22,14 @@ const catalog = Object.values(exerciseCatalog);
 const compile = (text, confirmedScopeHash = null) =>
   compileTrainingSafety(text, catalog, { confirmedScopeHash });
 
+it.each(['no chest exercises','Avoid all chest movements'])('enforces %s for canonical exercises and preserves unrelated movements', text => {
+  const safety=compile(text);
+  expect(safety.status).toBe('constraints_active');
+  expect(localTrainingSafetyResolution(text,catalog).status).toBe('resolved');
+  for(const id of ['pec-deck','cable-fly','barbell-bench-press'])expect(exerciseAllowedByTrainingSafety(exerciseCatalog[id],safety)).toBe(false);
+  for(const id of ['barbell-row','reverse-pec-deck'])expect(exerciseAllowedByTrainingSafety(exerciseCatalog[id],safety)).toBe(true);
+});
+
 function profile(avoid = "") {
   const state = blankState();
   return {

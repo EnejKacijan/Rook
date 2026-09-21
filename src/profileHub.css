@@ -19,3 +19,17 @@
 .profile-manage .list-row > span:first-child { min-width: 0; }
 .profile-manage .list-row small { line-height: 1.45; }
 .profile-screen :is(.profile-program-entry,.profile-management-back):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; }
+.profile-screen .profile-troubleshooting { margin-top: 24px; }
+.profile-screen .storage-local-copy-warning,
+.storage-diagnostics-privacy,
+.storage-diagnostics-feedback { color: var(--rook-secondary); font-size: 13px; line-height: 1.5; }
+.profile-screen .storage-local-copy-warning { margin: 12px 0 0; }
+.storage-status-summary { margin: 8px 0 20px; }
+.storage-status-summary > div { padding: 14px 0; border-bottom: 1px solid var(--rook-border); }
+.storage-status-summary dt { margin: 0 0 6px; }
+.storage-status-summary dd { margin: 0; color: var(--rook-text); font-size: 16px; line-height: 1.4; font-weight: 600; }
+.storage-diagnostics-screen > .button { width: 100%; min-height: 48px; }
+.storage-diagnostics-screen .storage-diagnostics { margin-top: 12px; }
+.storage-diagnostics-screen .storage-diagnostics summary { text-decoration: none; }
+.storage-diagnostics-screen .storage-diagnostics pre { user-select: text; }
+.storage-diagnostics-screen .storage-diagnostics :is(summary,pre):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; }

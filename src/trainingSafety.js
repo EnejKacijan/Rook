@@ -186,6 +186,8 @@ function unresolvedAvoidanceClauseText(sourceText, catalog) {
     "lower body movements",
     "upper body exercises",
     "upper body movements",
+    "chest exercises",
+    "chest movements",
     "overhead pressing",
     "bench presses",
     "bench press",
@@ -274,6 +276,12 @@ function explicitAvoidance(text, catalog) {
   if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? upper body (?:exercises|movements)\b/.test(operatorText)) {
     patterns.push(...UPPER_PATTERNS);
     labels.push("Upper-body exercises");
+  }
+  if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? chest (?:exercises|movements)\b/.test(operatorText)) {
+    // Use confirmed catalogue muscles, including aliases such as Chest Fly →
+    // Pec Deck. A canonical match must not bypass the saved chest restriction.
+    exerciseIds.push(...(catalog || []).filter(item => item.muscles?.some(muscle => normalize(muscle) === 'chest')).map(item => item.id));
+    labels.push('Chest exercises');
   }
   if (/\b(?:avoid|avoiding|no|cannot|cant|dont do|do not do|skip|exclude|never do)(?: any| all)? bench press(?:es)?\b/.test(operatorText)) {
     nameTokens.push("bench press");

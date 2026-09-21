@@ -213,7 +213,7 @@ await configured.page.getByRole("button", { name: "Configure bars and plates" })
 await configured.page.getByRole("radio", { name: /15 kg bar/ }).click();
 await configured.page.getByRole("button", { name: "SAVE PLATE SETUP" }).click();
 await configured.page.getByText("Bar: 15 kg", { exact: true }).waitFor();
-await configured.page.getByRole("button", { name: "Close" }).click();
+await configured.page.getByRole("button", { name: "Close", exact: true }).click();
 await configured.page.reload({ waitUntil: "networkidle" });
 await configured.page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 await configured.page.getByRole("button", { name: /Open plate calculator/ }).click();

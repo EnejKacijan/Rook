@@ -44,7 +44,7 @@ async function open(state, width) {
 async function checkRest(page, count) {
   const rest = page.locator('.rest-day-state'); await rest.waitFor();
   assert.equal(await rest.getByRole('button', { name: 'Start freestyle workout', exact: true }).count(), count ? 0 : 1);
-  assert.equal(await rest.getByText('Choose exercises as you go. Your plan won’t change.', { exact: true }).count(), count ? 0 : 1);
+  assert.equal(await rest.getByText('Choose exercises as you go. Your plan won’t change.', { exact: true }).count(), 0);
   assert.equal(await rest.locator('.today-completed-workouts > .list-row').count(), count);
   assert.equal(await rest.locator('.today-completed-workouts > .eyebrow').count(), count > 1 ? 1 : 0);
   assert.equal(await rest.getByRole('button', { name: 'Train today instead', exact: true }).count(), 1);

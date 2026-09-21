@@ -16,7 +16,7 @@ try{for(const [width,appearance,style] of [[320,'dark','standard'],[390,'light',
  const stored=()=>page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('lift-v2-state'));return {program:s.program,workouts:s.workouts,todayAdaptation:s.todayAdaptation,activeWorkout:s.activeWorkout};});
  const before=await stored();await entry.click();await page.waitForTimeout(350);
  const cards=sheet.locator('.adjust-option-list > button'),note=sheet.locator('.adjust-today-note');
- assert.equal(await cards.count(),4);
+ assert.equal(await cards.count(),5);assert.equal(await sheet.getByRole('button',{name:/Edit today.s exercises/}).count(),1);
  const metrics=await note.evaluate(e=>{const s=getComputedStyle(e);return {tag:e.tagName,tab:e.tabIndex,role:e.getAttribute('role'),bg:s.backgroundColor,border:s.borderTopWidth,left:e.getBoundingClientRect().left,cardLeft:e.previousElementSibling.getBoundingClientRect().left};});
  assert.equal(metrics.tag,'P');assert.equal(metrics.tab,-1);assert.equal(metrics.role,null);assert.equal(metrics.bg,'rgba(0, 0, 0, 0)');assert.equal(metrics.border,'0px');assert.equal(metrics.left,metrics.cardLeft);
  const geometry=await sheet.evaluate(s=>{const cards=()=>[...s.querySelectorAll('.choice-row')].map(e=>({width:e.offsetWidth,height:e.offsetHeight,top:e.offsetTop-s.querySelector('.choice-row').offsetTop}));const after=cards(),n=s.querySelector('.adjust-today-note');n.style.cssText='padding:12px 14px;border:1px solid transparent;border-radius:13px;background:#eee';const before=cards();n.removeAttribute('style');return {before,after};});assert.deepEqual(geometry.after,geometry.before,'option dimensions and internal spacing unchanged');

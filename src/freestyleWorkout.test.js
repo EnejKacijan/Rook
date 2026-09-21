@@ -148,13 +148,13 @@ describe('freestyle sessions', () => {
     expect(copyFreestylePrevious(state, e.id, e.sets[0].id, 0)).toBe(state);
     expect(cancelUnloggedFreestyle(state)).toBe(state);
   });
-  it('never marks the scheduled calendar slot complete, even after multiple freestyles', () => {
+  it('marks factual calendar activity without completing the planned occurrence after freestyles', () => {
     let state = fixture();
     for (let i = 0; i < 2; i++) {
       state = add(startFreestyleWorkout(state)); Object.assign(state.activeWorkout.exercises[0].sets[0], { weight: 80, reps: 8, completed: true }); state = completeWorkout(state);
     }
     expect(state.workouts).toHaveLength(2);
-    expect(calendarDayStates(state, [isoDay()])[isoDay()]).toMatchObject({ planned: true, complete: false });
+    expect(calendarDayStates(state, [isoDay()])[isoDay()]).toMatchObject({ planned: true, complete: true });
   });
   it('round-trips freestyle history through the unchanged backup format', async () => {
     let state = add(startFreestyleWorkout(fixture()));

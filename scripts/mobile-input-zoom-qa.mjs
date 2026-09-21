@@ -88,8 +88,10 @@ try {
       const viewport = await page.locator('meta[name="viewport"]').getAttribute("content");
       assert.ok(!/maximum-scale|user-scalable/iu.test(viewport || ""), "pinch zoom remains available");
 
-      await page.getByRole("button", { name: "BUILD MY PLAN" }).click();
+      // A persisted, incomplete blank state resumes personalization directly.
+      // Landing is the empty-storage path, not this themed first-run fixture.
       const firstName = page.getByRole("textbox", { name: "First name" });
+      await firstName.waitFor({ state: "visible" });
       assert.equal(await firstName.evaluate((node) => getComputedStyle(node).fontSize), "16px");
       await firstName.focus();
       await firstName.fill("Enej");
@@ -108,7 +110,9 @@ try {
       await page.getByRole("button", { name: "PROFILE", exact: true }).click();
       await openProfileArea(page, 'program'); await page.getByRole("button", { name: /^Edit plan/ }).click();
       const sheet = page.locator(".edit-plan-screen");
-      await sheet.getByRole("button", { name: "+ Add exercise", exact: true }).first().click();
+      // The first fixture workout is already at the eight-exercise limit.
+      // Exercise the real add/search flow on a workout that permits additions.
+      await sheet.getByRole("button", { name: "+ Add exercise", exact: true }).and(sheet.locator(':enabled')).first().click();
       const search = sheet.getByRole("searchbox", { name: /Search exercise for/ });
       assert.equal(await search.evaluate((node) => getComputedStyle(node).fontSize), "16px");
       await search.focus();

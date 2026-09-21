@@ -1,0 +1,52 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>ROOK isolated data reliability QA</title></head><body>
+<section id="setup"><h1>Isolated synthetic data reliability review</h1><p>Disposable fixture only, restricted to 127.0.0.1:4198.</p><label>Scenario <select id="scenario"><option>normal</option><option>fresh</option><option>read-failure</option><option>corrupt</option><option>missing-backup</option><option>missing-all</option><option>explicit-delete</option><option>newer-schema</option><option>migration</option><option>bad-backup</option><option>journal</option><option>legacy-evidence</option><option>inconsistent</option><option>quota</option><option>network-failure</option></select></label><label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label><button id="seed">START SYNTHETIC REVIEW</button></section>
+<div id="root"></div><aside id="qa" style="padding:16px;background:#eee;color:#111"><button id="proof">SHOW STORAGE PROOF</button><button id="unblock">ALLOW READS / WRITES</button><a href="/scripts/data-reliability-review.html">Choose another scenario</a><pre id="evidence" style="white-space:pre-wrap;overflow-wrap:anywhere"></pre></aside>
+<script type="module">
+import {dataReliabilityFixture} from '/src/dataReliability.fixture.js';
+import {serializeState,hydrateStoredState} from '/src/domain.js';
+import {PRIMARY_KEY as P,INSTALL_META_KEY as M,RECOVERY_KEY as B,JOURNAL_KEY as J,persistLocalState,deleteLocalState,forgetStorageSession} from '/src/localStateStorage.js';
+if(!import.meta.env.DEV||location.hostname!=='127.0.0.1'||location.port!=='4198')throw Error('Isolated QA origin required');
+const params=new URLSearchParams(location.search),scenario=params.get('scenario')||'normal',theme=params.get('theme')||'light';
+if(!params.has('run')){
+ document.querySelector('#qa').hidden=true;
+ document.querySelector('#seed').onclick=async()=>{
+  const mode=document.querySelector('#scenario').value,t=document.querySelector('#theme').value;
+  for(const key of [P,M,B,J,'lift-funnel-events-v1','lift-funnel-once-v1'])localStorage.removeItem(key);
+  forgetStorageSession(localStorage);
+  const state=dataReliabilityFixture();state.ai.planUpgradeDismissed=true;
+  Object.assign(state.profile,{appearancePreference:t.endsWith('dark')?'dark':'light',stylePreference:t.startsWith('premium')?'premium':'standard',themePreference:t.startsWith('premium')?'premium':t});
+  const original=serializeState(state);sessionStorage.setItem('qa-original',original);
+  if(mode!=='fresh'){
+   localStorage.setItem(P,original);state.activeWorkout.exercises[0].sets[1].reps=10;
+   if(!persistLocalState(serializeState(state),{storage:localStorage,hydrate:hydrateStoredState,reason:'test-fixture'}))throw Error('Fixture failed');
+  }
+  if(mode==='corrupt')localStorage.setItem(P,'!'+localStorage.getItem(P).slice(1));
+  if(['missing-backup','missing-all','bad-backup','legacy-evidence'].includes(mode))localStorage.removeItem(P);
+  if(['missing-all','legacy-evidence'].includes(mode))localStorage.removeItem(B);
+  if(mode==='bad-backup')localStorage.setItem(B,'{broken');
+  if(mode==='newer-schema')localStorage.setItem(P,JSON.stringify({...state,schemaVersion:99}));
+  if(mode==='migration'){state.program.days=[];localStorage.setItem(P,serializeState(state));}
+  if(mode==='inconsistent'){state.profile.onboardingComplete=false;localStorage.setItem(P,serializeState(state));}
+  if(mode==='journal')localStorage.setItem(J,'{broken journal');
+  if(mode==='legacy-evidence'){localStorage.removeItem(M);localStorage.setItem('lift-funnel-once-v1','["first_workout_completed"]');}
+  if(mode==='explicit-delete')await deleteLocalState({storage:localStorage,reason:'delete-local-data:user-confirmed'});
+  sessionStorage.setItem('qa-before',localStorage.getItem(P)??'__missing__');
+  sessionStorage.setItem('qa-backup-before',localStorage.getItem(B)??'__missing__');
+  location.href=`/scripts/data-reliability-review.html?run=1&scenario=${mode}&theme=${t}`;
+ };
+}else{
+ document.querySelector('#setup').remove();
+ Object.assign(document.documentElement.dataset,{appearance:theme.endsWith('dark')?'dark':'light',style:theme.startsWith('premium')?'premium':'standard',theme:theme.startsWith('premium')?'premium':theme});
+ let blocked=true;const events=[],get=Storage.prototype.getItem,set=Storage.prototype.setItem,remove=Storage.prototype.removeItem;
+ Storage.prototype.getItem=function(key){if(this===localStorage&&key===P&&blocked&&scenario==='read-failure')throw new DOMException('Synthetic read failure','SecurityError');return get.call(this,key);};
+ Storage.prototype.setItem=function(key,value){if(this===localStorage){events.push({operation:'set',key});if(key===P&&blocked&&scenario==='quota')throw new DOMException('Synthetic quota','QuotaExceededError');}return set.call(this,key,value);};
+ Storage.prototype.removeItem=function(key){if(this===localStorage)events.push({operation:'remove',key});return remove.call(this,key);};
+ if(scenario==='network-failure'){const nativeFetch=window.fetch;window.fetch=(input,options)=>String(input).includes('/api/')?Promise.reject(new TypeError('Synthetic offline API')):nativeFetch(input,options);}
+ document.querySelector('#unblock').onclick=()=>{blocked=false;document.querySelector('#unblock').textContent='READS / WRITES ALLOWED';};
+ document.querySelector('#proof').onclick=()=>{
+  const raw=get.call(localStorage,P),backup=get.call(localStorage,B);let state;try{state=JSON.parse(raw);}catch{}
+  document.querySelector('#evidence').textContent=JSON.stringify({scenario,primaryUnchanged:(raw??'__missing__')===sessionStorage.getItem('qa-before'),backupUnchanged:(backup??'__missing__')===sessionStorage.getItem('qa-backup-before'),restoredOriginal:raw===sessionStorage.getItem('qa-original'),primaryPresent:raw!==null,primaryWrites:events.filter(e=>e.key===P&&e.operation==='set').length,deletes:events.filter(e=>e.operation==='remove'),workouts:state?.workouts?.length,activeId:state?.activeWorkout?.id,pendingReps:state?.activeWorkout?.exercises?.[0]?.sets?.[1]?.reps,loggedReps:state?.activeWorkout?.exercises?.[0]?.sets?.[0]?.reps,coachMessages:state?.conversations?.length},null,2);
+ };
+ await import('/src/main.jsx');
+}
+</script></body></html>

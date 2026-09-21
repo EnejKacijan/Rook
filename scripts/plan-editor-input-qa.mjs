@@ -8,7 +8,7 @@ await mkdir(output,{recursive:true});
 const browser = await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
 try {
 for (const width of [320,390]) for (const style of ['standard','premium']) for (const appearance of ['light','dark']) {
-  const state=createReturningUserFixture(3); state.activeWorkout=null;
+  const state=createReturningUserFixture(3); state.activeWorkout=null;state.profile.sessionMinutes=45;for(const day of state.program.days)day.exercises=day.exercises.slice(0,6);
   Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'});
   await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
@@ -45,19 +45,21 @@ for (const width of [320,390]) for (const style of ['standard','premium']) for (
     assert.equal(JSON.stringify((await stored()).program),original,'numeric changes are draft only');
   };
   const testReorder=async(name)=>{
+    const mode=page.getByRole('button',{name:'Reorder',exact:true});const explicit=await mode.isVisible();if(explicit)await mode.click();
     const day=page.locator('.import-day').first(), cards=day.locator('.plan-editor-exercise');
     const before=await cards.evaluateAll(es=>es.map(e=>e.id));
-    const handle=cards.first().locator('.plan-editor-summary');
-    if(await handle.getAttribute('aria-expanded')==='true')await handle.click();
+    const summary=cards.first().locator('.plan-editor-summary');
+    if(await summary.getAttribute('aria-expanded')==='true')await summary.click();
+    const handle=cards.first().locator('.plan-exercise-drag-handle');
     await page.waitForTimeout(250); await handle.scrollIntoViewIfNeeded();
-    const a=await handle.boundingBox(), b=await cards.nth(1).locator('.plan-editor-summary').boundingBox();
-    await page.mouse.move(a.x+24,a.y+a.height/2); await page.mouse.down(); await page.mouse.move(a.x+24,a.y+a.height/2+8,{steps:2});
+    const a=await handle.boundingBox(), b=await cards.nth(1).locator('.plan-exercise-drag-handle').boundingBox();
+    await page.mouse.move(a.x+24,a.y+a.height/2); await page.mouse.down(); await page.mouse.move(a.x+24,a.y+a.height/2+12,{steps:2});
     assert.equal(await page.locator('.plan-reorder-preview').count(),1,`${name}: real drag listeners attached`);
     await page.mouse.move(b.x+24,b.y+b.height-2,{steps:8}); await page.mouse.up();
     await page.waitForTimeout(600);
     const after=await cards.evaluateAll(es=>es.map(e=>e.id)); assert.notDeepEqual(after,before); assert.deepEqual([...after].sort(),[...before].sort());
     assert.equal(JSON.stringify((await stored()).program),original,'reorder is draft only');
-    await shot(`${name}-reordered`);
+    await shot(`${name}-reordered`);if(explicit)await page.getByRole('button',{name:'Done reordering',exact:true}).click();
   };
   const add=async(name)=>{
     const day=page.locator('.import-day').first(); const count=await day.locator('.plan-editor-exercise').count();

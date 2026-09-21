@@ -1,3 +1,4 @@
+import {openFirstRunLanding,chooseOnboardingAnswer} from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
@@ -14,8 +15,8 @@ async function reachSchedule(page) {
   await page.getByRole('combobox', { name: 'Age range' }).click();
   await page.getByRole('option', { name: '18–29' }).click();
   await page.getByRole('button', { name: 'CONTINUE' }).click();
-  await page.getByRole('button', { name: 'Build muscle' }).click();
-  await page.getByRole('button', { name: /^Beginner/ }).click();
+  await chooseOnboardingAnswer(page,'Build muscle',3);
+  await chooseOnboardingAnswer(page,/^Beginner/,4);
 }
 
 try {
@@ -32,7 +33,7 @@ try {
     const errors = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: '{"available":false}' }));
-    await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+    await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' }); await openFirstRunLanding(page);
     await reachSchedule(page);
 
     const shot = async name => {

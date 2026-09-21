@@ -94,7 +94,7 @@ async function verifyScroller(page, locator, label, terminalPadding = 20) {
   state.selectedDay = today;
   state.selectedDate = isoDay();
   const { context, page } = await openApp(state, { width: 390, height: 430 });
-  await page.getByRole('button', { name: 'Train today instead' }).click();
+  await page.getByRole('button',{name:'Today options',exact:true}).click();await page.getByRole('button', { name: 'Rest-day activities' }).click();
   await verifyScroller(page, page.locator('.modal-layer > .rest-training-sheet'), 'Rest-day menu');
   await page.screenshot({ path: output('390-rest-menu-short-height.png') });
   await context.close();

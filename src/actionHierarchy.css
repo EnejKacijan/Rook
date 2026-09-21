@@ -3,6 +3,13 @@
 :root {
   --rook-destructive-fill: #9b302a;
   --rook-on-destructive: #fff;
+  /* Swipe surfaces have their own contrast pair; Premium keeps this semantic red. */
+  --rook-destructive-swipe-bg: #b23b34;
+  --rook-destructive-swipe-fg: #fff;
+}
+:root[data-appearance="dark"] {
+  --rook-destructive-swipe-bg: #ed665b;
+  --rook-destructive-swipe-fg: #231411;
 }
 :root[data-appearance] :is(.danger-text, .gym-delete-entry, .custom-exercise-delete, .weight-delete-action, .plan-conflict-remove, .custom-alias-row button, .exercise-note-remove, .workout-photo-delete, .workout-photo-delete-inline, .workout-photo-delete-confirm button:last-child):not(:disabled) {
   color: var(--rook-error-text, #8c2f2a) !important;

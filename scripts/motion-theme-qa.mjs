@@ -236,7 +236,7 @@ assert.equal(
   "reduced motion removes the traveling row wash",
 );
 const reducedExerciseName = await reducedRun.page.locator(".exercise-heading h1").textContent();
-await reducedRun.page.locator(".up-next button").first().click();
+await reducedRun.page.locator(".swipe-up-next-body").first().click();
 await reducedRun.page.waitForFunction(
   (name) => document.querySelector(".exercise-heading h1")?.textContent !== name,
   reducedExerciseName,

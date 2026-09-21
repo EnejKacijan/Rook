@@ -1,3 +1,4 @@
+import {openFirstRunLanding} from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -41,7 +42,7 @@ for (const width of [320, 360, 390, 430, 477, 768]) {
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
   page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-  await page.goto(appUrl, { waitUntil: 'networkidle' });
+  await page.goto(appUrl, { waitUntil: 'networkidle' }); await openFirstRunLanding(page);
   assert.equal(await page.locator('html').getAttribute('data-theme'), theme);
   const tagline = page.getByText('Training, built around you', { exact: true });
   await tagline.waitFor();
@@ -195,7 +196,7 @@ for (const { theme, colorScheme } of themeVariants) {
     }, { key: STORAGE_KEY, state: premiumState });
   }
   const page = await context.newPage();
-  await page.goto(appUrl, { waitUntil: 'networkidle' });
+  await page.goto(appUrl, { waitUntil: 'networkidle' }); await openFirstRunLanding(page);
   await page.getByRole('button', { name: /Start from scratch/ }).scrollIntoViewIfNeeded();
   assert.equal(await page.getByRole('button', { name: /Start from scratch/ }).isVisible(), true, `${theme} short viewport keeps secondary routes reachable`);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth), true, `${theme} short viewport does not overflow horizontally`);
@@ -255,7 +256,7 @@ for (const { theme, colorScheme } of themeVariants) {
       }, { key: STORAGE_KEY, state: premiumState });
     }
     const page = await context.newPage();
-    await page.goto(appUrl, { waitUntil: 'networkidle' });
+    await page.goto(appUrl, { waitUntil: 'networkidle' }); await openFirstRunLanding(page);
     const scratch = page.getByRole('button', { name: /Start from scratch/ });
     await scratch.waitFor();
     const layout = await page.evaluate(() => {

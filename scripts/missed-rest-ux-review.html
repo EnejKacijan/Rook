@@ -1,0 +1,23 @@
+<!doctype html><html><head><title>ROOK missed / rest review</title><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>
+<section id="fixture"><h1>Isolated missed / rest review</h1>
+<label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label>
+<label>Missed count <select id="count"><option>1</option><option>0</option><option>2</option><option>3</option></select></label>
+<label>Today <select id="day"><option>rest</option><option>planned</option><option>active</option></select></label>
+<button id="seed" disabled>Start synthetic review</button><output id="status">Loading review</output></section><div id="root"></div>
+<script>window.addEventListener('error',event=>{document.getElementById('status').textContent=event.message;});window.addEventListener('unhandledrejection',event=>{document.getElementById('status').textContent=String(event.reason);});</script>
+<script type="module">
+import {todayMissedRestFixture} from '/src/todayMissedRest.fixture.js';
+import {serializeState,STORAGE_KEY} from '/src/domain.js';
+const params=new URLSearchParams(location.search),RealDate=Date;
+let fixed=params.get('day')==='planned'?'2026-09-18T12:00:00':'2026-09-19T12:00:00';
+window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[fixed]));}static now(){return new RealDate(fixed).getTime();}};
+if(location.port!=='4198')throw Error('Isolated QA port required');
+if(params.has('run')){document.querySelector('#fixture').remove();await import('/src/main.jsx');}
+else {document.querySelector('#seed').disabled=false;document.querySelector('#status').textContent='Ready';document.querySelector('#seed').onclick=()=>{
+ const day=document.querySelector('#day').value,theme=document.querySelector('#theme').value;
+ fixed=day==='planned'?'2026-09-18T12:00:00':'2026-09-19T12:00:00';
+ const state=todayMissedRestFixture({count:Number(document.querySelector('#count').value),active:day==='active'});
+ Object.assign(state.profile,{stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ localStorage.setItem(STORAGE_KEY,serializeState(state));location.href='/scripts/missed-rest-ux-review.html?run=1&day='+day;
+};}
+</script></body></html>

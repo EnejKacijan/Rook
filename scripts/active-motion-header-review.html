@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>ROOK workout motion review</title></head><body>
+<section id="fixture"><h1>Isolated workout motion review</h1>
+<label>Workout <select id="kind"><option>planned</option><option>freestyle</option><option>long name</option></select></label>
+<label>Variant <select id="variant"><option>weighted</option><option>bodyweight</option><option>timed</option><option>per-side</option></select></label>
+<label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label>
+<label>RIR <input id="rir" type="checkbox" checked></label><label>Rest timer <input id="rest" type="checkbox" checked></label>
+<label>All sets logged <input id="logged" type="checkbox" checked></label><label>Long page <input id="long" type="checkbox"></label>
+<label>Reduced motion model <input id="reduced" type="checkbox"></label>
+<button id="start">Start synthetic workout</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {startWorkout,serializeState,STORAGE_KEY,isoDay} from '/src/domain.js';
+import {startFreestyleWorkout,addFreestyleExercise} from '/src/freestyleWorkout.js';
+if(!import.meta.env.DEV || location.origin!=='http://127.0.0.1:4198')throw Error('Isolated local review only');
+// A prefixed test store: neither seeding nor failure injection touches the
+// owner's app data, even when other review pages share this development port.
+const realStorage=window.localStorage,prefix='rook-motion-header-review:',params=new URLSearchParams(location.search);
+let failSave=false;
+Object.defineProperty(window,'localStorage',{value:{getItem:key=>realStorage.getItem(prefix+key),setItem:(key,value)=>{if(failSave&&key===STORAGE_KEY)throw new DOMException('Synthetic quota failure','QuotaExceededError');realStorage.setItem(prefix+key,value);},removeItem:key=>realStorage.removeItem(prefix+key)}});
+const el=id=>document.getElementById(id);
+if(!params.has('run'))el('start').onclick=()=>{
+ let state=createReturningUserFixture(0); const kind=el('kind').value,variant=el('variant').value,theme=el('theme').value;
+ Object.assign(state.profile,{showExerciseImages:true,rirEnabled:el('rir').checked,restTimerEnabled:el('rest').checked,themePreference:theme.startsWith('premium')?'premium':theme,appearancePreference:theme.endsWith('dark')?'dark':'light',stylePreference:theme.startsWith('premium')?'premium':'standard'});
+ state.selectedDate=isoDay();const ids=variant==='timed'?['plank','side-plank','bosu-balance']:variant==='bodyweight'?['push-up','pull-up','chin-up']:variant==='per-side'?['split-squat','bulgarian-split-squat','step-up']:['barbell-bench-press','dumbbell-bench-press','incline-dumbbell-press'];
+ const template=structuredClone(state.program.days[0]);template.name=kind==='long name'?'A very long full body strength and conditioning workout title':'UPPER A';template.exercises=template.exercises.slice(0,3);template.exercises.forEach((e,i)=>{e.exerciseId=ids[i];e.loggingMode=variant==='per-side'?'per_side':'normal';});state.activeWorkout=startWorkout(state,template);
+ if(kind==='freestyle'){state=startFreestyleWorkout({...state,activeWorkout:null});for(const id of ids)state=addFreestyleExercise(state,id);}
+ state.activeWorkout.startedAt=Date.now()-185000;state.activeWorkout.exercises.forEach((e,i)=>{e.loggingMode=variant==='per-side'?'per_side':'normal';e.sets=Array.from({length:el('long').checked?12:3},(_,n)=>({...e.sets[0],id:`qa-motion-${i}-${n}`,weight:variant==='timed'||variant==='bodyweight'?null:52.5,reps:variant==='timed'?30:12,rir:2,completed:el('logged').checked||i===0,...(variant==='per-side'?{sides:{left:{reps:12,completed:el('logged').checked||i===0},right:{reps:12,completed:el('logged').checked||i===0}}}:{})}));});
+ state.activeWorkout.rest=el('rest').checked?{seconds:90,endsAt:Date.now()+90000}:null;
+ for(const key of [STORAGE_KEY,'rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+ localStorage.setItem(STORAGE_KEY,serializeState(state));location.href=`?run=1&kind=${kind}&variant=${variant}&theme=${theme}&reduced=${el('reduced').checked}`;
+};else{
+ el('fixture').remove();if(params.get('reduced')==='true'){const match=window.matchMedia.bind(window);window.matchMedia=q=>q.includes('prefers-reduced-motion')?{matches:true,addEventListener(){},removeEventListener(){}}:match(q);}
+ const qaStyle=document.createElement('style');qaStyle.textContent='#motion-qa button,#motion-qa a,#motion-qa label{display:block;min-height:36px;margin:2px;padding:4px}#motion-qa button{width:calc(100% - 4px)}';document.head.append(qaStyle);
+ const qa=document.createElement('details');qa.id='motion-qa';qa.style.cssText='position:fixed;top:75px;right:0;z-index:99999;background:#eee;color:#111;font:11px system-ui;width:170px';
+ qa.innerHTML='<summary>Motion QA</summary><label>Fail save <input id="fail-save" type="checkbox"></label><button id="near">Near top</button><button id="middle">Middle</button><button id="bottom">Bottom</button><button id="double-finish">Double Finish</button><button id="inspect">Inspect</button><a href="?">New case</a><pre id="proof" style="max-height:200px;overflow:auto;white-space:pre-wrap"></pre>';
+ document.body.append(qa);el('fail-save').onchange=()=>{failSave=el('fail-save').checked;qa.open=false;};
+ const rect=node=>{if(!node)return null;const r=node.getBoundingClientRect();return {x:r.x,y:r.y,w:r.width,h:r.height};};
+ const read=()=>{const screen=document.querySelector('#root main'),header=screen?.querySelector('.workout-header'),identity=header?.querySelector('.workout-header-center'),title=identity?.querySelector('strong'),meta=identity?.querySelector('small'),state=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');return {width:innerWidth,phase:screen?.className,heading:screen?.querySelector('h1')?.textContent,title:title?.textContent,titleBox:rect(title),titleFits:title?title.scrollWidth<=title.clientWidth:null,titleStyle:title?{whiteSpace:getComputedStyle(title).whiteSpace,ellipsis:getComputedStyle(title).textOverflow}:null,header:rect(header),identity:rect(identity),meta:meta?.textContent,metaFits:meta?meta.scrollWidth<=meta.clientWidth:null,back:rect(header?.querySelector('[aria-label="Back to Today"]')),finish:rect(header?.querySelector('.text-button')),scroll:document.scrollingElement.scrollTop,overflow:document.documentElement.scrollWidth>innerWidth,activeId:state.activeWorkout?.id,exerciseIndex:state.activeWorkout?.exerciseIndex,saved:state.workouts?.map(w=>({id:w.id,startedAt:w.startedAt,completedAt:w.completedAt,sets:w.exercises.flatMap(e=>e.sets).filter(s=>s.completed).length})),restNodes:document.querySelectorAll('.rest-timer').length,hero:screen?.classList.contains('complete-screen')?[...screen.querySelectorAll('.complete-mark,h1,.stat-grid')].map(n=>({box:rect(n),opacity:getComputedStyle(n).opacity,delay:getComputedStyle(n).animationDelay})):null};};
+ let frames=[],before=null,token=0;
+ const observe=()=>{before=read();frames=[];const run=++token,start=performance.now();const sample=()=>{if(run!==token)return;const screen=document.querySelector('#root main'),panel=screen?.querySelector('.exercise-panel');frames.push({at:Math.round(performance.now()-start),heading:screen?.querySelector('h1')?.textContent,header:rect(screen?.querySelector('.workout-header')),screenOpacity:screen?getComputedStyle(screen).opacity:null,panelOpacity:panel?getComputedStyle(panel).opacity:null,paint:!!document.querySelector('.workout-motion-paint'),paintOpacity:document.querySelector('.workout-motion-paint')?getComputedStyle(document.querySelector('.workout-motion-paint')).opacity:null,heroOpacity:[...screen.querySelectorAll('.complete-mark,h1,.stat-grid,.workout-photo-memory')].map(n=>getComputedStyle(n).opacity),restNodes:document.querySelectorAll('.rest-timer').length,scroll:document.scrollingElement.scrollTop,animations:document.getAnimations().filter(a=>a.effect?.target?.matches('.exercise-panel,.complete-screen,.workout-motion-paint')).map(a=>({node:a.effect.target.className,duration:a.effect.getTiming().duration,frames:a.effect.getKeyframes().map(f=>({opacity:f.opacity,transform:f.transform}))}))});if(performance.now()-start<500)requestAnimationFrame(sample);};requestAnimationFrame(sample);};
+ document.addEventListener('click',event=>{const button=event.target.closest('#root button');if(button&&/NEXT EXERCISE|FINISH|Finish/.test(button.textContent))observe();},true);
+ for(const [id,fraction]of [['near',0],['middle',.5],['bottom',1]])el(id).onclick=()=>{const node=document.scrollingElement;node.scrollTop=(node.scrollHeight-node.clientHeight)*fraction;qa.open=false;};
+ el('double-finish').onclick=()=>{qa.open=false;const button=document.querySelector('.workout-header .text-button');button.click();button.click();};
+ el('inspect').onclick=()=>{el('proof').textContent=JSON.stringify({case:Object.fromEntries(params),current:read(),before,frames});};
+ await import('/src/main.jsx');
+}
+</script></body></html>

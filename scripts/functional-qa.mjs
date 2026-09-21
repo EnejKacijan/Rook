@@ -7,6 +7,9 @@ const context = await browser.newContext({ viewport: { width: 390, height: 844 }
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: true, provider: 'qa' }) }));
 await page.route('**/api/ai', route => { if(route.request().url().endsWith('/status'))return route.fallback(); const operation = route.request().postDataJSON()?.operation; if (operation === 'plan') planRequests += 1; return ['plan', 'coach'].includes(operation) ? route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ error: 'AI disabled for deterministic local-fallback QA.' }) }) : route.continue(); });
 page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error' && !message.text().includes('the server responded with a status of 503')) errors.push(message.text()); });
+// Keep the generated Mon/Wed/Fri plan on an actionable day, independent of
+// the wall clock. Historical planned days intentionally cannot be started.
+await page.clock.setFixedTime(new Date('2026-09-21T12:00:00'));
 await page.goto('http://127.0.0.1:4173', { waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'BUILD MY PLAN' }).click();
 assert.equal(await page.getByRole('combobox', { name: 'Sex' }).count(), 0, 'onboarding does not require a demographic that does not change the plan');
@@ -25,8 +28,13 @@ const buildElapsedMs = Date.now()-buildStarted;
 console.log(`Local build ready in ${buildElapsedMs}ms after click`);
 assert.equal(planRequests, 0, 'standard questionnaire plan generation does not wait for a network AI request');
 assert.equal(await page.getByText('Full Body A / B / C', { exact: true }).count(), 1, 'three days selects the fixed full-body structure');
-assert.equal(await page.getByRole('region', { name: 'How your answers shaped this plan' }).count(), 1, 'the first plan view visibly reflects onboarding constraints');
-for (const value of ['Lose fat · Beginner', '3 sessions · Mon, Wed, Fri', 'Up to 60 min', 'Full gym']) assert.equal(await page.getByText(value, { exact: true }).count(), 1, `personalization summary shows ${value}`);
+const summary = page.getByRole('region', { name: 'How your answers shaped this plan' });
+assert.equal(await summary.count(), 1, 'the first plan view visibly reflects onboarding constraints');
+for (const value of ['Lose fat · Beginner', '3 sessions · Mon, Wed, Fri', 'Full gym']) assert.equal(await summary.getByText(value, { exact: true }).count(), 1, `personalization summary shows ${value}`);
+// Duration-fidelity plans describe the requested session length as a target.
+// Check the SESSION definition in the answers summary, not unrelated minute copy.
+const sessionSummary = summary.locator('dl > div').filter({ has: page.locator('dt', { hasText: /^SESSION$/ }) }).locator('dd');
+assert.match(await sessionSummary.innerText(), /^60\s+min\s+target$/, 'duration-fidelity summary retains the selected 60-minute target');
 assert.equal(await page.getByText('WEEKLY CONDITIONING', { exact: true }).count(), 1, 'fat-loss preview explains the separate conditioning prescription');
 assert.equal(await page.getByText('2 × 30 min', { exact: true }).count(), 1, 'conditioning scales to the selected strength frequency and session duration');
 assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth), true, 'goal and plan UI do not overflow the phone viewport');
@@ -51,9 +59,12 @@ assert.equal(await page.locator('.coach-message').count() > 0, true, 'Coach repl
 const navBox = await page.locator('.bottom-nav').boundingBox(); assert.ok(Math.abs(navBox.y + navBox.height - 844) < 2, 'navigation is fixed to viewport bottom'); assert.equal(await page.locator('.bottom-nav .nav-label').count(), 4, 'all four navigation labels remain visible'); assert.equal(await page.locator('.bottom-nav .nav-icon[aria-hidden="true"] svg').count(), 4, 'navigation has four decorative local icons');
 await page.getByRole('button', { name: 'TODAY', exact: true }).click(); await page.getByRole('button', { name: 'START WORKOUT' }).click();
 const actionFunnel = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-funnel-events-v1')).map(event => event.name)); assert.equal(actionFunnel.includes('onboarding_completed'), true); assert.equal(actionFunnel.includes('first_workout_started'), true);
-assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '', 'first weight is unset');
-await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).fill('20'); await page.getByRole('button', { name: 'Log set 1' }).click(); await page.reload({ waitUntil: 'networkidle' });
+// The logger uses raw-string text editing with a decimal keyboard now.
+const firstWeight = page.getByLabel('Weight in kg for set 1', { exact: true });
+assert.equal(await firstWeight.inputValue(), '', 'first weight is unset');
+await firstWeight.fill('20'); await firstWeight.press('Enter'); await page.getByRole('button', { name: 'Log set 1' }).click(); await page.reload({ waitUntil: 'networkidle' });
 await page.getByRole('button', { name: 'RESUME WORKOUT' }).click(); assert.equal(await page.getByRole('button', { name: 'Undo logged set 1' }).count(), 1, 'active workout persists');
+assert.equal(await page.getByLabel('Weight in kg for set 1', { exact: true }).inputValue(), '20', 'committed actual weight persists after reload');
 await page.getByRole('button', { name: 'Back to Today' }).click(); await page.getByRole('button', { name: 'COACH' }).click(); await page.getByRole('textbox', { name: 'Ask Coach' }).fill('Adapt today to 35 minutes.'); await page.getByRole('button', { name: 'Send message' }).click(); await page.getByRole('button', { name: 'APPLY TO TODAY' }).waitFor();
 const before = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises.length); assert.ok(before > 1); await page.getByRole('button', { name: 'APPLY TO TODAY' }).click(); const after = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exercises.length); assert.ok(after <= before, 'Coach mutation applies only after acceptance');
 assert.deepEqual(errors, [], `browser console remains clean: ${errors.join('; ')}`); await browser.close(); console.log(`Functional QA passed: local plan preview opened in ${buildElapsedMs}ms with no plan AI request; persistence and Coach mutation also passed.`);

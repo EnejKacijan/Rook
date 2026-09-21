@@ -1,0 +1,42 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>ROOK occurrence-state QA</title><style>html{scrollbar-width:none}html::-webkit-scrollbar{width:0}</style></head><body>
+<section id="fixture"><h1>Isolated occurrence-state QA</h1><label>Theme <select id="theme"><option>premium-dark</option><option>premium-light</option><option>dark</option><option>light</option></select></label><label>Scenario <select id="scenario"><option>missed</option><option>completed-elsewhere</option><option>legacy-moved</option><option>current</option><option>moved</option><option>completed-original</option><option>skipped</option><option>active</option><option>repeated</option><option>same-name</option><option>ambiguous</option><option>reserved</option><option>combined</option></select></label><button id="seed">Load synthetic occurrence</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,deserializeState,STORAGE_KEY,startWorkout,completeWorkout,plannedWorkoutForDate,adaptedTemplateForToday,weekKey,workoutPerformedDate} from '/src/domain.js';
+import {flexibleOccurrenceForDate,missedFlexibleSessions,proposeFlexibleWeek,applyFlexibleWeek} from '/src/flexibleWeek.js';
+import {proposeWorkoutToday,applyWorkoutToday} from '/src/useWorkoutToday.js';
+import {buildCombinedProposal,applyCombinedProposal} from '/src/combineWorkouts.js';
+import {AIService} from '/src/aiService.js';
+if(location.port!=='4198')throw Error('Isolated QA port required');
+const params=new URLSearchParams(location.search),RealDate=Date;let fixed='2026-09-18T12:00:00';
+window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[fixed]));}static now(){return new RealDate(fixed).getTime();}};
+const finish=s=>{s.activeWorkout=startWorkout(s,plannedWorkoutForDate(s,s.selectedDate));s.activeWorkout.startedAt=Date.now()-1800000;s.activeWorkout.exercises.forEach(e=>e.sets.forEach(set=>Object.assign(set,{completed:true,reps:8,weight:20})));return completeWorkout(s);};
+if(!params.has('run'))document.querySelector('#seed').onclick=()=>{
+ let s=createReturningUserFixture(2);s.workouts=[];s.activeWorkout=null;s.todayAdaptation=null;s.flexibleWeek=null;s.weekScheduleOverrides={};s.workoutOccurrenceOverrides={};s.program.trainingBlock.startDate='2026-09-01';s.program.createdAt='2026-09-01T12:00:00';s.selectedDate='2026-09-17';s.selectedDay='Thu';s.ai.planUpgradeDismissed=true;
+ const theme=document.querySelector('#theme').value,scenario=document.querySelector('#scenario').value;
+ Object.assign(s.profile,{showExerciseImages:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ s.program.days.forEach(d=>d.nameEdited=true);s.program.days.find(d=>d.weekday==='Thu').name='UPPER B';s.program.userEdited=true;
+ s=deserializeState(serializeState(s),{strict:true});const tue=s.program.days.find(d=>d.weekday==='Tue'),thu=s.program.days.find(d=>d.weekday==='Thu');
+ if(scenario==='legacy-moved'){tue.name='UPPER B';s.weekScheduleOverrides[weekKey(s.selectedDate)]={[tue.id]:'2026-09-17',[thu.id]:'2026-09-15'};s=finish(s);}
+ if(['completed-elsewhere','repeated'].includes(scenario))s=finish(s);
+ if(scenario==='completed-original'){fixed='2026-09-17T12:00:00';s=finish(s);fixed='2026-09-18T12:00:00';}
+ if(scenario==='current'){s.selectedDate='2026-09-18';s.selectedDay='Fri';s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'move',sessionId:flexibleOccurrenceForDate(s,'2026-09-17').logicalSessionId,toDate:'2026-09-18'})).state;}
+ if(scenario==='moved')s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'move',sessionId:flexibleOccurrenceForDate(s,s.selectedDate).logicalSessionId,toDate:'2026-09-20'})).state;
+ if(scenario==='skipped')s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'skip',sessionId:flexibleOccurrenceForDate(s,s.selectedDate).logicalSessionId})).state;
+ if(scenario==='active')s.activeWorkout=startWorkout(s,plannedWorkoutForDate(s,s.selectedDate));
+ if(scenario==='repeated')s=applyWorkoutToday(s,proposeWorkoutToday(s,{workoutId:s.workouts[0].id}),{persist:()=>true});
+ if(scenario==='same-name'){s.program.days.forEach(d=>d.name='UPPER B');s.selectedDate='2026-09-10';s=finish(s);s.selectedDate='2026-09-17';}
+ if(scenario==='ambiguous')s.workouts=[{id:'ambiguous-record',name:'UPPER B',startedAt:'2026-09-18T10:00:00',completedAt:'2026-09-18T10:30:00',exercises:[]}];
+ if(['reserved','combined'].includes(scenario)){
+  const sources=['2026-09-15','2026-09-17'].map(d=>flexibleOccurrenceForDate(s,d).logicalSessionId);const p=buildCombinedProposal(s,{sourceIds:sources,minutes:60});if(p.status!=='ready')throw Error(p.error);s=applyCombinedProposal(s,p.proposal,()=>true);
+  if(scenario==='combined'){s.activeWorkout=startWorkout(s,adaptedTemplateForToday(s));s.activeWorkout.exercises.forEach(e=>e.sets.forEach(set=>Object.assign(set,{completed:true,reps:8,weight:20})));s=completeWorkout(s);}
+  s.selectedDate='2026-09-17';
+ }
+ s=deserializeState(serializeState(s),{strict:true});localStorage.setItem('occurrence-qa-baseline',JSON.stringify({program:s.program,workouts:s.workouts}));localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/occurrence-state-review.html?run=1&scenario='+scenario;
+};else{
+ AIService.status=async()=>({available:true});AIService.coach=async()=>({text:'Synthetic fixture response.'});
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+ const qa=document.createElement('details');qa.id='occurrence-qa';qa.style.cssText='position:fixed;right:0;top:0;z-index:99999;background:#ddd;color:#111;font:11px system-ui;max-width:210px';qa.innerHTML='<summary>QA</summary><button id="inspect">Inspect saved occurrence</button><pre id="proof" style="max-height:240px;overflow:auto;white-space:pre-wrap"></pre>';document.body.append(qa);
+ qa.querySelector('#inspect').onclick=()=>{const s=deserializeState(localStorage.getItem(STORAGE_KEY)),baseline=JSON.parse(localStorage.getItem('occurrence-qa-baseline')),item=flexibleOccurrenceForDate(s,'2026-09-17');qa.querySelector('#proof').textContent=JSON.stringify({selectedDate:s.selectedDate,source:item&&{id:item.logicalSessionId,status:item.status,original:item.originalScheduledDate,scheduled:item.currentScheduledDate,performed:item.actualPerformedDate,completedId:item.completedWorkout?.id},historyUnchanged:JSON.stringify(s.workouts)===JSON.stringify(baseline.workouts),planUnchanged:JSON.stringify(s.program)===JSON.stringify(baseline.program),history:s.workouts.map(w=>({id:w.id,logicalSessionId:w.logicalSessionId,performed:workoutPerformedDate(w)})),missed:missedFlexibleSessions(s).map(i=>i.logicalSessionId),pending:s.todayAdaptation,active:s.activeWorkout});};
+}
+</script></body></html>

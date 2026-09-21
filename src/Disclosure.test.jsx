@@ -12,6 +12,21 @@ it('retains visible content until collapse geometry finishes',()=>{render(true);
 it('rapid reopening cancels collapse and exposes current content',()=>{render(true);render(false);const closing=animations[0];render(true,'Current warm-up');expect(closing.cancel).toHaveBeenCalled();end();expect(host.textContent).toBe('Current warm-up');expect(host.firstChild.hasAttribute('inert')).toBe(false);});
 it('updates dynamic long content while expanded without scroll calls',()=>{const scroll=vi.fn();host.scrollIntoView=scroll;render(true);render(true,'Long content '.repeat(200));expect(host.textContent.length).toBeGreaterThan(2000);expect(scroll).not.toHaveBeenCalled();});
 it('reduced motion removes closing content immediately',()=>{vi.stubGlobal('matchMedia',()=>({matches:true}));render(true);render(false);expect(host.textContent).toBe('');});
+it('collapses into measured accessible compact content and cancels cleanly on reversal',()=>{
+  vi.spyOn(Element.prototype,'getBoundingClientRect').mockImplementation(function(){return {height:this.classList.contains('rook-disclosure-compact')?44:this.classList.contains('rook-disclosure-content')||this.style.height==='auto'?100:parseFloat(this.style.height)||0};});
+  const show=open=>act(()=>root.render(<Disclosure open={open} collapsed={<button>Undo</button>}><button>Use values</button></Disclosure>));
+  show(true);show(false);const closing=animations[0];
+  expect(host.firstChild.hasAttribute('inert')).toBe(false);expect(host.querySelector('.rook-disclosure-content').hasAttribute('inert')).toBe(true);
+  expect(host.firstChild.style.height).toBe('44px');expect(host.querySelector('.rook-disclosure-compact').textContent).toBe('Undo');
+  show(true);expect(closing.cancel).toHaveBeenCalled();expect(host.querySelector('.rook-disclosure-compact')).toBeNull();
+  show(false);act(()=>animations.at(-3).onfinish());expect(host.textContent).toBe('Undo');expect(host.firstChild.style.height).toBe('44px');
+});
+it('reduced motion switches directly to the compact target without hiding its action',()=>{
+  vi.stubGlobal('matchMedia',()=>({matches:true}));
+  vi.spyOn(Element.prototype,'getBoundingClientRect').mockImplementation(function(){return {height:this.classList.contains('rook-disclosure-compact')?44:100};});
+  const show=open=>act(()=>root.render(<Disclosure open={open} collapsed={<button>Undo</button>}><button>Use values</button></Disclosure>));
+  show(true);show(false);expect(host.textContent).toBe('Undo');expect(host.firstChild.style.height).toBe('44px');expect(animations).toHaveLength(0);
+});
 it('reveals options above a fixed footer without changing focus',()=>{
   host.style.overflowY='auto';host.scrollBy=vi.fn();
   const panel=document.createElement('div'),footer=document.createElement('div');footer.className='sheet-action-footer';host.append(panel,footer);

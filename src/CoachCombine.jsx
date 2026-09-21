@@ -7,8 +7,8 @@ import {combinedAdjustment,cancelCombinedWorkout,persistCombinedState,isCombined
 import './coachCombine.css';
 
 const dateLabel=date=>new Intl.DateTimeFormat('en',{month:'short',day:'numeric'}).format(new Date(`${date}T12:00:00`));
-// Same pointer-focus ownership as Coach Send: the composer must not move the
-// target between pointerdown and click. Keyboard focus remains fully available.
+// Same mouse-focus ownership as Coach Send: keep the keyboard through the click.
+// Do not cancel pointerdown: WebKit also suppresses the touch-generated click.
 const keepComposerFocus=event=>{
  if(event.button===0&&event.target.closest('button')&&document.activeElement?.matches('.coach-input textarea'))event.preventDefault();
 };
@@ -29,11 +29,13 @@ export function CombinedWorkoutNotice({state,update}){
    {!logged&&<button type="button" className="text-button" onClick={cancel}>Cancel combined workout</button>}
    {error&&<p role="alert">{error}</p>}</aside>;
 }
-export function CoachCombineChoices({request,onSend,busy}){
- const [selected,setSelected]=useState([]);
- if(request.step==='time')return <div className="coach-quick-questions combine-choices" onPointerDownCapture={keepComposerFocus}>{['45 min','60 min','75 min','90 min','No strict limit'].map(label=><button type="button" key={label} disabled={busy} onClick={()=>onSend(label)}>{label}</button>)}<small>Or enter another total time in the conversation.</small></div>;
- if(request.step==='target')return <div className="coach-quick-questions combine-choices" onPointerDownCapture={keepComposerFocus}>{request.choices.map(s=><button type="button" key={s.id} disabled={busy} onClick={()=>onSend(s.label,{targetId:s.id})}>{s.label}</button>)}</div>;
- return <fieldset className="combine-choices" onPointerDownCapture={keepComposerFocus}><legend>Choose two planned sessions</legend>{request.choices.map(s=><label key={s.id}><input type="checkbox" checked={selected.includes(s.id)} disabled={busy||selected.length===2&&!selected.includes(s.id)} onChange={()=>setSelected(current=>current.includes(s.id)?current.filter(id=>id!==s.id):[...current,s.id])}/><span>{s.label}</span></label>)}
+export function CoachCombineChoices({request,onSend,busy,selection,onSelectionChange}){
+ const [localSelection,setLocalSelection]=useState([]);
+ const selected=selection||localSelection;
+ const setSelected=fn=>{const next=fn(selected);if(onSelectionChange)onSelectionChange(next);else setLocalSelection(next);};
+ if(request.step==='time')return <div className="coach-quick-questions combine-choices" onMouseDownCapture={keepComposerFocus}>{['45 min','60 min','75 min','90 min','No strict limit'].map(label=><button type="button" key={label} disabled={busy} onClick={()=>onSend(label)}>{label}</button>)}<small>Or enter another total time in the conversation.</small></div>;
+ if(request.step==='target')return <div className="coach-quick-questions combine-choices" onMouseDownCapture={keepComposerFocus}>{request.choices.map(s=><button type="button" key={s.id} disabled={busy} onClick={()=>onSend(s.label,{targetId:s.id})}>{s.label}</button>)}</div>;
+ return <fieldset className="combine-choices" onMouseDownCapture={keepComposerFocus}><legend>Choose two planned sessions</legend>{request.choices.map(s=><label key={s.id}><input type="checkbox" checked={selected.includes(s.id)} disabled={busy||selected.length===2&&!selected.includes(s.id)} onChange={()=>setSelected(current=>current.includes(s.id)?current.filter(id=>id!==s.id):[...current,s.id])}/><span>{s.label}</span></label>)}
  <button type="button" className="button secondary" disabled={busy||selected.length!==2} onClick={()=>onSend(`Combine ${request.choices.filter(s=>selected.includes(s.id)).map(s=>s.label).join(' and ')}.`,{sourceIds:selected})}>CONTINUE</button></fieldset>;
 }
 export function CoachCombineCard({action,result,state,onAccept,onViewToday,reviewDraft,onReviewChange,onReviewCancelled}){
@@ -58,10 +60,10 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
    return reviewCombinedSelection(original,[...ids],effectiveGymContext(state,{}).profile);
  };
  const apply=()=>{if(lock.current)return;lock.current=true;setError('');try{onAccept({...action,proposal});}catch(e){lock.current=false;setError(e.message);}};
- return <div onPointerDownCapture={keepComposerFocus} className={`action-card combine-card${reviewing?' action-card-reviewing combine-review-surface':''}`}>
+ return <div onMouseDownCapture={keepComposerFocus} className={`action-card combine-card${reviewing?' action-card-reviewing combine-review-surface':''}`}>
    {reviewing&&<button ref={backRef} type="button" className="text-button" aria-label="Back to combined workout proposal" onClick={()=>{setReviewing(false);setError('');}}>‹ Back</button>}
    <h3>{proposal.revisionSummary?'Updated combined workout':'Combined workout'}</h3><p>~{Math.round(proposal.workout.estimatedMinutes)} min · Today only</p><CombinedProvenance adjustment={proposal}/>
-   {!reviewing?<button ref={reviewRef} type="button" className="button secondary" onClick={()=>{setReviewing(true);if(proposal.revisionSummary)onReviewCancelled?.(false);}}>REVIEW COMBINED WORKOUT</button>:<>
+   {!reviewing?<button ref={reviewRef} type="button" className="button secondary" onClick={()=>{setReviewing(true);onReviewCancelled?.(false);}}>REVIEW COMBINED WORKOUT</button>:<>
      {proposal.revisionSummary&&<div className="combine-revision-summary"><strong>Estimate: ~{Math.round(proposal.revisionSummary.previousMinutes)} → ~{Math.round(proposal.estimatedMinutes)} min</strong><span>New total-time target: {proposal.requestedMinutes===null?'No strict limit':`${proposal.requestedMinutes} min`}</span>
        {proposal.revisionSummary.added.map(e=><span key={e.id}>{e.origin==='coach-added'?'Coach-added':'Restored from source'}: {e.name}</span>)}
        {proposal.revisionSummary.removed.map(e=><span key={e.id}>Removed: {e.name}</span>)}
@@ -72,7 +74,7 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
        const next=candidate(e);
        return <button type="button" key={e.id} aria-pressed={selected.has(e.id)} disabled={!next} onClick={()=>{setProposal(next);onReviewChange?.(next);setError('');}}><span aria-hidden="true">{selected.has(e.id)?'✓':'+'}</span><span><strong>{exerciseName(e)}</strong><small>{e.sets.length} sets · {formatExportSet(e,e.sets[0],{units:state.profile.units,completed:false})}{e.supersetId?' · Superset':''}{e.combinedOrigin==='coach-added'?' · Coach-added recommendation':''}</small></span></button>;
      })}</div><small>Main movement coverage and linked supersets stay together.</small>
-     {error&&<p role="alert">{error}</p>}<div className="action-card-buttons"><button type="button" className="button primary" onClick={apply}>{proposal.revisionSummary?'USE UPDATED WORKOUT':'USE THIS WORKOUT'}</button><button type="button" className="button secondary" onClick={()=>{setReviewing(false);setError('');if(proposal.revisionSummary)onReviewCancelled?.(true);}}>CANCEL</button></div>
+     {error&&<p role="alert">{error}</p>}<div className="action-card-buttons"><button type="button" className="button primary" onClick={apply}>{proposal.revisionSummary?'USE UPDATED WORKOUT':'USE THIS WORKOUT'}</button><button type="button" className="button secondary" onClick={()=>{setReviewing(false);setError('');onReviewCancelled?.(true);}}>CANCEL</button></div>
      <small>Nothing changes until you use this workout. Your permanent plan stays unchanged.</small>
    </>}
  </div>;

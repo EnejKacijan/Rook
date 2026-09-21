@@ -222,6 +222,7 @@ describe("training setup validation", () => {
         ),
     ).toBe(true);
     expect(exerciseArt({ exerciseId: "imported-custom-exercise", pattern: "horizontal-pull" })).toBeNull();
+    expect(exerciseArt({ exerciseId: "imported-custom-chest-fly", importedName: "Chest Fly" })).toMatch(/wg-pec-deck.*\.svg/);
     expect(
       exerciseArt({
         exerciseId: "imported-custom-machine-lateral-raise",

@@ -8,7 +8,7 @@ import './importResolution.css';
 
 const importEdgeSurface = root => root.closest('.import-plan-screen') || root;
 
-export function ImportResolution({review, program, reviewProgram=program, excludedExercises, resolved, matchIds, onResolve, onMatch, onCustom, candidates, onDone, onBack, revisit=null, revisions={}}) {
+export function ImportResolution({review, program, reviewProgram=program, excludedExercises, resolved, matchIds, onResolve, onMatch, onCustom, onRemove, onUndo, candidates, onDone, onBack, revisit=null, revisions={}}) {
   // Freeze presentation identities, not answers. Hidden groups stay mounted so
   // raw/temporarily invalid input survives Back, optional choices and matching.
   const [groups]=useState(()=>importExerciseReviewGroups(review,reviewProgram,matchIds));
@@ -25,7 +25,8 @@ export function ImportResolution({review, program, reviewProgram=program, exclud
   };
   const itemResolved=item=>item.issue?Boolean(resolved[item.id]):Boolean(exerciseFor(item)&&!needsImportMatch(exerciseFor(item)));
   const groupResolved=group=>group.items.every(item=>!applicable(item,group)||itemResolved(item));
-  const visitable=group=>group.items.some(item=>applicable(item,group));
+  const removed=id=>program.importMetadata?.removedExercises?.some(r=>r.exercise.id===id);
+  const visitable=group=>group.items.some(item=>applicable(item,group))||group.members.some(m=>removed(m.id));
   const current=groups[step],nextIndex=groups.findIndex((g,i)=>i>step&&visitable(g));
   const signature=JSON.stringify([current?.items.map(i=>[resolved[i.id],exerciseFor(i)]),program.days.find(d=>d.id===current?.dayId)?.weekday]);
   const invalidate=group=>completedSteps.current.delete(group.id);
@@ -90,7 +91,8 @@ export function ImportResolution({review, program, reviewProgram=program, exclud
           const available=matching&&active?candidates(group.dayId,active,query):[];
           return <section key={member.id} className="import-review-member" data-review-exercise={member.id} aria-label={source.importRole||source.originalImportedName||source.importedName}>
             {group.members.length>1&&<h2>{source.importRole||source.originalImportedName||source.importedName}{source.hybridSource?.method==='drop'?' · Additional drop set':''}</h2>}
-            {optional&&renderIssue(group,optional)}
+            {removed(member.id)?<p role="status">Removed from plan · Source preserved <button className="text-button" onClick={()=>onUndo?.(member.id)}>Undo</button></p>:onRemove&&active&&<button className="text-button" onClick={()=>{invalidate(group);onRemove(group.dayId,member.id);}}>Remove from plan</button>}
+            {!removed(member.id)&&optional&&renderIssue(group,optional)}
             <div hidden={!included||!active}>
               {match&&active&&<div className="import-resolution-match" hidden={pendingAlternative(group,member.id)}>
                 {!matching&&<div className="import-match-selected"><span>{active.importedName||active.exerciseId} ✓</span><button className="text-button" onClick={()=>{invalidate(group);setEditingMatches(v=>({...v,[match.id]:true}));}}>Change exercise</button></div>}

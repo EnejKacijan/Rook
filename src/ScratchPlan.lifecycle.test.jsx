@@ -52,11 +52,14 @@ it('does not overload leaving setup with silent discard of meaningful editor wor
  await click('Back to start',setup());expect(close).not.toHaveBeenCalled();expect(window.confirm).toHaveBeenCalledOnce();
  window.confirm.mockReturnValue(true);await click('Back',setup());expect(close).toHaveBeenCalledOnce();
 });
-it('releases reorder listeners while retained but inactive, then permits the next session of editing',async()=>{
- const add=vi.spyOn(window,'addEventListener'),remove=vi.spyOn(window,'removeEventListener');await begin();
- expect(add.mock.calls.some(([type,fn])=>type==='keydown'&&fn.name==='cancelOnEscape')).toBe(true);
- await click('Back to plan setup',editor());
- for(const [type,fn]of add.mock.calls.filter(([,fn])=>['cancelOnEscape','cancelCompactWeek','clearCandidate'].includes(fn.name)))
-  expect(remove.mock.calls.some(([t,f])=>t===type&&f===fn)).toBe(true);
- await click('CONTINUE',setup());expect(editor().hidden).toBe(false);
+it('releases a live gesture while retained but inactive, then permits the next session of editing',async()=>{
+ await begin();
+ const point={identifier:7,clientX:100,clientY:200};
+ const touch=(target,type,y=220)=>{const event=new Event(type,{bubbles:true,cancelable:true});Object.assign(event,{touches:type==='touchcancel'?[]:[{...point,clientY:y}],changedTouches:[point]});target.dispatchEvent(event);return event;};
+ const start=async()=>{const handle=editor().querySelector('.plan-workout-drag-surface');await act(async()=>touch(handle,'touchstart',200));await act(async()=>touch(handle,'touchmove'));expect(editor().querySelector('.is-reordering')).not.toBeNull();};
+ await start();await click('Back to plan setup',editor());
+ expect(editor().hidden).toBe(true);expect(editor().querySelector('.is-reordering,.plan-reorder-preview')).toBeNull();
+ expect(touch(window,'touchmove').defaultPrevented).toBe(false);
+ await click('CONTINUE',setup());expect(editor().hidden).toBe(false);await start();
+ await act(async()=>touch(window,'touchcancel'));expect(editor().querySelector('.is-reordering,.plan-reorder-preview')).toBeNull();
 });

@@ -8,6 +8,7 @@ const browser = await chromium.launch({ executablePath: 'C:/Program Files/Google
 try {
   for (const [width, appearance, style, firstUse] of [[320,'light','standard',true],[390,'light','standard',true],[390,'dark','standard',true],[320,'dark','standard',true],[390,'light','premium',true],[390,'dark','premium',true],[390,'light','standard',false]]) {
     const state = createReturningUserFixture(2); state.activeWorkout = null; state.conversations = []; state.activeCoachConversationId = null;
+    if(!state.program.days.some(day=>day.weekday===weekday()))state.program.days[0].weekday=weekday();
     state.selectedDay = weekday(); state.selectedDate = isoDay();
     if(firstUse)state.workouts=[];
     Object.assign(state.profile, { appearancePreference: appearance, themePreference: style==='premium'?'premium':appearance, stylePreference: style });
@@ -33,8 +34,7 @@ try {
     await page.waitForTimeout(300); await page.screenshot({ path: `${output}/${prefix}-entry.png` });
     const before = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
     await first.click();
-    assert.equal(await page.getByLabel('Ask Coach').inputValue(), 'Shorten today’s workout');
-    await page.getByRole('button', { name: 'Send message', exact: true }).click();
+    assert.equal(await page.getByLabel('Ask Coach').inputValue(), '', 'quick prompt sends directly without replacing the composer draft');
     await page.getByRole('button', { name: 'REVIEW CHANGES', exact: true }).waitFor();
     const after = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));
     assert.deepEqual(after.program, before.program); assert.deepEqual(after.todayAdaptation, before.todayAdaptation);

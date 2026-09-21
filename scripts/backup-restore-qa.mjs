@@ -54,6 +54,8 @@ async function preparePage(state, viewport = { width: 390, height: 844 }) {
 }
 
 async function putPhoto(page, state) {
+  // Initialize the actual schema, including the transactional restore store.
+  await page.evaluate(async()=>{const media=await import('/src/workoutPhotos.js');await media.getAllWorkoutPhotos();});
   await page.evaluate(({ id, workoutId }) => new Promise((resolve, reject) => {
     const request = indexedDB.open("rook-workout-media", 3);
     request.onupgradeneeded = () => {
@@ -156,7 +158,7 @@ assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('lift
 await page.waitForTimeout(250);
 await page.screenshot({ path: output("390-restore-preview.png") });
 await page.getByRole("button", { name: "RESTORE & REPLACE", exact: true }).click();
-await page.getByRole("heading", { name: "ROOK has been restored." }).waitFor();
+await page.getByRole("heading", { name: "ROOK has been restored." }).waitFor().catch(async error=>{throw new Error(error.message+'\n'+await page.locator('body').innerText());});
 await page.screenshot({ path: output("390-restore-success.png"), fullPage: true });
 
 const restored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));

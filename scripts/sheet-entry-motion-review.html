@@ -1,0 +1,26 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ROOK sheet entry motion review</title></head><body><div id="root"></div><script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,isoDay} from '/src/domain.js';
+import {startFreestyleWorkout,addFreestyleExercise} from '/src/freestyleWorkout.js';
+if(!import.meta.env.DEV||location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development review only');
+const params=new URLSearchParams(location.search),theme=params.get('theme')||'standard-light';
+const nativeStorage=window.localStorage,prefix='rook-sheet-entry-motion-review:';
+Object.defineProperty(window,'localStorage',{value:{getItem:k=>nativeStorage.getItem(prefix+k),setItem:(k,v)=>nativeStorage.setItem(prefix+k,v),removeItem:k=>nativeStorage.removeItem(prefix+k)}});
+let state=createReturningUserFixture(4);
+Object.assign(state.profile,{showExerciseImages:false,restTimerEnabled:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme.endsWith('dark')?'dark':'light'});
+state.selectedDate=isoDay();state.ai.planUpgradeDismissed=true;
+if(params.has('active'))state=addFreestyleExercise(startFreestyleWorkout(state),'leg-press');
+if(params.has('kind')){
+  state.activeWorkout=null;
+  state=addFreestyleExercise(startFreestyleWorkout(state),'barbell-bench-press');
+  const exercise=state.activeWorkout.exercises[0],set=exercise.sets[0];
+  Object.assign(set,{weight:80,reps:8});
+  if(params.get('kind')==='finish'){
+    exercise.sets.push({...set,id:'audit-pending-set'});
+    set.completed=true;
+  }
+}
+for(const key of [STORAGE_KEY,'rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+localStorage.setItem(STORAGE_KEY,serializeState(state));
+await import('/src/main.jsx');
+</script></body></html>

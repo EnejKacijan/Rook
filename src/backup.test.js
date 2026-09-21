@@ -9,6 +9,7 @@ import {
   parseBackupArchive,
 } from "./backup.js";
 import { deserializeState, serializeState, startWorkout, STORAGE_KEY } from "./domain.js";
+import { canonicalBackupCounts } from './backupCounts.js';
 import {
   RESTORE_JOURNAL_KEY,
   beginRestoreTransaction,
@@ -155,6 +156,74 @@ function rewriteManifest(bytes, change) {
   entries["manifest.json"] = strToU8(JSON.stringify(manifest));
   return zipSync(entries);
 }
+
+// Synthetic historical archives only. Never rewrite an owner's backup to make
+// validation pass: this models the six-counter exporter checked into f5cf5e4.
+function legacySixCountArchive(bytes) {
+  const entries=unzipSync(bytes);
+  const manifest=JSON.parse(strFromU8(entries['manifest.json']));
+  const state=JSON.parse(strFromU8(entries['data/state.json']));
+  delete manifest.counts.importedMeasurementSources;
+  delete state.importedMeasurementSources;
+  manifest.schemaVersion=1;
+  delete manifest.counts.savedWorkoutTemplates;
+  delete state.savedWorkoutTemplates;
+  entries['manifest.json']=strToU8(JSON.stringify(manifest));
+  entries['data/state.json']=strToU8(JSON.stringify(state));
+  return zipSync(entries);
+}
+
+describe('canonical archive count compatibility', () => {
+  let archive;
+  beforeAll(async()=>{ archive=await buildBackupArchive(createReturningUserFixture(1),[]); });
+
+  it('exports counters for the exact serialized payload and validates with the same function',async()=>{
+    const raw=JSON.parse(strFromU8(unzipSync(archive.bytes)['data/state.json']));
+    expect(archive.manifest.counts).toEqual(canonicalBackupCounts(raw,archive.manifest.photos));
+    const parsed=await parseBackupArchive(archive.bytes);
+    expect(parsed.countValidation).toHaveLength(8);
+    expect(parsed.countValidation.every(row=>row.status==='match')).toBe(true);
+  });
+
+  it('restores an original six-counter schema-1 archive without modifying its bytes or declared counts',async()=>{
+    const legacy=legacySixCountArchive(archive.bytes),before=legacy.slice();
+    const restored=await parseBackupArchive(legacy);
+    expect(legacy).toEqual(before);
+    expect(restored.manifest.counts).not.toHaveProperty('importedMeasurementSources');
+    expect(restored.countValidation.filter(row=>row.status==='match')).toHaveLength(6);
+    expect(restored.countValidation.at(-1)).toEqual({field:'importedMeasurementSources',expected:null,recomputed:0,status:'legacy-zero'});
+    expect(restored.state.workouts).toHaveLength(archive.manifest.counts.workouts);
+  });
+
+  it.each(['programDays','workouts','completedSets','workoutPhotos','coachConversations','weightCheckins','importedMeasurementSources','savedWorkoutTemplates'])('still rejects an incorrect %s count and reports all fields',async field=>{
+    const corrupt=rewriteManifest(archive.bytes,manifest=>{manifest.counts[field]++;});
+    const error=await parseBackupArchive(corrupt).catch(error=>error);
+    expect(error).toBeInstanceOf(BackupError);
+    expect(error.code).toBe('corrupted-backup');
+    expect(error.mismatchedFields).toEqual([field]);
+    expect(error.countValidation).toHaveLength(8);
+    expect(error.countValidation.find(row=>row.field===field)).toMatchObject({expected:archive.manifest.counts[field]+1,recomputed:archive.manifest.counts[field],status:'mismatch'});
+  });
+
+  it.each(['programDays','workouts','completedSets','workoutPhotos','coachConversations','weightCheckins'])('does not excuse a missing original %s counter as legacy',async field=>{
+    const corrupt=rewriteManifest(legacySixCountArchive(archive.bytes),manifest=>{delete manifest.counts[field];});
+    await expect(parseBackupArchive(corrupt)).rejects.toMatchObject({code:'corrupted-backup',mismatchedFields:[field]});
+  });
+
+  it('rejects a missing measurement count if the collection exists, even when empty',async()=>{
+    const entries=unzipSync(legacySixCountArchive(archive.bytes));
+    const raw=JSON.parse(strFromU8(entries['data/state.json']));raw.importedMeasurementSources=[];
+    entries['data/state.json']=strToU8(JSON.stringify(raw));
+    await expect(parseBackupArchive(zipSync(entries))).rejects.toMatchObject({code:'corrupted-backup',mismatchedFields:['importedMeasurementSources']});
+  });
+
+  it('keeps an added payload record detectable independently of its manifest',async()=>{
+    const entries=unzipSync(archive.bytes),raw=JSON.parse(strFromU8(entries['data/state.json']));
+    raw.conversations.push({id:'extra-record',conversationId:'extra-thread',user:'Synthetic record',reply:{text:'Synthetic answer'}});
+    entries['data/state.json']=strToU8(JSON.stringify(raw));
+    await expect(parseBackupArchive(zipSync(entries))).rejects.toMatchObject({code:'corrupted-backup',mismatchedFields:['coachConversations']});
+  });
+});
 
 function readBlob(blob) {
   return new Promise((resolve, reject) => {
@@ -473,7 +542,9 @@ describe("ROOK backup archives", () => {
       discardSnapshot: async () => { discarded += 1; },
     });
     expect(rollbackCalls).toBe(0);
-    expect(discarded).toBe(1);
+    // A clean startup is read-only, including orphan photo-recovery data.
+    // Explicit finish/new restore owns snapshot cleanup.
+    expect(discarded).toBe(0);
     expect(storage.getItem(STORAGE_KEY)).toBe(newState);
   });
 });

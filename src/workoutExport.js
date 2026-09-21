@@ -10,7 +10,7 @@ import {
   isoDay,
   weekDate,
   weightUnit,
-  workoutPlanDate,
+  workoutPerformedDate,
   workoutSetSummary,
 } from "./domain.js";
 import { historySetDescriptor, loggingModeOf, setTypeLabel, hasOpenRepTarget, openRepTargetLabel, hasUnspecifiedRepTarget, loggingUnit } from "./advancedLogging.js";
@@ -143,7 +143,7 @@ export function buildWorkoutExport({
   includeNotes = false,
 }) {
   if(!completed&&workout.exercises.some(exercise=>exercise.partialPrescription))throw new Error('Resolve the imported workout structure before exporting.');
-  const planDate = date || workoutPlanDate(workout) || isoDay();
+  const planDate = date || workoutPerformedDate(workout) || isoDay();
   const summary = workoutSetSummary(workout);
   const lines = [
     `ROOK - ${workout.name}`,

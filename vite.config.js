@@ -1,6 +1,8 @@
 import { defineConfig, loadEnv } from 'vite';
 import react from '@vitejs/plugin-react';
 import { configDefaults } from 'vitest/config';
+import { createHash } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 
 function rookLocalApi() {
   let handlerPromise;
@@ -43,8 +45,12 @@ export default defineConfig(({ mode }) => {
     if (/^(?:OPENAI_|EXPERT_)/.test(key)) process.env[key] = value;
   return {
     plugins: [react(), rookLocalApi()],
-    define: { __ROOK_APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0') },
+    define: {
+      __ROOK_APP_VERSION__: JSON.stringify(process.env.npm_package_version || '1.0.0'),
+      __ROOK_BUILD_ID__: JSON.stringify(createHash('sha256').update(['src/App.jsx','src/domain.js','src/localStateStorage.js','src/StartupBoundary.jsx','src/main.jsx','src/backup.js','src/restoreTransaction.js','public/sw.js'].map(path=>readFileSync(new URL(path,import.meta.url))).join('\n')).digest('hex').slice(0,16)),
+    },
     test: { environment: 'jsdom', globals: true, testTimeout: 10000,
+      setupFiles: ['./src/testStorageSession.js'],
       exclude: [...configDefaults.exclude, 'artifacts/**', 'tmp/**', 'output/**'],
     },
   };

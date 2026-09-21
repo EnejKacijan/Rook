@@ -1,4 +1,11 @@
-import { effectiveWeekSchedule } from './flexibleWeek.js';
+import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
+import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplates} from './workoutTemplateSchema.js';
+import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
+import {normalizeCoachConversations} from './coachConversations.js';
+import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
+import {workoutPerformedDate} from './workoutDates.js';
+export {workoutPerformedDate} from './workoutDates.js';
+import { effectiveWeekSchedule,flexibleSessionStatus,missedFlexibleSessions } from './flexibleWeek.js';
 import { matchImportCatalogName } from './importExerciseMatching.js';
 import { normalizePartialTargets } from './importPartialPrescription.js';
 import { combinedAdjustment, combinedTemplate, isCombinedAdjustment, validateCombinedState, cancelCombinedWorkout } from './combinedWorkoutLifecycle.js';
@@ -144,7 +151,7 @@ export const exerciseCatalog = {
   "pec-deck": {
     id: "pec-deck",
     name: "Pec Deck",
-    aliases: ["Pec Deck Fly", "Machine Chest Fly"],
+    aliases: ["Pec Deck Fly", "Machine Chest Fly", "Chest Fly"],
     pattern: "chest-isolation",
     muscles: ["Chest"],
     equipment: ["machines"],
@@ -1911,6 +1918,9 @@ export const repRangeLabel = (minimum, maximum) =>
   Number(minimum) === Number(maximum)
     ? String(minimum)
     : `${minimum}–${maximum}`;
+// This is exercise prescription provenance, independent of session origin.
+// Both kinds are session-owned additions and retain separate instance IDs.
+export const isSessionAddedExercise = exercise => ['freestyle','saved-template'].includes(exercise?.prescriptionSource);
 export const targetLabel = (exercise, showRir = true) => {
   if (exercise.prescriptionSource === 'freestyle') return pluralize(exercise.sets.length, 'set');
   if(exercise.partialPrescription?.roundCount!=null)return `${exercise.partialPrescription.roundCount} rounds · Recording structure needs review`;
@@ -1924,7 +1934,7 @@ export const targetLabel = (exercise, showRir = true) => {
 };
 function normalizeTimedExercises(exercises, force = false) {
   for (const exercise of exercises || []) {
-    if (exercise.prescriptionSource === 'freestyle') continue;
+    if (['freestyle','saved-template'].includes(exercise.prescriptionSource)) continue;
     const item = exerciseCatalog[exercise.exerciseId];
     if (item?.measure !== "seconds") continue;
     const [minimum, maximum] = item.durationRange;
@@ -2106,10 +2116,12 @@ export function blankState() {
     defaultGymProfileId: null,
     substitutionPreferences: [],
     customExercises: [],
+    savedWorkoutTemplates: [],
     exerciseAliases: [],
     weekScheduleOverrides: {},
     flexibleWeek: null,
     workoutOccurrenceOverrides: {},
+    dismissedMissedReminderKey: null,
     optionalSessions: [],
     workouts: [],
     workoutCorrections: [],
@@ -2209,7 +2221,7 @@ function migrateBlockedExercises(stored) {
       .filter((exercise) => {
         // Imported role/additional-set blocks intentionally repeat a catalog
         // exercise. Their distinct instance identity is executable source work.
-        const key=exercise?.hybridSource&&exercise.id?`${exercise.exerciseId}:${exercise.id}`:exercise?.exerciseId;
+        const key=(workout.source==='freestyle'||exercise?.hybridSource||isSessionAddedExercise(exercise))&&exercise?.id?`${exercise.exerciseId}:${exercise.id}`:exercise?.exerciseId;
         if (!exercise || seen.has(key)) return false;
         seen.add(key);
         return true;
@@ -2303,7 +2315,7 @@ function migrateWorkoutPlanDates(stored) {
     const canonicalPlanDate = workoutPlanDate(workout);
     if (!canonicalPlanDate) return;
     workout.canonicalPlanDate ||= canonicalPlanDate;
-    workout.workoutDateKey ||= canonicalPlanDate;
+    workout.workoutDateKey = workoutPerformedDate(workout) || workout.workoutDateKey || canonicalPlanDate;
     if (!workout.sourcePlanSlotId && workout.programDayId)
       workout.sourcePlanSlotId = `${workout.programDayId}:${canonicalPlanDate}`;
   };
@@ -2315,11 +2327,14 @@ function migrateWorkoutPlanDates(stored) {
 export function deserializeState(input, { strict = false } = {}) {
   try {
     const stored = typeof input === "string" ? JSON.parse(input) : structuredClone(input);
+    const protectedCounts = strict && stored ? Object.fromEntries(['customExercises','exerciseAliases','gymProfiles','conversations','workouts','weightCheckins'].map(key => [key,Array.isArray(stored[key])?stored[key].length:0])) : null;
+    const activeLoggedSetIds = strict ? (stored?.activeWorkout?.exercises || []).flatMap(e=>(Array.isArray(e?.sets)?e.sets:[]).filter(s=>s?.completed).map(s=>s.id)) : [];
     if (!stored || ![2, 3].includes(stored.schemaVersion)) {
       if (strict) throw new Error('Saved ROOK schema could not be safely loaded.');
       return blankState();
     }
     if (strict) {
+      assertStateShape(stored);
       if (!stored.profile || typeof stored.profile !== 'object' || Array.isArray(stored.profile)) throw new Error('Saved profile could not be safely loaded.');
       for (const key of ['workouts','planVersions','customExercises','workoutCorrections','optionalSessions']) {
         if (stored[key] != null && !Array.isArray(stored[key])) throw new Error(`Saved ${key} could not be safely loaded.`);
@@ -2333,6 +2348,7 @@ export function deserializeState(input, { strict = false } = {}) {
       }
     }
     validateCombinedState(stored);
+    assertWorkoutTemplates(stored.savedWorkoutTemplates);
     stored.schemaVersion = 3;
     migrateBlockedExercises(stored);
     migrateMissingExerciseRest(stored);
@@ -2500,16 +2516,20 @@ export function deserializeState(input, { strict = false } = {}) {
         const checkedVersion = validateProgram(repaired, null, {
           preserveSchedule: Boolean(repaired?.userEdited),
         });
-        if (!checkedVersion.valid) return false;
+        if (!checkedVersion.valid) {
+          if (strict) throw new Error('Saved plan history could not be safely loaded.');
+          return false;
+        }
         repaired.trainingBlock = normalizeTrainingBlock(repaired);
         version.program = repaired;
         return true;
       });
     normalizeTrainingBlocksState(stored);
     normalizePlanHistoryState(stored);
-    return {
+    const hydrated = {
       ...base,
       ...stored,
+      dismissedMissedReminderKey: typeof stored.dismissedMissedReminderKey === 'string' ? stored.dismissedMissedReminderKey : null,
       profile,
       program,
       planVersions: stored.planVersions,
@@ -2556,9 +2576,14 @@ export function deserializeState(input, { strict = false } = {}) {
             )
             .map((entry) => ({ ...entry, weightKg: Number(entry.weightKg) }))
         : [],
-      conversations,
-      activeCoachConversationId,
+      ...normalizeCoachConversations({conversations, activeCoachConversationId, coachConversationMeta: stored.coachConversationMeta}),
     };
+    if (strict) {
+      for (const [key,count] of Object.entries(protectedCounts)) if ((hydrated[key]?.length || 0) < count) throw new Error('Saved records could not be safely loaded without dropping data.');
+      const retained = (hydrated.activeWorkout?.exercises || []).flatMap(e=>e.sets.filter(s=>s.completed).map(s=>s.id));
+      if (activeLoggedSetIds.length > retained.length || activeLoggedSetIds.some(id=>!retained.includes(id))) throw new Error('Logged sets could not be safely loaded without dropping data.');
+    }
+    return hydrated;
   } catch (error) {
     if (strict) throw error;
     return blankState();
@@ -2566,9 +2591,7 @@ export function deserializeState(input, { strict = false } = {}) {
 }
 export function readStartupState(storage) {
   try {
-    const raw = (storage ?? globalThis.localStorage).getItem(STORAGE_KEY);
-    if (raw === null) return { status: 'empty' };
-    return { status: 'ready', state: deserializeState(raw, { strict: true }) };
+    return readLocalState(storage ?? globalThis.localStorage, hydrateStoredState);
   } catch (error) {
     return { status: 'error', error };
   }
@@ -2621,17 +2644,23 @@ export const stateForPersistence = (state) => {
   return persistedState;
 };
 export const serializeState = (state) => JSON.stringify(stateForPersistence(state));
-export const saveState = (state) => {
+export const saveState = (state, options = {}) => {
   try {
-    localStorage.setItem(STORAGE_KEY, serializeState(state));
-    return true;
+    const raw = serializeState(state);
+    const defaults = blankState();
+    defaults.profile.id = state?.profile?.id;
+    if (raw === serializeState(defaults) && options.reason !== 'first-run:user-confirmed') return false;
+    return persistLocalState(raw, { ...options, hydrate: hydrateStoredState });
   } catch {
     return false;
   }
 };
 
+export const hydrateStoredState = input => deserializeState(input, { strict: true });
+export const saveSerializedState = (raw, options = {}) => persistLocalState(raw, { ...options, hydrate: hydrateStoredState });
+
 export const weekKey = (date = new Date()) => isoDay(weekDate("Mon", date));
-function calendarDate(value) {
+export function calendarDate(value) {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value))
     return new Date(`${value}T12:00:00`);
   const date = new Date(value);
@@ -2861,12 +2890,11 @@ export function nextScheduledWorkout(state, afterDate = new Date()) {
   return null;
 }
 export function plannedWorkoutForDate(state, date = new Date()) {
-  const target = isoDay(date);
-  return (
-    currentWeekSchedule(state, date).find(
-      (item) => item.scheduledDate === target,
-    )?.workout || null
-  );
+  const target = isoDay(calendarDate(date));
+  const items=currentWeekSchedule(state,date).filter(item=>item.scheduledDate===target);
+  // A completed occurrence may share today's date with an explicitly moved
+  // unstarted occurrence. Only the latter is the primary Start candidate.
+  return (items.find(item=>flexibleSessionStatus(state,item)!=='completed') || items[0])?.workout || null;
 }
 export function validateWeekScheduleChanges(state, changes, date = new Date()) {
   if (!Array.isArray(changes) || !changes.length || !state?.program)
@@ -7350,7 +7378,10 @@ export function validateProgram(program, profile = null, options = {}) {
       if (sets > hardCap)
         errors.push(`${muscle} exceeds the hard weekly volume limit of ${hardCap}.`);
     }
-  if (!allowImportedExercises && profile?.goal === "Build muscle" && program.volumeTargets) {
+  // Generated minimum-volume targets describe the generator's output. An
+  // explicitly edited preview may deliberately remove work, just like Edit
+  // plan; structural, restriction and maximum-volume checks still apply.
+  if (!allowImportedExercises && profile?.goal === "Build muscle" && program.volumeTargets && (!program.userEdited || options.requireProgramQuality)) {
     const volume = weeklyStimulusVolume(program);
     const targets = hypertrophyVolumeTargets(profile);
     for (const [muscle, policy] of Object.entries(targets)) {
@@ -8218,6 +8249,7 @@ export function templateForToday(program, date = new Date(), selectedDay) {
   );
 }
 export function adaptedTemplateForToday(state, date = new Date()) {
+  const repeat=repeatTemplate(state,isoDay(date));if(repeat)return repeat;
   const combined=combinedTemplate(state,isoDay(date));
   if(combined)return combined;
   const template = plannedWorkoutForDate(state, date);
@@ -8465,8 +8497,9 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
   if (next) {
     const previousStages = previous?.stages || [];
     const previousRampSets = new Map(
-      (previous?.rampUpSets || []).flatMap((entry) =>
-        (entry.sets || []).map((set) => [set.id, Boolean(set.completed)]),
+      // Stages are canonical after JSON reload; legacy top-level copies may lag.
+      [...(previous?.rampUpSets || []), ...previousStages.flatMap(stage => stage.rampUpSets || [])].flatMap((entry) =>
+        (entry.sets || []).map((set) => [`${entry.exerciseInstanceId || entry.exerciseId}:${set.id}`, Boolean(set.completed)]),
       ),
     );
     const previousItems = new Map(
@@ -8486,9 +8519,12 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
         stage.skipped = Boolean(previous?.skipped);
       }
       for (const entry of stage.rampUpSets || [])
-        for (const set of entry.sets || [])
-          if (previousRampSets.has(set.id))
-            set.completed = previousRampSets.get(set.id);
+        for (const set of entry.sets || []) {
+          const key = `${entry.exerciseInstanceId || entry.exerciseId}:${set.id}`;
+          const legacyKey = `${entry.exerciseId}:${set.id}`;
+          if (previousRampSets.has(key) || previousRampSets.has(legacyKey))
+            set.completed = previousRampSets.get(key) ?? previousRampSets.get(legacyKey);
+        }
       for (const item of [
         ...(stage.general || []),
         ...(stage.movementPreparation || []),
@@ -8501,6 +8537,7 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
   return workout;
 }
 export function startWorkout(state, template) {
+  if(isRepeatAdjustment(state.todayAdaptation) && template?.todayOnlyAdjustment?.id!==state.todayAdaptation.id)throw Error('Finish or cancel the pending repeated workout first.');
   const combined=combinedAdjustment(state);
   if(combined&&template?.todayOnlyAdjustment?.id===combined.id&&template.exercises.some(e=>!isExerciseAllowed(exerciseCatalog[e.exerciseId],effectiveGymContext(state,{}).profile)))
     throw new Error('Your equipment or restrictions changed. Cancel and review the combined workout again before starting.');
@@ -8538,18 +8575,21 @@ export function startWorkout(state, template) {
       `${exerciseName(prohibited)} conflicts with the current training restrictions.`,
     );
   const startedAt = Date.now();
-  const canonicalPlanDate = template.flexibleWeekMoved ? isoDay(startedAt) : state.selectedDate || isoDay(startedAt);
+  const occurrence=currentWeekSchedule(state,state.selectedDate || isoDay(startedAt)).find(item=>item.workoutId===template.id && (!template.logicalSessionId || (item.logicalSessionId || `${item.workoutId}:${item.originalDate}`)===template.logicalSessionId));
+  const logicalSessionId=template.logicalSessionId || (occurrence ? `${occurrence.workoutId}:${occurrence.originalDate}` : null);
+  const canonicalPlanDate = occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
   const workout = {
     id: uid("active"),
+    ...(isRepeatAdjustment(template.todayOnlyAdjustment)?{source:'repeat',repeatedFromWorkoutId:template.todayOnlyAdjustment.sourceWorkoutId}:{}),
     templateId: template.weekday,
     programDayId: template.id,
     canonicalPlanDate,
-    workoutDateKey: canonicalPlanDate,
+    workoutDateKey: isoDay(startedAt),
     sourcePlanSlotId:
-      template.logicalSessionId || template.trainingBlock?.blockWorkoutId ||
+      logicalSessionId || template.trainingBlock?.blockWorkoutId ||
       (template.id ? `${template.id}:${canonicalPlanDate}` : null),
     optionalSessionId: template.optionalSessionId || null,
-    ...(template.logicalSessionId ? { logicalSessionId: template.logicalSessionId, originalScheduledDate: template.originalScheduledDate, flexibleWeekMoved: template.flexibleWeekMoved } : {}),
+    ...(logicalSessionId ? { logicalSessionId, originalScheduledDate: template.originalScheduledDate || occurrence?.originalDate || canonicalPlanDate, flexibleWeekMoved: template.flexibleWeekMoved || occurrence?.moved || false } : {}),
     name: template.name,
     workoutName: template.workoutName,
     workoutDescriptor: template.workoutDescriptor,
@@ -8578,6 +8618,7 @@ export function startWorkout(state, template) {
       ? structuredClone(template.warmupPlan)
       : { mode: "auto" },
     exercises: template.exercises.map((base) => {
+      const definition = preparedExercise(base);
       const loadRequirement = exerciseLoadRequirement(base);
       const reviewedStart = base.nextBlockStartingLoad && template.trainingBlock && base.nextBlockStartingLoad.blockId === template.trainingBlock.blockId &&
         !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
@@ -8586,8 +8627,9 @@ export function startWorkout(state, template) {
       const completedPreviousSets =
         previous?.sets.filter((set) => set.completed) || [];
       return {
-        ...structuredClone(base),
-        sets: base.sets.map((set, index) => {
+        ...definition,
+        templatePrescription:reusableExerciseDefinition(base,{prescribed:true}),
+        sets: definition.sets.map((set, index) => {
           const candidatePreviousSet = completedPreviousSets[index];
           const previousSet =
             candidatePreviousSet &&
@@ -8620,16 +8662,14 @@ export function startWorkout(state, template) {
   };
   normalizeAdvancedLoggingState({ activeWorkout: workout, workouts: [] });
   const prepared = refreshWorkoutWarmup(workout, state.profile, state.program);
-  prepared.restartSnapshot = {
-    exercises: structuredClone(prepared.exercises),
-    warmup: prepared.warmup ? structuredClone(prepared.warmup) : null,
-  };
+  prepared.restartSnapshot = sessionStartSnapshot(prepared);
   return prepared;
 }
 export function activeWorkoutCanRestart(workout) {
-  const snapshot = workout?.restartSnapshot;
-  if (!snapshot || !Array.isArray(snapshot.exercises)) return false;
-  if (Number(workout.exerciseIndex || 0) !== 0 || workout.rest) return true;
+  const snapshot = restartBaseline(workout);
+  if (!snapshot) return false;
+  if (Number(workout.exerciseIndex || 0) !== 0 || workout.rest ||
+      workout.handledSupersetRestRounds?.length || workout.removedUpNextExercises?.length) return true;
   return (
     JSON.stringify(workout.exercises) !== JSON.stringify(snapshot.exercises) ||
     JSON.stringify(workout.warmup || null) !==
@@ -8639,16 +8679,19 @@ export function activeWorkoutCanRestart(workout) {
 export function restartActiveWorkout(state, restartedAt = Date.now()) {
   const active = state.activeWorkout;
   if (!activeWorkoutCanRestart(active)) return state;
-  const snapshot = active.restartSnapshot;
+  const snapshot = restartBaseline(active);
+  // Restored instances must not coexist with removal tombstones or Undo data.
+  const {removedUpNextExercises, ...session}=active;
   return {
     ...state,
     activeWorkout: {
-      ...active,
+      ...session,
       startedAt: restartedAt,
       updatedAt: restartedAt,
       exerciseIndex: 0,
       rest: null,
       handledSupersetRestRounds: [],
+      restartSnapshot: snapshot,
       exercises: structuredClone(snapshot.exercises),
       warmup: snapshot.warmup ? structuredClone(snapshot.warmup) : null,
     },
@@ -8720,10 +8763,7 @@ export function resumeCompletedWorkout(
   );
   active.rest = null;
   active.handledSupersetRestRounds = [];
-  active.restartSnapshot = {
-    exercises: structuredClone(active.exercises),
-    warmup: active.warmup ? structuredClone(active.warmup) : null,
-  };
+  active.restartSnapshot = sessionStartSnapshot(active);
   const correction = {
     id: uid("workout-correction"),
     type: "resume-empty-completion",
@@ -8743,7 +8783,7 @@ export function resumeCompletedWorkout(
     activeWorkout: active,
     optionalSessions,
     selectedDay: active.templateId || state.selectedDay,
-    selectedDate: workoutPlanDate(active) || state.selectedDate,
+    selectedDate: workoutPerformedDate(active) || state.selectedDate,
     workouts: state.workouts.filter((_, index) => index !== workoutIndex),
     workoutCorrections: [...(state.workoutCorrections || []), correction],
   };
@@ -9141,12 +9181,13 @@ export function normalizeSessionNote(value) {
 export function completeWorkout(state) {
   if (!state.activeWorkout) return state;
   if(isCombinedAdjustment(state.activeWorkout.adjustment) && !workoutSetSummary(state.activeWorkout).completed) return cancelCombinedWorkout(state);
-  if(state.activeWorkout.exercises.some(hasUnspecifiedRepTarget)&&!workoutSetSummary(state.activeWorkout).completed)return {...state,activeWorkout:null};
   if (state.activeWorkout.source === 'freestyle' && !workoutSetSummary(state.activeWorkout).completed) return state;
+  if(state.activeWorkout.exercises.some(hasUnspecifiedRepTarget)&&!workoutSetSummary(state.activeWorkout).completed)return {...state,activeWorkout:null};
   const endedAt = Date.now();
   const summary = workoutSetSummary(state.activeWorkout);
   const endedEarly = summary.completed < summary.total;
   const completedActiveWorkout = structuredClone(state.activeWorkout);
+  completedActiveWorkout.reusableStructure=reusableWorkoutStructure(state.activeWorkout);
   delete completedActiveWorkout.restartSnapshot;
   if (completedActiveWorkout.source === 'freestyle') completedActiveWorkout.exercises = completedActiveWorkout.exercises.filter(exercise => exercise.sets.some(set => set.completed));
   const session = {
@@ -9158,6 +9199,7 @@ export function completeWorkout(state) {
       Math.round((endedAt - state.activeWorkout.startedAt) / 1000),
     ),
     completedAt: new Date().toISOString(),
+    workoutDateKey: workoutPerformedDate({...completedActiveWorkout,completedAt:new Date().toISOString()}),
     status: endedEarly ? "ended-early" : "completed",
     endedEarly,
     plannedSetCount: summary.planned,
@@ -9179,12 +9221,13 @@ export function completeWorkout(state) {
     workouts: [...state.workouts, session],
   };
   if(isCombinedAdjustment(session.adjustment)) {
-    session.combinedSourcesResolved=!endedEarly && summary.completedPlanned>0 && summary.completedPlanned===summary.planned;
+    session.combinedSourcesResolved=!session.removedUpNextExercises?.length && !endedEarly && summary.completedPlanned>0 && summary.completedPlanned===summary.planned;
     next.todayAdaptation=null;
     // Schedule resolution is derived from this single factual record. Do not
     // award either source a completed block slot or change the weekly template.
     return next;
   }
+  if(isRepeatAdjustment(session.adjustment)){next.todayAdaptation=null;return next;}
   if (session.source === 'freestyle') return next;
   return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), Object.values(next.flexibleWeek?.sessions || {}).filter(record => record.blockId === next.program?.trainingBlock?.id));
 }
@@ -9211,7 +9254,7 @@ export function startOptionalSession(
   now = Date.now(),
 ) {
   if (
-    combinedAdjustment(state) ||
+    combinedAdjustment(state) || isRepeatAdjustment(state.todayAdaptation) ||
     state.activeWorkout ||
     state.activeOptionalSession ||
     date !== isoDay(new Date(now)) ||
@@ -9374,30 +9417,10 @@ export function replacementCandidates(
   ).slice(0, 4);
 }
 export function missedPlannedWorkouts(state, date = new Date()) {
-  if (!state.program) return [];
-  const created = isoDay(state.program.createdAt);
-  const result = [];
-  for (let offset = 1; offset <= 14; offset++) {
-    const candidate = new Date(date);
-    candidate.setHours(12, 0, 0, 0);
-    candidate.setDate(candidate.getDate() - offset);
-    if (isoDay(candidate) < created) continue;
-    const planned = plannedWorkoutForDate(state, candidate);
-    if (!planned) continue;
-    const completed = state.workouts.some(
-      (workout) =>
-        (workout.programDayId === planned.id ||
-          (!workout.programDayId && workout.templateId === planned.weekday)) &&
-        workoutPlanDate(workout) === isoDay(candidate),
-    );
-    if (!completed)
-      result.push({
-        date: isoDay(candidate),
-        weekday: planned.weekday,
-        workoutName: planned.name,
-      });
-  }
-  return result;
+  return missedFlexibleSessions(state, isoDay(calendarDate(date))).map(item => ({
+    logicalSessionId:item.logicalSessionId, originalDate:item.originalDate,
+    date:item.scheduledDate, weekday:weekday(calendarDate(item.scheduledDate)), workoutName:item.workout.name,
+  }));
 }
 export function coachContext(state) {
   const scheduledToday =
@@ -9517,6 +9540,7 @@ export function coachContext(state) {
     recentWorkouts: state.workouts.slice(-8).map((workout) => ({
       id: workout.id,
       planDate: workoutPlanDate(workout),
+      performedDate: workoutPerformedDate(workout),
       completedAt: workout.completedAt,
       name: workout.name,
       completedSetCount: workoutSetSummary(workout).completed,
@@ -10100,7 +10124,7 @@ export function deterministicCoach(state, message) {
         type: "resume-empty-completed-workout",
         label: "RESUME WORKOUT",
         targetCompletedWorkoutId: resumable.id,
-        trainingDate: workoutPlanDate(resumable),
+        trainingDate: workoutPerformedDate(resumable),
         expectedCompletedAt: resumable.completedAt,
         operationId: `coach-resume:${resumable.id}:${resumable.completedAt}`,
       },
@@ -10203,7 +10227,7 @@ export function coachActionConflict(state, action) {
       target.completedAt !== action.expectedCompletedAt
     )
       return "workout-changed";
-    if (action.trainingDate && workoutPlanDate(target) !== action.trainingDate)
+    if (action.trainingDate && workoutPerformedDate(target) !== action.trainingDate)
       return "workout-changed";
     return null;
   }
@@ -10464,7 +10488,7 @@ export function consistencyForCurrentWeek(state, date = new Date()) {
   // Reservations remove actionable prompts, not the week's planned denominator.
   const planned = effectiveWeekSchedule(state, date, {includeCombined:true}).length;
   const completed = (state.workouts || []).filter((workout) => {
-    const planDate = workoutPlanDate(workout);
+    const planDate = workoutPerformedDate(workout);
     return (
       workout.completedAt &&
       !workout.historicalImport &&

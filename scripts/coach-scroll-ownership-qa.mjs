@@ -77,8 +77,9 @@ try{
    await r.p.locator('.coach-scroll').evaluate(e=>e.scrollTop=e.scrollHeight);await frames(r.p);await r.p.evaluate(()=>qaViewport(450,25));await frames(r.p);const bottom=await measure(r.p);assert.ok(bottom.transcript.scrollHeight-bottom.transcript.clientHeight-bottom.transcript.scrollTop<2,'near-bottom follows keyboard resize');
    await r.p.screenshot({path:`${out}/${width}-${style}-${appearance}-keyboard.png`});
    await input.evaluate(e=>e.blur());await r.p.evaluate(()=>qaViewport(844,0));await frames(r.p);assert.equal((await measure(r.p)).composer.bottom,initial.composer.bottom);checks.push(...await checkScroll(r,'closed-again'));
-   await r.p.getByLabel('Conversation history',{exact:true}).click();assert.equal(await r.p.locator('.coach-content-surface').evaluate(e=>e.inert),true);
-   await r.p.locator('.coach-history-group button').first().click();await r.p.getByLabel('Back to conversation history',{exact:true}).waitFor();await frames(r.p);checks.push(...await checkScroll(r,'history-conversation'));
+   await r.p.getByLabel('Chat history',{exact:true}).click();assert.equal(await r.p.locator('.coach-content-surface').evaluate(e=>e.inert),true);
+   await r.p.locator('.coach-history-group button').first().click();await r.p.getByLabel('Back to conversation history',{exact:true}).waitFor();await frames(r.p);assert.equal(await r.p.locator('.coach-input').count(),0,'archived conversations are read-only');
+   await r.p.getByLabel('Back to conversation history',{exact:true}).click();await r.p.getByLabel('Back to Coach',{exact:true}).click();await frames(r.p);checks.push(...await checkScroll(r,'history-return'));
    assert.equal(await input.inputValue(),'A retained multiline draft\nSecond line');
    // Background/foreground notifications re-read viewport, without a timeout.
    await r.p.evaluate(()=>{Object.defineProperty(document,'hidden',{configurable:true,value:true});document.dispatchEvent(new Event('visibilitychange'));Object.defineProperty(document,'hidden',{configurable:true,value:false});document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(new Event('pageshow'));});await frames(r.p);
@@ -86,7 +87,7 @@ try{
    await r.p.screenshot({path:`${out}/${width}-${style}-${appearance}-conversation.png`});
    await r.p.getByRole('button',{name:'TODAY',exact:true}).click();assert.notEqual(await r.p.evaluate(()=>getComputedStyle(document.body).position),'fixed');
    // Give the normal page enough content to scroll even on a short rest-day fixture.
-   await r.p.locator('main.screen').evaluate(e=>e.style.minHeight='1500px');await r.p.evaluate(()=>scrollTo(0,200));assert.ok(await r.p.evaluate(()=>scrollY)>0,'normal page scrolling restored');
+   await r.p.locator('main.today-screen').evaluate(e=>e.style.minHeight='1500px');await r.p.evaluate(()=>scrollTo(0,200));assert.ok(await r.p.evaluate(()=>scrollY)>0,'normal page scrolling restored');
    assert.deepEqual(r.errors,[]);return {initial,keyboard,foreground,checks};
   }finally{await r.c.close();}
  });

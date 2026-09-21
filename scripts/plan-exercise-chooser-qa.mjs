@@ -10,6 +10,8 @@ const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chr
 try {
  for(const width of [320,390,430]) for(const style of ['standard','premium']) for(const appearance of ['light','dark']) {
   const state=createReturningUserFixture(3);state.activeWorkout=null;state.profile.avoid='';state.profile.trainingSafety=null;
+  // Keep room under the current eight-exercise planning limit.
+  for(const day of state.program.days)day.exercises=day.exercises.slice(0,6);
   Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
   const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
   await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);

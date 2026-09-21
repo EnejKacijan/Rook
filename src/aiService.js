@@ -1,4 +1,5 @@
 import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
+import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
 import {
   HOME_EQUIPMENT,
@@ -1516,7 +1517,10 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     if (consumedPrescriptionLines) index += consumedPrescriptionLines;
   }
   const trainingDays = days.filter((day) => day.exercises.length);
-  if (!trainingDays.length && !roundGroups.length) return null;
+  if (!trainingDays.length && !roundGroups.length) {
+    if(review){const grouped=analyzeHybridImport(sourceText,null,{heading:parsedDayHeading,workoutHeading:genericWorkoutHeading,matchName:matchImportedExerciseName});if(grouped.multiline)return compileHybridImport(grouped);}
+    return null;
+  }
   const parsedNameCounts = new Map();
   for (const name of trainingDays.flatMap((day) => [
     ...day.exercises.map((exercise) => exercise.sourceName),
@@ -1562,13 +1566,15 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     sourceOffset += raw.length + 1;
     return record;
   }) : [];
-  return {
+  const parsed = {
     name: explicitTitle
       ? String(explicitTitle).trim().slice(0, 80)
       : "Imported plan",
     days: trainingDays,
     ...((review || roundGroups.length) ? { parseReview: { version: 1, lines: sourceLines, roundGroups } } : {}),
   };
+  if(review){const grouped=analyzeHybridImport(sourceText,parsed,{heading:parsedDayHeading,workoutHeading:genericWorkoutHeading,matchName:matchImportedExerciseName});if(grouped.multiline)return compileHybridImport(grouped);}
+  return parsed;
 }
 
 function finalizeImportedPlan(profile, existingPlanText, data, { review = false } = {}) {
@@ -2047,10 +2053,12 @@ export const AIService = {
   async coach(state, message, combineOptions = {}) {
     const responseLanguage = preferredCoachLanguage(
       message,
-      state.conversations,
+      state.conversations.filter(entry => (entry.conversationId || 'legacy') === state.activeCoachConversationId),
     );
     const combined=await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload)});
     if(combined)return combined;
+    const missed=coachMissedReply(state,message);
+    if(missed)return missed;
     const deterministic = deterministicCoach(state, message);
     if (deterministic.final) return deterministic;
     try {

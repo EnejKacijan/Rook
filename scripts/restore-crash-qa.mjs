@@ -32,6 +32,7 @@ async function openCase(label) {
 }
 
 async function simulate(page, stage) {
+  await page.evaluate(async()=>{const media=await import('/src/workoutPhotos.js');await media.getAllWorkoutPhotos();});
   await page.evaluate(async ({ stage, oldState, newState }) => {
     const open = () => new Promise((resolve, reject) => {
       const request = indexedDB.open("rook-workout-media", 3);
@@ -110,7 +111,8 @@ for (const stage of ["journal-only", "photos-staged", "state-written"]) {
   await context.close();
 }
 
-// Once the journal is removed, the new pair is committed and only stale temp data is cleaned.
+// Once the journal is removed, the new pair is authoritative. Startup leaves
+// an orphaned snapshot inert; it must never roll back committed data.
 {
   const { context, page } = await openCase("committed");
   await simulate(page, "state-written");
@@ -119,7 +121,7 @@ for (const stage of ["journal-only", "photos-staged", "state-written"]) {
   const state = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
   assert.equal(state.profile.name, "Partially restored state");
   assert.deepEqual(await storedPhotoIds(page), ["new-photo"]);
-  assert.deepEqual(await storedPhotoIds(page, "restore-snapshot"), []);
+  assert.deepEqual(await storedPhotoIds(page, "restore-snapshot"), ["__rook_restore_snapshot__", "old-photo"], "no-journal startup preserves inert evidence without rolling back the new pair");
   await context.close();
 }
 

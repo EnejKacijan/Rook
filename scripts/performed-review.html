@@ -1,0 +1,29 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body>
+<section id="fixture"><h1>Isolated scheduled/performed QA</h1><label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label><label>Scenario <select id="scenario"><option>performed</option><option>two</option><option>one</option><option>none</option><option>moved</option><option>closed</option></select></label><label><input id="fail" type="checkbox">Fail first schedule write</label><button id="seed">Start synthetic missed review</button></section><div id="root"></div>
+<script type="module">
+import {blankState,buildProgram,deserializeState,serializeState,STORAGE_KEY,startWorkout,completeWorkout} from '/src/domain.js';
+import {missedFlexibleSessions,proposeFlexibleWeek,applyFlexibleWeek} from '/src/flexibleWeek.js';
+const params=new URLSearchParams(location.search);
+const RealDate=Date;const fixed=params.get('scenario')==='closed'?'2026-09-21T12:00:00':'2026-09-18T12:00:00';
+window.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[fixed]));}static now(){return new RealDate(fixed).getTime();}};
+if(params.has('run')){
+ if(params.has('fail')){const original=Storage.prototype.setItem;let injected=false;Storage.prototype.setItem=function(key,value){if(key===STORAGE_KEY&&!injected){const before=JSON.parse(localStorage.getItem(key)||'{}'),after=JSON.parse(value);if(JSON.stringify(before.flexibleWeek)!==JSON.stringify(after.flexibleWeek)){injected=true;throw new DOMException('Synthetic schedule failure','QuotaExceededError');}}return original.call(this,key,value);};}
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+}else document.querySelector('#seed').onclick=()=>{
+ if(location.port!=='4198')throw Error('Isolated QA port required');
+ let s=blankState();Object.assign(s.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:['Mon','Wed','Fri'],sessionMinutes:60,equipment:['full gym'],environment:'Commercial gym',priorities:['Balanced'],onboardingComplete:true});
+ s.program=buildProgram(s.profile);s.program.trainingBlock.startDate='2026-09-14';s.program.createdAt='2026-09-14T12:00:00';s.selectedDate='2026-09-18';s.selectedDay='Fri';s.ai.planUpgradeDismissed=true;
+ const theme=document.querySelector('#theme').value,scenario=document.querySelector('#scenario').value;
+ Object.assign(s.profile,{stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ s=deserializeState(s);const missed=missedFlexibleSessions(s);
+ if(['one','none'].includes(scenario)){for(const item of (scenario==='one'?missed.slice(1):missed)){s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'skip',sessionId:item.logicalSessionId})).state;}}
+ if(scenario==='performed'){
+   s.selectedDate='2026-09-14';s.activeWorkout=startWorkout(s,missed[0].workout);
+   s.activeWorkout.startedAt=new RealDate('2026-09-17T18:10:00').getTime();s.activeWorkout.utcOffsetMinutesAtStart=new RealDate(s.activeWorkout.startedAt).getTimezoneOffset();
+   s.activeWorkout.exercises.forEach(e=>e.sets.forEach(set=>{set.completed=true;set.weight=20;set.reps=8;}));s=completeWorkout(s);s.workouts[0].completedAt=new RealDate('2026-09-17T19:05:00').toISOString();s.workouts[0].durationSeconds=3300;s.workouts[0].endedAt=s.workouts[0].completedAt;s.selectedDate='2026-09-14';s.selectedDay='Mon';
+ }
+ if(scenario==='moved')s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'move',sessionId:missed[0].logicalSessionId,toDate:'2026-09-19'})).state;
+ if(scenario==='closed'){s.selectedDate='2026-09-21';s.selectedDay='Mon';}
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/performed-review.html?run=1&scenario='+scenario+(document.querySelector('#fail').checked?'&fail=1':'');
+};
+</script></body></html>

@@ -1,0 +1,70 @@
+.freestyle-queue-picker .exercise-search-body[hidden] { display:none!important; }
+.queue-picker-search-chrome[hidden] { display:none; }
+.queue-picker-search-chrome { flex:0 0 auto;min-width:0; }
+.freestyle-queue-picker .queue-search-scopes { position:relative; }
+/* One underline travels between the existing equal-width tabs. Keep their
+   transparent borders so the chrome and touch targets retain their geometry. */
+:root .freestyle-queue-picker .queue-search-scopes button { border-bottom-color:transparent; }
+.freestyle-queue-picker .queue-search-scopes::after { content:"";position:absolute;left:0;bottom:0;width:calc((100% - 8px)/2);height:2px;background:var(--rook-accent);pointer-events:none;transform:translateX(0);transition:transform 160ms var(--rook-ease-standard,cubic-bezier(.2,0,0,1)); }
+.freestyle-queue-picker .queue-search-scopes[data-scope="saved"]::after { transform:translateX(calc(100% + 8px)); }
+@media(prefers-reduced-motion:reduce){.freestyle-queue-picker .queue-search-scopes::after{transition:none}}
+.queue-picker-search-chrome .rook-search-field { margin-bottom:8px; }
+.freestyle-queue-picker > .saved-workouts { gap:0; }
+:root .freestyle-queue-picker [data-exercise-search-scroll] { padding-bottom:20px;scroll-padding-bottom:20px; }
+.queue-more-results { min-height:44px;width:100%; }
+.freestyle-queue-picker .queue-picker-back { width:100%;margin:0; }
+.queue-search-row { display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;min-width:0;border-bottom:1px solid var(--rook-border); }
+:root .queue-search-body { min-width:0;min-height:44px;position:relative;padding:10px 8px 10px 0;cursor:pointer;border:0;background:transparent;color:var(--rook-text);font:inherit;text-align:left; }
+.queue-search-body strong { display:block;overflow-wrap:anywhere; }
+.queue-search-body small { display:block;color:var(--rook-muted);font-size:12px;line-height:1.4; }
+.queue-search-body .queue-result-status { color:var(--rook-accent); }
+:root .queue-add-button { width:44px;min-height:44px;border:0;background:transparent;color:var(--rook-accent);font-size:24px; }
+.queue-picker-feedback { min-height:24px;font-size:12px;color:var(--rook-secondary); }
+/* The existing live announcement stays available without reserving a blank row
+   or changing result geometry when an addition announces itself. Undo remains
+   the visible feedback/action surface while the keyboard is open. */
+.freestyle-queue-picker.is-search-browsing[data-sheet-keyboard-open] .queue-picker-feedback { position:absolute;width:1px;height:1px;min-height:0;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
+.freestyle-queue-picker.is-search-browsing[data-sheet-keyboard-open] > .exercise-remove-undo { bottom:8px; }
+:root .freestyle-queue-picker .queue-exercise-preview { min-height:0;overflow-y:auto;min-width:0;margin:0; }
+:root .freestyle-queue-picker .queue-exercise-preview h1 { font-size:26px;line-height:1.15;overflow-wrap:anywhere;margin:16px 0 8px; }
+.queue-exercise-preview h1:focus { outline:none; }
+.queue-preview-choice:focus { outline:none; }
+.queue-exercise-preview .queue-preview-equipment { margin:0 0 8px;color:var(--rook-secondary);font-size:14px; }
+.queue-exercise-preview .queue-preview-status { margin:0;color:var(--rook-muted);font-size:13px;line-height:1.5; }
+.queue-preview-description { color:var(--rook-secondary);line-height:1.5; }
+.queue-preview-hero { --queue-preview-art-size:160px;width:var(--queue-preview-art-size);height:var(--queue-preview-art-size);margin:8px auto 16px; }
+:root .queue-preview-hero .exercise-detail-art-button,
+:root .queue-preview-hero .exercise-detail-art { width:var(--queue-preview-art-size);height:var(--queue-preview-art-size);max-width:none;border-radius:12px; }
+:root .queue-preview-hero .exercise-detail-art-button { display:block;position:relative;margin:0;background:var(--rook-surface-muted); }
+/* Tint only the line art: filtering an opaque image background creates a loud
+   green/gold tile and reduces contrast in the dark themes. */
+:root .freestyle-queue-picker .queue-preview-hero .exercise-detail-art { padding:10px;background:transparent; }
+.queue-preview-expand { position:absolute;right:8px;bottom:8px;width:18px;height:18px;fill:none;stroke:var(--rook-secondary);stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round;pointer-events:none; }
+@media(max-height:650px){.queue-preview-hero{--queue-preview-art-size:140px}}
+:root .freestyle-queue-picker .queue-preview-repeat { padding-inline:0;min-height:44px; }
+.queue-exercise-preview .button { display:block;width:100%;margin-top:12px; }
+.queue-exercise-preview .text-button { min-height:44px; }
+.queue-preview-actions .button { min-height:48px; }
+:root .queue-preview-actions::before { border-top:0; }
+:root .queue-preview-actions .queue-preview-added { opacity:1;color:var(--rook-text);background:var(--rook-surface-muted);border-color:var(--rook-border); }
+.queue-preview-added.is-acknowledged > span { display:inline-block;animation:queue-preview-added 220ms var(--rook-ease-standard,cubic-bezier(.2,0,0,1)) both; }
+@keyframes queue-preview-added { from { opacity:.4;transform:scale(.98); } to { opacity:1;transform:scale(1); } }
+@media(prefers-reduced-motion:reduce){.queue-preview-added.is-acknowledged > span{animation:none}}
+.freestyle-queue-picker .queue-preview-paint { z-index:5;pointer-events:none;overflow:hidden;background:var(--rook-bg); }
+/* Preview feedback stays compact above the measured, safe-area-aware footer.
+   Other shared Undo surfaces retain their existing presentation. */
+.freestyle-queue-picker.has-exercise-preview > .exercise-remove-undo { bottom:calc(var(--sheet-action-height,128px) + 8px);height:50px;min-height:50px;padding:2px 10px 2px 12px;border-radius:12px;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px; }
+.freestyle-queue-picker.has-exercise-preview > .exercise-remove-undo > span { min-width:0;line-height:18px;overflow:hidden;overflow-wrap:anywhere;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2; }
+.queue-picker-back { min-height:44px;flex-shrink:0; }
+.freestyle-queue-picker .exercise-remove-undo { position:absolute;bottom:64px; }
+.queue-add-swipe{position:relative;overflow:hidden;min-width:0;touch-action:pan-y}
+.queue-add-swipe[data-swipe-settling]{pointer-events:none}
+.queue-add-swipe [data-swipe-content]{position:relative;background:var(--rook-bg);z-index:1;will-change:transform}
+.queue-swipe-cue{position:absolute;inset:0;display:flex;align-items:center;padding:0 18px;background:var(--rook-surface-muted);color:var(--rook-secondary);visibility:hidden;pointer-events:none}
+.queue-swipe-cue svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:transform 90ms ease-out}
+.queue-add-swipe[data-swipe-adding] .queue-swipe-cue{visibility:visible}
+/* Semantic green stays green in Premium themes; decorative gold is not success. */
+.queue-add-swipe[data-swipe-armed] .queue-swipe-cue{background:#1f6b4c;color:#fff}
+.queue-add-swipe[data-swipe-armed] .queue-swipe-cue svg{transform:scale(1.12)}
+@media(prefers-reduced-motion:reduce){.queue-swipe-cue svg{transition:none}}
+.freestyle-queue-picker [data-exercise-search-scroll],.saved-workouts [data-exercise-search-scroll]{scrollbar-width:thin;scrollbar-color:var(--rook-border) transparent}

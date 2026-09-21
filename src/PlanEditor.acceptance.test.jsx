@@ -1,0 +1,27 @@
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {afterEach,expect,it,vi} from 'vitest';
+import {PlanEditor} from './App.jsx';
+import {createReturningUserFixture} from './demoFixture.js';
+import {buildReplacementProgram,validateProgram,deserializeState} from './domain.js';
+globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+let root,host;
+afterEach(async()=>{await act(async()=>root?.unmount());host?.remove();vi.unstubAllGlobals();});
+it('accepts a generated preview after toggling warmups and removing a draft exercise',async()=>{
+ vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('scrollTo',()=>{});
+ const state=deserializeState(createReturningUserFixture(2)),program=buildReplacementProgram(state.profile,state.program,state.workouts),saved=vi.fn();
+ host=document.createElement('main');document.body.append(host);root=createRoot(host);
+ await act(async()=>root.render(<PlanEditor source={program} profile={state.profile} generatedAcceptance onSave={saved} onCancel={()=>{}}/>));
+ const button=text=>[...host.querySelectorAll('button')].find(b=>b.textContent.trim()===text||b.getAttribute('aria-label')===text);
+ const toggle=host.querySelector('.plan-warmup-preference input');expect(toggle).not.toBeNull();
+ await act(async()=>toggle.click());await act(async()=>toggle.click());
+ await act(async()=>host.querySelector('.plan-editor-summary').click());
+ await act(async()=>button('Remove exercise').click());await act(async()=>button('USE THIS PLAN').click());
+ expect(saved).toHaveBeenCalledOnce();const next=saved.mock.calls[0][0];
+ expect(next.days[0].exercises).toHaveLength(program.days[0].exercises.length-1);
+ expect(validateProgram(next,{...state.profile,sessionMinutes:null},{preserveSchedule:true})).toEqual({valid:true,errors:[]});
+ expect(validateProgram({...next,userEdited:false},state.profile,{preserveSchedule:true}).errors).toContain('Chest is below its weekly floor without a recorded constraint reason.');
+ expect(validateProgram(next,{...state.profile,avoid:'No chest exercises'},{preserveSchedule:true}).valid).toBe(false);
+ const invalid=structuredClone(next);invalid.days[0].exercises[0].sets=[];
+ expect(validateProgram(invalid,state.profile,{preserveSchedule:true}).valid).toBe(false);
+});

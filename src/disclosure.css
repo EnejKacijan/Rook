@@ -5,6 +5,8 @@
   overflow-anchor: none;
 }
 .rook-disclosure-content { display: flow-root; }
+.rook-disclosure.has-compact-content { position:relative; }
+.rook-disclosure-compact { position:absolute;inset:0 0 auto; }
 :root :is(.workout-warmup-toggle,.specific-split-toggle,.plan-editor-summary,.plan-editor-picker-trigger,.profile-sex-trigger) i::before,
 :root .specific-split-toggle i {
   transition: transform 200ms cubic-bezier(.2,0,0,1);

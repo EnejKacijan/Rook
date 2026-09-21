@@ -8,11 +8,11 @@ const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chr
 try{for(const imported of [false,true]){
  const s=blankState(),today=weekday();Object.assign(s.profile,{onboardingComplete:true,goal:'Build muscle',experience:'Intermediate',daysPerWeek:2,availableDays:[today,WEEKDAYS[(WEEKDAYS.indexOf(today)+3)%7]],sessionMinutes:60,environment:'Commercial gym',equipment:['full gym'],priorities:['Balanced'],warmupEnabled:false});
  s.program=buildProgram(s.profile);s.program.source=imported?'ai-import':'generated';s.selectedDate=isoDay();s.selectedDay=today;s.ai.planUpgradeDismissed=true;
- const day=s.program.days.find(d=>d.weekday===today);const pair=day.exercises.slice(0,2);pair.forEach(e=>{e.supersetId='qa-pair';e.supersetRestSeconds=60;});
+ const day=s.program.days.find(d=>d.weekday===today);const pair=day.exercises.slice(0,2),rounds=Math.min(...pair.map(e=>e.sets.length));pair.forEach(e=>{e.sets=e.sets.slice(0,rounds);e.supersetId='qa-pair';e.supersetRestSeconds=60;});
  const c=await browser.newContext({viewport:{width:390,height:844},reducedMotion:'reduce',serviceWorkers:'block'});await c.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},s);
  const p=await c.newPage();p.setDefaultTimeout(10000);await p.route('**/api/**',r=>r.fulfill({json:{available:false}}));await p.goto(process.env.ROOK_QA_URL||'http://127.0.0.1:4190');
  const read=()=>p.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
- async function open(){await p.getByRole('button',{name:'PROFILE',exact:true}).click();await p.locator('[data-profile-area="program"]').click();await openProfileArea(p, 'program'); await p.getByRole('button',{name:/^Edit plan/}).click();await p.locator('.plan-editor-exercise').first().locator('.plan-editor-summary').click();}
+ async function open(){await openProfileArea(p, 'program'); await p.getByRole('button',{name:/^Edit plan/}).click();await p.locator('.plan-editor-exercise').first().locator('.plan-editor-summary').click();}
  await open();const input=p.getByRole('textbox',{name:/^Sets for/}).first(),limit=imported?20:6;
  await input.fill(String(limit));await input.press('Tab');assert.equal(await input.inputValue(),String(limit));await input.fill(String(limit+1));await input.press('Tab');assert.equal(await input.inputValue(),String(limit));
  await p.getByRole('button',{name:'SAVE CHANGES',exact:true}).click();await p.locator('.edit-plan-screen').waitFor({state:'detached'});await p.reload();await open();assert.equal(await input.inputValue(),String(limit));results.push({imported,accepted:limit,rejected:limit+1,persisted:true});
@@ -21,7 +21,7 @@ try{for(const imported of [false,true]){
  let active=(await read()).activeWorkout;assert.equal(active.exercises[0].supersetId,active.exercises[1].supersetId);assert.equal(active.exercises[0].sets.length,2);assert.equal(active.exercises[1].sets.length,2);
  for(const expected of [1,0]){
   const row=p.locator('.set-row').filter({has:p.getByRole('button',{name:/^Log set/})}).first();
-  const weights=row.locator('input');for(let i=0;i<await weights.count();i++){if(!(await weights.nth(i).inputValue()))await weights.nth(i).fill('8');}
+  const weights=row.locator('input');for(let i=0;i<await weights.count();i++){if(!(await weights.nth(i).inputValue())){await weights.nth(i).fill('8');await weights.nth(i).press('Tab');}}
   await row.getByRole('button',{name:/^Log set/}).click();
   await p.waitForFunction(index=>JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.exerciseIndex===index,expected);
  }

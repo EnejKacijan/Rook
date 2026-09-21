@@ -1,0 +1,17 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1"></head><body><div id="fixture"><h1>Isolated logger touch review</h1><label>Variant <select id="variant"><option>weighted</option><option>bodyweight</option><option>timed</option><option>per-side</option><option>empty</option><option>no-load</option><option>weighted-bodyweight</option><option>freestyle</option></select></label><label>RIR <input id="rir" type="checkbox" checked></label><label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label><button id="seed">Start synthetic logger</button></div><div id="root"></div><script type="module">
+import {startFreestyleWorkout,addFreestyleExercise} from '/src/freestyleWorkout.js';
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,startWorkout,exerciseCatalog,isoDay} from '/src/domain.js';
+if(location.port!=='4198')throw Error('Isolated review port required');
+if(new URLSearchParams(location.search).has('run')){document.querySelector('#fixture').remove();await import('/src/main.jsx');}
+else document.querySelector('#seed').onclick=()=>{
+ const s=createReturningUserFixture(0),kind=document.querySelector('#variant').value,theme=document.querySelector('#theme').value;
+ Object.assign(s.profile,{rirEnabled:document.querySelector('#rir').checked,showExerciseImages:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ s.selectedDate=isoDay();const t=structuredClone(s.program.days[0]);t.name='Synthetic touch review';t.exercises=t.exercises.slice(0,1);
+ const e=t.exercises[0],id=kind==='weighted-bodyweight'?'weighted-push-up':kind==='no-load'?'band-row':kind==='timed'?'plank':kind==='bodyweight'?'push-up':kind==='per-side'?'split-squat':e.exerciseId;
+ Object.assign(e,{exerciseId:id,name:exerciseCatalog[id].name,loggingMode:kind==='per-side'?'per_side':'standard'});
+ s.activeWorkout=startWorkout(s,t);if(kind==='freestyle')s.activeWorkout=addFreestyleExercise(startFreestyleWorkout({...s,activeWorkout:null}),e.exerciseId).activeWorkout;const active=s.activeWorkout.exercises[0];
+ for(const set of active.sets){set.weight=kind==='bodyweight'||kind==='timed'||kind==='empty'?null:52.5;set.reps=kind==='timed'?30:kind==='empty'?null:12;set.rir=null;if(kind==='per-side')set.sides={left:{reps:12},right:{reps:12}};}
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/logger-touch-review.html?run=1';
+};
+</script></body></html>

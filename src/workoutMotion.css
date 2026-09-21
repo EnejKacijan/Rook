@@ -1,0 +1,3 @@
+.workout-motion-boundary { display: contents; }
+.workout-motion-paint { position: fixed; z-index: 11; overflow: clip; pointer-events: none; contain: strict; background: var(--rook-bg); }
+.workout-motion-paint .exercise-panel { margin: 0; }

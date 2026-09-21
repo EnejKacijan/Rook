@@ -42,7 +42,7 @@ for(const width of [320,390])for(const style of ['standard','premium'])for(const
    const cell=dialog.locator(`[data-date="${today}"]`);
    assert.equal(await cell.getAttribute('aria-pressed'),String(selected));
    assert.equal(await cell.getAttribute('aria-current'),'date');
-   assert.equal(await cell.locator('.month-calendar-mark').getAttribute('class'),`month-calendar-mark ${status==='none'?'':`is-${status}`}`);
+   assert.deepEqual(await cell.locator('.month-calendar-mark').evaluateAll(es=>es.map(e=>[...e.classList].find(c=>c.startsWith('is-')))),status==='none'?[]:[`is-${status}`]);
    const metrics=await cell.locator('.month-calendar-number').evaluate(e=>{
     const s=getComputedStyle(e),p=getComputedStyle(e,'::before');
     return {color:s.color,before:p.content,after:getComputedStyle(e,'::after').content,border:s.borderTopWidth,bg:s.backgroundColor,weight:s.fontWeight};

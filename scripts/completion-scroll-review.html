@@ -1,0 +1,58 @@
+<!doctype html>
+<html><head><meta name="viewport" content="width=device-width, initial-scale=1"><title>ROOK completion scroll QA</title></head><body>
+<section id="fixture"><h1>Isolated completion scroll review</h1>
+<label>Workout <select id="kind"><option>weighted</option><option>planned</option><option>freestyle</option></select></label>
+<label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label>
+<label>Finish early <input id="partial" type="checkbox"></label>
+<button id="seed">Start synthetic workout</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {startFreestyleWorkout,addFreestyleExercise} from '/src/freestyleWorkout.js';
+import {serializeState,STORAGE_KEY,startWorkout,isoDay} from '/src/domain.js';
+if(location.hostname!=='127.0.0.1'||location.port!=='4198')throw Error('Isolated QA origin required');
+const params=new URLSearchParams(location.search);
+if(!params.has('run')){
+ document.querySelector('#seed').onclick=()=>{
+  const state=createReturningUserFixture(0),kind=document.querySelector('#kind').value,theme=document.querySelector('#theme').value,partial=document.querySelector('#partial').checked;
+  Object.assign(state.profile,{rirEnabled:true,showExerciseImages:false,restTimerEnabled:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+  state.selectedDate=isoDay();
+  const template=structuredClone(state.program.days[0]);template.name=`Synthetic ${kind} completion`;template.exercises=template.exercises.slice(0,3);
+  state.activeWorkout=startWorkout(state,template);
+  if(kind==='freestyle'){
+   let next=startFreestyleWorkout({...state,activeWorkout:null});
+   for(const id of ['barbell-bench-press','dumbbell-bench-press','incline-dumbbell-press'])next=addFreestyleExercise(next,id);
+   state.activeWorkout=next.activeWorkout;
+  }
+  state.activeWorkout.startedAt=Date.now()-185000;
+  state.activeWorkout.exercises.forEach((exercise,e)=>{
+   exercise.sets=Array.from({length:12},(_,i)=>({...exercise.sets[0],id:`qa-${e}-${i}`,weight:52.5,reps:12,rir:2,completed:!partial||i<6}));
+  });
+  for(const key of [STORAGE_KEY,'rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+  localStorage.setItem(STORAGE_KEY,serializeState(state));
+  location.href=`?run=1&kind=${kind}&theme=${theme}&partial=${partial}`;
+ };
+}else{
+ document.querySelector('#fixture').remove();
+ const qa=document.createElement('details');qa.id='completion-scroll-qa';qa.style.cssText='position:fixed;right:0;bottom:64px;z-index:99999;background:#eee;color:#111;font:11px system-ui;max-width:180px';
+ qa.innerHTML='<summary>Scroll QA</summary><button id="near">Near top</button><button id="middle">Middle</button><button id="bottom">Bottom</button><a href="?">New synthetic case</a><pre id="scroll-proof" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre>';
+ document.body.append(qa);
+ const describe=element=>({tag:element.tagName,className:element.className,scrollTop:element.scrollTop,scrollHeight:element.scrollHeight,clientHeight:element.clientHeight,overflowY:getComputedStyle(element).overflowY});
+ const measure=()=>({document:describe(document.scrollingElement),ancestors:[...document.querySelectorAll('.app-shell,.app-content,.workout-screen,.complete-screen')].map(describe),headerTop:document.querySelector('.complete-screen h1')?.getBoundingClientRect().top,markTop:document.querySelector('.complete-mark')?.getBoundingClientRect().top,summaryBottom:document.querySelector('.complete-screen .stat-grid')?.getBoundingClientRect().bottom});
+ const proof={kind:params.get('kind'),theme:params.get('theme'),partial:params.get('partial'),width:innerWidth};
+ const publish=()=>qa.querySelector('#scroll-proof').textContent=JSON.stringify(proof);
+ for(const [id,fraction]of [['near',0],['middle',.5],['bottom',1]])qa.querySelector('#'+id).onclick=()=>{
+  const owner=document.scrollingElement;owner.scrollTop=fraction===0?40:(owner.scrollHeight-owner.clientHeight)*fraction;
+  proof.position=id;proof.positioned=measure();publish();qa.open=false;
+ };
+ document.addEventListener('click',event=>{
+  if(event.target.closest('.workout-screen button')?.textContent.toUpperCase().includes('FINISH')){proof.beforeFinish=measure();publish();}
+ },true);
+ let observed=false;
+ new MutationObserver(()=>{
+  if(observed||!document.querySelector('.complete-screen'))return;
+  observed=true;proof.completionCommit=measure();publish();
+  requestAnimationFrame(()=>{proof.firstFrame=measure();publish();requestAnimationFrame(()=>{proof.secondFrame=measure();publish();});});
+ }).observe(document.querySelector('#root'),{childList:true,subtree:true});
+ await import('/src/main.jsx');
+}
+</script></body></html>

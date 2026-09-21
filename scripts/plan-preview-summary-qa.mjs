@@ -1,3 +1,4 @@
+import {openFirstRunLanding,chooseOnboardingAnswer} from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import { mkdir, writeFile } from 'node:fs/promises';
 import { chromium } from 'playwright-core';
@@ -21,12 +22,13 @@ function themeName(appearance, style) {
 }
 
 async function reachPreview(page, long = false) {
+  await openFirstRunLanding(page);
   const next = () => page.getByRole('button', { name: 'CONTINUE', exact: true }).click();
   await page.getByRole('button', { name: 'BUILD MY PLAN', exact: true }).click();
   await page.getByRole('combobox', { name: 'Age range' }).click();
   await page.getByRole('option', { name: '18–29' }).click(); await next();
-  await page.getByRole('button', { name: 'Athletic performance', exact: true }).click();
-  await page.getByRole('button', { name: /^Beginner/ }).click();
+  await chooseOnboardingAnswer(page,'Athletic performance',3);
+  await chooseOnboardingAnswer(page,/^Beginner/,4);
   await page.getByRole('button', { name: long ? '5 days' : '3 days', exact: true }).click();
   const days = page.locator('.schedule-days .day-options .onboarding-option');
   for (const index of long ? [0, 1, 3, 4, 5] : [0, 2, 4]) await days.nth(index).click();

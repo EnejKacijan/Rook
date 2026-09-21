@@ -79,3 +79,5 @@ it('another edge direction cannot take ownership during an active gesture/settle
  other.fire('touchstart',4);other.fire('touchmove',180);other.fire('touchend',180,100,0);vi.runAllTimers();
  expect(s.onBack).toHaveBeenCalledOnce();expect(other.onBack).not.toHaveBeenCalled();s.dispose();other.dispose();
 });
+it('keeps the existing focused-input policy unless the caller explicitly owns that editor',()=>{const s=setup();const input=document.createElement('input');s.surface.append(input);input.focus();s.fire('touchstart',4);s.fire('touchmove',200);s.fire('touchend',200,100,0);vi.runAllTimers();expect(s.onBack).not.toHaveBeenCalled();s.dispose();});
+it('focused-input opt-in never permits gestures starting on an input or button',()=>{const s=setup(true,{allowFocusedInput:()=>true});for(const tag of ['input','button']){const target=document.createElement(tag);s.surface.append(target);target.focus();s.fire('touchstart',4,100,1,target);s.fire('touchmove',200,100,1,target);s.fire('touchend',200,100,0,target);}vi.runAllTimers();expect(s.onBack).not.toHaveBeenCalled();s.dispose();});

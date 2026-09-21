@@ -1,3 +1,4 @@
+import {measureActiveSetLayout} from './active-set-layout-contract.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -134,19 +135,10 @@ await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 const rirHelp = page.getByRole("button", { name: "What is RIR?" });
 assert.equal(await rirHelp.count(), 1, "active logging explains RIR once, at the column header");
 const rirHelpTarget = await rirHelp.boundingBox();
-assert.ok(rirHelpTarget.width >= 16 && rirHelpTarget.width <= 24 && rirHelpTarget.height >= 16 && rirHelpTarget.height <= 24, "RIR help target is the approved visible question mark, not its former 44px slot");
-const rirTerm = page.locator(".set-labels .help-popover-term");
-const rirTermTarget = await rirTerm.boundingBox();
-assert.ok(
-  rirTermTarget.x + rirTermTarget.width <= rirHelpTarget.x,
-  "the static RIR label does not overlap the question-mark touch target",
-);
-await rirTerm.click();
-assert.equal(
-  await page.getByRole("tooltip").count(),
-  0,
-  "tapping the RIR label does not open its explanation",
-);
+assert.equal(rirHelpTarget.width,44,'RIR help retains the shared 44px target');
+assert.equal(rirHelpTarget.height,44);
+const firstRir=await page.locator('.set-row .rir-trigger').first().boundingBox();
+assert.ok(rirHelpTarget.y+rirHelpTarget.height<=firstRir.y,'Help does not overlap the first value control');
 // Header geometry belongs to header-alignment-qa.mjs (12 width/theme cases).
 // Keep interaction coverage here, without duplicating old mark-gap/group-centering rules.
 await rirHelp.locator('.help-popover-mark').click();
@@ -249,15 +241,16 @@ assert.deepEqual(
   activeStateBeforeViewer,
   "browser Back closes only the viewer and preserves workout progress",
 );
-const noteButton = page.getByRole("button", { name: "No exercise note. Add note." });
+const noteButton = page.getByRole("button", { name: "Exercise options", exact:true });
 assert.equal(await noteButton.count(), 1, "the current exercise exposes one compact note affordance");
 const noteButtonBox = await noteButton.boundingBox();
-assert.ok(noteButtonBox.width >= 44 && noteButtonBox.height >= 44, "the pencil keeps a 44px touch target");
-await noteButton.click();
+assert.ok(noteButtonBox.width >= 44 && noteButtonBox.height >= 44, "the shared options affordance keeps a 44px touch target");
+await noteButton.click();await page.getByRole("button",{name:/Add note/}).click();
 await page.getByRole("heading", { name: "Exercise notes", exact: true }).waitFor();
-await page.waitForTimeout(50);
+await page.waitForFunction(()=>document.activeElement?.closest('.exercise-note-sheet')&&!document.activeElement.matches('input,textarea'));
+
 assert.equal(
-  await page.getByRole("button", { name: "Close" }).evaluate((node) => document.activeElement === node),
+  await page.locator(".exercise-note-sheet").evaluate((node) => node.contains(document.activeElement) && !document.activeElement.matches("input,textarea")),
   true,
   "the note sheet opens without focusing the textarea or summoning the software keyboard",
 );
@@ -280,8 +273,8 @@ assert.equal(
   "personal notes remain visually separate from imported program notes",
 );
 assert.equal(
-  await page.getByRole("button", { name: "Exercise note. Added." }).count(),
-  1,
+  await noteButton.getAttribute("aria-description"),
+  "Note added. Edit note in this menu.",
   "the affordance exposes its saved state without relying on color",
 );
 const storedNote = await page.evaluate(() => {
@@ -336,14 +329,16 @@ const headerGeometry = await workoutHeader.evaluate((header) => {
   const actions = header.querySelector(".workout-header-actions").getBoundingClientRect();
   const title = header.querySelector(".workout-header-center > strong");
   return {
-    centerDelta: Math.abs(center.left + center.width / 2 - innerWidth / 2),
+    titleFitsColumn: center.left >= back.right && center.right <= actions.left,
+    titleAlignment: getComputedStyle(title).textAlign,
     actionVerticalDelta: Math.abs(back.top + back.height / 2 - (actions.top + actions.height / 2)),
     titleOverflow: title.scrollWidth > title.clientWidth,
     titleWhiteSpace: getComputedStyle(title).whiteSpace,
     headerTop: bounds.top,
   };
 });
-assert.ok(headerGeometry.centerDelta <= 1, JSON.stringify(headerGeometry));
+assert.ok(headerGeometry.titleFitsColumn, JSON.stringify(headerGeometry));
+assert.ok(["left", "start"].includes(headerGeometry.titleAlignment), JSON.stringify(headerGeometry));
 assert.ok(headerGeometry.actionVerticalDelta <= 1, JSON.stringify(headerGeometry));
 assert.equal(headerGeometry.titleOverflow, true, "long imported workout names truncate in the header");
 assert.equal(headerGeometry.titleWhiteSpace, "nowrap");
@@ -379,7 +374,7 @@ assert.equal(
   true,
 );
 
-const upNextRows = page.locator(".up-next button");
+const upNextRows = page.locator(".up-next .swipe-up-next-body");
 const upNextCount = await upNextRows.count();
 const activeShape = await page.evaluate(() => {
   const active = JSON.parse(localStorage.getItem("lift-v2-state")).activeWorkout;
@@ -390,7 +385,7 @@ assert.ok(
   upNextCount >= 8,
   `10-exercise sessions show multiple upcoming exercises (found ${upNextCount}; ${JSON.stringify(activeShape)})`,
 );
-assert.equal(await page.locator(".up-next button i").count(), 0, "decorative status dots are removed");
+assert.equal(await page.locator(".up-next .swipe-up-next-body > i").count(), 0, "decorative status dots are removed");
 const upcomingLayout = await upNextRows.evaluateAll((rows) =>
   rows.map((row) => {
     const main = row.querySelector(".up-next-main").getBoundingClientRect();
@@ -417,8 +412,9 @@ assert.ok(upcomingLayout.every((row) => row.titleLines <= 2.05), JSON.stringify(
 assert.ok(upcomingLayout.every((row) => row.paddingTop <= 11), JSON.stringify(upcomingLayout));
 assert.ok(upcomingLayout.every((row) => !row.overflow), JSON.stringify(upcomingLayout));
 
-const weight = page.getByRole("spinbutton", { name: /Weight in kg for set 1/ });
+const weight = page.getByRole("textbox", { name: /Weight in kg for set 1/ });
 assert.equal(await weight.getAttribute("placeholder"), "Enter weight");
+await page.evaluate(measureActiveSetLayout);
 const unifiedStepper = page.locator(".set-row .stepper:not(.unset)").first();
 const stepperSurfaces = await unifiedStepper.evaluate((node) => {
   const [decrement, input, increment] = node.children;
@@ -432,11 +428,11 @@ const stepperSurfaces = await unifiedStepper.evaluate((node) => {
 assert.equal(stepperSurfaces.decrement, "rgba(0, 0, 0, 0)");
 assert.equal(stepperSurfaces.input, "rgba(0, 0, 0, 0)");
 assert.equal(stepperSurfaces.increment, "rgba(0, 0, 0, 0)");
-assert.notEqual(stepperSurfaces.divider, "rgba(0, 0, 0, 0)");
+assert.equal(await unifiedStepper.evaluate(node=>getComputedStyle(node).borderRightWidth), "0px", "Final C groups use separate small control faces without an enclosing divider");
 const checks = page.locator(".set-row .check");
 assert.equal(await checks.nth(0).isDisabled(), true, "missing required load keeps the active set unconfirmable");
 assert.equal(await checks.nth(1).isDisabled(), true);
-assert.equal(await checks.nth(0).innerText(), "✓", "disabled confirmation retains the shared checkmark");
+assert.equal(await checks.nth(0).locator(".check-mark svg").count(), 1, "disabled confirmation retains the shared SVG checkmark");
 assert.equal(await checks.nth(0).locator('.check-mark').count(), 1);
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'current');
 assert.equal(await page.locator('.set-index-label small').count(), 0, 'set rows no longer render a NEXT text label');
@@ -454,20 +450,20 @@ const disabledStyle = await checks.nth(1).evaluate((node) => ({
   color: getComputedStyle(node).color,
   opacity: getComputedStyle(node).opacity,
 }));
-assert.deepEqual(missingStyle, { border: disabledStyle.border, color: disabledStyle.color });
+assert.equal(await checks.nth(0).locator(".check-mark").evaluate(node=>getComputedStyle(node).boxShadow!=="none"), true, "current set is outlined even before its required load is committed");
 assert.equal(Number(disabledStyle.opacity), 1);
 
-await weight.fill("135");
+await weight.fill("135");await weight.press("Enter");
 assert.equal(await checks.nth(0).isEnabled(), true, "entering a valid load makes the active set confirmable");
 assert.equal(await page.locator('.set-row').nth(0).getAttribute('data-set-state'), 'ready');
-assert.equal(await checks.nth(0).innerText(), "✓", "a ready set uses the outlined check control");
+assert.equal(await checks.nth(0).locator(".check-mark svg").count(), 1, "a ready set uses the shared SVG check control");
 assert.equal(await checks.nth(0).locator('.check-mark').count(), 1);
 await page.waitForTimeout(220);
 const readyStyle = await checks.nth(0).evaluate((node) => ({
   border: getComputedStyle(node).borderColor,
   color: getComputedStyle(node).color,
 }));
-assert.notDeepEqual(readyStyle, missingStyle);
+assert.equal(await checks.nth(0).locator(".check-mark").evaluate(node=>getComputedStyle(node).boxShadow!=="none"), true, "current set retains the outlined confirmation face");
 assert.equal(
   await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
   true,
@@ -485,8 +481,8 @@ assert.equal(
   'rgb(31, 107, 76)',
 );
 assert.equal(
-  await checks.nth(0).evaluate((node) => getComputedStyle(node).backgroundColor),
-  "rgb(31, 107, 76)",
+  await checks.nth(0).locator(".check-mark").evaluate((node) => getComputedStyle(node).color),
+  "rgb(23, 107, 73)",
 );
 assert.equal(await checks.nth(0).getAttribute("aria-label"), "Undo logged set 1");
 
@@ -502,7 +498,7 @@ assert.ok(navigationGap >= 6 && navigationGap <= 8, navigationGap);
 assert.ok(previousBox.height >= 44 && nextBox.height >= 52);
 
 await page.screenshot({ path: output("320-active-workout-clarity.png") });
-await upNextRows.filter({ hasText: "Single-Leg Leg Extension" }).click();
+await upNextRows.filter({ hasText: "Single-Leg Leg Extension" }).click();await page.locator(".workout-motion-paint").waitFor({state:"detached"});
 assert.equal(await heading.locator("h1").innerText(), "Single-Leg Leg Extension");
 assert.equal(
   await heading.locator(".exercise-heading-art-button").count(),
@@ -549,8 +545,8 @@ for (const [label, control, name] of [
 ]) {
   const verticalGap = control.y - (label.y + label.height);
   assert.ok(
-    verticalGap >= 12 && verticalGap <= 16,
-    `${name} stays 12–16px above its control when RIR is disabled; received ${verticalGap}px ${JSON.stringify({ label, control })}`,
+    Math.abs(verticalGap - 10) <= .5,
+    `${name} keeps the Final C 10px label gap when RIR is disabled; received ${verticalGap}px ${JSON.stringify({ label, control })}`,
   );
   assert.ok(
     Math.abs(label.x + label.width / 2 - (control.x + control.width / 2)) <= 1,

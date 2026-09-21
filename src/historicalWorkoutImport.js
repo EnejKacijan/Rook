@@ -5,7 +5,7 @@ import {
   exerciseLoadRequirement,
   rankExerciseSearch,
   storedWeight,
-  workoutPlanDate,
+  workoutPerformedDate,
 } from "./domain.js";
 import {
   customExerciseSnapshot,
@@ -59,7 +59,7 @@ export function historicalWorkoutFingerprint(workout) {
 }
 function identityOf(workout) {
   return workout.historicalImport?.sourceIdentity || workout.sourceIdentity ||
-    JSON.stringify([workoutPlanDate(workout),normalizeExerciseAlias(workout.name)]);
+    JSON.stringify([workoutPerformedDate(workout),normalizeExerciseAlias(workout.name)]);
 }
 function classifyDuplicates(workouts, existingWorkouts) {
   const fingerprints=new Set(), identities=new Set(), legacyDates=new Set();
@@ -67,12 +67,12 @@ function classifyDuplicates(workouts, existingWorkouts) {
     if(!workout.historicalImport?.partial)fingerprints.add(workout.historicalImport?.fingerprint || historicalWorkoutFingerprint(workout));
     identities.add(identityOf(workout));
     if(!workout.historicalImport?.sourceIdentity)
-      legacyDates.add(JSON.stringify([workoutPlanDate(workout),normalizeExerciseAlias(workout.name)]));
+      legacyDates.add(JSON.stringify([workoutPerformedDate(workout),normalizeExerciseAlias(workout.name)]));
   }
   return workouts.map(workout=>{
     const fingerprint=historicalWorkoutFingerprint(workout), identity=identityOf(workout);
     const duplicate=fingerprints.has(fingerprint)?'exact':
-      identities.has(identity)||legacyDates.has(JSON.stringify([workoutPlanDate(workout),normalizeExerciseAlias(workout.name)]))?'ambiguous':null;
+      identities.has(identity)||legacyDates.has(JSON.stringify([workoutPerformedDate(workout),normalizeExerciseAlias(workout.name)]))?'ambiguous':null;
     fingerprints.add(fingerprint);identities.add(identity);
     return {...workout,fingerprint,duplicate};
   });

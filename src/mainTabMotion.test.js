@@ -19,7 +19,7 @@ describe('one persistent main-tab navigation motion contract',()=>{
  it('keeps active-icon feedback and the existing reduced-motion rule',()=>{
   let feedback=false,reduced=false;
   nav.walkDecls('transition',d=>{if(d.parent.selector===':root[data-appearance] .bottom-nav button'){
-   if(d.value==='color 150ms linear')feedback=true;
+   if(d.value==='color var(--rook-motion-tab,160ms) var(--rook-ease-standard)')feedback=true;
    if(d.value==='none'&&d.parent.parent.params==='(prefers-reduced-motion: reduce)')reduced=true;
   }});
   expect(feedback).toBe(true);expect(reduced).toBe(true);

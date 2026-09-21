@@ -11,7 +11,7 @@ try {
   for (const width of [320,390]) for (const style of (baseline ? ['standard'] : ['standard','premium'])) for (const appearance of (baseline ? [width === 320 ? 'dark' : 'light'] : ['dark','light'])) {
     const state = createReturningUserFixture(3); state.activeWorkout = null;
     state.profile.avoid = ''; state.profile.trainingSafety = null;
-    for (const day of state.program.days) day.exercises = day.exercises.filter(e => !['pull-up','wg-weighted-pull-up'].includes(e.exerciseId));
+    for (const day of state.program.days) day.exercises = day.exercises.filter(e => !['pull-up','wg-weighted-pull-up'].includes(e.exerciseId)).slice(0,6);
     Object.assign(state.profile, { appearancePreference: appearance, stylePreference: style, themePreference: style === 'premium' ? 'premium' : appearance });
     const context = await browser.newContext({ viewport: { width, height: 844 }, serviceWorkers: 'block', reducedMotion: 'reduce' });
     await context.addInitScript(s => { if (!localStorage.getItem('lift-v2-state')) localStorage.setItem('lift-v2-state', JSON.stringify(s)); }, state);
@@ -25,18 +25,22 @@ try {
     await sheet.getByRole('button', { name: '+ Add exercise', exact: true }).first().click();
     const search = sheet.getByRole('searchbox');
     const options = sheet.locator('.scratch-exercise-results [role="option"]');
-    const defaultOrder = await options.allTextContents();
+    // Thumbnails reserve their space with an aria-hidden placeholder while
+    // loading. Search ranking concerns the stable labels, not image readiness.
+    const optionLabels = () => options.locator('.exercise-picker-label').allTextContents();
+    const defaultOrder = await optionLabels();
     await search.fill('pull ups');
-    const results = await options.allTextContents();
+    const results = await optionLabels();
     if (!baseline) assert.equal(results[0].trim(), 'Pull-up');
     console.log(`${width}-${style}-${appearance}: ${results.slice(0,4).join(', ')}`);
     await search.scrollIntoViewIfNeeded(); await page.waitForTimeout(250);
     await page.screenshot({ path: `${output}/${width}-${style}-${appearance}-${baseline ? 'before' : 'pull-ups'}.png` });
     if (!baseline) {
-      await search.fill('weighted pull ups'); assert.equal((await options.first().innerText()).trim(), 'Weighted Pull-up');
+      await search.fill('weighted pull ups'); assert.equal((await options.first().locator('.exercise-picker-label').innerText()).trim(), 'Weighted Pull-up');
+      assert.equal(await sheet.getByRole('option', {name:'Weighted Pull-up',exact:true}).count(), 1, 'decorative thumbnail never changes the accessible exercise name');
       await page.screenshot({ path: `${output}/${width}-${style}-${appearance}-weighted.png` });
       await sheet.getByRole('button', { name: 'Clear search', exact: true }).click();
-      assert.deepEqual(await options.allTextContents(), defaultOrder);
+      assert.deepEqual(await optionLabels(), defaultOrder);
       await search.fill('pull ups'); await options.first().click();
       assert.equal(await sheet.locator('.plan-editor-exercise').filter({ hasText: /^Pull-up/ }).count() > 0, true);
       assert.deepEqual(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program), original, 'selection only changes local plan draft');

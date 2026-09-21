@@ -25,7 +25,7 @@ for (const width of [320, 390, 430]) for (const appearance of ['light', 'dark'])
   await page.locator('.active-workout-start-lock').waitFor();
   await page.waitForTimeout(350);
   assert.equal(await page.locator('.active-workout-notice').count(), 1);
-  assert.equal(await page.locator('.today-exercise-edit-toggle').isDisabled(), true);
+  assert.equal(await page.locator('.today-exercise-edit-toggle').count(), 0, 'editing remains in the current planning flow, not the active Today summary');
   assert.equal(await page.getByRole('button', { name: 'START WORKOUT', exact: true }).count(), 0);
   const name = `${width}-${style}-${appearance}`;
   const geometry = await page.evaluate(() => {
@@ -40,8 +40,7 @@ for (const width of [320, 390, 430]) for (const appearance of ['light', 'dark'])
     assert.ok(geometry.gap >= 38 && geometry.gap <= 64, 'selected-day content retains restrained separation');
     assert.equal(await page.getByText('Finish your active workout to edit exercises.', { exact: true }).count(), 0);
     assert.equal(await page.locator('.active-workout-start-lock').count(), 1);
-    const reference = await page.locator('.today-exercise-edit-toggle').getAttribute('aria-describedby');
-    assert.equal(await page.locator(`#${reference}`).count(), 1, 'disabled Edit retains accessible explanation');
+    assert.match(await page.locator('.active-workout-start-lock').innerText(), /Finish the active session/);
   }
   await writeFile(new URL(`${name}-${phase}.json`, out), JSON.stringify(geometry, null, 2));
   await page.screenshot({ path: fileURLToPath(new URL(`${name}-${phase}.png`, out)), fullPage: true });

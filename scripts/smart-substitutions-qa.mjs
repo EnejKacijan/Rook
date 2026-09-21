@@ -136,7 +136,8 @@ async function open(state, viewport = { width: 390, height: 844 }) {
     }
   }, state);
   const page = await context.newPage();
-  const errors = [];
+  const errors = [], resourceFailures = [];
+  page.on('requestfailed',r=>resourceFailures.push({url:r.url(),error:r.failure()?.errorText}));
   page.on("pageerror", (error) => errors.push(error.message));
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(message.text());
@@ -151,7 +152,7 @@ async function open(state, viewport = { width: 390, height: 844 }) {
   await page.getByRole("button", { name: "Replace", exact: true }).click();
   await page.getByRole("dialog").waitFor();
   await page.waitForTimeout(350); // Measure the settled sheet, not its entrance animation.
-  return { context, page, errors };
+  return { context, page, errors, resourceFailures };
 }
 
 async function screenshotState(name, state, viewport, action) {
@@ -177,6 +178,8 @@ for (const appearance of ['light', 'dark']) for (const style of ['standard', 'pr
   await screenshotState(`390-clear-${style}-${appearance}`, fixture({ appearance, style }), { width: 390, height: 844 }, async page => {
     await page.getByRole('button', { name: 'Search all exercises' }).click();
     const field = page.getByRole('searchbox');
+    await field.waitFor();await field.click(); // Compare typing after entering the current focused-search layout.
+    await page.locator('.replace-sheet').evaluate(async node=>{await new Promise(done=>requestAnimationFrame(()=>requestAnimationFrame(done)));await Promise.all(node.getAnimations({subtree:true}).map(a=>a.finished.catch(()=>{})));});
     const before = await field.boundingBox();
     await field.fill('Cable');
     const clear = page.getByRole('button', { name: 'Clear search', exact: true });
@@ -260,7 +263,8 @@ await offline.page.getByRole("button", { name: "More compatible options" }).clic
 await offline.page.waitForTimeout(250);
 assert.ok(await offline.page.locator(".replace-sheet .choice-row").count() > 3, "local ranking works offline");
 await offline.context.setOffline(false);
-assert.deepEqual(offline.errors, []);
+assert.ok(offline.resourceFailures.every(r=>r.error==='net::ERR_INTERNET_DISCONNECTED'),JSON.stringify(offline.resourceFailures));
+assert.deepEqual(offline.errors.filter(message=>message!=='Failed to load resource: net::ERR_INTERNET_DISCONNECTED'), []);
 await offline.context.close();
 
 await browser.close();

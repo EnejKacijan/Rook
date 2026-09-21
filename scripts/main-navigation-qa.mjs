@@ -77,8 +77,9 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
    await page.evaluate(()=>{document.documentElement.style.fontSize='';document.documentElement.style.removeProperty('--rook-nav-safe-bottom');});
    await page.locator('.bottom-nav').getByRole('button',{name:'COACH',exact:true}).click();
    const input=page.locator('.coach-input textarea');await input.fill('A long local draft to check wrapping and composer growth. '.repeat(12));
-   assert.equal(await page.locator('.bottom-nav').isVisible(),false,'Preserve existing mobile focus behavior');
+   assert.equal(await page.locator('.bottom-nav').isVisible(),true,'Focus alone does not claim that a native keyboard has opened');
    await page.setViewportSize({width,height:530});await page.waitForTimeout(100);
+   assert.equal(await page.locator('.bottom-nav').isVisible(),false,'Measured keyboard occlusion hides the nav');
    assert.ok(await input.evaluate(e=>e.getBoundingClientRect().bottom<=innerHeight));
    await page.screenshot({path:`${output}/${width}-${style}-${appearance}-coach-focused-resized.png`});
    await input.evaluate(e=>e.blur());await page.setViewportSize({width,height:844});await page.waitForTimeout(100);

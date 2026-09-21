@@ -2,6 +2,7 @@
   --bottom-nav-height: 56px;
   --rook-nav-safe-bottom: env(safe-area-inset-bottom, 0px);
   --bottom-nav-total-height: calc(var(--bottom-nav-height) + var(--rook-nav-safe-bottom));
+  --rook-motion-nav-select: 180ms;
 }
 .bottom-nav {
   position: fixed;
@@ -33,7 +34,7 @@
   align-items: center;
   justify-content: flex-start;
   gap: 6px;
-  transition: color 150ms linear;
+  transition: color var(--rook-motion-tab,160ms) var(--rook-ease-standard);
 }
 .nav-icon {
   flex: 0 0 22px;
@@ -43,6 +44,11 @@
   place-items: center;
 }
 .nav-icon svg { width: 22px; height: 22px; }
+.bottom-nav .nav-icon {
+  transform-origin: center;
+  transition: transform var(--rook-motion-press-out,120ms) var(--rook-ease-standard);
+}
+.bottom-nav button:active .nav-icon { transform: scale(.96); transition-duration: 0ms; }
 .nav-icon-line { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: square; stroke-linejoin: miter; }
 .nav-icon-solid { display: none; fill: currentColor; stroke: none; }
 .nav-icon-knockout { fill: var(--rook-bg); }
@@ -51,6 +57,12 @@
 .nav-label { font-family: inherit; font-size: .59375rem; line-height: 1.052632; font-weight: 700; letter-spacing: .13em; max-width: 100%; overflow-wrap: anywhere; text-align: center; }
 :root[data-appearance] .bottom-nav .nav-active { color: var(--rook-accent-text); }
 .nav-active .nav-label { color: var(--rook-text); }
+.bottom-nav .nav-label { transition: color var(--rook-motion-tab,160ms) var(--rook-ease-standard); }
 :root[data-appearance] .bottom-nav button:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: -3px; border-radius: 9px; }
 @media (prefers-reduced-motion: reduce) { :root[data-appearance] .bottom-nav button { transition: none; } }
 @media (prefers-reduced-motion: reduce) { .bottom-nav { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .bottom-nav .nav-label { transition: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .bottom-nav .nav-icon { transition: none; }
+  .bottom-nav button:active .nav-icon { transform: none; }
+}

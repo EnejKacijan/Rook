@@ -72,6 +72,7 @@ await capture("07-premium-drop", fixture({ kind: "drop", appearance: "dark", sty
 
 const reload = await open(fixture({ perSide: true }));
 await reload.page.getByLabel("right reps for set 1", { exact: true }).fill("8");
+await reload.page.getByLabel("right reps for set 1", { exact: true }).press("Enter");
 await reload.page.reload({ waitUntil: "networkidle" });
 await reload.page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 assert.equal(await reload.page.getByLabel("right reps for set 1", { exact: true }).inputValue(), "8", "per-side value survives reload");

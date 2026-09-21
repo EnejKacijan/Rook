@@ -1,3 +1,4 @@
+import { workoutPerformedDate } from './workoutDates.js';
 import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, progressionFor, compatibleReplacementCandidates, isExerciseAllowed, isoDay } from './domain.js';
 import { effectiveSetReps, progressionComparableSet, loggingModeOf } from './advancedLogging.js';
 import { summarizeSessionFeedback } from './sessionFeedback.js';
@@ -9,12 +10,12 @@ import { addPlanVersion, planFingerprint } from './planHistory.js';
 import { calculatePlateLoad, normalizePlateSetup, selectedPlateBar, plateLoadingRelation, kgToPlateUnit } from './plateCalculator.js';
 
 const clone = value => structuredClone(value);
-const dateOf = workout => String(workout.completedAt || '').slice(0, 10);
+const dateOf = workoutPerformedDate;
 const working = exercise => (exercise.sets || []).filter(set => set.planned !== false && !set.added);
 const completeSets = exercise => working(exercise).filter(set => set.completed);
 const eligible = exercise => exerciseMeasure(exercise) === 'reps' && exerciseLoadRequirement(exercise) !== 'none';
 const shape = exercise => JSON.stringify([exercise.repMin, exercise.repMax, exercise.targetRir, loggingModeOf(exercise), working(exercise).length]);
-const chronological = workouts => [...workouts].sort((a,b) => String(a.completedAt).localeCompare(String(b.completedAt)));
+const chronological = workouts => [...workouts].sort((a,b) => String(dateOf(a)).localeCompare(String(dateOf(b))) || String(a.completedAt).localeCompare(String(b.completedAt)));
 export function authoritativeBlockWorkouts(state, blockId) {
   const superseded = new Set((state.workouts || []).map(workout => workout.supersedesCompletionId).filter(Boolean));
   const bySlot = new Map();
@@ -105,7 +106,7 @@ export function reviewTrainingBlock(state, block=state.program?.trainingBlock) {
 }
 function nextStartDate(state, now) {
   const date=new Date(now);date.setHours(12,0,0,0);
-  const today=isoDay(date),alreadyTrained=(state.workouts||[]).some(w=>w.completedAt && (w.canonicalPlanDate||dateOf(w))===today);
+  const today=isoDay(date),alreadyTrained=(state.workouts||[]).some(w=>w.completedAt && dateOf(w)===today);
   if(alreadyTrained)date.setDate(date.getDate()+1);
   for(let i=0;i<7;i++){
     const weekday=new Intl.DateTimeFormat('en',{weekday:'short'}).format(date);

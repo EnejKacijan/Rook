@@ -37,6 +37,7 @@
   flex-shrink: 0;
 }
 :root :is(.detail-screen, .sheet) .sheet-action-footer > p { margin: 0; }
+:root :is(.detail-screen, .sheet) .sheet-action-footer[hidden] { display:none; }
 :root :is(.detail-screen, .sheet) .sheet-action-footer[data-separate] {
   position: relative;
   bottom: auto;
@@ -59,6 +60,13 @@
    must not become a second scroll owner when a picker result receives focus. */
 :root .modal-layer:has(> .has-anchored-plan-footer) { overflow: clip; }
 :root .scratch-editor-screen.has-anchored-plan-footer { position: fixed; inset-inline: 0; top: 0; }
+/* These editors also run inside a modal. While the keyboard is open the
+   contained layer owns viewport positioning; fixed top:0 would ignore its pan. */
+:root .modal-layer > .scratch-editor-screen.has-anchored-plan-footer[data-sheet-keyboard-open] {
+  position: relative;
+  top: auto;
+  inset-inline: auto;
+}
 :root .modal-layer:not(.edit-plan-page-layer) > .has-anchored-plan-footer {
   height: min(92dvh, calc(var(--sheet-visible-height, 100dvh) - max(12px, env(safe-area-inset-top))));
 }

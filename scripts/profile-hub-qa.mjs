@@ -32,7 +32,7 @@ try{for(const [width,appearance,style,active,complete] of [[390,'light','standar
    await row.click();await page.locator('.modal-layer').waitFor();assert.ok(await page.locator('.modal-layer').innerText(),`${label}: destination rendered`);
    if(String(label)==='/Logging & increments/')await page.getByText('Rest timer notifications',{exact:true}).waitFor();
    if(String(label)==='/Delete local data/')await page.getByRole('button',{name:'BACK UP FIRST',exact:true}).waitFor();
-   await page.waitForTimeout(250);await page.keyboard.press('Escape');await page.locator('.modal-layer').waitFor({state:'detached'});assert.equal(await root.locator('[data-profile-area]').count(),0,`close returns to same category: ${label}`);
+   await page.waitForTimeout(250);await page.keyboard.press('Escape');await page.locator('.modal-layer').waitFor({state:'detached'});assert.equal(await root.locator('[data-profile-area]:not([data-profile-area="diagnostics"])').count(),0,`close returns to same category: ${label}`);
   }
   await page.getByRole('button',{name:'Back to Profile',exact:true}).click();assert.equal(await root.locator(`[data-profile-area="${area}"]`).evaluate(e=>document.activeElement===e),true);
  }

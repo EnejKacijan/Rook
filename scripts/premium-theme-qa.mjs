@@ -1,4 +1,4 @@
-import { openProfileArea } from './qa-current-navigation.mjs';
+import { openProfileArea, openFirstRunLanding } from './qa-current-navigation.mjs';
 import assert from "node:assert/strict";
 import { mkdir } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -258,8 +258,8 @@ const weekStateSignals = await run.page.evaluate(() => {
     restSurface: restStyle.backgroundColor,
     plannedLine: plannedStyle.borderColor,
     restLine: restStyle.borderColor,
-    plannedDotFill: plannedDotStyle.backgroundColor,
-    plannedDotBorder: plannedDotStyle.borderStyle,
+    plannedDotFill: getComputedStyle(planned.querySelector('.workout-dot circle')).fill,
+    plannedDotBorder: getComputedStyle(planned.querySelector('.workout-dot circle')).stroke,
     todayMarkerWidth: getComputedStyle(today, "::after").width,
   };
 });
@@ -274,8 +274,8 @@ assert.notEqual(
   weekStateSignals.restLine,
   "Premium planned days use a distinct tile border",
 );
-assert.equal(weekStateSignals.plannedDotFill, "rgba(0, 0, 0, 0)");
-assert.equal(weekStateSignals.plannedDotBorder, "solid");
+assert.equal(weekStateSignals.plannedDotFill, "none");
+assert.notEqual(weekStateSignals.plannedDotBorder, "none", "planned circle has a visible stroke");
 assert.equal(weekStateSignals.todayMarkerWidth, "12px");
 const primary = run.page.locator(".today-hero .primary");
 if (await primary.count()) {
@@ -493,13 +493,13 @@ assert.match(
 const completedCheck = activeRun.page.locator(".set-row.set-done .check").first();
 assert.equal(
   await completedCheck.evaluate((button) => getComputedStyle(button).backgroundColor),
-  "rgb(185, 154, 80)",
-  "completed check fill uses the receded Premium gold step",
+  "rgba(0, 0, 0, 0)",
+  "the native hit target stays transparent around the smaller completion face",
 );
 assert.equal(
-  await completedCheck.evaluate((button) => getComputedStyle(button).borderColor),
-  "rgb(185, 154, 80)",
-  "completed check outline uses the receded Premium gold step",
+  await completedCheck.locator(".check-mark").evaluate((face) => getComputedStyle(face).color === "rgb(215, 177, 90)"),
+  true,
+  "completed check uses the Premium accent text token",
 );
 assert.equal(
   await activeRun.page.locator(".set-row.set-done").first().evaluate(
@@ -553,11 +553,11 @@ assert.equal(
   "target metadata remains neutral in Premium Light",
 );
 assert.equal(
-  await lightActiveRun.page.locator(".set-row.set-done .check").first().evaluate(
-    (node) => getComputedStyle(node).backgroundColor,
+  await lightActiveRun.page.locator(".set-row.set-done .check-mark").first().evaluate(
+    (node) => getComputedStyle(node).color,
   ),
-  "rgb(154, 118, 26)",
-  "Premium Light uses a darker completion gold",
+  "rgb(138, 103, 15)",
+  "Premium Light uses its dark gold completion mark",
 );
 assert.equal(
   await lightActiveRun.page.locator(".rest-timer").evaluate(
@@ -669,7 +669,7 @@ await timerCompletionRun.context.close();
 
 const fresh = blankState();
 fresh.profile.themePreference = "premium";
-const onboardingRun = await openState(fresh, 375);
+const onboardingRun = await openState(fresh, 375);await openFirstRunLanding(onboardingRun.page);
 await onboardingRun.page.getByRole("button", { name: "BUILD MY PLAN" }).click();
 assert.equal((await premiumSignals(onboardingRun.page)).overflow, false);
 await screenshot(onboardingRun.page, "375-onboarding-premium.png");
@@ -677,7 +677,7 @@ assert.deepEqual(await visibleGreenLeaks(onboardingRun.page), [], "Premium onboa
 assert.deepEqual(onboardingRun.errors, []);
 await onboardingRun.context.close();
 
-const lightLandingRun = await openState(fresh, 375, "light");
+const lightLandingRun = await openState(fresh, 375, "light");await openFirstRunLanding(lightLandingRun.page);
 assert.deepEqual(
   await visibleGreenLeaks(lightLandingRun.page),
   [],
@@ -700,7 +700,7 @@ assert.equal(await disabledImport.evaluate(button => {
 assert.deepEqual(lightLandingRun.errors, []);
 await lightLandingRun.context.close();
 
-const lightScratchRun = await openState(fresh, 375, "light");
+const lightScratchRun = await openState(fresh, 375, "light");await openFirstRunLanding(lightScratchRun.page);
 await lightScratchRun.page.getByRole("button", { name: /Start from scratch/ }).click();
 assert.deepEqual(
   await visibleGreenLeaks(lightScratchRun.page),

@@ -6,7 +6,7 @@ import { createReturningUserFixture } from '../src/demoFixture.js';
 const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
 try {
   for(const avoid of ['', 'Avoid leg press']) {
-    const state=createReturningUserFixture(3);state.activeWorkout=null;state.profile.avoid=avoid;
+    const state=createReturningUserFixture(3);state.activeWorkout=null;state.profile.avoid=avoid;for(const day of state.program.days)day.exercises=day.exercises.slice(0,6);
     const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
     await context.addInitScript(s=>localStorage.setItem('lift-v2-state',JSON.stringify(s)),state);
     const page=await context.newPage();await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));
@@ -15,6 +15,7 @@ try {
     const cdp=await context.newCDPSession(page);await cdp.send('Emulation.setCPUThrottlingRate',{rate:4});
     const times=[];
     for(let run=0;run<3;run++) {
+      assert.equal(await page.getByRole('button',{name:'+ Add exercise',exact:true}).first().isEnabled(),true);
       const ms=await page.getByRole('button',{name:'+ Add exercise',exact:true}).first().evaluate(async el=>{
         const start=performance.now();el.click();
         await new Promise(resolve=>{const poll=()=>document.querySelector('.scratch-exercise-results')?requestAnimationFrame(()=>requestAnimationFrame(resolve)):requestAnimationFrame(poll);poll();});

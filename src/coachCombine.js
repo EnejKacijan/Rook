@@ -1,3 +1,4 @@
+import {pendingCoachWorkflows} from './coachConversations.js';
 import {isoDay,weekKey,optionalStrengthForDate} from './domain.js';
 import {flexibleSessions,addCalendarDays} from './flexibleWeek.js';
 import {buildCombinedProposal,buildCombinedRevision,combineSources,combineFingerprint} from './combineWorkouts.js';
@@ -18,7 +19,7 @@ const conversation=state=>(state.conversations||[]).filter(e=>e.conversationId==
 export function combineRevisionTargets(state){
   const byId=new Map(),owner=combinedAdjustment(state);
   for(const entry of conversation(state)){
-    if(entry.combineReviewCancelled)continue;
+    if(entry.combineReviewCancelled || entry.coachWorkflowStatus === 'cancelled')continue;
     const proposal=entry.combineReview||entry.reply?.action?.proposal;
     if(proposal?.mode!=='combine')continue;
     if(owner?.id===proposal.id){byId.set(owner.id,entry.actionResult?.status==='applied'?owner:proposal);continue;}
@@ -48,7 +49,7 @@ function revisionTime(message,base,interpreted){
   return undefined;
 }
 export async function coachCombineReply(state,message,{selection,interpret,interpretedMinutes,revisionIntent,language}={}){
-  const previous=(state.conversations||[]).filter(e=>e.conversationId===state.activeCoachConversationId).at(-1)?.reply?.combineRequest;
+  const previous=pendingCoachWorkflows(state).filter(entry=>entry.reply?.combineRequest).at(-1)?.reply.combineRequest;
   const enteredTime=combineTime(message),text=normalize(message);
   const sl=language==='Slovenian'||previous?.language==='Slovenian'||/\b(zdruz\w*|podaljs\w*|skrajs\w*|imam|zdaj|cas\w*)\b/.test(text);
   const say=(text,extra={})=>({text,action:null,source:'combine-domain',final:true,...extra});

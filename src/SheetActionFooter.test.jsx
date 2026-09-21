@@ -17,6 +17,22 @@ it('keeps disabled/enabled action and secondary callbacks unchanged', () => {
   view.rerender(<main className="detail-screen"><SheetActionFooter><button onClick={commit}>Save</button></SheetActionFooter></main>);
   fireEvent.click(screen.getByText('Save')); expect(commit).toHaveBeenCalledOnce();
 });
+it('bounds an ordinary footer sheet when both viewport heights shrink, including offset-only pan', () => {
+  const original=window.visualViewport, originalHeight=window.innerHeight;
+  const viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});
+  Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+  try {
+    const view=render(<div className="modal-layer"><main className="detail-screen"><input defaultValue="Keep draft"/><SheetActionFooter><button>Save</button></SheetActionFooter></main></div>);
+    const layer=view.container.firstChild,panel=layer.firstChild,input=panel.querySelector('input');
+    expect(layer.style.height).toBe('');
+    Object.defineProperty(window,'innerHeight',{configurable:true,value:480});Object.assign(viewport,{height:480,offsetTop:24});
+    act(()=>viewport.dispatchEvent(new Event('resize')));
+    expect(layer.style.height).toBe('844px');expect(layer.style.paddingBottom).toBe('340px');expect(panel.style.getPropertyValue('--sheet-action-safe-bottom')).toBe('0px');
+    viewport.offsetTop=72;act(()=>viewport.dispatchEvent(new Event('scroll')));expect(layer.style.top).toBe('0px');expect(layer.style.paddingTop).toBe('72px');
+    expect(panel.querySelector('input')).toBe(input);expect(input.value).toBe('Keep draft');
+    viewport.height=844;act(()=>viewport.dispatchEvent(new Event('resize')));expect(layer.style.height).toBe('');
+  } finally {act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});Object.defineProperty(window,'innerHeight',{configurable:true,value:originalHeight});}
+});
 it('does not create a footer for excluded states and removes its scroll registration', () => {
   const view=render(<main className="detail-screen"><SheetActionFooter><button>Apply</button></SheetActionFooter></main>);
   expect(view.container.querySelector('main').classList.contains('has-sheet-action-footer')).toBe(true);
@@ -48,10 +64,11 @@ it('keeps the opted-in sheet anchored across keyboard pan, zoom and restoration 
   try {
     const view=render(<div className="modal-layer"><main className="sheet"><div className="sheet-scroll"><textarea defaultValue="Retain me"/></div><SheetActionFooter containViewport separate><button>Save</button></SheetActionFooter></main></div>);
     const layer=view.container.firstChild, panel=layer.firstChild, input=panel.querySelector('textarea');
-    expect(layer.style.height).toBe('420px');
+    expect(layer.style.height).toBe(`${window.innerHeight}px`);expect(layer.style.paddingBottom).toBe(`${window.innerHeight-420}px`);
     for (const [height,offsetTop,scale,type] of [[420,115,1,'scroll'],[360,70,1.2,'resize'],[window.innerHeight,0,1,'resize'],[400,0,1,'resize']]) {
       Object.assign(viewport,{height,offsetTop,scale});act(()=>viewport.dispatchEvent(new Event(type)));
-      expect(layer.style.top).toBe(`${offsetTop}px`);expect(layer.style.height).toBe(`${height}px`);
+      expect(layer.style.top).toBe('0px');expect(layer.style.height).toBe(`${window.innerHeight}px`);
+      expect(layer.style.paddingTop).toBe(`${offsetTop}px`);expect(layer.style.paddingBottom).toBe(`${window.innerHeight-offsetTop-height}px`);
       expect(layer.firstChild).toBe(panel);expect(panel.querySelector('textarea')).toBe(input);expect(input.value).toBe('Retain me');
     }
     act(()=>root.unmount());root=null;
@@ -92,4 +109,15 @@ it('opts plan editors into visible-viewport containment without changing other f
    view.rerender(<main className="detail-screen"><SheetActionFooter><button>Other action</button></SheetActionFooter></main>);
    expect(panel.classList.contains('has-anchored-plan-footer')).toBe(false);expect(panel.style.height).toBe('');expect(panel.style.top).toBe('');
  } finally {Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
+it('only hides an explicitly redundant browsing footer and removes its owned space until the keyboard closes',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try{
+  const element=hide=><div className="modal-layer"><main className="detail-screen is-search-browsing"><input/><SheetActionFooter hideWhileSearching={hide} separate><button>Action</button></SheetActionFooter></main></div>;
+  const view=render(element(true)),panel=view.container.querySelector('main'),footer=panel.querySelector('footer'),input=panel.querySelector('input');footer.getBoundingClientRect=()=>({top:350,height:footer.hidden?0:68});input.getBoundingClientRect=()=>({top:100,bottom:150});
+  expect(footer.hidden).toBe(false);panel.scrollTop=27;act(()=>input.focus());expect(panel.scrollTop).toBe(27);
+  Object.assign(viewport,{height:400});act(()=>viewport.dispatchEvent(new Event('resize')));expect(footer.hidden).toBe(true);expect(panel.style.getPropertyValue('--sheet-action-height')).toBe('0px');expect(panel.classList.contains('has-sheet-action-footer')).toBe(false);expect(panel.scrollTop).toBe(27);
+  view.rerender(element(false));expect(panel.querySelector('footer')).toBe(footer);expect(footer.hidden).toBe(false);expect(panel.style.getPropertyValue('--sheet-action-height')).toBe('68px');
+  view.rerender(element(true));expect(footer.hidden).toBe(true);Object.assign(viewport,{height:844});act(()=>viewport.dispatchEvent(new Event('resize')));expect(footer.hidden).toBe(false);expect(panel.style.getPropertyValue('--sheet-action-height')).toBe('68px');expect(panel.classList.contains('has-sheet-action-footer')).toBe(true);
+ }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
 });

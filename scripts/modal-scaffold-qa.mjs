@@ -83,7 +83,8 @@ async function verifyLongForm(page, selector, label) {
   assert.equal(headerStyle.position, "sticky", `${label} scrollable header is sticky`);
   assert.equal(await handle.count(), 1, `${label} keeps its drag handle inside the sticky header`);
   assert.ok(isOpaque(headerStyle.background), `${label} header is opaque`);
-  assert.equal(await compactTitle.evaluate(node => getComputedStyle(node).opacity), "0", `${label} compact title starts hidden`);
+  const hasHero=await panel.locator(':scope > h1,:scope > h2').count()>0;
+  assert.equal(await compactTitle.evaluate(node => getComputedStyle(node).opacity),hasHero && !await panel.evaluate(node=>node.matches('.edit-plan-screen'))?'0':'1', `${label} keeps one visible title at the top`);
   const closeStyle = await closeControl.evaluate((node) => {
     node.focus({ preventScroll: true });
     const style = getComputedStyle(node);

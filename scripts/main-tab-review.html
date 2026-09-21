@@ -1,0 +1,48 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>ROOK main-tab transition QA</title><style>/* Match mobile overlay scrollbars; do not change app CSS or scrolling. */ html{scrollbar-width:none}html::-webkit-scrollbar{width:0}</style></head><body>
+<section id="fixture"><h1>Isolated main-tab QA</h1><label>Theme <select id="theme"><option>premium-dark</option><option>premium-light</option><option>dark</option><option>light</option></select></label><label>Reduced motion <input id="reduce" type="checkbox"></label><button id="seed">Load synthetic tabs</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,startWorkout,isoDay} from '/src/domain.js';
+import {AIService} from '/src/aiService.js';
+if(!import.meta.env.DEV || location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development QA origin required');
+const params=new URLSearchParams(location.search);
+if(!params.has('run'))document.querySelector('#seed').onclick=()=>{
+ const s=createReturningUserFixture(2),theme=document.querySelector('#theme').value;
+ Object.assign(s.profile,{showExerciseImages:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ s.selectedDate=isoDay();s.activeWorkout=startWorkout(s,s.program.days[0]);s.activeWorkout.startedAt=Date.now()-185000;
+ s.activeWorkout.exercises.forEach(e=>e.sets.forEach((set,i)=>Object.assign(set,{weight:40,reps:9,completed:i===0})));
+ s.activeCoachConversationId='tab-qa-current';s.coachDraft='Draft preserved across tabs';delete s.coachConversationMeta;
+ s.conversations=Array.from({length:12},(_,i)=>({id:'tab-message-'+i,conversationId:'tab-qa-current',createdAt:Date.now(),user:'Training question '+(i+1),reply:{text:'Use your current plan and log the work you perform. Review an adjustment before applying it.'}}));
+ for(const key of ['lift-v2-state','rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/main-tab-review.html?run=1'+(document.querySelector('#reduce').checked?'&reduce=1':'');
+};
+else{
+ const originalMatch=window.matchMedia.bind(window);window.matchMedia=q=>q==='(display-mode: standalone)'||q==='(prefers-reduced-motion: reduce)'?{matches:q.includes('standalone')||params.has('reduce'),media:q,addEventListener(){},removeEventListener(){}}:originalMatch(q);
+ const viewport=new EventTarget();Object.assign(viewport,{height:innerHeight,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ AIService.status=async()=>({available:true});AIService.coach=async()=>({text:'Synthetic fixture response.'});
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+ // The review browser cannot emulate CSS media preferences directly. Activate
+ // the app's own declared reduce rules alongside matchMedia's QA preference.
+ if(params.has('reduce')){const css=[];for(const sheet of document.styleSheets){try{for(const rule of sheet.cssRules)if(rule.type===CSSRule.MEDIA_RULE&&rule.conditionText.includes('prefers-reduced-motion: reduce'))css.push(...[...rule.cssRules].map(r=>r.cssText));}catch{}}const reducedStyle=document.createElement('style');reducedStyle.dataset.reviewReducedMotion='true';reducedStyle.textContent=css.join('\n');document.head.append(reducedStyle);}
+ const qa=document.createElement('details');qa.id='tab-qa';qa.style.cssText='position:fixed;right:0;top:0;z-index:99999;background:#ddd;color:#111;font:11px system-ui;max-width:180px';
+ qa.innerHTML='<summary>Tab QA</summary><label>Hold next transition at <select id="hold"><option>live</option><option>0</option><option>40</option><option>80</option><option>120</option></select></label><button id="resume">Release animation</button><label>Frame <select id="frame"><option>0</option><option>40</option><option>80</option><option>120</option><option>159</option></select></label><button id="seek">Seek held frame</button><label>Keyboard <select id="keyboard"><option>closed</option><option>open</option><option>dismissing</option></select></label><button id="viewport">Apply viewport</button><label>Navigate <select id="target"><option>TODAY</option><option>COACH</option><option>PROGRESS</option><option>PROFILE</option></select></label><button id="navigate">Activate real nav handler</button><button id="rapid-a">Rapid Today Coach Progress Profile</button><button id="rapid-b">Rapid Profile Today Progress Coach</button><button id="inspect">Inspect saved state</button><pre id="proof" style="max-height:160px;overflow:auto;white-space:pre-wrap"></pre>';document.body.append(qa);
+ const animations=()=>[...document.querySelectorAll('.app-content > .screen,.main-tab-paint,.bottom-nav button,.bottom-nav .nav-icon,.bottom-nav .nav-label')].flatMap(e=>e.getAnimations());
+ for(const id of ['hold','frame'])for(const ms of [30,60,72,90,150,179,180]){const option=document.createElement('option');option.value=ms;option.textContent=ms;qa.querySelector('#'+id).append(option);}
+ const pressProof=document.createElement('pre');pressProof.id='nav-press-proof';pressProof.style.cssText='max-height:140px;overflow:auto;white-space:pre-wrap';qa.append(pressProof);
+ const presses=[];
+ document.addEventListener('pointerdown',event=>{const button=event.target.closest('.bottom-nav button');if(!button)return;const r=button.getBoundingClientRect();presses.push({label:button.getAttribute('aria-label'),active:button.matches(':active'),transform:getComputedStyle(button.querySelector('.nav-icon')).transform,buttonTransform:getComputedStyle(button).transform,box:{x:r.x,y:r.y,width:r.width,height:r.height}});pressProof.textContent=JSON.stringify(presses.slice(-16));});
+ const motionProof=document.createElement('pre');motionProof.id='motion-proof';motionProof.style.cssText='max-height:120px;overflow:auto;white-space:pre-wrap';qa.append(motionProof);
+ const record=()=>{motionProof.textContent=JSON.stringify(animations().map(a=>({target:a.effect.target.className,state:a.playState,currentTime:a.currentTime,timing:a.effect.getTiming(),frames:a.effect.getKeyframes()})));};
+ let last=[];
+ document.addEventListener('click',event=>{if(!event.target.closest('.bottom-nav button'))return;requestAnimationFrame(()=>{last=animations();const value=qa.querySelector('#hold').value;if(value!=='live')for(const a of last){a.pause();a.currentTime=Number(value);}record();qa.open=false;});});
+ qa.querySelector('#resume').onclick=()=>{for(const a of last)if(a.playState!=='idle')a.finish();qa.open=false;};
+ qa.querySelector('#seek').onclick=()=>{const ms=Number(qa.querySelector('#frame').value);for(const a of last){if(a.playState==='idle')continue;if(ms>=Number(a.effect.getTiming().duration))a.finish();else{a.pause();a.currentTime=ms;}}queueMicrotask(record);qa.open=false;};
+ qa.querySelector('#viewport').onclick=()=>{const value=qa.querySelector('#keyboard').value;viewport.height=value==='open'?480:value==='dismissing'?650:innerHeight;viewport.offsetTop=value==='open'?24:0;viewport.dispatchEvent(new Event('resize'));qa.open=false;};
+ qa.querySelector('#navigate').onclick=()=>document.querySelector(`.bottom-nav button[aria-label="${qa.querySelector('#target').value}"]`)?.click();
+ const rapid=sequence=>{qa.querySelector('#hold').value='live';let i=0;const next=()=>{document.querySelector(`.bottom-nav button[aria-label="${sequence[i++]}"]`)?.click();if(i<sequence.length)requestAnimationFrame(next);};next();};
+ qa.querySelector('#rapid-a').onclick=()=>rapid(['TODAY','COACH','PROGRESS','PROFILE']);qa.querySelector('#rapid-b').onclick=()=>rapid(['PROFILE','TODAY','PROGRESS','COACH']);
+ for(const [label,sequence] of [['Rapid Today Coach Progress',['TODAY','COACH','PROGRESS']],['Rapid Profile Today Coach Profile',['PROFILE','TODAY','COACH','PROFILE']]]){const button=document.createElement('button');button.textContent=label;button.onclick=()=>rapid(sequence);qa.append(button);}
+ const refresh=document.createElement('button');refresh.textContent='Read current motion';refresh.onclick=record;qa.append(refresh);
+ qa.querySelector('#inspect').onclick=()=>{const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');qa.querySelector('#proof').textContent=JSON.stringify({activeWorkout:s.activeWorkout,selectedDate:s.selectedDate,weekScheduleOverrides:s.weekScheduleOverrides,todayAdaptation:s.todayAdaptation,conversation:s.activeCoachConversationId,draft:s.coachDraft,messages:s.conversations,scrollY,transcriptScroll:document.querySelector('.app-content .coach-scroll')?.scrollTop});};
+}
+</script></body></html>

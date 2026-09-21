@@ -1,3 +1,4 @@
+import {openFirstRunLanding} from './qa-current-navigation.mjs';
 import { openProfileArea } from './qa-current-navigation.mjs';
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
@@ -12,11 +13,11 @@ for(const [width,appearance,units] of [[390,'light','kg'],[320,'dark','lb']]){
   await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
   const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
-  await page.locator('.existing-plan-action').click();
+  await openFirstRunLanding(page); await page.locator('.existing-plan-action').click();
   assert.equal(await page.getByRole('group',{name:'Weight units'}).count(),0);
   const notes='Monday - Push\nBench Press 3x8 185\nCable Fly 2x12 15 kg';
   await page.getByPlaceholder(/Paste your workout notes/).fill(notes);await page.getByRole('button',{name:'CREATE PREVIEW',exact:true}).click();
-  await page.getByRole('heading',{name:'What unit is this weight?',exact:true}).waitFor();
+  await page.getByRole('heading',{name:'Bench Press',exact:true}).waitFor();
   const next=page.locator('.import-resolution .sheet-action-footer button');assert.equal(await next.isDisabled(),true);
   await page.screenshot({path:`${out}/${width}-${appearance}-unit-decision.png`});
   const active=page.locator('.import-decision-content:visible');

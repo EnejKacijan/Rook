@@ -69,7 +69,7 @@ describe('Flexible Week logical sessions', () => {
   it('requires explicit today-adjustment choice, supports restore and keep', () => {
     const state = fixture(), item = first(state);
     state.todayAdaptation = { id: 'adjusted', date: item.scheduledDate, programDayId: item.workoutId, workout: { exercises: [] } };
-    const p = proposal(state);
+    const p = proposeFlexibleWeek(state,{mode:'move',sessionId:item.logicalSessionId,toDate:'2026-09-05'});
     expect(p.adaptationConflict).toBe(true); expect(applyFlexibleWeek(state, p).status).toBe('conflict');
     expect(applyFlexibleWeek(state, p, { adaptationChoice: 'restore' }).state.todayAdaptation).toBeNull();
     expect(applyFlexibleWeek(state, p, { adaptationChoice: 'keep' }).state.todayAdaptation.date).toBe('2026-09-05');
@@ -149,7 +149,7 @@ describe('Flexible Week logical sessions', () => {
   it('early starting a carried session stores the actual local performance date', () => {
     const state=fixture(), next=applyFlexibleWeek(state,proposal(state,'2026-09-08')).state;next.selectedDate='2026-09-08';
     const active=startWorkout(next,plannedWorkoutForDate(next,'2026-09-08'));
-    expect(active.canonicalPlanDate).toBe('2026-09-05');expect(active.originalScheduledDate).toBe('2026-08-31');
+    expect(active.canonicalPlanDate).toBe('2026-09-08');expect(active.workoutDateKey).toBe('2026-09-05');expect(active.originalScheduledDate).toBe('2026-08-31');
   });
   it('restoring a past moved session clears orphaned temporary edits', () => {
     const state=fixture(), next=applyFlexibleWeek(state,proposal(state)).state;

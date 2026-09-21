@@ -57,7 +57,7 @@ it('can exclude optional work, revisit it from final review and include it witho
 });
 it('keeps same-unit match answers but invalidates only dependent targets when the chosen measurement changes',async()=>{
  let now=0;vi.spyOn(Date,'now').mockImplementation(()=>now+=400);
- await setup('Monday: Upper\nChest flys - 4 seti vsaj 8 repi\nBench Press 3x8 RIR 7',()=>{},true);
+ await setup('Monday: Upper\nPersonal chest fly variation - 4 seti vsaj 8 repi\nBench Press 3x8 RIR 7',()=>{},true);
  const search=async value=>act(async()=>{const el=active().querySelector('input[type="search"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});
  await search('Cable Fly');await click('Cable Fly');await fill('Max reps','10');await click('CONTINUE');
  await act(async()=>{const el=active().querySelector('select');el.value='2';el.dispatchEvent(new Event('change',{bubbles:true}));});await click('Back');
@@ -76,7 +76,7 @@ it('does not create a review visit for an identity already resolved by an existi
 });
 it('matching an open-target source preserves absence; a voluntary edit is a separate user correction',async()=>{
  let now=0;vi.spyOn(Date,'now').mockImplementation(()=>now+=400);
- const {r,saved}=await setup('Monday: Upper\nChest flys - 4 seti');const original=JSON.stringify(r.program);
+ const {r,saved}=await setup('Monday: Upper\nPersonal chest fly variation - 4 seti');const original=JSON.stringify(r.program);
  expect(button('USE THIS PLAN').disabled).toBe(false);
  await click('Review exercise matches · Optional');await click('CHOOSE ANOTHER');
  await act(async()=>{const el=active().querySelector('input[type="search"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'Cable Fly');el.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -91,10 +91,19 @@ it('a timed identity change stays blocked until an explicit duration is entered'
  let now=0;vi.spyOn(Date,'now').mockImplementation(()=>now+=400);
  // An unresolved legacy identity allows a deliberate measurement change;
  // new optional suggestions filter incompatible modes instead.
- const {saved}=await setup('Monday: Upper\nChest flys - 4 seti',()=>{},true);
+ const {saved}=await setup('Monday: Upper\nPersonal chest fly variation - 4 seti',()=>{},true);
  await act(async()=>{const el=active().querySelector('input[type="search"]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,'Plank');el.dispatchEvent(new Event('input',{bubbles:true}));});
  await click('Plank');expect(host.querySelector('.import-resolution')).toBeNull();expect(button('USE THIS PLAN').disabled).toBe(true);expect(host.textContent).toContain('Duration needs review');
  await click('Edit Plank');await click('EDIT PRESCRIPTION');const minimum=host.querySelector('[aria-label="Minimum seconds for Plank"]');expect(minimum.value).toBe('');
  await act(async()=>{minimum.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(minimum,'30');minimum.dispatchEvent(new Event('input',{bubbles:true}));});await act(async()=>minimum.blur());
  expect(button('USE THIS PLAN').disabled).toBe(false);await click('USE THIS PLAN');const e=saved.mock.calls[0][0].days[0].exercises[0];expect(e).toMatchObject({exerciseId:'plank',repMin:30,repMax:30});expect(e.repTarget).toBeUndefined();expect(e.sets).toHaveLength(4);
 });
+it('removes a conflicted source block without deleting source, then Undo restores its required review',async()=>{
+ const {r,saved}=await setup('Monday\nBench press\n3 sets\n4 sets\nChest fly 3x12');const removedId=r.program.days[0].exercises[0].id;
+ expect(button('EDIT NOTES')).toBeDefined();await click('Remove from plan');expect(active().textContent).toContain('Source preserved');expect(button('REVIEW PLAN').disabled).toBe(false);await click('Undo');expect(button('EDIT NOTES')).toBeDefined();await click('Remove from plan');await click('REVIEW PLAN');await click('USE THIS PLAN');expect(saved).toHaveBeenCalledOnce();const plan=saved.mock.calls[0][0];expect(plan.days[0].exercises.some(e=>e.id===removedId)).toBe(false);expect(plan.importMetadata.sourceNotes).toEqual(r.program.importMetadata.sourceNotes);expect(plan.importMetadata.removedExercises[0].exercise.id).toBe(removedId);
+});
+it('optional matching removes one of two same-name imports, supports Undo and never resurrects it on Keep original',async()=>{
+ const {r,saved}=await setup('Monday\nUnknown cable thing\n3x12\nBench Press 3x8\nThursday\nUnknown cable thing\n4x10');const first=r.program.days[0].exercises[0].id,second=r.program.days[1].exercises[0].id;
+ await click('Review exercise matches · Optional');expect(button('USE MATCH')).toBeUndefined();await click('Remove from plan');expect(host.textContent).toContain('Removed from plan');await click('Undo');expect(host.textContent).not.toContain('Removed from plan');await click('Remove from plan');await click('KEEP ORIGINAL');await click('Review exercise matches · Optional');expect(host.textContent).not.toContain('occurrence 2');await click('Back');await click('USE THIS PLAN');const p=saved.mock.calls[0][0];expect(p.days.flatMap(d=>d.exercises).some(e=>e.id===first)).toBe(false);expect(p.days.flatMap(d=>d.exercises).some(e=>e.id===second)).toBe(true);expect(p.importMetadata.sourceNotes).toEqual(r.program.importMetadata.sourceNotes);
+});
+it('optional suggested match is explicit and preserves the multiline prescription',async()=>{let now=0;vi.spyOn(Date,'now').mockImplementation(()=>now+=400);const {r,saved}=await setup('Monday\nBarbell flat bench\n3 sets\n8 reps');await click('Review exercise matches · Optional');expect(button('USE MATCH')).toBeDefined();await click('USE MATCH');await click('USE THIS PLAN');expect(saved).toHaveBeenCalledOnce();const e=saved.mock.calls[0][0].days[0].exercises[0];expect(e.exerciseId).toBe('barbell-bench-press');expect(e.sets).toHaveLength(3);expect(e.repMin).toBe(8);expect(e.hybridSource.sourceSpan).toEqual(r.program.days[0].exercises[0].hybridSource.sourceSpan);});

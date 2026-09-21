@@ -23,7 +23,7 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
   const red=async locator=>{const color=await locator.evaluate(e=>getComputedStyle(e).color),rgb=color.match(/[\d.]+/g).map(Number);assert.ok(rgb[0]>rgb[1]*1.3&&rgb[0]>rgb[2]*1.3,color);return color;};
   await page.goto('http://127.0.0.1:4173');
   await page.getByRole('button',{name:'WORKOUT COMPLETE · VIEW HISTORY',exact:true}).click();
-  await page.getByRole('button',{name:'EDIT',exact:true}).click();
+  await page.getByRole('button',{name:'Workout options',exact:true}).click();await page.getByRole('button',{name:'Edit history',exact:true}).click();
   const save=page.getByRole('button',{name:'REVIEW CHANGES',exact:true});assert.ok(await save.isDisabled());await shot('01-history-disabled');
   await page.getByRole('textbox',{name:'Session note',exact:true}).fill('Action hierarchy QA draft');await shot('02-edit-workout-save');
   await page.getByRole('button',{name:'CANCEL',exact:true}).click();

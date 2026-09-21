@@ -1,6 +1,6 @@
-import { baseWeekSchedule, exerciseCatalog, isoDay, weekKey, workoutPlanDate } from './domain.js';
+import { baseWeekSchedule, exerciseCatalog, isoDay, weekKey, workoutPlanDate, workoutPerformedDate } from './domain.js';
 import { prescribeTrainingBlockWorkout, resolveTrainingBlockSkips } from './trainingBlocks.js';
-import { combinedOccurrenceState, combinedAdjustment } from './combinedWorkoutLifecycle.js';
+import { combinedOccurrenceState, combinedAdjustment, isCombinedAdjustment } from './combinedWorkoutLifecycle.js';
 
 export const addCalendarDays = (date, amount) => {
   const value = new Date(`${String(date).slice(0, 10)}T12:00:00`);
@@ -27,16 +27,32 @@ export function flexibleWeekConflict(state) {
   return records(state).some(record => !['completed', 'active'].includes(flexibleSessionStatus(state, record)) && record.planFingerprint !== flexiblePlanFingerprint(state));
 }
 export function flexibleSessionStatus(state, item, today = isoDay()) {
+  return flexibleSessionLifecycle(state,item,today).status;
+}
+// The same identity/linkage resolves both scheduling eligibility and historical
+// presentation. Explicit IDs win; legacy matching retains only the established
+// template + exact schedule-date fallback, never a title or nearest date.
+export function workoutMatchesOccurrence(workout,item) {
+  if(!workout||!item||workout.source==='freestyle')return false;
+  const id=item.logicalSessionId || item.id || identity(item);
+  const explicit=workout.sourceOccurrenceId || workout.logicalSessionId;
+  if(explicit)return explicit===id;
+  if(workout.source==='repeat'||workout.historicalImport)return false;
+  return Boolean((item.workoutId && workout.programDayId===item.workoutId || (!workout.programDayId && item.workout?.weekday && workout.templateId===item.workout.weekday)) &&
+    (workout.originalScheduledDate ? workout.originalScheduledDate===item.originalDate : workoutPlanDate(workout)===item.scheduledDate));
+}
+export function completedWorkoutForOccurrence(state,item) {
+  return (state.workouts||[]).find(w=>w.completedAt && (workoutMatchesOccurrence(w,item) ||
+    w.combinedSourcesResolved===true && isCombinedAdjustment(w.adjustment) && w.adjustment.sourceSessions?.some(s=>s.programId===state.program?.id && s.logicalSessionId===(item.logicalSessionId||item.id||identity(item))))) || null;
+}
+export function flexibleSessionLifecycle(state, item, today = isoDay()) {
+  const completedWorkout=completedWorkoutForOccurrence(state,item);
+  const activeWorkout=workoutMatchesOccurrence(state.activeWorkout,item)?state.activeWorkout:null;
   const combined=combinedOccurrenceState(state,item);
-  if(combined)return combined;
-  const id = item.logicalSessionId || item.id || identity(item);
-  const matches = workout => workout && (workout.logicalSessionId === id ||
-    (!workout.logicalSessionId && workout.programDayId === item.workoutId && [item.originalDate, item.scheduledDate].includes(workoutPlanDate(workout))));
-  if ((state.workouts || []).some(w => w.completedAt && matches(w))) return 'completed';
-  if (matches(state.activeWorkout)) return 'active';
-  if (item.skipped) return 'skipped';
-  if (item.optional || item.workout?.optional) return 'optional';
-  return item.scheduledDate < today ? 'missed' : 'planned';
+  const status=completedWorkout ? (combined==='combined'?'combined':'completed') : activeWorkout?'active':combined || (item.skipped?'skipped':item.optional||item.workout?.optional?'optional':item.scheduledDate<today?'missed':'planned');
+  return {status,logicalSessionId:item.logicalSessionId||item.id||identity(item),completedWorkout,activeWorkout,
+    originalScheduledDate:item.originalDate,currentScheduledDate:item.scheduledDate,
+    actualPerformedDate:completedWorkout?workoutPerformedDate(completedWorkout):activeWorkout?workoutPerformedDate(activeWorkout):null};
 }
 function materialize(state, record) {
   const source = state.program?.days.find(day => day.id === record.workoutId);
@@ -65,6 +81,27 @@ export function effectiveWeekSchedule(state, date, {includeCombined=false} = {})
 export function flexibleSourceForDate(state, date) {
   return records(state).filter(r => r.originalDate === date && (r.skipped || r.scheduledDate !== date));
 }
+export function flexibleOccurrencesForDate(state,date) {
+  const all=new Map();
+  const put=item=>{if(item&&(item.scheduledDate===date||item.originalDate===date)){const id=item.logicalSessionId||item.id||identity(item);all.set(id,{...item,logicalSessionId:id});}};
+  effectiveWeekSchedule(state,date,{includeCombined:true}).forEach(put);
+  records(state).map(record=>materialize(state,record)).forEach(put);
+  // A legacy explicit skip is absent from baseWeekSchedule. Materialize only
+  // its known template/date for truthful read-only presentation, without editing
+  // the saved override or inventing a completion.
+  const overrides=state.workoutOccurrenceOverrides?.[date];
+  if(overrides&&Object.values(overrides).some(o=>o.skipWorkout)){
+    const unskipped=Object.fromEntries(Object.entries(overrides).map(([id,o])=>[id,{...o,skipWorkout:false}]));
+    baseWeekSchedule({...state,workoutOccurrenceOverrides:{...state.workoutOccurrenceOverrides,[date]:unskipped}},date)
+      .filter(item=>overrides[item.workoutId]?.skipWorkout).forEach(item=>put({...item,skipped:true}));
+  }
+  return [...all.values()].map(item=>({...item,...flexibleSessionLifecycle(state,item)}));
+}
+export function flexibleOccurrenceForDate(state,date,workoutId) {
+  const items=flexibleOccurrencesForDate(state,date).filter(item=>!workoutId||item.workoutId===workoutId);
+  const scheduled=items.filter(item=>item.scheduledDate===date);
+  return scheduled.find(item=>['planned','missed','optional','active'].includes(item.status)) || scheduled[0] || items[0] || null;
+}
 export function flexibleSessions(state, today = isoDay()) {
   const first = addCalendarDays(weekKey(today), -7), last = addCalendarDays(today, 13);
   const all = new Map();
@@ -78,8 +115,64 @@ export function flexibleSessions(state, today = isoDay()) {
   return [...all.values()].filter(item => item.originalDate >= (state.program?.trainingBlock?.startDate || weekKey(today)) || state.flexibleWeek?.sessions?.[item.logicalSessionId]).map(item => ({ ...item, status: flexibleSessionStatus(state, item, today) })).sort((a, b) => a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 const movable = item => ['planned', 'missed', 'optional'].includes(item.status);
+function scheduleChangeError(state, mode, today) {
+  if (state.todayAdaptation?.mode === 'repeat') return 'Finish or cancel the repeated workout before changing the schedule.';
+  if (combinedAdjustment(state)) return 'Finish or cancel the combined workout before changing its source schedule.';
+  if (!validDate(today) || !state.program) return 'No current plan is available.';
+  if (flexibleWeekConflict(state) && mode !== 'restore') return 'Your plan changed. Review and clear the old temporary schedule first.';
+  return null;
+}
+function moveSourceError(state, item, today) {
+  if (!item || !movable({...item, status:flexibleSessionStatus(state,item,today)})) return 'This session is active, completed, or no longer available.';
+  if (state.program.trainingBlock?.completed || item.originalDate < (state.program.trainingBlock?.startDate || isoDay(state.program.createdAt || today))) return 'This session is outside the current plan.';
+  if (state.activeOptionalSession?.date === item.scheduledDate) return 'An optional workout is active on that date. Finish or cancel it first.';
+  return null;
+}
+const missedMoveIsBackward = (item, toDate, today) => item.status === 'missed' && (toDate < today || toDate < item.originalDate);
+// Shared Move chooser sources. Keep the canonical missed-backlog horizon, and
+// include upcoming occurrences throughout the existing rolling 14-day window.
+// Explicit old-calendar moves still use flexibleSessionById, not a revived backlog.
+export function moveWorkoutCandidates(state, today = isoDay()) {
+  if (scheduleChangeError(state, 'move', today)) return [];
+  const end = addCalendarDays(today, 13), adjustment = state.todayAdaptation;
+  return flexibleSessions(state,today).filter(item =>
+    !moveSourceError(state,item,today) &&
+    !(adjustment?.programDayId === item.workoutId && adjustment.date === item.scheduledDate) &&
+    (actionableMissedSession(state,item,today) ||
+      ['planned','optional'].includes(item.status) && item.scheduledDate >= today && item.scheduledDate <= end))
+    .sort((a,b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
+}
+// Destination affordances use the same full validation as review and Apply.
+// A freestyle session is not a planned occurrence and occupies no schedule slot.
+export function moveWorkoutDestinations(state, sessionId, today = isoDay()) {
+  return Array.from({length:14}, (_, index) => {
+    const date = addCalendarDays(today, index);
+    const proposal = proposeFlexibleWeek(state, {mode:'move', sessionId, toDate:date}, today);
+    return {date, available:proposal.status === 'ready', reason:proposal.error || ''};
+  });
+}
+// Explicit calendar selection may open a closed-week fact. It does not extend
+// Today's backlog, nor scan old weeks unless that exact identity was requested.
+export function flexibleSessionById(state, id, today=isoDay()) {
+  const current=flexibleSessions(state,today).find(item=>item.logicalSessionId===id);
+  if(current)return current;
+  const originalDate=String(id||'').slice(-10);
+  if(!validDate(originalDate) || originalDate < (state.program?.trainingBlock?.startDate || isoDay(state.program?.createdAt || today)))return null;
+  const item=effectiveWeekSchedule(state,originalDate,{includeCombined:true}).find(item=>item.logicalSessionId===id);
+  return item?{...item,status:flexibleSessionStatus(state,item,today)}:null;
+}
 export function missedFlexibleSessions(state, today = isoDay()) {
-  return flexibleSessions(state, today).filter(item => item.status === 'missed' && !item.workout.optional && item.originalDate >= (state.program?.trainingBlock?.startDate || weekKey(today)));
+  return flexibleSessions(state, today).filter(item => actionableMissedSession(state, item, today))
+    .sort((a,b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
+}
+// Status is factual; actionability expires at the end of the destination week.
+// An explicitly carried occurrence belongs to that week, without changing its ID.
+export function actionableMissedSession(state, item, today = isoDay()) {
+  const adjustment=state.todayAdaptation;
+  if(adjustment && adjustment.mode!=='repeat' && adjustment.programDayId===item.workoutId && adjustment.date===item.scheduledDate)return false;
+  return Boolean(state.program && !state.program.trainingBlock?.completed && flexibleSessionStatus(state,item,today) === 'missed' && !item.workout?.optional &&
+    item.scheduledDate >= weekKey(today) && item.scheduledDate < today &&
+    item.originalDate >= (state.program.trainingBlock?.startDate || isoDay(state.program.createdAt || today)));
 }
 function overlap(a, b) {
   const muscles = workout => new Set((workout?.exercises || []).flatMap(e => exerciseCatalog[e.exerciseId]?.muscles?.slice(0, 1) || [e.primaryMuscle || e.muscle]).filter(Boolean));
@@ -87,12 +180,15 @@ function overlap(a, b) {
   return [...first].some(m => second.has(m)) || (/lower|legs/i.test(a.workout.name) && /lower|legs/i.test(b.workout.name));
 }
 export function proposeFlexibleWeek(state, request, today = isoDay()) {
-  if (combinedAdjustment(state)) return {status:'conflict',error:'Finish or cancel the combined workout before changing its source schedule.'};
   const fail = error => ({ status: 'conflict', error });
-  if (!validDate(today) || !state.program) return fail('No current plan is available.');
-  if (flexibleWeekConflict(state) && request.mode !== 'restore') return fail('Your plan changed. Review and clear the old temporary schedule first.');
+  const scheduleError = scheduleChangeError(state,request.mode,today);
+  if (scheduleError) return fail(scheduleError);
   const fingerprint = flexibleReviewFingerprint(state), end = addCalendarDays(today, 13);
-  const all = flexibleSessions(state, today), byId = new Map(all.map(i => [i.logicalSessionId, i]));
+  const all = flexibleSessions(state, today);
+  if(request.sessionId && !all.some(i=>i.logicalSessionId===request.sessionId)){
+    const explicit=flexibleSessionById(state,request.sessionId,today);if(explicit)all.push(explicit);
+  }
+  const byId = new Map(all.map(i => [i.logicalSessionId, i]));
   const changes = [];
   let availabilitySchedule;
   const push = (item, toDate, skipped = false) => {
@@ -107,14 +203,37 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
       const item = byId.get(record.id);
       if (item && record.originalDate >= today) push(item, record.originalDate);
     }
+  } else if (request.mode === 'swap') {
+    const first = byId.get(request.sessionId), second = byId.get(request.otherSessionId);
+    const eligible = item => item && movable(item) && item.status !== 'optional' &&
+      item.scheduledDate >= weekKey(today) && item.scheduledDate <= end &&
+      item.originalDate >= (state.program.trainingBlock?.startDate || isoDay(state.program.createdAt || today)) &&
+      !state.program.trainingBlock?.completed && state.activeOptionalSession?.date !== item.scheduledDate &&
+      !(state.todayAdaptation?.programDayId === item.workoutId && state.todayAdaptation.date === item.scheduledDate);
+    if (!eligible(first) || !eligible(second) || first.logicalSessionId === second.logicalSessionId || first.scheduledDate === second.scheduledDate)
+      return fail('Choose two uncompleted, unreserved sessions within this week and the next 14 days.');
+    if (missedMoveIsBackward(first,second.scheduledDate,today) || missedMoveIsBackward(second,first.scheduledDate,today))
+      return fail('Move missed workouts forward to today or a later date, on or after their original scheduled date.');
+    push(first, second.scheduledDate);
+    push(second, first.scheduledDate);
   } else if (request.mode === 'skip' || request.mode === 'move') {
     const item = byId.get(request.sessionId);
     if (!item || !movable(item)) return fail('This session is active, completed, or no longer available.');
     if (request.mode === 'skip') push(item, item.scheduledDate, true);
     else {
+      const sourceError = moveSourceError(state,item,today);
+      if (sourceError) return fail(sourceError);
       if (!validDate(request.toDate) || request.toDate < today || request.toDate > end) return fail('Choose a date within the next 14 days.');
+      if (request.toDate === item.scheduledDate) return fail('This workout is already scheduled on that date.');
+      if (missedMoveIsBackward(item,request.toDate,today)) return fail('Choose a date on or after this missed workout’s original scheduled date.');
       if (request.availableDates && !request.availableDates.includes(request.toDate)) return fail('This date is not available.');
-      if (all.some(i => i.logicalSessionId !== item.logicalSessionId && i.scheduledDate === request.toDate && i.status !== 'skipped')) return fail('Another workout is on that date. Adjust remaining week to review a complete schedule, or choose another day.');
+      if (state.activeOptionalSession?.date === request.toDate) return fail('An optional workout is active on that date. Finish or cancel it first.');
+      const occupied = all.find(i => i.logicalSessionId !== item.logicalSessionId && i.scheduledDate === request.toDate && i.status !== 'skipped' && !(request.allowCompletedToday && request.toDate===today && i.status==='completed'));
+      if (occupied) {
+        if (request.toDate === today && occupied.status === 'active') return fail('Today already has an active planned workout. Choose another day.');
+        if (request.toDate === today && occupied.status === 'completed') return fail('Today already has a completed planned workout. Choose another day.');
+        return fail('Another workout is on that date. Adjust remaining week to review a complete schedule, or choose another day.');
+      }
       push(item, request.toDate);
     }
   } else if (request.mode === 'available') {
@@ -124,8 +243,8 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
     // calendar week (which ends today when the picker is opened on Sunday).
     const cutoff = request.carry ? addCalendarDays(weekKey(today), 6) : addCalendarDays(today, request.windowDays === 14 ? 13 : 6);
     if (!request.carry && available.some(date => date > cutoff)) return fail('Show more dates before selecting days outside this window.');
-    const outstanding = all.filter(i => movable(i) && (i.scheduledDate <= cutoff || records(state).some(r => r.id === i.logicalSessionId)) && i.originalDate >= (state.program.trainingBlock?.startDate || weekKey(today)));
-    const targets = request.carry ? all.filter(i => movable(i) && i.originalDate >= (outstanding[0]?.originalDate || today) && i.originalDate <= end) : outstanding;
+    const outstanding = all.filter(i => movable(i) && (i.status !== 'missed' || actionableMissedSession(state,i,today)) && (i.scheduledDate <= cutoff || records(state).some(r => r.id === i.logicalSessionId)) && i.originalDate >= (state.program.trainingBlock?.startDate || weekKey(today)));
+    const targets = request.carry ? all.filter(i => movable(i) && (i.status!=='missed'||actionableMissedSession(state,i,today)) && i.originalDate >= (outstanding[0]?.originalDate || today) && i.originalDate <= end) : outstanding;
     const targetIds = new Set(targets.map(i => i.logicalSessionId));
     const occupied = new Set(all.filter(i => !targetIds.has(i.logicalSessionId) && i.status !== 'skipped').map(i => i.scheduledDate));
     if (state.activeOptionalSession) occupied.add(state.activeOptionalSession.date);
@@ -163,6 +282,7 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
   }
   const seen = new Set();
   for (const item of final) {
+    if(request.allowCompletedToday && item.scheduledDate===today && item.status==='completed')continue;
     if (seen.has(item.scheduledDate)) return fail('Restoring would create a collision. Adjust remaining week instead.');
     seen.add(item.scheduledDate);
   }
@@ -192,24 +312,29 @@ export function applyFlexibleWeek(state, proposal, { adaptationChoice } = {}) {
       }
       delete next.flexibleWeek.sessions[id];
     }
-  } else for (const change of proposal.changes) {
+  } else {
+    for (const change of proposal.changes) {
+      if (change.toDate !== change.fromDate && next.workoutOccurrenceOverrides?.[change.fromDate])
+        delete next.workoutOccurrenceOverrides[change.fromDate][change.workoutId];
+    }
+    for (const change of proposal.changes) {
     if (next.weekScheduleOverrides?.[weekKey(change.originalDate)]) delete next.weekScheduleOverrides[weekKey(change.originalDate)][change.workoutId];
     next.flexibleWeek.sessions[change.logicalSessionId] = { id: change.logicalSessionId, workoutId: change.workoutId, name: change.name, originalDate: change.originalDate, scheduledDate: change.toDate, skipped: change.skipped, blockId: state.program?.trainingBlock?.id || null, blockWeekNumber: change.blockWeekNumber, planFingerprint: flexiblePlanFingerprint(state), updatedAt: new Date().toISOString() };
-    const occurrence = next.workoutOccurrenceOverrides?.[change.fromDate]?.[change.workoutId];
+    const occurrence = state.workoutOccurrenceOverrides?.[change.fromDate]?.[change.workoutId];
     if (occurrence && change.toDate !== change.fromDate) {
-      (next.workoutOccurrenceOverrides[change.toDate] ||= {})[change.workoutId] = occurrence;
-      delete next.workoutOccurrenceOverrides[change.fromDate][change.workoutId];
+      (next.workoutOccurrenceOverrides[change.toDate] ||= {})[change.workoutId] = structuredClone(occurrence);
     }
     if (next.todayAdaptation?.programDayId === change.workoutId && next.todayAdaptation.date === change.fromDate) {
       if (adaptationChoice === 'keep' && !change.skipped) next.todayAdaptation.date = change.toDate;
       else next.todayAdaptation = null;
     }
   }
+  }
   if (proposal.request.mode === 'restore') {
     for (const change of proposal.changes) {
       const occurrence = next.workoutOccurrenceOverrides?.[change.fromDate]?.[change.workoutId];
       if (occurrence && change.toDate !== change.fromDate) {
-        (next.workoutOccurrenceOverrides[change.toDate] ||= {})[change.workoutId] = occurrence;
+        (next.workoutOccurrenceOverrides[change.toDate] ||= {})[change.workoutId] = structuredClone(occurrence);
         delete next.workoutOccurrenceOverrides[change.fromDate][change.workoutId];
       }
       if (next.todayAdaptation?.programDayId === change.workoutId && next.todayAdaptation.date === change.fromDate) {

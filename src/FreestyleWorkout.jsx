@@ -1,13 +1,14 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { useExerciseSearchSheet } from './useExerciseSearchSheet.js';
-import { SearchInput } from './SearchInput.jsx';
-import { exerciseMatchesQuery, rankExerciseSearch, exerciseMeasure, displayWeight, workoutSetSummary, isoDay } from './domain.js';
-import { startFreestyleWorkout, addFreestyleExercise, freestyleCatalog, freestylePreviousSets, copyFreestylePrevious, cancelUnloggedFreestyle, freestyleEffortLimit } from './freestyleWorkout.js';
+import React, { useEffect,useId,useMemo,useRef,useState } from 'react';
+import {createPortal} from 'react-dom';
+import {useDurableAction} from './useDurableAction.js';
+import { exerciseMeasure, displayWeight, workoutSetSummary, isoDay } from './domain.js';
+import { startFreestyleWorkout, freestylePreviousSets, cancelUnloggedFreestyle, freestyleEffortLimit } from './freestyleWorkout.js';
+import {PreviousValuesHelper} from './PreviousValuesHelper.jsx';
 import './freestyleWorkout.css';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
 import { importedSessionTimeLabel } from './historicalSetSemantics.js';
 
-export function FreestyleEntry({ state, update, setPage, setDetail, date, historyOnly = false, hideHistory = false, representedWorkoutId = null }) {
+export function FreestyleEntry({ state, update, setPage, setDetail, date, historyOnly = false, hideHistory = false, representedWorkoutId = null, tertiary = false }) {
   const [error, setError] = useState('');
   const today = date === isoDay();
   const records = hideHistory ? [] : completedWorkoutsForDate(state.workouts, date).filter(workout => workout.id !== representedWorkoutId);
@@ -15,14 +16,14 @@ export function FreestyleEntry({ state, update, setPage, setDetail, date, histor
   if (!available && !records.length) return null;
   return <div className="freestyle-entry">
     {available && <>
-      <button className="button secondary" onClick={() => {
+      <button className={tertiary ? 'text-button rest-freestyle-action' : 'button secondary'} onClick={() => {
         try { startFreestyleWorkout(state); update(current => {
           if (current.activeWorkout || current.activeOptionalSession) return current;
           try { return startFreestyleWorkout(current); } catch { return current; }
         }); setPage('workout'); }
         catch (e) { setError(e.message); }
-      }}>Start freestyle workout</button>
-      <small>Choose exercises as you go. Your plan won’t change.</small>
+      }}>{tertiary && <span aria-hidden="true">+ </span>}Start freestyle workout</button>
+      {!tertiary && <small>Choose exercises as you go. Your plan won’t change.</small>}
       {error && <p role="alert">{error}</p>}
     </>}
     {records.length > 0 && <section className="today-completed-workouts" aria-label="Completed workouts">
@@ -32,52 +33,53 @@ export function FreestyleEntry({ state, update, setPage, setDetail, date, histor
   </div>;
 }
 
-export function FreestyleExercisePicker({ state, update, close, Header }) {
-  const sheetRef = useRef(null);
-  useExerciseSearchSheet(sheetRef, true, { focusedSearch: true });
-  const [query, setQuery] = useState('');
-  const [error, setError] = useState('');
-  const catalog = useMemo(() => freestyleCatalog(state), [state]);
-  const recent = useMemo(() => {
-    const ids = new Set();
-    for (const w of [...state.workouts].reverse()) for (const e of w.exercises || [])
-      if (w.completedAt && e.sets.some(s => s.completed) && catalog.some(i => i.id === e.exerciseId)) ids.add(e.exerciseId);
-    return [...ids].slice(0, 6).map(id => catalog.find(i => i.id === id));
-  }, [state.workouts, catalog]);
-  const matches = rankExerciseSearch(catalog.filter(item => exerciseMatchesQuery(item, query)).sort((a, b) => a.name.localeCompare(b.name)), query);
-  const row = item => {
-    const added = state.activeWorkout?.exercises.some(e => e.exerciseId === item.id);
-    return <button className="list-row" key={item.id} disabled={added} onClick={() => {
-      try { addFreestyleExercise(state, item.id); update(current => {
-        try { return addFreestyleExercise(current, item.id); } catch { return current; }
-      }); close(); }
-      catch (e) { setError(e.message); }
-    }}><span>{item.name}<small>{item.equipment?.join(' · ')}{item.custom ? ' · Custom' : ''}</small></span><span>{added ? 'Added' : '+'}</span></button>;
-  };
-  return <main ref={sheetRef} className="screen detail-screen freestyle-picker">
-    <Header title="Add exercise" onClose={close} />
-    <SearchInput className="exercise-search" aria-label="Search exercises" placeholder="Search exercises" value={query} onChange={e => setQuery(e.target.value)} onClear={() => setQuery('')} />
-    <div data-exercise-search-scroll>
-    {error && <p role="alert">{error}</p>}
-    {!query && recent.length > 0 && <section><h3>Recent</h3>{recent.map(row)}</section>}
-    <section><h3>{query ? 'Matching exercises' : 'All exercises'}</h3>{matches.map(row)}
-      {!matches.length && <p>No compatible exercises found. Try another search or review your equipment and restrictions in Profile.</p>}
-    </section>
-    </div>
-  </main>;
-}
+export {FreestyleExercisePicker} from './FreestyleQueuePicker.jsx';
 
-export function FreestyleActions({ state, update, setDetail, setPage, empty = false, hideAdd = false }) {
+export function FreestyleActions({ state, update, setDetail, setPage, hideAdd = false, Modal, Header, backgroundRef, preserveDraftsRef }) {
   const logged = workoutSetSummary(state.activeWorkout).completed;
+  const [confirmSession,setConfirmSession]=useState(null),[error,setError]=useState('');
+  const trigger=useRef(null),titleId=useId(),detailId=useId();
+  const {commit,latest}=useDurableAction(state,update);
+  useEffect(()=>()=>{if(preserveDraftsRef)preserveDraftsRef.current=false;},[preserveDraftsRef]);
+  const keep=()=>{setConfirmSession(null);setError('');if(preserveDraftsRef)preserveDraftsRef.current=false;};
+  const cancel=sessionId=>{
+    setError('');
+    try {
+      const result=commit(current=>current.activeWorkout?.id===sessionId?cancelUnloggedFreestyle(current):current);
+      if(!result.changed){setError('This workout can no longer be cancelled. Keep the workout to continue.');return;}
+      setPage('today');
+    } catch(e){setError(e.message);}
+  };
+  const requestCancel=()=>{
+    const active=latest.current.activeWorkout;
+    if(active?.source!=='freestyle'||workoutSetSummary(active).completed)return;
+    if(!active.exercises.length){cancel(active.id);return;}
+    if(preserveDraftsRef)preserveDraftsRef.current=true;
+    setError('');setConfirmSession(active.id);
+  };
   return <div className="freestyle-actions">
     {!hideAdd && <button className="button secondary" onClick={() => setDetail({ freestylePicker: true })}>+ ADD EXERCISE</button>}
-    {!logged && <button className="text-button freestyle-cancel" onClick={() => { update(cancelUnloggedFreestyle); setPage('today'); }}>Cancel workout</button>}
+    {state.activeWorkout?.source==='freestyle' && !logged && <button ref={trigger} type="button" data-freestyle-cancel className="text-button freestyle-cancel"
+      onPointerDown={event=>{if(event.button===0)event.preventDefault();}} onClick={requestCancel}>Cancel workout</button>}
+    {!confirmSession&&error&&<p role="alert">{error}</p>}
+    {confirmSession&&createPortal(<Modal backgroundRef={backgroundRef} returnFocusRef={trigger} close={keep}>
+      {requestClose=><section className="screen detail-screen workout-confirm freestyle-cancel-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={detailId}>
+        <Header title="END WORKOUT" onBack={requestClose}/>
+        <h2 id={titleId}>Cancel workout?</h2>
+        <p id={detailId}>Your added exercises and any unlogged entries will be discarded.</p>
+        {error&&<p role="alert">{error}</p>}
+        <div className="workout-confirm-actions">
+          <button type="button" className="button primary" data-sheet-initial-focus onClick={requestClose}>KEEP WORKOUT</button>
+          <button type="button" className="button danger" onClick={()=>cancel(confirmSession)}>CANCEL WORKOUT</button>
+        </div>
+      </section>}
+    </Modal>,document.body)}
   </div>;
 }
 
-export function FreestylePrevious({ state, exercise, update, setDetail }) {
+export function FreestylePrevious({ state, exercise, update, setDetail, screenRef }) {
   const limit = useMemo(() => freestyleEffortLimit(state, exercise.exerciseId), [state.profile, exercise.exerciseId]);
-  const previous = freestylePreviousSets(state, exercise);
+  const previous = useMemo(()=>freestylePreviousSets(state, exercise),[state.workouts,exercise.exerciseId,exercise.loggingMode]);
   const index = exercise.sets.findIndex(s => !s.completed);
   const set = exercise.sets[index];
   const prior = previous[index];
@@ -87,7 +89,7 @@ export function FreestylePrevious({ state, exercise, update, setDetail }) {
     {limit != null && <p className="training-limit-note">Your training limit: keep at least {limit} RIR.</p>}
     <div className={canCopy ? 'freestyle-history-aid' : ''}>
     <button className="text-button" onClick={() => setDetail({ exercise })}>View exercise history</button>
-    {canCopy && <button className="freestyle-copy" onClick={() => update(current => copyFreestylePrevious(current, exercise.id, set.id, index))}><span>Previous workout · set {index + 1}<strong>{label(prior)}</strong></span><span>USE VALUES</span></button>}
+    {canCopy && <PreviousValuesHelper key={`${state.activeWorkout.id}:${exercise.id}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} label={label(prior)} screenRef={screenRef}/>}
     </div>
   </div>;
 }

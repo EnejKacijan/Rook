@@ -1,0 +1,40 @@
+/* A separate scrim lets only transform/opacity change during direct manipulation.
+   No cloned background, sheet geometry, or touch-action:none. */
+[data-viewer-motion] {
+  background: transparent !important;
+  isolation: isolate;
+}
+.modal-layer[data-viewer-motion] { transition: none; }
+[data-viewer-motion]::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: var(--viewer-scrim);
+  opacity: var(--viewer-scrim-opacity, 1);
+  transition: opacity var(--viewer-settle-duration, 0ms) linear;
+}
+.exercise-visual-layer[data-viewer-motion].is-closing::before {
+  opacity: 0;
+  transition-duration: 160ms;
+}
+.exercise-visual-viewer, .workout-photo-viewer-content {
+  transform-origin: center;
+  touch-action: pan-y pinch-zoom;
+}
+[data-viewer-dragging] > :is(.exercise-visual-viewer, .workout-photo-viewer-content) {
+  will-change: transform, opacity;
+  user-select: none;
+}
+.workout-photo-viewer[data-fullscreen-photo] { grid-template-rows: minmax(0, 1fr); overscroll-behavior: none; }
+.workout-photo-viewer-content {
+  min-height: 0;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  gap: 12px;
+}
+.workout-photo-viewer-panel { overscroll-behavior: contain; }
+@media (prefers-reduced-motion: reduce) {
+  .exercise-visual-layer[data-viewer-motion].is-closing::before { transition-duration: 0ms; }
+}

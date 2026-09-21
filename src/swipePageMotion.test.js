@@ -1,5 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {pageBackMotion} from './swipePageMotion.js';
+import {pageBackMotion,rememberSwipeParent} from './swipePageMotion.js';
 afterEach(()=>{document.body.innerHTML='';vi.unstubAllGlobals();});
 function fixture(reduced=false){
  vi.stubGlobal('matchMedia',()=>({matches:reduced}));
@@ -19,6 +19,13 @@ it('preserves the history overlay position and removes only transient drag style
  const motion=pageBackMotion(history);motion.render(100,100);expect(history.style.position).toBe('');motion.clear();expect(history.getAttribute('style')).toBeNull();
 });
 it('does not animate under reduced motion',()=>{expect(pageBackMotion(fixture(true))).toBeNull();});
+it('restores the Profile preview after returning from a nested diagnostics page',()=>{
+ fixture();document.body.innerHTML='<main class="profile-management-screen">Profile hub</main>';
+ const surface=document.querySelector('main');surface.getAnimations=()=>[];surface.getBoundingClientRect=()=>({left:0,top:0,width:390});
+ rememberSwipeParent(surface);surface.textContent='Data & backup';const restore=rememberSwipeParent(surface);surface.textContent='Storage diagnostics';
+ let motion=pageBackMotion(surface);motion.render(120,100);expect(document.querySelector('[data-swipe-parent]').textContent).toBe('Data & backup');motion.clear();
+ restore();surface.textContent='Data & backup';motion=pageBackMotion(surface);motion.render(120,100);expect(document.querySelector('[data-swipe-parent]').textContent).toBe('Profile hub');motion.clear();
+});
 
 function questionnaire(reduced=false) {
  fixture(reduced);
@@ -44,4 +51,10 @@ it('cancels the existing entrance without toggling animation CSS and replaying i
 it('does not opt other onboarding surfaces into motion or animate questionnaire content under reduced motion',()=>{
  const {main,content}=questionnaire();content.removeAttribute('data-swipe-back-content');expect(pageBackMotion(main)).toBeNull();
  expect(pageBackMotion(questionnaire(true).main)).toBeNull();
+});
+it('Active Workout uses the exact Profile renderer, easing and parent parallax without cloning live inputs',()=>{
+ fixture();document.body.innerHTML='<main class="today-screen"><button>Resume workout</button></main><main data-active-workout="true" class="workout-screen" style="padding:9px"><input value="53,"></main>';
+ const today=document.querySelector('.today-screen'),active=document.querySelector('.workout-screen');for(const e of [today,active]){e.getAnimations=()=>[];e.getBoundingClientRect=()=>({left:0,top:0,width:390});}
+ rememberSwipeParent(today,'workout');const input=active.firstElementChild,original=active.getAttribute('style'),motion=pageBackMotion(active);active.scrollTop=500;motion.render(195,100);
+ expect(active.style.transform).toBe('translate3d(195px,0,0)');expect(active.style.transition).toBe('transform 100ms cubic-bezier(.2,.8,.2,1)');const parent=document.querySelector('[data-swipe-parent]');expect(parent.style.transform).toBe('translate3d(-8px,0,0)');expect(parent.textContent).toContain('Resume workout');expect(parent.hasAttribute('inert')).toBe(true);expect(active.firstElementChild).toBe(input);expect(active.scrollTop).toBe(500);motion.clear();expect(active.getAttribute('style')).toBe(original);expect(document.querySelector('[data-swipe-parent]')).toBeNull();expect(input.value).toBe('53,');
 });

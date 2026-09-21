@@ -17,7 +17,7 @@ try {for(const style of ['standard','premium'])for(const appearance of ['light',
   await page.screenshot({path:`${out}/${style}-${appearance}-${name}.png`,animations:'disabled'});
   console.log(style,appearance,name,arrows);
  };
- await check('today');await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'program'); await page.getByRole('button',{name:/^Edit plan/}).click();await check('edit-plan');await page.getByRole('button',{name:'Close edit plan',exact:true}).click();
+ await page.locator('.today-screen .week-navigation').waitFor();await check('today');await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'program'); await page.getByRole('button',{name:/^Edit plan/}).click();await check('edit-plan');await page.getByRole('button',{name:'Close edit plan',exact:true}).click();
  await openProfileArea(page, 'program'); await page.getByRole('button',{name:/Replace plan/}).click();await page.getByRole('button',{name:/Import from Notes|Import a different plan/}).click();await check('import-entry');
  await page.getByPlaceholder(/Paste your workout notes/).fill('Monday\nBench Press 3x8 or Incline Dumbbell Press 3x10');await page.getByRole('button',{name:'CREATE PREVIEW',exact:true}).click();await page.locator('.import-resolution').waitFor();await check('import-decision');
  await page.getByRole('button',{name:'Back',exact:true}).click();await page.getByPlaceholder(/Paste your workout notes/).waitFor();await context.close();

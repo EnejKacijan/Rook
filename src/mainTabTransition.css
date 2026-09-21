@@ -1,0 +1,18 @@
+:root {
+  --rook-motion-tab:160ms;
+  --rook-motion-tab-reduced:80ms;
+  --rook-motion-tab-distance:6px;
+}
+.main-tab-paint {
+  position:fixed;
+  z-index:14;
+  overflow:clip;
+  pointer-events:none;
+  background:var(--rook-bg);
+  contain:strict;
+}
+.main-tab-paint, .main-tab-paint * {
+  pointer-events:none !important;
+  animation:none !important;
+  transition:none !important;
+}

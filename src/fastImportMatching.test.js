@@ -32,7 +32,7 @@ it('job caches unique matches across files, defers advanced work, hashes/dedupes
 it('Chest flys retains four sets and empty targets, with no mandatory identity question or catalogue writes',async()=>{
  const fetch=vi.spyOn(globalThis,'fetch');try{
  const r=await parse('Chest flys - 4 seti');const e=r.program.days[0].exercises[0];
- expect(e.matchStatus).toBe('original');expect(importExerciseReviewGroups(r.sourceReview,r.program)).toEqual([]);
+ expect(e).toMatchObject({matchStatus:'alias',exerciseId:'pec-deck'});expect(importExerciseReviewGroups(r.sourceReview,r.program)).toEqual([]);
  expect(e.sets).toHaveLength(4);expect([e.repMin,e.repMax,e.sets[0].weight]).toEqual([null,null,null]);
  const state=blankState(),before=serializeState(state);applySavedPlanImportMatch(e,state);
  expect(serializeState(state)).toBe(before);expect(fetch).not.toHaveBeenCalled();
@@ -51,8 +51,9 @@ it('explicit Keep original overrides later canonical/alias lookup after atomic s
  const next=await parse('Bench Press 3x10');applySavedPlanImportMatch(next.program.days[0].exercises[0],saved);
  expect(next.program.days[0].exercises[0]).toMatchObject({matchStatus:'original',repMin:10,importedName:'Bench Press'});
 });
-it('original fallback cannot bypass saved restrictions, while historical facts remain importable',async()=>{
+it.each([false,true])('canonical match and explicit original fallback cannot bypass saved restrictions (keep original=%s)',async original=>{
  const r=await parse('Chest flys 4 sets'),state=blankState();state.profile.avoid='no chest exercises';
+ if(original)keepPlanImportOriginal(r.program.days[0].exercises[0]);
  expect(planImportSafetyIssues(r.program,state.profile).length).toBeGreaterThan(0);
  expect(()=>preparePlanImport(state,r.program,r.profile)).toThrow();
 });

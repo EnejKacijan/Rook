@@ -23,6 +23,7 @@
   --rook-muted: #8a8783;
   --rook-border: #dedbd4;
   --rook-accent: #1f6b4c;
+  --rook-calendar-marker: var(--rook-accent);
   --rook-accent-fill: #206b4c;
   --rook-accent-fill-strong: #17553c;
   --rook-accent-text: #176b49;
@@ -328,6 +329,7 @@
   --rook-accent-text: var(--rook-premium-accent);
   --rook-on-accent-fill: #1d1b18;
   --rook-accent-strong: #745509;
+  --rook-calendar-marker: var(--rook-accent-strong);
   --rook-accent-soft: #f1e8cf;
   --rook-accent-hairline: rgba(138, 103, 15, .3);
   --rook-accent-ring: rgba(138, 103, 15, .7);
@@ -496,6 +498,12 @@
   background: var(--rook-selected);
   color: var(--rook-on-selected);
 }
+/* Appearance uses a light accent wash without changing other selected controls. */
+:root[data-appearance="light"][data-style="standard"] .appearance-segmented > button[aria-pressed="true"] {
+  border-color: var(--rook-accent);
+  background: var(--rook-accent-soft);
+  color: var(--rook-accent-text);
+}
 :root[data-appearance] .appearance-segmented > button[aria-pressed="true"] :is(strong, i) {
   color: inherit;
   font-weight: 800;
@@ -572,10 +580,6 @@
 :root[data-appearance="dark"] :is(.eyebrow, .step-count, .list-row small, .workout-header small, .set-labels span, .set-row > span, .muted, .week-row small, .up-next small, .stat-grid small, .workout-title-detail, .workout-title-context, .rest-up-next time, .rest-up-next-descriptor, .rest-up-next > span, .active-workout-notice small, .active-workout-start-lock, .restriction-helper, .profile-current-program p, .change-plan-sheet .plan-choice small, .sheet-footnote, .personal-fields label, .personal-fields label small, .personal-fields .personal-field, .option-card-copy small, .onboarding-group-heading > strong, .onboarding-group-heading > small, .specific-split-toggle small, .physique-review-entry strong, .warmup-layer small, .warmup-ramp > small, .warmup-complete-status small, .action-card small, .scratch-day-status small) { color: var(--rook-muted); }
 :root[data-appearance="dark"] .today-screen .exercise-list-row > .navigation-row-end { color: var(--rook-secondary); }
 :root[data-appearance="dark"] .today-screen .exercise-list-item { border-color: var(--rook-border); }
-:root[data-appearance="dark"] .today-screen .exercise-list-row:active { background: var(--rook-surface-elevated); }
-@media (hover: hover) and (pointer: fine) {
-  :root[data-appearance="dark"] .today-screen .exercise-list-row:hover { background: var(--rook-surface-elevated); }
-}
 :root[data-appearance="dark"] .today-exercise-remove-occurrence strong { color: #d97770; }
 :root[data-appearance="dark"] .today-exercise-remove-weekly strong { color: #d97770; }
 :root[data-appearance="dark"] :is(.today-exercise-drag-handle, .today-exercise-list-heading > .text-button) { color: var(--rook-secondary); }
@@ -786,7 +790,7 @@
 :root[data-appearance="dark"] .workout-screen .exercise-options-button { color: var(--rook-muted); }
 :root[data-appearance="dark"] .workout-screen .exercise-options-button:is(:hover, :focus-visible) { background: var(--rook-accent-soft); color: var(--rook-accent); }
 :root[data-appearance="dark"] .workout-screen .workout-options-trigger { color: var(--rook-muted); }
-:root[data-appearance="dark"] .workout-screen .workout-options-trigger:is(:hover, :focus-visible) { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root[data-appearance="dark"] .workout-screen .workout-options-trigger:active { background: var(--rook-accent-soft); color: var(--rook-accent); }
 :root[data-appearance="dark"] .active-workout-options-sheet .button.workout-restart-danger { background: #873a34; color: #fff; border-color: #873a34; }
 :root[data-appearance="dark"] .active-workout-options-sheet .button.workout-restart-danger:is(:hover, :focus-visible) { background: #73302b; border-color: #73302b; }
 :root[data-appearance="dark"] .workout-screen .workout-exercise-actions .text-button:not(:disabled) { color: var(--rook-secondary); }
@@ -818,7 +822,7 @@
 :root[data-appearance="dark"] .rest-timer i { background: var(--rook-accent); }
 :root[data-appearance="dark"] .rest-timer .button { background: var(--rook-timer-button, var(--rook-surface-raised)); color: var(--rook-timer-button-text, var(--rook-secondary)); border-color: transparent; }
 :root[data-appearance="dark"] :is(.consistency-bars i, .workout-dot, .up-next button i) { background: var(--rook-border); }
-:root[data-appearance="dark"] :is(.consistency-bars .filled, .completed-dot, .chart i, .progression-row.progression-progress > span:first-child > small:first-of-type::before) { background: var(--rook-success); }
+:root[data-appearance="dark"] :is(.consistency-bars .filled, .chart i, .progression-row.progression-progress > span:first-child > small:first-of-type::before) { background: var(--rook-success); }
 
 :root[data-appearance="dark"] :is(.exercise-heading-art-button, .exercise-detail-art) { background: var(--rook-surface-muted); }
 :root[data-appearance="dark"] img[src*="/assets/wg-"],
@@ -899,13 +903,10 @@
   color: var(--rook-week-selected-text);
   font-weight: 850;
 }
-:root .today-screen .week-strip .workout-planned .workout-dot {
+:root .today-screen .week-strip .calendar-status-mark {
+  color: var(--rook-calendar-marker);
   background: transparent;
-  border: 1px solid var(--rook-week-marker);
-}
-:root .today-screen .week-strip .workout-completed .completed-dot {
-  background: var(--rook-week-completed-marker);
-  border: 1px solid var(--rook-week-completed-marker);
+  border: 0;
 }
 
 :is(.button, .warmup-finish) {
@@ -1072,7 +1073,6 @@
 }
 :root[data-style="premium"] :is(
   .consistency-bars .filled,
-  .completed-dot,
   .chart i,
   .progression-row.progression-progress > span:first-child > small:first-of-type::before
 ) { background: var(--rook-success); }
@@ -1184,7 +1184,6 @@
 }
 
 :root[data-appearance="light"][data-style="premium"] :is(
-  .workout-options-trigger,
   .exercise-options-button,
   .exercise-note-button
 ):is(:hover, :focus-visible) {
@@ -1231,6 +1230,15 @@
   background-clip: padding-box;
   color: var(--rook-text);
   transition: none;
+}
+
+/* Match the narrow .screen gutter so header chrome stays inside the panel.
+   Editor and calculator headers retain their explicit scoped overrides. */
+@media (max-width: 374px) {
+  .modal-layer > .screen.detail-screen > .detail-header {
+    margin-inline: -17px;
+    padding-inline: 17px;
+  }
 }
 
 .modal-layer > .screen.detail-screen > .detail-header.is-scrollable-sheet-header {

@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { forgetStorageSession } from './localStateStorage.js';
 import {
   EXERCISE_ILLUSTRATION_EQUIVALENTS,
   ROOK_ADAPTED_ILLUSTRATIONS,
@@ -476,7 +477,7 @@ function stateFor(overrides = {}) {
 }
 
 describe("personalized training domain", () => {
-  beforeEach(() => localStorage.clear());
+  beforeEach(() => { localStorage.clear(); forgetStorageSession(localStorage); });
   it("repairs stale bodyweight load metadata and fake zeroes on load", () => {
     const state = blankState();
     state.activeWorkout = {
@@ -727,6 +728,10 @@ describe("personalized training domain", () => {
     expect(
       exerciseMatchesQuery(exerciseCatalog["lateral-raise"], "lateral raises"),
     ).toBe(true);
+    expect(matchImportedExerciseName("Chest Fly")).toEqual({
+      exerciseId: "pec-deck",
+      status: "alias",
+    });
   });
 
   it("resolves common plural free-text names for every illustrated canonical exercise", () => {
@@ -2270,12 +2275,12 @@ ogrevalni set 12kg
       completedNote,
     );
   });
-  it("anchors an active workout to its selected date and rejects a second session", () => {
+  it("keeps actual start separate from source occurrence and rejects a second session", () => {
     const state = stateFor();
     state.selectedDate = "2026-08-27";
     state.activeWorkout = startWorkout(state, state.program.days[0]);
-    expect(state.activeWorkout.workoutDateKey).toBe("2026-08-27");
-    expect(state.activeWorkout.canonicalPlanDate).toBe("2026-08-27");
+    expect(state.activeWorkout.workoutDateKey).toBe(isoDay(state.activeWorkout.startedAt));
+    expect(state.activeWorkout.canonicalPlanDate).toBe(currentWeekSchedule(state,state.selectedDate).find(item=>item.workoutId===state.program.days[0].id).scheduledDate);
     expect(() => startWorkout(state, state.program.days[1])).toThrow(
       /already in progress/i,
     );
@@ -3191,7 +3196,7 @@ ogrevalni set 12kg
     const original = workout.exercises.map((entry) => entry.id);
     state.activeWorkout = startWorkout(state, workout);
     reorderExercisesForOccurrence(state, {
-      planDate: isoDay(),
+      planDate: workoutPlanDate(state.activeWorkout),
       workoutId: workout.id,
       orderedEntryIds: [original[1], original[0], ...original.slice(2)],
     });
@@ -3481,6 +3486,7 @@ ogrevalni set 12kg
   it("derives missed Coach-context workouts from the real schedule and completion dates", () => {
     const state = stateFor({ daysPerWeek: 2, availableDays: ["Mon", "Fri"] });
     state.program.createdAt = new Date(2026, 7, 1, 12).toISOString();
+    state.program.trainingBlock.startDate = '2026-08-01';
     const missed = missedPlannedWorkouts(state, new Date(2026, 7, 22, 12));
     expect(missed.some((item) => item.weekday === "Fri")).toBe(true);
     state.workouts.push({
@@ -3851,14 +3857,13 @@ ogrevalni set 12kg
           ).toBe(true);
         }
   });
-  it("builds and validates the complete supported split, goal, experience, and frequency matrix", () => {
-    const preferences = [
+  it.each([
       "",
       "Upper / Lower",
       "PPL",
       "Full Body",
       "Arnold split",
-    ];
+    ])("builds and validates the goal, experience, and frequency matrix for split %s", trainingPreferences => {
     const goals = [
       "General fitness",
       "Build muscle",
@@ -3868,8 +3873,7 @@ ogrevalni set 12kg
     ];
     const experiences = ["Beginner", "Intermediate", "Advanced"];
     let combinations = 0;
-    for (const trainingPreferences of preferences)
-      for (const goal of goals)
+    for (const goal of goals)
         for (const experience of experiences)
           for (let daysPerWeek = 2; daysPerWeek <= 6; daysPerWeek++) {
             const user = profile({
@@ -3899,7 +3903,7 @@ ogrevalni set 12kg
                 : false,
             );
           }
-    expect(combinations).toBe(375);
+    expect(combinations).toBe(75);
   });
   it("uses all-day availability to place five hypertrophy sessions around two recovery days", () => {
     const program = buildProgram(
@@ -4665,14 +4669,13 @@ ogrevalni set 12kg
         .valid,
     ).toBe(true);
   });
-  it("validates the full goal, experience, frequency, effort, and age personalization matrix", () => {
-    for (const goal of [
+  it.each([
       "General fitness",
       "Build muscle",
       "Lose fat",
       "Get stronger",
       "Athletic performance",
-    ])
+    ])("validates the experience, frequency, effort, and age matrix for %s", goal => {
       for (const experience of ["Beginner", "Intermediate", "Advanced"])
         for (let daysPerWeek = 2; daysPerWeek <= 6; daysPerWeek++)
           for (const effortStyle of [

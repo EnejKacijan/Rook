@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ROOK shared keyboard QA</title>
+<style>#keyboard-qa{position:fixed;right:0;top:0;z-index:99999;font:11px system-ui;background:#eee;color:#111;max-width:180px}#keyboard-proof{max-height:160px;overflow:auto;white-space:pre-wrap}
+/* Test-only 34px safe-area model, used where the real binder chooses env(). */
+:root{--rook-sheet-safe-bottom:54px}
+:root :is(.screen,.sheet)[style*="--sheet-action-safe-bottom: env("]{--sheet-action-safe-bottom:34px!important}
+</style></head><body>
+<section id="fixture"><h1>Isolated shared keyboard QA</h1><label>Scenario <select id="scenario"><option>workout</option><option>freestyle</option><option>home</option></select></label><label>Theme <select id="theme"><option>premium-dark</option><option>premium-light</option><option>dark</option><option>light</option></select></label><button id="seed">Load synthetic review</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,isoDay,startWorkout} from '/src/domain.js';
+import {startFreestyleWorkout} from '/src/freestyleWorkout.js';
+if(!import.meta.env.DEV||location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development review only');
+if(!new URLSearchParams(location.search).has('run'))document.querySelector('#seed').onclick=()=>{
+ let s=createReturningUserFixture(0);const theme=document.querySelector('#theme').value,scenario=document.querySelector('#scenario').value;
+ Object.assign(s.profile,{showExerciseImages:false,restTimerEnabled:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ s.selectedDate=isoDay();if(scenario==='workout')s.activeWorkout=startWorkout(s,s.program.days[0]);if(scenario==='freestyle')s=startFreestyleWorkout(s);
+ for(const key of [STORAGE_KEY,'rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='?run=1';
+};else{
+ const originalHeight=Object.getOwnPropertyDescriptor(window,'innerHeight'),rootHeight=Object.getOwnPropertyDescriptor(document.documentElement,'clientHeight');
+ const vv=new EventTarget();Object.assign(vv,{height:innerHeight,width:innerWidth,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:vv});
+ let fullHeight=innerHeight;const restore=()=>{Object.defineProperty(window,'innerHeight',originalHeight);if(rootHeight)Object.defineProperty(document.documentElement,'clientHeight',rootHeight);else delete document.documentElement.clientHeight;};
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+ const qa=document.createElement('details');qa.id='keyboard-qa';qa.innerHTML='<summary>Viewport QA</summary><label>Geometry <select id="geometry"><option>overlay</option><option>both-follow</option></select></label><button id="open">Keyboard open</button><button id="toolbar">Accessory change</button><button id="pan">Viewport pan</button><button id="close">Keyboard close</button><button id="blur">Blur while open</button><button id="foreground">Foreground</button><button id="end">Scroll results to end</button><button id="inspect">Inspect geometry</button><pre id="keyboard-proof"></pre>';document.body.append(qa);
+ const panel=()=>[...document.querySelectorAll('.modal-layer > :is(.screen,.sheet),.app-content > .coach-screen,.scratch-editor-screen,.initial-import-screen')].at(-1);
+ const apply=(height,offsetTop=0)=>{restore();fullHeight=innerHeight;if(qa.querySelector('#geometry').value==='both-follow'){Object.defineProperty(window,'innerHeight',{configurable:true,value:height});Object.defineProperty(document.documentElement,'clientHeight',{configurable:true,value:height});}Object.assign(vv,{height,offsetTop,width:innerWidth});window.dispatchEvent(new Event('resize'));vv.dispatchEvent(new Event('resize'));vv.dispatchEvent(new Event('scroll'));qa.open=false;};
+ qa.querySelector('#open').onclick=()=>{const p=panel();if(!p?.contains(document.activeElement))p?.querySelector('textarea,input:not([type=hidden])')?.focus({preventScroll:true});apply(480,24);};
+ qa.querySelector('#toolbar').onclick=()=>apply(436,24);
+ qa.querySelector('#pan').onclick=()=>apply(vv.height,72);
+ qa.querySelector('#close').onclick=()=>apply(fullHeight);
+ qa.querySelector('#blur').onclick=()=>{document.activeElement?.blur();qa.open=false;};
+ qa.querySelector('#foreground').onclick=()=>{window.dispatchEvent(new Event('pageshow'));document.dispatchEvent(new Event('visibilitychange'));qa.open=false;};
+ qa.querySelector('#end').onclick=()=>{const p=panel(),scroll=p?.querySelector('[data-exercise-search-scroll]')||p?.querySelector('.sheet-scroll,.profile-setting-scroll,.import-decision-scroll')||p;if(scroll)scroll.scrollTop=scroll.scrollHeight;qa.open=false;};
+ const box=e=>{if(!e)return null;const b=e.getBoundingClientRect();return {top:b.top,bottom:b.bottom,height:b.height,width:b.width};};
+ qa.querySelector('#inspect').onclick=()=>{const p=panel(),footer=p?.querySelector('.sheet-action-footer'),scroll=p?.querySelector('[data-exercise-search-scroll]')||p?.querySelector('.sheet-scroll,.profile-setting-scroll,.import-decision-scroll,.coach-scroll')||p,buttons=footer?[...footer.querySelectorAll('button')]:[],input=p?.querySelector('textarea,input:not([type=hidden])');qa.querySelector('#keyboard-proof').textContent=JSON.stringify({viewport:{height:vv.height,offsetTop:vv.offsetTop,bottom:vv.height+vv.offsetTop,innerHeight,rootHeight:document.documentElement.clientHeight},panel:box(p),classes:p?.className,layer:box(p?.closest('.modal-layer')),layerScroll:p?.closest('.modal-layer')?.scrollTop??null,keyboard:p?.hasAttribute('data-sheet-keyboard-open')||p?.hasAttribute('data-coach-keyboard-open'),footer:box(footer),save:box(buttons[0]),lastAction:box(buttons.at(-1)),gap:buttons.length?vv.height+vv.offsetTop-buttons.at(-1).getBoundingClientRect().bottom:null,footerPadding:footer?getComputedStyle(footer).paddingBottom:null,safe:p?getComputedStyle(p).getPropertyValue('--sheet-action-safe-bottom'):null,panelPadding:p?getComputedStyle(p).paddingBottom:null,input:box(input),focused:document.activeElement===input,value:input?.value,scroll:box(scroll),scrollState:scroll?{top:scroll.scrollTop,height:scroll.clientHeight,total:scroll.scrollHeight,padding:getComputedStyle(scroll).paddingBottom,scrollPadding:getComputedStyle(scroll).scrollPaddingBottom}:null,lastResult:box([...scroll?.querySelectorAll('button')||[]].at(-1)),rootScroll:{x:scrollX,y:scrollY},navDisplay:document.querySelector('.bottom-nav')?getComputedStyle(document.querySelector('.bottom-nav')).display:null});qa.open=false;};
+ for(const button of qa.querySelectorAll('button,summary'))button.addEventListener('pointerdown',event=>event.preventDefault());
+}
+</script></body></html>

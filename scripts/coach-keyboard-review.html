@@ -1,0 +1,53 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><title>ROOK Coach keyboard QA</title><style>html{scrollbar-width:none}html::-webkit-scrollbar{width:0}#keyboard-qa{position:fixed;right:0;top:0;z-index:99999;background:#ddd;color:#111;font:11px system-ui;max-width:190px}#keyboard-qa button{min-height:28px}#keyboard-proof{max-height:200px;overflow:auto;white-space:pre-wrap}#keyboard-guide{position:fixed;left:0;right:0;bottom:0;background:#34363c;color:white;text-align:center;padding-top:24px;z-index:9998;pointer-events:none;font:13px system-ui}</style></head><body>
+<section id="fixture"><h1>Isolated Coach keyboard QA</h1><label>Theme <select id="theme"><option>premium-dark</option><option>premium-light</option><option>dark</option><option>light</option></select></label><label>Mode <select id="mode"><option>browser</option><option>standalone</option></select></label><label>Conversation <select id="conversation"><option>long</option><option>short</option><option>empty</option><option>combine</option><option>adjust</option></select></label><button id="seed">Load synthetic Coach</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,isoDay} from '/src/domain.js';
+import {AIService} from '/src/aiService.js';
+if(!import.meta.env.DEV || location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development QA origin required');
+const params=new URLSearchParams(location.search);
+if(!params.has('run'))document.querySelector('#seed').onclick=()=>{
+ const s=createReturningUserFixture(2),theme=document.querySelector('#theme').value,kind=document.querySelector('#conversation').value;
+ Object.assign(s.profile,{showExerciseImages:false,stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+ s.selectedDate=isoDay();s.activeCoachConversationId='keyboard-current';s.coachDraft=kind==='empty'?'':'Draft retained while the keyboard opens and closes.';delete s.coachConversationMeta;
+ s.conversations=Array.from({length:kind==='empty'?0:kind==='long'?14:1},(_,i)=>({id:'keyboard-message-'+i,conversationId:'keyboard-current',createdAt:Date.now(),user:'Training question '+(i+1),reply:{text:'Use your current plan and log the work you perform. Review an adjustment before applying it.'}}));
+ if(kind==='combine')s.conversations[0].reply={text:'Which workouts?',combineRequest:{step:'sources',choices:[{id:'upper',label:'Upper A'},{id:'lower',label:'Lower B'}]}};
+ if(kind==='adjust'){const day=s.program.days[0];s.conversations[0].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:isoDay(),exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:30,label:'USE WORKOUT'}};}
+ s.conversations.unshift({id:'keyboard-older',conversationId:'keyboard-older',createdAt:Date.now()-86400000,user:'Yesterday question',reply:{text:'Yesterday answer'}});
+ for(const key of ['lift-v2-state','rook-install-meta-v1','rook-recovery-v1','rook-restore-journal-v1'])localStorage.removeItem(key);
+ localStorage.setItem(STORAGE_KEY,serializeState(s));location.href='/scripts/coach-keyboard-review.html?run=1&mode='+document.querySelector('#mode').value+'&kind='+kind;
+};
+else{
+ const originalMatch=window.matchMedia.bind(window);window.matchMedia=q=>q==='(display-mode: standalone)'?{matches:params.get('mode')==='standalone',media:q,addEventListener(){},removeEventListener(){}}:originalMatch(q);
+ const originalHeight=Object.getOwnPropertyDescriptor(window,'innerHeight'),rootHeight=Object.getOwnPropertyDescriptor(document.documentElement,'clientHeight');
+ const viewport=new EventTarget();Object.assign(viewport,{height:innerHeight,width:innerWidth,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ let fullHeight=innerHeight;
+ AIService.status=async()=>({available:true});AIService.coach=async()=>({text:'Synthetic fixture response.'});
+ document.querySelector('#fixture').remove();await import('/src/main.jsx');
+ const qa=document.createElement('details');qa.id='keyboard-qa';qa.innerHTML='<summary>Keyboard QA</summary><label>Geometry <select id="geometry"><option>overlay</option><option>inner-follows</option><option>both-follow</option></select></label><button id="open">Open keyboard</button><button id="toolbar">Suggestions toolbar</button><button id="blur">Blur while open</button><button id="close">Close keeping focus</button><button id="done">Done and close</button><button id="chrome">Browser chrome only</button><button id="zoom">Pinch zoom only</button><button id="foreground">Foreground</button><button id="inspect">Inspect layout/state</button><pre id="keyboard-proof"></pre>';document.body.append(qa);
+ const guide=document.createElement('div');guide.id='keyboard-guide';guide.textContent='SIMULATED keyboard boundary — not a physical iPhone';guide.hidden=true;document.body.append(guide);
+ const restore=()=>{Object.defineProperty(window,'innerHeight',originalHeight);if(rootHeight)Object.defineProperty(document.documentElement,'clientHeight',rootHeight);else delete document.documentElement.clientHeight;};
+ const apply=(height,offsetTop=0,scale=1)=>{
+  restore();fullHeight=innerHeight;const geometry=qa.querySelector('#geometry').value;
+  if(geometry!=='overlay')Object.defineProperty(window,'innerHeight',{configurable:true,value:height*scale});
+  if(geometry==='both-follow')Object.defineProperty(document.documentElement,'clientHeight',{configurable:true,value:height*scale});
+  Object.assign(viewport,{height,offsetTop,scale,width:innerWidth/scale});viewport.dispatchEvent(new Event('resize'));window.dispatchEvent(new Event('resize'));
+  guide.hidden=height*scale>=fullHeight-100;guide.style.top=(height+offsetTop)+'px';qa.open=false;
+ };
+ qa.querySelector('#open').onclick=()=>{document.querySelector('.coach-input textarea')?.focus({preventScroll:true});apply(480,24);};
+ qa.querySelector('#toolbar').onclick=()=>{document.querySelector('.coach-input textarea')?.focus({preventScroll:true});apply(436,24);};
+ qa.querySelector('#blur').onclick=()=>{document.querySelector('.coach-input textarea')?.blur();qa.open=false;};
+ qa.querySelector('#close').onclick=()=>{document.querySelector('.coach-input textarea')?.focus({preventScroll:true});apply(fullHeight);};
+ qa.querySelector('#done').onclick=()=>{document.querySelector('.coach-input textarea')?.blur();apply(fullHeight);};
+ qa.querySelector('#chrome').onclick=()=>apply(fullHeight-88);
+ qa.querySelector('#zoom').onclick=()=>apply(fullHeight/2,0,2);
+ qa.querySelector('#foreground').onclick=()=>{window.dispatchEvent(new Event('pageshow'));qa.open=false;};
+ const box=e=>{if(!e)return null;const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,height:r.height,width:r.width};};
+ qa.querySelector('#inspect').onclick=()=>{
+  const screen=document.querySelector('.app-content > .coach-screen'),input=screen?.querySelector('textarea'),nav=document.querySelector('.app-content > .bottom-nav'),scroll=screen?.querySelector('.coach-scroll'),s=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');
+  qa.querySelector('#keyboard-proof').textContent=JSON.stringify({mode:params.get('mode'),kind:params.get('kind'),geometry:qa.querySelector('#geometry').value,viewport:{height:viewport.height,offsetTop:viewport.offsetTop,scale:viewport.scale,innerHeight,rootHeight:document.documentElement.clientHeight},keyboardMode:screen?.hasAttribute('data-coach-keyboard-open'),screen:box(screen),input:box(input),composer:box(screen?.querySelector('.coach-input')),gap:input?viewport.height+viewport.offsetTop-input.getBoundingClientRect().bottom:null,nav:box(nav),navDisplay:nav?getComputedStyle(nav).display:null,reservedBottom:screen?getComputedStyle(screen).paddingBottom:null,focused:document.activeElement===input,scroll:scroll?{top:scroll.scrollTop,height:scroll.clientHeight,total:scroll.scrollHeight}:null,rootScroll:{x:scrollX,y:scrollY,height:document.documentElement.scrollHeight,client:document.documentElement.clientHeight},draft:s.coachDraft,conversation:s.activeCoachConversationId,messages:s.conversations.map(e=>({id:e.id,combineSelection:e.combineSelection,actionReview:e.actionReview})),history:!!document.querySelector('.coach-history-surface')});
+  qa.open=false;
+ };
+ for(const button of qa.querySelectorAll('button'))button.addEventListener('pointerdown',e=>e.preventDefault());
+}
+</script></body></html>

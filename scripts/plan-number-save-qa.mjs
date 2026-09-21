@@ -24,6 +24,6 @@ try {for(const width of [320,390]) {
  await open();await page.getByLabel(/^Sets for/).first().fill('4');
  await page.getByRole('button',{name:'SAVE CHANGES',exact:true}).evaluate(e=>e.click());await page.locator('.edit-plan-screen').waitFor({state:'detached'});
  const increased=(await stored()).program.days.flatMap(d=>d.exercises).find(e=>e.id===first.id);assert.equal(increased.sets.length,4);assert.deepEqual(increased.sets.slice(0,2),decreased.sets);assert.ok(increased.sets.slice(2).every(s=>!s.completed));assert.equal((await stored()).program.userEdited,true);
- const saved=(await stored()).program;await open();await page.getByLabel(/^Sets for/).first().fill('5');await page.getByRole('button',{name:'Close edit plan',exact:true}).click();await page.locator('.edit-plan-screen').waitFor({state:'detached'});assert.deepEqual((await stored()).program,saved,'cancel cannot persist a pending field');
+ const saved=(await stored()).program;await open();await page.getByLabel(/^Sets for/).first().fill('5');page.once('dialog',d=>{assert.match(d.message(),/Discard unsaved plan changes/);return d.accept();});await page.getByRole('button',{name:'Close edit plan',exact:true}).click();await page.locator('.edit-plan-screen').waitFor({state:'detached'});assert.deepEqual((await stored()).program,saved,'cancel cannot persist a pending field');
  console.log(`PASS ${width}: metadata, focused programmatic save, intentional resize, wheel, cancel`);await context.close();
 }}finally{await browser.close();}

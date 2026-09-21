@@ -43,7 +43,7 @@ try {
   assert.equal((await stored()).activeWorkout.id, emptyId);
   await page.getByRole('button', { name: '+ ADD EXERCISE', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Search exercises', exact: true }).fill('Bench Press');
-  await page.locator('.freestyle-picker .list-row').filter({ hasText: /^Bench Press/ }).first().click();
+  await page.getByRole('button',{name:'Add Bench Press to Up Next',exact:true}).click();await page.getByRole('button',{name:'Back to workout',exact:true}).first().click();await page.locator('.freestyle-queue-picker').waitFor({state:'detached'});
   await page.locator('.freestyle-copy').waitFor(); await shot('previous');
   assert.equal((await stored()).activeWorkout.exercises[0].sets[0].weight, null);
   await page.locator('.freestyle-copy').click();
@@ -52,7 +52,7 @@ try {
   const before = (await stored()).activeWorkout;
   await page.getByRole('button', { name: '+ ADD EXERCISE', exact: true }).click();
   await page.getByRole('searchbox', { name: 'Search exercises', exact: true }).fill('Dumbbell Bench Press');
-  await page.locator('.freestyle-picker .list-row').filter({ hasText: /^Dumbbell Bench Press/ }).first().click();
+  await page.getByRole('button',{name:'Add Dumbbell Bench Press to Up Next',exact:true}).click();await page.getByRole('button',{name:'Back to workout',exact:true}).first().click();await page.locator('.freestyle-queue-picker').waitFor({state:'detached'});
   const after = (await stored()).activeWorkout;
   assert.deepEqual(after.exercises[0], before.exercises[0]); assert.deepEqual(after.rest, before.rest); assert.equal(after.startedAt, before.startedAt);
   assert.equal(after.exercises.length, 2);
@@ -66,7 +66,7 @@ try {
   assert.deepEqual((await stored()).program, originalProgram);
   await page.getByRole('button', { name: 'DONE', exact: true }).click();
   assert.equal(await page.getByRole('button', { name: 'START WORKOUT', exact: true }).isEnabled(), true);
-  await page.locator('.freestyle-entry .list-row').scrollIntoViewIfNeeded(); await shot('history');
+  await shot('history');
   assert.equal((await stored()).activeWorkout,null);
   await startFreestyle(page); await page.getByRole('button', { name: 'Cancel workout', exact: true }).click();
   assert.equal((await stored()).activeWorkout, null); assert.equal((await stored()).workouts.length, 2);
@@ -77,14 +77,14 @@ try {
     await page.evaluate(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), completeWorkout(planned)); await page.reload({ waitUntil: 'networkidle' });
     await page.getByRole('button', { name: 'WORKOUT COMPLETE · VIEW HISTORY', exact: true }).waitFor();
     assert.equal((await stored()).activeWorkout,null); await shot('completed-day');
-    const rest = baseline; rest.profile.availableDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].filter(day => day !== weekday()).slice(0,3); rest.program = buildProgram(rest.profile);
+    const rest = structuredClone(baseline);rest.workouts=[];rest.flexibleWeek={sessions:{}}; rest.profile.availableDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].filter(day => day !== weekday()).slice(0,3); rest.program = buildProgram(rest.profile);
     await page.evaluate(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), rest); await page.reload({ waitUntil: 'networkidle' });
     await page.getByRole('heading', { name: 'Rest day', exact: true }).waitFor(); await shot('rest-day');
     await startFreestyle(page);
     await page.getByRole('button', { name: '+ ADD EXERCISE', exact: true }).click();
     await page.getByRole('searchbox', { name: 'Search exercises', exact: true }).fill('no-such-exercise-xyz');
     await page.getByText('No compatible exercises found.', { exact: false }).waitFor(); await shot('no-match');
-    await page.getByRole('button', { name: 'Close Add exercise', exact: true }).click();
+    await page.getByRole('button', { name: 'Back to workout', exact: true }).first().click();
     await page.getByRole('button', { name: 'Back to Today', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: 'Start freestyle workout', exact: true }).count(), 0);
     await page.getByRole('button', { name: 'RESUME WORKOUT', exact: true }).click();

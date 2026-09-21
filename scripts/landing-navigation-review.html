@@ -1,0 +1,38 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover"><title>ROOK Landing navigation review</title>
+<style>#landing-qa{position:fixed;right:0;top:0;z-index:9999;background:#eee;color:#111;font:11px system-ui;max-width:190px}#landing-qa button,#landing-qa select{min-height:30px}#landing-proof{white-space:pre-wrap;max-height:210px;overflow:auto}</style></head><body><div id="root"></div>
+<details id="landing-qa"><summary>Navigation QA</summary><label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label><label><input id="standalone" type="checkbox" checked>Standalone model</label><label><input id="reduced" type="checkbox">Reduced motion model</label><button id="edge">Synthetic edge Back</button><button id="partial">Synthetic partial</button><button id="vertical">Synthetic vertical</button><button id="nonedge">Synthetic non-edge</button><button id="forward">Synthetic step Forward</button><button id="resume">PWA resume event</button><button id="inspect">Inspect</button><pre id="landing-proof"></pre></details>
+<script type="module">
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {EntryLanding,Onboarding,ImportPlan,ScratchPlan,RestoreBackupSheet} from '/src/App.jsx';
+import {FirstRunNavigation} from '/src/FirstRunNavigation.jsx';
+import {useSemanticSwipeBack} from '/src/useSemanticSwipeBack.js';
+import {blankState} from '/src/domain.js';
+import {bindNavigationFocus} from '/src/navigationFocus.js';
+import '/src/styles.css';import '/src/overrides.css';import '/src/overlay.css';import '/src/calendar.css';import '/src/workout-controls.css';import '/src/onboarding-controls.css';import '/src/import-plan.css';import '/src/coach.css';import '/src/landing.css';import '/src/theme.css';import '/src/navigationFocus.css';
+if(!import.meta.env.DEV||location.origin!=='http://127.0.0.1:4198')throw Error('Isolated development review only');
+// In-memory blank fixtures only. No storage initialization, network generation or restore writes in this review.
+const el=id=>document.getElementById(id),nativeMatch=window.matchMedia.bind(window);
+window.matchMedia=query=>query.includes('display-mode: standalone')||query.includes('prefers-reduced-motion')?{matches:el(query.includes('standalone')?'standalone':'reduced').checked,addEventListener(){},removeEventListener(){}}:nativeMatch(query);
+bindNavigationFocus();
+function Review(){const[mode,setMode]=React.useState('landing'),[state,setState]=React.useState(blankState);useSemanticSwipeBack();
+ return React.createElement(FirstRunNavigation,{mode},route=>{
+  const close=()=>setMode(current=>current===route?'landing':current),update=fn=>setState(current=>fn(structuredClone(current)));
+  if(route==='personalize')return React.createElement(Onboarding,{update,exit:close});
+  if(route==='import')return React.createElement(ImportPlan,{state,update,close,initial:true});
+  if(route==='scratch')return React.createElement(ScratchPlan,{state,update,close,preserveDraftOnClose:true});
+  if(route==='restore')return React.createElement(RestoreBackupSheet,{state,update,close});
+  return React.createElement(EntryLanding,{personalize:()=>setMode('personalize'),importPlan:()=>setMode('import'),startFromScratch:()=>setMode('scratch'),restoreBackup:()=>setMode('restore')});});}
+createRoot(el('root')).render(React.createElement(Review));
+const theme=()=>{const value=el('theme').value;document.documentElement.dataset.appearance=value.endsWith('dark')?'dark':'light';document.documentElement.dataset.style=value.startsWith('premium')?'premium':'standard';document.documentElement.dataset.theme=value;};el('theme').onchange=theme;theme();
+const current=()=>document.querySelector('.first-run-page:not([hidden])'),screen=()=>[...current().querySelectorAll('main')].find(node=>!node.closest('[hidden],[inert]'));
+let frames=[],run=0,departures=[],lastGesture=null;
+document.addEventListener('click',event=>{if(!event.target.closest('#root'))return;if(current()?.dataset.firstRunPage==='landing')departures.push({label:event.target.closest('button')?.textContent,scroll:document.scrollingElement.scrollTop});const token=++run;frames=[];let start;
+ const sample=at=>{if(token!==run)return;start??=at;const s=screen(),visual=document.querySelector('.first-run-visual');frames.push({at:Math.round(at-start),route:current()?.dataset.firstRunPage,opacity:s?getComputedStyle(s).opacity:null,oldVisible:!!visual&&getComputedStyle(visual).opacity!=='0',overflow:document.documentElement.scrollWidth>innerWidth});if(at-start<230)requestAnimationFrame(sample);};requestAnimationFrame(sample);},true);
+function gesture(kind){el('landing-qa').open=false;const target=screen(),content=target.querySelector('[data-swipe-back-content]'),left=target.getBoundingClientRect().left,width=target.getBoundingClientRect().width,start=kind==='forward'?width-4:kind==='nonedge'?65:4,end=kind==='partial'?28:Math.round(width*(kind==='forward'?.4:.6)),y=200;
+ const send=(type,x,dy=0)=>{const event=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(event,'touches',{value:type==='touchend'?[]:[{identifier:7,clientX:left+x,clientY:y+dy}]});target.dispatchEvent(event);};send('touchstart',start);send('touchmove',kind==='vertical'?20:end,kind==='vertical'?140:0);
+ const preview=document.querySelector('.first-run-visual');lastGesture={kind,width,heading:target.querySelector('h1')?.textContent,contentTransform:content?getComputedStyle(content).transform:null,surfaceTransform:getComputedStyle(target).transform,previewHeading:preview?.querySelector('h1')?.textContent,previewInert:preview?.hasAttribute('inert'),previewHidden:preview?.getAttribute('aria-hidden'),previewOpacity:preview?getComputedStyle(preview).opacity:null,sameContent:!content||content===target.querySelector('[data-swipe-back-content]'),overflow:document.documentElement.scrollWidth>innerWidth};send('touchend',end);}
+for(const kind of ['edge','partial','vertical','nonedge','forward'])el(kind).onclick=()=>gesture(kind);
+el('resume').onclick=()=>{window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true}));document.dispatchEvent(new Event('visibilitychange'));el('landing-qa').open=false;};
+el('inspect').onclick=()=>{const s=screen();el('landing-proof').textContent=JSON.stringify({route:current().dataset.firstRunPage,width:innerWidth,theme:el('theme').value,scroll:document.scrollingElement.scrollTop,screenScroll:s.scrollTop,overflow:document.documentElement.scrollWidth>innerWidth,livePages:document.querySelectorAll('.first-run-page:not([hidden])').length,heading:s.querySelector('h1')?.textContent,lastGesture,departure:departures.at(-1),frames},null,2);};
+</script></body></html>

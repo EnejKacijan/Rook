@@ -1,0 +1,193 @@
+/* Final C: Active Workout presentation only. Native button boxes own every tap;
+   the smaller faces never extend into a neighbouring input or group. */
+.workout-screen { padding-inline:calc(12px + env(safe-area-inset-left)) calc(12px + env(safe-area-inset-right)); }
+.workout-screen .sets { container:logger-sets / inline-size; padding-top:20px; margin:0; font-size:1rem; }
+.workout-screen .sets :is(.set-row,.set-labels) {
+ --logger-height:max(52px,3.25rem); --logger-tile:30px; --logger-number:1.3125rem;
+ --logger-label-size:10px; --logger-label-weight:700; --logger-label-line:1; --logger-label-track:.13em;
+ --logger-index:20px; --logger-start-gap:4px; --logger-metric-gap:12px; --logger-rir-gap:8px; --logger-done-gap:6px;
+ --logger-rir:40px; --logger-done:44px; --logger-check-face:38px;
+ --logger-load-ratio:146fr; --logger-reps-ratio:128fr; --logger-load-hit:44px; --logger-reps-hit:44px;
+ --logger-end-gap:12px;
+ display:grid; align-items:center; gap:0;
+ grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,var(--logger-load-ratio)) var(--logger-metric-gap) [reps] minmax(0,var(--logger-reps-ratio)) var(--logger-end-gap) [done] var(--logger-done);
+ padding:0; border:0; margin:0 0 4px; min-width:0;
+}
+.workout-screen .sets :is(.set-row,.set-labels).with-rir {
+ --logger-load-ratio:124fr; --logger-reps-ratio:108fr; --logger-load-hit:40px; --logger-reps-hit:38px;
+ grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,var(--logger-load-ratio)) var(--logger-metric-gap) [reps] minmax(0,var(--logger-reps-ratio)) var(--logger-rir-gap) [rir] var(--logger-rir) var(--logger-done-gap) [done] var(--logger-done);
+}
+.workout-screen .sets .set-row { min-height:var(--logger-height); border-radius:12px; box-shadow:none; }
+.workout-screen .sets :is(.set-row,.set-labels) > * { grid-row:1; min-width:0; }
+.workout-screen .sets :is(.set-index-label,.extra-set-label),.workout-screen .sets .set-labels > span:first-child { grid-column:index; }
+.workout-screen .sets .set-row > :is(.set-index-label,.extra-set-label) { width:100%; min-height:var(--logger-height); justify-content:center; padding:0; }
+.workout-screen .sets :is(.logger-load,.set-load-context,.set-load-heading) { grid-column:load; }
+.workout-screen .sets :is(.logger-reps,.set-reps-heading) { grid-column:reps; }
+.workout-screen .sets :is(.rir-trigger,.set-label-help) { grid-column:rir; }
+.workout-screen .sets :is(.check,.set-done-heading) { grid-column:done; }
+.workout-screen .sets .set-labels { min-height:24px; align-items:center; }
+.workout-screen .sets .set-labels > span { padding:0; height:24px; display:flex; align-items:center; justify-content:center; color:var(--rook-secondary); }
+.workout-screen .sets .set-labels .logger-column-label,
+.workout-screen .sets .logger-column-label .help-popover-term {
+ display:inline-flex; align-items:center; justify-content:center;
+ font-family:inherit;
+ font-size:var(--logger-label-size); font-weight:var(--logger-label-weight);
+ line-height:var(--logger-label-line); letter-spacing:var(--logger-label-track);
+ text-transform:uppercase; color:var(--rook-secondary);
+}
+.workout-screen .sets .stepper { --logger-hit:var(--logger-reps-hit); display:grid; grid-template-columns:var(--logger-hit) minmax(0,1fr) var(--logger-hit); height:var(--logger-height); min-width:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; overflow:visible; }
+.workout-screen .sets .stepper.logger-load { --logger-hit:var(--logger-load-hit); }
+.workout-screen .sets .stepper > button { display:flex; align-items:center; justify-content:center; width:100%; min-width:0; height:100%; min-height:0; margin:0; padding:0; border:0; border-radius:8px; background:transparent; box-shadow:none; color:var(--rook-secondary); touch-action:manipulation; }
+.workout-screen .sets .stepper > button::before,.workout-screen .sets .stepper > button::after { content:none; }
+.workout-screen .sets .stepper-sign { display:flex; align-items:center; justify-content:center; width:var(--logger-tile); height:var(--logger-tile); border-radius:8px; background:var(--logger-tool-fill); font-size:17px; font-weight:400; line-height:1; pointer-events:none; }
+.workout-screen .sets .stepper > button:disabled { opacity:.42; }
+.workout-screen .sets .stepper > input { width:100%; min-width:0; height:100%; margin:0; padding:0; border:0; border-radius:0; background:transparent; font:inherit; font-size:var(--logger-number); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.015em; text-align:center; }
+/* Valid decimals and long numbers fit without moving any hit region. Keep the
+   native editable input at least 16px; raw drafts can still scroll the caret. */
+.workout-screen .sets .logger-load[data-value-length="4"] > input { font-size:min(var(--logger-number),1.1875rem); }
+.workout-screen .sets .logger-load[data-value-length="5"] > input { font-size:min(var(--logger-number),1.0625rem); }
+.workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > input { font-size:1rem; letter-spacing:-.06em; }
+.workout-screen .sets .logger-reps[data-value-length="3"] > input { font-size:min(var(--logger-number),1.1875rem); }
+.workout-screen .sets .logger-reps:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"]) > input { font-size:1rem; letter-spacing:-.06em; }
+.workout-screen .sets .stepper-empty-label { inset-inline:var(--logger-hit); font-size:9px; line-height:1.1; text-align:center; pointer-events:none; }
+.workout-screen .sets .stepper-display-label { font-size:var(--logger-number); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.015em; color:var(--rook-text); }
+.workout-screen .sets .set-done .stepper-display-label { color:var(--rook-secondary); }
+.workout-screen .sets .logger-load[data-value-length="4"] > .stepper-display-label { font-size:min(var(--logger-number),1.1875rem); }
+.workout-screen .sets .logger-load[data-value-length="5"] > .stepper-display-label { font-size:min(var(--logger-number),1.0625rem); }
+.workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > .stepper-display-label { font-size:1rem; letter-spacing:-.06em; }
+.workout-screen .sets .stepper.unset:focus-within { border:0; box-shadow:none; }
+.workout-screen .sets .set-row > .rir-trigger { width:100%; height:var(--logger-height); margin:0; padding:0; border:0; border-radius:8px; display:flex; align-items:center; justify-content:center; background:transparent; font:inherit; font-size:15px; font-weight:650; font-variant-numeric:tabular-nums; }
+.workout-screen .sets .rir-face { width:100%; max-width:42px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:3px; background:var(--logger-tool-fill); pointer-events:none; }
+.workout-screen .rir-value { line-height:1; }
+.workout-screen .rir-chevron { position:static; width:9px; height:9px; fill:none; stroke:currentColor; stroke-width:1.4; pointer-events:none; }
+.workout-screen .sets .set-row > .check { grid-column:done; grid-row:1; width:100%; height:var(--logger-height); min-width:0; margin:0; padding:0; border-radius:11px; display:flex; align-items:center; justify-content:center; }
+.workout-screen .sets .set-row > .check::after { content:none; }
+.workout-screen .sets .check-mark { display:flex; align-items:center; justify-content:center; width:var(--logger-check-face); height:var(--logger-check-face); border-radius:11px; background:transparent; box-shadow:inset 0 0 0 1px var(--rook-border); color:var(--rook-secondary); }
+.workout-screen .sets .check-mark svg { width:15px; height:15px; fill:none; stroke:currentColor; stroke-width:1.5; stroke-linecap:round; stroke-linejoin:round; }
+/* Resolve legacy state/theme chrome here; all states retain identical geometry. */
+:root[data-appearance][data-style] .workout-screen .sets .set-row { --logger-tool-fill:color-mix(in srgb,var(--rook-text) 4.5%,transparent); background:transparent; box-shadow:none; }
+:root[data-appearance][data-style] .workout-screen .sets .set-row.set-active { --logger-tool-fill:color-mix(in srgb,var(--rook-text) 7.5%,transparent); background:color-mix(in srgb,var(--rook-accent) 5.5%,transparent); }
+:root[data-appearance][data-style] .workout-screen .sets .set-row.set-done { --logger-tool-fill:color-mix(in srgb,var(--rook-text) 3%,transparent); }
+:root[data-appearance][data-style] .workout-screen .sets .stepper { background:transparent; border:0; box-shadow:none; }
+:root[data-appearance][data-style] .workout-screen .sets .set-row :is(input,.rir-trigger,.set-load-context) { color:var(--rook-text); }
+:root[data-appearance][data-style] .workout-screen .sets .set-row.set-done :is(input,.rir-trigger,.set-load-context) { color:var(--rook-secondary); }
+:root[data-appearance][data-style] .workout-screen .sets .set-row > .check { border:0; background:transparent; box-shadow:none; opacity:1; }
+.workout-screen .sets .set-active .check-mark { color:var(--rook-accent); background:color-mix(in srgb,var(--rook-accent) 8%,transparent); box-shadow:inset 0 0 0 1.5px var(--rook-accent); }
+.workout-screen .sets .set-active .check-mark svg { width:17px; height:17px; stroke-width:2.1; }
+.workout-screen .sets .set-done .check-mark { color:var(--rook-accent-text); background:color-mix(in srgb,var(--rook-accent) 14%,transparent); box-shadow:none; }
+.workout-screen .sets .set-done .check-mark svg { width:17px; height:17px; stroke-width:2.3; }
+.workout-screen .sets .set-index-label > b { font-size:13px; font-weight:600; color:var(--rook-secondary); }
+.workout-screen .sets .set-active .set-index-label > b { color:var(--rook-accent); font-weight:800; }
+/* Small gold labels need more contrast on ivory. Reuse the existing stronger
+   gold only for the current set and these inline actions, leaving theme-wide
+   accents, completed rows, inactive actions and primary actions unchanged. */
+:root[data-appearance="light"][data-style="premium"] .workout-screen {
+ --rook-workout-action-accent:var(--rook-accent-strong);
+}
+:root[data-appearance="light"][data-style="premium"] .workout-screen .sets .set-row.set-active {
+ --rook-accent:var(--rook-workout-action-accent);
+ background:color-mix(in srgb,var(--rook-accent) 8%,transparent);
+}
+:root[data-appearance="light"][data-style="premium"] .workout-screen :is(.freestyle-copy,.freestyle-previous .text-button,.workout-previous):not(:disabled) {
+ --rook-accent:var(--rook-workout-action-accent);
+ --rook-accent-text:var(--rook-workout-action-accent);
+}
+:root[data-appearance="light"][data-style="premium"] .workout-screen :is(.freestyle-copy,.freestyle-previous .text-button,.workout-previous):not(:disabled):focus-visible {
+ outline-color:var(--rook-workout-action-accent);
+}
+:root[data-appearance="light"][data-style="premium"] .workout-screen .freestyle-copy:not(:disabled):active { opacity:.88; }
+.workout-screen .sets .set-load-context { min-height:var(--logger-height); }
+.workout-screen .sets :is(button,input):focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset:-3px; }
+.workout-screen .sets input[aria-invalid="true"] { box-shadow:inset 0 -2px var(--rook-error-text,var(--rook-accent)); }
+.workout-screen .sets .set-load-heading { position:relative; }
+.workout-screen .sets .set-load-heading .plate-calculator-entry { position:absolute; right:0; margin:0; }
+.workout-screen .sets .set-label-help > .help-popover { position:relative; display:block; width:100%; padding:0; height:24px; }
+.workout-screen .sets .set-label-help .help-heading-trigger { position:absolute; width:44px; height:44px; min-width:44px; min-height:44px; left:50%; top:50%; transform:translate(-50%,-50%); display:flex; justify-content:center; gap:5px; border-radius:8px; }
+.workout-screen .sets .help-heading-trigger .help-popover-term { line-height:var(--logger-label-line); font-size:var(--logger-label-size); font-weight:var(--logger-label-weight); letter-spacing:var(--logger-label-track); }
+.workout-screen .sets .help-heading-trigger .help-popover-mark { position:static; width:12px; height:12px; font-size:8px; font-weight:600; }
+.workout-screen .sets .help-heading-trigger .help-popover-mark::before { transform:none; }
+/* Keep the existing 44px help target above, never over the first row. */
+.workout-screen .sets .set-labels { margin-bottom:10px; }
+/* Single-metric exercises reclaim the unused load column. */
+.workout-screen .sets :is(.set-row,.set-labels).no-load { --logger-reps-hit:44px; grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [reps] minmax(0,1fr) var(--logger-end-gap) [done] var(--logger-done); }
+.workout-screen .sets :is(.set-row,.set-labels).no-load.with-rir { grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [reps] minmax(0,1fr) var(--logger-rir-gap) [rir] var(--logger-rir) var(--logger-done-gap) [done] var(--logger-done); }
+/* Owner-approved exception: preserve independent L/R steppers on their own line. */
+.workout-screen .sets :is(.set-row,.set-labels).per-side { --logger-load-hit:44px; --logger-reps-hit:44px; grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,1fr) var(--logger-end-gap) [done] var(--logger-done); }
+.workout-screen .sets :is(.set-row,.set-labels).per-side.with-rir { grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,1fr) var(--logger-rir-gap) [rir] var(--logger-rir) var(--logger-done-gap) [done] var(--logger-done); }
+.workout-screen .sets .set-row.per-side { grid-template-rows:var(--logger-height) auto; }
+.workout-screen .sets .unilateral-reps { grid-column:1/-1; grid-row:2; gap:8px; padding:0; margin-bottom:4px; }
+.workout-screen .sets .unilateral-side { gap:2px; }
+.workout-screen .sets .set-labels.per-side > .set-reps-heading { display:none; }
+@container logger-sets (min-width:396px) {
+ .workout-screen .sets :is(.set-row,.set-labels) { --logger-index:22px; --logger-height:max(54px,3.375rem); --logger-tile:32px; --logger-number:1.375rem; --logger-metric-gap:14px; --logger-done-gap:8px; --logger-rir:44px; --logger-done:48px; --logger-check-face:40px; }
+ .workout-screen .sets :is(.set-row,.set-labels).with-rir { --logger-load-ratio:140fr; --logger-reps-ratio:118fr; --logger-load-hit:44px; --logger-reps-hit:40px; }
+ .workout-screen .sets .rir-face { height:34px; }
+}
+@media (max-width:359px) { .workout-screen { padding-inline:calc(8px + env(safe-area-inset-left)) calc(8px + env(safe-area-inset-right)); } }
+@container logger-sets (max-width:335px) {
+ .workout-screen .sets :is(.set-row,.set-labels) { --logger-index:16px; --logger-start-gap:2px; --logger-metric-gap:8px; --logger-rir-gap:5px; --logger-done-gap:3px; --logger-rir:36px; --logger-done:42px; --logger-check-face:34px; --logger-tile:26px; --logger-number:1.1875rem; --logger-load-hit:36px; --logger-reps-hit:36px; --logger-end-gap:8px; }
+ .workout-screen .sets :is(.set-row,.set-labels).with-rir { --logger-load-ratio:104fr; --logger-reps-ratio:88fr; --logger-load-hit:32px; --logger-reps-hit:32px; }
+ .workout-screen .sets .rir-face { width:34px; height:30px; }
+ .workout-screen .sets .logger-load[data-value-length="4"] > input { font-size:1.0625rem; }
+ .workout-screen .sets .logger-load[data-value-length="5"] > input { font-size:1rem; }
+ .workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > input { letter-spacing:-.1em; }
+ .workout-screen .sets .logger-load[data-value-length="4"] > .stepper-display-label { font-size:1.0625rem; }
+ .workout-screen .sets .logger-load[data-value-length="5"] > .stepper-display-label { font-size:1rem; }
+ .workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > .stepper-display-label { letter-spacing:-.1em; }
+ .workout-screen .sets .logger-reps[data-value-length="3"] > input { font-size:1rem; letter-spacing:-.065em; }
+ .workout-screen .sets :is(.set-row,.set-labels):is(.no-load,.per-side) { --logger-load-hit:44px; --logger-reps-hit:44px; }
+}
+/* Mobile columns stay stable when rest-timer padding makes the page scroll. */
+@media (max-width:480px) { html:has(.workout-screen) { scrollbar-width:none; } html:has(.workout-screen)::-webkit-scrollbar { display:none; } }
+/* Preserve the existing accessibility reflow for enlarged text. This cannot
+   match the normal-size 320/390/430 layouts, with or without RIR. */
+@container logger-sets (width < 18em) {
+ .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) { grid-template-columns:repeat(4,minmax(0,1fr)); column-gap:4px; }
+ .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-load,.set-load-context,.set-load-heading) { grid-column:1/3; grid-row:1; }
+ .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-reps,.set-reps-heading) { grid-column:3/5; grid-row:1; }
+ .workout-screen .sets .set-row:not(.no-load):not(.per-side) > :is(.set-index-label,.extra-set-label) { grid-column:1; grid-row:2; width:44px; justify-self:start; }
+ .workout-screen .sets .set-row:not(.no-load):not(.per-side) > .rir-trigger { grid-column:3; grid-row:2; width:44px; justify-self:end; }
+ .workout-screen .sets .set-row:not(.no-load):not(.per-side) > .check { grid-column:4; grid-row:2; width:44px; justify-self:end; }
+ .workout-screen .sets .set-labels:not(.no-load):not(.per-side) > :is(span:first-child,.set-done-heading) { display:none; }
+ .workout-screen .sets .set-labels:not(.no-load):not(.per-side) > .set-label-help { grid-column:3; grid-row:2; justify-self:end; width:44px; margin-top:12px; }
+}
+
+.workout-screen .up-next button { align-items:baseline; }
+.workout-screen .up-next .up-next-prescription { align-self:baseline; }
+.rir-options { display:grid; gap:8px; padding:16px; }
+.rir-options button { min-height:48px; border:1px solid var(--rook-border); border-radius:10px; background:var(--rook-surface); color:var(--rook-text); }
+.modal-layer > .screen.detail-screen.rir-sheet { min-height:0; padding-inline:20px; padding-bottom:var(--rook-sheet-safe-bottom); }
+.modal-layer > .screen.detail-screen.rir-sheet > .detail-header { min-height:72px; margin:0 -20px 4px; padding:28px 20px 0; }
+.rir-sheet .rir-options { gap:4px; padding:8px 0 0; }
+.rir-sheet .rir-options button { min-height:52px; padding:0 16px; border-radius:12px; display:flex; justify-content:space-between; align-items:center; text-align:left; font:inherit; font-size:1rem; }
+.rir-sheet .rir-options button[aria-pressed="true"] { background:var(--rook-surface-muted); border-color:var(--rook-border); outline:none; }
+.rir-sheet .rir-option-check { color:var(--rook-accent-text); width:20px; font-size:16px; }
+.rir-sheet .rir-options button:focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset:2px; }
+
+.workout-screen :is(.exercise-history-meta,.exercise-program-note,.exercise-personal-note,.up-next-title,.up-next-prescription) { color:var(--rook-secondary); }
+.workout-screen .sets .set-labels :is(.set-unit-label,.help-popover-term) { color:var(--rook-secondary); }
+
+/* Every active session can add EXTRA sets, including planned/repeat sessions.
+   Reserve the same label gutter before/after adding a set. Reclaim group gaps,
+   never the existing native +/- button surfaces. */
+.workout-screen .sets :is(.set-row,.set-labels) {
+ --logger-index:max(36px,2.25em); --logger-start-gap:2px; --logger-metric-gap:8px;
+ --logger-rir-gap:6px; --logger-done-gap:4px; --logger-end-gap:8px;
+}
+.workout-screen .sets .extra-set-label { gap:3px; color:var(--rook-secondary); }
+.workout-screen .sets .extra-set-label b { font-size:13px; font-weight:600; line-height:1; }
+.workout-screen .sets .extra-set-label small {
+ flex:none; padding:2px; border-radius:3px; background:color-mix(in srgb,var(--rook-text) 5%,transparent);
+ font-size:8px; font-weight:750; line-height:1; letter-spacing:0; white-space:nowrap;
+}
+@container logger-sets (min-width:336px) {
+ .workout-screen .sets :is(.set-row,.set-labels):not(.with-rir):not(.no-load):not(.per-side) {
+  --logger-load-ratio:1fr; --logger-reps-ratio:1fr;
+ }
+}
+@container logger-sets (max-width:335px) {
+ .workout-screen .sets :is(.set-row,.set-labels) { --logger-metric-gap:4px; }
+ .workout-screen .sets :is(.set-row,.set-labels).with-rir {
+  --logger-start-gap:0px; --logger-metric-gap:2px; --logger-rir-gap:0px; --logger-done-gap:0px;
+ }
+}

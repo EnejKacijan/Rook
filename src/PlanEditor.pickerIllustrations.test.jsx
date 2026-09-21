@@ -1,0 +1,21 @@
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {it,expect,vi,afterEach} from 'vitest';
+import {PlanEditor} from './App.jsx';
+import {createReturningUserFixture} from './demoFixture.js';
+globalThis.IS_REACT_ACT_ENVIRONMENT=true;
+let root,host;
+afterEach(async()=>{await act(async()=>root?.unmount());host?.remove();vi.unstubAllGlobals();});
+it.each(['scratch','edit','review'])('%s Add picker retains input, result action and canonical illustrations',async mode=>{
+ vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('scrollTo',()=>{});
+ const state=createReturningUserFixture(0),source=structuredClone(state.program);source.days=source.days.slice(0,1);source.days[0].exercises=source.days[0].exercises.slice(0,1);
+ host=document.createElement('main');host.className='screen';document.body.append(host);root=createRoot(host);
+ await act(async()=>root.render(<PlanEditor source={source} profile={state.profile} exerciseState={state} mode={mode} generatedAcceptance={mode==='review'} onSave={()=>{}} onCancel={()=>{}}/>));
+ await act(async()=>host.querySelector('.plan-workout-add').click());
+ const input=host.querySelector('.scratch-exercise-search input');expect(input).not.toBeNull();
+ const type=async value=>act(async()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
+ await type('pistol');expect(host.querySelectorAll('.scratch-exercise-results img')).toHaveLength(2);expect(host.querySelector('.scratch-exercise-search input')).toBe(input);
+ await type('zzzznomatch');expect(host.querySelectorAll('.scratch-exercise-results [role=option]')).toHaveLength(0);expect(host.querySelector('.scratch-exercise-search input')).toBe(input);
+ await type('pistol');const option=[...host.querySelectorAll('.scratch-exercise-results [role=option]')].find(b=>b.textContent==='Pistol Squat');expect(option).toBeDefined();
+ await act(async()=>option.click());expect(host.querySelectorAll('.plan-editor-exercise')).toHaveLength(2);expect(host.querySelector('.scratch-exercise-results')).toBeNull();
+});

@@ -1,3 +1,4 @@
+import { workoutPerformedDate as workoutDate } from './workoutDates.js';
 export const E1RM_FORMULA = "Epley: weight × (1 + reps ÷ 30)";
 export const E1RM_MIN_REPS = 1;
 export const E1RM_MAX_REPS = 12;
@@ -20,17 +21,6 @@ export function estimatedOneRepMax(weight, reps) {
   return Number((load * (1 + repetitions / 30)).toFixed(2));
 }
 
-function workoutDate(workout) {
-  const explicit = workout?.canonicalPlanDate || workout?.workoutDateKey;
-  if (/^\d{4}-\d{2}-\d{2}$/.test(String(explicit || ""))) return explicit;
-  const value = workout?.completedAt ?? workout?.endedAt ?? workout?.startedAt;
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return null;
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
 
 function chronologicalWorkouts(workouts = []) {
   return [...workouts]

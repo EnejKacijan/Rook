@@ -34,7 +34,7 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
   assert.ok(await nameInput.evaluate(e=>e.getBoundingClientRect().bottom<=e.closest('main').querySelector('.sheet-action-footer').getBoundingClientRect().top),'Focused input clears action area in keyboard-sized viewport');
   const g=await geometry();assert.ok(g.buttonBottom<=480,JSON.stringify(g));
   await page.setViewportSize({width,height:844});
-  await page.addStyleTag({content:':root { --sheet-action-safe-bottom: 34px; }'});
+  await page.addStyleTag({content:'.edit-plan-screen { --sheet-action-safe-bottom: 34px !important; }'});
   assert.ok(await footer.evaluate(f=>f.getBoundingClientRect().bottom-f.lastElementChild.getBoundingClientRect().bottom)>=34);
   await capture('safe-area-34');
   await context.close();console.log(`${width} ${style} ${appearance}: footer geometry passed`);

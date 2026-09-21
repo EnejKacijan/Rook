@@ -1,3 +1,4 @@
+import { workoutPerformedDate } from './workoutDates.js';
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
 function safeDay(value) {
@@ -10,15 +11,7 @@ function safeDay(value) {
   return `${year}-${month}-${day}`;
 }
 
-export function workoutPhotoDay(workout) {
-  return (
-    safeDay(workout?.canonicalPlanDate) ||
-    safeDay(workout?.workoutDateKey) ||
-    safeDay(workout?.completedAt) ||
-    safeDay(workout?.endedAt) ||
-    safeDay(workout?.startedAt)
-  );
-}
+export const workoutPhotoDay = workoutPerformedDate;
 
 export function workoutPhotoTimeline(workouts = [], metadata = []) {
   const metadataById = new Map(

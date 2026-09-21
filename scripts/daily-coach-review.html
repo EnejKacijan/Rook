@@ -1,0 +1,34 @@
+<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><title>ROOK daily Coach review</title></head><body>
+<section id="fixture"><h1>Isolated daily Coach QA</h1><label>Scenario <select id="scenario"><option>populated</option><option>empty</option><option>pending</option><option>sources</option><option>review</option><option>previous-day</option></select></label><label>Theme <select id="theme"><option>light</option><option>dark</option><option>premium-light</option><option>premium-dark</option></select></label><label>Reduced motion <input id="reduce" type="checkbox"></label><button id="seed">Start synthetic Coach review</button></section><div id="root"></div>
+<script type="module">
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {serializeState,STORAGE_KEY,isoDay} from '/src/domain.js';
+import {combineSources,buildCombinedProposal} from '/src/combineWorkouts.js';
+import {AIService} from '/src/aiService.js';
+if(location.port!=='4198')throw Error('Isolated QA port required');
+const params=new URLSearchParams(location.search);
+if(params.has('run')){
+  const realMatch=window.matchMedia.bind(window);window.matchMedia=q=>{const media=realMatch(q);if(q==='(display-mode: standalone)'||q==='(prefers-reduced-motion: reduce)')return {matches:q.includes('standalone')||params.has('reduce'),media:q,addEventListener(){},removeEventListener(){},addListener(){},removeListener(){}};return media;};
+  // Synthetic fixture replies only; this review page never calls an AI provider.
+  AIService.coach=async()=>({text:'Synthetic Coach response. Your current plan and workout context remain available.'});
+  document.querySelector('#fixture').remove();await import('/src/main.jsx');
+  const qa=document.createElement('details');qa.id='daily-qa';qa.style.cssText='position:fixed;right:0;top:0;z-index:99999;background:#ddd;color:#111;font:11px system-ui;max-width:140px';
+  qa.innerHTML='<summary>Lifecycle QA</summary><button id="inspect">Show saved state</button><button id="replay">Replay edge Back</button><pre id="proof" style="white-space:pre-wrap;max-height:180px;overflow:auto"></pre>';document.body.append(qa);
+  qa.querySelector('#inspect').onclick=()=>{const s=JSON.parse(localStorage.getItem(STORAGE_KEY)||'{}');qa.querySelector('#proof').textContent=JSON.stringify({id:s.activeCoachConversationId,draft:s.coachDraft,meta:s.coachConversationMeta,messages:s.conversations,activeWorkout:s.activeWorkout?.id});};
+  qa.querySelector('#replay').onclick=()=>{const visible=e=>e&&e.getBoundingClientRect().height&&getComputedStyle(e).visibility!=='hidden';const history=document.querySelector('.coach-history-surface'),surface=visible(history)?history:document.querySelector('.coach-content-surface');if(!surface)return;qa.open=false;const b=surface.getBoundingClientRect();for(const [type,x]of [['touchstart',b.left+4],['touchmove',b.left+b.width*.65],['touchend',b.left+b.width*.65]]){const point=new Touch({identifier:1,target:surface,clientX:x,clientY:300});surface.dispatchEvent(new TouchEvent(type,{bubbles:true,cancelable:true,touches:type==='touchend'?[]:[point],targetTouches:type==='touchend'?[]:[point],changedTouches:[point]}));}};
+}else document.querySelector('#seed').onclick=()=>{
+  const state=createReturningUserFixture(0),theme=document.querySelector('#theme').value,kind=document.querySelector('#scenario').value;
+  Object.assign(state.profile,{stylePreference:theme.startsWith('premium')?'premium':'standard',appearancePreference:theme.endsWith('dark')?'dark':'light',themePreference:theme.startsWith('premium')?'premium':theme});
+  state.activeWorkout=null;state.todayAdaptation=null;state.workouts=[];state.activeCoachConversationId='qa-current';state.coachDraft=kind==='empty'?'':'Draft for this conversation';delete state.coachConversationMeta;
+  state.conversations=[];
+  if(kind!=='empty'){
+    for(let i=0;i<16;i++)state.conversations.push({id:'old-'+i,conversationId:'qa-old-'+i,createdAt:Date.now()-(i+1)*86400000,user:'Earlier training question '+(i+1),reply:{text:'Earlier advice retained in Coach history. Your logged workouts stay separate.'}});
+    for(let i=0;i<12;i++)state.conversations.push({id:'message-'+i,conversationId:'qa-current',createdAt:Date.now()-(kind==='previous-day'?86400000:0),user:'Training question '+(i+1),reply:{text:'Use your current training plan and log the work you actually perform. Review any adjustment before applying it.'}});
+    const last=state.conversations.at(-1),sources=combineSources(state).slice(0,2);
+    if(kind==='pending')last.reply={text:'How much time do you have today for the whole workout?',combineRequest:{step:'time',sourceIds:sources.map(s=>s.logicalSessionId)}};
+    if(kind==='sources')last.reply={text:'Which two workouts should I combine for today?',combineRequest:{step:'sources',choices:sources.map(s=>({id:s.logicalSessionId,label:s.workout.name}))}};
+    if(kind==='review'){const result=buildCombinedProposal(state,{sourceIds:sources.map(s=>s.logicalSessionId),minutes:60});if(result.status!=='ready')throw Error(result.error);last.reply={text:'Review the combined workout before applying it.',action:{type:'combine-workouts',proposal:result.proposal}};}
+  }
+  localStorage.setItem(STORAGE_KEY,serializeState(state));location.href='/scripts/daily-coach-review.html?run=1'+(document.querySelector('#reduce').checked?'&reduce=1':'');
+};
+</script></body></html>

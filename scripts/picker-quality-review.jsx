@@ -1,0 +1,76 @@
+import React,{Profiler} from 'react';
+import {flushSync} from 'react-dom';
+import {createRoot} from 'react-dom/client';
+import App from '/src/App.jsx';
+import {createReturningUserFixture} from '/src/demoFixture.js';
+import {startFreestyleWorkout} from '/src/freestyleWorkout.js';
+import {saveState,deserializeState} from '/src/domain.js';
+import {bindNavigationFocus} from '/src/navigationFocus.js';
+import {observeVisibleViewport} from '/src/sheetVisibleViewport.js';
+import '/src/styles.css';import '/src/overrides.css';import '/src/overlay.css';import '/src/calendar.css';import '/src/workout-controls.css';import '/src/onboarding-controls.css';import '/src/import-plan.css';import '/src/coach.css';import '/src/landing.css';import '/src/theme.css';import '/src/navigationFocus.css';import '/src/activeLoggerTouch.css';
+if(!import.meta.env.DEV||location.origin!=='http://127.0.0.1:4198')throw Error('Isolated review only');
+const storage=window.localStorage,prefix='rook-picker-quality:',params=new URLSearchParams(location.search);
+let writes=0;
+const nativeViewport=window.visualViewport,viewport=new EventTarget();
+Object.assign(viewport,{height:innerHeight,offsetTop:0,scale:1,width:innerWidth});
+Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+const listenerRecords=new Map(),listenerOriginal=[];
+for(const target of [window,document]){
+ const add=target.addEventListener,remove=target.removeEventListener;listenerOriginal.push([target,add,remove]);
+ const entries=[];listenerRecords.set(target,entries);
+ target.addEventListener=function(type,callback,options){const capture=typeof options==='boolean'?options:!!options?.capture;if(!entries.some(e=>e.type===type&&e.callback===callback&&e.capture===capture))entries.push({type,callback,capture});return add.call(this,type,callback,options);};
+ target.removeEventListener=function(type,callback,options){const capture=typeof options==='boolean'?options:!!options?.capture,index=entries.findIndex(e=>e.type===type&&e.callback===callback&&e.capture===capture);if(index>=0)entries.splice(index,1);return remove.call(this,type,callback,options);};
+}
+const listenerCount=()=>[...listenerRecords.values()].reduce((n,a)=>n+a.length,0);
+
+Object.defineProperty(window,'localStorage',{value:{getItem:k=>storage.getItem(prefix+k),setItem:(k,v)=>{writes++;storage.setItem(prefix+k,v);},removeItem:k=>storage.removeItem(prefix+k),get length(){return Object.keys(storage).filter(k=>k.startsWith(prefix)).length;},key:i=>Object.keys(storage).filter(k=>k.startsWith(prefix))[i]?.slice(prefix.length)}});
+let initial=startFreestyleWorkout(createReturningUserFixture(0));initial.profile.showExerciseImages=true;initial.profile.stylePreference='standard';initial.profile.appearancePreference='dark';initial.savedWorkoutTemplates=[];saveState(initial);
+const frames=[],commits=[],work=[],runs=[];let run=null,drag=null,raf;
+globalThis.__ROOK_PICKER_TRACE__=entry=>work.push(entry);
+const mark=(name)=>{const value=performance.now();performance.mark('picker:'+name);return value;};
+const read=()=>{try{const state=deserializeState(localStorage.getItem('lift-v2-state'),{strict:true});return {session:state.activeWorkout,plan:state.program};}catch{return null;}};
+const qa=document.createElement('details');qa.id='picker-qa';qa.innerHTML='<summary>Picker QA</summary><button id="measure">Measure ten opens</button><button id="drag">Measure drag cancel/close</button><button id="geometry">Measure tabs</button><button id="keyboard">Toggle keyboard geometry</button><button id="matrix">Theme and keyboard matrix</button><button id="lifecycle">Lifecycle and rapid actions</button><button id="reduced">Reduced motion and safe inset</button><pre id="proof"></pre>';
+const style=document.createElement('style');style.textContent='#picker-qa{position:fixed;right:0;bottom:0;z-index:9999;background:var(--rook-bg);color:var(--rook-text);font:11px system-ui;width:145px}#picker-qa button{display:block;min-height:28px;width:100%}#picker-qa pre{max-height:90px;overflow:auto;white-space:pre-wrap}';document.head.append(style);document.body.append(qa);const out=value=>qa.querySelector('#proof').textContent=JSON.stringify(value);
+const button=text=>[...document.querySelectorAll('#root button')].find(b=>b.textContent.trim()===text),panel=()=>document.querySelector('.freestyle-queue-picker');
+const paint=()=>{const now=performance.now();frames.push(now);if(run&&run.T3==null&&panel()){const b=panel().getBoundingClientRect();if(run.T1==null)run.T1=mark('T1');if(run.T2==null&&b.top<innerHeight-2)run.T2=mark('T2');if(run.T3==null&&panel().querySelector('.queue-search-row')&&b.top<innerHeight-2)run.T3=mark('T3');}if(drag&&panel()&&drag.D1==null&&parseFloat(panel().style.transform.match(/\(([-\d.]+)/)?.[1])>0)drag.D1=mark('D1');raf=requestAnimationFrame(paint);};raf=requestAnimationFrame(paint);
+const click=event=>{const target=event.target.closest('button');if(target?.textContent.trim()==='+ ADD EXERCISE'){run={T0:mark('T0'),workStart:work.length,commitStart:commits.length,writesStart:writes};runs.push(run);}};document.addEventListener('click',click,true);
+const observer=new MutationObserver(()=>{if(run&&panel()&&run.T1==null)run.T1=mark('T1');if(drag&&!panel()&&drag.D3==null)drag.D3=mark('D3');});observer.observe(document.getElementById('root'),{subtree:true,childList:true});
+const root=createRoot(document.getElementById('root'));bindNavigationFocus();observeVisibleViewport();root.render(<Profiler id="app" onRender={(id,phase,actualDuration,baseDuration,startTime,commitTime)=>commits.push({phase,actualDuration,startTime,commitTime})}><App/></Profiler>);
+const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms)),frame=()=>new Promise(requestAnimationFrame);
+const until=async(test)=>{for(let i=0;i<150;i++){if(test())return;await wait(20);}throw Error('Timed out');};
+async function open(){button('+ ADD EXERCISE').click();await until(()=>run?.T3!=null);await wait(240);}
+async function close(){panel().querySelector('.detail-header-close').click();await until(()=>!panel());await wait(40);}
+function reportRun(r){return {commit:r.T1-r.T0,firstVisibleFrame:r.T2-r.T0,resultsFrame:r.T3-r.T0,rows:panel()?.querySelectorAll('.queue-search-row').length,work:work.slice(r.workStart),renders:commits.slice(r.commitStart),writes:writes-r.writesStart};}
+qa.querySelector('#measure').onclick=async()=>{qa.open=false;out({running:true});const results=[],beforeListeners=listenerCount();try{for(let i=0;i<10;i++){await open();results.push(reportRun(run));await close();}out({complete:true,kind:'opens',width:innerWidth,results,beforeListeners,afterListeners:listenerCount(),bodyLocked:document.body.style.position==='fixed',layers:document.querySelectorAll('.modal-layer').length,domain:read()});}catch(e){out({error:e.message,results});}};
+function send(type,target,x,y){const event=new Event(type,{bubbles:true,cancelable:true}),p={identifier:1,clientX:x,clientY:y};Object.assign(event,{touches:['touchend','touchcancel'].includes(type)?[]:[p],changedTouches:[p]});target.dispatchEvent(event);return event;}
+qa.querySelector('#drag').onclick=async()=>{qa.open=false;out({running:true});const results=[];try{if(!panel())await open();for(const distance of [40,220]){const p=panel(),header=p.querySelector('.detail-header'),b=header.getBoundingClientRect(),x=b.left+b.width/2,y=b.top+18;drag={D0:mark('D0'),renders:commits.length,writes,reads:0};const original=p.getBoundingClientRect;p.getBoundingClientRect=function(){drag.reads++;return original.call(this);};send('touchstart',header,x,y);const samples=[];for(let i=1;i<=20;i++){const dy=distance*i/20,t=performance.now(),reads=drag.reads;send('touchmove',header,x,y+dy);samples.push({dy,handler:performance.now()-t,reads:drag.reads-reads,transform:p.style.transform});await frame();}drag.D2=mark('D2');send('touchend',header,x,y+distance);await wait(260);results.push({...drag,firstMotion:drag.D1-drag.D0,releaseToUnmount:drag.D3?drag.D3-drag.D2:null,renderCount:commits.length-drag.renders,writeCount:writes-drag.writes,samples});p.getBoundingClientRect=original;if(panel()){send('touchcancel',header,x,y);}drag=null;}out({complete:true,kind:'drag',results,bodyLocked:document.body.style.position==='fixed'});}catch(e){out({error:e.message,results});}};
+function geometry(){const p=panel(),box=e=>{if(!e)return null;const r=e.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width,height:r.height,bottom:r.bottom};};return {width:innerWidth,title:p.querySelector('.detail-header strong')?.textContent,header:box(p.querySelector('.detail-header')),close:box(p.querySelector('.detail-header-close')),tabs:box(p.querySelector('.queue-search-scopes')),search:box(p.querySelector('.rook-search-field:not([hidden])')),footer:box(p.querySelector('.queue-picker-back')),scrollers:[...p.querySelectorAll('[data-exercise-search-scroll]')].filter(e=>e.getClientRects().length&&getComputedStyle(e).display!=='none').map(box),overflow:document.documentElement.scrollWidth>innerWidth};}
+qa.querySelector('#geometry').onclick=async()=>{qa.open=false;if(!panel())await open();const results=[geometry()];button('Saved workouts').click();await wait(240);results.push(geometry());button('Exercises').click();await wait(240);results.push(geometry());out({complete:true,kind:'geometry',results});};
+
+const setQuery=value=>{const input=panel().querySelector('input[type=search]');Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));};
+function theme(value){const [style,appearance]=value.split('-'),root=document.documentElement;root.dataset.style=style;root.dataset.appearance=appearance;root.dataset.theme=style==='premium'?'premium':appearance;root.dataset.premiumScheme=appearance;root.style.colorScheme=appearance;}
+qa.querySelector('#keyboard').onclick=async()=>{viewport.height=viewport.height<600?844:430;viewport.dispatchEvent(new Event('resize'));await frame();out({keyboardGeometry:true,visibleHeight:viewport.height,geometry:geometry()});};
+qa.querySelector('#matrix').onclick=async()=>{qa.open=false;out({running:true});const results=[];try{if(!panel())await open();const p=panel(),header=p.querySelector('.detail-header'),input=p.querySelector('input'),footer=p.querySelector('footer'),handle=p.querySelector('.modal-drag-handle');
+ for(const value of ['standard-light','standard-dark','premium-light','premium-dark']){theme(value);for(const keyboard of [false,true]){viewport.height=keyboard?430:844;viewport.dispatchEvent(new Event('resize'));await frame();await frame();for(const scope of ['Exercises','Saved workouts']){button(scope).click();await frame();await frame();results.push({theme:value,keyboard,scope,geometry:geometry(),samePanel:p===panel(),sameHeader:header===p.querySelector('.detail-header'),sameInput:input===p.querySelector('input'),sameFooter:footer===p.querySelector('footer'),sameHandle:handle===p.querySelector('.modal-drag-handle')});}}}
+ viewport.height=844;viewport.dispatchEvent(new Event('resize'));button('Exercises').click();out({complete:true,kind:'matrix',width:innerWidth,results});
+ }catch(e){out({error:e.message,results});}};
+qa.querySelector('#lifecycle').onclick=async()=>{qa.open=false;out({running:true});try{
+ if(panel())await close();const active=document.querySelector('main.active-workout')||document.querySelector('#root main'),before=read(),listeners=listenerCount(),checks=[];
+ const opener=button('+ ADD EXERCISE');flushSync(()=>{opener.click();opener.click();});checks.push({doubleOpen:document.querySelectorAll('.freestyle-queue-picker').length===1,initialRows:panel().querySelectorAll('.queue-search-row').length});panel().querySelector('.detail-header-close').click();await until(()=>!panel());await wait(100);checks.push({noDelayedReopen:!panel(),activeSame:active.isConnected});
+ await open();const p=panel(),input=p.querySelector('input'),header=p.querySelector('.detail-header');input.focus();setQuery('bench');await frame();await frame();const list=p.querySelector('[data-exercise-search-scroll]');list.scrollTop=100;button('Saved workouts').click();await frame();setQuery('upper');await frame();button('Exercises').click();await frame();checks.push({queryRestored:input.value==='bench',scrollRestored:list.scrollTop===100,searchSame:input===p.querySelector('input'),headerSame:header===p.querySelector('.detail-header'),focusSame:document.activeElement===input});
+ const add=p.querySelector('.queue-add-button:not(:disabled)');add.click();await frame();await wait(150);checks.push({stayOpen:p===panel(),added:read().session.exercises.length===before.session.exercises.length+1});button('Back to workout').click();await until(()=>!panel());await wait(60);
+ checks.push({footerClosed:true,activeSame:active.isConnected,sameSession:read().session.id===before.session.id,sameStart:read().session.startedAt===before.session.startedAt,planUnchanged:JSON.stringify(read().plan)===JSON.stringify(before.plan),bodyUnlocked:document.body.style.position!=='fixed'});
+ await open();setQuery('bench');await frame();await frame();checks.push({reopenContainsAdded:!!panel().querySelector('.queue-add-button:disabled')});await close();checks.push({afterListeners:listenerCount(),beforeListeners:listeners});
+ out({complete:true,kind:'lifecycle',checks,domain:read()});
+ }catch(e){out({error:e.message});}};
+
+qa.querySelector('#reduced').onclick=async()=>{qa.open=false;out({running:true});const media=window.matchMedia,changed=[];
+ try{if(panel())await close();
+ window.matchMedia=query=>query.includes('prefers-reduced-motion')?{matches:true,media:query,addEventListener(){},removeEventListener(){},addListener(){},removeListener(){}}:media.call(window,query);
+ const visit=rules=>{for(const rule of rules){if(rule instanceof CSSMediaRule&&rule.conditionText.replaceAll(' ','')==='(prefers-reduced-motion:reduce)'){changed.push([rule,rule.media.mediaText]);rule.media.mediaText='all';}else if(rule.cssRules)visit(rule.cssRules);}};
+ for(const sheet of document.styleSheets){try{visit(sheet.cssRules);}catch{}}
+ await open();const p=panel();p.style.setProperty('--sheet-action-safe-bottom','34px');await frame();const safe=geometry(),animation=getComputedStyle(p).animationName;
+ viewport.height=430;viewport.dispatchEvent(new Event('resize'));await frame();const keyboard=geometry();
+ const at=performance.now();button('Back to workout').click();await until(()=>!panel());out({complete:true,kind:'reduced',rules:changed.length,animation,safe,keyboard,releaseToUnmount:performance.now()-at,bodyUnlocked:document.body.style.position!=='fixed'});
+ }catch(e){out({error:e.message});}finally{window.matchMedia=media;changed.forEach(([rule,value])=>rule.media.mediaText=value);viewport.height=844;viewport.dispatchEvent(new Event('resize'));}};
+if(import.meta.hot)import.meta.hot.dispose(()=>{root.unmount();cancelAnimationFrame(raf);observer.disconnect();document.removeEventListener('click',click,true);delete globalThis.__ROOK_PICKER_TRACE__;qa.remove();style.remove();for(const [target,add,remove] of listenerOriginal){target.addEventListener=add;target.removeEventListener=remove;}Object.defineProperty(window,'visualViewport',{configurable:true,value:nativeViewport});});

@@ -26,7 +26,7 @@ try { for(const width of [320,390]) for(const appearance of ['light','dark']) fo
  if(mode==='planned'){
  assert.equal(await page.locator('.freestyle-previous').count(),0);
  assert.equal(await page.locator('.workout-screen').evaluate(e=>e.classList.contains('freestyle-workout')),false);
- assert.equal(await page.locator('.sets').evaluate(e=>getComputedStyle(e).paddingTop),await page.locator('.recommendation').count()?'16px':'10px');
+ assert.equal(await page.locator('.sets').evaluate(e=>getComputedStyle(e).paddingTop),'20px');
  await page.getByRole('button',{name:'Exercise options',exact:true}).click();await page.locator('.active-exercise-options-sheet').waitFor();assert.equal(await page.getByRole('button',{name:'Remove exercise',exact:true}).count(),0);
  console.log(`PASS ${width} ${style} ${appearance} planned`);await context.close();continue;
  }
@@ -35,7 +35,7 @@ try { for(const width of [320,390]) for(const appearance of ['light','dark']) fo
  assert.equal(await page.getByRole('button',{name:'Cancel workout',exact:true}).count(),mode==='logged'?0:1);
  const gap=await page.evaluate(()=>document.querySelector('.sets').getBoundingClientRect().top-document.querySelector('.freestyle-previous').getBoundingClientRect().bottom);
  assert.ok(gap>=0&&gap<=1,`unexpected extra gap ${gap}`);
- assert.equal(await page.locator('.sets').evaluate(e=>getComputedStyle(e).paddingTop),'10px');
+ assert.equal(await page.locator('.sets').evaluate(e=>getComputedStyle(e).paddingTop),'20px');
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  if(mode==='long')assert.equal(await page.locator('.exercise-heading h1').textContent(),'Single-Arm Behind-the-Body Cable Lateral Raise');
  await page.waitForTimeout(300);await page.screenshot({path:`${prefix}.png`,fullPage:true});

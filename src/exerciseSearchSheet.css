@@ -1,7 +1,9 @@
 /* Content count never chooses the search-sheet height. The viewport does.
    Other sheet states, including compact replacement suggestions, are unchanged. */
 :root .modal-layer > :is(.screen, .sheet).exercise-search-sheet {
-  height: min(92dvh, calc(var(--sheet-visible-height, 100dvh) - max(12px, env(safe-area-inset-top))));
+  /* Closed browsing keeps its established inset. Search uses the safe boundary. */
+  --exercise-search-top: max(calc(var(--sheet-reference-height, 100dvh) * .08), 12px, env(safe-area-inset-top));
+  height: max(0px, calc(var(--sheet-visible-height, 100dvh) - var(--exercise-search-top)));
   min-height: 0;
   display: flex;
   flex-direction: column;
@@ -12,6 +14,7 @@
 :root .modal-layer > .screen.detail-screen.exercise-search-sheet > .detail-header {
   margin-inline: 0;
   padding-inline: 0;
+  margin-bottom: 18px;
 }
 :root .exercise-search-sheet > .exercise-search-body {
   flex: 1 1 0;
@@ -31,12 +34,25 @@
   touch-action: pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(var(--rook-sheet-content-bottom, 20px) + var(--sheet-action-safe-bottom, env(safe-area-inset-bottom, 0px)));
+  scroll-padding-bottom: calc(var(--rook-sheet-content-bottom, 20px) + var(--sheet-action-safe-bottom, env(safe-area-inset-bottom, 0px)));
 }
 .exercise-search-sheet > .rook-search-field,
 .exercise-search-body > .rook-search-field { margin-bottom: 8px; }
 .exercise-search-body > .sheet-back { margin-bottom: 0; }
 .exercise-search-body > h2 { margin-bottom: 0; }
-/* Only explicitly opted-in dedicated pickers receive the focused chrome state.
-   Title, Back, Close and drag targets stay put and keep their full hit areas. */
-:root .modal-layer > .screen.detail-screen.exercise-search-sheet.is-search-focused > .detail-header { margin-bottom: 2px; }
-:root .exercise-search-sheet.is-search-focused .exercise-search-body > h2 { margin-top: 0; }
+/* One opt-in presentation; text/results never select its height. Geometry tracks
+   the shared writer directly, without a fresh transition per keyboard frame. */
+:root .modal-layer:has(> .exercise-search-sheet) { overflow:clip; }
+:root .modal-layer > :is(.screen,.sheet).exercise-search-sheet.is-search-browsing:is(.is-search-focused,[data-sheet-keyboard-open]) {
+  --exercise-search-top:max(12px, env(safe-area-inset-top));
+  scroll-padding:0;
+}
+:root .modal-layer > .screen.detail-screen.exercise-search-sheet.is-search-browsing:is(.is-search-focused,[data-sheet-keyboard-open]) > .detail-header {
+  min-height:64px;
+  padding-top:16px;
+  padding-bottom:4px;
+  margin-bottom:4px;
+}
+.exercise-search-sheet.is-search-browsing:is(.is-search-focused,[data-sheet-keyboard-open]) .exercise-search { margin-top:4px; margin-bottom:0; }
+.exercise-search-sheet.is-search-browsing:is(.is-search-focused,[data-sheet-keyboard-open]) .rook-search-field:has(> .exercise-search) > .rook-search-clear { margin-top:2px; }
+.exercise-search-sheet.is-search-browsing:is(.is-search-focused,[data-sheet-keyboard-open]) .sheet-back { min-height:44px; }

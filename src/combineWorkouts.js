@@ -1,5 +1,5 @@
 import {exerciseCatalog,exerciseName,isExerciseAllowed,isExerciseAutoGeneratable,isoDay,weekday,uid,validateProgram,priorityStimulusMusclesForProfile,makeProgramExercise,candidateScore} from './domain.js';
-import {flexibleSessions,flexibleWeekConflict} from './flexibleWeek.js';
+import {flexibleSessions,flexibleWeekConflict,actionableMissedSession} from './flexibleWeek.js';
 import {effectiveGymContext} from './gymProfiles.js';
 import {generatedSessionTiming} from './durationPlanning.js';
 import {compileProfileTrainingSafety,trainingSafetyBlocks} from './trainingSafety.js';
@@ -11,7 +11,7 @@ const clone=value=>structuredClone(value);
 export const combineFingerprint=state=>combinedStateToken([state.program,state.profile,state.gymProfiles,state.defaultGymProfileId,
   state.flexibleWeek,state.weekScheduleOverrides,state.workoutOccurrenceOverrides,state.workouts,state.optionalSessions,
   state.todayAdaptation,state.activeWorkout,state.activeOptionalSession]);
-export const combineSources=(state,today=isoDay())=>flexibleSessions(state,today).filter(s=>['missed','planned'].includes(s.status)&&!s.workout.optional);
+export const combineSources=(state,today=isoDay())=>flexibleSessions(state,today).filter(s=>(s.status==='planned'||actionableMissedSession(state,s,today))&&!s.workout.optional);
 const purpose=item=>{
   const p=item.pattern||'';
   if(['horizontal-push','incline-push'].includes(p))return 'press';

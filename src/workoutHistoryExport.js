@@ -1,3 +1,4 @@
+import { workoutPerformedDate as dateOf } from './workoutDates.js';
 import { exerciseName, exerciseMeasure } from './domain.js';
 import { loggingModeOf } from './advancedLogging.js';
 import { validSessionFeedback } from './sessionFeedback.js';
@@ -7,12 +8,7 @@ const number = value => typeof value === 'number' && Number.isFinite(value) ? va
 const text = value => typeof value === 'string' ? value : null;
 const timestamp = value => value != null && Number.isFinite(new Date(value).getTime()) ? new Date(value).toISOString() : null;
 export const completedExportWorkouts = state => (state.workouts || []).filter(w => timestamp(w.completedAt));
-function dateOf(w) {
-  if (w.historicalImport?.version === 2 && w.sourceDate?.day) return w.sourceDate.day;
-  const date = new Date(timestamp(w.startedAt) || w.completedAt);
-  if (Number.isFinite(w.utcOffsetMinutesAtStart)) return new Date(date.getTime() - w.utcOffsetMinutesAtStart * 60000).toISOString().slice(0,10);
-  return date.toISOString().slice(0,10);
-}
+
 function performance(s, measure) {
   const imported = s.rawImport?.version === 2;
   return { weight: number(s.weight), unit: 'kg', reps: imported ? number(s.reps) : measure === 'seconds' ? null : number(s.reps),
@@ -27,7 +23,7 @@ function portableWorkout(w, index, includeNotes, names) {
     workout_id: text(w.id) || `legacy-workout-${index + 1}`, workout_date: dateOf(w),
     started_at: w.historicalImport?.version === 2 ? text(w.startedAt) : timestamp(w.startedAt),
     completed_at: w.historicalImport?.version === 2 ? text(w.sourceEnd?.value) : timestamp(w.completedAt),
-    date_basis: w.historicalImport?.version === 2 ? 'source_local_date' : Number.isFinite(w.utcOffsetMinutesAtStart) ? 'recorded_start_offset' : 'UTC',
+    date_basis: w.historicalImport?.version === 2 ? 'source_local_date' : Number.isFinite(w.utcOffsetMinutesAtStart) ? 'recorded_start_offset' : w.timeZoneAtStart ? 'recorded_start_timezone' : 'local_date',
     workout_duration_seconds: number(w.durationSeconds), source_time_precision: text(w.sourceDate?.precision),
     scheduled_date: text(w.canonicalPlanDate || w.workoutDateKey), original_scheduled_date: text(w.originalScheduledDate),
     workout_name: text(w.name), adjusted: Boolean(w.adjustment), moved: Boolean(w.flexibleWeekMoved),

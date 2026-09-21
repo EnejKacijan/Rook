@@ -7,9 +7,50 @@ const MAX_SOURCE_BYTES = 15_000_000;
 const MAX_EDGE = 1600;
 const photoChangeListeners = new Set();
 
+// Evidence probe for a missing primary: never create a database or delete data.
+export async function hasStoredWorkoutMedia() {
+  if (typeof indexedDB === 'undefined') return false;
+  if (typeof indexedDB.databases === 'function') {
+    const databases = await indexedDB.databases();
+    if (!databases.some(db => db.name === DB_NAME)) return false;
+  }
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME);
+    let absent = false;
+    request.onupgradeneeded = () => { absent = true; request.transaction.abort(); };
+    request.onerror = () => absent ? resolve(false) : reject(request.error);
+    request.onblocked = () => reject(new Error('Photo storage is busy.'));
+    request.onsuccess = async () => {
+      const db = request.result;
+      try {
+        const stores = [PHOTO_STORE, RESTORE_SNAPSHOT_STORE].filter(name => db.objectStoreNames.contains(name));
+        if (!stores.length) { resolve(false); return; }
+        const tx = db.transaction(stores, 'readonly');
+        const counts = await Promise.all(stores.map(name => requestResult(tx.objectStore(name).count())));
+        resolve(counts.some(count => count > 0));
+      } catch (error) { reject(error); } finally { db.close(); }
+    };
+  });
+}
+
 export function subscribeWorkoutPhotoChanges(listener) {
   photoChangeListeners.add(listener);
   return () => photoChangeListeners.delete(listener);
+}
+
+export async function clearAllWorkoutMedia() {
+  if (typeof indexedDB === 'undefined') return;
+  const db = await openPhotoDatabase();
+  try {
+    await new Promise((resolve,reject) => {
+      const tx = db.transaction([PHOTO_STORE,RESTORE_SNAPSHOT_STORE], 'readwrite');
+      tx.oncomplete = resolve;
+      tx.onerror = tx.onabort = () => reject(tx.error || new Error('Photo deletion failed.'));
+      tx.objectStore(PHOTO_STORE).clear();
+      tx.objectStore(RESTORE_SNAPSHOT_STORE).clear();
+    });
+    notifyWorkoutPhotoChanges();
+  } finally { db.close(); }
 }
 
 // Publish only committed writes, never pending previews or staged restores.

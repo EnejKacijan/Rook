@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { blankState, deserializeState, serializeState } from "./domain.js";
 import { buildBackupArchive, parseBackupArchive } from "./backup.js";
+import { createReturningUserFixture } from './demoFixture.js';
 import {
   createGymProfile,
   normalizeGymProfilesState,
@@ -152,8 +153,9 @@ describe("plate calculator", () => {
   });
 
   it("round-trips configured bars and plates through Backup & Restore", async () => {
-    const state = blankState();
-    state.profile.onboardingComplete = true;
+    // A completed onboarding profile has a real plan; malformed backup state
+    // must no longer be silently normalized into an uninitialized profile.
+    const state = createReturningUserFixture(0);
     state.profile.equipment = ["full gym"];
     normalizeGymProfilesState(state, "2026-09-05T12:00:00.000Z");
     state.gymProfiles[0].plateSetup = normalizePlateSetup({

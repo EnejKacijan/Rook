@@ -9,7 +9,8 @@ globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let root;
 afterEach(()=>{act(()=>root?.unmount());root=null;document.body.innerHTML='';vi.restoreAllMocks();});
 const fixture=()=>{const s=createReturningUserFixture(2);s.profile.name='Recovery fixture';s.profile.units='lb';s.profile.avoid='No jumping';s.workouts[0].sessionNote='Keep this note';s.customExercises=[{id:'custom-recovery',name:'Recovery exercise',equipment:['other'],primaryMuscle:'Full body',loggingType:'weight_reps',createdAt:'2026-09-01T12:00:00Z'}];return deserializeState(s);};
-const storage=raw=>({getItem:vi.fn(()=>raw),setItem:vi.fn(),removeItem:vi.fn()});
+// Model real keyed storage; recovery metadata must not alias the primary value.
+const storage=raw=>({getItem:vi.fn((key=STORAGE_KEY)=>key===STORAGE_KEY?raw:null),setItem:vi.fn(),removeItem:vi.fn()});
 const untouched=s=>{expect(s.setItem).not.toHaveBeenCalled();expect(s.removeItem).not.toHaveBeenCalled();};
 it('ready read preserves existing migrations and every fixture field without any mutation',()=>{
  const s=fixture(),raw=serializeState(s),store=storage(raw),result=readStartupState(store);

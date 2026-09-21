@@ -53,9 +53,10 @@ assert.equal(await page.locator('.exercise-preview .exercise-row-main img').coun
 assert.equal(await page.getByText('WORKOUT EXERCISES', { exact: true }).count(), 1, 'another workout date uses the neutral workout heading while today remains active');
 await page.screenshot({ path: output('390-other-workout-with-active.png'), fullPage: false });
 await page.locator('.active-workout-notice').getByRole('button', { name: /Resume .* workout/ }).click();
-assert.equal(await page.locator('.exercise-heading h1').count(), 1, 'compact Resume opens the existing active session');
+assert.equal(await page.locator('.exercise-heading h1:not(.workout-motion-paint *)').count(), 1, 'compact Resume opens the existing active session');
 await page.getByRole('button', { name: 'Back to Today' }).click();
-assert.equal(await page.locator('.active-workout-notice').count(), 1, 'returning from Resume preserves the separately viewed day');
+assert.equal(await page.locator('.active-workout-hero').count(), 1, 'Resume returns to the canonical Today date, with the same active session');
+await page.locator('[data-week-offset="0"] .week-strip .workout-planned:not(.selected-day)').first().click();
 for (const theme of ['dark', 'premium']) {
   await page.evaluate(themePreference => {
     const state = JSON.parse(localStorage.getItem('lift-v2-state'));
@@ -91,18 +92,30 @@ for (const width of [375, 390, 430, 500]) {
 }
 await page.setViewportSize({ width: 390, height: 844 });
 
-await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-v2-state')); state.activeWorkout.startedAt = Date.now() - 130 * 60 * 60 * 1000; localStorage.setItem('lift-v2-state', JSON.stringify(state)); });
-await page.reload({ waitUntil: 'networkidle' }); assert.match(await page.locator('.active-workout-hero > p').textContent(), new RegExp(`^0 / ${totalSets} sets · 99\\+ h$`)); assert.equal(await page.locator('.active-workout-hero > p').evaluate(element => element.scrollWidth <= element.clientWidth), true, 'abnormal duration stays inside the metadata row');
-await page.evaluate(() => { const state = JSON.parse(localStorage.getItem('lift-v2-state')); state.activeWorkout.startedAt = Date.now() - 18 * 60 * 1000; localStorage.setItem('lift-v2-state', JSON.stringify(state)); }); await page.reload({ waitUntil: 'networkidle' });
+// Seed before startup instead of rewriting a live persistence checkpoint.
+const abnormalState=fixture();abnormalState.activeWorkout.startedAt=Date.now()-130*60*60*1000;
+const abnormalContext=await browser.newContext({viewport:{width:390,height:844}});
+await abnormalContext.addInitScript(state=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(state));},abnormalState);
+const abnormalPage=await abnormalContext.newPage();await abnormalPage.goto(appUrl,{waitUntil:'networkidle'});
+// Open a different date: Today is still the source occurrence of this old
+// execution and correctly offers its linked Resume action, not a second notice.
+await abnormalPage.locator('.week-strip button:not([aria-current="date"])').first().click();
+const abnormalProgress=abnormalPage.locator('.active-workout-notice-progress');
+const abnormalDate=new Intl.DateTimeFormat('en',{weekday:'long',month:'short',day:'numeric'}).format(new Date(abnormalState.activeWorkout.startedAt));
+assert.equal(await abnormalProgress.textContent(),`${abnormalDate} · 0 / ${totalSets} sets · 99+ h`);
+assert.equal(await abnormalProgress.evaluate(element=>element.scrollWidth<=element.clientWidth),true,'abnormal duration stays inside the metadata row on its correctly dated session');
+await abnormalContext.close();
 
 await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
-await page.getByRole('spinbutton', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('32.5');
+await page.getByRole('textbox', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('32.5');
+await page.getByRole('textbox', { name: /Weight(?: \(optional\))? in kg for set 1/ }).press('Enter');
 await page.getByRole('button', { name: 'Log set 1' }).click();
 await page.locator('.rest-timer').getByRole('button', { name: 'SKIP' }).click();
 await page.getByRole('button', { name: 'NEXT EXERCISE →' }).click();
 await page.getByRole('button', { name: /SKIP INCOMPLETE SETS?/ }).click();
-const currentExercise = await page.locator('.exercise-heading h1').textContent();
-await page.getByRole('spinbutton', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('47.5');
+const currentExercise = await page.locator('.exercise-heading h1:not(.workout-motion-paint *)').textContent();
+await page.getByRole('textbox', { name: /Weight(?: \(optional\))? in kg for set 1/ }).fill('47.5');
+await page.getByRole('textbox', { name: /Weight(?: \(optional\))? in kg for set 1/ }).press('Enter');
 await page.getByRole('button', { name: 'Log set 1' }).click();
 await page.getByRole('button', { name: 'Back to Today' }).click();
 assert.match(await page.locator('.active-workout-hero > p').textContent(), new RegExp(`^2 / ${totalSets} sets · 18 min$`));
@@ -115,8 +128,8 @@ assert.equal(await page.getByRole('button', { name: 'RESUME WORKOUT' }).count(),
 await page.reload({ waitUntil: 'networkidle' });
 assert.match(await page.locator('.active-workout-hero > p').textContent(), new RegExp(`^2 / ${totalSets} sets · 18 min$`));
 await page.getByRole('button', { name: 'RESUME WORKOUT' }).click();
-assert.equal(await page.locator('.exercise-heading h1').textContent(), currentExercise, 'resume restores the exact exercise');
-assert.equal(await page.getByRole('spinbutton', { name: /Weight in kg for set 1/ }).inputValue(), '47.5', 'resume restores entered weight');
+assert.equal(await page.locator('.exercise-heading h1:not(.workout-motion-paint *)').textContent(), currentExercise, 'resume restores the exact exercise');
+assert.equal(await page.getByRole('textbox', { name: /Weight in kg for set 1/ }).inputValue(), '47.5', 'resume restores entered weight');
 assert.equal(await page.getByRole('button', { name: 'Undo logged set 1' }).count(), 1, 'resume restores completed sets');
 assert.equal(await page.locator('.rest-timer').isVisible(), true, 'resume restores the relevant rest timer');
 
@@ -126,7 +139,7 @@ await page.getByRole('heading', { name: 'Workout ended early' }).waitFor();
 await page.getByRole('button', { name: 'DONE' }).click();
 assert.equal(await page.getByRole('button', { name: 'RESUME WORKOUT' }).count(), 0, 'resume state disappears after finishing');
 assert.equal(await page.getByRole('button', { name: 'SHARE WORKOUT' }).count(), 0, 'completed Today state also omits per-session export');
-assert.equal(await page.getByText(/completed/, { exact: false }).count() > 0, true, 'Today shows the completed state');
+assert.equal(await page.getByRole('button', {name:'SESSION ENDED · VIEW HISTORY',exact:true}).count(),1,'Today shows the ended-early session history action');
 assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout), null);
 assert.deepEqual(errors, [], `console errors: ${errors.join('; ')}`);
 
