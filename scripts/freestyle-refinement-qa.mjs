@@ -32,7 +32,11 @@ try { for(const width of [320,390]) for(const appearance of ['light','dark']) fo
  }
  assert.equal(await page.getByRole('button',{name:'Remove exercise',exact:true}).count(),0);
  assert.equal(await page.getByRole('button',{name:'Replace',exact:true}).count(),1);
- assert.equal(await page.getByRole('button',{name:'Cancel workout',exact:true}).count(),mode==='logged'?0:1);
+ assert.equal(await page.getByRole('button',{name:'Cancel workout',exact:true}).count(),0,'Cancel belongs in Workout options');
+ await page.getByRole('button',{name:'Workout options',exact:true}).click();
+ await page.locator('.active-workout-options-sheet').waitFor();
+ assert.equal(await page.getByRole('button',{name:'Cancel workout',exact:true}).isEnabled(),true,'Logged and unlogged sessions can be cancelled through the guarded menu');
+ await page.keyboard.press('Escape');await page.locator('.active-workout-options-sheet').waitFor({state:'detached'});
  const gap=await page.evaluate(()=>document.querySelector('.sets').getBoundingClientRect().top-document.querySelector('.freestyle-previous').getBoundingClientRect().bottom);
  assert.ok(gap>=0&&gap<=1,`unexpected extra gap ${gap}`);
  assert.equal(await page.locator('.sets').evaluate(e=>getComputedStyle(e).paddingTop),'20px');

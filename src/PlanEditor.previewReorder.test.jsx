@@ -6,13 +6,13 @@ import {createReturningUserFixture} from './demoFixture.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let root, host;
-afterEach(async () => { if (root) await act(async () => root.unmount()); root = null; host?.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); });
+afterEach(async () => { if (root) await act(async () => root.unmount()); root = null; host?.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers(); });
 const button = text => [...host.querySelectorAll('button')].find(node => node.textContent.trim() === text || node.getAttribute('aria-label') === text);
 const click = async text => act(async () => button(text).click());
 const cards = () => [...host.querySelectorAll('.plan-editor-exercise')];
 const event = (target, type, fields = {}) => { const e = new Event(type, {bubbles:true,cancelable:true}); Object.assign(e,fields); target.dispatchEvent(e); return e; };
 async function mount({mode = 'review', generatedAcceptance = true, pair = false} = {}) {
-  vi.stubGlobal('matchMedia', () => ({matches:true,addEventListener(){},removeEventListener(){}}));
+  vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});vi.stubGlobal('matchMedia', () => ({matches:true,addEventListener(){},removeEventListener(){}}));
   vi.stubGlobal('scrollTo', () => {});
   const state = createReturningUserFixture(0), source = structuredClone(state.program);
   source.days = source.days.slice(0,2);
@@ -82,6 +82,7 @@ it.each(['touchcancel','pointercancel','Escape','Done reordering','Back'])('canc
   const handle = host.querySelector('.plan-workout-drag-surface'), point = {identifier:5,clientX:30,clientY:200};
   await act(async () => event(handle,'touchstart',{touches:[point]}));
   expect(host.querySelector('.is-week-reordering')).toBeNull();
+  await act(async () => vi.advanceTimersByTime(300));
   await act(async () => event(handle,'touchmove',{touches:[{...point,clientY:220}]}));
   expect(host.querySelector('.is-week-reordering')).not.toBeNull();
   if (reason === 'Done reordering' || reason === 'Back') await click(reason);

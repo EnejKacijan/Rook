@@ -16,6 +16,14 @@ it('defers only opted-in offscreen art, retains its slot and action, and release
  act(()=>notify([{isIntersecting:false}]));expect(host.querySelector('img')).toBeNull();
  act(()=>notify([{isIntersecting:true}]));expect(host.querySelector('.exercise-picker-thumbnail')).toBe(slot);expect(host.querySelector('img').width).toBe(44);expect(disconnect).toHaveBeenCalled();
 });
+it('loads the first result window eagerly and observes farther rows without a second native lazy gate',()=>{
+ const observe=vi.fn();vi.stubGlobal('IntersectionObserver',class{constructor(){}observe=observe;disconnect(){}});
+ host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ const item=Object.values(exerciseCatalog).find(i=>i.artId);
+ act(()=>root.render(<ExercisePickerIdentity item={item} priority/>));
+ const img=host.querySelector('img');expect(img.getAttribute('loading')).toBe('eager');expect(img.getAttribute('fetchpriority')).toBe('high');expect(observe).not.toHaveBeenCalled();
+ act(()=>root.render(<ExercisePickerIdentity item={item} priority/>));expect(host.querySelector('img')).toBe(img);
+});
 it('disconnects a deferred thumbnail if the picker closes before it becomes visible',()=>{
  const disconnect=vi.fn();vi.stubGlobal('IntersectionObserver',class{observe(){}disconnect=disconnect;});
  host=document.createElement('div');document.body.append(host);root=createRoot(host);

@@ -50,5 +50,5 @@ export function useExerciseRemoveUndo() {
   useEffect(()=>{if(notice?.valid && !notice.valid()){clearTimeout(timer.current);setNotice(null);}});
   const clear=()=>{clearTimeout(timer.current);setNotice(null);};
   return {show:next=>{clearTimeout(timer.current);setNotice(next);timer.current=setTimeout(()=>setNotice(null),5000);},clear,
-    surface:notice&&<aside className="today-undo exercise-remove-undo" role="status" aria-live="polite"><span>{notice.message}</span><button type="button" onClick={()=>{clearSwipeRowExits();notice.undo();clear();}}>Undo</button></aside>};
+    surface:notice&&<aside className="today-undo exercise-remove-undo" role="status" aria-live="polite"><span>{notice.message}</span><button type="button" onClick={()=>{clearSwipeRowExits();if(notice.undo()!==false)clear();}}>Undo</button></aside>};
 }

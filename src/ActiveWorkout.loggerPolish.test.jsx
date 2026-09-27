@@ -44,7 +44,7 @@ function mount({ rirEnabled = true, kind = "weighted" } = {}) {
   const template = structuredClone(state.program.days[0]);
   template.exercises = template.exercises.slice(0, 1);
   template.exercises[0].exerciseId = kind === "timed" ? "plank" : "barbell-bench-press";
-  template.exercises[0].loggingMode = kind === "timed" ? "timed" : "normal";
+  template.exercises[0].loggingMode = kind === "per-side" ? "per_side" : kind === "timed" ? "timed" : "normal";
   state.activeWorkout = startWorkout(state, template);
   state.activeWorkout.exercises[0].sets = state.activeWorkout.exercises[0].sets.slice(0, 2);
   state.activeWorkout.exercises[0].sets.forEach((set, index) => {
@@ -53,6 +53,7 @@ function mount({ rirEnabled = true, kind = "weighted" } = {}) {
       reps: kind === "timed" ? 30 : 8,
       rir: rirEnabled && kind !== "timed" ? 2 : null,
       completed: index === 0,
+      ...(kind === 'per-side' ? {sides:{left:{reps:8},right:{reps:7}}} : {}),
     });
   });
   function Harness() {
@@ -73,6 +74,20 @@ function mount({ rirEnabled = true, kind = "weighted" } = {}) {
 
 const labels = () => [...host.querySelectorAll(".set-labels .logger-column-label")];
 const firstRow = () => host.querySelector('.set-row[aria-label="set 1"]');
+
+it.each([true,false])('groups per-side reps explicitly and keeps independent entry and one completion (RIR=%s)', rirEnabled => {
+  mount({kind:'per-side',rirEnabled});
+  const row=host.querySelector('.set-row[aria-label="set 2"]'),group=row.querySelector('[role="group"]');
+  const original=structuredClone(current.activeWorkout.exercises[0]);
+  expect(group.getAttribute('aria-label')).toBe('Reps per side for set 2');expect(group.textContent).toContain('REPS / SIDE');
+  expect(group.querySelectorAll('input')).toHaveLength(2);expect(row.querySelectorAll('.check')).toHaveLength(1);
+  act(()=>group.querySelector('[aria-label="Increase left reps for set 2"]').click());
+  expect(current.activeWorkout.exercises[0].sets[1].sides).toEqual({left:{reps:9},right:{reps:7}});
+  expect(current.activeWorkout.exercises[0].sets[1].weight).toBe(40);
+  act(()=>row.querySelector('.check').click());
+  expect(current.activeWorkout.exercises[0].sets[1].completed).toBe(true);
+  expect(current.activeWorkout.exercises[0].sets.map(s=>s.id)).toEqual(original.sets.map(s=>s.id));
+});
 
 it("uses one shared label class, hides DONE, and preserves completion semantics", () => {
   mount();

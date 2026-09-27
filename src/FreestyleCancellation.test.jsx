@@ -1,17 +1,19 @@
 import React,{act,useState,StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
-import {ActiveWorkout} from './App.jsx';
+import {ActiveWorkout, ActiveWorkoutOptions, ModalLayer} from './App.jsx';
 import * as domain from './domain.js';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startFreestyleWorkout,addFreestyleExercise,removeFreestyleExercise} from './freestyleWorkout.js';
 import {templateDraft,saveWorkoutTemplate,useSavedWorkout} from './savedWorkouts.js';
+import {calendarStatusFixture} from './calendarStatus.fixture.js';
+import {flexibleOccurrenceForDate} from './flexibleWeek.js';
 
 let host,root,current,change,navigate,save;
 const advance=ms=>act(()=>vi.advanceTimersByTime(ms));
 const click=node=>act(()=>node.click());
-const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
-const dialog=()=>document.querySelector('.freestyle-cancel-confirm');
+const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text||b.getAttribute('aria-label')===text);
+const dialog=()=>document.querySelector('.active-workout-options-sheet:has(#cancel-workout-detail)');
 const screen=()=>host.querySelector('[data-active-workout]');
 function seed(count=1){
   let state=startFreestyleWorkout(createReturningUserFixture(0));state.profile.rirEnabled=true;
@@ -19,16 +21,17 @@ function seed(count=1){
   state.activeWorkout.rest={endsAt:Date.now()+90000,seconds:90};return state;
 }
 function mount(initial=seed()){
-  function Harness(){const[state,setState]=useState(initial);current=state;
+  function Harness(){const[state,setState]=useState(initial),[detail,setDetail]=useState(null);current=state;
     change=fn=>setState(s=>fn(structuredClone(s)));
-    return <ActiveWorkout state={state} update={change} setPage={navigate} setDetail={()=>{}}/>;
+    return <><ActiveWorkout state={state} update={change} setPage={navigate} setDetail={setDetail}/>
+      {detail?.workoutOptions&&<ModalLayer close={()=>setDetail(null)} backgroundRef={{current:screen()}}>{close=><ActiveWorkoutOptions {...detail} workout={state.activeWorkout} close={close}/>}</ModalLayer>}</>;
   }
   act(()=>root.render(<StrictMode><Harness/></StrictMode>));advance(40);
 }
-const open=()=>{click(button('Cancel workout'));advance(40);};
+const open=()=>{click(screen().querySelector('[aria-label="Workout options"]'));advance(40);click(button('Cancel workout'));advance(40);};
 const type=(input,value)=>act(()=>{input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
 beforeEach(()=>{
-  globalThis.IS_REACT_ACT_ENVIRONMENT=true;vi.useFakeTimers();
+  globalThis.IS_REACT_ACT_ENVIRONMENT=true;vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-21T12:00:00'));
   vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));
   vi.stubGlobal('requestAnimationFrame',fn=>setTimeout(fn,16));vi.stubGlobal('cancelAnimationFrame',clearTimeout);
   vi.spyOn(window,'scrollTo').mockImplementation(()=>{});
@@ -46,11 +49,11 @@ it.each(['empty','removed'])('%s freestyle cancels immediately using the domain 
   expect(current.program).toEqual(state.program);expect(current.workouts).toEqual(state.workouts);
 });
 it('opening and KEEP preserve the entire workout, identities, order, rest, scroll and input nodes without a save',()=>{
-  mount(seed(3));const before=structuredClone(current),main=screen(),input=main.querySelector('input'),trigger=button('Cancel workout');main.scrollTop=320;
+  mount(seed(3));const before=structuredClone(current),main=screen(),input=main.querySelector('input'),trigger=main.querySelector('[aria-label="Workout options"]');main.scrollTop=320;
   open();expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();expect(navigate).not.toHaveBeenCalled();
   expect(dialog().getAttribute('role')).toBe('dialog');expect(dialog().getAttribute('aria-modal')).toBe('true');
   expect(document.getElementById(dialog().getAttribute('aria-labelledby')).textContent).toBe('Cancel workout?');
-  expect(document.getElementById(dialog().getAttribute('aria-describedby')).textContent).toContain('unlogged entries');
+  expect(document.getElementById(dialog().getAttribute('aria-describedby')).textContent).toContain('Your changes from this session');
   expect(document.activeElement).toBe(button('KEEP WORKOUT'));expect(main.inert).toBe(true);
   click(button('KEEP WORKOUT'));advance(40);advance(20);
   expect(dialog()).toBeNull();expect(current).toEqual(before);expect(main.inert).toBe(false);
@@ -58,7 +61,7 @@ it('opening and KEEP preserve the entire workout, identities, order, rest, scrol
 });
 it('explicit cancellation clears only the active freestyle, saves once and creates no history or plan changes',()=>{
   mount(seed(2));const before=structuredClone(current);open();const confirm=button('CANCEL WORKOUT');act(()=>{confirm.click();confirm.click();});
-  expect(current).toEqual({...before,activeWorkout:null});expect(save).toHaveBeenCalledOnce();
+  expect(current).toEqual({...before,activeWorkout:null,selectedDate:domain.isoDay(),selectedDay:'Mon'});expect(save).toHaveBeenCalledOnce();
   expect(domain.loadState().activeWorkout).toBeNull();expect(navigate).toHaveBeenCalledExactlyOnceWith('today');
 });
 it.each(['142,5',''])('raw draft %s survives opening/KEEP without committing; later ordinary input still commits',raw=>{
@@ -71,7 +74,7 @@ it.each(['142,5',''])('raw draft %s survives opening/KEEP without committing; la
 it('weight, reps and RIR entries are retained by KEEP and discarded only by explicit confirmation',()=>{
   const state=seed();Object.assign(state.activeWorkout.exercises[0].sets[0],{weight:72.5,reps:13,rir:2,touched:true});mount(state);
   const before=structuredClone(current);open();click(button('KEEP WORKOUT'));advance(40);advance(20);expect(current).toEqual(before);
-  open();expect(current).toEqual(before);click(button('CANCEL WORKOUT'));expect(current).toEqual({...before,activeWorkout:null});
+  open();expect(current).toEqual(before);click(button('CANCEL WORKOUT'));expect(current).toEqual({...before,activeWorkout:null,selectedDate:domain.isoDay(),selectedDay:'Mon'});
 });
 it.each(['start','append'])('Saved Workout %s content requires confirmation and leaves the saved template unchanged',mode=>{
   let state=seed(2);state=saveWorkoutTemplate(state,{...templateDraft(state.activeWorkout,state),name:'Saved workout'},{id:'cancel-template'});
@@ -79,27 +82,28 @@ it.each(['start','append'])('Saved Workout %s content requires confirmation and 
     ?useSavedWorkout({...state,activeWorkout:null},{templateId:'cancel-template',revision:1,requestId:'start-cancel-test'})
     :useSavedWorkout(state,{templateId:'cancel-template',revision:1,sessionId:state.activeWorkout.id,requestId:'append-cancel-test',confirmDuplicates:true});
   mount(state);const before=structuredClone(current);open();expect(dialog()).not.toBeNull();expect(current).toEqual(before);
-  click(button('CANCEL WORKOUT'));expect(current).toEqual({...before,activeWorkout:null});
+  click(button('CANCEL WORKOUT'));expect(current).toEqual({...before,activeWorkout:null,selectedDate:domain.isoDay(),selectedDay:'Mon'});
 });
-it('completed sets keep Cancel workout unavailable',()=>{
+it('completed sets require explicit cancellation and do not create history',()=>{
   const state=seed();Object.assign(state.activeWorkout.exercises[0].sets[0],{weight:60,reps:10,completed:true});mount(state);
-  expect(button('Cancel workout')).toBeUndefined();expect(dialog()).toBeNull();
+  const before=structuredClone(current);open();expect(dialog()).not.toBeNull();expect(dialog().textContent).toContain('1 completed set');
+  click(button('KEEP WORKOUT'));advance(60);expect(current).toEqual(before);
+  open();click(button('CANCEL WORKOUT'));expect(current.activeWorkout).toBeNull();expect(current.workouts).toEqual(before.workouts);
 });
-it.each(['KEEP WORKOUT','Back','handle','Escape','backdrop'])('%s is a safe dismissal with focus restoration',path=>{
-  mount();const before=structuredClone(current),trigger=button('Cancel workout');open();
-  if(path==='Back')click(dialog().querySelector('[aria-label="Back"]'));
-  else if(path==='handle')click(dialog().querySelector('.modal-drag-handle'));
+it.each(['KEEP WORKOUT','Close','handle','Escape','backdrop'])('%s is a safe dismissal with focus restoration',path=>{
+  mount();const before=structuredClone(current),trigger=screen().querySelector('[aria-label="Workout options"]');open();
+  if(path==='Close')click(dialog().querySelector('[aria-label="Close"]'));
+  else if(path==='handle')click(dialog().querySelector('.sheet-grab-zone'));
   else if(path==='Escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
   else if(path==='backdrop')click(dialog().parentElement);
   else click(button(path));
   advance(40);advance(20);expect(dialog()).toBeNull();expect(current).toEqual(before);expect(document.activeElement).toBe(trigger);
   expect(save).not.toHaveBeenCalled();expect(navigate).not.toHaveBeenCalled();
 });
-it.each(['logged','different-session','different-source'])('stale confirmation fails safely after %s',changeKind=>{
+it.each(['different-session','disappeared'])('stale confirmation fails safely after %s',changeKind=>{
   mount();open();act(()=>change(s=>{
-    if(changeKind==='logged')s.activeWorkout.exercises[0].sets[0].completed=true;
     if(changeKind==='different-session')s.activeWorkout.id='replacement-session';
-    if(changeKind==='different-source')s.activeWorkout.source='repeat';
+    if(changeKind==='disappeared')s.activeWorkout=null;
     return s;
   }));
   const before=structuredClone(current),confirm=button('CANCEL WORKOUT');
@@ -113,4 +117,43 @@ it('failed persistence keeps the workout and confirmation instead of navigating'
 it('normal Back only navigates and never opens cancellation or clears the active workout',()=>{
   mount();const before=structuredClone(current);click(screen().querySelector('[aria-label="Back to Today"]'));
   expect(navigate).toHaveBeenCalledExactlyOnceWith('today');expect(current).toEqual(before);expect(dialog()).toBeNull();expect(save).not.toHaveBeenCalled();
+});
+function planned(logged=0) {
+  const state=calendarStatusFixture('active-planned');state.profile.showExerciseImages=false;
+  state.activeWorkout.exercises.flatMap(e=>e.sets).slice(0,logged).forEach(set=>Object.assign(set,{weight:20,reps:8,completed:true}));
+  return state;
+}
+it('untouched planned workout cancels immediately and its source remains available',()=>{
+  mount(planned());const before=structuredClone(current);open();expect(dialog()).toBeNull();expect(current.activeWorkout).toBeNull();
+  expect(current.program).toEqual(before.program);expect(current.workouts).toEqual(before.workouts);
+  expect(flexibleOccurrenceForDate(current,'2026-09-21').status).toBe('planned');expect(navigate).toHaveBeenCalledExactlyOnceWith('today');
+});
+it('four completed planned sets require confirmation, KEEP preserves everything, double confirm cancels once',()=>{
+  mount(planned(4));const before=structuredClone(current);open();expect(dialog().textContent).toContain('4 completed sets');
+  click(button('KEEP WORKOUT'));advance(60);expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();
+  open();const confirm=button('CANCEL WORKOUT');act(()=>{confirm.click();confirm.click();});
+  expect(save).toHaveBeenCalledOnce();expect(navigate).toHaveBeenCalledExactlyOnceWith('today');expect(current.activeWorkout).toBeNull();
+  expect(current.workouts).toEqual(before.workouts);expect(current.program).toEqual(before.program);expect(domain.loadState().activeWorkout).toBeNull();
+});
+it.each(['.','123,5',''])('planned raw draft %s requires confirmation without committing, and KEEP preserves the input',raw=>{
+  const initial=planned();initial.activeWorkout.exercises[0].sets[0].weight=60;initial.activeWorkout.restartSnapshot.exercises[0].sets[0].weight=60;
+  mount(initial);const weight=screen().querySelector('[aria-label="Weight in kg for set 1"]');type(weight,raw);
+  const before=structuredClone(current);open();expect(dialog()).not.toBeNull();expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();
+  click(button('KEEP WORKOUT'));advance(60);expect(weight.value).toBe(raw);expect(current).toEqual(before);
+  open();click(button('CANCEL WORKOUT'));expect(current.activeWorkout).toBeNull();expect(current.workouts).toEqual(before.workouts);
+});
+it('a planned raw value reverted to its original number does not trigger a historical warning',()=>{
+  mount(planned());const weight=screen().querySelector('[aria-label="Weight in kg for set 1"]');const original=weight.value;
+  type(weight,'123');type(weight,original);open();expect(dialog()).toBeNull();expect(current.activeWorkout).toBeNull();
+});
+it('failed planned cancel retains the full session and supports a successful retry',()=>{
+  mount(planned(4));const before=structuredClone(current);domain.saveState(before);save.mockClear();open();save.mockReturnValueOnce(false);
+  click(button('CANCEL WORKOUT'));expect(current).toEqual(before);expect(domain.loadState().activeWorkout.id).toBe(before.activeWorkout.id);
+  expect(navigate).not.toHaveBeenCalled();expect(dialog().querySelector('[role="alert"]').textContent).toContain('Could not save');
+  click(button('CANCEL WORKOUT'));expect(current.activeWorkout).toBeNull();expect(navigate).toHaveBeenCalledExactlyOnceWith('today');
+});
+it('Finish anyway and Cancel expose different UI/domain paths for the same four sets',()=>{
+  mount(planned(4));const before=structuredClone(current);click(button('Finish'));advance(40);click(button('FINISH ANYWAY'));
+  expect(current.workouts).toHaveLength(before.workouts.length+1);expect(current.workouts.at(-1).completedSetCount).toBe(4);
+  expect(navigate).toHaveBeenCalledExactlyOnceWith('complete');
 });

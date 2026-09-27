@@ -36,8 +36,10 @@ export { weekLabel } from './WeekPager.jsx';
 import './profileHub.css';
 import { calendarRange } from './workoutCalendar.js';
 import { completionRecognition } from './completionRecognition.js';
+import {completeWorkoutReversibly, canContinueWorkout, continueWorkout} from './workoutCompletion.js';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
 import { FreestyleEntry, FreestyleActions, FreestyleExercisePicker, FreestylePrevious } from './FreestyleWorkout.jsx';
+import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancellation.js';
 import { removeFreestyleExercise } from './freestyleWorkout.js';
 import { adjustedMovedLabel } from './progressPresentation.js';
 import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
@@ -95,6 +97,7 @@ import { WorkoutPhotoCompare } from './WorkoutPhotoCompare.jsx';
 import { BlockReviewSheet } from './BlockReviewSheet.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
+import { MissedWorkoutFeedbackProvider } from './MissedWorkoutFeedback.jsx';
 import { flexibleSourceForDate, flexibleWeekConflict, missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek, flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import {
@@ -211,7 +214,6 @@ import {
   buildReplacementProgram,
   coachActionConflict,
   combinedTrainingPriorities,
-  completeWorkout,
   completedWorkoutCanResume,
   cancelOptionalSession,
   compatibleReplacementCandidates,
@@ -4224,6 +4226,7 @@ export function formatWorkoutElapsedDuration(seconds) {
 function TodayExerciseRow({
   exercise,
   detail,
+  result,
   profile,
   setDetail,
   actions,
@@ -4349,7 +4352,7 @@ function TodayExerciseRow({
           </span>
         </span>
         <span className="navigation-row-end">
-          <span>{targetLabel(exercise, profile.rirEnabled)}</span>
+          <span>{result ?? targetLabel(exercise, profile.rirEnabled)}</span>
         </span>
       </ExerciseNavigationButton>
     </div>
@@ -5566,6 +5569,7 @@ export function Today({
               key={exercise.id}
               exercise={exercise}
               detail={detail}
+              result={completed ? exerciseHistoryPerformanceLabel(exercise, exercise.sets) || 'Not logged' : undefined}
               profile={state.profile}
               setDetail={setDetail}
               actions={actionForExercise(exercise)}
@@ -5686,7 +5690,7 @@ export function Stepper({
     if (!deferred) return;
     const input = inputRef.current;
     const listener = event => { if (draftRef.current !== null && !commit(draftRef.current)) event.preventDefault(); };
-    const snapshot = event => { event.detail.snapshot={draft:draftRef.current,committed:committedDraft.current}; };
+    const snapshot = event => { event.detail.snapshot={draft:draftRef.current,committed:committedDraft.current,value:currentValue.current}; };
     const restore = event => {
       const saved=event.detail?.snapshot;
       draftRef.current=saved?.draft??null;committedDraft.current=saved?.committed??null;
@@ -5822,7 +5826,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const [restCompleteVisible, setRestCompleteVisible] = useState(false);
   const screenRef = useRef(null);
   const [rirSet, setRirSet] = useState(null);
-  const preserveFreestyleDraftsRef = useRef(false);
+  const preserveWorkoutDraftsRef = useRef(false);
   const draftResolverRef = useRef(null);
 
   const upNextUndo = useExerciseRemoveUndo();
@@ -5842,7 +5846,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   };
   const commitBeforeAction = event => {
     const button = event.target.closest('button,select');
-    if (!button || button.closest('[role="dialog"]') || button.hasAttribute('data-freestyle-cancel')) return;
+    if (!button || button.closest('[role="dialog"]') || button.hasAttribute('data-workout-options')) return;
     draftResolverRef.current = button;
     try {
       if (!commitWorkoutDrafts(button.closest('.stepper'), workoutDraftScope(button))) { event.preventDefault(); event.stopPropagation(); }
@@ -5857,6 +5861,35 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   };
   const exerciseHeadingRef = useRef(null);
   const workoutActionLockRef = useRef(false);
+  const hasPendingWorkoutDrafts = () => [...screenRef.current?.querySelectorAll('[data-workout-draft]') || []].some(input => {
+    const detail = {};
+    input.dispatchEvent(new CustomEvent('rook-snapshot-draft', {detail}));
+    const snapshot = detail.snapshot;
+    return snapshot?.draft != null && (normalizeStepperValue(snapshot.draft) === undefined ||
+      normalizeStepperValue(snapshot.draft) !== normalizeStepperValue(snapshot.value ?? ''));
+  });
+  const cancelWorkout = sessionId => {
+    if (workoutActionLockRef.current) return false;
+    workoutActionLockRef.current = true;
+    try {
+      const result = queueAction.commit(current => cancelActiveWorkout(current, sessionId));
+      if (!result.changed) { workoutActionLockRef.current = false; return false; }
+      upNextUndo.clear();
+      setDetail(null);
+      setPage('today');
+      return true;
+    } catch (error) {
+      workoutActionLockRef.current = false;
+      throw error;
+    }
+  };
+  const openWorkoutOptions = (onRestart = null) => {
+    preserveWorkoutDraftsRef.current = true;
+    focusNavigationTarget(screenRef.current?.querySelector('.workout-options-trigger'));
+    setDetail({workoutOptions: true, onRestart, onCancelWorkout: cancelWorkout,
+      hasPendingDrafts: hasPendingWorkoutDrafts,
+      draftGuard: preserveWorkoutDraftsRef});
+  };
   const upNextQueueRef=useRef(null);
   useSwipeActionList(upNextQueueRef);
   const queueGroups=upNextReorderGroups(active);
@@ -6002,8 +6035,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     );
   const exercise = currentExercise;
   if (active.source === 'freestyle' && !exercise) return <main ref={screenRef} data-active-workout="true" className="screen workout-screen freestyle-workout">
-    <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center"><strong>Freestyle workout</strong><small>{formatWorkoutElapsedDuration(Math.floor((now - active.startedAt) / 1000))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button></span></header>
-    <section className="freestyle-empty"><h1>No exercises yet</h1><p>Add the first exercise when you’re ready. Your plan won’t change.</p><FreestyleActions state={state} update={update} setDetail={setDetail} setPage={setPage} Modal={ModalLayer} Header={SheetHeader} backgroundRef={screenRef} preserveDraftsRef={preserveFreestyleDraftsRef} /></section>
+    <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center"><strong>Freestyle workout</strong><small>{formatWorkoutElapsedDuration(Math.floor((now - active.startedAt) / 1000))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button><button type="button" className="workout-options-trigger" aria-label="Workout options" onClick={()=>openWorkoutOptions()}><OverflowIcon/></button></span></header>
+    <section className="freestyle-empty"><h1>No exercises yet</h1><p>Add the first exercise when you’re ready. Your plan won’t change.</p><FreestyleActions setDetail={setDetail} /></section>
   </main>;
   const exerciseIllustration = activeArtwork.source;
   const superset = supersetMeta(active.exercises, active.exerciseIndex);
@@ -6327,13 +6360,13 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       // publishing success; a failed write leaves this live session untouched.
       const before = removalStateRef.current;
       const combined = isCombinedAdjustment(before.activeWorkout?.adjustment);
-      const next = completeWorkout(clone(before));
+      const {state: next, reversal} = completeWorkoutReversibly(before);
       if (combined) persistCombinedState(before, next, saveState);
       else if (!saveState(next, {reason:'workout-complete'}))
         throw new Error('Could not save the workout. Your active workout is still here. Try Finish again.');
       const completed = next.workouts.length > before.workouts.length;
       if (completed) {
-        onLiveFinish?.({priorWorkouts:before.workouts,startedAt:before.activeWorkout.startedAt,presented:false});
+        onLiveFinish?.({priorWorkouts:before.workouts,startedAt:before.activeWorkout.startedAt,workoutId:reversal?.workoutId,reversal,presented:false});
         if (!before.workouts.length) trackFunnelEventOnce('first_workout_completed', {setCount:summary.completed,endedEarly:summary.completed<summary.total});
       }
       update(() => next, {persistedState:next, ...(combined && {planVersion:false})});
@@ -6565,7 +6598,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         draftResolverRef.current=null;
         // Preserve the resolver's raw snapshot through native blur. The click
         // remains the mutation boundary, including browsers with null relatedTarget.
-        if(preserveFreestyleDraftsRef.current || screenRef.current?.contains(action)&&ownsWorkoutDraft(event.target,workoutDraftScope(action)))event.stopPropagation();
+        if(preserveWorkoutDraftsRef.current || event.relatedTarget?.closest?.('[data-workout-options]') || screenRef.current?.contains(action)&&ownsWorkoutDraft(event.target,workoutDraftScope(action)))event.stopPropagation();
       }}
       className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}${active.source === 'freestyle' ? ' freestyle-workout' : ''}`}
     >
@@ -6598,10 +6631,10 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             type="button"
             className="workout-options-trigger"
             aria-label="Workout options"
+            data-workout-options
             disabled={finishing || exerciseTransitioning}
-            onClick={() =>
-              setDetail({ workoutOptions: true, onRestart: canRestartWorkout ? restartWorkout : null })
-            }
+            onPointerDown={event=>{if(event.button===0)event.preventDefault();}}
+            onClick={() => openWorkoutOptions(canRestartWorkout ? restartWorkout : null)}
           >
             <OverflowIcon/>
           </button>
@@ -6978,7 +7011,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 />
               ))}
               {perSide ? (
-                <div className="unilateral-reps" aria-label={`Per-side reps for ${entryUnit} ${index + 1}`}>
+                <div className="unilateral-reps" role="group" aria-label={`Reps per side for ${entryUnit} ${index + 1}`}>
+                  <span className="unilateral-heading logger-column-label">REPS / SIDE</span>
                   {[["left", "L"], ["right", "R"]].map(([side, label]) => (
                     <div className="unilateral-side" key={side}><span>{label}</span><Stepper deferred required workoutField={`sides.${side}`} label={`${side} reps for ${entryUnit} ${index + 1}`} value={set.sides?.[side]?.reps ?? null} step={1} min={1} integer allowIncrementFromEmpty onChange={value => updateSideReps(index, side, value)} /></div>
                   ))}
@@ -7161,8 +7195,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         </section>
       )}
       {queueReorder.view&&<UpNextReorderPreview view={queueReorder.view} listRef={upNextQueueRef} previewRef={queueReorder.previewRef}/>}
-      <FreestyleActions state={state} update={update} setDetail={setDetail} setPage={setPage} Modal={ModalLayer} Header={SheetHeader} backgroundRef={screenRef} preserveDraftsRef={preserveFreestyleDraftsRef} hideAdd={active.source==='freestyle' && !nextExercise && !summary.completed && !canonicalSupersetStep} />
-      {active.source==='repeat' && !summary.completed && <CancelRepeatedWorkoutAction state={state} update={update} done={()=>setPage('today')}/>}
+      <FreestyleActions setDetail={setDetail} hideAdd={active.source==='freestyle' && !nextExercise && !summary.completed && !canonicalSupersetStep} />
       </div></WorkoutMotion>
       {upNextUndo.surface}
       {queueError&&<p role="alert">{queueError}</p>}
@@ -7614,7 +7647,7 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
   );
 }
 
-function WorkoutPhotoMemory({ workout, update }) {
+function WorkoutPhotoMemory({ workout, update, onBusyChange }) {
   const photoTrigger = useRef(null);
   const [photoUrl, setPhotoUrl] = useState("");
   const [loading, setLoading] = useState(Boolean(workout.photoId));
@@ -7623,6 +7656,7 @@ function WorkoutPhotoMemory({ workout, update }) {
   const [busy, setBusy] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  useLayoutEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   useEffect(() => {
     let current = true;
@@ -7945,10 +7979,6 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
 }
 
 
-function CancelRepeatedWorkoutAction({state,update,done}) {
-  const [error,setError]=useState('');
-  return <div className="workout-session-actions"><button className="text-button" onClick={()=>{try{const next=cancelRepeatedWorkout(state);update(()=>next,{planVersion:false,persistedState:next});done();}catch(e){setError(e.message);}}}>Cancel repeated workout</button>{error && <p role="alert">{error}</p>}</div>;
-}
 export function completedRecordLabel(workout) {
   const date=workoutPerformedDate(workout);
   const finished=new Date(workout.completedAt);
@@ -8217,7 +8247,35 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
 }
 
 export function Complete({ state, update, setPage, setDetail, liveFinish, persistenceFailed }) {
-  const session = state.workouts.at(-1);
+  const session = liveFinish?.workoutId ? state.workouts.find(workout => workout.id === liveFinish.workoutId) : state.workouts.at(-1);
+  const continuation = useDurableAction(state, update);
+  const [continueError, setContinueError] = useState('');
+  const [photoBusy, setPhotoBusy] = useState(false);
+  const continuing = useRef(false);
+  const canContinue = canContinueWorkout(state, liveFinish?.reversal);
+  useEffect(() => {
+    if (liveFinish?.reversal && !canContinue) liveFinish.reversal = null;
+  }, [state, liveFinish, canContinue]);
+  const continueSession = () => {
+    if (continuing.current || photoBusy) return;
+    continuing.current = true;
+    try {
+      // Flush the same note blur commit before the durable transaction reads.
+      flushSync(() => document.activeElement?.blur());
+      const result = continuation.commit(current => continueWorkout(current, liveFinish?.reversal));
+      if (!result.changed) throw Error('This workout can no longer be continued. Use Edit history to correct its log.');
+      liveFinish.reversal = null;
+      flushSync(() => setPage('workout'));
+      const heading = document.querySelector('.workout-screen .exercise-heading h1');
+      const scroller = heading?.ownerDocument.scrollingElement;
+      if (scroller) scroller.scrollTop = 0;
+      heading?.focus({preventScroll: true});
+      triggerHaptic('success');
+    } catch (error) {
+      continuing.current = false;
+      setContinueError(error.message);
+    }
+  };
   const [liveEntry] = useState(()=>Boolean(liveFinish && !liveFinish.presented && liveFinish.startedAt===session?.startedAt));
   const [motionCancelled,setMotionCancelled] = useState(false);
   useEffect(()=>{if(persistenceFailed)setMotionCancelled(true);},[persistenceFailed]);
@@ -8268,7 +8326,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   if (!session) return null;
   return (
     <main
-      className={`screen complete-screen ${endedEarly ? "ended-early" : ""} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
+      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : ""} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
     >
       <div className="complete-mark" aria-hidden="true">
         <span>✓</span>
@@ -8296,7 +8354,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
           ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
           : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
-      <WorkoutPhotoMemory workout={session} update={update} />
+      <WorkoutPhotoMemory workout={session} update={update} onBusyChange={setPhotoBusy} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
       <WorkoutSessionLog
@@ -8312,6 +8370,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
             : "Completed values are saved. They will appear as real previous-session data the next time this exercise is programmed."}
         </p>
       </section>
+      {continueError && <p className="complete-continue-error" role="alert">{continueError}</p>}
       <div className="complete-done-dock">
         <Button
           variant="primary"
@@ -8328,6 +8387,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
         >
           DONE
         </Button>
+        {canContinue && <Button variant="quiet" className="complete-continue" disabled={photoBusy} onClick={continueSession}>CONTINUE WORKOUT</Button>}
       </div>
     </main>
   );
@@ -14111,7 +14171,7 @@ export function PlanEditor({
                                 className="plan-editor-picker import-review-picker"
                                 id={`exercise-picker-${exercise.id}`}
                               >
-                                <SearchInput onClear={() => setExerciseQuery("")}
+                                <SearchInput resultsRoot=".plan-editor-picker,.scratch-add-exercise" resultsSelector="[role=listbox]" onClear={() => setExerciseQuery("")}
                                   type="search"
                                   aria-label={`Search replacement for ${exerciseName(exercise)}`}
                                   placeholder="Search exercises"
@@ -14242,7 +14302,7 @@ export function PlanEditor({
                                 className="plan-editor-picker"
                                 id={`exercise-picker-${exercise.id}`}
                               >
-                                <SearchInput onClear={() => setExerciseQuery("")}
+                                <SearchInput resultsRoot=".plan-editor-picker,.scratch-add-exercise" resultsSelector="[role=listbox]" onClear={() => setExerciseQuery("")}
                                   type="search"
                                   aria-label={`Search replacement for ${exerciseName(exercise)}`}
                                   placeholder="Search exercises"
@@ -14595,7 +14655,7 @@ export function PlanEditor({
                 {!collapsed && addingToDayId === day.id ? (
                   <>
                     <div className="scratch-exercise-search">
-                      <SearchInput onClear={() => setExerciseQuery("")}
+                      <SearchInput resultsRoot=".plan-editor-picker,.scratch-add-exercise" resultsSelector="[role=listbox]" onClear={() => setExerciseQuery("")}
                         type="search"
                         aria-label={`Search exercise for ${day.weekday}`}
                         placeholder="Search exercises"
@@ -18553,6 +18613,9 @@ export function Detail({
       <ActiveWorkoutOptions
         close={close}
         onRestart={detail.onRestart}
+        onCancelWorkout={detail.onCancelWorkout}
+        hasPendingDrafts={detail.hasPendingDrafts}
+        draftGuard={detail.draftGuard}
         workout={state.activeWorkout}
       />
     );
@@ -19414,35 +19477,53 @@ function WorkoutOptionsSheet({ children, className, titleId, describedBy, close 
     <div className="sheet-scroll">{children}</div>
   </main>;
 }
-export function ActiveWorkoutOptions({ close, onRestart, workout }) {
+export function ActiveWorkoutOptions({ close, onRestart, onCancelWorkout, hasPendingDrafts, draftGuard, workout }) {
   const [confirming,setConfirming]=useState(false),[busy,setBusy]=useState(false),[error,setError]=useState('');
-  const submitting=useRef(false),cancelRef=useRef(null),restartRef=useRef(null),changedView=useRef(false);
+  const submitting=useRef(false),cancelRef=useRef(null),restartRef=useRef(null),changedView=useRef(false),sessionId=useRef(workout?.id);
+  useLayoutEffect(()=>{if(draftGuard)draftGuard.current=true;return()=>{if(draftGuard)draftGuard.current=false;};},[draftGuard]);
   useLayoutEffect(()=>{
     if(changedView.current)focusNavigationTarget(confirming?cancelRef.current:restartRef.current);
   },[confirming]);
   const showConfirmation=value=>{changedView.current=true;setError('');setConfirming(value);};
-  const confirm=()=>{
+  const confirm=(action=confirming)=>{
     if(submitting.current)return;
     submitting.current=true;setBusy(true);setError('');
     try {
-      if(!onRestart||onRestart()===false)throw Error('Could not restart. Your workout is unchanged. Try again.');
+      if(action==='cancel') {
+        if(workout?.id!==sessionId.current || !onCancelWorkout || onCancelWorkout(sessionId.current)===false)
+          throw Error('This active workout changed. Close this menu and review the current workout.');
+      } else if(!onRestart||onRestart()===false)throw Error('Could not restart. Your workout is unchanged. Try again.');
     } catch(error) {submitting.current=false;setBusy(false);setError(error.message);}
   };
+  const completed = workoutSetSummary(workout).completed;
+  const requestCancel=()=>{
+    if(hasMeaningfulSessionWork(workout) || hasPendingDrafts?.())showConfirmation('cancel');
+    else confirm('cancel');
+  };
   return <WorkoutOptionsSheet className={`active-workout-options-sheet${confirming?' confirming-restart':''}`}
-    titleId="active-workout-options-title" describedBy={confirming?'restart-workout-detail':undefined} close={()=>{if(!submitting.current)close();}}>
-    <h2 id="active-workout-options-title">{confirming?'Restart workout?':'Workout options'}</h2>
-    {confirming?<>
+    titleId="active-workout-options-title" describedBy={confirming ? confirming==='cancel'?'cancel-workout-detail':'restart-workout-detail' : undefined} close={()=>{if(!submitting.current)close();}}>
+    {confirming==='cancel'&&<Eyebrow>END WORKOUT</Eyebrow>}
+    <h2 id="active-workout-options-title">{confirming==='cancel'?'Cancel workout?':confirming?'Restart workout?':'Workout options'}</h2>
+    {confirming==='cancel'?<>
+      <p id="cancel-workout-detail">{completed ? `${completed} completed ${completed===1?'set':'sets'} and all changes from this session will be discarded.` : 'Your changes from this session will be discarded.'} This can’t be undone.</p>
+      <div className="workout-restart-confirm-actions workout-cancel-confirm-actions">
+        <button ref={cancelRef} type="button" className="button secondary" disabled={busy} data-sheet-initial-focus onClick={close}>KEEP WORKOUT</button>
+        <button type="button" className="button danger workout-restart-danger" disabled={busy} onClick={()=>confirm('cancel')}>CANCEL WORKOUT</button>
+      </div>
+    </>:confirming?<>
       <p id="restart-workout-detail">{workout?.source==='freestyle'
         ? 'All exercises and logged values will be cleared and the timer reset. You’ll return to an empty freestyle workout. This can’t be undone.'
         : 'Logged sets will be cleared, the starting exercises and values restored, and the timer reset. This can’t be undone.'}</p>
-      {error&&<p className="danger-text" role="alert">{error}</p>}
       <div className="workout-restart-confirm-actions">
         <button ref={cancelRef} type="button" className="button secondary" disabled={busy} onClick={()=>showConfirmation(false)}>Cancel</button>
-        <button type="button" className="button danger workout-restart-danger" disabled={busy} onClick={confirm}>Restart workout</button>
+        <button type="button" className="button danger workout-restart-danger" disabled={busy} onClick={()=>confirm()}>Restart workout</button>
       </div>
-    </>:<button ref={restartRef} type="button" className="workout-restart-option danger-text" disabled={!onRestart} onClick={()=>showConfirmation(true)}>
+    </>:<><button ref={restartRef} type="button" className="workout-restart-option danger-text" disabled={!onRestart} onClick={()=>showConfirmation('restart')}>
       <span aria-hidden="true">↻</span><span>Restart workout</span>
-    </button>}
+    </button><button type="button" aria-label="Cancel workout" className="workout-restart-option workout-cancel-option danger-text" disabled={!onCancelWorkout} onClick={requestCancel}>
+      <span aria-hidden="true">×</span><span>Cancel workout</span>
+    </button></>}
+    {error&&<p className="danger-text" role="alert">{error}</p>}
   </WorkoutOptionsSheet>;
 }
 
@@ -19960,13 +20041,13 @@ function Replace({ exercise, state, update, close }) {
       !query.trim() ||
       exerciseMatchesQuery(item, query),
   ), query);
-  const choiceButton = (choice, allowAnyAllowed = false) => (
+  const choiceButton = (choice, allowAnyAllowed = false, priority = false) => (
     <button
       className="choice-row"
       key={choice.id}
       onClick={() => replace(choice, allowAnyAllowed)}
     >
-      <ExercisePickerIdentity item={choice} enabled={state.profile.showExerciseImages!==false}><strong>{choice.name}</strong>
+      <ExercisePickerIdentity item={choice} enabled={state.profile.showExerciseImages!==false} priority={priority}><strong>{choice.name}</strong>
       <small>
         {substitutionReason(
           exerciseCatalog[exercise.exerciseId] || exercise.importedExercise,
@@ -20025,7 +20106,7 @@ function Replace({ exercise, state, update, close }) {
             </p>
             {pickerChoices.length ? (
               <div className="picker-results">
-                {pickerChoices.map((choice) => choiceButton(choice, true))}
+                {pickerChoices.map((choice,index) => choiceButton(choice, true, index<6))}
               </div>
             ) : (
               <p className="offline-banner">
@@ -20107,6 +20188,7 @@ function HydratedApp({startup}) {
   const prepareTabTransition = useMainTabTransition(page, backgroundRef);
   const setPage = useCallback(next => {
     prepareTabTransition(next);
+    if (next !== 'complete') liveCompletion.current = null;
     if(next==='workout')rememberSwipeParent(document.querySelector('.today-screen'),'workout');
     setPageState(next);
   },[prepareTabTransition]);
@@ -20309,6 +20391,7 @@ function HydratedApp({startup}) {
       failed={persistenceFailed}
       onBackup={() => setDetail("backup-rook")}
     >
+    <MissedWorkoutFeedbackProvider state={state} update={update}>
     <div className="app-shell">
       <div className="app-content" ref={backgroundRef}>
         {['workout','complete'].includes(page) ? <WorkoutMotion kind="completion" identity={page}>{content}</WorkoutMotion> : content}
@@ -20365,6 +20448,7 @@ function HydratedApp({startup}) {
       )}
       {state.ai.repairingPlan && <BuildingOverlay stage={repairStage} />}
     </div>
+    </MissedWorkoutFeedbackProvider>
     </PersistenceHost>
   );
 }

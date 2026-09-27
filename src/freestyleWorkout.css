@@ -38,6 +38,3 @@
 .freestyle-copy-applied .text-button { min-width:44px;min-height:44px;margin:0;flex-shrink:0;padding-inline:0; }
 .freestyle-copy-error { margin:8px 0 0;font-size:12px;color:var(--rook-danger); }
 .freestyle-workout .workout-options-trigger.unavailable { display: none; }
-:root .modal-layer > .screen.freestyle-cancel-confirm > .detail-header { margin-inline:-22px;padding-inline:22px; }
-.freestyle-cancel-confirm .workout-confirm-actions { grid-template-columns:repeat(2,minmax(0,1fr)); }
-.freestyle-cancel-confirm .workout-confirm-actions .button { min-width:0;white-space:normal;overflow-wrap:anywhere;padding:12px 10px; }

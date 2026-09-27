@@ -68,7 +68,7 @@ try {
   assert.equal(await page.getByRole('button', { name: 'START WORKOUT', exact: true }).isEnabled(), true);
   await shot('history');
   assert.equal((await stored()).activeWorkout,null);
-  await startFreestyle(page); await page.getByRole('button', { name: 'Cancel workout', exact: true }).click();
+  await startFreestyle(page); await page.getByRole('button', { name: 'Workout options', exact: true }).click();await page.getByRole('button', { name: 'Cancel workout', exact: true }).click();
   assert.equal((await stored()).activeWorkout, null); assert.equal((await stored()).workouts.length, 2);
   if (style === 'standard' && ((width === 320 && appearance === 'dark') || (width === 390 && appearance === 'light'))) {
     const baseline = await stored(); const planned = structuredClone(baseline);
@@ -88,7 +88,7 @@ try {
     await page.getByRole('button', { name: 'Back to Today', exact: true }).click();
     assert.equal(await page.getByRole('button', { name: 'Start freestyle workout', exact: true }).count(), 0);
     await page.getByRole('button', { name: 'RESUME WORKOUT', exact: true }).click();
-    await page.getByRole('button', { name: 'Cancel workout', exact: true }).click();
+    await page.getByRole('button', { name: 'Workout options', exact: true }).click();await page.getByRole('button', { name: 'Cancel workout', exact: true }).click();
     await page.evaluate(() => { const original = Storage.prototype.setItem; Storage.prototype.setItem = function(k,v) { if (k === 'lift-v2-state') throw new DOMException('Quota', 'QuotaExceededError'); return original.call(this,k,v); }; });
     await startFreestyle(page);
     await page.locator('.persistence-warning').waitFor(); await shot('save-warning');

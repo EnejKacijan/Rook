@@ -9,7 +9,10 @@
 .week-pager-page { flex: 0 0 33.333333%; min-width: 0; }
 .week-pager-page .week-strip { margin: 0; }
 .week-pager-page[aria-hidden="true"] { pointer-events: none; }
-.week-range-viewport { display: block; overflow: hidden; width: 16ch; }
+.week-range-viewport { position: relative; display: block; overflow: hidden; width: 8em; height: 1.4em; line-height: 1.4; }
+/* Fixed page geometry fits cross-month/year ranges. The gutter keeps clipped
+   outgoing/incoming words visibly separate instead of forming a hybrid label. */
+.week-range-track { --week-range-gap: 32px; position: absolute; top: 0; left: 0; column-gap: var(--week-range-gap); transform: translate3d(calc(-33.333333% - var(--week-range-gap)), 0, 0); }
 .week-range-track > span { flex: 0 0 33.333333%; min-width: 0; overflow: hidden; }
 .week-selector[data-week-phase="dragging"] :is(.week-pager-track, .week-range-track),
 .week-selector[data-week-phase="settling"] :is(.week-pager-track, .week-range-track) { will-change: transform; }
@@ -42,7 +45,7 @@
 }
 .week-navigation button:disabled { color: #8f8c87; opacity: .58; }
 .week-navigation span { color: #315f4b; font-size: 12px; font-weight: 600; text-align: center; white-space: nowrap; }
-.week-navigation .week-calendar-trigger { width:auto;min-width:0;display:flex;align-items:center;justify-content:center;gap:6px;padding:0 3px; }
+.week-navigation .week-calendar-trigger { width:max-content;min-width:0;display:inline-flex;align-items:center;justify-content:center;justify-self:center;gap:10px;padding:0 3px; }
 .week-calendar-trigger svg { flex:none; }
 .today-screen .screen-top {
   display: grid;
@@ -118,16 +121,24 @@
 .today-workout-chooser .list-row { min-height: 64px; color: var(--rook-text); }
 .today-workout-chooser .list-row > span:first-child { white-space: normal; overflow-wrap: anywhere; }
 .today-workout-chooser .list-row small { color: var(--rook-secondary); line-height: 1.4; }
-.today-missed-row { display: grid; grid-template-columns: minmax(0, 1fr) 44px; align-items: center; column-gap: 8px; margin-top: 16px; padding: 8px 0; border-bottom: 1px solid var(--rook-border); }
-.rest-day-state > .today-missed-row { margin-top: 24px; border-bottom: 0; }
-.today-missed-label { grid-column: 1; grid-row: 1; color: var(--rook-secondary); }
+.today-missed-row { display: grid; gap: 12px; margin-top: 16px; padding: 8px 0; border-bottom: 1px solid var(--rook-border); }
+.rest-day-state > .today-missed-row { margin-top: 16px; border-bottom: 0; }
+.rest-day-state > .today-missed-row + .rest-up-next { margin-top: 16px; }
+.today-missed-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
+.today-missed-label { margin: 0; color: var(--rook-secondary); }
+.today-missed-header > .missed-reminder-hide { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0; color: var(--rook-accent-text); font-size: 13px; }
 .today-missed-open { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--rook-text); text-align: left; }
 .today-missed-open > span:first-child { min-width: 0; }
 .today-missed-open strong { font-size: 13px; overflow-wrap: anywhere; }
 .today-missed-open time { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
 .today-missed-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 22px; }
-.today-missed-row.is-single .today-missed-open { grid-column: 1 / -1; grid-row: 2; }
-.today-missed-row > .missed-reminder-dismiss { grid-column: 2; grid-row: 1; }
+:root .missed-workout-feedback .today-undo { bottom: calc(var(--bottom-nav-total-height, 90px) + 12px); }
+.missed-workout-feedback .today-undo > span { min-width: 0; overflow-wrap: anywhere; }
+.missed-workout-feedback .today-undo > button { flex-shrink: 0; min-height: 44px; }
+/* The shared snackbar stays dark in Light; its action needs inverse text. */
+:root[data-appearance="light"][data-style="premium"] .missed-workout-feedback .today-undo > button { color: inherit; }
+.missed-workout-feedback:has(.missed-feedback-error) .exercise-remove-undo { visibility: hidden; }
+.missed-workout-feedback .missed-feedback-error { z-index: 126; }
 .missed-destination-sheet .missed-date-group { margin: 14px 0; }
 .missed-destination-sheet .missed-date-group h2 { margin: 0 0 8px; font-size: 14px; }
 .missed-destination-sheet .missed-date-group .flexible-week-dates { margin-top: 0; }
@@ -230,5 +241,4 @@
   .week-navigation span { font-size: 11px; }
 }
 .missed-quick-actions { display:flex !important; align-items:center; gap:4px; flex-shrink:0; }
-.missed-reminder-dismiss { width:44px; min-width:44px; height:44px; padding:0; border:0; background:transparent; color:var(--rook-secondary); font-size:22px; line-height:1; touch-action:manipulation; }
 .missed-skip-feedback { display:flex; align-items:center; gap:12px; font-size:13px; color:var(--rook-secondary); }

@@ -6,3 +6,11 @@
 .flexible-workout-group small { color: var(--rook-secondary); font-size: 12px; }
 .flexible-week-sheet .missed-session-choices .choice-row { min-height:60px; padding:10px 14px; gap:4px; margin-top:8px; }
 .flexible-week-sheet .missed-session-choices .choice-row small { color:var(--rook-secondary); font-size:12px; line-height:1.4; }
+.missed-recovery-actions { display:flex; flex-direction:column; gap:12px; margin-top:24px; }
+.missed-recovery-actions .button { margin:0; }
+.missed-recovery-actions .text-button { align-self:center; min-height:44px; }
+.missed-recovery-options { margin-top:24px; }
+.missed-recovery-options .list-row { min-height:52px; gap:12px; text-align:left; }
+.missed-recovery-options .list-row > span { flex-shrink:0; }
+.missed-recovery-today > .text-button { min-height:44px; }
+.missed-destination-sheet [data-move-date][aria-pressed="true"] { background:var(--rook-accent-soft); border-color:var(--rook-accent); }

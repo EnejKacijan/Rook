@@ -1,7 +1,7 @@
 import {beforeEach, afterEach, it, expect, vi} from 'vitest';
 import {bindWeekPager} from './weekPager.js';
 
-let root, viewport, track, labelTrack, controller, commit, options, time, reduced, pageWidth;
+let root, viewport, track, labelTrack, controller, commit, options, time, reduced, pageWidth, labelWidth;
 const advance = ms => { time += ms; vi.advanceTimersByTime(ms); };
 function touch(type, x, y = 40, count = 1) {
   const t = {identifier: 1, clientX: x, clientY: y};
@@ -13,13 +13,13 @@ const pull = (dx, delay = 400) => { touch('touchstart', 160); advance(delay); re
 const end = dx => touch('touchend', 160 + dx);
 const click = (detail = 1) => { const e = new MouseEvent('click', {bubbles: true, cancelable: true, detail}); viewport.querySelector('button').dispatchEvent(e); return e; };
 beforeEach(() => {
-  vi.useFakeTimers(); time = 0; reduced = false; pageWidth = 300;
+  vi.useFakeTimers(); time = 0; reduced = false; pageWidth = 300; labelWidth = 100;
   vi.spyOn(performance, 'now').mockImplementation(() => time);
   vi.stubGlobal('matchMedia', () => ({matches: reduced}));
   root = document.createElement('div'); root.innerHTML = '<span><span id="label"></span></span><div data-week-drag><div id="track"><button>Day</button></div></div>';
   document.body.append(root); viewport = root.querySelector('[data-week-drag]'); track = root.querySelector('#track'); labelTrack = root.querySelector('#label');
   viewport.getBoundingClientRect = () => ({width: pageWidth});
-  track.style.columnGap = '14px';
+  track.style.columnGap = '14px'; labelTrack.style.columnGap = '32px'; labelTrack.parentElement.getBoundingClientRect = () => ({width:labelWidth});
   options = {canGoBack: true, canGoForward: true}; commit = vi.fn();
   controller = bindWeekPager({root, viewport, track, labelTrack, getOptions: () => options, onCommit: commit});
 });
@@ -27,7 +27,7 @@ afterEach(() => {controller.destroy(); root.remove(); vi.useRealTimers(); vi.res
 it('slow 20% drag follows as one track per frame, then cancels without a commit', () => {
   pull(-60); touch('touchmove', 99); touch('touchmove', 100);
   expect(track.style.transform).toContain('-314px'); advance(17);
-  expect(track.style.transform).toContain('-374px'); expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo((-1 - 60 / 314) * 100 / 3);
+  expect(track.style.transform).toContain('-374px'); expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo((-1 - 60 / 314) * 132);
   expect(commit).not.toHaveBeenCalled(); end(-60); expect(root.dataset.weekPhase).toBe('settling');
   advance(260); expect(track.style.transform).toContain('-314px'); expect(root.dataset.weekPhase).toBe('idle'); expect(commit).not.toHaveBeenCalled();
 });
@@ -114,7 +114,7 @@ it.each([12,14,16])('uses viewport width plus the actual %spx CSS page gap for b
   expect(track.style.transform).toContain(`${-300-gap}px`);
   reduced = false; controller.arrow(1);
   expect(track.style.transform).toContain(`${-2*(300+gap)}px`);
-  expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-200/3);
+  expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-264);
   advance(260); expect(track.style.transform).toContain(`${-300-gap}px`);
   controller.arrow(-1); expect(track.style.transform).toContain('0px');
   expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(0);
@@ -126,7 +126,15 @@ it.each([[83,false],[85,true]])('keeps the original viewport-based distance thre
 it('clamps a full drag to one page stride, including its gutter', () => {
   pull(-500,1000); advance(17);
   expect(track.style.transform).toContain('-628px');
-  expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-200/3);
+  expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-264);
+});
+it.each([[80,16],[100,32],[120,40]])('range uses its own %spx viewport and %spx gutter with the same normalized progress', (size,gap) => {
+ labelWidth=size;labelTrack.style.columnGap=`${gap}px`;controller.reset();
+ pull(-314*.6,1000);advance(17);
+ expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-1.6*(size+gap));
+ expect(labelTrack.style.transition).toBe('none');expect(commit).not.toHaveBeenCalled();
+ end(-314*.6);expect(labelTrack.style.transition).toBe(track.style.transition);advance(260);
+ expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-(size+gap));
 });
 it.each(['centered','dragging','settling','committed'])('remeasures the stride on resize while %s without a stale commit or offset', phase => {
   if(phase==='dragging') {pull(-60); advance(17);}
@@ -134,7 +142,7 @@ it.each(['centered','dragging','settling','committed'])('remeasures the stride o
   if(phase==='committed') advance(260);
   pageWidth = 390; window.dispatchEvent(new Event('resize'));
   expect(track.style.transform).toContain('-404px');
-  expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-100/3);
+  expect(Number(labelTrack.style.transform.match(/translate3d\(([-\d.]+)/)[1])).toBeCloseTo(-132);
   end(-150); advance(260); expect(commit).toHaveBeenCalledTimes(phase==='committed'?1:0);
   controller.arrow(1); expect(track.style.transform).toContain('-808px'); advance(260);
   expect(track.style.transform).toContain('-404px');

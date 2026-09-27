@@ -1,8 +1,6 @@
-import React, { useEffect,useId,useMemo,useRef,useState } from 'react';
-import {createPortal} from 'react-dom';
-import {useDurableAction} from './useDurableAction.js';
-import { exerciseMeasure, displayWeight, workoutSetSummary, isoDay } from './domain.js';
-import { startFreestyleWorkout, freestylePreviousSets, cancelUnloggedFreestyle, freestyleEffortLimit } from './freestyleWorkout.js';
+import React, { useMemo, useState } from 'react';
+import { exerciseMeasure, displayWeight, isoDay } from './domain.js';
+import { startFreestyleWorkout, freestylePreviousSets, freestyleEffortLimit } from './freestyleWorkout.js';
 import {PreviousValuesHelper} from './PreviousValuesHelper.jsx';
 import './freestyleWorkout.css';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
@@ -35,48 +33,10 @@ export function FreestyleEntry({ state, update, setPage, setDetail, date, histor
 
 export {FreestyleExercisePicker} from './FreestyleQueuePicker.jsx';
 
-export function FreestyleActions({ state, update, setDetail, setPage, hideAdd = false, Modal, Header, backgroundRef, preserveDraftsRef }) {
-  const logged = workoutSetSummary(state.activeWorkout).completed;
-  const [confirmSession,setConfirmSession]=useState(null),[error,setError]=useState('');
-  const trigger=useRef(null),titleId=useId(),detailId=useId();
-  const {commit,latest}=useDurableAction(state,update);
-  useEffect(()=>()=>{if(preserveDraftsRef)preserveDraftsRef.current=false;},[preserveDraftsRef]);
-  const keep=()=>{setConfirmSession(null);setError('');if(preserveDraftsRef)preserveDraftsRef.current=false;};
-  const cancel=sessionId=>{
-    setError('');
-    try {
-      const result=commit(current=>current.activeWorkout?.id===sessionId?cancelUnloggedFreestyle(current):current);
-      if(!result.changed){setError('This workout can no longer be cancelled. Keep the workout to continue.');return;}
-      setPage('today');
-    } catch(e){setError(e.message);}
-  };
-  const requestCancel=()=>{
-    const active=latest.current.activeWorkout;
-    if(active?.source!=='freestyle'||workoutSetSummary(active).completed)return;
-    if(!active.exercises.length){cancel(active.id);return;}
-    if(preserveDraftsRef)preserveDraftsRef.current=true;
-    setError('');setConfirmSession(active.id);
-  };
-  return <div className="freestyle-actions">
-    {!hideAdd && <button className="button secondary" onClick={() => setDetail({ freestylePicker: true })}>+ ADD EXERCISE</button>}
-    {state.activeWorkout?.source==='freestyle' && !logged && <button ref={trigger} type="button" data-freestyle-cancel className="text-button freestyle-cancel"
-      onPointerDown={event=>{if(event.button===0)event.preventDefault();}} onClick={requestCancel}>Cancel workout</button>}
-    {!confirmSession&&error&&<p role="alert">{error}</p>}
-    {confirmSession&&createPortal(<Modal backgroundRef={backgroundRef} returnFocusRef={trigger} close={keep}>
-      {requestClose=><section className="screen detail-screen workout-confirm freestyle-cancel-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId} aria-describedby={detailId}>
-        <Header title="END WORKOUT" onBack={requestClose}/>
-        <h2 id={titleId}>Cancel workout?</h2>
-        <p id={detailId}>Your added exercises and any unlogged entries will be discarded.</p>
-        {error&&<p role="alert">{error}</p>}
-        <div className="workout-confirm-actions">
-          <button type="button" className="button primary" data-sheet-initial-focus onClick={requestClose}>KEEP WORKOUT</button>
-          <button type="button" className="button danger" onClick={()=>cancel(confirmSession)}>CANCEL WORKOUT</button>
-        </div>
-      </section>}
-    </Modal>,document.body)}
-  </div>;
+export function FreestyleActions({ setDetail, hideAdd = false }) {
+  if (hideAdd) return null;
+  return <div className="freestyle-actions"><button className="button secondary" onClick={() => setDetail({ freestylePicker: true })}>+ ADD EXERCISE</button></div>;
 }
-
 export function FreestylePrevious({ state, exercise, update, setDetail, screenRef }) {
   const limit = useMemo(() => freestyleEffortLimit(state, exercise.exerciseId), [state.profile, exercise.exerciseId]);
   const previous = useMemo(()=>freestylePreviousSets(state, exercise),[state.workouts,exercise.exerciseId,exercise.loggingMode]);

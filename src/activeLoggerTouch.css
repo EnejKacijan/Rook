@@ -115,7 +115,8 @@
 .workout-screen .sets :is(.set-row,.set-labels).per-side { --logger-load-hit:44px; --logger-reps-hit:44px; grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,1fr) var(--logger-end-gap) [done] var(--logger-done); }
 .workout-screen .sets :is(.set-row,.set-labels).per-side.with-rir { grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,1fr) var(--logger-rir-gap) [rir] var(--logger-rir) var(--logger-done-gap) [done] var(--logger-done); }
 .workout-screen .sets .set-row.per-side { grid-template-rows:var(--logger-height) auto; }
-.workout-screen .sets .unilateral-reps { grid-column:1/-1; grid-row:2; gap:8px; padding:0; margin-bottom:4px; }
+.workout-screen .sets .unilateral-reps { grid-column:1/-1; grid-row:2; gap:4px 8px; padding:4px 8px; margin-bottom:4px; border-top:1px solid var(--rook-border); }
+.workout-screen .sets .unilateral-heading { grid-column:1/-1; text-align:center; font-size:10px; font-weight:700; letter-spacing:.13em; line-height:1.4; color:var(--rook-secondary); }
 .workout-screen .sets .unilateral-side { gap:2px; }
 .workout-screen .sets .set-labels.per-side > .set-reps-heading { display:none; }
 @container logger-sets (min-width:396px) {
@@ -175,6 +176,11 @@
  --logger-rir-gap:6px; --logger-done-gap:4px; --logger-end-gap:8px;
 }
 .workout-screen .sets .extra-set-label { gap:3px; color:var(--rook-secondary); }
+/* The side-by-side rep groups have room for full targets at every breakpoint;
+   do not inherit the standard row's narrower RIR-on stepper tracks. */
+.workout-screen .sets :is(.set-row,.set-labels).per-side {
+ --logger-load-hit:44px; --logger-reps-hit:44px; --logger-rir:44px; --logger-done:44px;
+}
 .workout-screen .sets .extra-set-label b { font-size:13px; font-weight:600; line-height:1; }
 .workout-screen .sets .extra-set-label small {
  flex:none; padding:2px; border-radius:3px; background:color-mix(in srgb,var(--rook-text) 5%,transparent);

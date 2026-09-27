@@ -14,7 +14,7 @@ import './savedWorkouts.css';
 
 export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved}) {
   const {commit,latest}=useDurableAction(state,update);
-  const screen=useRef(null),undo=useExerciseRemoveUndo();
+  const screen=useRef(null),browseScroll=useRef(0),undo=useExerciseRemoveUndo();
   const overlapDescriptionId=useId();
   const [query,setQuery]=useState(''),[selection,setSelection]=useState(null),[draft,setDraft]=useState(()=>source?templateDraft(source,state):null);
   const [editing,setEditing]=useState(false),[renaming,setRenaming]=useState(false),[deleting,setDeleting]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[confirmed,setConfirmed]=useState(false);
@@ -23,6 +23,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
   const createId=useRef(uid('workout-template')),request=useRef(null),sessionId=useRef(state.activeWorkout?.id||null).current;
   const selected=selection,review=draft||selected;
   const searchQuery=browseQuery??query;
+  useLayoutEffect(()=>{if(!review){const list=screen.current?.querySelector('.saved-workout-list');if(list)list.scrollTop=browseScroll.current;}},[Boolean(review)]);
   useLayoutEffect(()=>{onViewChange?.(Boolean(review));},[Boolean(review),onViewChange]);
   useLayoutEffect(()=>{onEditingChange?.(editing);return()=>onEditingChange?.(false);},[editing,onEditingChange]);
   useExerciseSearchSheet(screen,!embedded&&!editing,{focusedSearch:true,browsing:!review});
@@ -93,7 +94,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     </>:<>
       {!embedded&&<SearchInput className="exercise-search" aria-label="Search saved workouts" placeholder="Search saved workouts" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/>}
       <div className="saved-workout-list" data-exercise-search-scroll>
-      {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><span aria-hidden="true">›</span></button>)}
+      {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><span aria-hidden="true">›</span></button>)}
       {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Save a freestyle or completed workout as a template from its workout options.</p></div>}
       {state.savedWorkoutTemplates?.length>0&&!(state.savedWorkoutTemplates||[]).some(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()))&&<p>No saved workouts match your search.</p>}
       </div>

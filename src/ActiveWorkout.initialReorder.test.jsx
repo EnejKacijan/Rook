@@ -29,7 +29,7 @@ const handles=()=>[...host.querySelectorAll('.up-next-queue .rook-reorder-handle
 function touch(type,target,x,y){const e=new Event(type,{bubbles:true,cancelable:true}),p={identifier:1,clientX:x,clientY:y};Object.assign(e,{touches:['touchend','touchcancel'].includes(type)?[]:[p],changedTouches:[p]});act(()=>target.dispatchEvent(e));return e;}
 function lastToFirst(){const last=handles().at(-1),y=last.getBoundingClientRect().top+30;
  touch('touchstart',last,360,y);expect(feedback.pickup).not.toHaveBeenCalled();
- touch('touchmove',last,360,y-15);expect(feedback.pickup).toHaveBeenCalledOnce();
+ act(()=>vi.advanceTimersByTime(300));touch('touchmove',last,360,y-15);expect(feedback.pickup).toHaveBeenCalledOnce();
  expect(host.querySelector('.queue-reorder-preview')).not.toBeNull();
  touch('touchmove',last,360,220);touch('touchend',last,360,220);
 }
@@ -62,7 +62,7 @@ it('a failed first reorder write leaves the queue and current exercise unchanged
 it('pickup uses an inert copy of the actual row, retaining notes; cancel never publishes order',()=>{
  const s=initial('freestyle');s.activeWorkout.exercises[3].personalNote='A longer note with a deliberately steady tempo';const before=structuredClone(s.activeWorkout);mount(s);
  const last=handles().at(-1),y=last.getBoundingClientRect().top+30,source=last.closest('[data-swipe-row]');
- touch('touchstart',last,360,y);expect(feedback.pickup).not.toHaveBeenCalled();touch('touchmove',last,360,y-15);
+ touch('touchstart',last,360,y);expect(feedback.pickup).not.toHaveBeenCalled();act(()=>vi.advanceTimersByTime(300));touch('touchmove',last,360,y-15);
  const preview=host.querySelector('.queue-reorder-preview');expect(preview.hasAttribute('inert')).toBe(true);
  expect(preview.querySelector('.up-next-main').textContent).toBe(source.querySelector('.up-next-main').textContent);
  expect(preview.querySelector('.up-next-prescription').textContent).toBe(source.querySelector('.up-next-prescription').textContent);

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
 import {blankState,buildProgram,isoDay,weekday,weekKey,plannedWorkoutForDate} from '../src/domain.js';
-import {missedFlexibleSessions} from '../src/flexibleWeek.js';
+import {missedFlexibleSessions,moveWorkoutDestinations} from '../src/flexibleWeek.js';
 const out='artifacts/missed-resolution';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({executablePath:'C:/Program Files/Google/Chrome/Application/chrome.exe',headless:true});
 try{for(const [width,appearance,empty] of [[390,'light',false],[320,'dark',false],[390,'light',true]]){
@@ -14,10 +14,13 @@ try{for(const [width,appearance,empty] of [[390,'light',false],[320,'dark',false
  const shot=async name=>{await page.waitForTimeout(300);await page.screenshot({path:`${prefix}-${name}.png`});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);};
  const saved=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));const before=await saved(),missed=missedFlexibleSessions(before)[0];
  await shot('today');await page.getByRole('button',{name:'Today options',exact:true}).click();await page.getByText('More options',{exact:true}).waitFor();await shot('overflow');await page.keyboard.press('Escape');
- await entry.click();if(await page.locator('.missed-session-choices').isVisible())await page.locator(`[data-session-id="${missed.logicalSessionId}"]`).click();const sheet=page.locator('.missed-destination-sheet');await sheet.waitFor();assert.equal(await sheet.count(),1);await shot('move');
- assert.equal(await sheet.getByRole('button',{name:'Move to today',exact:true}).count(),empty?1:0);assert.ok(await sheet.locator('[data-move-date]:not(:disabled)').count()>0);assert.ok(await sheet.locator('[data-move-date]:disabled').evaluateAll(nodes=>nodes.every(node=>node.getAttribute('aria-label')?.includes('already scheduled'))),'Occupied dates remain visible, labelled and unavailable');
+ const openMove=async()=>{await entry.click();if(await page.locator('.missed-session-choices').isVisible())await page.locator(`[data-session-id="${missed.logicalSessionId}"]`).click();await page.locator('.missed-recovery-sheet').waitFor();await page.getByRole('button',{name:'MOVE TO ANOTHER DAY',exact:true}).click();};
+ await openMove();const sheet=page.locator('.missed-destination-sheet');await sheet.waitFor();assert.equal(await sheet.count(),1);await shot('move');
+ const expectedDates=moveWorkoutDestinations(before,missed.logicalSessionId).filter(d=>d.available).map(d=>d.date);
+ assert.ok(expectedDates.length>0);assert.deepEqual(await sheet.locator('[data-move-date]').evaluateAll(nodes=>nodes.map(n=>n.dataset.moveDate)),expectedDates,'Only currently available dates are offered in recovery');
+ assert.equal(await sheet.locator('[data-move-date]:disabled').count(),0);
  const date=await sheet.locator('[data-move-date]:not(:disabled)').first().getAttribute('data-move-date');await sheet.locator(`[data-move-date="${date}"]`).click();await page.getByRole('button',{name:'APPLY MOVE',exact:true}).waitFor();await shot('review');
  assert.deepEqual((await saved()).flexibleWeek,before.flexibleWeek);await page.getByRole('button',{name:'CANCEL',exact:true}).click();await page.locator('.flexible-week-sheet').waitFor({state:'detached'});assert.deepEqual((await saved()).flexibleWeek,before.flexibleWeek);
- await entry.click();if(await page.locator('.missed-session-choices').isVisible())await page.locator(`[data-session-id="${missed.logicalSessionId}"]`).click();await sheet.locator(`[data-move-date="${date}"]`).click();await page.getByRole('button',{name:'APPLY MOVE',exact:true}).click();await page.getByRole('heading',{name:'Workout moved',exact:true}).waitFor();await page.getByRole('button',{name:'DONE',exact:true}).click();await page.locator('.flexible-week-sheet').waitFor({state:'detached'});await shot('resolved');
+ await openMove();await sheet.locator(`[data-move-date="${date}"]`).click();await page.getByRole('button',{name:'APPLY MOVE',exact:true}).click();await page.locator('.flexible-week-sheet').waitFor({state:'detached'});const feedback=page.locator('.missed-workout-feedback .today-undo');await feedback.waitFor();assert.match(await feedback.innerText(),new RegExp('moved to'));await shot('resolved');
  const after=await saved(),remainingMissed=missedFlexibleSessions(after);assert.deepEqual(after.program,before.program);assert.deepEqual(after.workouts,before.workouts);assert.equal(remainingMissed.some(s=>s.logicalSessionId===missed.logicalSessionId),false);assert.equal(await entry.isVisible(),remainingMissed.length>0);assert.equal(plannedWorkoutForDate(after,date).logicalSessionId,missed.logicalSessionId);assert.deepEqual(errors,[]);console.log(`PASS ${prefix}: visible state, valid dates, review/cancel/apply, identity and plan preserved`);await context.close();
 }}finally{await browser.close();}

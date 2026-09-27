@@ -6,16 +6,16 @@ import {createReturningUserFixture} from './demoFixture.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let root,host;
-afterEach(async()=>{if(root)await act(async()=>root.unmount());root=null;host?.remove();vi.restoreAllMocks();vi.unstubAllGlobals();});
+afterEach(async()=>{if(root)await act(async()=>root.unmount());root=null;host?.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 async function mount(mode='scratch'){
- vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('scrollTo',()=>{});
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('scrollTo',()=>{});
  const state=createReturningUserFixture(0);host=document.createElement('main');host.className='screen';document.body.append(host);root=createRoot(host);
  await act(async()=>root.render(<PlanEditor source={state.program} profile={state.profile} exerciseState={state} mode={mode} onSave={()=>{}} onCancel={()=>{}}/>));
  return host.querySelector('.plan-workout-drag-surface');
 }
 function event(target,type,fields={}){const e=new Event(type,{bubbles:true,cancelable:true});Object.assign(e,fields);target.dispatchEvent(e);return e;}
 const point={identifier:5,clientX:25,clientY:200};
-async function start(handle){await act(async()=>event(handle,'touchstart',{touches:[point]}));expect(document.querySelector('.is-week-reordering')).toBeNull();await act(async()=>event(handle,'touchmove',{touches:[{...point,clientY:220}]}));expect(document.querySelector('.is-week-reordering')).not.toBeNull();}
+async function start(handle){await act(async()=>event(handle,'touchstart',{touches:[point]}));expect(document.querySelector('.is-week-reordering')).toBeNull();await act(async()=>vi.advanceTimersByTime(300));await act(async()=>event(handle,'touchmove',{touches:[{...point,clientY:220}]}));expect(document.querySelector('.is-week-reordering')).not.toBeNull();}
 function idle(){expect(document.querySelector('.is-reordering,.is-week-reordering,.plan-reorder-preview,.reorder-live-source')).toBeNull();expect(host.querySelector('.plan-editor').style.minHeight).toBe('');expect(host.querySelector('.plan-editor').style.paddingTop).toBe('');}
 it.each(['touchend','touchcancel','pointercancel','Escape','blur','visibilitychange'])('Scratch releases the touch gesture on %s',async reason=>{
  const add=vi.spyOn(window,'addEventListener'),remove=vi.spyOn(window,'removeEventListener'),handle=await mount();await start(handle);
@@ -39,6 +39,7 @@ it('captures non-touch pointers only during drag and releases them on Escape',as
  const handle=await mount('edit');let captured=false;
  handle.setPointerCapture=vi.fn(()=>{captured=true;});handle.hasPointerCapture=vi.fn(()=>captured);handle.releasePointerCapture=vi.fn(()=>{captured=false;});
  await act(async()=>event(handle,'pointerdown',{pointerType:'mouse',pointerId:9,button:0,clientX:25,clientY:200}));
+ await act(async()=>vi.advanceTimersByTime(300));
  await act(async()=>event(handle,'pointermove',{pointerType:'mouse',pointerId:9,clientX:25,clientY:220}));expect(captured).toBe(true);
  await act(async()=>event(window,'keydown',{key:'Escape'}));expect(handle.releasePointerCapture).toHaveBeenCalledWith(9);expect(captured).toBe(false);idle();
 });

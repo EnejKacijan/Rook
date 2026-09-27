@@ -26,6 +26,19 @@ describe('conservative progression next steps', () => {
   });
   it('does not recommend reduction from one poor session', () => expect(progressionFor(exercise,[session([6,6])]).title).toBe('Repeat this load'));
   it('confirms a first success', () => expect(progressionFor(exercise,[session([8,8])])).toMatchObject({type:'hold',title:'Repeat to confirm'}));
+  it('attributes one historical success to last workout, without credit from pending/partial/current sets', () => {
+    const history=[session([8,8])],before=structuredClone(history);
+    for(const completed of [0,1,2]) {
+      const activeExercise={...exercise,sets:[0,1].map(i=>({reps:8,weight:40,completed:i<completed}))};
+      const result=progressionFor(activeExercise,history);
+      expect(result.title).toBe('Repeat to confirm');expect(result.detail).toContain('last workout');
+      expect(result.detail).not.toContain('this time');expect(result).not.toHaveProperty('evidenceExposures');
+    }
+    expect(progressionFor(exercise,JSON.parse(JSON.stringify(history)))).toEqual(progressionFor(exercise,history));
+    expect(progressionFor(exercise,[...history,session([8,7])]).title).toBe('Build reps first');
+    expect(progressionFor(exercise,[...history,session([8,8])])).toMatchObject({type:'progress',evidenceExposures:2});
+    expect(history).toEqual(before);
+  });
   it('confirms improvement without an early load increase', () => expect(progressionFor(exercise,[session([8,7]),session([8,8])]).title).toBe('Repeat to confirm'));
   it('retains the two-session increase and exact increment', () => expect(advice([8,8])).toMatchObject({type:'progress',weight:41,evidenceExposures:2}));
   it('holds when latest reported effort exceeds target, including zero', () => expect(advice([8,8],{rirs:[null,0]}).title).toBe('Hold the load'));

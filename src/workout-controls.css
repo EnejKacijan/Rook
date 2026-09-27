@@ -632,6 +632,8 @@
 .workout-restart-confirm-actions .button { min-height: 50px; padding-inline: 10px; font-size: 10px; }
 .workout-restart-confirm-actions .workout-restart-danger { background: #873a34; color: #fff; }
 .workout-restart-confirm-actions .workout-restart-danger:is(:hover, :focus-visible) { background: #73302b; }
+.workout-cancel-confirm-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.workout-cancel-confirm-actions .button { white-space: normal; overflow-wrap: anywhere; }
 
 
 @media (max-width: 350px) {

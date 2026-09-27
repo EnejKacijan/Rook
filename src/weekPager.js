@@ -4,7 +4,7 @@ export const WEEK_PAGER = Object.freeze({intent: 10, ratio: 1.35, fraction: .28,
   flickDistance: 24, velocity: .5, freshFor: 100, minSettle: 160, maxSettle: 220});
 
 export function bindWeekPager({root, viewport, track, labelTrack, getOptions, onCommit}) {
-  let gesture = null, phase = 'idle', width = 0, stride = 0, frame = 0, timer = 0;
+  let gesture = null, phase = 'idle', width = 0, stride = 0, labelWidth = 0, labelStride = 0, frame = 0, timer = 0;
   let dragX = 0, suppressUntil = 0, disposed = false, finish = null, settlingDirection = null, resumedTap = null;
   const removers = [];
   const now = () => performance.now();
@@ -18,11 +18,14 @@ export function bindWeekPager({root, viewport, track, labelTrack, getOptions, on
     width = viewport.getBoundingClientRect().width;
     // The gap belongs to the track, never to a day cell or the page width.
     stride = width + (parseFloat(getComputedStyle(track).columnGap) || 0);
+    labelWidth = labelTrack.parentElement.getBoundingClientRect().width;
+    labelStride = labelWidth + (parseFloat(getComputedStyle(labelTrack).columnGap) || 0);
   };
   const paint = () => {
     frame = 0;
     track.style.transform = `translate3d(${-stride + dragX}px, 0, 0)`;
-    labelTrack.style.transform = `translate3d(${(-1 + (stride ? dragX / stride : 0)) * 100 / 3}%, 0, 0)`;
+    // Both tracks use one normalized progress, each with its own page + gutter.
+    labelTrack.style.transform = `translate3d(${(-1 + (stride ? dragX / stride : 0)) * labelStride}px, 0, 0)`;
   };
   const schedulePaint = () => { if (!frame) frame = requestAnimationFrame(paint); };
   const flushPaint = () => { cancelAnimationFrame(frame); frame = 0; paint(); };
@@ -164,9 +167,10 @@ export function bindWeekPager({root, viewport, track, labelTrack, getOptions, on
   for (const name of ['blur', 'resize', 'orientationchange', 'pagehide']) listen(window, name, reset);
   listen(document, 'visibilitychange', reset);
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-    if (viewport.getBoundingClientRect().width !== width) reset();
+    if (viewport.getBoundingClientRect().width !== width || labelTrack.parentElement.getBoundingClientRect().width !== labelWidth) reset();
   }) : null;
   observer?.observe(viewport);
+  observer?.observe(labelTrack.parentElement);
   reset();
   return {arrow, reset, destroy() { disposed = true; reset(); observer?.disconnect(); removers.forEach(remove => remove()); }};
 }

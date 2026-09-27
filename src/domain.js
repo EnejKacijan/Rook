@@ -8998,7 +8998,7 @@ export function progressionFor(exercise, history, profile = null) {
     return {
       type: "hold",
       title: "Repeat to confirm",
-      detail: `Rep target reached this time. Repeat at the ${sameSetup} before increasing.`,
+      detail: `You reached the rep target last workout. Repeat at the ${sameSetup} to confirm before increasing.`,
     };
   const completeRecent = observations.filter((entry) => entry.complete);
   const plateauWindow = completeRecent.slice(

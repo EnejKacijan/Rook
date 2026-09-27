@@ -106,7 +106,7 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
   },[chooseInstance,repeatRequest]);
   actions.current={open,add,keepSearchFocus};
   const searchQuery=scope==='saved'?savedQuery:query;
-  const setSearch=value=>{if(scope==='saved')setSavedQuery(value);else {setQuery(value);position.current=0;if(list.current)list.current.scrollTop=0;}};
+  const setSearch=value=>{if(scope==='saved')setSavedQuery(value);else setQuery(value);};
   // The underlying workout updates immediately; keep the outgoing preview's
   // actions stable during the shared sheet's normal close animation.
   if(!leaving.current)exitPresentation.current={status:preview?status(preview.id):'',empty:!state.activeWorkout?.exercises.length};
@@ -116,13 +116,13 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
     <Header title={preview?'Exercise':'Add exercise'} onBack={preview?back:scope==='saved'&&savedView?()=>savedBack.current?.():undefined} onClose={close} closeLabel="Back to workout"/>
     <div className="queue-picker-search-chrome" hidden={!browsing} data-preview-motion>
       {scopes}
-      <SearchInput className="exercise-search" aria-label={scope==='saved'?'Search saved workouts':'Search exercises'} placeholder={scope==='saved'?'Search saved workouts':'Search exercises'} value={searchQuery} onChange={e=>setSearch(e.target.value)} onClear={()=>setSearch('')}/>
+      <SearchInput className="exercise-search" searchScope={scope} resultsTarget={()=>scope==='saved'?screen.current?.querySelector('.saved-workout-list'):list.current} aria-label={scope==='saved'?'Search saved workouts':'Search exercises'} placeholder={scope==='saved'?'Search saved workouts':'Search exercises'} value={searchQuery} onChange={e=>setSearch(e.target.value)} onClear={()=>setSearch('')}/>
       <div className="queue-picker-feedback" aria-live="polite">{notice}</div>
     </div>
     {savedVisited&&<SavedWorkouts embedded hidden={scope!=='saved'} browseQuery={savedQuery} navigationRef={savedBack} onViewChange={setSavedView} state={state} update={update} close={close} Header={Header} Editor={Editor} Modal={Modal} onEditingChange={setSavedEditing}/>}
     <div className="exercise-search-body" hidden={Boolean(preview)||scope!=='exercises'} data-preview-motion>
       <div ref={list} data-exercise-search-scroll>
-        {results.slice(0,limit).map(item=><PickerRow key={item.id} item={item} status={status(item.id)} showImages={state.profile.showExerciseImages!==false} actions={actions}/>)}
+        {results.slice(0,limit).map((item,index)=><PickerRow key={item.id} item={item} priority={index<6} status={status(item.id)} showImages={state.profile.showExerciseImages!==false} actions={actions}/>)}
         {limit<results.length&&<button ref={more} className="text-button queue-more-results" onClick={()=>setLimit(n=>n+24)}>Show more exercises</button>}
         {ready&&!results.length&&<p>No compatible exercises found. Try another search or review your equipment and restrictions in Profile.</p>}
       </div>
@@ -145,12 +145,12 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
   </main>;
 }
 
-const PickerRow=memo(function PickerRow({item,status,showImages,actions}){
+const PickerRow=memo(function PickerRow({item,priority,status,showImages,actions}){
   return <div className="queue-add-swipe" data-catalog-id={item.id} data-swipe-row data-swipe-enabled={!status}>
     <span className="queue-swipe-cue" aria-hidden="true"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12h8M12 8v8"/></svg></span>
     <div className="queue-search-row" data-swipe-content>
       <button type="button" className="queue-search-body" data-swipe-body aria-label={`Preview ${item.name}`} onClick={()=>actions.current.open(item)}>
-        <ExercisePickerIdentity item={item} enabled={showImages}><strong>{item.name}</strong><small>{item.equipment?.join(' · ')}{item.custom?' · Custom':''}</small><small className="queue-result-status" aria-hidden={!status}>{status||'\u00a0'}</small></ExercisePickerIdentity>
+        <ExercisePickerIdentity item={item} enabled={showImages} priority={priority}><strong>{item.name}</strong><small>{item.equipment?.join(' · ')}{item.custom?' · Custom':''}</small><small className="queue-result-status" aria-hidden={!status}>{status||'\u00a0'}</small></ExercisePickerIdentity>
       </button>
       <button type="button" className="queue-add-button" aria-label={status?`${item.name}: ${status}`:`Add ${item.name} to Up Next`} disabled={Boolean(status)} onMouseDown={e=>actions.current.keepSearchFocus(e)} onClick={()=>actions.current.add(item)}>{status?'✓':'+'}</button>
     </div>

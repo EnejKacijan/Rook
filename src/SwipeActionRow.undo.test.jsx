@@ -55,3 +55,9 @@ it('unmount cancels the pending timer',()=>{
   act(()=>undo.show({message:'Hack Squat added',undo:vi.fn()}));
   expect(vi.getTimerCount()).toBe(1);act(()=>root.render(null));expect(vi.getTimerCount()).toBe(0);
 });
+it('an explicitly failed Undo remains retryable without restarting its lifetime',()=>{
+ const restore=vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true);
+ act(()=>undo.show({message:'Workout moved',undo:restore}));advance(4000);
+ act(()=>surface().querySelector('button').click());expect(surface()).not.toBeNull();expect(vi.getTimerCount()).toBe(1);
+ advance(999);act(()=>surface().querySelector('button').click());expect(surface()).toBeNull();expect(restore).toHaveBeenCalledTimes(2);expect(vi.getTimerCount()).toBe(0);
+});

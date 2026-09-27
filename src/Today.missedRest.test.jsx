@@ -32,18 +32,18 @@ it.each([1,2,3])('dismissed %i occurrences remain accessible through overflow af
  const before=todayMissedRestFixture({count}),state=deserializeState(serializeState(dismissMissedReminder(before,{persist:()=>true})));
  draw(state);expect(document.querySelector('.today-missed-row')).toBeNull();overflow(state);click(button('Missed workouts'));
  const request=detail.mock.calls[0][0].flexibleWeek;expect(request).toEqual(count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true});
- sheet(state,request);expect(document.querySelector('h1').textContent).toBe(count===1?'Move UPPER B':'Choose a missed session');
+ sheet(state,request);expect(document.querySelector('h1').textContent).toBe(count===1?'UPPER B':'Choose a missed session');
  expect(update).not.toHaveBeenCalled();expect(state.flexibleWeek).toEqual(before.flexibleWeek);expect(state.workouts).toEqual(before.workouts);
 });
 it('the single missed action also bypasses the chooser through Adjust week',()=>{
  const state=todayMissedRestFixture({count:1});sheet(state,{});click([...document.querySelectorAll('button')].find(b=>b.textContent.startsWith('I missed a workout')));
- expect(document.querySelector('h1').textContent).toBe('Move UPPER B');expect(document.body.textContent).toContain('Fri, Sep 18');expect(update).not.toHaveBeenCalled();
+ expect(document.querySelector('h1').textContent).toBe('UPPER B');expect(document.body.textContent).toContain('Fri, Sep 18');expect(update).not.toHaveBeenCalled();
 });
 it('same-name rows retain dates and canonical targeting after plan order changes',()=>{
  const state=todayMissedRestFixture({count:3}),missed=missedFlexibleSessions(state);sheet(state,{missed:true});
  expect([...document.querySelectorAll('[data-session-id]')].map(b=>b.textContent)).toEqual(missed.map(s=>`UPPER BMissed · ${new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(new Date(s.scheduledDate+'T12:00:00'))}`));
  const target=missed[2],row=document.querySelector(`[data-session-id="${target.logicalSessionId}"]`);state.program.days.reverse();sheet({...state},{missed:true});expect(document.querySelector(`[data-session-id="${target.logicalSessionId}"]`)).toBe(row);
- click(row);expect(document.body.textContent).toContain('Currently Fri, Sep 18');click(button('Use this workout today'));expect(document.body.textContent).toContain('From Fri, Sep 18, 2026.');expect(update).not.toHaveBeenCalled();click(button('APPLY'));
+ click(row);expect(document.body.textContent).toContain('Missed · Fri, Sep 18');click(button('TRAIN TODAY'));expect(document.body.textContent).toContain('From Fri, Sep 18, 2026.');expect(update).not.toHaveBeenCalled();click(button('APPLY'));
  const next=update.mock.calls[0][0]();expect(missedFlexibleSessions(next).map(s=>s.logicalSessionId)).toEqual(missed.slice(0,2).map(s=>s.logicalSessionId));
 });
 it.each(['move','skip','complete'])('resolved missed occurrence leaves reminder and list: %s',kind=>{

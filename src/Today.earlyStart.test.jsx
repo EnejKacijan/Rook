@@ -74,6 +74,6 @@ it('projects active and completed early execution only on its actual date', () =
   const completed = completeWorkout(state);
   const dates = calendarDayPresentation(completed, ['2026-09-21', '2026-09-22']);
   expect(dates['2026-09-21'].markers).toContain('completed');
-  expect(dates['2026-09-22'].markers).toContain('completed');
+  expect(dates['2026-09-22'].markers).not.toContain('completed');
   expect(dates['2026-09-22'].label).not.toBe('rest day');
 });

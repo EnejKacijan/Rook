@@ -1,4 +1,4 @@
-import {isoDay,weekDate,workoutPerformedDate,currentWeekSchedule,optionalStrengthForDate} from './domain.js';
+import {isoDay,weekDate,workoutPerformedDate,currentWeekSchedule,optionalStrengthForDate,pluralize} from './domain.js';
 import {flexibleOccurrencesForDate} from './flexibleWeek.js';
 import {isRepeatAdjustment} from './useWorkoutToday.js';
 import {isCombinedAdjustment} from './combinedWorkoutLifecycle.js';
@@ -42,45 +42,54 @@ export function calendarDayStates(state,dates) {
 export function calendarDayPresentation(state,dates) {
   const facts=calendarDayStates(state,dates);
   return Object.fromEntries(dates.map(date=>{
-    const day=facts[date],buckets=new Set(),provenance=[];
-    if(day.active)buckets.add('active');
-    if(day.complete)buckets.add('completed');
+    const day=facts[date],provenance=[];
+    // Count executions once from history, not again for each linked occurrence
+    // (one combined workout can fulfil several source occurrences).
+    const counts={active:Number(day.active),completed:(state.workouts||[]).filter(w=>w.completedAt&&workoutPerformedDate(w)===date).length,planned:0,missed:0};
     for(const occurrence of flexibleOccurrencesForDate(state,date)){
-      if(occurrence.completedWorkout)buckets.add('completed');
       // The occurrence can be browsed on its scheduled/source date while its
       // execution is already happening elsewhere. Calendar activity is a fact
       // of the execution date, never provenance of the source occurrence.
-      else if(occurrence.activeWorkout && occurrence.actualPerformedDate===date)buckets.add('active');
-      else if(occurrence.activeWorkout)provenance.push('workout already started elsewhere');
-      else if(occurrence.completedWorkout && occurrence.actualPerformedDate!==date)provenance.push('workout performed elsewhere');
-      else if(occurrence.scheduledDate===date && ['planned','missed','optional'].includes(occurrence.status))buckets.add('planned');
+      if(occurrence.completedWorkout){
+        if(occurrence.actualPerformedDate!==date)provenance.push('workout performed elsewhere');
+      }
+      else if(occurrence.activeWorkout){
+        if(occurrence.actualPerformedDate!==date)provenance.push('workout already started elsewhere');
+      }
+      else if(occurrence.scheduledDate===date && ['planned','missed','optional'].includes(occurrence.status))counts[occurrence.status==='missed'?'missed':'planned']++;
     }
     // Optional strength and repeat/combined preparations own independent IDs.
     // Starting one replaces its own ring, never a different planned occurrence.
     for(const optional of state.optionalSessions||[]){
       if(optional.kind!=='Strength'||optional.date!==date||!optional.workout?.exercises)continue;
-      if(optional.id&&state.workouts?.some(w=>w.completedAt&&w.optionalSessionId===optional.id))buckets.add('completed');
-      else if(optional.id&&state.activeWorkout?.optionalSessionId===optional.id)buckets.add('active');
-      else if(optional.status==='planned')buckets.add('planned');
+      if(optional.id&&state.workouts?.some(w=>w.completedAt&&w.optionalSessionId===optional.id)) {
+        if(!state.workouts.some(w=>w.completedAt&&w.optionalSessionId===optional.id&&workoutPerformedDate(w)===date))provenance.push('workout performed elsewhere');
+      }
+      else if(optional.id&&state.activeWorkout?.optionalSessionId===optional.id) {
+        if(workoutPerformedDate(state.activeWorkout)!==date)provenance.push('workout already started elsewhere');
+      }
+      else if(optional.status==='planned')counts.planned++;
     }
     const adjustment=state.todayAdaptation;
     if(adjustment?.date===date && (isRepeatAdjustment(adjustment)||isCombinedAdjustment(adjustment))){
-      if(adjustment.id&&state.workouts?.some(w=>w.completedAt&&w.adjustment?.id===adjustment.id))buckets.add('completed');
-      else if(adjustment.id&&state.activeWorkout?.adjustment?.id===adjustment.id)buckets.add('active');
-      else buckets.add('planned');
+      if(adjustment.id&&state.workouts?.some(w=>w.completedAt&&w.adjustment?.id===adjustment.id)) {
+        if(!state.workouts.some(w=>w.completedAt&&w.adjustment?.id===adjustment.id&&workoutPerformedDate(w)===date))provenance.push('workout performed elsewhere');
+      }
+      else if(adjustment.id&&state.activeWorkout?.adjustment?.id===adjustment.id) {
+        if(workoutPerformedDate(state.activeWorkout)!==date)provenance.push('workout already started elsewhere');
+      }
+      else counts.planned++;
     }
-    const statuses=['active','completed','planned'].filter(status=>buckets.has(status));
-    // At most two shapes. Keep an active session and an unresolved obligation
-    // visible when all three coexist; the accessible label still includes history.
+    const statuses=['active','completed','planned','missed'].filter(status=>counts[status]>0);
     const markers=compactCalendarMarkers(statuses);
-    const labels={active:'workout in progress',completed:'completed workout',planned:'planned workout'};
-    return [date,{...day,statuses,markers,label:statuses.map(status=>labels[status]).join(', ')||provenance.join(', ')||'rest day'}];
+    const labels={active:`${pluralize(counts.active,'workout')} in progress`,completed:pluralize(counts.completed,'completed workout'),planned:pluralize(counts.planned,'planned workout'),missed:pluralize(counts.missed,'missed workout')};
+    return [date,{...day,counts,statuses,markers,label:[...statuses.map(status=>labels[status]),...new Set(provenance)].join(', ')||'rest day'}];
   }));
 }
 
-// The status summary remains complete for accessibility and detail views. The
-// small day-cell slot has room for one clear activity signal when a session is
-// actually in progress.
+// One compact activity signal, shared by week and month. Full counts/statuses
+// remain available above. Missed-only dates retain their existing outlined ring.
 export function compactCalendarMarkers(statuses=[]) {
-  return statuses.includes('active') ? ['active'] : statuses.length>2 ? ['active','planned'] : statuses;
+  const primary=['active','completed','planned'].find(status=>statuses.includes(status));
+  return primary ? [primary] : statuses.includes('missed') ? ['planned'] : [];
 }

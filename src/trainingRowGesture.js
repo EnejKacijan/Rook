@@ -1,6 +1,7 @@
 import {EDGE_BACK} from './edgeBack.js';
 
 export const ROW_INTENT = Object.freeze({slop:10, ratio:1.3});
+export const REORDER_HOLD = Object.freeze({delay:300, slop:8});
 const owners = new WeakMap();
 
 /** One input owner per list. Adapters supply presentation, never domain state. */
@@ -23,6 +24,7 @@ function createOwner(root) {
   const consume=e=>{if(e.cancelable)e.preventDefault();e.stopPropagation();};
   const end=(commit=false,point=null,event=null)=>{
     const g=gesture;if(!g)return;gesture=null;unlisten();
+    clearTimeout(g.holdTimer);
     if(g.capture?.hasPointerCapture?.(g.id))g.capture.releasePointerCapture(g.id);
     if(g.lock){
       suppress={row:g.row,until:performance.now()+500};
@@ -32,6 +34,16 @@ function createOwner(root) {
   };
   const cancel=()=>end(false);
   const valid=()=>gesture&&root.isConnected&&gesture.row.isConnected&&!blocked();
+  const claim=(g,kind)=>{
+    clearTimeout(g.holdTimer);
+    g.lock=kind;g.candidate=g[kind];g.adapter=adapters.get(kind);
+    if(g.adapter.begin?.(g.candidate)===false){cancel();return false;}
+    if(g.pointerType!=='touch'){
+      g.capture=g.reorder?.activator||g.row;
+      g.capture.setPointerCapture?.(g.id);
+    }
+    return true;
+  };
   const start=(event,point,pointerType)=>{
     cancel();suppress=null;
     if(blocked())return;
@@ -43,6 +55,12 @@ function createOwner(root) {
     gesture={swipe,reorder,row:swipe?.row||reorder.activator.closest('[data-reorder-block-index],[data-reorder-workout-section]')||reorder.activator,
       startX:point.clientX,startY:point.clientY,point,pointerType,id:pointerType==='touch'?point.identifier:point.pointerId,lock:null};
     listen();
+    if(reorder){
+      const candidate=gesture;
+      candidate.holdTimer=setTimeout(()=>{
+        if(gesture===candidate&&valid()&&!candidate.lock)claim(candidate,'reorder');
+      },REORDER_HOLD.delay);
+    }
   };
   const move=(event,point)=>{
     const g=gesture;if(!g)return;
@@ -50,24 +68,23 @@ function createOwner(root) {
     g.point=point;
     const dx=point.clientX-g.startX,dy=point.clientY-g.startY;
     if(!g.lock){
+      // Before pickup the handle is an ordinary scroll surface. A horizontal
+      // swipe may still use the existing Remove owner; vertical intent yields.
+      if(g.reorder&&Math.max(Math.abs(dx),Math.abs(dy))>REORDER_HOLD.slop){
+        clearTimeout(g.holdTimer);
+        if(Math.abs(dx)<Math.abs(dy)*ROW_INTENT.ratio){cancel();return;}
+        g.reorder=null;
+      }
       if(Math.max(Math.abs(dx),Math.abs(dy))<ROW_INTENT.slop)return;
       if(Math.abs(dx)>=Math.abs(dy)*ROW_INTENT.ratio){
         if(!g.swipe||!adapters.get('swipe').accepts(dx)){cancel();return;}
-        g.lock='swipe';g.candidate=g.swipe;
+        if(!claim(g,'swipe'))return;
       }else if(Math.abs(dy)>=Math.abs(dx)*ROW_INTENT.ratio){
-        if(!g.reorder){cancel();return;}
-        g.lock='reorder';g.candidate=g.reorder;
+        cancel();return;
       }else return;
-      g.adapter=adapters.get(g.lock);
-      if(g.adapter.begin?.(g.candidate)===false){cancel();return;}
-      if(g.pointerType!=='touch'){
-        g.capture=g.reorder?.activator||g.row;
-        g.capture.setPointerCapture?.(g.id);
-      }
     }
-    // Handle touch-action:none already owns scrolling. A body move claimed by
-    // the browser must yield rather than cause a removal.
-    if(g.lock==='swipe'&&!event.cancelable&&!g.candidate.handle){cancel();return;}
+    // A touch already claimed by native scrolling cannot become an action.
+    if(g.lock==='swipe'&&g.pointerType==='touch'&&!event.cancelable){cancel();return;}
     if(g.adapter.move(g.candidate,point)===false){cancel();return;}
     consume(event);
   };

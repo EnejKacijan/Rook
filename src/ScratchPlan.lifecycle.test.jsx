@@ -7,12 +7,12 @@ import {blankState} from './domain.js';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let root,host,close;
 beforeEach(async()=>{
- vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));
+ vi.useFakeTimers({toFake:['setTimeout','clearTimeout']});vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));
  vi.stubGlobal('scrollTo',()=>{});vi.spyOn(window,'confirm').mockReturnValue(false);
  host=document.createElement('div');document.body.append(host);root=createRoot(host);close=vi.fn();
  await act(async()=>root.render(<ScratchPlan state={blankState()} update={()=>{}} close={close}/>));
 });
-afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();});
+afterEach(async()=>{await act(async()=>root.unmount());host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 const setup=()=>host.querySelector('.scratch-plan-screen');
 const editor=()=>host.querySelector('.scratch-editor-screen');
 const button=(name,scope=host)=>[...scope.querySelectorAll('button')].find(e=>e.getAttribute('aria-label')===name||e.textContent.trim()===name);
@@ -56,7 +56,7 @@ it('releases a live gesture while retained but inactive, then permits the next s
  await begin();
  const point={identifier:7,clientX:100,clientY:200};
  const touch=(target,type,y=220)=>{const event=new Event(type,{bubbles:true,cancelable:true});Object.assign(event,{touches:type==='touchcancel'?[]:[{...point,clientY:y}],changedTouches:[point]});target.dispatchEvent(event);return event;};
- const start=async()=>{const handle=editor().querySelector('.plan-workout-drag-surface');await act(async()=>touch(handle,'touchstart',200));await act(async()=>touch(handle,'touchmove'));expect(editor().querySelector('.is-reordering')).not.toBeNull();};
+ const start=async()=>{const handle=editor().querySelector('.plan-workout-drag-surface');await act(async()=>touch(handle,'touchstart',200));await act(async()=>vi.advanceTimersByTime(300));await act(async()=>touch(handle,'touchmove'));expect(editor().querySelector('.is-reordering')).not.toBeNull();};
  await start();await click('Back to plan setup',editor());
  expect(editor().hidden).toBe(true);expect(editor().querySelector('.is-reordering,.plan-reorder-preview')).toBeNull();
  expect(touch(window,'touchmove').defaultPrevented).toBe(false);

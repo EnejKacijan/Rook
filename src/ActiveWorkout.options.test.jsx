@@ -26,7 +26,7 @@ function fixture(kind='planned',changed=true){let s=createReturningUserFixture(0
 }
 function mount(s){function Harness(){const[state,setState]=useState(s),[open,setOpen]=useState(null);current=state;detail=open;
  return <><ActiveWorkout state={state} update={fn=>setState(prev=>fn(structuredClone(prev)))} setPage={()=>{}} setDetail={setOpen}/>
- {open?.workoutOptions&&<ActiveWorkoutOptions workout={state.activeWorkout} onRestart={open.onRestart} close={()=>setOpen(null)}/>}
+ {open?.workoutOptions&&<ActiveWorkoutOptions workout={state.activeWorkout} {...open} close={()=>setOpen(null)}/>}
  {open?.upNextOptions&&<UpNextExerciseOptions workout={state.activeWorkout} request={open.upNextOptions} onMoveUpNext={open.onMoveUpNext} onRemoveUpNext={open.onRemoveUpNext} close={()=>setOpen(null)}/>}</>;}
  act(()=>root.render(<StrictMode><Harness/></StrictMode>));
 }
@@ -34,9 +34,9 @@ const click=node=>act(()=>node.click());
 const button=name=>[...host.querySelectorAll('button')].find(b=>b.textContent.trim()===name||b.getAttribute('aria-label')===name);
 const open=()=>click(button('Workout options'));
 const request=()=>click(host.querySelector('.workout-restart-option'));
-it.each(['planned','freestyle'])('%s menu contains only Restart; Cancel retains the exact session and restores focus',kind=>{
+it.each(['planned','freestyle'])('%s menu contains Restart and Cancel workout; declining Restart preserves the session and focus',kind=>{
  mount(fixture(kind));const before=structuredClone(current);open();
- const sheet=host.querySelector('.active-workout-options-sheet');expect(sheet.querySelectorAll('.sheet-scroll button')).toHaveLength(1);
+ const sheet=host.querySelector('.active-workout-options-sheet');expect(sheet.querySelectorAll('.sheet-scroll button')).toHaveLength(2);
  expect(sheet.textContent).not.toMatch(/autosave|saved automatically|UP NEXT|Save as template|Move up/i);
  request();expect(document.activeElement.textContent).toBe('Cancel');expect(host.querySelector('.workout-restart-danger').classList.contains('danger')).toBe(true);
  click(button('Cancel'));expect(current).toEqual(before);expect(document.activeElement).toBe(host.querySelector('.workout-restart-option'));
@@ -69,7 +69,7 @@ it('recording reproduction: restart removes both Started labels, preserves prepa
  const reloaded=domain.loadState();expect(reloaded.activeWorkout.id).toBe(id);
  act(()=>root.render(null));mount(reloaded);
  expect(host.querySelectorAll('.up-next-note')).toHaveLength(0);
- expect(button('Cancel repeated workout')).toBeTruthy();
+ open();expect(button('Cancel workout')).toBeTruthy();
 });
 it('freestyle confirmation describes the empty reset and renders a usable empty session',()=>{
  mount(fixture('freestyle'));open();request();

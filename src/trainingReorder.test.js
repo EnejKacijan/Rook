@@ -19,16 +19,16 @@ afterEach(()=>{release();swipeRelease();root.remove();preview.remove();vi.useRea
 const handle=i=>root.children[i].querySelector('[data-reorder-kind]'),body=i=>root.children[i].querySelector('span');
 function pointer(type,target,y,x=320,extra={}){const e=new Event(type,{bubbles:true,cancelable:true});Object.assign(e,{pointerId:1,pointerType:'mouse',button:0,clientX:x,clientY:y,...extra});target.dispatchEvent(e);return e;}
 function touch(type,target,y,x=320,multi=false){const e=new Event(type,{bubbles:true,cancelable:true});const point={identifier:1,clientX:x,clientY:y};Object.assign(e,{touches:type==='touchend'||type==='touchcancel'?[]:[point,...multi?[{...point,identifier:2}]:[]],changedTouches:[point]});target.dispatchEvent(e);return e;}
-it('a handle tap is a no-op; movement starts mouse and pen immediately; row body never reorders',()=>{
+it('a handle tap is a no-op; mouse and pen require a deliberate hold; row body never reorders',()=>{
  pointer('pointerdown',handle(0),125);pointer('pointerup',handle(0),125);expect(commit).not.toHaveBeenCalled();view.mockClear();
  pointer('pointerdown',body(0),125);pointer('pointermove',body(0),245);pointer('pointerup',body(0),245);expect(view).not.toHaveBeenCalled();
- for(const pointerType of ['mouse','pen']){pointer('pointerdown',handle(0),125,320,{pointerType});pointer('pointermove',handle(0),235,320,{pointerType});expect(gesture.current.active).toBe(true);pointer('pointerup',handle(0),235,320,{pointerType});}
+ for(const pointerType of ['mouse','pen']){pointer('pointerdown',handle(0),125,320,{pointerType});vi.advanceTimersByTime(300);pointer('pointermove',handle(0),235,320,{pointerType});expect(gesture.current.active).toBe(true);pointer('pointerup',handle(0),235,320,{pointerType});}
  expect(commit).toHaveBeenCalledTimes(2);expect(commit.mock.calls[0][0]).toMatchObject({exerciseId:'b',targetIndex:2});
 });
-it('touch has no hold delay and no-movement touch does not commit or change order',()=>{
+it('touch waits 300ms and a short no-movement touch never commits',()=>{
  touch('touchstart',handle(0),125);expect(gesture.current).toBeNull();touch('touchmove',handle(0),133,319);expect(gesture.current).toBeNull();
  touch('touchend',handle(0),125);expect(commit).not.toHaveBeenCalled();
- touch('touchstart',handle(0),125);touch('touchmove',handle(0),235);touch('touchend',handle(0),235);
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);touch('touchmove',handle(0),235);touch('touchend',handle(0),235);
  expect(commit).toHaveBeenCalledOnce();expect(commit.mock.calls[0][0].exerciseId).toBe('b');
 });
 it('one arbiter chooses direction on the handle and never switches until release',()=>{
@@ -37,7 +37,7 @@ it('one arbiter chooses direction on the handle and never switches until release
  expect(gesture.current).toBeNull();expect(root.children[0].hasAttribute('data-swipe-active')).toBe(true);
  touch('touchmove',handle(0),250,100);expect(gesture.current).toBeNull();expect(remove).not.toHaveBeenCalled();
  touch('touchend',handle(0),250,100);expect(remove).toHaveBeenCalledOnce();expect(commit).not.toHaveBeenCalled();
- touch('touchstart',handle(0),125);touch('touchmove',handle(0),145,317);expect(gesture.current.active).toBe(true);
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);touch('touchmove',handle(0),145,317);expect(gesture.current.active).toBe(true);
  touch('touchmove',handle(0),235,80);expect(root.querySelector('[data-swipe-active]')).toBeNull();touch('touchend',handle(0),235,80);
  expect(commit).toHaveBeenCalledOnce();expect(remove).toHaveBeenCalledOnce();unregister();
 });
@@ -52,7 +52,7 @@ it.each(['mouse','pen'])('%s handle left removes without reordering; unrelated p
  pointer('pointerup',handle(0),128,100,{pointerType});expect(remove).toHaveBeenCalledOnce();expect(commit).not.toHaveBeenCalled();unregister();
 });
 it.each(['touchcancel','pointercancel','Escape','blur','resize','visibilitychange','cleanup','multitouch'])('cancels %s without a mutation, stale transforms or a scrolling timer',reason=>{
- touch('touchstart',handle(0),125);touch('touchmove',handle(0),245);
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);touch('touchmove',handle(0),245);
  if(reason==='cleanup')release();else if(reason==='multitouch')touch('touchstart',handle(0),245,320,true);
  else if(reason==='Escape')window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'}));
  else if(reason==='pointercancel')pointer(reason,handle(0),245,320,{pointerType:'touch'});
@@ -64,24 +64,24 @@ it.each(['touchcancel','pointercancel','Escape','blur','resize','visibilitychang
 });
 it('autoscroll moves only the supplied list, stops away from its edge, and cancels on release',()=>{
  const documentTop=document.documentElement.scrollTop;
- touch('touchstart',handle(3),275);touch('touchmove',handle(3),295);vi.advanceTimersByTime(200);
+ touch('touchstart',handle(3),275);vi.advanceTimersByTime(300);touch('touchmove',handle(3),295);vi.advanceTimersByTime(200);
  expect(root.scrollTop).toBeGreaterThan(0);expect(root.scrollTop).toBeLessThanOrEqual(300);expect(document.documentElement.scrollTop).toBe(documentTop);
  touch('touchmove',handle(3),200);const atMiddle=root.scrollTop;vi.advanceTimersByTime(200);expect(root.scrollTop).toBe(atMiddle);
  touch('touchend',handle(3),200);vi.advanceTimersByTime(200);expect(root.scrollTop).toBe(atMiddle);
 });
 it('reduced motion still follows touch and settles without positional animations',()=>{
  vi.stubGlobal('matchMedia',()=>({matches:true}));const animation=vi.fn();for(const row of root.children)row.animate=animation;
- touch('touchstart',handle(0),125);touch('touchmove',handle(0),235);expect(preview.style.getPropertyValue('--reorder-drag-y')).toBe('110px');touch('touchend',handle(0),235);expect(commit).toHaveBeenCalledOnce();expect(animation).not.toHaveBeenCalled();
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);touch('touchmove',handle(0),235);expect(preview.style.getPropertyValue('--reorder-drag-y')).toBe('110px');touch('touchend',handle(0),235);expect(commit).toHaveBeenCalledOnce();expect(animation).not.toHaveBeenCalled();
 });
 it('the release click is suppressed, and cleanup removes ownership',()=>{
  const clicked=vi.fn();root.addEventListener('click',clicked);
- pointer('pointerdown',handle(0),125);pointer('pointermove',handle(0),235);pointer('pointerup',handle(0),235);handle(0).click();expect(clicked).not.toHaveBeenCalled();
+ pointer('pointerdown',handle(0),125);vi.advanceTimersByTime(300);pointer('pointermove',handle(0),235);pointer('pointerup',handle(0),235);handle(0).click();expect(clicked).not.toHaveBeenCalled();
  release();vi.advanceTimersByTime(500);body(0).click();expect(clicked).toHaveBeenCalledOnce();
 });
 
 it('feedback follows locked mode and canonical slots, including hysteresis and backwards motion',()=>{
  touch('touchstart',handle(3),275);expect(feedback.pickup).not.toHaveBeenCalled();
- touch('touchmove',handle(3),263);expect(feedback.pickup).toHaveBeenCalledOnce();expect(feedback.selection).not.toHaveBeenCalled();
+ vi.advanceTimersByTime(300);touch('touchmove',handle(3),263);expect(feedback.pickup).toHaveBeenCalledOnce();expect(feedback.selection).not.toHaveBeenCalled();
  for(const [y,count] of [[215,1],[214,1],[225,1],[165,2],[115,3],[185,4],[180,4]]){
   touch('touchmove',handle(3),y);expect(feedback.selection).toHaveBeenCalledTimes(count);
  }
@@ -91,6 +91,19 @@ it.each(['horizontal','original','cancel','failed'])('%s does not emit a success
  if(reason==='failed')commit.mockReturnValue(false);
  touch('touchstart',handle(0),125);
  if(reason==='horizontal'){touch('touchmove',handle(0),125,100);expect(feedback.pickup).not.toHaveBeenCalled();touch('touchend',handle(0),125,100);}
- else {touch('touchmove',handle(0),reason==='original'?140:235);touch(reason==='cancel'?'touchcancel':'touchend',handle(0),reason==='original'?140:235);expect(feedback.pickup).toHaveBeenCalledOnce();}
+ else {vi.advanceTimersByTime(300);touch('touchmove',handle(0),reason==='original'?140:235);touch(reason==='cancel'?'touchcancel':'touchend',handle(0),reason==='original'?140:235);expect(feedback.pickup).toHaveBeenCalledOnce();}
  expect(feedback.drop).not.toHaveBeenCalled();
+});
+
+it('vertical handle scrolling before pickup cancels the candidate without blocking native scrolling',()=>{
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(299);expect(feedback.pickup).not.toHaveBeenCalled();
+ expect(touch('touchmove',handle(0),134).defaultPrevented).toBe(false);vi.advanceTimersByTime(600);
+ expect(gesture.current).toBeNull();expect(feedback.pickup).not.toHaveBeenCalled();touch('touchend',handle(0),235);expect(commit).not.toHaveBeenCalled();
+ touch('touchstart',handle(0),125);touch('touchmove',handle(0),130);vi.advanceTimersByTime(300);
+ expect(feedback.pickup).toHaveBeenCalledOnce();expect(touch('touchmove',handle(0),235).defaultPrevented).toBe(true);touch('touchend',handle(0),235);expect(commit).toHaveBeenCalledOnce();
+});
+it.each(['blur','visibilitychange','multitouch','cleanup'])('cancels pending hold on %s before any pickup',reason=>{
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(150);
+ if(reason==='cleanup')release();else if(reason==='multitouch')touch('touchstart',handle(0),125,320,true);else (reason==='blur'?window:document).dispatchEvent(new Event(reason));
+ vi.advanceTimersByTime(500);expect(feedback.pickup).not.toHaveBeenCalled();expect(gesture.current).toBeNull();expect(commit).not.toHaveBeenCalled();
 });
