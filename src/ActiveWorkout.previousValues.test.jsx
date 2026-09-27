@@ -118,9 +118,11 @@ it('a raw edit re-enables matching history before blur and Undo retains that exa
  mount(fixture({matching:true}));const weight=input('weight'),before=structuredClone(current),save=vi.spyOn(domain,'saveState');expect(use().disabled).toBe(true);type(weight,'095,50');expect(use().disabled).toBe(false);click(use());expect(weight.value).toBe('90');click(button('Undo'));expect(weight.value).toBe('095,50');expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();
  expect(use().disabled).toBe(false);pointerApply();expect(weight.value).toBe('90');click(button('Undo'));expect(weight.value).toBe('095,50');expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();
 });
-it('only a changed RIR acknowledges when load/reps already match, and per-side raw drafts survive Undo',()=>{
+it('only a changed RIR acknowledges when load/reps already match',()=>{
  const initial=fixture({matching:true});initial.activeWorkout.exercises[0].sets[0].rir=3;mount(initial);click(use());expect(animations.filter(a=>a.node.matches('input'))).toHaveLength(0);expect(animations.some(a=>a.node.classList.contains('rir-value'))).toBe(true);click(button('Undo'));expect(set().rir).toBe(3);
- act(()=>root.render(null));mount(fixture({mode:'per_side'}));type(input('sides.left'),'003');type(input('sides.right'),'005');click(use());click(button('Undo'));expect(input('sides.left').value).toBe('3');expect(input('sides.right').value).toBe('005');expect(set().sides).toEqual({left:{reps:3},right:{reps:null}});
+});
+it('independent per-side raw drafts survive Undo',()=>{
+ mount(fixture({mode:'per_side'}));type(input('sides.left'),'003');type(input('sides.right'),'005');click(use());click(button('Undo'));expect(input('sides.left').value).toBe('3');expect(input('sides.right').value).toBe('005');expect(set().sides).toEqual({left:{reps:3},right:{reps:null}});
 });
 it.each([{id:'hack-squat',units:'lb',rir:false},{id:'pull-up'},{id:'assisted-pull-up'},{id:'plank'},{mode:'per_side'}])('preserves canonical representation, independent sides and Undo for %j',options=>{
  mount(fixture(options));const before=structuredClone(current);click(use());expect(set().reps).toBe(options.id==='plank'?45:7);expect(set().weight).toBe(options.id==='plank'?null:90);

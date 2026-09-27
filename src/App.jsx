@@ -46,7 +46,7 @@ import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
 import { importedSetComparable,importedSessionTimeLabel } from './historicalSetSemantics.js';
 import { StartupBoundary } from './StartupBoundary.jsx';
 import { StorageDiagnostics } from './StorageDiagnostics.jsx';
-import { hasEstablishedData, deleteLocalState, localRecoverySummary, recordStartupOutcome } from './localStateStorage.js';
+import { hasEstablishedData, assertStateContinuity, assertHydrationCurrent, isPersistedReplacement, deleteLocalState, localRecoverySummary, recordStartupOutcome } from './localStateStorage.js';
 import { recoverInterruptedRestore } from './restoreTransaction.js';
 import { hasStoredWorkoutMedia, clearAllWorkoutMedia } from './workoutPhotos.js';
 import { moveReorderPreview } from './reorderPresentation.js';
@@ -267,6 +267,7 @@ import {
   restoreWeeklyPlanWorkout,
   roundedEstimate,
   saveState,
+  serializeState,
   saveSerializedState,
   hydrateStoredState,
   STORAGE_KEY,
@@ -456,13 +457,14 @@ export async function loadInitialLiftState() {
   try {
     const initial = normalizePlanHistoryState(normalizeCustomExercisesState(normalizeTrainingBlocksState(result.state)));
     if (!initial.profile.onboardingComplete && hasEstablishedData(initial)) {recordStartupOutcome('inconsistent-profile');return { status: 'error', code: 'inconsistent-profile', recovery: localRecoverySummary(globalThis.localStorage,hydrateStoredState) };}
-    return { status: 'ready', state: initial };
+    return { ...result, state: initial };
   } catch (error) { return { status: 'error', error }; }
 }
-function useLiftState(startup) {
+export function useLiftState(startup) {
   const alreadyPersistedState = useRef(null);
   const initialWrite = useRef(true);
   const [state, setState] = useState(() => {
+    assertHydrationCurrent(startup);
     const initial = startup.status === 'empty' ? blankState() : startup.state;
     if (initial.profile.onboardingComplete) {
       const landingDate = initial.activeWorkout
@@ -498,7 +500,7 @@ function useLiftState(startup) {
       return;
     }
     const reason = initialWrite.current ? (startup.status==='empty'?'first-run:user-change':'startup-hydration') : state.activeWorkout ? 'active-workout' : 'app-autosave';
-    const saved = saveState(state, { reason });
+    const saved = saveState(state, { reason, ...(initialWrite.current && startup.generation !== undefined && {expectedGeneration:startup.generation}) });
     initialWrite.current = false;
     setPersistenceFailed(!saved);
   }, [state]);
@@ -513,6 +515,13 @@ function useLiftState(startup) {
             ),
           ),
         );
+        try {
+          const restored = options.replacement && options.persistedState && isPersistedReplacement(serializeState(options.persistedState));
+          assertStateContinuity(restored ? options.persistedState : previous, next);
+        } catch {
+          setPersistenceFailed(true);
+          return previous;
+        }
         if (programMeaningfullyChanged(previousProgram, next.program)) {
           const requested = options.planVersion;
           if (requested !== false) {
@@ -16622,7 +16631,7 @@ export function RestoreBackupSheet({ state, update, close, onRestored }) {
     try {
       const { commitPreparedRestore } = await loadBackupTools();
       const restoredState = await commitPreparedRestore(prepared, { currentState: state });
-      update(() => restoredState, { persistedState: restoredState });
+      update(() => restoredState, { persistedState: restoredState, replacement: true });
       if (onRestored) {
         onRestored(restoredState);
         triggerHaptic("success");

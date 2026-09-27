@@ -146,3 +146,61 @@ it('async storage estimates cannot roll back a newer generation or resurrect a d
 it('diagnostics remain bounded and contain no personal state or injected metadata contents',()=>{
   const storage=seeded(),meta=JSON.parse(storage.getItem(M));Object.assign(meta,{privateWorkout:fixture,startupOutcome:'Synthetic secret',persistentStorage:{result:'Synthetic secret'},storageEstimate:{usage:'Synthetic secret'}});storage.values.set(M,JSON.stringify(meta));const diagnostic=JSON.stringify(storageDiagnostics(storage));expect(diagnostic).not.toContain('Synthetic');expect(diagnostic.length).toBeLessThan(2500);expect(diagnostic).not.toContain('exercises');
 });
+
+it.each(['coach-residue','onboarding-flag','new-profile-id'])('blocks a partial/default profile reset (%s) without touching either durable copy',kind=>{
+ const storage=seeded(),before=new Map(storage.values);let next=structuredClone(fixture);
+ if(kind==='coach-residue'){next=blankState();next.conversations=fixture.conversations;}
+ if(kind==='onboarding-flag')next.profile.onboardingComplete=false;
+ if(kind==='new-profile-id')next.profile.id='unexpected-new-profile';
+ expect(save(storage,next)).toBe(false);expect(storage.values).toEqual(before);
+});
+it.each(['current-metadata','legacy-metadata','no-checkpoint'])('does not accept defaults over initialized-profile evidence (%s)',kind=>{
+ const storage=seeded();
+ if(kind==='legacy-metadata'){const meta=JSON.parse(storage.getItem(M));delete meta.profileInitialized;storage.values.set(M,JSON.stringify(meta));}
+ if(kind==='no-checkpoint')storage.values.delete(B);
+ storage.values.set(P,serializeState(blankState()));forgetStorageSession(storage);const before=new Map(storage.values);storage.ops=[];
+ for(let attempt=0;attempt<3;attempt++)expect(readStartupState(storage)).toMatchObject({status:'error',code:'profile-reset-blocked'});
+ const next=blankState();next.profile.units='lb';expect(save(storage,next)).toBe(false);
+ expect(storage.values).toEqual(before);expect(writes(storage)).toEqual([]);
+ if(kind!=='no-checkpoint'){restoreLocalCheckpoint(storage,hydrateStoredState);expect(readStartupState(storage).state).toEqual(fixture);expect(storage.getItem(B)).toBe(before.get(B));}
+});
+it('a failed read invalidates the old write session until successful hydration',()=>{
+ const storage=seeded(),before=new Map(storage.values);
+ expect(readLocalState(storage,()=>{throw Error('migration interrupted');}).status).toBe('error');
+ fixture.profile.name+=' edit';expect(save(storage)).toBe(false);expect(storage.values).toEqual(before);
+ expect(readStartupState(storage).status).toBe('ready');expect(save(storage)).toBe(true);
+});
+it('an outdated hydration generation cannot overwrite newer writes, even on a later retry',()=>{
+ const storage=seeded(),loaded=readStartupState(storage),newer=structuredClone(loaded.state);newer.activeWorkout.exercises[0].sets[0].reps=12;
+ expect(save(storage,newer)).toBe(true);const durable=storage.getItem(P);
+ expect(save(storage,loaded.state,{expectedGeneration:loaded.generation})).toBe(false);expect(save(storage,loaded.state)).toBe(false);expect(storage.getItem(P)).toBe(durable);
+ expect(readStartupState(storage).state.activeWorkout.exercises[0].sets[0].reps).toBe(12);
+});
+it('only explicit restore intent can replace profile identity, including a deliberately empty backup',()=>{
+ const storage=seeded(),next=blankState(),before=new Map(storage.values);
+ expect(save(storage,next,{replacement:true})).toBe(false);expect(storage.values).toEqual(before);
+ expect(save(storage,next,{replacement:true,reason:'history-delete:user-confirmed'})).toBe(false);expect(storage.values).toEqual(before);
+ const other=structuredClone(fixture);other.profile.id='different-profile';expect(save(storage,other,{replacement:true,reason:'history-delete:user-confirmed'})).toBe(false);expect(storage.values).toEqual(before);
+ expect(save(storage,next,{replacement:true,reason:'backup-restore:user-confirmed'})).toBe(true);
+ expect(readStartupState(storage)).toMatchObject({status:'ready',state:{profile:{onboardingComplete:false}}});
+});
+it.each([M,B,P])('reload after an interrupted ordinary write at %s retains the last committed root',key=>{
+ const storage=seeded(),prior=storage.getItem(P),set=storage.setItem.bind(storage);vi.advanceTimersByTime(60001);
+ storage.setItem=(k,v)=>{if(k===key)throw Error('interrupted');set(k,v);};
+ fixture.profile.name+=' next';expect(save(storage)).toBe(false);storage.setItem=set;forgetStorageSession(storage);
+ const loaded=readStartupState(storage);expect(loaded.status).toBe('ready');expect(serializeState(loaded.state)).toBe(prior);
+ loaded.state.profile.units='lb';expect(save(storage,loaded.state)).toBe(true);expect(JSON.parse(storage.getItem(P)).profile.units).toBe('lb');
+});
+it('failed first onboarding does not falsely mark the durable draft initialized',()=>{
+ const draft=blankState(),storage=new MemoryStorage([[P,serializeState(draft)]]);readStartupState(storage);
+ const set=storage.setItem.bind(storage);storage.setItem=(key,value)=>{if(key===P)throw Error('interrupted');set(key,value);};
+ expect(save(storage)).toBe(false);storage.setItem=set;forgetStorageSession(storage);
+ expect(readStartupState(storage)).toMatchObject({status:'ready',state:{profile:{onboardingComplete:false}}});
+ expect(storage.getItem(P)).toBe(serializeState(draft));
+});
+it('reload accepts a committed initialized primary even if the final metadata receipt failed',()=>{
+ const draft=blankState(),storage=new MemoryStorage([[P,serializeState(draft)]]);readStartupState(storage);
+ const set=storage.setItem.bind(storage);let calls=0;storage.setItem=(key,value)=>{if(key===M&&++calls===2)throw Error('interrupted');set(key,value);};
+ expect(save(storage)).toBe(true);storage.setItem=set;forgetStorageSession(storage);
+ expect(readStartupState(storage)).toMatchObject({status:'ready',state:{profile:{onboardingComplete:true}}});expect(storage.getItem(P)).toBe(raw);
+});

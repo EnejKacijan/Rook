@@ -51,6 +51,31 @@ export function hasEstablishedData(state) {
   return !!(state?.program || state?.activeWorkout || state?.activeOptionalSession || state?.workouts?.length || state?.optionalSessions?.length || state?.planVersions?.length || state?.conversations?.length || state?.savedWorkoutTemplates?.length);
 }
 
+const continuity = state => ({ initialized: state?.profile?.onboardingComplete === true, profileId: state?.profile?.id, established: hasEstablishedData(state) });
+function assertContinuity(previous, next) {
+  if (previous?.initialized && !next.initialized) fail('profile-reset-blocked');
+  if (previous?.initialized && previous.profileId && previous.profileId !== next.profileId) fail('profile-identity-changed');
+  if (previous?.established && !next.established) fail('empty-write-blocked');
+}
+// Shared by the durable writer and the React state owner: rejecting a write
+// must not still publish an uninitialized profile and render onboarding.
+export function assertStateContinuity(previous, next) { assertContinuity(continuity(previous), continuity(next)); }
+
+// Validate the handoff again before mounting the domain owner. A delayed
+// ready/empty result must not publish an older profile even if its save would
+// later be rejected. The existing render boundary offers a safe reload.
+export function assertHydrationCurrent(startup, storage = globalThis.localStorage) {
+  const session = sessions.get(storage);
+  if (!['ready','empty'].includes(startup.status) || session?.status !== startup.status) fail('stale-hydration');
+  const meta = parseMeta(storage.getItem(INSTALL_META_KEY));
+  if (meta?.deletePending || storage.getItem(JOURNAL_KEY) !== null || storage.getItem(PRIMARY_KEY) !== session.raw || (startup.status === 'ready' && startup.generation !== (meta?.generation || 0)) || (startup.status === 'empty' && meta?.everInitialized)) fail('stale-hydration');
+}
+
+export function isPersistedReplacement(raw, storage = globalThis.localStorage) {
+  const session = sessions.get(storage);
+  return session?.replacement === true && session.raw === raw && storage.getItem(PRIMARY_KEY) === raw;
+}
+
 function parseMeta(raw) {
   if (raw === null) return null;
   let meta;
@@ -123,16 +148,25 @@ export function readLocalState(storage, hydrate) {
     if (meta?.deletePending) fail('delete-incomplete');
     if (raw !== null) {
       const state = decode(raw, hydrate);
-      sessions.set(storage, { raw, established: hasEstablishedData(state), planSignature: JSON.stringify([state.program,state.planVersions]), lastCheckpointAt: 0 });
+      if (!state.profile.onboardingComplete) {
+        // Valid JSON is not proof of a new user. Preserve both copies when an
+        // older/default writer has removed an established profile lifecycle.
+        // A false value is a receipt from a validated first-run/explicit
+        // replacement. Legacy metadata lacks it and needs checkpoint evidence.
+        if (meta?.profileInitialized !== false) recovery = readRecovery(storage, hydrate);
+        if (meta?.profileInitialized || recovery?.state.profile.onboardingComplete) fail('profile-reset-blocked');
+      }
+      sessions.set(storage, { status: 'ready', raw, continuity: continuity(state), established: hasEstablishedData(state), planSignature: JSON.stringify([state.program,state.planVersions]), lastCheckpointAt: 0 });
       remember('ready', { startupOutcome: 'ready', lastSuccessfulReadAt: stamp(), schemaVersion: state.schemaVersion, serializedChars: raw.length });
-      return { status: 'ready', state };
+      return { status: 'ready', state, generation: meta?.generation || 0 };
     }
     recovery = readRecovery(storage, hydrate);
     if (recovery || meta?.everInitialized || storage.getItem(JOURNAL_KEY) !== null || (!meta?.explicitDeleteAt && hasLegacyUseEvidence(storage))) fail('primary-missing');
-    sessions.set(storage, { raw: null, lastCheckpointAt: 0 });
+    sessions.set(storage, { status: 'empty', raw: null, lastCheckpointAt: 0 });
     recordStartupOutcome(meta?.explicitDeleteAt ? 'explicitly-deleted' : 'empty');
     return { status: 'empty' };
   } catch (error) {
+    sessions.set(storage, { ...sessions.get(storage), status: 'error' });
     // Read failures do not write/delete ANY storage. Diagnostic error details
     // stay in memory until a later successful operation or manual inspection.
     try { recovery ||= readRecovery(storage, hydrate); } catch { /* Never offer unvalidated bytes. */ }
@@ -144,16 +178,22 @@ export function readLocalState(storage, hydrate) {
 
 function writeMeta(storage, meta) { storage.setItem(INSTALL_META_KEY, JSON.stringify(meta)); }
 
-export function persistLocalState(raw, { storage, hydrate, reason = 'user-change', replacement = false, preserveRecovery = false } = {}) {
+export function persistLocalState(raw, { storage, hydrate, reason = 'user-change', replacement = false, preserveRecovery = false, expectedGeneration } = {}) {
   try {
     storage ??= globalThis.localStorage;
     const parsed = JSON.parse(raw);
     assertStateShape(parsed);
+    if (replacement && !['backup-restore:user-confirmed','history-delete:user-confirmed','recovery-used'].includes(reason)) fail('replacement-intent-required');
     let meta;
     try { meta = parseMeta(storage.getItem(INSTALL_META_KEY)); } catch (error) { if (!replacement) throw error; }
     if (meta?.deletePending && !replacement) fail('delete-incomplete');
     if (!replacement && storage.getItem(JOURNAL_KEY) !== null) fail('restore-in-progress');
     const prior = storage.getItem(PRIMARY_KEY), session = sessions.get(storage);
+    // History deletion uses the same cross-store transaction, but its intent
+    // permits removing that workout only, never replacing the owning profile.
+    if (replacement && reason === 'history-delete:user-confirmed') assertStateContinuity(decode(prior, hydrate), parsed);
+    if (!replacement && session?.status === 'error') fail('hydration-required');
+    if (expectedGeneration !== undefined && expectedGeneration !== (meta?.generation || 0)) fail('state-changed');
     if (!replacement && session && session.raw !== prior) fail('state-changed');
     if (!replacement && prior === null && (meta?.everInitialized || storage.getItem(RECOVERY_KEY) !== null)) fail('primary-missing');
     const planSignature = JSON.stringify([parsed.program,parsed.planVersions]);
@@ -161,12 +201,20 @@ export function persistLocalState(raw, { storage, hydrate, reason = 'user-change
     // An initialized app cannot autosave a default state over established data.
     let previous;
     if (prior !== null && prior !== raw && !replacement) {
-      if (!session) previous = decode(prior, hydrate);
-      if ((session?.established || hasEstablishedData(previous)) && !hasEstablishedData(parsed)) fail('empty-write-blocked');
+      if (!session) {
+        const source = readLocalState(storage, hydrate);
+        if (source.status !== 'ready') fail('hydration-required');
+        previous = source.state;
+      }
+      assertContinuity(session?.continuity || continuity(previous), continuity(parsed));
     }
+    if (!replacement && meta?.profileInitialized && !parsed.profile.onboardingComplete) fail('profile-reset-blocked');
     if (prior === raw && meta?.everInitialized) { sessions.set(storage, { ...session, raw }); return true; }
     const generation = (meta?.generation || 0) + 1;
-    const nextMeta = { ...meta, version: 1, everInitialized: true, generation, committedGeneration: meta?.committedGeneration ?? (meta?.writePending ? 0 : meta?.generation || 0), appVersion: version, build, schemaVersion: parsed.schemaVersion, serializedChars: raw.length, lastWriteReason: reason, writePending: true, deletePending: false };
+    // Do not announce first onboarding as committed before PRIMARY succeeds.
+    // Explicit replacement may intentionally import an uninitialized profile.
+    const profileInitialized = replacement ? Boolean(parsed.profile.onboardingComplete) : meta?.profileInitialized ?? session?.continuity?.initialized ?? previous?.profile?.onboardingComplete;
+    const nextMeta = { ...meta, version: 1, everInitialized: true, profileInitialized, generation, committedGeneration: meta?.committedGeneration ?? (meta?.writePending ? 0 : meta?.generation || 0), appVersion: version, build, schemaVersion: parsed.schemaVersion, serializedChars: raw.length, lastWriteReason: reason, writePending: true, deletePending: false };
     // A tiny intent marker is committed before touching PRIMARY. If interrupted,
     // a missing primary will be recovery, never a silent fresh installation.
     writeMeta(storage, nextMeta);
@@ -180,14 +228,15 @@ export function persistLocalState(raw, { storage, hydrate, reason = 'user-change
     }
     storage.setItem(PRIMARY_KEY, raw); // Web Storage replaces a single value atomically.
     if (storage.getItem(PRIMARY_KEY) !== raw) fail('write-verification-failed');
-    sessions.set(storage, { raw, established: hasEstablishedData(parsed), planSignature, lastCheckpointAt: checkpointAt });
-    const completed = { ...nextMeta, committedGeneration: generation, writePending: false, lastSuccessfulWriteAt: stamp(), lastSuccessfulReadAt: lastDiagnostic.lastSuccessfulReadAt || meta?.lastSuccessfulReadAt || null, startupOutcome: lastDiagnostic.startupOutcome || meta?.startupOutcome || 'ready' };
+    sessions.set(storage, { status: 'ready', raw, continuity: continuity(parsed), established: hasEstablishedData(parsed), planSignature, lastCheckpointAt: checkpointAt, replacement });
+    const completed = { ...nextMeta, profileInitialized: Boolean(parsed.profile.onboardingComplete), committedGeneration: generation, writePending: false, lastSuccessfulWriteAt: stamp(), lastSuccessfulReadAt: lastDiagnostic.lastSuccessfulReadAt || meta?.lastSuccessfulReadAt || null, startupOutcome: lastDiagnostic.startupOutcome || meta?.startupOutcome || 'ready' };
     remember('saved', { lastSuccessfulWriteAt: completed.lastSuccessfulWriteAt, generation, lastWriteReason: reason });
     // PRIMARY is already durable. Failure of optional final diagnostics must not
     // falsely report the successfully verified data write as lost.
     try { writeMeta(storage, completed); } catch { remember('saved-metadata-pending'); }
     return true;
   } catch (error) {
+    if (storage && ['state-changed','primary-missing'].includes(error?.code)) sessions.set(storage, { ...sessions.get(storage), status: 'error' });
     remember(error?.name === 'QuotaExceededError' ? 'quota-error' : error?.code || 'write-error');
     return false;
   }
@@ -235,7 +284,7 @@ export function storageDiagnostics(storage) {
     const stored = parseMeta(storage.getItem(INSTALL_META_KEY)) || {};
     // Whitelist even metadata read from disk: never echo arbitrary injected keys.
     for (const key of ['generation','committedGeneration','schemaVersion']) if (Number.isSafeInteger(stored[key])) meta[key] = stored[key];
-    for (const key of ['everInitialized','writePending','deletePending']) if (typeof stored[key] === 'boolean') meta[key] = stored[key];
+    for (const key of ['everInitialized','profileInitialized','writePending','deletePending']) if (typeof stored[key] === 'boolean') meta[key] = stored[key];
     for (const key of ['lastSuccessfulWriteAt','lastSuccessfulReadAt','explicitDeleteAt']) if (typeof stored[key] === 'string' && /^\d{4}-\d{2}-\d{2}T[\d:.]+Z$/.test(stored[key])) meta[key] = stored[key];
     if (['ready','empty','parse-error','schema-error','migration-error','primary-missing','recovery-used','explicitly-deleted'].includes(stored.startupOutcome)) meta.startupOutcome = stored.startupOutcome;
     if (['granted','not-granted','unsupported','unavailable','requested'].includes(stored.persistentStorage?.result)) meta.persistentStorage = { result: stored.persistentStorage.result, requested: !!stored.persistentStorage.requestedAt };
