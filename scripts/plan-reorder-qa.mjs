@@ -143,6 +143,7 @@ const nextBox = await nextSummary.boundingBox();
 assert.ok(sourceBox && nextBox, 'drag targets have measurable geometry');
 await dragPage.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2);
 await dragPage.mouse.down();
+await dragPage.locator('.plan-reorder-preview').waitFor();
 await dragPage.mouse.move(sourceBox.x + sourceBox.width / 2, sourceBox.y + sourceBox.height / 2 + 6, { steps: 2 });
 await dragPage.mouse.move(nextBox.x + nextBox.width / 2, nextBox.y + nextBox.height - 2, { steps: 8 });
 assert.equal(await dragPage.locator('.plan-reorder-preview').count(), 1, 'drag preview appears after intentional movement');
@@ -188,6 +189,7 @@ await dragPage.mouse.move(
   workoutSourceBox.y + workoutSourceBox.height / 2,
 );
 await dragPage.mouse.down();
+await dragPage.locator('.plan-reorder-preview').waitFor();
 await dragPage.mouse.move(
   workoutSourceBox.x + workoutSourceBox.width / 2,
   workoutSourceBox.y + workoutSourceBox.height / 2 + 6,
@@ -259,6 +261,7 @@ const touchClient=await touchContext.newCDPSession(touchPage);
 const fireTouch=(type,x,y)=>touchClient.send('Input.dispatchTouchEvent',{type:({touchstart:'touchStart',touchmove:'touchMove',touchend:'touchEnd',touchcancel:'touchCancel'})[type],touchPoints:type==='touchend'||type==='touchcancel'?[]:[{x,y}]});
 await touchPage.evaluate(async()=>{await Promise.all(document.getAnimations().filter(a=>a.effect?.getTiming().iterations!==Infinity).map(a=>a.finished.catch(()=>{})));});
 await fireTouch('touchstart', touchSourceBox.x + 24, touchSourceBox.y + touchSourceBox.height / 2);
+await touchPage.locator('.plan-reorder-preview').waitFor();
 await fireTouch('touchmove', touchSourceBox.x + 24, touchSourceBox.y + touchSourceBox.height / 2 + 24);
 await touchPage.locator('.plan-reorder-preview').waitFor();
 assert.equal(await touchPage.locator('.plan-reorder-preview').count(), 1, 'vertical movement on the dedicated handle activates reorder');

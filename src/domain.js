@@ -1,4 +1,5 @@
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
+import {intentionalNoPlan} from './trainingStyle.js';
 import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
 import {normalizeCoachConversations} from './coachConversations.js';
@@ -2098,6 +2099,8 @@ export function defaultProfile() {
     restTimerSeconds: null,
     restTimerNotificationsEnabled: false,
     onboardingComplete: false,
+    preferredTrainingStyle: null,
+    noPlanReceipt: null,
     increments: { barbell: 2.5, dumbbells: 2, machines: 5, cables: 2.5 },
     restDefaults: { compound: 120, isolation: 60 },
   };
@@ -2379,7 +2382,7 @@ export function deserializeState(input, { strict = false } = {}) {
       preserveSchedule: Boolean(repairedProgram?.userEdited),
     });
     const program = checked.valid ? repairedProgram : null;
-    if (strict && ((stored.program && !program) || (stored.profile?.onboardingComplete && !program))) throw new Error('Saved plan could not be safely loaded.');
+    if (strict && ((stored.program && !program) || (stored.profile?.onboardingComplete && !program && !intentionalNoPlan(stored)))) throw new Error('Saved plan could not be safely loaded.');
     if (program && program.goalAtCreation === undefined) {
       const userAuthored = ["ai-import", "manual"].includes(program.source);
       program.goalAtCreation = userAuthored
@@ -2456,9 +2459,7 @@ export function deserializeState(input, { strict = false } = {}) {
         ...base.profile.restDefaults,
         ...(stored.profile?.restDefaults || {}),
       },
-      onboardingComplete: Boolean(
-        program && stored.profile?.onboardingComplete,
-      ),
+      onboardingComplete: Boolean(stored.profile?.onboardingComplete && (program || intentionalNoPlan(stored)) || !program && intentionalNoPlan(stored)),
     };
     stored.profile = profile;
     normalizeGymProfilesState(stored);
@@ -9417,6 +9418,7 @@ export function replacementCandidates(
   ).slice(0, 4);
 }
 export function missedPlannedWorkouts(state, date = new Date()) {
+  if (!state.program) return [];
   return missedFlexibleSessions(state, isoDay(calendarDate(date))).map(item => ({
     logicalSessionId:item.logicalSessionId, originalDate:item.originalDate,
     date:item.scheduledDate, weekday:weekday(calendarDate(item.scheduledDate)), workoutName:item.workout.name,
@@ -9449,7 +9451,7 @@ export function coachContext(state) {
         ? "active-workout"
         : scheduledToday
           ? "planned-workout"
-          : "rest-day",
+          : state.program ? "rest-day" : "open-training-day",
       workoutId: today?.programDayId || today?.id || null,
       workoutName: today?.name || null,
     },
@@ -9498,6 +9500,11 @@ export function coachContext(state) {
           })),
         }
       : null,
+    savedWorkouts: (state.savedWorkoutTemplates || []).map(template => ({
+      id: template.id,
+      name: template.name,
+      exerciseCount: template.exercises.length,
+    })),
     availableExercises: Object.values(exerciseCatalog)
       .filter((item) => isExerciseAutoGeneratable(item, state.profile))
       .map((item) => ({

@@ -98,7 +98,7 @@ export function analyzeSetPr(set, priorSets = [], { e1rmEligible = true } = {}) 
     weightPr,
     repPr,
     e1rmPr,
-    label: e1rmPr ? "e1RM PR" : weightPr ? "WEIGHT PR" : "REP PR",
+    label: e1rmPr ? "Est. 1RM PR" : weightPr ? "WEIGHT PR" : "REP PR",
   };
 }
 
@@ -210,7 +210,7 @@ export function prEventsForWorkouts(
                 type,
                 label:
                   type === "e1rm"
-                    ? "e1RM PR"
+                    ? "Est. 1RM PR"
                     : type === "weight"
                       ? "Weight PR"
                       : "Rep PR",

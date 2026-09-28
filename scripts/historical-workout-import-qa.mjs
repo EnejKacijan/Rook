@@ -110,8 +110,12 @@ for (const width of [390, 320]) {
   const choice=page.locator('.history-import-match-list button').first();
   const correctedName=await choice.locator('strong').innerText();await choice.click();await page.getByRole('heading',{name:'Review import',exact:true}).waitFor();await page.locator('.history-import-resolved summary').click();await page.getByRole('button',{name:'CHANGE',exact:true}).first().waitFor();
   assert.match(await page.locator('.history-import-mapping-row').first().innerText(),new RegExp(correctedName));
-  await page.locator('.remember-import-match input').first().click();
-  await page.waitForFunction(()=>document.querySelector('.remember-import-match input')?.checked);
+  const rememberMatch=page.locator('.remember-import-match input').first();
+  assert.equal(await rememberMatch.isChecked(),true,'a manual match is remembered by default');
+  await rememberMatch.click();
+  await page.waitForFunction(()=>document.querySelector('.remember-import-match input')?.checked===false);
+  await rememberMatch.click();
+  await page.waitForFunction(()=>document.querySelector('.remember-import-match input')?.checked===true);
   assert.deepEqual((await stored()).exerciseAliases,original.exerciseAliases,'remembered aliases also wait for import');
   if(width===320) {
     await page.getByRole('button',{name:'Close Import workout history',exact:true}).click();

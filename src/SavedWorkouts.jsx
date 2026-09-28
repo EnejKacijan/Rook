@@ -12,15 +12,15 @@ import {canUndoWorkoutAddition,undoWorkoutAddition} from './freestyleWorkout.js'
 import {templateDraft,saveWorkoutTemplate,deleteWorkoutTemplate,templateUseIssues,templateOverlaps,useSavedWorkout} from './savedWorkouts.js';
 import './savedWorkouts.css';
 
-export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved}) {
+export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,initialTemplateId=null,createNew=false,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved}) {
   const {commit,latest}=useDurableAction(state,update);
   const screen=useRef(null),browseScroll=useRef(0),undo=useExerciseRemoveUndo();
   const overlapDescriptionId=useId();
-  const [query,setQuery]=useState(''),[selection,setSelection]=useState(null),[draft,setDraft]=useState(()=>source?templateDraft(source,state):null);
-  const [editing,setEditing]=useState(false),[renaming,setRenaming]=useState(false),[deleting,setDeleting]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[confirmed,setConfirmed]=useState(false);
+  const [query,setQuery]=useState(''),[selection,setSelection]=useState(()=>initialTemplateId?structuredClone(state.savedWorkoutTemplates?.find(t=>t.id===initialTemplateId)||null):null),[draft,setDraft]=useState(()=>source?templateDraft(source,state):createNew?{name:'New workout',exercises:[]}:null);
+  const [editing,setEditing]=useState(createNew),[renaming,setRenaming]=useState(false),[deleting,setDeleting]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[confirmed,setConfirmed]=useState(false);
   const [optionsOpen,setOptionsOpen]=useState(false);
   const optionsBackground=useRef(null),optionsTrigger=useRef(null),optionsAction=useRef(null),actionFocus=useRef(null),editPosition=useRef(null);
-  const createId=useRef(uid('workout-template')),request=useRef(null),sessionId=useRef(state.activeWorkout?.id||null).current;
+  const createId=useRef(uid('workout-template')),request=useRef(initialTemplateId?uid('template-use'):null),sessionId=useRef(state.activeWorkout?.id||null).current;
   const selected=selection,review=draft||selected;
   const searchQuery=browseQuery??query;
   useLayoutEffect(()=>{if(!review){const list=screen.current?.querySelector('.saved-workout-list');if(list)list.scrollTop=browseScroll.current;}},[Boolean(review)]);
@@ -58,7 +58,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
   const back=()=>{if(editing){setEditing(false);return;}if(source&&onBack){onBack();return;}if(renaming){setRenaming(false);setDraft(null);return;}if(source){close();return;}reset();};
   if(navigationRef)navigationRef.current=back;
   const save=value=>{
-    try{commit(current=>saveWorkoutTemplate(current,value,{id:selected?.id||createId.current,revision:selected?.revision??null}));setNotice('Workout template saved');if(source){(onSaved||close)();return;}reset();}catch(e){setError(e.message);}
+    try{commit(current=>saveWorkoutTemplate(current,value,{id:selected?.id||createId.current,revision:selected?.revision??null}));setNotice('Workout template saved');if(source){(onSaved||close)();return;}createId.current=uid('workout-template');reset();}catch(e){setError(e.message);}
   };
   const use=()=>{
     try{const result=commit(current=>useSavedWorkout(current,{templateId:selected.id,revision:selected.revision,sessionId,requestId:request.current,confirmDuplicates:confirmed}));if(result.changed){setNotice(sessionId?'Exercises added to Up Next':'Workout started');if(!sessionId)onStarted?.();else {const record={sessionId,requestId:request.current,ids:result.state.activeWorkout.exercises.filter(e=>e.queueAdditionId===request.current).map(e=>e.id)};undo.show({message:`${record.ids.length} exercises added`,valid:()=>canUndoWorkoutAddition(latest.current,record),undo:()=>{try{commit(current=>undoWorkoutAddition(current,record));setNotice('Addition undone');}catch(e){setError(e.message);}}});}}}catch(e){setError(e.message);}
@@ -67,10 +67,10 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
   const editorSource=useMemo(()=>editing&&review&&{id:'saved-workout-editor',source:'manual',name:review.name,days:[{id:'saved-workout-day',name:review.name,workoutName:review.name,weekday:'Mon',exercises:structuredClone(review.exercises).map(e=>({...e,sets:e.sets.map(s=>({...s,completed:false}))}))}]},[editing,review]);
   const applied=state.activeWorkout?.queueCommandIds?.includes(request.current);
   return <><main hidden={hidden} ref={screen} className={`${embedded?'':'screen detail-screen '}${editing?'edit-plan-screen ':''}saved-workouts`}>
-    {!embedded&&<Header title={source?'Save as template':editing?'Edit saved workout':review?'Saved workout':'Saved workouts'} onBack={review?back:undefined} onClose={close}/>}
+    {!embedded&&<Header title={source?'Save as template':editing&&!selected?'Create workout':editing?'Edit saved workout':review?'Saved workout':'Saved workouts'} onBack={review?back:undefined} onClose={close}/>}
     {!review&&scopeBar}
     {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
-      copyOverride={{eyebrow:'PERSONAL TEMPLATE',title:'Edit exercises',body:'Changes affect this template only. Sessions already started keep their own values.',action:'REVIEW TEMPLATE'}}
+      copyOverride={{eyebrow:'PERSONAL TEMPLATE',title:selected?'Edit exercises':'Build your workout',body:'Changes affect this template only. Sessions already started keep their own values.',action:'REVIEW TEMPLATE'}}
       onSave={program=>{setDraft({name:review.name,exercises:program.days[0].exercises});setEditing(false);setRenaming(true);}} onCancel={()=>setEditing(false)}/>:review?<>
       <div className="saved-workout-preview" data-exercise-search-scroll>
       {(source||renaming||draft)?<label className="saved-template-name">Template name<input maxLength={100} value={review.name} onChange={e=>setDraft({...review,name:e.target.value})}/></label>:<div className="saved-template-title"><h1>{review.name}</h1><button ref={optionsTrigger} className="saved-template-options-trigger" type="button" aria-label="Saved workout options" aria-haspopup="dialog" aria-expanded={optionsOpen} onClick={()=>{optionsBackground.current=screen.current.closest('.screen')||screen.current;optionsAction.current=null;setOptionsOpen(true);}}><OverflowIcon/></button></div>}
@@ -92,10 +92,11 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
       </>}
       </div>
     </>:<>
+      {!embedded&&<button className="button secondary saved-workout-create" type="button" onClick={()=>{setDraft({name:'New workout',exercises:[]});setEditing(true);setError('');}}>+ CREATE WORKOUT</button>}
       {!embedded&&<SearchInput className="exercise-search" aria-label="Search saved workouts" placeholder="Search saved workouts" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/>}
       <div className="saved-workout-list" data-exercise-search-scroll>
       {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><span aria-hidden="true">›</span></button>)}
-      {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Save a freestyle or completed workout as a template from its workout options.</p></div>}
+      {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Create a reusable workout here, or save a completed session as a template.</p></div>}
       {state.savedWorkoutTemplates?.length>0&&!(state.savedWorkoutTemplates||[]).some(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()))&&<p>No saved workouts match your search.</p>}
       </div>
     </>}

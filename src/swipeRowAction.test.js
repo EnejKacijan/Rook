@@ -2,6 +2,7 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {bindSwipeRowActions,registerSwipeRemoval} from './swipeRowAction.js';
 import {ADD_SWIPE,addSwipeTranslation} from './directSwipeState.js';
+import {createInteractionFeedback,createVibrationAdapter} from './interactionFeedback.js';
 let list,release,remove,unregister;
 beforeEach(()=>{
  vi.useFakeTimers();
@@ -14,6 +15,7 @@ beforeEach(()=>{
 afterEach(()=>{release();unregister();list.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 const row=id=>list.querySelector(`#${id}`),body=id=>row(id).querySelector('[data-swipe-content] span');
 function touch(type,target,x,y=100,multi=false,id=1){const e=new Event(type,{bubbles:true,cancelable:true}),p={identifier:id,clientX:x,clientY:y};Object.assign(e,{touches:type==='touchend'||type==='touchcancel'?[]:[p,...multi?[{...p,identifier:2}]:[]],changedTouches:[p]});target.dispatchEvent(e);return e;}
+function pointer(type,target,x){const e=new Event(type,{bubbles:true,cancelable:true});Object.assign(e,{pointerId:1,pointerType:'mouse',button:0,clientX:x,clientY:100});target.dispatchEvent(e);return e;}
 function swipe(id='a',x=280,to=200,y=100){touch('touchstart',body(id),x);const e=touch('touchmove',body(id),to,y);touch('touchend',body(id),to,y);return e;}
 it.each([320,390,430])('uses exactly half of actual %spx row width, independent of velocity',width=>{
  row('a').getBoundingClientRect=()=>({width});
@@ -76,15 +78,50 @@ it('semantic row-body buttons support right-add, suppress the release click and 
  touch('touchstart',target,60);touch('touchmove',target,245);touch('touchend',target,245);target.click();vi.advanceTimersByTime(ADD_SWIPE.duration);expect(add).toHaveBeenCalledExactlyOnceWith('plank');expect(preview).not.toHaveBeenCalled();
  target.dispatchEvent(new Event('pointerdown',{bubbles:true}));target.click();expect(preview).toHaveBeenCalledOnce();
 });
-it.each(['add','remove'])('%s shares visual/feedback/release hysteresis and exactly one event per re-arm',mode=>{
+it.each(['add','remove'])('%s shares visual/feedback/release hysteresis and one threshold event per gesture',mode=>{
  release();const threshold=vi.fn(),add=vi.fn();row('a').dataset.catalogId='plank';release=bindSwipeRowActions(list,{mode,onAdd:add,feedback:{threshold}});
  const start=mode==='add'?60:280,sign=mode==='add'?1:-1,target=body('a');
  touch('touchstart',target,start);
- const steps=mode==='add'?[[.2,false,0],[.24,true,1],[.3,true,1],[.23,true,1],[.19,true,1],[.17,false,1],[.23,false,1],[.24,true,2]]:[[.2,false,0],[.5,true,1],[.6,true,1],[.49,true,1],[.41,true,1],[.39,false,1],[.49,false,1],[.5,true,2]];
+ const steps=mode==='add'?[[.2,false,0],[.24,true,1],[.3,true,1],[.23,true,1],[.19,true,1],[.17,false,1],[.23,false,1],[.24,true,1]]:[[.2,false,0],[.5,true,1],[.6,true,1],[.49,true,1],[.41,true,1],[.39,false,1],[.49,false,1],[.5,true,1]];
  for(const [fraction,armed,ticks] of steps){
   touch('touchmove',target,start+sign*320*fraction);expect(row('a').hasAttribute('data-swipe-armed')).toBe(armed);expect(threshold).toHaveBeenCalledTimes(ticks);expect(add).not.toHaveBeenCalled();expect(remove).not.toHaveBeenCalled();
  }
  touch('touchend',target,start+sign*160);touch('touchend',target,start+sign*160);vi.advanceTimersByTime(ADD_SWIPE.duration);expect(mode==='add'?add:remove).toHaveBeenCalledOnce();
+ touch('touchstart',target,start);touch('touchmove',target,start+sign*320*(mode==='add'?.3:.6));expect(threshold).toHaveBeenCalledTimes(2);
+ touch('touchcancel',target,start);expect(row('a').hasAttribute('data-swipe-armed')).toBe(false);
+});
+it.each(['add','remove'])('%s uses one short vibration request per armed gesture and safely ignores a missing API',mode=>{
+ release();const vibrate=vi.fn(()=>true),add=vi.fn(),target=body('a'),start=mode==='add'?60:280,sign=mode==='add'?1:-1;
+ let time=0;
+ const adapter=createVibrationAdapter({navigator:()=>({vibrate}),document:()=>({visibilityState:'visible'})});
+ const feedback=createInteractionFeedback({adapter,reducedMotion:()=>false,now:()=>time});
+ row('a').dataset.catalogId='plank';release=bindSwipeRowActions(list,{mode,onAdd:add,feedback});
+ touch('touchstart',target,start);touch('touchmove',target,start+sign*40);expect(vibrate).not.toHaveBeenCalled();
+ touch('touchmove',target,start+sign*(mode==='add'?80:170));expect(vibrate).toHaveBeenCalledExactlyOnceWith(9);
+ touch('touchmove',target,start+sign*210);touch('touchmove',target,start+sign*30);touch('touchmove',target,start+sign*210);
+ expect(vibrate).toHaveBeenCalledTimes(1);
+ touch('touchend',target,start+sign*30);vi.advanceTimersByTime(ADD_SWIPE.duration);
+ time=100;touch('touchstart',target,start);touch('touchmove',target,start+sign*210);expect(vibrate).toHaveBeenCalledTimes(2);
+ touch('touchcancel',target,start);release();
+ release=bindSwipeRowActions(list,{mode,onAdd:add,feedback:createInteractionFeedback({adapter:createVibrationAdapter({navigator:()=>({})}),reducedMotion:()=>false})});
+ expect(()=>{touch('touchstart',target,start);touch('touchmove',target,start+sign*210);touch('touchend',target,start+sign*210);vi.advanceTimersByTime(ADD_SWIPE.duration);}).not.toThrow();
+ expect(mode==='add'?add:remove).toHaveBeenCalledOnce();
+});
+it.each(['touchend','touchcancel','pointerup','pointercancel','lostpointercapture','visibilitychange','multitouch','unmount','dispose'])('a %s exit cannot carry threshold feedback into another swipe',async reason=>{
+ release();const threshold=vi.fn();release=bindSwipeRowActions(list,{feedback:{threshold}});
+ const first=body('a');
+ if(reason.startsWith('pointer')||reason==='lostpointercapture'){
+  pointer('pointerdown',first,280);pointer('pointermove',first,80);
+ }else{touch('touchstart',first,280);touch('touchmove',first,80);}
+ expect(threshold).toHaveBeenCalledOnce();
+ if(reason.startsWith('pointer')||reason==='lostpointercapture')pointer(reason,first,80);
+ else if(reason==='touchend'||reason==='touchcancel')touch(reason,first,80);
+ else if(reason==='visibilitychange')document.dispatchEvent(new Event(reason));
+ else if(reason==='multitouch')touch('touchstart',first,80,100,true);
+ else if(reason==='unmount'){row('a').remove();await Promise.resolve();}
+ else {release();release=bindSwipeRowActions(list,{feedback:{threshold}});}
+ const second=body('b');touch('touchstart',second,280);touch('touchmove',second,80);
+ expect(threshold).toHaveBeenCalledTimes(2);touch('touchcancel',second,80);
 });
 it.each([true,false])('Add returns immediately from the finger position without a wipe, and publishes only after settling (saved %s)',saved=>{
  release();const target=body('a'),content=row('a').querySelector('[data-swipe-content]');const animations=[];

@@ -44,7 +44,7 @@ describe("Performance Insights", () => {
   it("detects a genuine weight PR after a baseline", () => {
     const result = analyzeSetPr(set(82.5, 5), [set(80, 6)]);
     expect(result.weightPr).toBe(true);
-    expect(result.label).toBe("e1RM PR");
+    expect(result.label).toBe("Est. 1RM PR");
   });
 
   it("detects a rep PR only at a previously logged meaningful load", () => {
@@ -76,7 +76,7 @@ describe("Performance Insights", () => {
       sets: [set(80, 7, { id: "active-set" })],
     };
     expect(prEventsForWorkouts(history)).toHaveLength(0);
-    expect(activeExercisePr(history, active).label).toBe("e1RM PR");
+    expect(activeExercisePr(history, active).label).toBe("Est. 1RM PR");
   });
 
   it("builds bests and an estimated 1RM session history", () => {

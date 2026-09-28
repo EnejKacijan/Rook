@@ -33,3 +33,7 @@
 .storage-diagnostics-screen .storage-diagnostics summary { text-decoration: none; }
 .storage-diagnostics-screen .storage-diagnostics pre { user-select: text; }
 .storage-diagnostics-screen .storage-diagnostics :is(summary,pre):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; }
+.profile-training-style { border: 0; padding: 0; margin: 0 0 20px; min-width: 0; }
+.profile-training-style legend { padding: 0 0 8px; color: var(--rook-secondary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
+.profile-training-style .list-row { width: 100%; text-align: left; }
+.profile-training-style-note { display: block; margin: 8px 0 0; color: var(--rook-secondary); line-height: 1.4; }

@@ -41,3 +41,4 @@
 .screen .plan-editor[data-workout-only]{margin-top:12px}
 .plan-editor[data-workout-only]>.plan-reorder-help{margin:0 0 12px}
 .plan-editor[data-workout-only]>.plan-edit-day-section{padding-top:4px}
+.saved-workout-create { width: 100%; min-height: 48px; margin: 12px 0 16px; }

@@ -29,9 +29,11 @@ const sets=()=>current.activeWorkout.exercises[0].sets;
 function type(el,value){act(()=>el.focus());act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});}
 it.each([null,0])('presents %s as BW with a full accessible description and unchanged numeric value',weight=>{
  mount({weight});expect(label()).toBe('BW');expect(input().value).toBe(weight===null?'':'0');expect(document.getElementById(input().getAttribute('aria-describedby')).textContent).toBe('Bodyweight, no added load');expect(sets()[0].weight).toBe(weight);
+ expect(row().querySelector('.bodyweight-load-token')?.textContent).toBe('BW');
 });
 it.each([5,12.5,999.5])('presents added load %s without writing formatted text to the model',weight=>{
  mount({weight});expect(label()).toBe(`+${weight}`);expect(input().value).toBe(String(weight));expect(sets()[0].weight).toBe(weight);type(input(),'12,5');expect(label()).toBeUndefined();act(()=>input().blur());expect(label()).toBe('+12.5');expect(sets()[0].weight).toBe(12.5);
+ expect(row().querySelector('.bodyweight-load-prefix')?.textContent).toBe('+');expect(row().querySelector('.bodyweight-load-prefix + span')?.textContent).toBe('12.5');
 });
 it('raw edit then rapid stepping commits exact increments once and retains input identities',()=>{
  mount();const el=input(),future=input(3),id=current.activeWorkout.id,start=current.activeWorkout.startedAt;

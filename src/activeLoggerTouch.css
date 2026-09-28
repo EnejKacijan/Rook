@@ -51,6 +51,9 @@
 .workout-screen .sets .logger-reps:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"]) > input { font-size:1rem; letter-spacing:-.06em; }
 .workout-screen .sets .stepper-empty-label { inset-inline:var(--logger-hit); font-size:9px; line-height:1.1; text-align:center; pointer-events:none; }
 .workout-screen .sets .stepper-display-label { font-size:var(--logger-number); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.015em; color:var(--rook-text); }
+.workout-screen .sets .bodyweight-load-value { gap:0; align-items:baseline; }
+.workout-screen .sets .bodyweight-load-prefix { font-size:.8em; font-weight:550; line-height:1; }
+.workout-screen .sets .bodyweight-load-token { font-size:.85em; font-weight:600; letter-spacing:.035em; }
 .workout-screen .sets .set-done .stepper-display-label { color:var(--rook-secondary); }
 .workout-screen .sets .logger-load[data-value-length="4"] > .stepper-display-label { font-size:min(var(--logger-number),1.1875rem); }
 .workout-screen .sets .logger-load[data-value-length="5"] > .stepper-display-label { font-size:min(var(--logger-number),1.0625rem); }

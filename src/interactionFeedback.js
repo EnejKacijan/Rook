@@ -1,5 +1,5 @@
 // Discrete training-list feedback only. No audio session or native-control hacks.
-const pulses = Object.freeze({selection:6, threshold:6, pickup:9, drop:10});
+const pulses = Object.freeze({selection:6, threshold:9, pickup:9, drop:10});
 
 export function createVibrationAdapter({navigator: nav = () => globalThis.navigator, document: doc = () => globalThis.document} = {}) {
   let rejected = false;

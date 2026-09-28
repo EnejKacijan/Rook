@@ -53,7 +53,9 @@ for (const width of [320,390]) for (const style of ['standard','premium']) for (
     const handle=cards.first().locator('.plan-exercise-drag-handle');
     await page.waitForTimeout(250); await handle.scrollIntoViewIfNeeded();
     const a=await handle.boundingBox(), b=await cards.nth(1).locator('.plan-exercise-drag-handle').boundingBox();
-    await page.mouse.move(a.x+24,a.y+a.height/2); await page.mouse.down(); await page.mouse.move(a.x+24,a.y+a.height/2+12,{steps:2});
+    await page.mouse.move(a.x+24,a.y+a.height/2); await page.mouse.down();
+    await page.locator('.plan-reorder-preview').waitFor();
+    await page.mouse.move(a.x+24,a.y+a.height/2+12,{steps:2});
     assert.equal(await page.locator('.plan-reorder-preview').count(),1,`${name}: real drag listeners attached`);
     await page.mouse.move(b.x+24,b.y+b.height-2,{steps:8}); await page.mouse.up();
     await page.waitForTimeout(600);

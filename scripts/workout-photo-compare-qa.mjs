@@ -44,7 +44,7 @@ async function open(state,width=390,options={}){
   },state);
   const page=await context.newPage(),errors=[],outgoing=[];page.on('pageerror',e=>errors.push(e.message));page.on('request',r=>{if(r.method()==='POST')outgoing.push(r.url());});
   await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));
-  await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});await seed(page,state,options.mixed,options.corrupt);await page.reload({waitUntil:'networkidle'});
+  await page.goto(process.env.ROOK_QA_PREVIEW_URL||'http://127.0.0.1:4173',{waitUntil:'networkidle'});await seed(page,state,options.mixed,options.corrupt);await page.reload({waitUntil:'networkidle'});
   return {context,page,errors,outgoing};
 }
 async function timeline(page){await page.getByRole('button',{name:'PROGRESS',exact:true}).click();await page.locator('.workout-photo-entry-card').click();await page.getByRole('heading',{name:'Your training, over time.'}).waitFor();}
@@ -79,6 +79,7 @@ for(const scenario of ['zero','one','many','mixed','landscape','different-workou
     if(scenario==='many')assert.ok((await page.evaluate(()=>window.photoURLs.created))<50,'hundreds of originals are not materialized to enter selection');
     if(['missing','corrupt-selected'].includes(scenario)){
       await page.getByRole('button',{name:'CHANGE PHOTOS',exact:true}).click();
+      await page.waitForFunction(()=>document.querySelectorAll('.workout-photo-compare-screen .workout-photo-timeline-item.is-compare-selected img.is-ready').length===2);
       await page.evaluate(async corrupt=>{const db=await new Promise(resolve=>{const r=indexedDB.open('rook-workout-media',3);r.onsuccess=()=>resolve(r.result);});const tx=db.transaction('photos','readwrite'),store=tx.objectStore('photos');if(corrupt){const r=store.get('photo-0');r.onsuccess=()=>store.put({...r.result,blob:new Blob(['broken'],{type:'image/jpeg'})});}else store.delete('photo-0');await new Promise(resolve=>tx.oncomplete=resolve);db.close();},scenario==='corrupt-selected');
       await page.getByRole('button',{name:'COMPARE PHOTOS',exact:true}).click();await page.locator('.photo-compare-unavailable').getByText(/This photo is no longer available/).waitFor();await shot(page,`320-${scenario}`);await page.getByRole('button',{name:'Choose another',exact:true}).click();await page.getByRole('heading',{name:'Choose another photo'}).waitFor();
     }else{

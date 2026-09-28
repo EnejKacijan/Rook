@@ -7,7 +7,7 @@ import {addPlanVersion} from './planHistory.js';
 export function persistProgramReplacement(state,program,{profile=state.profile,source='manual'}={},persist) {
   if(state.activeWorkout || state.activeOptionalSession) throw new Error('Finish or discard your active workout before replacing your plan.');
   const next=structuredClone(state);
-  next.profile={...profile,onboardingComplete:true};
+  next.profile={...profile,onboardingComplete:true,noPlanReceipt:null};
   if(!validateProgram(program,{...next.profile,sessionMinutes:null},{preserveSchedule:true}).valid)
     throw new Error('Review this plan before saving. Your current plan is unchanged.');
   next.program=structuredClone(program);

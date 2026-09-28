@@ -38,7 +38,7 @@ it.each(['planned','freestyle'])('StrictMode %s: last-to-first works before any 
  expect(domain.workoutSetSummary(current.activeWorkout).completed).toBe(0);lastToFirst();
  expect(current.activeWorkout.exercises.map(e=>e.id)).toEqual([ids[0],ids[3],ids[1],ids[2]]);
  expect(save).toHaveBeenCalledOnce();expect(current.activeWorkout.exerciseIndex).toBe(0);expect(current.activeWorkout.startedAt).toBe(before.activeWorkout.startedAt);
- expect(feedback.pickup).toHaveBeenCalledOnce();expect(feedback.selection).toHaveBeenCalledOnce();expect(feedback.drop).toHaveBeenCalledOnce();
+ expect(feedback.pickup).toHaveBeenCalledOnce();expect(feedback.selection).not.toHaveBeenCalled();expect(feedback.drop).toHaveBeenCalledOnce();
  expect(current.program).toEqual(before.program);expect(domain.workoutSetSummary(current.activeWorkout)).toEqual(domain.workoutSetSummary(before.activeWorkout));
  expect(current.activeWorkout.exercises.map(e=>e.id).sort()).toEqual(ids.toSorted());
  const restored=domain.loadState();expect(restored.activeWorkout.exercises.map(e=>e.id)).toEqual([ids[0],ids[3],ids[1],ids[2]]);
@@ -62,13 +62,15 @@ it('a failed first reorder write leaves the queue and current exercise unchanged
 it('pickup uses an inert copy of the actual row, retaining notes; cancel never publishes order',()=>{
  const s=initial('freestyle');s.activeWorkout.exercises[3].personalNote='A longer note with a deliberately steady tempo';const before=structuredClone(s.activeWorkout);mount(s);
  const last=handles().at(-1),y=last.getBoundingClientRect().top+30,source=last.closest('[data-swipe-row]');
+ source.querySelector('.swipe-up-next-body').setAttribute('data-row-pressed','');
  touch('touchstart',last,360,y);expect(feedback.pickup).not.toHaveBeenCalled();act(()=>vi.advanceTimersByTime(300));touch('touchmove',last,360,y-15);
+ expect(source.classList.contains('reorder-live-source')).toBe(true);expect(source.querySelector('[data-row-pressed]')).toBeNull();
  const preview=host.querySelector('.queue-reorder-preview');expect(preview.hasAttribute('inert')).toBe(true);
  expect(preview.querySelector('.up-next-main').textContent).toBe(source.querySelector('.up-next-main').textContent);
  expect(preview.querySelector('.up-next-prescription').textContent).toBe(source.querySelector('.up-next-prescription').textContent);
  expect(preview.querySelector('[data-reorder-kind],[data-exercise-id],[id],[data-swipe-row]')).toBeNull();
  expect(current.activeWorkout).toEqual(before);touch('touchcancel',last,360,y-15);
- expect(current.activeWorkout).toEqual(before);expect(host.querySelector('.queue-reorder-preview')).toBeNull();expect(feedback.drop).not.toHaveBeenCalled();
+ expect(current.activeWorkout).toEqual(before);expect(source.classList.contains('reorder-live-source')).toBe(false);expect(source.querySelector('[data-row-pressed]')).toBeNull();expect(host.querySelector('.queue-reorder-preview')).toBeNull();expect(feedback.drop).not.toHaveBeenCalled();
 });
 
 it.each(['.up-next-main','.up-next-prescription','.rook-reorder-handle'])('first-exercise horizontal remove from %s preserves current/plan and supports Undo',selector=>{

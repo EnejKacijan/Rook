@@ -242,3 +242,18 @@
 }
 .missed-quick-actions { display:flex !important; align-items:center; gap:4px; flex-shrink:0; }
 .missed-skip-feedback { display:flex; align-items:center; gap:12px; font-size:13px; color:var(--rook-secondary); }
+.no-plan-today { padding-bottom: calc(var(--bottom-nav-total-height, 80px) + 24px); }
+.no-plan-today-heading { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; margin: 18px 0 28px; }
+.no-plan-today-heading h1 { margin: 10px 0 0; overflow-wrap: anywhere; }
+.no-plan-calendar-action { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 44px; padding: 0 4px; border: 0; background: none; color: var(--rook-accent); font: inherit; font-size: 13px; font-weight: 700; white-space: nowrap; }
+.no-plan-today .active-workout-notice { margin: 0 0 28px; }
+.no-plan-my-workouts { margin-top: 4px; }
+.no-plan-workout-list { margin-top: 12px; }
+.no-plan-workout-list .list-row { min-height: 64px; gap: 12px; text-align: left; }
+.no-plan-workout-list .list-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.no-plan-workout-list small { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 13px; }
+.no-plan-create-action, .no-plan-plan-action { display: block; min-height: 44px; margin-top: 16px; text-align: left; }
+.no-plan-today .freestyle-entry { margin-top: 20px; }
+.no-plan-today .today-completed-workouts { margin-top: 32px; }
+.no-plan-no-history { margin-top: 28px; color: var(--rook-secondary); }
+@media (max-width: 360px) { .no-plan-today-heading { gap: 8px; } .no-plan-calendar-action { gap: 4px; } }

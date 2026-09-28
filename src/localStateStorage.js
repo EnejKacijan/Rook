@@ -1,6 +1,7 @@
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
 import { sha256 } from '@noble/hashes/sha2.js';
 import {assertWorkoutTemplates} from './workoutTemplateSchema.js';
+import {intentionalNoPlan} from './trainingStyle.js';
 
 // Application data lives only in PRIMARY and the bounded recovery checkpoint.
 // Metadata never contains names, exercises, notes, messages, or state payloads.
@@ -39,7 +40,7 @@ export function assertStateShape(state) {
   }
   for (const workout of workouts)
     if (!workout || !Array.isArray(workout.exercises) || workout.exercises.some(e => !e || !Array.isArray(e.sets) || e.sets.some(s => !object(s)))) fail('validation-error');
-  if (state.profile.onboardingComplete && !state.program) fail('validation-error');
+  if (state.profile.onboardingComplete && !state.program && !intentionalNoPlan(state)) fail('validation-error');
   if (state.activeOptionalSession != null && (!object(state.activeOptionalSession) || !['Cardio','Mobility'].includes(state.activeOptionalSession.kind) || !Number.isFinite(Number(state.activeOptionalSession.startedAt)))) fail('validation-error');
   for (const entry of state.weightCheckins || []) if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.localDate) || !Number.isFinite(Number(entry.weightKg)) || Number(entry.weightKg) < 10 || Number(entry.weightKg) > 700) fail('validation-error');
   for (const entry of state.customExercises || []) if (!entry.id || !String(entry.name || '').trim()) fail('validation-error');
