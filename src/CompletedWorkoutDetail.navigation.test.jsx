@@ -42,22 +42,22 @@ function back(){const child=document.querySelector('.modal-layer > main');const 
 function parent(){expect(route).toEqual({completedWorkout:target.id});expect(detail()?.querySelector('h1').textContent).toBe(target.name);expect(closed).not.toHaveBeenCalled();expect(navigate).not.toHaveBeenCalled();expect(document.querySelectorAll('.modal-layer')).toHaveLength(1);}
 it('Save Back keeps the parent route, templates, history and current workout; semantic edge Back selects the same action',()=>{
  mount();const before=structuredClone(current);detail().scrollTop=113;
- choose('Save as template');expect(document.querySelector('.saved-workouts')).not.toBeNull();back();parent();
+ choose('Save workout');expect(document.querySelector('.saved-workouts')).not.toBeNull();back();parent();
  expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();expect(detail().scrollTop).toBe(113);expect(document.activeElement).toBe(trigger());
 });
 it('successful template save persists exactly once, returns to the same detail and announces success',()=>{
  mount();const history=structuredClone(current.workouts),plan=structuredClone(current.program);
- choose('Save as template');click(button('Save template'));settle();parent();
+ choose('Save workout');click(button('SAVE WORKOUT'));settle();parent();
  expect(persist).toHaveBeenCalledTimes(1);expect(current.savedWorkoutTemplates).toHaveLength(1);expect(current.workouts).toEqual(history);expect(current.program).toEqual(plan);expect(current.activeWorkout).toBeNull();
- expect(detail().querySelector('[role="status"]').textContent).toBe('Workout template saved');
+ expect(detail().querySelector('[role="status"]').textContent).toBe('Workout saved');
 });
 it('failed template save stays in the child and retry returns to the parent',()=>{
- mount();choose('Save as template');persist.mockReturnValueOnce(false);click(button('Save template'));
+ mount();choose('Save workout');persist.mockReturnValueOnce(false);click(button('SAVE WORKOUT'));
  expect(detail()).toBeNull();expect(current.savedWorkoutTemplates).toEqual([]);expect(document.querySelector('[role="alert"]').textContent).toContain('Could not save');expect(closed).not.toHaveBeenCalled();
- click(button('Save template'));settle();parent();expect(current.savedWorkoutTemplates).toHaveLength(1);
+ click(button('SAVE WORKOUT'));settle();parent();expect(current.savedWorkoutTemplates).toHaveLength(1);
 });
 it('Save Back after reviewing template exercises still returns to the completed parent without saving the draft',()=>{
- mount();const before=structuredClone(current);choose('Save as template');click(button('Edit exercises'));click(button('REVIEW TEMPLATE'));back();parent();expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
+ mount();const before=structuredClone(current);choose('Save workout');click(button('Edit exercises'));click(button('REVIEW WORKOUT'));back();parent();expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
 });
 it('Edit Back preserves the existing correct path and a successful correction returns to the same workout',()=>{
  mount();const before=structuredClone(current);choose('Edit history');back();parent();expect(current).toEqual(before);
@@ -69,7 +69,7 @@ it('Edit Back retains the existing dirty-draft confirmation before returning to 
  expect(document.querySelector('.history-correction-confirm').textContent).toContain('Discard changes?');expect(detail()).toBeNull();expect(closed).not.toHaveBeenCalled();
  click(button('KEEP EDITING'));expect(button('Harder than expected').getAttribute('aria-pressed')).toBe('true');back();click(button('DISCARD CHANGES'));settle();parent();expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
 });
-it('independent Save as template retains its original Back-to-close behavior',()=>{
+it('independent Save workout retains its original Back-to-close behavior',()=>{
  act(()=>root.render(<Detail detail={{saveWorkoutTemplate:{workoutId:target.id}}} state={initial} update={vi.fn()} close={closed} setDetail={navigate}/>));
  click(document.querySelector('.saved-workouts .detail-header-back'));expect(closed).toHaveBeenCalledOnce();expect(navigate).not.toHaveBeenCalled();expect(persist).not.toHaveBeenCalled();
 });
@@ -84,7 +84,7 @@ it('Repeat APPLY retains the existing domain operation and closes the details st
 it.each(['close','back','backdrop','escape','handle'])('options %s dismissal preserves the mounted detail, log, scroll, state and focus',method=>{
  mount();const panel=detail(),note=panel.querySelector('textarea'),log=panel.querySelector('.session-log-trigger'),before=structuredClone(current);
  click(log);panel.scrollTop=147;click(trigger());settle();expect(panel.inert).toBe(true);expect(trigger().getAttribute('aria-expanded')).toBe('true');
- expect([...options().querySelectorAll('.list-row')].map(n=>n.textContent)).toEqual(['Save as template','Repeat today','Edit history','Delete workout']);
+ expect([...options().querySelectorAll('.list-row')].map(n=>n.textContent)).toEqual(['Save workout','Repeat today','Edit history','Delete workout']);
  if(method==='backdrop')click(options().parentElement);
  else if(method==='escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})));
  else click(options().querySelector(method==='close'?'.detail-header-close':method==='back'?'.detail-header-back':'.modal-drag-handle'));
@@ -94,6 +94,6 @@ it.each(['activeWorkout','activeOptionalSession'])('keeps %s Repeat/Delete guard
  initial[key]={id:'active'};mount();expect(detail().textContent).not.toContain('before deleting history');click(trigger());
  const rows=[...options().querySelectorAll('.list-row')];expect(rows[0].disabled).toBe(false);expect(rows[1].disabled).toBe(true);expect(rows[1].textContent).toContain('active workout');expect(rows[2].disabled).toBe(false);expect(rows[3].disabled).toBe(true);expect(rows[3].textContent).toContain('before deleting history');
 });
-it.each(['Save as template','Edit history','Repeat today'])('%s explicit Close still closes the complete stack',action=>{
+it.each(['Save workout','Edit history','Repeat today'])('%s explicit Close still closes the complete stack',action=>{
  mount();choose(action);click(document.querySelector('.modal-layer > main .detail-header-close'));settle();expect(route).toBeNull();expect(closed).toHaveBeenCalledOnce();
 });

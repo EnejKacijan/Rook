@@ -59,6 +59,13 @@ it('an existing unsaved guard may refuse navigation; gesture never writes data',
 it('interruptions clear a partial drag without navigation',()=>{
  const s=setup();s.fire('touchstart',4);s.fire('touchmove',160);window.dispatchEvent(new Event('resize'));s.fire('touchend',160,100,0);vi.runAllTimers();expect(s.onBack).not.toHaveBeenCalled();expect(s.surface.dataset.edgeBackActive).toBeUndefined();s.dispose();
 });
+it.each([false,true])('pointercancel clears tracking/settling without a pop (settling=%s)', settling=>{
+ const s=setup();s.fire('touchstart',4);s.fire('touchmove',180);
+ if(settling)s.fire('touchend',180,100,0);
+ s.surface.dispatchEvent(new Event('pointercancel',{bubbles:true}));
+ s.fire('touchend',180,100,0);vi.runAllTimers();
+ expect(s.onBack).not.toHaveBeenCalled();expect(s.surface.dataset.edgeBackActive).toBeUndefined();expect(s.clear).toHaveBeenCalled();s.dispose();
+});
 it('mirrors Forward at the right edge using the same thresholds and negative finger-follow',()=>{
  const s=setup(true,{edge:'right'});s.fire('touchstart',386);s.fire('touchmove',210);
  expect(s.render).toHaveBeenLastCalledWith(-176,0);expect(s.onBack).not.toHaveBeenCalled();

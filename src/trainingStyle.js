@@ -17,8 +17,8 @@ export function intentionalNoPlan(state) {
 }
 
 export function trainingStyleFor(state) {
+  const preference = state?.profile?.preferredTrainingStyle;
+  if (['own-workouts', 'freestyle'].includes(preference)) return preference;
   if (state?.program) return 'plan';
-  if (['own-workouts', 'freestyle'].includes(state?.profile?.preferredTrainingStyle))
-    return state.profile.preferredTrainingStyle;
   return state?.savedWorkoutTemplates?.length ? 'own-workouts' : 'freestyle';
 }

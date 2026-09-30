@@ -790,7 +790,7 @@
 :root[data-appearance="dark"] .workout-screen .exercise-options-button { color: var(--rook-muted); }
 :root[data-appearance="dark"] .workout-screen .exercise-options-button:is(:hover, :focus-visible) { background: var(--rook-accent-soft); color: var(--rook-accent); }
 :root[data-appearance="dark"] .workout-screen .workout-options-trigger { color: var(--rook-muted); }
-:root[data-appearance="dark"] .workout-screen .workout-options-trigger:active { background: var(--rook-accent-soft); color: var(--rook-accent); }
+:root[data-appearance="dark"] .workout-screen .workout-options-trigger:active { background: transparent; color: var(--rook-accent); }
 :root[data-appearance="dark"] .active-workout-options-sheet .button.workout-restart-danger { background: #873a34; color: #fff; border-color: #873a34; }
 :root[data-appearance="dark"] .active-workout-options-sheet .button.workout-restart-danger:is(:hover, :focus-visible) { background: #73302b; border-color: #73302b; }
 :root[data-appearance="dark"] .workout-screen .workout-exercise-actions .text-button:not(:disabled) { color: var(--rook-secondary); }

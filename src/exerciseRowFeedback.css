@@ -1,4 +1,4 @@
-/* Only exercise navigation rows opt in. Selection rows and action buttons keep
+/* Only navigation rows opt in. Selection rows and action buttons keep
    their own state semantics, focus styling, dimensions and content. */
 :root button.exercise-row-feedback {
  position:relative;

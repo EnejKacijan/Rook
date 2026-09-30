@@ -2,6 +2,7 @@ import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
 import { sha256 } from '@noble/hashes/sha2.js';
 import {assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {intentionalNoPlan} from './trainingStyle.js';
+import { FIRST_RUN_ACCOUNT_CLAIM_KEY } from './firstRunAccountClaim.js';
 
 // Application data lives only in PRIMARY and the bounded recovery checkpoint.
 // Metadata never contains names, exercises, notes, messages, or state payloads.
@@ -16,6 +17,7 @@ const LEGACY_EVIDENCE_KEYS = ['lift-funnel-events-v1','lift-funnel-once-v1'];
 const build = typeof __ROOK_BUILD_ID__ === 'undefined' ? 'development' : __ROOK_BUILD_ID__;
 const version = typeof __ROOK_APP_VERSION__ === 'undefined' ? '1.0.0' : __ROOK_APP_VERSION__;
 const sessions = new WeakMap();
+const savedListeners = new Set();
 let lastDiagnostic = {};
 const stamp = () => new Date().toISOString();
 const fail = (code) => { throw Object.assign(new Error(`Saved ROOK data could not be safely loaded or written (${code}).`), { code }); };
@@ -52,11 +54,22 @@ export function hasEstablishedData(state) {
   return !!(state?.program || state?.activeWorkout || state?.activeOptionalSession || state?.workouts?.length || state?.optionalSessions?.length || state?.planVersions?.length || state?.conversations?.length || state?.savedWorkoutTemplates?.length);
 }
 
-const continuity = state => ({ initialized: state?.profile?.onboardingComplete === true, profileId: state?.profile?.id, established: hasEstablishedData(state) });
+const continuity = state => ({
+  initialized: state?.profile?.onboardingComplete === true,
+  profileId: state?.profile?.id,
+  established: hasEstablishedData(state),
+  noPlanReceipt: JSON.stringify(state?.profile?.noPlanReceipt ?? null),
+  // A first-run Freestyle user's only established data can be the empty active
+  // session. Removing that exact session must not be mistaken for profile loss.
+  activeOnlyNoPlan: Boolean(state?.activeWorkout) && intentionalNoPlan(state) &&
+    !hasEstablishedData({ ...state, activeWorkout: null }),
+  emptyNoPlan: !hasEstablishedData(state) && intentionalNoPlan(state),
+});
 function assertContinuity(previous, next) {
   if (previous?.initialized && !next.initialized) fail('profile-reset-blocked');
   if (previous?.initialized && previous.profileId && previous.profileId !== next.profileId) fail('profile-identity-changed');
-  if (previous?.established && !next.established) fail('empty-write-blocked');
+  if (previous?.established && !next.established && !(previous.activeOnlyNoPlan && next.emptyNoPlan &&
+      previous.initialized && next.initialized && previous.noPlanReceipt === next.noPlanReceipt)) fail('empty-write-blocked');
 }
 // Shared by the durable writer and the React state owner: rejecting a write
 // must not still publish an uninitialized profile and render onboarding.
@@ -89,6 +102,20 @@ function remember(outcome, extra = {}) {
   lastDiagnostic = { ...lastDiagnostic, appVersion: version, build, lastEventAt: stamp(), outcome, ...extra };
 }
 export function recordStartupOutcome(code) { remember(code, { startupOutcome: code }); }
+// Later startup stages can fail after readLocalState has established a session.
+// A failed UI/account handoff must revoke that authority too, without changing
+// primary, backup or disk metadata. Only a fresh successful read can reopen it.
+export function invalidateStartupSession(code, stage, storage) {
+  try {
+    storage ??= globalThis.localStorage;
+    sessions.set(storage, { ...sessions.get(storage), status: 'error' });
+  } catch { /* Storage may itself be inaccessible. Diagnostics stay in memory. */ }
+  remember(code, { startupOutcome: code, startupStage: stage });
+}
+export function subscribeLocalStateSaved(listener) {
+  savedListeners.add(listener);
+  return () => savedListeners.delete(listener);
+}
 export function localRecoverySummary(storage, hydrate) {
   try { const recovery = readRecovery(storage, hydrate); return recovery ? { createdAt: recovery.createdAt, generation: recovery.generation } : undefined; } catch { return undefined; }
 }
@@ -141,6 +168,20 @@ export function readRecovery(storage, hydrate) {
   } catch { fail('recovery-invalid'); }
 }
 
+// Cloud bootstrap/recovery must have a verified local copy before any remote
+// entity is allowed to update the primary state. No network call is made here.
+export function checkpointCurrentLocalState(storage = globalThis.localStorage, hydrate) {
+  const current = readLocalState(storage, hydrate);
+  if (current.status !== 'ready') fail('checkpoint-source-unavailable');
+  const raw = storage.getItem(PRIMARY_KEY);
+  const generation = current.generation;
+  const envelope = encodeCheckpoint(raw, current.state, generation);
+  storage.setItem(RECOVERY_KEY, envelope);
+  const verified = readRecovery(storage, hydrate);
+  if (verified?.raw !== raw || verified.generation !== generation) fail('checkpoint-verification-failed');
+  return { generation, profileId: current.state.profile.id };
+}
+
 export function readLocalState(storage, hydrate) {
   let raw, meta, recovery;
   try {
@@ -158,7 +199,7 @@ export function readLocalState(storage, hydrate) {
         if (meta?.profileInitialized || recovery?.state.profile.onboardingComplete) fail('profile-reset-blocked');
       }
       sessions.set(storage, { status: 'ready', raw, continuity: continuity(state), established: hasEstablishedData(state), planSignature: JSON.stringify([state.program,state.planVersions]), lastCheckpointAt: 0 });
-      remember('ready', { startupOutcome: 'ready', lastSuccessfulReadAt: stamp(), schemaVersion: state.schemaVersion, serializedChars: raw.length });
+      remember('ready', { startupOutcome: 'ready', startupStage: 'ready', lastSuccessfulReadAt: stamp(), schemaVersion: state.schemaVersion, serializedChars: raw.length });
       return { status: 'ready', state, generation: meta?.generation || 0 };
     }
     recovery = readRecovery(storage, hydrate);
@@ -177,6 +218,23 @@ export function readLocalState(storage, hydrate) {
   }
 }
 
+// Read-only cloud worker snapshot. Unlike startup hydration, this must not
+// replace the writer's in-memory session or checkpoint cadence on every tap.
+export function readLocalSyncSnapshot(storage = globalThis.localStorage, hydrate) {
+  const meta = parseMeta(storage.getItem(INSTALL_META_KEY));
+  const raw = storage.getItem(PRIMARY_KEY);
+  if (meta?.deletePending || storage.getItem(JOURNAL_KEY) !== null || raw === null) fail('sync-source-unavailable');
+  const state = decode(raw, hydrate);
+  if (!state.profile?.id) fail('sync-profile-missing');
+  return { status: 'ready', state, generation: meta?.generation || 0, raw };
+}
+export function isLocalSyncSnapshotCurrent(snapshot, storage = globalThis.localStorage) {
+  try {
+    const meta = parseMeta(storage.getItem(INSTALL_META_KEY));
+    return !meta?.deletePending && storage.getItem(JOURNAL_KEY) === null && (meta?.generation || 0) === snapshot.generation && storage.getItem(PRIMARY_KEY) === snapshot.raw;
+  } catch { return false; }
+}
+
 function writeMeta(storage, meta) { storage.setItem(INSTALL_META_KEY, JSON.stringify(meta)); }
 
 export function persistLocalState(raw, { storage, hydrate, reason = 'user-change', replacement = false, preserveRecovery = false, expectedGeneration } = {}) {
@@ -184,7 +242,7 @@ export function persistLocalState(raw, { storage, hydrate, reason = 'user-change
     storage ??= globalThis.localStorage;
     const parsed = JSON.parse(raw);
     assertStateShape(parsed);
-    if (replacement && !['backup-restore:user-confirmed','history-delete:user-confirmed','recovery-used'].includes(reason)) fail('replacement-intent-required');
+    if (replacement && !['backup-restore:user-confirmed','cloud-recovery:user-confirmed','profile-switch:user-confirmed','history-delete:user-confirmed','recovery-used'].includes(reason)) fail('replacement-intent-required');
     let meta;
     try { meta = parseMeta(storage.getItem(INSTALL_META_KEY)); } catch (error) { if (!replacement) throw error; }
     if (meta?.deletePending && !replacement) fail('delete-incomplete');
@@ -235,6 +293,9 @@ export function persistLocalState(raw, { storage, hydrate, reason = 'user-change
     // PRIMARY is already durable. Failure of optional final diagnostics must not
     // falsely report the successfully verified data write as lost.
     try { writeMeta(storage, completed); } catch { remember('saved-metadata-pending'); }
+    for (const listener of savedListeners) {
+      try { listener({ profileId: parsed.profile.id, generation }); } catch { /* Optional sync must never undo a verified local write. */ }
+    }
     return true;
   } catch (error) {
     if (storage && ['state-changed','primary-missing'].includes(error?.code)) sessions.set(storage, { ...sessions.get(storage), status: 'error' });
@@ -264,7 +325,7 @@ export function withStorageTransaction(operation, locks = globalThis.navigator?.
 export function deleteLocalState(options = {}) {
   return withStorageTransaction(() => deleteLocalStateLocked(options));
 }
-async function deleteLocalStateLocked({ storage = globalThis.localStorage, clearPhotos, reason = 'delete-local-data:user-confirmed' } = {}) {
+async function deleteLocalStateLocked({ storage = globalThis.localStorage, clearPhotos, clearProfiles, reason = 'delete-local-data:user-confirmed' } = {}) {
   // Explicit action only: retain a tiny deletion receipt even after all user
   // content is gone. Partial deletion stays recoverable, never claims success.
   let meta;
@@ -272,7 +333,8 @@ async function deleteLocalStateLocked({ storage = globalThis.localStorage, clear
   const intent = { version: 1, generation: (meta?.generation || 0) + 1, everInitialized: true, deletePending: true, explicitDeleteAt: stamp(), lastWriteReason: reason, build, appVersion: version };
   writeMeta(storage, intent);
   await clearPhotos?.();
-  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, ...LEGACY_EVIDENCE_KEYS]) storage.removeItem(key);
+  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, ...LEGACY_EVIDENCE_KEYS]) storage.removeItem(key);
+  await clearProfiles?.(storage);
   writeMeta(storage, { ...intent, everInitialized: false, deletePending: false });
   sessions.delete(storage);
   remember('explicitly-deleted', { explicitDeleteAt: intent.explicitDeleteAt, lastWriteReason: reason });

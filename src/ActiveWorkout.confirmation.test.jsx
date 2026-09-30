@@ -59,7 +59,8 @@ it.each([false, true])('Finish confirmation owns focus/background and Escape ret
 it('a cancelled pointer drag never dismisses Finish confirmation', () => {
   mount(); const before = structuredClone(current), target = panel().querySelector('[aria-label="Drag down or tap to close"]');
   pointer('pointerdown', target, 100); advance(200); pointer('pointermove', target, 270);
-  expect(panel().style.transform).toBe('translateY(170px)');
+  act(() => vi.advanceTimersToNextFrame());
+  expect(panel().style.transform).toBe('translate3d(0, 170px, 0)');
   pointer('pointercancel', target, 270); advance(250);
   expect(panel()).not.toBeNull(); expect(['', 'translateY(0px)']).toContain(panel().style.transform);
   expect(current).toEqual(before); expect(navigate).not.toHaveBeenCalled();
@@ -70,13 +71,13 @@ it.each(['resize', 'blur', 'visibilitychange', 'lostpointercapture'])('%s resets
   act(() => (reason === 'visibilitychange' ? document : reason === 'lostpointercapture' ? target : window).dispatchEvent(new Event(reason, {bubbles:true})));
   advance(250); expect(panel().style.transform).toBe(''); expect(current).toEqual(before);
 });
-it('the remaining legacy Change plan handle also cancels pointer drag without closing', () => {
+it('Change plan uses the same cancellable pointer handle as confirmation sheets', () => {
   const close = vi.fn(), backgroundRef = {current:host}, state = createReturningUserFixture(0);
   act(() => root.render(<ModalLayer close={close} backgroundRef={backgroundRef}>{requestClose => <Detail detail="change-plan" state={state} update={() => {}} close={requestClose} setDetail={() => {}}/>}</ModalLayer>));
-  advance(300); const sheet = document.querySelector('.change-plan-sheet'), target = sheet.querySelector('.sheet-grab-zone');
+  advance(300); const sheet = document.querySelector('.change-plan-sheet'), target = sheet.querySelector('.modal-drag-handle');
   Object.defineProperty(sheet, 'offsetHeight', {configurable:true, value:400});
   pointer('pointerdown', target, 100); advance(200); pointer('pointermove', target, 270); pointer('pointercancel', target, 270); advance(450);
-  expect(close).not.toHaveBeenCalled(); expect(sheet.style.transform).toBe('translateY(0px)');
+  expect(close).not.toHaveBeenCalled(); expect(sheet.style.transform).toBe('');
 });
 it('Finish anyway still stores one completed workout and only performed sets', () => {
   mount(); const before = structuredClone(current), selected = before.activeWorkout;

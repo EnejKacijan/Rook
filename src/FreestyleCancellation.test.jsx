@@ -93,7 +93,7 @@ it('completed sets require explicit cancellation and do not create history',()=>
 it.each(['KEEP WORKOUT','Close','handle','Escape','backdrop'])('%s is a safe dismissal with focus restoration',path=>{
   mount();const before=structuredClone(current),trigger=screen().querySelector('[aria-label="Workout options"]');open();
   if(path==='Close')click(dialog().querySelector('[aria-label="Close"]'));
-  else if(path==='handle')click(dialog().querySelector('.sheet-grab-zone'));
+  else if(path==='handle')click(dialog().querySelector('.modal-drag-handle'));
   else if(path==='Escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));
   else if(path==='backdrop')click(dialog().parentElement);
   else click(button(path));

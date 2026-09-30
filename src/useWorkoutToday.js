@@ -28,7 +28,14 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
   if(state.todayAdaptation)return fail('Finish or cancel the pending workout adjustment first.');
   if(source?.scheduledDate===today)return fail('This workout is already scheduled for today.');
   const displaced=sessions.find(s=>s.scheduledDate===today && s.logicalSessionId!==source?.logicalSessionId && ['planned','missed','optional'].includes(s.status));
+  const swapProposal=displaced && source ? proposeFlexibleWeek(state,{mode:'swap',sessionId:source.logicalSessionId,otherSessionId:displaced.logicalSessionId},today) : null;
+  if(request.swap){
+    if(swapProposal?.status!=='ready')return fail(swapProposal?.error || 'These workouts can no longer be swapped. Review your selection again.');
+    return {status:'ready',today,request:structuredClone(request),fingerprint:flexibleReviewFingerprint(state),kind:'swap',
+      sourceName:source.workout.name,sourceDate:source.originalDate,displaced,swapProposal};
+  }
   if(displaced && !request.displacedToDate){
+    if(eligibilityOnly && swapProposal?.status==='ready')return {status:'choose-date'};
     const dates=[];
     for(let i=1;i<=13;i++){
       const toDate=addCalendarDays(today,i);
@@ -38,8 +45,8 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
       // enumerates every date using exactly the same canonical move validation.
       if(eligibilityOnly)break;
     }
-    if(!dates.length)return fail('No dates are free for today’s workout. Adjust your week first.');
-    return {status:'choose-date',sourceName:record?.name || source.workout.name,displaced,dates};
+    if(!dates.length && swapProposal?.status!=='ready')return fail('No dates are free for today’s workout. Adjust your week first.');
+    return {status:'choose-date',sourceName:record?.name || source.workout.name,displaced,dates,swapProposal:swapProposal?.status==='ready'?swapProposal:null};
   }
   let displacedProposal=null,staged=state;
   if(displaced){
@@ -66,7 +73,13 @@ export function applyWorkoutToday(state,proposal,{persist=saveState}={}) {
   if(checked.status!=='ready')throw Error(checked.error || 'Review your selection again.');
   let next=structuredClone(state);
   if(checked.displacedProposal){const r=applyFlexibleWeek(next,checked.displacedProposal);if(r.status!=='applied')throw Error(r.error);next=r.state;}
-  if(checked.moveProposal){
+  if(checked.swapProposal){
+    // Reuse the same atomic, identity-preserving temporary swap as Flexible Week.
+    const result=applyFlexibleWeek(next,checked.swapProposal);
+    if(result.status!=='applied')throw Error(result.error);
+    next=result.state;
+  }
+  else if(checked.moveProposal){
     // Displacement writes an updatedAt timestamp. Rebase the already reviewed
     // move request on that exact intermediate state, not an earlier timestamp.
     const move=proposeFlexibleWeek(next,checked.moveProposal.request,checked.today);

@@ -1,11 +1,39 @@
 .first-run-navigation, .first-run-page, .first-run-step-motion { display: contents; }
 .first-run-page[hidden] { display: none !important; }
+.rook-navigation-chevron { display: block; width: 18px; height: 18px; flex: 0 0 auto; pointer-events: none; }
+.first-run-back-button {
+  appearance: none; display: grid; place-items: center; width: 44px; height: 44px;
+  min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px;
+  background: transparent; color: var(--rook-accent-text);
+}
+:root[data-appearance] .first-run-back-button { color: var(--rook-accent-text); }
+.first-run-back-button .rook-navigation-chevron { width: 22px; height: 22px; }
+.first-run-page .detail-header > .first-run-back-button { margin-inline-start: -12px; }
+/* The shared .screen gutter narrows from 24px to 17px below 375px; keep
+   the first-run Back hit area at the same 12px inset as entry screens. */
+@media (max-width: 374px) {
+  .first-run-page .detail-header > .first-run-back-button { margin-inline-start: -5px; }
+}
+.first-run-back-button:active { opacity: .7; }
+.first-run-back-button:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
 .first-run-navigation { overflow-anchor: none; }
 .first-run-page:not([hidden]) > main { overflow-anchor: none; }
 :root .first-run-page:not([hidden]) main { overflow-x: clip; }
-.first-run-visual { position: fixed; inset: 0; z-index: 200; pointer-events: none; overflow: clip; contain: strict; }
 /* The shared transition replaces the old zero-opacity keyed entrance only here. */
 .first-run-step-motion .onboarding-content { animation: none !important; }
+/* Returning users use the same questionnaire inside the existing page layer. */
+:root .modal-layer.edit-plan-page-layer .first-run-step-motion > .onboarding,
+:root .edit-plan-page-layer > .generated-plan-preview {
+  width: 100%; max-width: 500px; height: 100%; min-height: 0; max-height: 100%;
+  overflow-y: auto; border: 0; border-radius: 0; box-shadow: none;
+  padding-top: calc(20px + env(safe-area-inset-top));
+  background: var(--rook-bg); color: var(--rook-text);
+}
 .persistence-host > .first-run-navigation > .first-run-page > :is(.onboarding,.initial-import-screen) {
   min-height: calc(100dvh - 74px - env(safe-area-inset-top));
 }
+.first-run-freestyle-screen { min-height: 100dvh; }
+.first-run-freestyle-content { padding: 28px 24px calc(32px + env(safe-area-inset-bottom)); }
+.first-run-freestyle-content h1 { margin: 12px 0 8px; }
+.first-run-freestyle-content p { color: var(--rook-secondary); line-height: 1.5; }
+.first-run-freestyle-content .button { margin-top: 24px; }

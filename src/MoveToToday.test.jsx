@@ -18,6 +18,8 @@ beforeEach(() => {
 afterEach(() => {act(()=>root.unmount());host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 const button = text => [...host.querySelectorAll('button')].find(node=>node.textContent === text);
 const tap = text => act(()=>button(text).click());
+const todayCell=()=>host.querySelector(`[data-move-date="${isoDay()}"]`);
+const tapToday=()=>act(()=>todayCell().click());
 function mount(state, initial = 'sheet') {
   function Harness() {
     const [value,setValue]=useState(state), [page,setPage]=useState(initial);
@@ -37,8 +39,8 @@ function destination(state) {
 }
 it.each(['freestyle','none','completed-freestyle'])('reviews then durably applies Move to today with %s, without mutating the active session or plan', kind => {
   const state=moveToTodayFixture(kind), before=structuredClone(state);mount(state);
-  const id=destination(state);expect(button('Move to today').disabled).toBe(false);
-  tap('Move to today');expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');
+  const id=destination(state);expect(button('Use this workout today')).toBeUndefined();expect(button('Move to today')).toBeUndefined();expect(todayCell().disabled).toBe(false);
+  tapToday();expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');
   expect(host.textContent).toContain('Wed, Sep 23 → Sun, Sep 20');
   expect(current).toEqual(before);expect(publish).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
   tap('APPLY MOVE');expect(host.querySelector('h1').textContent).toBe('Workout moved');expect(close).not.toHaveBeenCalled();
@@ -57,11 +59,11 @@ it.each(['freestyle','none','completed-freestyle'])('reviews then durably applie
   expect(flexibleSessionById(reloaded,id).scheduledDate).toBe(isoDay());
 });
 it.each(['active-planned','planned','completed-planned'])('disables the shortcut and same date cell for an occupied %s destination, with an adjacent accessible reason', kind => {
-  const state=moveToTodayFixture(kind), before=serializeState(state);mount(state);const id=destination(state),shortcut=button('Move to today');
+  const state=moveToTodayFixture(kind), before=serializeState(state);mount(state);const id=destination(state),shortcut=todayCell();
   expect(proposeFlexibleWeek(state,{mode:'move',sessionId:id,toDate:isoDay()}).status).toBe('conflict');
-  expect(shortcut.disabled).toBe(true);const reason=document.getElementById(shortcut.getAttribute('aria-describedby'));
+  expect(shortcut.disabled).toBe(true);const reason=host.querySelector('.sheet-footnote');
   expect(reason.textContent).toMatch(/another workout|active planned workout|completed planned workout/i);
-  expect(shortcut.nextElementSibling).toBe(reason);
+  expect(reason.textContent).toMatch(/^Today:/);
   expect([...host.querySelectorAll(`[data-move-date="${isoDay()}"]`)].every(node=>node.disabled)).toBe(true);
   act(()=>shortcut.click());expect(publish).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();expect(serializeState(current)).toBe(before);
 });
@@ -78,17 +80,17 @@ it('does not treat an unrelated completed planned record performed today as an o
   const state=moveToTodayFixture(), source=flexibleSessions(state).find(item=>item.originalDate==='2026-09-18');
   state.workouts.push({id:'prior-plan-work',logicalSessionId:source.logicalSessionId,programDayId:source.workoutId,canonicalPlanDate:source.originalDate,workoutDateKey:isoDay(),completedAt:'2026-09-20T01:37:00',name:source.workout.name,exercises:[]});
   expect(proposeFlexibleWeek(state,{mode:'move',sessionId:moveToTodaySource(state).logicalSessionId,toDate:isoDay()}).status).toBe('ready');
-  mount(state);destination(state);expect(button('Move to today').disabled).toBe(false);
+  mount(state);destination(state);expect(todayCell().disabled).toBe(false);
 });
 it('keeps review, selected destination, saved schedule and active workout on persistence failure, then retries', () => {
-  const state=moveToTodayFixture();localStorage.setItem(STORAGE_KEY,serializeState(state));const saved=localStorage.getItem(STORAGE_KEY);mount(state);destination(state);tap('Move to today');
+  const state=moveToTodayFixture();localStorage.setItem(STORAGE_KEY,serializeState(state));const saved=localStorage.getItem(STORAGE_KEY);mount(state);destination(state);tapToday();
   const write=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw Error('full');});tap('APPLY MOVE');
   expect(current).toEqual(state);expect(localStorage.getItem(STORAGE_KEY)).toBe(saved);expect(close).not.toHaveBeenCalled();expect(publish).not.toHaveBeenCalled();
   expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');expect(host.querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
   write.mockRestore();tap('TRY AGAIN');expect(host.querySelector('h1').textContent).toBe('Workout moved');expect(current.activeWorkout).toEqual(state.activeWorkout);
 });
 it.each(['schedule','source-started'])('keeps the review and rejects Apply when %s changes', kind => {
-  const state=moveToTodayFixture();mount(state);destination(state);tap('Move to today');
+  const state=moveToTodayFixture();mount(state);destination(state);tapToday();
   act(()=>change(next=>{if(kind==='schedule')next.weekScheduleOverrides={'2026-09-21':{}};else next.activeWorkout=startWorkout({...next,activeWorkout:null},moveToTodaySource(next).workout);return next;}));
   const before=structuredClone(current);expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');tap('APPLY MOVE');
   expect(current).toEqual(before);expect(publish).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();expect(host.querySelector('[role="alert"]').textContent).toContain('Review the schedule again');

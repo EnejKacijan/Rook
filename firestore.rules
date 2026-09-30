@@ -1,0 +1,62 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function owns(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+    function account(uid) {
+      return get(/databases/$(database)/documents/rookAccounts/$(uid));
+    }
+    function validEntity(uid) {
+      let data = request.resource.data;
+      return owns(uid)
+        && exists(/databases/$(database)/documents/rookAccounts/$(uid))
+        && data.keys().hasAll(['syncSchemaVersion', 'profileId', 'domain', 'entityId', 'ordinal', 'revision', 'lastMutationId', 'updatedAt', 'deleted', 'digest', 'value'])
+        && data.keys().hasOnly(['syncSchemaVersion', 'profileId', 'domain', 'entityId', 'ordinal', 'revision', 'lastMutationId', 'updatedAt', 'deleted', 'digest', 'value'])
+        && data.syncSchemaVersion == 1
+        && data.profileId == account(uid).data.profileId
+        && data.domain is string && data.domain.size() > 0 && data.domain.size() <= 80
+        && data.entityId is string && data.entityId.size() > 0 && data.entityId.size() <= 200
+        && (data.ordinal == null || (data.ordinal is int && data.ordinal >= 0))
+        && data.lastMutationId is string && data.lastMutationId.size() >= 32 && data.lastMutationId.size() <= 128
+        && data.updatedAt == request.time
+        && data.deleted is bool
+        && (data.deleted
+          ? data.value == null && data.digest == null
+          : data.value != null && data.digest is string && data.digest.size() == 64)
+        && !(data.deleted && (data.domain == 'profile' || data.domain == 'program'));
+    }
+
+    match /rookAccounts/{uid} {
+      allow get: if owns(uid);
+      allow list: if false;
+      allow create: if owns(uid)
+        && request.resource.data.keys().hasAll(['syncSchemaVersion', 'profileId', 'createdAt'])
+        && request.resource.data.keys().hasOnly(['syncSchemaVersion', 'profileId', 'createdAt'])
+        && request.resource.data.syncSchemaVersion == 1
+        && request.resource.data.profileId is string
+        && request.resource.data.profileId.size() > 0
+        && request.resource.data.profileId.size() <= 200
+        && request.resource.data.createdAt == request.time;
+      // A lineage change is never an ordinary client update. Explicit account
+      // deletion/migration needs a separate reviewed, privileged path.
+      allow update, delete: if false;
+
+      match /entities/{entityDocId} {
+        allow get, list: if owns(uid);
+        allow create: if validEntity(uid)
+          && request.resource.data.revision == 1
+          && request.resource.data.deleted == false;
+        allow update: if validEntity(uid)
+          && resource.data.syncSchemaVersion == 1
+          && request.resource.data.profileId == resource.data.profileId
+          && request.resource.data.domain == resource.data.domain
+          && request.resource.data.entityId == resource.data.entityId
+          && request.resource.data.revision == resource.data.revision + 1
+          && request.resource.data.lastMutationId != resource.data.lastMutationId;
+        // Deletes are versioned tombstone updates, never missing documents.
+        allow delete: if false;
+      }
+    }
+  }
+}

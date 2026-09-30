@@ -29,9 +29,9 @@ it('the next exercise follows the new queue, with the current exercise pinned',(
  act(()=>button('NEXT EXERCISE →').click());act(()=>vi.advanceTimersByTime(1000));expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].id).toBe(c);
  expect(current.activeWorkout.exercises.find(e=>e.id===a).sets.every(set=>set.completed)).toBe(true);expect(current.activeWorkout.exercises.find(e=>e.id===b)).toBeTruthy();
 });
-it('logged and previously visited future exercises do not acquire handles; a handle tap never opens an exercise',()=>{
+it('logged future exercises stay locked, but a visit leaves the handle available; handle tap never opens an exercise',()=>{
  const s=make();s.activeWorkout.exercises[2].startedAt=Date.now();s.activeWorkout.exercises[3].sets[0].completed=true;mount(s);
- expect(handle(s.activeWorkout.exercises[2].id)).toBeNull();expect(handle(s.activeWorkout.exercises[3].id)).toBeNull();
+ expect(handle(s.activeWorkout.exercises[2].id)).not.toBeNull();expect(handle(s.activeWorkout.exercises[3].id)).toBeNull();
  act(()=>root.unmount());root=createRoot(host);const plain=make();mount(plain);
  act(()=>handle(plain.activeWorkout.exercises[1].id).click());expect(current.activeWorkout.exerciseIndex).toBe(0);
 });
@@ -40,12 +40,50 @@ it('the contextual sheet offers Move up/down for only its named instance',()=>{
  const buttons=[...host.querySelectorAll('.up-next-options-sheet .list-row')];expect(buttons).toHaveLength(3);
  act(()=>buttons[1].click());expect(move).toHaveBeenCalledExactlyOnceWith(exercise.id,1);
 });
-it('visiting an untouched future exercise pins it after returning and reloading',()=>{
- const s=make();mount(s);const currentId=s.activeWorkout.exercises[0].id,visitedId=s.activeWorkout.exercises[2].id;
- act(()=>host.querySelectorAll('.up-next-main')[1].click());act(()=>vi.advanceTimersByTime(1000));
- expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].id).toBe(visitedId);
- expect(current.activeWorkout.exercises.find(e=>e.id===visitedId).startedAt).toBeGreaterThan(0);
- const restored=deserializeState(serializeState(current),{strict:true});restored.activeWorkout.exerciseIndex=0;
+it('opening A, leaving with Previous, and revisiting never locks its queue reorder handle',()=>{
+ const s=make();mount(s);const [currentId,visitedId,nextId]=s.activeWorkout.exercises.map(e=>e.id);
+ for(let visit=0;visit<2;visit++){
+  act(()=>host.querySelectorAll('.up-next-main')[0].click());act(()=>vi.advanceTimersByTime(1000));
+  expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].id).toBe(visitedId);
+  expect(current.activeWorkout.exercises.find(e=>e.id===visitedId).startedAt).toBeGreaterThan(0);
+  act(()=>button('← PREVIOUS EXERCISE').click());act(()=>vi.advanceTimersByTime(1000));
+  expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].id).toBe(currentId);
+  expect(handle(visitedId)).not.toBeNull();
+ }
+ const restored=deserializeState(serializeState(current),{strict:true});
  act(()=>root.unmount());root=createRoot(host);mount(restored);
- expect(current.activeWorkout.exercises[0].id).toBe(currentId);expect(handle(visitedId)).toBeNull();
+ expect(handle(visitedId)).not.toBeNull();
+ key(visitedId,'ArrowDown');
+ expect(current.activeWorkout.exercises.map(e=>e.id).slice(0,3)).toEqual([currentId,nextId,visitedId]);
+});
+it('a persisted value on a visited exercise still blocks reordering after Previous',()=>{
+ const s=make();mount(s);const visitedId=s.activeWorkout.exercises[1].id;
+ act(()=>host.querySelectorAll('.up-next-main')[0].click());act(()=>vi.advanceTimersByTime(1000));
+ const increase=[...host.querySelectorAll('button')].find(item=>/Increase reps for set 1/i.test(item.getAttribute('aria-label')||''));
+ expect(increase).toBeTruthy();act(()=>increase.click());
+ expect(current.activeWorkout.exercises.find(entry=>entry.id===visitedId).sets[0].touched).toBe(true);
+ act(()=>button('← PREVIOUS EXERCISE').click());act(()=>vi.advanceTimersByTime(1000));
+ expect(handle(visitedId)).toBeNull();
+});
+it('Next past an untouched exercise does not turn its visit into logged progress',()=>{
+ const s=make();mount(s);const [firstId,visitedId]=s.activeWorkout.exercises.map(e=>e.id);
+ act(()=>host.querySelectorAll('.up-next-main')[0].click());act(()=>vi.advanceTimersByTime(1000));
+ expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].id).toBe(visitedId);
+ act(()=>button('NEXT EXERCISE →').click());
+ act(()=>[...document.querySelectorAll('.workout-confirm-actions button')].find(item=>item.textContent.trim()==='SKIP INCOMPLETE SETS').click());act(()=>vi.advanceTimersByTime(1000));
+ expect(current.activeWorkout.exerciseIndex).toBe(2);
+ act(()=>button('← PREVIOUS EXERCISE').click());act(()=>vi.advanceTimersByTime(1000));
+ act(()=>button('← PREVIOUS EXERCISE').click());act(()=>vi.advanceTimersByTime(1000));
+ expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].id).toBe(firstId);
+ expect(handle(visitedId)).not.toBeNull();
+});
+it('an uncommitted edit restored to its original value does not lock the visited exercise',()=>{
+ const s=make();mount(s);const visitedId=s.activeWorkout.exercises[1].id;
+ act(()=>host.querySelectorAll('.up-next-main')[0].click());act(()=>vi.advanceTimersByTime(1000));
+ const input=host.querySelector('[aria-label="Reps for set 1"]'),original=String(s.activeWorkout.exercises[1].sets[0].reps);
+ const edit=value=>act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
+ act(()=>input.focus());edit(String(Number(original)+1));edit(original);
+ act(()=>button('← PREVIOUS EXERCISE').click());act(()=>vi.advanceTimersByTime(1000));
+ expect(current.activeWorkout.exercises.find(entry=>entry.id===visitedId).sets[0].touched).toBeFalsy();
+ expect(handle(visitedId)).not.toBeNull();
 });

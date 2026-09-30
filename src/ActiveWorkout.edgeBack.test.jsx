@@ -7,6 +7,8 @@ import {rememberSwipeParent} from './swipePageMotion.js';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startWorkout,isoDay,serializeState,deserializeState} from './domain.js';
 let root,host,current,navigations,writes,finish,width=390,reduced=false,standalone=true;
+// jsdom has no scrolling implementation; browser QA asserts actual set geometry.
+beforeEach(()=>{HTMLElement.prototype.scrollIntoView=vi.fn();});
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-18T12:00:00'));width=390;reduced=false;standalone=true;vi.stubGlobal('matchMedia',q=>({matches:q.includes('standalone')?standalone:q.includes('reduced-motion')?reduced:false,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('requestAnimationFrame',cb=>setTimeout(cb,0));vi.stubGlobal('cancelAnimationFrame',clearTimeout);vi.stubGlobal('scrollTo',()=>{});vi.spyOn(HTMLElement.prototype,'getClientRects').mockImplementation(function(){return this.closest('[hidden]')?[]:[{}];});vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(()=>({left:0,top:0,width,height:844,right:width,bottom:844}));HTMLElement.prototype.getAnimations=()=>[];HTMLElement.prototype.scrollTo=()=>{};host=document.createElement('div');document.body.append(host);root=createRoot(host);navigations=vi.fn();writes=vi.fn();finish=vi.fn();});
 afterEach(()=>{act(()=>root.unmount());host.remove();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});

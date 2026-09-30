@@ -50,10 +50,9 @@
 .workout-screen .sets .logger-reps[data-value-length="3"] > input { font-size:min(var(--logger-number),1.1875rem); }
 .workout-screen .sets .logger-reps:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"]) > input { font-size:1rem; letter-spacing:-.06em; }
 .workout-screen .sets .stepper-empty-label { inset-inline:var(--logger-hit); font-size:9px; line-height:1.1; text-align:center; pointer-events:none; }
-.workout-screen .sets .stepper-display-label { font-size:var(--logger-number); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.015em; color:var(--rook-text); }
-.workout-screen .sets .bodyweight-load-value { gap:0; align-items:baseline; }
-.workout-screen .sets .bodyweight-load-prefix { font-size:.8em; font-weight:550; line-height:1; }
-.workout-screen .sets .bodyweight-load-token { font-size:.85em; font-weight:600; letter-spacing:.035em; }
+.workout-screen .sets .stepper-display-label { font-size:var(--logger-number); font-weight:650; line-height:normal; font-variant-numeric:tabular-nums; letter-spacing:-.015em; color:var(--rook-text); }
+.workout-screen .sets .bodyweight-load-value { gap:0; align-items:center; }
+.workout-screen .sets :is(.bodyweight-load-prefix,.bodyweight-load-token) { font:inherit; letter-spacing:inherit; }
 .workout-screen .sets .set-done .stepper-display-label { color:var(--rook-secondary); }
 .workout-screen .sets .logger-load[data-value-length="4"] > .stepper-display-label { font-size:min(var(--logger-number),1.1875rem); }
 .workout-screen .sets .logger-load[data-value-length="5"] > .stepper-display-label { font-size:min(var(--logger-number),1.0625rem); }
@@ -99,7 +98,7 @@
  outline-color:var(--rook-workout-action-accent);
 }
 :root[data-appearance="light"][data-style="premium"] .workout-screen .freestyle-copy:not(:disabled):active { opacity:.88; }
-.workout-screen .sets .set-load-context { min-height:var(--logger-height); }
+.workout-screen .sets .set-load-context { min-height:var(--logger-height); background:transparent; border:0; font-family:inherit; font-size:1rem !important; line-height:1.2; letter-spacing:-.015em; }
 .workout-screen .sets :is(button,input):focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset:-3px; }
 .workout-screen .sets input[aria-invalid="true"] { box-shadow:inset 0 -2px var(--rook-error-text,var(--rook-accent)); }
 .workout-screen .sets .set-load-heading { position:relative; }
@@ -119,7 +118,6 @@
 .workout-screen .sets :is(.set-row,.set-labels).per-side.with-rir { grid-template-columns:[index] var(--logger-index) var(--logger-start-gap) [load] minmax(0,1fr) var(--logger-rir-gap) [rir] var(--logger-rir) var(--logger-done-gap) [done] var(--logger-done); }
 .workout-screen .sets .set-row.per-side { grid-template-rows:var(--logger-height) auto; }
 .workout-screen .sets .unilateral-reps { grid-column:1/-1; grid-row:2; gap:4px 8px; padding:4px 8px; margin-bottom:4px; border-top:1px solid var(--rook-border); }
-.workout-screen .sets .unilateral-heading { grid-column:1/-1; text-align:center; font-size:10px; font-weight:700; letter-spacing:.13em; line-height:1.4; color:var(--rook-secondary); }
 .workout-screen .sets .unilateral-side { gap:2px; }
 .workout-screen .sets .set-labels.per-side > .set-reps-heading { display:none; }
 @container logger-sets (min-width:396px) {
@@ -142,7 +140,6 @@
  .workout-screen .sets :is(.set-row,.set-labels):is(.no-load,.per-side) { --logger-load-hit:44px; --logger-reps-hit:44px; }
 }
 /* Mobile columns stay stable when rest-timer padding makes the page scroll. */
-@media (max-width:480px) { html:has(.workout-screen) { scrollbar-width:none; } html:has(.workout-screen)::-webkit-scrollbar { display:none; } }
 /* Preserve the existing accessibility reflow for enlarged text. This cannot
    match the normal-size 320/390/430 layouts, with or without RIR. */
 @container logger-sets (width < 18em) {
@@ -199,4 +196,29 @@
  .workout-screen .sets :is(.set-row,.set-labels).with-rir {
   --logger-start-gap:0px; --logger-metric-gap:2px; --logger-rir-gap:0px; --logger-done-gap:0px;
  }
+}
+
+/* Same top row, column headings, state chrome and spacing as the normal logger.
+   Only the independent side steppers need a second line. At 320px this leaves
+   44px for each side input and each +/- target, without invisible hit expansion. */
+.workout-screen .sets .set-row.per-side > .unilateral-reps {
+ grid-column:1/-1; grid-row:2;
+ gap:8px; padding:0 2px 4px; margin:0; border:0;
+}
+.workout-screen .sets .set-row.per-side .unilateral-side { grid-template-columns:12px minmax(0,1fr); align-items:center; gap:2px; }
+.workout-screen .sets .set-row.per-side .unilateral-side > span {
+ color:var(--rook-secondary); font-size:12px; font-weight:550;
+ letter-spacing:.02em; line-height:1;
+}
+.workout-screen .sets .set-row.per-side .unilateral-side .stepper {
+ --logger-hit:44px; grid-template-columns:44px minmax(0,1fr) 44px;
+ height:44px;
+}
+/* Match the shared mobile native-input zoom floor. Idle BW/+load text must
+   not switch to a different size when the same native input receives focus. */
+@media (hover:none) and (pointer:coarse) and (max-width:768px) {
+ .workout-screen .sets .stepper-display-label { font-size:16px !important; }
+}
+@container logger-sets (width < 19em) {
+ .workout-screen .sets .set-row.per-side > .unilateral-reps { grid-template-columns:minmax(0,1fr); }
 }

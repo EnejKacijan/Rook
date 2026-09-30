@@ -3,7 +3,8 @@
 export const WEEK_PAGER = Object.freeze({intent: 10, ratio: 1.35, fraction: .28,
   flickDistance: 24, velocity: .5, freshFor: 100, minSettle: 160, maxSettle: 220});
 
-export function bindWeekPager({root, viewport, track, labelTrack, getOptions, onCommit}) {
+export function bindWeekPager({root, viewport, track, labelTrack=null, getOptions, onCommit,
+  dragSelector='[data-week-drag]', phaseAttribute='weekPhase'}) {
   let gesture = null, phase = 'idle', width = 0, stride = 0, labelWidth = 0, labelStride = 0, frame = 0, timer = 0;
   let dragX = 0, suppressUntil = 0, disposed = false, finish = null, settlingDirection = null, resumedTap = null;
   const removers = [];
@@ -12,24 +13,26 @@ export function bindWeekPager({root, viewport, track, labelTrack, getOptions, on
     node.addEventListener(name, handler, options);
     removers.push(() => node.removeEventListener(name, handler, options));
   };
-  const setPhase = value => { phase = value; root.dataset.weekPhase = value; };
+  const setPhase = value => { phase = value; root.dataset[phaseAttribute] = value; };
   const available = direction => direction < 0 ? getOptions().canGoBack : getOptions().canGoForward;
   const measure = () => {
     width = viewport.getBoundingClientRect().width;
     // The gap belongs to the track, never to a day cell or the page width.
     stride = width + (parseFloat(getComputedStyle(track).columnGap) || 0);
-    labelWidth = labelTrack.parentElement.getBoundingClientRect().width;
-    labelStride = labelWidth + (parseFloat(getComputedStyle(labelTrack).columnGap) || 0);
+    if (labelTrack) {
+      labelWidth = labelTrack.parentElement.getBoundingClientRect().width;
+      labelStride = labelWidth + (parseFloat(getComputedStyle(labelTrack).columnGap) || 0);
+    }
   };
   const paint = () => {
     frame = 0;
     track.style.transform = `translate3d(${-stride + dragX}px, 0, 0)`;
     // Both tracks use one normalized progress, each with its own page + gutter.
-    labelTrack.style.transform = `translate3d(${(-1 + (stride ? dragX / stride : 0)) * labelStride}px, 0, 0)`;
+    if (labelTrack) labelTrack.style.transform = `translate3d(${(-1 + (stride ? dragX / stride : 0)) * labelStride}px, 0, 0)`;
   };
   const schedulePaint = () => { if (!frame) frame = requestAnimationFrame(paint); };
   const flushPaint = () => { cancelAnimationFrame(frame); frame = 0; paint(); };
-  const transitions = value => { track.style.transition = value; labelTrack.style.transition = value; };
+  const transitions = value => { track.style.transition = value; if (labelTrack) labelTrack.style.transition = value; };
   const releaseCapture = previous => {
     if (previous?.kind === 'pointer' && root.hasPointerCapture?.(previous.id)) root.releasePointerCapture(previous.id);
   };
@@ -65,7 +68,7 @@ export function bindWeekPager({root, viewport, track, labelTrack, getOptions, on
     else timer = setTimeout(() => finish?.(), duration + 32);
   };
   const start = (id, x, y, kind, target) => {
-    if (phase !== 'idle' || getOptions().disabled || !target.closest?.('[data-week-drag]')) return;
+    if (phase !== 'idle' || getOptions().disabled || !target.closest?.(dragSelector)) return;
     suppressUntil = 0;
     measure();
     if (!width) return;
@@ -167,10 +170,10 @@ export function bindWeekPager({root, viewport, track, labelTrack, getOptions, on
   for (const name of ['blur', 'resize', 'orientationchange', 'pagehide']) listen(window, name, reset);
   listen(document, 'visibilitychange', reset);
   const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(() => {
-    if (viewport.getBoundingClientRect().width !== width || labelTrack.parentElement.getBoundingClientRect().width !== labelWidth) reset();
+    if (viewport.getBoundingClientRect().width !== width || labelTrack && labelTrack.parentElement.getBoundingClientRect().width !== labelWidth) reset();
   }) : null;
   observer?.observe(viewport);
-  observer?.observe(labelTrack.parentElement);
+  if (labelTrack) observer?.observe(labelTrack.parentElement);
   reset();
   return {arrow, reset, destroy() { disposed = true; reset(); observer?.disconnect(); removers.forEach(remove => remove()); }};
 }

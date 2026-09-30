@@ -1,0 +1,37 @@
+/* Decoration only: never change overflow, dimensions, scroll ownership or input.
+   ROOK's touch-first mobile convention matches the input-zoom policy in theme.css.
+   Fine-pointer/narrow desktop, forced colors and increased contrast keep native
+   scrollbars. Native iOS viewport indicators may ignore author scrollbar CSS.
+
+   Deliberate allowlist of app-owned vertical content surfaces, not descendants.
+   Textareas, pre/code, horizontal tables/previews, photo viewers and provider UI
+   retain their own scrollbar presentation. See docs/mobile-scrollbar-audit.md. */
+@media (hover: none) and (pointer: coarse) and (max-width: 768px) and (forced-colors: none) and (prefers-contrast: no-preference) {
+  :is(
+    html:has(> body > #root),
+    .screen, .onboarding, .sheet, .sheet-scroll, .workout-confirm,
+    .coach-scroll, .coach-history-scroll, .profile-setting-scroll,
+    .onboarding-priorities .onboarding-content,
+    [data-exercise-search-scroll], .queue-exercise-preview,
+    .saved-workout-list, .saved-workout-preview,
+    .up-next-queue, .plan-editor.is-reorder-scroll-scope,
+    .today-screen .exercise-preview.is-editing,
+    .scratch-exercise-results, .plan-editor-picker > div,
+    .plan-workout-actions-body, .import-decision-scroll,
+    .history-import-match-list
+  ) { scrollbar-width: none; }
+
+  :is(
+    html:has(> body > #root),
+    .screen, .onboarding, .sheet, .sheet-scroll, .workout-confirm,
+    .coach-scroll, .coach-history-scroll, .profile-setting-scroll,
+    .onboarding-priorities .onboarding-content,
+    [data-exercise-search-scroll], .queue-exercise-preview,
+    .saved-workout-list, .saved-workout-preview,
+    .up-next-queue, .plan-editor.is-reorder-scroll-scope,
+    .today-screen .exercise-preview.is-editing,
+    .scratch-exercise-results, .plan-editor-picker > div,
+    .plan-workout-actions-body, .import-decision-scroll,
+    .history-import-match-list
+  )::-webkit-scrollbar { display: none; }
+}

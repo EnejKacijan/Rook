@@ -41,8 +41,28 @@ it('a throwing normalizer also fails closed',async()=>{
  await act(async()=>root.render(<StartupBoundary load={()=>{throw new Error('normalization');}}>{()=>{saved();return null;}}</StartupBoundary>));
  expect(saved).not.toHaveBeenCalled();expect(document.querySelector('[role=alert]')).not.toBeNull();
 });
+it('does not mount a blank first-run state without explicit verification evidence',async()=>{
+ const mounted=vi.fn(),host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ await act(async()=>root.render(<StartupBoundary load={()=>({status:'empty'})}>{()=>{mounted();return <p>Onboarding</p>;}}</StartupBoundary>));
+ expect(mounted).not.toHaveBeenCalled();
+ expect(document.body.textContent).not.toContain('Onboarding');
+ expect(document.querySelector('[role=alert]')).not.toBeNull();
+});
 it('dev StrictMode does not consume a transient failed read through a cancelled effect',async()=>{
  const load=vi.fn().mockResolvedValue({status:'error',error:new Error('temporary')}),host=document.createElement('div');document.body.append(host);root=createRoot(host);
  await act(async()=>root.render(<React.StrictMode><StartupBoundary load={load}>{()=>null}</StartupBoundary></React.StrictMode>));
  expect(load).toHaveBeenCalledOnce();expect(document.querySelector('[role=alert]')).not.toBeNull();
+});
+it('holds first-run UI behind an account check and only accepts explicit fresh start after verified empty cloud',async()=>{
+ const mounted=vi.fn(),host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ const load=vi.fn(({allowStartFresh=false}={})=>allowStartFresh
+   ? Promise.resolve({status:'empty',firstRunVerified:true})
+   : Promise.resolve({status:'account-recovery',code:'unverified-anonymous-first-run',allowStartFresh:true,verifiedEmpty:true}));
+ await act(async()=>root.render(<StartupBoundary load={load}>{()=>{mounted();return <p>First-run setup</p>;}}</StartupBoundary>));
+ expect(mounted).not.toHaveBeenCalled();
+ expect(document.body.textContent).not.toContain('First-run setup');
+ expect(document.body.textContent).toContain('We couldn’t check your training data');
+ await act(async()=>document.querySelector('button.button.secondary').click());
+ expect(load).toHaveBeenLastCalledWith({allowStartFresh:true});
+ expect(mounted).toHaveBeenCalledOnce();
 });

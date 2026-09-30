@@ -13,7 +13,7 @@ await context.addInitScript(value => localStorage.setItem('lift-v2-state', JSON.
 const page = await context.newPage(); const errors = [];
 await page.route('**/api/ai/status', route => route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ available: false }) }));
 page.on('pageerror', error => errors.push(error.message)); page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
-await page.goto('http://127.0.0.1:4173/?bottom-sheet-drag=1', { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
+await page.goto(`${process.env.ROOK_QA_URL || 'http://127.0.0.1:4173'}/?bottom-sheet-drag=1`, { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
 
 async function openScreen(buttonName) {
   await openProfileArea(page, buttonName==='Edit plan'?'program':['Logging & increments','Appearance'].includes(buttonName)?'preferences':'training');
@@ -59,12 +59,37 @@ for (const name of ['Logging & increments', 'Training priorities', 'Personal det
   const { handle } = await openScreen(name); if (name === 'Logging & increments') { await page.screenshot({ path: output('390-logging-handle.png'), fullPage: false }); await page.waitForTimeout(220); const box = await handle.boundingBox(); const x = box.x + 18; const y = box.y + 24; await page.mouse.move(x, y); await page.mouse.down(); await page.mouse.move(x, y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' }); } else { await handle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' }); }
 }
 
-await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet retains its functional native handle'); assert.equal(await compactGrabZone.evaluate(element => element.parentElement?.classList.contains('sheet-header-chrome')), true, 'compact-sheet grabber is part of its fixed header chrome'); let compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await compactGrabZone.click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click(); let compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); await compactGrabZone.waitFor(); assert.equal(await compactGrabZone.count(), 1, 'compact Change Plan sheet has one canonical handle'); assert.equal(await compactGrabZone.evaluate(element => element.closest('header')?.classList.contains('sheet-header-chrome')), true, 'compact-sheet grabber is part of its fixed header chrome'); let compactBox = await compactGrabZone.boundingBox(); assert.ok(compactBox.width >= 350 && compactBox.height >= 44, 'compact-sheet grab zone also extends well beyond the visible line'); await compactGrabZone.click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
-await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click(); compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); await compactGrabZone.waitFor(); await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
+await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click(); compactGrabZone = page.getByRole('button', { name: 'Drag down or tap to close' }); await compactGrabZone.waitFor(); await page.getByRole('button', { name: /Import from Notes|Import a different plan|Bring my plan/ }).click();
 const importHandle = page.getByRole('button', { name: 'Drag down or tap to close' }); await importHandle.waitFor(); assert.equal(await page.locator('.modal-layer > .import-plan-screen').count(), 1); await importHandle.press('Enter'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
 await openScreen('Appearance'); assert.equal(await page.locator('.theme-choice-layer').count(), 0, 'Appearance keeps Theme and Style inline without a nested sheet'); await page.getByRole('button', { name: 'Close Appearance' }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
+// The actual Data & backup route previously bypassed automatic handle discovery.
+await openProfileArea(page, 'data');
+const deletionEntry = page.getByRole('button', {name: /^Delete local data/});
+const savedBefore = await page.evaluate(() => localStorage.getItem('lift-v2-state'));
+for (const exit of ['drag', 'X', 'CANCEL', 'backup']) {
+  await deletionEntry.click();
+  const sheet = page.locator('.logout-confirm-sheet');
+  const handle = sheet.getByRole('button', {name: 'Drag down or tap to close'});
+  await handle.waitFor(); await page.waitForTimeout(300);
+  assert.equal(await handle.count(), 1);
+  if (exit === 'drag') {
+    const box = await handle.boundingBox();
+    await page.mouse.move(box.x + box.width / 2, box.y + 8); await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2, box.y + 168, {steps: 6});
+    await page.mouse.up();
+  } else if (exit === 'X') await sheet.getByRole('button', {name: 'Close Delete local data'}).click();
+  else if (exit === 'backup') {
+    await sheet.getByRole('button', {name: 'BACK UP FIRST', exact: true}).click();
+    assert(await page.getByRole('button', {name: 'CREATE BACKUP', exact: true}).isVisible());
+    await page.getByRole('button', {name: 'Close Back up ROOK', exact: true}).click();
+    await page.locator('.logout-confirm-sheet').getByRole('button', {name: 'CANCEL', exact: true}).click();
+  } else await sheet.getByRole('button', {name: 'CANCEL', exact: true}).click();
+  await page.locator('.modal-layer').waitFor({state: 'detached'});
+  assert.equal(await page.evaluate(() => localStorage.getItem('lift-v2-state')), savedBefore, `${exit}: local data unchanged`);
+}
 assert.deepEqual(errors, []); await browser.close();
 console.log('Bottom-sheet handle QA passed: full-width top-edge handles tap-close, drag, fade, spring back, and dismiss while Appearance remains a single flat sheet.');

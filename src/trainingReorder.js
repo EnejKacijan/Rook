@@ -37,6 +37,7 @@ export function bindTrainingReorder(root, {
     if (gesture?.pointerId != null && gesture.activator.hasPointerCapture?.(gesture.pointerId))
       gesture.activator.releasePointerCapture(gesture.pointerId);
     resetDisplacement(gesture);
+    root.querySelectorAll('[data-row-pressed]').forEach(node=>node.removeAttribute('data-row-pressed'));
     root.classList.remove("is-reordering", "is-week-reordering");
     if (gesture?.compactStyle) {
       root.style.paddingTop = gesture.compactStyle.paddingTop;

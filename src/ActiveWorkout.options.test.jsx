@@ -57,11 +57,11 @@ it('failed persistence keeps the original live session, confirmation and rest ti
 it('a pristine workout retains the header menu with Restart disabled',()=>{
  mount(fixture('planned',false));expect(button('Workout options').disabled).toBe(false);open();expect(host.querySelector('.workout-restart-option').disabled).toBe(true);
 });
-it('recording reproduction: restart removes both Started labels, preserves prepared values, and stays clean after reload',()=>{
+it('legacy visited timestamps do not show Started labels before or after restart; prepared values survive reload',()=>{
  const s=repeatedRestartFixture({legacySnapshot:true});mount(s);
  expect(host.querySelector('.up-next-queue').textContent).toContain('Hack Squat');
  expect(host.querySelector('.up-next-queue').textContent).toContain('Single-Leg Leg Extension');
- expect(host.querySelectorAll('.up-next-note')).toHaveLength(2);
+ expect(host.querySelectorAll('.up-next-note')).toHaveLength(0);
  const id=s.activeWorkout.id;open();request();click(host.querySelector('.workout-restart-danger'));
  expect(host.querySelectorAll('.up-next-note')).toHaveLength(0);
  expect(host.querySelector('.workout-header').textContent).toContain('0 / 14 sets');

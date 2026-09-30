@@ -3,7 +3,7 @@ import './disclosure.css';
 
 // Keep the last expanded render through collapse, including lazy picker data.
 // Animate the outer measured height, not nested fractional grid tracks.
-export function Disclosure({open, children, id, revealOnOpen = false, collapsed}) {
+export function Disclosure({open, children, id, className = '', revealOnOpen = false, collapsed}) {
   const [retained,setRetained]=useState(open?children:null);
   const root=useRef(null),content=useRef(null),compact=useRef(null),initialized=useRef(false);
   const hasCompact=Boolean(collapsed);
@@ -37,7 +37,7 @@ export function Disclosure({open, children, id, revealOnOpen = false, collapsed}
       geometry?.cancel();fade?.cancel();incoming?.cancel();node.style.height=`${height}px`;node.style.opacity=opacity;
     };
   },[open,revealOnOpen,hasCompact]);
-  return <div ref={root} id={id} className={`rook-disclosure${open?' is-open':''}${hasCompact?' has-compact-content':''}`} aria-hidden={!open&&!hasCompact} inert={!open&&!hasCompact?'':undefined}>
+  return <div ref={root} id={id} className={`rook-disclosure${open?' is-open':''}${hasCompact?' has-compact-content':''}${className?` ${className}`:''}`} aria-hidden={!open&&!hasCompact} inert={!open&&!hasCompact?'':undefined}>
     <div ref={content} className="rook-disclosure-content" aria-hidden={!open&&hasCompact||undefined} inert={!open&&hasCompact?'':undefined}>{open?children:retained}</div>
     {!open&&collapsed&&<div ref={compact} className="rook-disclosure-compact">{collapsed}</div>}
   </div>;

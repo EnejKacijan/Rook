@@ -1,0 +1,24 @@
+import React,{act} from 'react';
+import {createRoot} from 'react-dom/client';
+import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+import {Today} from './App.jsx';
+import {adjustWeekState} from './fixtures/adjustWeekState.js';
+import {proposeFlexibleWeek,applyFlexibleWeek} from './flexibleWeek.js';
+let root;
+beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-29T12:00:00'));globalThis.IS_REACT_ACT_ENVIRONMENT=true;vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));});
+afterEach(()=>{act(()=>root?.unmount());document.body.innerHTML='';vi.useRealTimers();vi.unstubAllGlobals();});
+it('Today reuses navigation reads but invalidates the same selected date when the schedule changes',()=>{
+ const host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ const render=state=>act(()=>root.render(<Today state={state} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>));
+ const state=adjustWeekState();render(state);
+ expect(document.querySelector('.today-hero').textContent).toContain('UPPER A');
+ render({...state,selectedDate:'2026-09-30',selectedDay:'Wed'});
+ expect(document.querySelector('.today-hero').textContent).toContain('NOGE A');
+ render(state);expect(document.querySelector('.today-hero').textContent).toContain('UPPER A');
+ const id=Object.keys(state.flexibleWeek.sessions)[0];
+ const next=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:id,toDate:'2026-10-04'})).state;
+ render(next);expect(document.body.textContent).toContain('VIEW DESTINATION');
+ expect(document.body.textContent).not.toContain('needs review');
+ render({...next,selectedDate:'2026-10-04',selectedDay:'Sun'});
+ expect(document.querySelector('.today-hero').textContent).toContain('UPPER A');
+});

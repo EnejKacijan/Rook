@@ -63,8 +63,8 @@ it('real logger route has one shared handle, one X, unchanged calculation conten
 });
 it('a small touch pull follows the finger, fades the backdrop and settles back without a ghost close',()=>{
   mount();const target=panel(),grab=handle();touch('touchstart',grab,100);advance(200);const move=touch('touchmove',grab,125);
-  expect(move.defaultPrevented).toBe(true);expect(target.style.transform).toBe('translateY(25px)');expect(target.classList.contains('is-dragging')).toBe(true);expect(target.style.animation).toBe('none');
-  const alpha=Number(target.parentElement.style.backgroundColor.match(/[\d.]+/g).at(-1));expect(alpha).toBeGreaterThan(0);expect(alpha).toBeLessThan(.35);
+  act(()=>vi.advanceTimersToNextFrame());expect(move.defaultPrevented).toBe(true);expect(target.style.transform).toBe('translate3d(0, 25px, 0)');expect(target.classList.contains('is-dragging')).toBe(true);expect(target.style.animation).toBe('none');
+  const alpha=Number(target.parentElement.querySelector('.sheet-drag-scrim').style.opacity);expect(alpha).toBeGreaterThan(0);expect(alpha).toBeLessThan(1);
   touch('touchend',grab,125);expect(target.style.transform).toBe('');expect(target.style.transition).toBe('transform 180ms ease-out');click(grab);advance(400);expect(panel()).toBe(target);expect(closed).not.toHaveBeenCalled();
 });
 it.each(['drag','x','escape','handle-enter','handle-space'])('root %s closes once and returns focus to the original calculator trigger',method=>{
@@ -86,7 +86,7 @@ it('the shared touch velocity threshold dismisses a fast deliberate pull but pre
 });
 it('pointer cancellation resets a drag even after its distance would otherwise dismiss',()=>{
   mount();const grab=handle(),dispatch=(type,y)=>act(()=>grab.dispatchEvent(new MouseEvent(type,{bubbles:true,clientY:y,button:0})));
-  dispatch('pointerdown',100);advance(200);dispatch('pointermove',260);expect(panel().style.transform).toBe('translateY(160px)');dispatch('pointercancel',260);advance(220);expect(panel().style.transform).toBe('');expect(closed).not.toHaveBeenCalled();
+  dispatch('pointerdown',100);advance(200);dispatch('pointermove',260);act(()=>vi.advanceTimersToNextFrame());expect(panel().style.transform).toBe('translate3d(0, 160px, 0)');dispatch('pointercancel',260);advance(220);expect(panel().style.transform).toBe('');expect(closed).not.toHaveBeenCalled();
 });
 it('nested setup keeps one modal/header/handle, Back discards the unsaved draft and returns to the calculator',()=>{
   mount();const target=panel(),grab=handle(),original=structuredClone(current);configure();
@@ -109,7 +109,7 @@ it('setup saves only through the existing Save action and returns to the same ca
 it('scrolled setup content owns downward movement, then hands a deliberate pull to the shared dismiss path at top',()=>{
   mount();configure();const target=panel(),input=target.querySelector('input');target.scrollTop=180;
   touch('touchstart',input,100);advance(100);const scroll=touch('touchmove',input,180);expect(scroll.defaultPrevented).toBe(false);expect(target.style.transform).toBe('');expect(closed).not.toHaveBeenCalled();
-  target.scrollTop=0;touch('touchmove',input,200);expect(target.style.transform).toBe('');advance(200);touch('touchmove',input,350);expect(target.style.transform).toBe('translateY(150px)');touch('touchend',input,350);expectClosed(structuredClone(current));
+  target.scrollTop=0;touch('touchmove',input,200);expect(target.style.transform).toBe('');advance(200);touch('touchmove',input,350);act(()=>vi.advanceTimersToNextFrame());expect(target.style.transform).toBe('translate3d(0, 150px, 0)');touch('touchend',input,350);expectClosed(structuredClone(current));
 });
 it('keyboard geometry retains the numeric draft, one viewport owner and the existing form scroll/close lifecycle',()=>{
   mount();configure();const target=panel(),original=structuredClone(current),input=target.querySelector('.plate-add-row input');

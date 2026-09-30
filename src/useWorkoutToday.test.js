@@ -20,6 +20,37 @@ function completed(s){
  }finally{vi.setSystemTime(now);}
 }
 const apply=(s,p)=>applyWorkoutToday(s,p,{persist:()=>true});
+it('Train Today uses the canonical swap, preserves occurrence provenance, and logs only on the performed day',()=>{
+ const s=fixture(),source=flexibleSessions(s).find(item=>item.scheduledDate==='2026-09-21'),request={sessionId:source.logicalSessionId,swap:true};
+ const p=proposeWorkoutToday(s,request);expect(p.kind).toBe('swap');
+ const canonical=flexibleWeek.proposeFlexibleWeek(s,{mode:'swap',sessionId:source.logicalSessionId,otherSessionId:p.displaced.logicalSessionId});
+ expect(p.swapProposal).toEqual(canonical);
+ const next=deserializeState(serializeState(apply(s,p)));expect(next.selectedDate).toBe(isoDay());expect(next.program).toEqual(s.program);expect(next.workouts).toEqual(s.workouts);
+ expect(plannedWorkoutForDate(next,isoDay()).logicalSessionId).toBe(source.logicalSessionId);
+ expect(plannedWorkoutForDate(next,source.scheduledDate).logicalSessionId).toBe(p.displaced.logicalSessionId);
+ for(const id of [source.logicalSessionId,p.displaced.logicalSessionId])expect(flexibleSessions(next).filter(item=>item.logicalSessionId===id)).toHaveLength(1);
+ next.activeWorkout=startWorkout(next,adaptedTemplateForToday(next));expect(next.activeWorkout.originalScheduledDate).toBe(source.originalDate);expect(next.activeWorkout.workoutDateKey).toBe(isoDay());
+ next.activeWorkout.exercises[0].sets[0].completed=true;next.activeWorkout.exercises[0].sets[0].reps=8;
+ const resumed=deserializeState(serializeState(next));expect(resumed.activeWorkout).toEqual(next.activeWorkout);
+ const done=completeWorkout(resumed);expect(done.workouts).toHaveLength(1);expect(done.workouts[0].logicalSessionId).toBe(source.logicalSessionId);expect(done.workouts[0].originalScheduledDate).toBe(source.originalDate);expect(done.workouts[0].workoutDateKey).toBe('2026-09-17');
+});
+it('swap targets the current source slot even when its original date differs, without duplicating occurrences',()=>{
+ const s=fixture(),source=flexibleSessions(s).find(item=>item.scheduledDate==='2026-09-21');
+ const moved=flexibleWeek.applyFlexibleWeek(s,flexibleWeek.proposeFlexibleWeek(s,{mode:'move',sessionId:source.logicalSessionId,toDate:'2026-09-18'})).state;
+ const p=proposeWorkoutToday(moved,{sessionId:source.logicalSessionId,swap:true}),next=apply(moved,p);
+ expect(p.swapProposal.changes.find(c=>c.logicalSessionId===p.displaced.logicalSessionId).toDate).toBe('2026-09-18');
+ expect(next.flexibleWeek.sessions[source.logicalSessionId].originalDate).toBe('2026-09-21');expect(next.flexibleWeek.sessions[p.displaced.logicalSessionId].scheduledDate).toBe('2026-09-18');
+});
+it('keeps a valid swap available even when every candidate relocation date is occupied',()=>{
+ const s=fixture(),base=s.program.days[0];s.program.days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map((weekday,index)=>({...structuredClone(base),id:`daily-${index}`,weekday,optional:false}));
+ const source=flexibleSessions(s).find(item=>item.scheduledDate==='2026-09-18'),request={sessionId:source.logicalSessionId};
+ const p=proposeWorkoutToday(s,request);expect(p.dates).toEqual([]);expect(p.swapProposal.status).toBe('ready');expect(canUseWorkoutToday(s,request)).toBe(true);expect(proposeWorkoutToday(s,{...request,swap:true}).kind).toBe('swap');
+});
+it('swap revalidates persistence, active guards, stale state and double application',()=>{
+ const s=fixture(),source=flexibleSessions(s).find(item=>item.scheduledDate==='2026-09-21'),request={sessionId:source.logicalSessionId,swap:true},p=proposeWorkoutToday(s,request),before=serializeState(s);
+ expect(()=>applyWorkoutToday(s,p,{persist:()=>false})).toThrow(/previous schedule/);expect(serializeState(s)).toBe(before);
+ expect(()=>apply({...s,activeWorkout:{id:'active'}},p)).toThrow(/changed/);expect(()=>apply(apply(s,p),p)).toThrow(/changed/);
+});
 it('stops menu eligibility at the first valid destination while the real proposal retains all dates',()=>{
  const s=completed(fixture()),request={workoutId:s.workouts[0].id},before=serializeState(s);
  const validate=vi.spyOn(flexibleWeek,'proposeFlexibleWeek');

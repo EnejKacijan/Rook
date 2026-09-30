@@ -34,8 +34,8 @@ export function templateUseIssues(state,template) {
   if(trainingSafetyBlocks(safety.status))return [safety.message||'Review your training restrictions first.'];
   return template.exercises.flatMap(e=>{
     const item=e.importedExercise?.source==='custom'||e.exerciseSource==='custom'?e.importedExercise:exerciseCatalog[e.exerciseId]||e.importedExercise;
-    if(!item||item.trackingSupport==='history-only')return [`${exerciseName(e)} is unavailable. Edit the template to select a supported exercise.`];
-    if(item.exerciseType==='distance_duration'||e.distanceTarget!=null||e.sets.some(s=>s.distance!=null))return [`${exerciseName(e)} has a distance prescription that the current active logger cannot record. Edit the template before using it; its saved targets are preserved.`];
+    if(!item||item.trackingSupport==='history-only')return [`${exerciseName(e)} is unavailable. Edit the saved workout to select a supported exercise.`];
+    if(item.exerciseType==='distance_duration'||e.distanceTarget!=null||e.sets.some(s=>s.distance!=null))return [`${exerciseName(e)} has a distance prescription that the current active logger cannot record. Edit the saved workout before using it; its saved targets are preserved.`];
     if(!planEditorExerciseAllowed(item,profile,safety))return [`${exerciseName(e)} is incompatible with your current equipment or restrictions.`];
     const min=safety.constraints.minRirByExerciseId?.[e.exerciseId];
     if(Number.isFinite(min)&&(e.targetRir!=null&&e.targetRir<min||e.sets.some(s=>s.rir!=null&&s.rir<min)))return [`${exerciseName(e)} requires at least ${min} RIR.`];

@@ -269,8 +269,7 @@
 
 @media (max-height: 760px) {
   .onboarding.onboarding-priorities { height: 100dvh; min-height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
-  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  .onboarding-priorities .onboarding-content::-webkit-scrollbar { display: none; }
+  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
   .onboarding-preferences .onboarding-content { padding-top: 12px !important; padding-bottom: 8px !important; }
   .onboarding-preferences .onboarding-content > p { margin-block: 8px; font-size: 12px; }
   .onboarding-preferences h1 { font-size: 27px !important; }
@@ -382,8 +381,7 @@
   .onboarding-priorities .priority-selection-summary { margin-top: 6px; padding-block: 8px; }
   .onboarding-priorities .physique-review-entry { min-height: 48px; margin-top: 6px; padding-block: 6px; }
   .onboarding.onboarding-priorities { height: 100dvh; min-height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
-  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: none; }
-  .onboarding-priorities .onboarding-content::-webkit-scrollbar { display: none; }
+  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
 }
 
 @media (max-height: 640px) {

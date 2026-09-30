@@ -4,8 +4,8 @@ import { registerPageBackMotion } from './swipePageMotion.js';
 import { focusNavigationTarget } from './navigationFocus.js';
 import './firstRunNavigation.css';
 
-const routes = ['landing', 'personalize', 'import', 'scratch', 'restore'];
-const returnSurface = '.onboarding-personal,.import-plan-screen,.scratch-plan-screen,.restore-backup-screen';
+const routes = ['landing', 'bring', 'sign-in', 'personalize', 'import', 'scratch', 'restore', 'create-workout', 'freestyle-confirm'];
+const returnSurface = '.entry-bring-plan,.entry-sign-in,.onboarding-personal,.import-plan-screen,.scratch-plan-screen,.restore-backup-screen,.saved-workouts,.first-run-freestyle-screen';
 const visibleScreen = host => [...(host?.querySelectorAll('main') || [])].find(node => !node.closest('[hidden],[inert]'));
 
 // Retain visited form trees, not serialized drafts. getSnapshotBeforeUpdate reads
@@ -15,6 +15,7 @@ export class FirstRunNavigation extends React.Component {
   host = React.createRef();
   scrolls = new Map();
   focus = new Map();
+  snapshots = new Map();
   clearMotion = () => {};
   releaseRenderer = () => {};
   static getDerivedStateFromProps({ mode }, state) {
@@ -24,7 +25,8 @@ export class FirstRunNavigation extends React.Component {
     this.releaseRenderer = registerPageBackMotion(this.host.current, surface => {
       if (!surface.matches(returnSurface)) return null;
       this.clearMotion();
-      return firstRunBackMotion(surface, this.landingSnapshot, this.props.mode === 'restore');
+      const route = surface.closest('[data-first-run-page]')?.dataset.firstRunPage;
+      return firstRunBackMotion(surface, this.snapshots.get(this.props.parents?.[route] || 'landing'));
     });
   }
   getSnapshotBeforeUpdate(previous) {
@@ -41,7 +43,7 @@ export class FirstRunNavigation extends React.Component {
     const swipe = screen?.dataset.swipeBackCommitted === 'true';
     if (screen) delete screen.dataset.swipeBackCommitted;
     const outgoing = swipe ? null : captureFirstRunSurface(screen);
-    if (previous.mode === 'landing') this.landingSnapshot = captureFirstRunSurface(screen);
+    this.snapshots.set(previous.mode, captureFirstRunSurface(screen));
     return { outgoing, swipe };
   }
   componentDidUpdate(previous, _state, snapshot) {
@@ -49,10 +51,11 @@ export class FirstRunNavigation extends React.Component {
     const screen = visibleScreen(this.host.current);
     const scroller = document.scrollingElement || document.documentElement;
     scroller.scrollTop = this.scrolls.get(this.props.mode) || 0;
-    const target = this.props.mode === 'landing' ? this.focus.get('landing') : screen?.querySelector('button[aria-label^="Back"],button[aria-label^="Close"]');
+    const back = this.props.mode === (this.props.parents?.[previous.mode] || 'landing');
+    const target = back ? this.focus.get(this.props.mode) : screen?.querySelector('button[aria-label^="Back"],button[aria-label^="Close"]');
     focusNavigationTarget(target);
     if (!snapshot?.swipe) this.clearMotion = playFirstRunMotion(screen, snapshot?.outgoing, {
-      back: this.props.mode === 'landing', utility: this.props.mode === 'restore' || previous.mode === 'restore',
+      back,
     });
   }
   componentWillUnmount() { this.clearMotion(); this.releaseRenderer(); }
@@ -68,7 +71,7 @@ export class FirstRunNavigation extends React.Component {
   }
 }
 
-// Questionnaire steps use the same overlap/easing and semantic direction.
+// Questionnaire steps retain their hierarchy within the shared physical stack.
 export class FirstRunStepMotion extends React.Component {
   host = React.createRef();
   steps = new Map();
@@ -77,7 +80,7 @@ export class FirstRunStepMotion extends React.Component {
   componentDidMount() {
     this.releaseRenderer = registerPageBackMotion(this.host.current, surface => {
       // Step zero delegates to the enclosing Landing stack. Later steps return
-      // to their own previous question, using that same compact renderer.
+      // to their own previous question, using that same page-stack renderer.
       if (surface !== this.host.current?.firstElementChild || this.props.step === 0) return null;
       this.clearMotion();
       return firstRunBackMotion(surface, this.steps.get(this.props.step - 1));

@@ -18,6 +18,7 @@ export function preparePlanImport(state, program, importedProfile, { date, weekd
   if(safetyIssues.length)throw new Error(safetyIssues[0]);
   const profile = { ...state.profile, environment: importedProfile.environment,
     equipment: importedProfile.equipment, onboardingComplete: true, noPlanReceipt: null,
+    ...(!state.program && { preferredTrainingStyle: 'plan' }),
     rirEnabled: Boolean(state.profile.rirEnabled || candidate.days.some(day => day.exercises.some(exercise => Number.isFinite(exercise.targetRir)))),
     availableDays: candidate.days.map(day => day.weekday), daysPerWeek: candidate.days.length };
   candidate.days.forEach(day => { day.estimatedMinutes = estimateSessionMinutes(day.exercises); });

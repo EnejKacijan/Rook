@@ -1,8 +1,9 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useRef } from 'react';
 import { bindSwipeRowActions, registerSwipeRemoval, SWIPE_ROW } from './swipeRowAction.js';
 import {flushSync} from 'react-dom';
 import './swipeActionRow.css';
 import {prepareSwipeRowExit,clearSwipeRowExits} from './swipeRowExit.js';
+import { useTransientSnackbar } from './TransientSnackbar.jsx';
 
 export function useSwipeActionList(ref, enabled=true, options={}) {
   const latest=useRef(options);latest.current=options;
@@ -45,10 +46,5 @@ export function SwipeActionRow({as:Tag='div',enabled=true,onRemove,beforeRemove,
 
 /** Existing Today undo surface and five-second lifetime, shared by these lists. */
 export function useExerciseRemoveUndo() {
-  const [notice,setNotice]=useState(null),timer=useRef(null);
-  useEffect(()=>()=>clearTimeout(timer.current),[]);
-  useEffect(()=>{if(notice?.valid && !notice.valid()){clearTimeout(timer.current);setNotice(null);}});
-  const clear=()=>{clearTimeout(timer.current);setNotice(null);};
-  return {show:next=>{clearTimeout(timer.current);setNotice(next);timer.current=setTimeout(()=>setNotice(null),5000);},clear,
-    surface:notice&&<aside className="today-undo exercise-remove-undo" role="status" aria-live="polite"><span>{notice.message}</span><button type="button" onClick={()=>{clearSwipeRowExits();if(notice.undo()!==false)clear();}}>Undo</button></aside>};
+  return useTransientSnackbar({ className: 'exercise-remove-undo', beforeUndo: clearSwipeRowExits });
 }

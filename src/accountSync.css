@@ -1,0 +1,22 @@
+.profile-screen .account-sync-panel { margin-top: 30px; }
+.account-sync-panel .account-sync-identity { margin: 14px 0 3px; font-weight: 650; overflow-wrap: anywhere; }
+.account-sync-panel .account-sync-status { margin: 0; color: var(--rook-muted); }
+.account-sync-panel > small { display: block; margin-top: 4px; color: var(--rook-muted); }
+.account-sync-panel .list-row { width: 100%; margin-top: 12px; }
+.account-sync-panel .account-sync-error { color: var(--rook-danger, #a54840); overflow-wrap: anywhere; }
+.account-sync-lock { min-height: 100dvh; padding-top: max(60px, env(safe-area-inset-top)); }
+.account-sync-lock h1 { max-width: 18ch; }
+.account-sync-lock > p:not(.eyebrow) { max-width: 34ch; }
+.account-sync-lock .button { margin-top: 20px; min-height: 48px; }
+.account-sync-lock .account-sync-secondary { display: block; width: 100%; min-height: 48px; margin-top: 12px; padding: 10px 12px; border: 0; background: transparent; color: var(--rook-accent); text-align: center; font: inherit; cursor: pointer; }
+.account-sync-lock > small { display: block; margin-top: 4px; color: var(--rook-muted); text-align: center; }
+.account-confirm-sheet { padding: 32px max(20px, env(safe-area-inset-left)) max(24px, env(safe-area-inset-bottom)); }
+.account-confirm-sheet > .sheet-header-chrome { margin: -32px 0 16px; }
+.account-confirm-sheet h1 { margin: 0 0 12px; }
+.account-confirm-sheet p { margin: 0; color: var(--rook-muted); overflow-wrap: anywhere; }
+.account-confirm-actions { display: flex; gap: 12px; margin-top: 28px; }
+.account-confirm-actions .button { flex: 1; min-width: 0; min-height: 48px; }
+.account-profile-options { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
+.account-profile-choice .button { white-space: normal; overflow-wrap: anywhere; height: auto; padding-block: 12px; }
+.account-profile-choice > .detail-header { margin-bottom: 16px; }
+.account-profile-choice .account-sync-error { margin-top: 16px; color: var(--rook-error-text); }

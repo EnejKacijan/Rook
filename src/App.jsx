@@ -10,7 +10,9 @@ import {SavedWorkouts} from './SavedWorkouts.jsx';
 import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
-import { canRemoveUpNext, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval } from './upNextRemoval.js';
+import { useTransientSnackbar } from './TransientSnackbar.jsx';
+import { canRemoveUpNext, hasMeaningfulExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval } from './upNextRemoval.js';
+import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
 import {persistCoachEntry,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -20,10 +22,14 @@ import {UseWorkoutTodaySheet} from './UseWorkoutTodaySheet.jsx';
 import {workoutDraftScope,ownsWorkoutDraft} from './workoutDraftScope.js';
 import {isRepeatAdjustment,cancelRepeatedWorkout,canUseWorkoutToday,proposeWorkoutToday} from './useWorkoutToday.js';
 import {MissedWorkoutSummary} from './missedWorkoutPresentation.jsx';
+import {TemporaryScheduleSummary} from './TemporaryScheduleSummary.jsx';
 import { PlanProcessing as BuildingOverlay, finishPlanProcessing } from './PlanProcessing.jsx';
 import { rememberSwipeParent } from './swipePageMotion.js';
+import { capturePageSurface, playPageNavigation, stopPageNavigation } from './pageStackMotion.js';
 import { FirstRunNavigation, FirstRunStepMotion } from './FirstRunNavigation.jsx';
+import { FirstRunBackButton, NavigationChevron } from './NavigationChevron.jsx';
 import { WorkoutMotion, workoutMotionDuration } from './WorkoutMotion.jsx';
+import { createTodayScheduleReader } from './todayScheduleReader.js';
 import { useMainTabTransition } from './mainTabTransition.js';
 import { useBottomNavFeedback } from './useBottomNavFeedback.js';
 import { focusNavigationTarget } from './navigationFocus.js';
@@ -41,6 +47,8 @@ import { completionRecognition } from './completionRecognition.js';
 import {completeWorkoutReversibly, canContinueWorkout, continueWorkout} from './workoutCompletion.js';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
 import { FreestyleEntry, FreestyleActions, FreestyleExercisePicker, FreestylePrevious } from './FreestyleWorkout.jsx';
+import { startFreestyleWorkout } from './freestyleWorkout.js';
+import { startFirstRunFreestyle } from './firstRunNoPlan.js';
 import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancellation.js';
 import { removeFreestyleExercise } from './freestyleWorkout.js';
 import { adjustedMovedLabel } from './progressPresentation.js';
@@ -48,7 +56,13 @@ import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
 import { importedSetComparable,importedSessionTimeLabel } from './historicalSetSemantics.js';
 import { StartupBoundary } from './StartupBoundary.jsx';
 import { StorageDiagnostics } from './StorageDiagnostics.jsx';
-import { hasEstablishedData, assertStateContinuity, assertHydrationCurrent, isPersistedReplacement, deleteLocalState, localRecoverySummary, recordStartupOutcome } from './localStateStorage.js';
+import { ACCOUNT_SIGNED_OUT_KEY, useAccountSync } from './useAccountSync.js';
+import { resolveAccountStartup } from './accountStartup.js';
+import { clearAllProfileSlotArchives, recoverInterruptedProfileSwitch } from './accountProfileSlots.js';
+import { AccountSyncLock, AccountSyncPanel } from './AccountSyncPanel.jsx';
+import { ACCOUNT_SYNC_LEDGER_KEY, recordAccountSyncDeleteIntent } from './accountSyncOutbox.js';
+import { getFirebaseSyncClient } from './firebaseSyncClient.js';
+import { hasEstablishedData, assertStateContinuity, assertHydrationCurrent, isPersistedReplacement, deleteLocalState, localRecoverySummary, recordStartupOutcome, invalidateStartupSession, withStorageTransaction } from './localStateStorage.js';
 import { recoverInterruptedRestore } from './restoreTransaction.js';
 import { hasStoredWorkoutMedia, clearAllWorkoutMedia } from './workoutPhotos.js';
 import { moveReorderPreview } from './reorderPresentation.js';
@@ -58,7 +72,7 @@ import { PlanNumberInput } from './PlanNumberInput.jsx';
 import { nextImportReview } from './nextImportReview.js';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { bindSheetVisibleViewport } from './sheetVisibleViewport.js';
-import { prepareSheetEntry, freezeSheetMotion } from './sheetMotion.js';
+import { prepareSheetEntry, freezeSheetMotion, createSheetDragMotion, fadeSheetBackdrop } from './sheetMotion.js';
 import { bindFullscreenViewerDrag } from './fullscreenViewerDrag.js';
 import { bindFullscreenPhotoScope } from './fullscreenPhotoScope.js';
 import './fullscreenViewerDrag.css';
@@ -100,7 +114,7 @@ import { BlockReviewSheet } from './BlockReviewSheet.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
 import { MissedWorkoutFeedbackProvider } from './MissedWorkoutFeedback.jsx';
-import { flexibleSourceForDate, flexibleWeekConflict, missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek, flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
+import { flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek, flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import {
   Component,
@@ -193,6 +207,7 @@ import {
   onboardingSplitOptions,
   selectStructuralTemplate,
 } from "./splitPreferences.js";
+import { createPlanBuilderDraft, missingPlanBuilderStep, activatePlanBuilder, PLAN_BUILDER_STEPS, PLAN_BUILDER_FREQUENCIES, PLAN_GOALS, PLAN_EXPERIENCES, PLAN_EFFORT_STYLES } from './planBuilder.js';
 import {
   BALANCED_TRAINING_PRIORITY,
   MAX_MANUAL_TRAINING_PRIORITIES,
@@ -432,6 +447,7 @@ async function generatePersonalizedProgram(
   profile,
   { onStage, currentProgram = null, workouts = [] } = {},
 ) {
+  if (missingPlanBuilderStep(profile)) throw new Error('Review the missing plan preferences before building.');
   const startedAt = performance.now();
   onStage?.("preparing");
   await afterVisibleFrame();
@@ -449,25 +465,41 @@ async function generatePersonalizedProgram(
   await finishPlanProcessing(startedAt, onStage);
   return { program, source: "personalized-template" };
 }
-export async function loadInitialLiftState() {
+export async function loadInitialLiftState({ allowStartFresh = false } = {}) {
+  let result;
+  try { result = await loadInitialLiftStateAttempt({allowStartFresh}); }
+  catch(error) { result = {status:'error',code:'startup-error',stage:'startup-handoff',error}; }
+  if (result.status === 'error' || result.status === 'account-recovery') {
+    invalidateStartupSession(result.code || 'startup-error', result.stage || (result.status==='account-recovery'?'account':'local-read'));
+  }
+  return result;
+}
+async function loadInitialLiftStateAttempt({ allowStartFresh = false } = {}) {
+  try { await withStorageTransaction(() => recoverInterruptedProfileSwitch()); }
+  catch(error) {recordStartupOutcome('profile-switch-recovery-failed');return {status:'error',code:'profile-switch-recovery-failed',error};}
   try { await recoverInterruptedRestore(); }
   catch(error) {const code=error.name==='SecurityError'?'storage-unavailable':'restore-error';recordStartupOutcome(code);return {status:'error',code,error};}
   const result = readStartupState();
   if (result.status === 'empty' && await hasStoredWorkoutMedia()) {recordStartupOutcome('primary-missing');return { status: 'error', code: 'primary-missing' };}
+  if (result.status === 'empty' || result.status === 'error') return resolveAccountStartup(result, { allowStartFresh });
   if (result.status !== 'ready') return result;
   // Any additional startup normalization must also fail closed, before autosave.
   try {
     const initial = normalizePlanHistoryState(normalizeCustomExercisesState(normalizeTrainingBlocksState(result.state)));
     if (!initial.profile.onboardingComplete && hasEstablishedData(initial)) {recordStartupOutcome('inconsistent-profile');return { status: 'error', code: 'inconsistent-profile', recovery: localRecoverySummary(globalThis.localStorage,hydrateStoredState) };}
-    return { ...result, state: initial };
-  } catch (error) { return { status: 'error', error }; }
+    return resolveAccountStartup({ ...result, state: initial }, { allowStartFresh });
+  } catch (error) { return { status: 'error', code:'normalization-error', stage:'normalization', error, recovery:localRecoverySummary(globalThis.localStorage,hydrateStoredState) }; }
 }
 export function useLiftState(startup) {
   const alreadyPersistedState = useRef(null);
+  const pendingDateSave = useRef(null);
+  const pendingSyncDeletes = useRef([]);
   const initialWrite = useRef(true);
   const [state, setState] = useState(() => {
     assertHydrationCurrent(startup);
     const initial = startup.status === 'empty' ? blankState() : startup.state;
+    if (startup.status === 'empty' && startup.firstRunProfileId)
+      initial.profile.id = startup.firstRunProfileId;
     if (initial.profile.onboardingComplete) {
       const landingDate = initial.activeWorkout
         ? initial.selectedDate || initial.activeWorkout.workoutDateKey || isoDay()
@@ -478,9 +510,27 @@ export function useLiftState(startup) {
     return initial;
   });
   const [persistenceFailed, setPersistenceFailed] = useState(false);
+  const registerSavedDeletes = savedState => {
+    if (!pendingSyncDeletes.current.length) return;
+    const intents = pendingSyncDeletes.current;
+    pendingSyncDeletes.current = [];
+    for (const { domain, entityId } of intents) {
+      const identityField = domain === 'weightCheckins' ? 'localDate' : 'id';
+      if ((savedState[domain] || []).some(item => item?.[identityField] === entityId)) continue;
+      try { recordAccountSyncDeleteIntent(globalThis.localStorage, savedState.profile.id, domain, entityId); }
+      catch { /* The missing intent blocks cloud deletion; the local save remains valid. */ }
+    }
+  };
   useLayoutEffect(() => {
+    // A day selection changes only navigation state. Paint that state first;
+    // the same durable writer can persist it immediately after the frame.
+    if (pendingDateSave.current === state) return;
+    pendingDateSave.current = null;
+    // A signed-out profile is readable only for verification/switching.
+    if (globalThis.localStorage?.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true') return;
     if (alreadyPersistedState.current === state) {
       alreadyPersistedState.current = null;
+      registerSavedDeletes(state);
       setPersistenceFailed(false);
       return;
     }
@@ -504,10 +554,51 @@ export function useLiftState(startup) {
     const reason = initialWrite.current ? (startup.status==='empty'?'first-run:user-change':'startup-hydration') : state.activeWorkout ? 'active-workout' : 'app-autosave';
     const saved = saveState(state, { reason, ...(initialWrite.current && startup.generation !== undefined && {expectedGeneration:startup.generation}) });
     initialWrite.current = false;
+    if (saved) registerSavedDeletes(state);
     setPersistenceFailed(!saved);
   }, [state]);
+  useEffect(() => {
+    if (pendingDateSave.current !== state) return undefined;
+    let timer;
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        if (pendingDateSave.current !== state) return;
+        pendingDateSave.current = null;
+        if (globalThis.localStorage?.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true') return;
+        const saved = saveState(state, {reason:'date-navigation',
+          ...(initialWrite.current && startup.generation !== undefined && {expectedGeneration:startup.generation})});
+        initialWrite.current = false;
+        if (saved) registerSavedDeletes(state);
+        setPersistenceFailed(!saved);
+      }, 0);
+    });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [state]);
+  useEffect(() => {
+    const flush = () => {
+      const pending = pendingDateSave.current;
+      if (!pending) return;
+      pendingDateSave.current = null;
+      if (globalThis.localStorage?.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true') return;
+      const saved = saveState(pending, {reason:'date-navigation',
+        ...(initialWrite.current && startup.generation !== undefined && {expectedGeneration:startup.generation})});
+      initialWrite.current = false;
+      if (saved) registerSavedDeletes(pending);
+    };
+    window.addEventListener('pagehide', flush);
+    const hidden = () => { if (document.visibilityState === 'hidden') flush(); };
+    document.addEventListener('visibilitychange', hidden);
+    return () => { window.removeEventListener('pagehide', flush); document.removeEventListener('visibilitychange', hidden); };
+  }, []);
   const update = useCallback((fn, options = {}) =>
       setState((previous) => {
+        if (options.navigationDate) {
+          const {day,date} = options.navigationDate;
+          if (previous.selectedDate === date && previous.selectedDay === day) return previous;
+          const next = {...previous, selectedDay:day, selectedDate:date};
+          pendingDateSave.current = next;
+          return next;
+        }
         const draft = clone(previous);
         const previousProgram = clone(previous.program);
         const next = normalizeTrainingBlocksState(
@@ -547,6 +638,7 @@ export function useLiftState(startup) {
           alreadyPersistedState.current=next;
         }
         // An atomic importer can publish the exact state it has just saved.
+        if (options.syncDeletes?.length) pendingSyncDeletes.current.push(...options.syncDeletes);
         // Only skip the automatic write if normalization changed nothing.
         if (options.persistedState && JSON.stringify(next) === JSON.stringify(options.persistedState)) alreadyPersistedState.current = next;
         return next;
@@ -1411,16 +1503,21 @@ export function SheetHeader({
   closeLabel = `Close ${typeof title === "string" ? title : "sheet"}`,
   onBack,
   backLabel = "Back",
+  backDisabled = false,
+  firstRunBack = false,
   trailingAction,
   closeDisabled = false,
 }) {
   return (
     <header className={`detail-header${trailingAction ? " has-trailing-action" : ""}`}>
-      {onBack ? (
+      {onBack ? firstRunBack ? (
+        <FirstRunBackButton onClick={onBack} label={backLabel} disabled={backDisabled} />
+      ) : (
         <button
           type="button"
           className="detail-header-back"
           aria-label={backLabel}
+          disabled={backDisabled}
           onClick={onBack}
         >
           ‹
@@ -1445,6 +1542,14 @@ export function SheetHeader({
       )}
     </header>
   );
+}
+function FirstRunSheetHeader(props) {
+  return <SheetHeader {...props} firstRunBack />;
+}
+function MyWorkoutsLink({ onClick }) {
+  return <button type="button" className="text-button today-my-workouts" onClick={onClick}>
+    <span>My workouts</span><NavigationChevron className="inline-navigation-chevron" />
+  </button>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
   return (
@@ -1554,6 +1659,11 @@ export function BottomNav({ page, setPage }) {
     </nav>
   );
 }
+function shouldDismissSheet(distance, velocity, height) {
+  const threshold = Math.min(140, height * 0.24);
+  return distance >= threshold ||
+    (distance >= Math.min(72, threshold * 0.72) && velocity >= 0.55);
+}
 export function bindScrollableSheetTouch({
   surface,
   scroller,
@@ -1580,7 +1690,8 @@ export function bindScrollableSheetTouch({
     // Only the explicit shared handle retains drag-to-dismiss in this state.
     if (surface.classList.contains('is-search-browsing') && surface.hasAttribute('data-sheet-keyboard-open') &&
       !event.target.closest?.('.modal-drag-handle,.sheet-grab-zone')) { touch = null; return; }
-    const scrollOwner = results ? (results.contains(event.target) ? results : surface) : scroller;
+    const fromHandle = Boolean(event.target.closest?.('.modal-drag-handle'));
+    const scrollOwner = fromHandle ? surface : results ? (results.contains(event.target) ? results : surface) : scroller;
     touch = {
       scrollOwner,
       startY: y,
@@ -1590,7 +1701,7 @@ export function bindScrollableSheetTouch({
       velocity: 0,
       distance: 0,
       dragging: false,
-      canDrag: scrollOwner.scrollTop <= 0,
+      canDrag: fromHandle || scrollOwner.scrollTop <= 0,
       lockedScroll: Boolean(results && scrollOwner === results && results.scrollTop > 0),
       nestedResults: Boolean(results && scrollOwner === results),
     };
@@ -1643,12 +1754,9 @@ export function bindScrollableSheetTouch({
     if (!gesture.dragging) return;
     suppressClickUntil = performance.now() + 350;
     surface.classList.remove("is-dragging");
-    const threshold = Math.min(140, surface.offsetHeight * 0.24);
-    const velocityFloor = Math.min(72, threshold * 0.72);
-    const dismiss =
-      !cancelled &&
-      (gesture.distance >= threshold ||
-        (gesture.distance >= velocityFloor && gesture.velocity >= 0.55));
+    const dismiss = !cancelled && shouldDismissSheet(
+      gesture.distance, gesture.velocity, surface.offsetHeight,
+    );
     if (dismiss) onDismiss();
     else onReset();
   };
@@ -1685,52 +1793,41 @@ export function bindScrollableSheetTouch({
 }
 function ModalDragHandle({ layerRef, close, closing }) {
   const closeLatest = useRef(close); closeLatest.current = close;
-  const geometry = useRef({height:1});
   const [header, setHeader] = useState(null);
   const drag = useRef(null);
   const suppressActivation = useRef(false);
-  const closeTimer = useRef(null);
-  useEffect(() => () => clearTimeout(closeTimer.current), []);
   const panel = () => layerRef.current?.firstElementChild;
+  const motion=useRef(null);
+  if(!motion.current)motion.current=createSheetDragMotion(panel,()=>layerRef.current,{fadeDistance:0.65});
+  useEffect(()=>()=>motion.current.dispose(),[]);
   useEffect(() => {
-    const target = panel();
-    const nextHeader = target?.matches(".screen, .workout-confirm")
-      ? Array.from(target.children).find((child) =>
-          child.matches?.(".detail-header, .long-form-sheet-header, .sheet-header-chrome"),
-        ) || null
-      : null;
-    setHeader((current) => (current === nextHeader ? current : nextHeader));
-  });
+    const discoverHeader = () => {
+      const target = panel();
+      const nextHeader = target?.matches(".screen, .sheet")
+        ? target.querySelector('[data-sheet-handle-slot]') || Array.from(target.children).find((child) =>
+            child.matches?.(".detail-header, .long-form-sheet-header, .sheet-header-chrome"),
+          ) || null
+        : null;
+      setHeader((current) => (current === nextHeader ? current : nextHeader));
+    };
+    discoverHeader();
+    // Nested destinations can replace their own header without rerendering ModalLayer.
+    const observer = new MutationObserver(discoverHeader);
+    observer.observe(layerRef.current, {childList: true, subtree: true});
+    return () => observer.disconnect();
+  }, [layerRef]);
   const stopEntranceAnimation = () => {
-    clearTimeout(closeTimer.current);
-    const layer = layerRef.current;
-    const target = panel();
-    geometry.current.height = target?.getBoundingClientRect().height || 1;
-    if (layer) layer.style.transition = "none";
-    if (layer) layer.style.animation = "none";
-    if (target) target.style.animation = "none";
+    motion.current.begin();
   };
   const applyDistance = (distance) => {
-    const target = panel();
-    if (!target) return;
-    target.style.transform = `translateY(${distance}px)`;
-    const progress = Math.min(
-      1,
-      distance / Math.max(1, geometry.current.height * 0.65),
-    );
-    layerRef.current.style.backgroundColor = `rgba(27, 26, 25, ${(0.35 * (1 - progress)).toFixed(3)})`;
+    motion.current.track(distance);
   };
   const settle = (dismiss) => {
-    const target = panel(), layer = layerRef.current;
+    const target = panel();
     if (!target || closing.current) return;
-    clearTimeout(closeTimer.current);
-    layer.style.transition = "";
     if (dismiss && closeLatest.current() !== false) return;
     const duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 180;
-    target.style.transition = duration ? "transform 180ms ease-out" : "none";
-    target.style.transform = "";
-    layer.style.backgroundColor = "";
-    closeTimer.current = setTimeout(() => { target.style.transition = ""; }, duration);
+    motion.current.reset(duration);
   };
   const start = (event) => {
     if (closing.current || event.button > 0) return;
@@ -1738,10 +1835,9 @@ function ModalDragHandle({ layerRef, close, closing }) {
       suppressActivation.current = false;
       return;
     }
-    clearTimeout(closeTimer.current);
     suppressActivation.current = false;
     event.stopPropagation();
-    event.currentTarget.setPointerCapture(event.pointerId);
+    event.currentTarget.setPointerCapture?.(event.pointerId);
     drag.current = {
       startY: event.clientY,
       lastY: event.clientY,
@@ -1771,7 +1867,7 @@ function ModalDragHandle({ layerRef, close, closing }) {
     const distance = Math.max(0, event.clientY - drag.current.startY);
     const velocity = drag.current.velocity || 0;
     drag.current = null;
-    settle(distance >= 72 || (distance >= 24 && velocity > 0.65));
+    settle(shouldDismissSheet(distance, velocity, motion.current.height));
   };
   const cancelPointer = () => {
     if (!drag.current) return;
@@ -1791,9 +1887,9 @@ function ModalDragHandle({ layerRef, close, closing }) {
   useEffect(() => {
     if (!header) return undefined;
     const surface = panel();
-    return bindScrollableSheetTouch({
+    const release = bindScrollableSheetTouch({
       surface,
-      scroller: surface,
+      scroller: surface.querySelector('.sheet-scroll') || surface,
       disabled: () => closing.current,
       setPosition: applyDistance,
       onDragStart: () => {
@@ -1803,6 +1899,7 @@ function ModalDragHandle({ layerRef, close, closing }) {
       onDismiss: () => settle(true),
       onReset: () => settle(false),
     });
+    return () => { release(); drag.current = null; motion.current.dispose(); };
   }, [header]);
   if (!header) return null;
   return createPortal(
@@ -2007,7 +2104,7 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
     const duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : 180;
     panel.style.transition = duration ? "transform 180ms ease-out" : "none";
     panel.style.transform = `translateY(${height + 24}px)`;
-    layer.style.backgroundColor = "rgba(27, 26, 25, 0)";
+    fadeSheetBackdrop(layer,duration);
     closeTimer.current = setTimeout(close, duration);
     return true;
   };
@@ -2155,13 +2252,7 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
   );
 }
 
-const GOALS = [
-  "Build muscle",
-  "Get stronger",
-  "Lose fat",
-  "General fitness",
-  "Athletic performance",
-];
+const GOALS = PLAN_GOALS;
 const GOAL_PLAN_PREVIEWS = {
   "Build muscle": {
     title: "Built for muscle growth",
@@ -2201,7 +2292,7 @@ const DEFAULT_GOAL_PLAN_PREVIEW = {
   detail:
     "Your choice guides exercise order, training volume, effort, and conditioning.",
 };
-const EXPERIENCES = ["Beginner", "Intermediate", "Advanced"];
+const EXPERIENCES = PLAN_EXPERIENCES;
 const EXPERIENCE_DESCRIPTIONS = {
   Beginner: "New to structured training",
   Intermediate: "~1–3 years of consistent training",
@@ -2236,11 +2327,7 @@ export function onboardingGenerationProfile(profile = {}) {
   };
 }
 const PRIORITIES = TRAINING_PRIORITY_OPTIONS;
-const EFFORT_STYLES = [
-  "Balanced workload · usually 3 sets · 1–2 RIR",
-  "Fewer hard sets · 2 sets · 1 RIR",
-  "More moderate sets · 3–4 sets · 2–3 RIR",
-];
+const EFFORT_STYLES = PLAN_EFFORT_STYLES;
 const EFFORT_GUIDANCE = {
   Beginner: {
     question: "How much work per exercise feels manageable?",
@@ -2531,177 +2618,129 @@ function PhysiqueReview({ profile, onUse, onClose }) {
     </>,
   );
 }
-export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, importPlan, startFromScratch, restoreBackup }) {
-  const [entryError,setEntryError]=useState('');
-  const choose=action=>{try {if(action?.()===false)setEntryError('ROOK could not save your training setup. Please try again.');else setEntryError('');}catch(failure){setEntryError(failure?.message||'ROOK could not save your training setup.');}};
-  const [previewDays, setPreviewDays] = useState(4);
-  const [previewChanged, setPreviewChanged] = useState(false);
-  const [previewEquipment, setPreviewEquipment] = useState("Full gym");
-  const [previewEquipmentChanged, setPreviewEquipmentChanged] = useState(false);
-  const [previewAnnouncement, setPreviewAnnouncement] = useState("");
-  const weekPatterns = {
-    3: [
-      ["MON", "Full body"],
-      ["WED", "Full body"],
-      ["FRI", "Full body"],
-    ],
-    4: [
-      ["MON", "Upper"],
-      ["TUE", "Lower"],
-      ["THU", "Upper"],
-      ["SAT", "Lower"],
-    ],
-    5: [
-      ["MON", "Push"],
-      ["TUE", "Pull"],
-      ["WED", "Legs"],
-      ["FRI", "Upper"],
-      ["SAT", "Lower"],
-    ],
-  };
-  const weekdays = ["MON", "TUE", "WED", "THU", "FRI", "SAT", "SUN"];
-  const equipmentExamples = {
-    "Full gym": "Barbell Bench Press",
-    Dumbbells: "Dumbbell Bench Press",
-    Bodyweight: "Push-Up",
-  };
-  const previewExercise = equipmentExamples[previewEquipment];
-  const selectedPattern = new Map(weekPatterns[previewDays]);
-  const exampleWeek = weekdays.map((day) => ({
-    day,
-    workout: selectedPattern.get(day) || "Rest",
-    training: selectedPattern.has(day),
-  }));
-  return (
-    <main className="onboarding entry-screen entry-v2">
-      <header className="entry-top">
-        <div className="brand">ROOK</div>
-        <span className="entry-eyebrow">Training, built around you</span>
-      </header>
-      <div className="entry-content">
-        <h1>Train your way.</h1>
-        <p>Follow a plan, use workouts you save, or build each session as you go.</p>
-        <fieldset className="entry-training-style">
-          <legend>How do you want to train?</legend>
-          <button type="button" aria-label="BUILD MY PLAN" onClick={personalize}><strong>BUILD MY PLAN</strong><small>Follow a structured training schedule.</small></button>
-          <button type="button" onClick={()=>choose(ownWorkouts)}><strong>Use my own workouts</strong><small>Save reusable workouts and choose one whenever you train.</small></button>
-          <button type="button" onClick={()=>choose(trainFreestyle)}><strong>Train freestyle</strong><small>Start blank and choose exercises as you go.</small></button>
-        </fieldset>
-        {entryError&&<p role="alert">{entryError}</p>}
-        <section className="entry-demo" aria-labelledby="entry-demo-title">
-          <div className="entry-demo-header">
-            <span id="entry-demo-title">SEE HOW ROOK ADAPTS</span>
-          </div>
-          <fieldset className="entry-demo-control">
-            <legend>DAYS I CAN TRAIN</legend>
-            <div className="entry-days">
-              {[3, 4, 5].map((days) => (
-                <label key={days}>
-                  <input
-                    type="radio"
-                    name="landing-preview-days"
-                    value={days}
-                    checked={previewDays === days}
-                    onChange={() => {
-                      setPreviewChanged(true);
-                      setPreviewDays(days);
-                      setPreviewAnnouncement(
-                        `Training days set to ${days}. Week preview updated.`,
-                      );
-                    }}
-                  />
-                  <span>{days}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <fieldset className="entry-demo-control">
-            <legend>EQUIPMENT</legend>
-            <div className="entry-equipment">
-              {["Full gym", "Dumbbells", "Bodyweight"].map((equipment) => (
-                <label key={equipment}>
-                  <input
-                    type="radio"
-                    name="landing-preview-equipment"
-                    value={equipment}
-                    checked={previewEquipment === equipment}
-                    onChange={() => {
-                      const exercise = equipmentExamples[equipment];
-                      setPreviewEquipmentChanged(true);
-                      setPreviewEquipment(equipment);
-                      setPreviewAnnouncement(
-                        `Equipment set to ${equipment}. Rook might choose ${exercise}.`,
-                      );
-                    }}
-                  />
-                  <span>{equipment}</span>
-                </label>
-              ))}
-            </div>
-          </fieldset>
-          <div className="entry-demo-output">
-            <div className="entry-equipment-example">
-              <span>ROOK MIGHT CHOOSE</span>
-              <strong
-                key={previewEquipment}
-                className={
-                  previewEquipmentChanged
-                    ? "entry-equipment-value-transition"
-                    : undefined
-                }
-              >
-                {previewExercise}
-              </strong>
-            </div>
-            <p
-              className="visually-hidden"
-              role="status"
-              aria-live="polite"
-              aria-atomic="true"
-            >
-              {previewAnnouncement}
-            </p>
-            <div className="entry-week-result">
-              <div className="entry-week-header">
-                <span>A WEEK LIKE THIS</span>
-                <small>{previewDays} training days</small>
-              </div>
-              <ul
-                key={previewDays}
-                className={previewChanged ? "entry-week-transition" : undefined}
-                aria-label={`${previewDays}-day illustrative training week`}
-              >
-                {exampleWeek.map(({ day, workout, training }) => (
-                  <li className={training ? "training-day" : "rest-day"} key={day}>
-                    <i aria-hidden="true" />
-                    <strong>{day.slice(0, 1)}</strong>
-                    <small>{workout}</small>
-                  </li>
-                ))}
-              </ul>
-              <p>Example only · Your plan is personalized.</p>
-            </div>
-          </div>
-        </section>
-      </div>
-      <div className="entry-actions">
-        <button className="existing-plan-action" onClick={importPlan}>
-          <strong>Already have a plan?</strong>
-          <small>Bring your current routine into Rook</small>
-        </button>
-        <button className="scratch-plan-action" onClick={startFromScratch}>
-          <strong>Start from scratch</strong>
-          <small>Create your workouts manually</small>
-        </button>
-        <button className="restore-backup-action" onClick={restoreBackup}>
-          Restore from backup
-        </button>
-      </div>
-    </main>
-  );
+function EntryActionRow({ title, description, onClick }) {
+  return <ExerciseNavigationButton type="button" className="list-row entry-action-row" onClick={onClick}>
+    <span className="entry-action-copy"><strong>{title}</strong><small>{description}</small></span>
+    <NavigationChevron className="entry-action-chevron" />
+  </ExerciseNavigationButton>;
 }
-export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }) {
+export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPlan, restoreBackup, signIn, signedIn, returnToSavedProfile }) {
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
+  return <main className="onboarding entry-screen entry-v2">
+    <header className="entry-top">
+      <div className="brand">ROOK</div>
+      <button type="button" className="restore-backup-action" onClick={signIn || restoreBackup}>{signIn ? signedIn ? 'Account' : 'Sign in' : 'Restore'}</button>
+    </header>
+    <section className="entry-content" aria-labelledby="entry-title">
+      <h1 id="entry-title">A plan that fits your week.</h1>
+      <p>Tell ROOK your goal, schedule and equipment. It builds the plan around them.</p>
+      <div className="entry-primary-action">
+        <Button onClick={personalize}>BUILD MY PLAN</Button>
+        <p className="entry-primary-note">A few questions · No account needed</p>
+      </div>
+    </section>
+    <nav className="entry-secondary-routes" aria-labelledby="entry-other-title">
+      <h2 className="entry-micro-label" id="entry-other-title">OTHER WAYS TO START</h2>
+      <EntryActionRow title="Bring my plan" description="Import it, or enter it yourself." onClick={bringPlan}/>
+      <EntryActionRow title="Create a workout" description="Save a session to repeat anytime." onClick={ownWorkouts}/>
+      <EntryActionRow title="Freestyle" description="Start empty. Add exercises as you go." onClick={trainFreestyle}/>
+    </nav>
+    {returnToSavedProfile && <div className="entry-account-actions">
+        {returnToSavedProfile && <button className="restore-backup-action" disabled={recoveryBusy} onClick={async () => {
+          if (recoveryBusy) return;
+          setRecoveryBusy(true); setRecoveryError('');
+          try { await returnToSavedProfile(); }
+          catch (failure) { setRecoveryError(failure?.message || 'Could not reopen the saved profile. This profile is unchanged.'); }
+          finally { setRecoveryBusy(false); }
+        }}>Return to saved profile</button>}
+        {recoveryError && <p role="alert">{recoveryError}</p>}
+
+    </div>}
+  </main>;
+}
+
+export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signedIn = false, email = null, providerReady = false, accountStatus = 'connecting', onSignedIn }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const begin = async () => {
+    if (busy || !providerReady || signedIn) return;
+    setBusy(true); setError('');
+    try {
+      const result = await signInWithGoogle();
+      onSignedIn(result);
+    } catch (failure) {
+      if (failure?.code !== 'auth/popup-closed-by-user')
+        setError(failure?.code === 'auth/operation-not-allowed'
+          ? 'Google sign-in is not enabled for ROOK yet.'
+          : failure?.message || 'Could not check this account. No local data was replaced.');
+    } finally { setBusy(false); }
+  };
+  return <main className="onboarding entry-v2 entry-sign-in">
+    <header className="entry-top"><FirstRunBackButton onClick={back} label="Back to start" /></header>
+    <section className="entry-content">
+      <p className="entry-micro-label">ROOK ACCOUNT</p>
+      <h1>Welcome back</h1>
+      <p>{signedIn ? `Signed in${email ? ` as ${email}` : ''}. Continue with ROOK or restore a backup.`
+        : 'Sign in to continue with an existing ROOK profile.'}</p>
+    </section>
+    <div className="entry-sign-in-providers">
+      <Button disabled={busy || !providerReady || signedIn} onClick={begin}>
+        {signedIn ? 'SIGNED IN WITH GOOGLE' : busy ? 'CHECKING ACCOUNT…' : 'CONTINUE WITH GOOGLE'}
+      </Button>
+      {!providerReady && !signedIn && <p role={accountStatus === 'connecting' ? 'status' : 'alert'}>
+        {accountStatus === 'connecting' ? 'Checking account availability…' : 'Account sign-in is unavailable right now. No local data was changed.'}
+      </p>}
+      {error && <p role="alert">{error}</p>}
+    </div>
+    <button type="button" className="entry-sign-in-restore" onClick={restoreBackup}>Restore from backup <NavigationChevron /></button>
+  </main>;
+}
+
+export function FirstRunFreestyleConfirm({ back, start }) {
+  const started = useRef(false);
+  const [error, setError] = useState('');
+  const begin = () => {
+    if (started.current) return;
+    started.current = true;
+    try {
+      if (start() === false) throw Error('ROOK could not start your workout. Please try again.');
+    } catch (failure) {
+      started.current = false;
+      setError(failure?.message || 'ROOK could not start your workout.');
+    }
+  };
+  return <main className="screen detail-screen first-run-freestyle-screen">
+    <SheetHeader title="Freestyle" onBack={back} backLabel="Back to start" firstRunBack />
+    <div className="first-run-freestyle-content">
+      <Eyebrow>FREESTYLE</Eyebrow>
+      <h1>Start a freestyle workout?</h1>
+      <p>Start blank and add exercises as you go.</p>
+      {error && <p role="alert">{error}</p>}
+      <Button onClick={begin}>START FREESTYLE</Button>
+    </div>
+  </main>;
+}
+
+export function BringPlanLanding({ back, importPlan, startFromScratch }) {
+  return <main className="onboarding entry-v2 entry-bring-plan">
+    <header className="entry-top">
+      <FirstRunBackButton onClick={back} label="Back to start" />
+    </header>
+    <section className="entry-content">
+      <h1>Bring my plan</h1>
+      <p>Add the program you already follow. ROOK keeps its structure.</p>
+    </section>
+    <nav className="entry-secondary-routes" aria-label="Bring my plan options">
+      <EntryActionRow title="Import a plan" description="From a file or another app." onClick={importPlan}/>
+      <EntryActionRow title="Enter it myself" description="Build your weekly program day by day." onClick={startFromScratch}/>
+    </nav>
+  </main>;
+}
+export function Onboarding({ state = null, update, exit, onPlanAccepted, initialUnits = state?.profile?.units || 'kg' }) {
   const [step, setStep] = useState(0);
+  const currentStateRef = useRef(state);
+  currentStateRef.current = state;
   const onboardingRootRef = useRef(null);
   const selectionAcknowledgement = useSelectionAcknowledgement(step);
   const revealScheduleContinue = useScheduleContinueReveal(step, onboardingRootRef);
@@ -2721,7 +2760,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
   const [buildFailed, setBuildFailed] = useState(false);
   const generationRef = useRef(false);
   const generationRun = useRef(0);
-  const lastBuildProfile = useRef(null);
+  useEffect(() => () => { generationRun.current++; }, []);
   const restrictionTextRef = useRef("");
   const safetyRequestRef = useRef(false);
   const [safetyAnalysis, setSafetyAnalysis] = useState({
@@ -2737,8 +2776,9 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
   const generatedPreviewHeadingRef = useRef(null);
   const [generatedPreview, setGeneratedPreview] = useState(null);
   const [equipmentSetupExpanded, setEquipmentSetupExpanded] = useState(false);
-  const [answers, setAnswers] = useState(() => ({...blankState().profile, units: initialUnits}));
-  const [anyDayWorks, setAnyDayWorks] = useState(false);
+  const [answers, setAnswers] = useState(() => createPlanBuilderDraft({...state?.profile, units: initialUnits}));
+  const reviewedSteps = useRef(new Set());
+  const [anyDayWorks, setAnyDayWorks] = useState(() => state?.profile?.availableDays?.length === 7);
   const manualAvailableDaysRef = useRef([]);
   restrictionTextRef.current = String(answers.avoid || "");
   supplementalLimitTextRef.current = supplementalLimitText;
@@ -2753,8 +2793,8 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     setSupplementalLimitText("");
     setSupplementalLimitStatus("idle");
   }, [answers.avoid]);
-  const [splitChoice, setSplitChoice] = useState("recommended");
-  const [specificSplitOpen, setSpecificSplitOpen] = useState(false);
+  const [splitChoice, setSplitChoice] = useState(answers.trainingSplitChoice);
+  const [specificSplitOpen, setSpecificSplitOpen] = useState(Boolean(answers.trainingSplitChoice && answers.trainingSplitChoice !== 'recommended'));
   useEffect(() => {
     setBuildFailed(false);
     setNotice("");
@@ -2906,9 +2946,9 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     {
       key: "preferences",
       label: "FINAL PREFERENCES",
-      question: "Anything else before ROOK builds your plan?",
+      question: "Review your plan preferences.",
+      helper: "Confirm your weekly structure, restrictions and exercise preference before building.",
       options: [],
-      optional: true,
     },
   ];
   const stages = allStages;
@@ -3012,13 +3052,13 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
   const chooseFrequency = (option) => {
     // A changed day count can make a custom week invalid, not disposable.
     if (splitChoice !== "other") {
-      setSplitChoice("recommended");
+      setSplitChoice(null);
       setSpecificSplitOpen(false);
     }
     setAnswers((current) => ({
       ...current,
       daysPerWeek: option,
-      trainingSplitChoice: splitChoice === "other" ? "other" : "recommended",
+      trainingSplitChoice: splitChoice === "other" ? "other" : null,
       trainingPreferences: splitChoice === "other" ? current.trainingPreferences : "",
     }));
   };
@@ -3038,6 +3078,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     setAnswers((current) => ({
       ...current,
       environment: option,
+      trainingEnvironmentChoice: option,
       primaryTrainingEnvironment:
         option === "Both" ? null : option,
       equipment: option === "Commercial gym" ? ["full gym"] : [],
@@ -3111,11 +3152,19 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
       ? scheduleValid
       : stage.key === "setup"
         ? setupValid
+        : stage.key === 'preferences'
+          ? Boolean(answers.trainingSplitChoice && answers.exercisePreference)
         : stage.optional ||
           stage.custom ||
           (stage.multi ? value.length > 0 : value !== null));
   const finalize = async (profile) => {
     if (generationRef.current || safetyRequestRef.current) return;
+    const missing = missingPlanBuilderStep(profile, new Set([...reviewedSteps.current, 'preferences']));
+    if (missing) {
+      setStep(PLAN_BUILDER_STEPS.indexOf(missing));
+      setNotice('Review this step before building your plan.');
+      return;
+    }
     const generationProfile = onboardingGenerationProfile(profile);
     // Reject incomplete/partially recognized custom intent before processing
     // or safety/network work. buildProgram enforces the same guard independently.
@@ -3196,7 +3245,6 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     generationRef.current = true;
     const run = ++generationRun.current;
     const startedAt = performance.now();
-    lastBuildProfile.current = effectiveProfile;
     setBusy(true);
     setNotice("");
     setBuildFailed(false);
@@ -3211,6 +3259,8 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
       await afterVisibleFrame();
       const result = await generatePersonalizedProgram(effectiveProfile, {
         onStage: setGenerationStage,
+        currentProgram: state?.program,
+        workouts: state?.workouts,
       });
       await afterVisibleFrame();
       if (run !== generationRun.current) return;
@@ -3224,7 +3274,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
           0,
         ),
       });
-      setGeneratedPreview({ ...result, profile: effectiveProfile });
+      setGeneratedPreview({ ...result, profile: effectiveProfile, profileId: state?.profile.id, programId: state?.program?.id || null, programVersion: state?.program?.version || null });
       setBusy(false);
       generationRef.current = false;
     } catch (error) {
@@ -3254,6 +3304,8 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     setNotice("Generation cancelled. Your answers are still here.");
   };
   const acceptGenerated = async (program) => {
+    if (generationRef.current) return;
+    generationRef.current = true;
     setBusy(true);
     setGenerationStage("saving");
     await afterVisibleFrame();
@@ -3263,18 +3315,14 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
       totalSteps: stages.length,
       daysPerWeek: program.days.length,
     });
-    update((state) => {
-      state.profile = { ...generatedPreview.profile, onboardingComplete: true };
-      state.program = {
-        ...program,
-        rotationStartDate: firstScheduledDate(program),
-      };
-      state.selectedDay = weekday();
-      state.selectedDate = isoDay();
-      state.ai = { ...state.ai, lastPlanSource: generatedPreview.source };
-      return state;
-    }, { planVersion: { source: "Initial plan", reason: "Personalized plan created" } });
-    onPlanAccepted?.();
+    try {
+      const current = currentStateRef.current || blankState();
+      if (state && (current.profile.id !== generatedPreview.profileId || (current.program?.id || null) !== generatedPreview.programId || (current.program?.version || null) !== generatedPreview.programVersion)) throw new Error('Your training context changed. Reopen the plan builder to review it.');
+      const next = activatePlanBuilder(current, {...program, rotationStartDate: firstScheduledDate(program)}, generatedPreview.profile, generatedPreview.source, saveState);
+      update(() => next, { planVersion: false, persistedState: next });
+      onPlanAccepted?.();
+    } catch (error) { setNotice(error.message); }
+    finally { setBusy(false); generationRef.current = false; }
   };
   const structuredDone = async () => {
     trackFunnelEvent("onboarding_step_completed", {
@@ -3377,6 +3425,11 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     }
   };
   const advance = () => {
+    reviewedSteps.current.add(stage.key);
+    // These optional steps expose the fallback as the Continue action; it is
+    // only selected after review, never inferred from absent stored data.
+    if (stage.key === 'priorities' && !answers.priorities.length) setAnswers(current => ({...current, priorities:['Balanced'], prioritySources:{...current.prioritySources, manual:['Balanced']}}));
+    if (stage.key === 'effortStyle' && !answers.effortStyle) setAnswers(current => ({...current, effortStyle:EFFORT_STYLES[0]}));
     trackFunnelEvent("onboarding_step_completed", {
       path: "personalized",
       step: stage.key,
@@ -3453,11 +3506,13 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
           generatedAcceptance
           previewNavigationRef={generatedPreviewNavigationRef}
           profile={generatedPreview.profile}
+          exerciseState={state}
           onSave={acceptGenerated}
           onCancel={() => setGeneratedPreview(null)}
           saving={busy}
           headingRef={generatedPreviewHeadingRef}
         />
+        {notice && <p className="offline-banner" role="alert">{notice}</p>}
         {busy && <BuildingOverlay stage={generationStage} />}
       </main>
     );
@@ -3523,7 +3578,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
   return (
     <FirstRunStepMotion step={step}><main ref={onboardingRootRef} className={`onboarding onboarding-${stage.key}${selectionAcknowledgement.acknowledging ? " is-acknowledging" : ""}`}>
       <div className={step === 0 ? 'onboarding-start-brand' : undefined}>
-        {step === 0 && <button type="button" className="detail-header-back onboarding-start-back" aria-label="Back to plan options" onClick={exit}>‹</button>}
+        {step === 0 && <FirstRunBackButton onClick={exit} label="Back to plan options" />}
         <div className="brand">ROOK</div>
       </div>
       <StepProgress step={step+1} total={stages.length} />
@@ -3673,7 +3728,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
                 <strong>Workouts per week</strong>
               </div>
               <div className="option-list">
-                {[2, 3, 4, 5, 6].map((option) => (
+                {PLAN_BUILDER_FREQUENCIES.map((option) => (
                   <OnboardingOptionCard
                     key={option}
                     label={`${option} days`}
@@ -4120,7 +4175,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
               return;
             }
             if (step === stages.length - 1) {
-              if (buildFailed) finalize(lastBuildProfile.current);
+              if (buildFailed) finalize(answers);
               else structuredDone();
             } else advance();
           }}
@@ -4163,7 +4218,9 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
               : step === stages.length - 1
                 ? "BUILD MY PLAN"
                 : stage.key === "effortStyle" && !value
-                  ? "SKIP FOR NOW"
+                  ? "LET ROOK CHOOSE"
+                  : stage.key === 'priorities' && !value.length
+                    ? "KEEP PLAN BALANCED"
                   : "CONTINUE"}
         </Button>}
         {!busy &&
@@ -4609,7 +4666,8 @@ export function NoPlanToday({state,update,setPage,setDetail}) {
       {templates.length>0&&<section className="no-plan-my-workouts" aria-label="My workouts"><Eyebrow>MY WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><span aria-hidden="true">›</span></button>)}</div></section>}
       <button type="button" className={style==='own-workouts'&&!templates.length?'button primary no-plan-create-action':'text-button no-plan-create-action'} onClick={()=>setDetail({createSavedWorkout:true})}>+ CREATE WORKOUT</button>
       {style!=='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} noPlan hideHistory/>}
-      <button type="button" className="text-button no-plan-plan-action" onClick={()=>setDetail('change-plan')}>Want a structured plan? Create or import one</button>
+      {state.program ? <button type="button" className="text-button no-plan-plan-action" onClick={()=>update(current=>{current.profile.preferredTrainingStyle='plan';return current;})}>Return to your saved plan</button>
+        : <button type="button" className="list-row no-plan-plan-action" onClick={()=>setDetail('change-plan')}><span className="no-plan-plan-copy"><span>Want a structured plan?</span>{' '}<strong>Create or import one</strong></span><span aria-hidden="true">›</span></button>}
     </>}
     <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly/>
     {!today&&!state.workouts.some(workout=>workout.completedAt&&workoutPerformedDate(workout)===selectedIso)&&<p className="no-plan-no-history">No workouts logged on this date.</p>}
@@ -4627,7 +4685,6 @@ export function Today({
   const activeOptional = state.activeOptionalSession;
   const trackedActive = active || activeOptional;
   const startLock = useRef(false);
-  const undoTimer = useRef(null);
   const resumeLock = useRef(false);
   const todayReorderGesture = useRef(null);
   const todayEditOrderRef = useRef([]);
@@ -4637,7 +4694,7 @@ export function Today({
   const todayReorderSettleTimer = useRef(null);
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
-  const [undoNotice, setUndoNotice] = useState(null);
+  const todayUndo = useTransientSnackbar({ afterUndo: () => triggerHaptic('tap') });
   const [calendarOpen, setCalendarOpen] = useState(false);
   const calendarBackground = useRef(null);
   const [todayEditMode, setTodayEditMode] = useState(false);
@@ -4697,36 +4754,21 @@ export function Today({
   }, [active?.id, activeOptional?.id, activeOptional?.status]);
   useEffect(
     () => () => {
-      clearTimeout(undoTimer.current);
       todayReorderGesture.current?.cleanup?.();
       clearTimeout(todayReorderSettleTimer.current);
       todayReorderAnimationsRef.current.forEach((animation) => animation.cancel());
     },
     [],
   );
-  const showUndo = (notice) => {
-    clearTimeout(undoTimer.current);
-    setUndoNotice(notice);
-    undoTimer.current = setTimeout(() => setUndoNotice(null), 5000);
-  };
-  const undoBanner = undoNotice && (
-    <aside className="today-undo" role="status" aria-live="polite">
-      <span>{undoNotice.message}</span>
-      <button
-        type="button"
-        onClick={() => {
-          undoNotice.undo();
-          clearTimeout(undoTimer.current);
-          setUndoNotice(null);
-          triggerHaptic("tap");
-        }}
-      >
-        UNDO
-      </button>
-    </aside>
-  );
+  const showUndo = todayUndo.show;
+  const undoBanner = todayUndo.surface;
   const selectedIso = isoDay(selectedDate);
   const selectedDay = weekday(selectedDate);
+  const todayKey = isoDay();
+  const scheduleState = useRef(state);
+  if (Object.keys(state).some(key => key !== 'selectedDate' && key !== 'selectedDay' &&
+    state[key] !== scheduleState.current[key])) scheduleState.current = state;
+  const scheduleReader = useMemo(()=>createTodayScheduleReader(state),[scheduleState.current,todayKey]);
   const viewingToday = selectedIso === isoDay();
   useEffect(() => {
     todayReorderGesture.current?.cleanup?.();
@@ -4742,10 +4784,7 @@ export function Today({
     ? workoutPerformedDate(active) || active.workoutDateKey || isoDay(active.startedAt || new Date())
     : null;
   const selectedActiveWorkout = Boolean(active && selectedIso === activeDateKey);
-  const recurringTemplate = plannedWorkoutForDate(state, selectedDate);
-  const adaptedTemplate = adaptedTemplateForToday(state, selectedDate);
-  const template =
-    adaptedTemplate || optionalStrengthForDate(state, selectedDate);
+  const {recurringTemplate, adaptedTemplate, template, occurrence} = scheduleReader.read(selectedIso);
   const todayAdjustment =
     viewingToday &&
     recurringTemplate &&
@@ -4778,24 +4817,21 @@ export function Today({
     : trainingSafety;
   const selectedMonday = weekDate("Mon", selectedDate);
   const currentMonday = weekDate("Mon");
-  const datedWorkouts = state.workouts.filter(
+  const datedWorkouts = useMemo(() => state.workouts.filter(
     (workout) => workout.completedAt && workoutPerformedDate(workout),
-  );
-  const dateBounds = calendarRange(state);
+  ), [state.workouts]);
+  const dateBounds = useMemo(() => calendarRange(scheduleState.current, todayKey), [scheduleState.current,todayKey]);
   const canGoBack = isoDay(selectedMonday) > dateBounds.min;
   const canGoForward = selectedMonday < weekDate("Mon", dateBounds.max);
   const selectDate = (day, date) => {
     dismissPlanReady?.();
-    update((current) => {
-      current.selectedDay = day;
-      current.selectedDate = isoDay(date);
-      return current;
-    });
+    const key=isoDay(date);
+    update(current=>{current.selectedDay=day;current.selectedDate=key;return current;},
+      {navigationDate:{day,date:key}});
   };
-  const occurrence=flexibleOccurrenceForDate(state,selectedIso,template?.id);
-  const linkedOccurrence = active?.logicalSessionId
+  const linkedOccurrence = useMemo(()=>active?.logicalSessionId
     ? flexibleSessions(state).find(item => item.logicalSessionId===active.logicalSessionId) || null
-    : null;
+    : null,[scheduleState.current,todayKey]);
   const resumeActiveWorkout = () => {
     if (!active || resumeLock.current) return;
     resumeLock.current = true;
@@ -4807,14 +4843,15 @@ export function Today({
   };
   const nextWeek = new Date();
   nextWeek.setDate(nextWeek.getDate() + 7);
-  const noticeSchedule = planReady
+  const noticeSchedule = useMemo(() => planReady
     ? [...currentWeekSchedule(state), ...currentWeekSchedule(state, nextWeek)]
         .filter((item) => item.scheduledDate >= isoDay())
         .sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate))
-    : [];
-  const workoutToday =
-    planReady && Boolean(plannedWorkoutForDate(state, new Date()));
+    : [], [scheduleState.current,planReady,todayKey]);
+  const workoutToday = useMemo(() =>
+    planReady && Boolean(plannedWorkoutForDate(state, new Date())), [scheduleState.current,planReady,todayKey]);
   const missedReminder = selectedIso === isoDay() && !trackedActive && <MissedWorkoutSummary state={state} update={update} onSelect={request=>setDetail({flexibleWeek:request})}/>;
+  const scheduleReview = useMemo(() => temporaryScheduleReview(state), [scheduleState.current,todayKey]);
   const calendar = (showMissed = true) => (
     <>
       {calendarOpen && createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso}
@@ -4825,7 +4862,7 @@ export function Today({
         calendarOpen={calendarOpen}
         openCalendar={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}/>
       {combinedAdjustment(state) && <CombinedWorkoutNotice state={state} update={update} />}
-      {flexibleWeekConflict(state) && <aside className="flexible-week-missed"><strong>Review your temporary schedule</strong><small>Your plan changed. Some moved sessions need review.</small><button className="text-button" onClick={() => setDetail({ flexibleWeek: {} })}>REVIEW SCHEDULE</button></aside>}
+      <TemporaryScheduleSummary state={state} review={scheduleReview} update={update} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
       {showMissed && missedReminder}
       {planReady && (
         <PlanReadyNotice
@@ -4921,16 +4958,17 @@ export function Today({
     {occurrence.originalDate!==selectedIso && <small className="flexible-week-origin">Moved from {displayDate(localDate(occurrence.originalDate))}</small>}
     <p>{occurrence.actualPerformedDate?`Performed ${displayDate(localDate(occurrence.actualPerformedDate))}`:'Completed workout'}</p>
     <Button variant="secondary" onClick={()=>setDetail({completedWorkout:performedElsewhere.id})}>View completed workout</Button>
-    {canUseWorkoutToday(state,{workoutId:performedElsewhere.id}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:{workoutId:performedElsewhere.id}})}>Repeat today</button>}
+    {scheduleReader.canUseToday({workoutId:performedElsewhere.id}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:{workoutId:performedElsewhere.id}})}>Repeat today</button>}
     {freestyleEntry}
   </section></main>;
   if(!completed && occurrence && occurrence.status==='active' && sourceLinkedActive)return <main className="screen today-screen">{calendar()}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>Started early · {shortDisplayDate(activeDateKey)}</p><Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>{freestyleEntry}</section></main>;
   if(!completed && occurrence && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{occurrence.status==='skipped'?'Skipped this session':occurrence.status==='active'?'Workout in progress':occurrence.status==='reserved'?'Included in a combined workout':'Completed in a combined workout'}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
   const isHistoricalWeek = selectedMonday < currentMonday;
   const movedSource = occurrence?.originalDate===selectedIso && occurrence.scheduledDate!==selectedIso ? occurrence : flexibleSourceForDate(state, selectedIso)[0];
-  if (!template && !completed && movedSource) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSource.skipped ? 'Skipped this week' : `Moved to ${displayDate(localDate(movedSource.scheduledDate))}`}</p>{!movedSource.skipped && <Button variant="secondary" onClick={() => selectDate(weekday(movedSource.scheduledDate), localDate(movedSource.scheduledDate))}>VIEW DESTINATION</Button>}{freestyleEntry}</section></main>;
+  const movedSourceIssue = scheduleReview.unresolved.find(item=>item.id===(movedSource?.logicalSessionId||movedSource?.id));
+  if (!template && !completed && movedSource) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSourceIssue ? 'Needs a destination' : movedSource.skipped ? 'Skipped this week' : `Moved to ${displayDate(localDate(movedSource.scheduledDate))}`}</p>{movedSourceIssue ? <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button> : !movedSource.skipped && <Button variant="secondary" onClick={() => selectDate(weekday(movedSource.scheduledDate), localDate(movedSource.scheduledDate))}>VIEW DESTINATION</Button>}{freestyleEntry}</section></main>;
   if (!template && !completed) {
-    const upcoming = nextScheduledWorkout(state, selectedDate);
+    const upcoming = scheduleReader.next(selectedIso);
     const upcomingTitle = upcoming
       ? workoutDisplayParts(upcoming.workout, upcoming.workout.weekday)
       : null;
@@ -5002,6 +5040,7 @@ export function Today({
             </div>
           )}
         </section>
+        <MyWorkoutsLink onClick={() => setDetail('saved-workouts')} />
         {undoBanner}
       </main>
     );
@@ -5472,7 +5511,7 @@ export function Today({
         {!completed && !isHistoricalWeek && trainingPaused && (
           <TrainingSafetySummary safety={todaySafety} />
         )}
-        {selectedIso!==isoDay() && (completed || occurrence) && canUseWorkoutToday(state,completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}})}>{completed?'Repeat today':'Train today instead'}</button>}
+        {selectedIso!==isoDay() && (completed || occurrence) && scheduleReader.canUseToday(completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}})}>{completed?'Repeat today':'Train today instead'}</button>}
         {isRepeatAdjustment(session.todayOnlyAdjustment) && <><p>Repeating workout from {session.todayOnlyAdjustment.sourceDate}. Original history is unchanged.</p><button className="text-button" onClick={()=>{try{const next=cancelRepeatedWorkout(state);update(()=>next,{planVersion:false,persistedState:next});}catch(e){setStartError(e.message);}}}>Cancel repeated workout</button></>}
         {completed ? (
           <Button
@@ -5647,6 +5686,7 @@ export function Today({
           </div>
         )}
       </section>
+      <MyWorkoutsLink onClick={() => setDetail('saved-workouts')} />
       {undoBanner}
     </main>
   );
@@ -5821,20 +5861,21 @@ export function Stepper({
     </div>
   );
 }
-function WorkoutConfirmation({ confirmation, cancel, continueAction, error, backgroundRef }) {
+function WorkoutConfirmation({ confirmation, cancel, keepTraining, continueAction, error, backgroundRef }) {
+  const sheetRef=useRef(null);
   if (!confirmation) return null;
   const next = confirmation.type === "next";
   const setLabel = pluralize(confirmation.incomplete, "set");
   return createPortal(
     <ModalLayer close={cancel} backgroundRef={backgroundRef}>
-      {requestClose => <div
+      {requestClose => <div ref={sheetRef}
       className="sheet workout-confirm drag-anywhere"
       role="dialog"
       aria-modal="true"
       aria-labelledby="workout-confirm-title"
       aria-describedby="workout-confirm-detail"
     >
-        <header className="sheet-header-chrome" />
+        <header className="sheet-header-chrome"><SheetHandleSlot/></header>
         <Eyebrow>{next ? "INCOMPLETE EXERCISE" : "END SESSION"}</Eyebrow>
         <h2 id="workout-confirm-title">
           {next
@@ -5849,7 +5890,10 @@ function WorkoutConfirmation({ confirmation, cancel, continueAction, error, back
         {confirmation.combined && <p>Both source sessions will become available again. Only your actual completed sets are saved.</p>}
         {error && <p role="alert">{error}</p>}
         <div className="workout-confirm-actions">
-          <Button data-sheet-initial-focus onClick={requestClose}>
+          <Button data-sheet-initial-focus onClick={() => {
+            if (!next) keepTraining();
+            requestClose();
+          }}>
             {next ? "RETURN TO EXERCISE" : "KEEP TRAINING"}
           </Button>
           <Button variant="secondary" onClick={continueAction}>
@@ -5867,6 +5911,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const active = state.activeWorkout;
   const [now, setNow] = useState(Date.now());
   const [confirmation, setConfirmation] = useState(null);
+  const keepTrainingTargetRef = useRef(null);
+  const [setToReveal, setSetToReveal] = useState(null);
   const [combinedSaveError, setCombinedSaveError] = useState('');
   const [finishing, setFinishing] = useState(false);
   const [exerciseTransitioning, setExerciseTransitioning] = useState(false);
@@ -5880,6 +5926,30 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const [recentlyCompletedSetId, setRecentlyCompletedSetId] = useState(null);
   const [restCompleteVisible, setRestCompleteVisible] = useState(false);
   const screenRef = useRef(null);
+  useEffect(() => {
+    if (!setToReveal || confirmation) return;
+    // The shared sheet has now released body lock/inert ownership. Wait for its
+    // focus restoration frame, then reveal the live logger row without an input focus.
+    const frame = requestAnimationFrame(() => {
+      const screen = screenRef.current;
+      if (active?.id !== setToReveal.sessionId ||
+          active.exercises[active.exerciseIndex]?.id !== setToReveal.exerciseId) return;
+      const row = [...screen?.querySelectorAll('.set-row[data-set-id]') || []]
+        .find(element => element.dataset.setId === setToReveal.setId);
+      if (row) {
+        const spacing = getComputedStyle(screen);
+        const previous = [row.style.scrollMarginTop, row.style.scrollMarginBottom];
+        // Reuse the logger's safe-area/header/rest-timer scroll reservations even
+        // when the document, rather than the workout element, owns scrolling.
+        row.style.scrollMarginTop = spacing.scrollPaddingTop;
+        row.style.scrollMarginBottom = spacing.scrollPaddingBottom;
+        row.scrollIntoView({ block: 'center', behavior: 'instant' });
+        [row.style.scrollMarginTop, row.style.scrollMarginBottom] = previous;
+      }
+      setSetToReveal(null);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [setToReveal, confirmation, active?.id, active?.exerciseIndex]);
   const [rirSet, setRirSet] = useState(null);
   const preserveWorkoutDraftsRef = useRef(false);
   const draftResolverRef = useRef(null);
@@ -6475,6 +6545,31 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           announcement: `Skipped ${exerciseName(exercise)}. Next: ${exerciseName(nextExercise)}`,
         })
       : finishWorkout();
+  const keepTraining = () => {
+    const workout = removalStateRef.current.activeWorkout;
+    const target = workoutSetSummary(workout).firstIncomplete;
+    keepTrainingTargetRef.current = target ? { ...target, sessionId: workout.id } : null;
+  };
+  const dismissWorkoutConfirmation = () => {
+    const target = keepTrainingTargetRef.current;
+    keepTrainingTargetRef.current = null;
+    setConfirmation(null);
+    if (!target) return;
+    const workout = removalStateRef.current.activeWorkout;
+    if (workout?.id !== target.sessionId) return;
+    const index = workout.exercises.findIndex(entry => entry.id === target.exerciseId);
+    const entry = workout.exercises[index];
+    const setIndex = entry?.sets.findIndex(set => set.id === target.setId && !set.completed) ?? -1;
+    if (setIndex < 0) return;
+    // Navigation only: unlike normal Next, this must not clear rest or stamp
+    // startedAt/updatedAt, reinterpret values, or rebuild the session.
+    if (index !== workout.exerciseIndex) update(current => {
+      if (current.activeWorkout?.id === target.sessionId) current.activeWorkout.exerciseIndex = index;
+      return current;
+    });
+    setExerciseNavigationAnnouncement(`${exerciseName(entry)}, set ${setIndex + 1} is unfinished.`);
+    setSetToReveal(target);
+  };
   const canRestartWorkout = activeWorkoutCanRestart(active);
   const restartWorkout = () => {
     if(workoutActionLockRef.current)return false;
@@ -7070,7 +7165,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               ))}
               {perSide ? (
                 <div className="unilateral-reps" role="group" aria-label={`Reps per side for ${entryUnit} ${index + 1}`}>
-                  <span className="unilateral-heading logger-column-label">REPS / SIDE</span>
                   {[["left", "L"], ["right", "R"]].map(([side, label]) => (
                     <div className="unilateral-side" key={side}><span>{label}</span><Stepper deferred required workoutField={`sides.${side}`} label={`${side} reps for ${entryUnit} ${index + 1}`} value={set.sides?.[side]?.reps ?? null} step={1} min={1} integer allowIncrementFromEmpty onChange={value => updateSideReps(index, side, value)} /></div>
                   ))}
@@ -7211,7 +7305,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                     ? `SUPERSET · A1 ${exerciseName(block.entries[0])} · A2 ${exerciseName(block.entries[1])}`
                     : exerciseName(block.entries[0])}
                 </strong>
-                {block.entries.some(entry=>entry.startedAt)&&<small className="up-next-note">Started · saved progress</small>}
+                {block.entries.some(entry=>hasMeaningfulExerciseProgress(active,entry.id))&&<small className="up-next-note">Started · saved progress</small>}
                 {block.entries.length === 1 && upNextExerciseNote(block.entries[0], state.program) && (
                   <small className="up-next-note up-next-program-note">
                     {upNextExerciseNote(block.entries[0], state.program)}
@@ -7259,7 +7353,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         confirmation={confirmation}
         backgroundRef={screenRef}
         error={combinedSaveError}
-        cancel={() => setConfirmation(null)}
+        cancel={dismissWorkoutConfirmation}
+        keepTraining={keepTraining}
         continueAction={confirmAction}
       />
       {restReady && !confirmation && (
@@ -8073,6 +8168,10 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
                 deleteRef.current=true;setDeleteBusy(true);setDeleteError('');
                 try {
                   const next=await deleteCompletedWorkout(state,workoutId,{isCurrent:()=>liveDeleteState.current===state});
+                  try {
+                    recordAccountSyncDeleteIntent(globalThis.localStorage, next.profile.id, 'workouts', workoutId);
+                    if (workout.optionalSessionId) recordAccountSyncDeleteIntent(globalThis.localStorage, next.profile.id, 'optionalSessions', workout.optionalSessionId);
+                  } catch { /* Local deletion succeeded; sync will require review if its intent cannot be saved. */ }
                   update(()=>next,{planVersion:false,persistedState:next});close();
                 } catch(error) {
                   if(error.code==='rollback-failed') { location.reload(); return; }
@@ -8197,7 +8296,7 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
   };
   if (!workout) return null;
   if (child === 'edit') return <HistoryCorrectionEditor workout={workout} state={state} update={update} onDone={returnToWorkout} closeSheet={close} Header={SheetHeader}/>;
-  if (child === 'save') return <SavedWorkouts state={state} update={update} source={workout} close={close} onBack={returnToWorkout} onSaved={()=>{setNotice('Workout template saved');returnToWorkout();}} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>;
+  if (child === 'save') return <SavedWorkouts state={state} update={update} source={workout} close={close} onBack={returnToWorkout} onSaved={()=>{setNotice('Workout saved');returnToWorkout();}} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>;
   if (child === 'repeat') return <UseWorkoutTodaySheet state={state} update={update} request={{workoutId}} close={close} onBack={returnToWorkout} Header={SheetHeader}/>;
   const summary = workoutSetSummary(workout);
   const date = workoutPerformedDate(workout);
@@ -8292,7 +8391,7 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
       )}
       {optionsOpen && createPortal(<ModalLayer close={dismissOptions} backgroundRef={detailRef} returnFocusRef={optionsTriggerRef} lockDocument={false}>{requestClose=><main className="screen detail-screen completed-workout-options-sheet" role="dialog" aria-modal="true" aria-label="Workout options">
         <SheetHeader title="Workout options" onBack={requestClose} backLabel="Back to workout details" onClose={requestClose}/>
-        {setDetail && <button type="button" className="list-row" onClick={()=>chooseOption('save',requestClose)}>Save as template</button>}
+        {setDetail && <button type="button" className="list-row" onClick={()=>chooseOption('save',requestClose)}>Save workout</button>}
         {setDetail && <button type="button" className="list-row" disabled={!canUseWorkoutToday(state,{workoutId})} onClick={()=>chooseOption('repeat',requestClose)}><span>Repeat today{!canUseWorkoutToday(state,{workoutId}) && <small>{proposeWorkoutToday(state,{workoutId}).error}</small>}</span></button>}
         <button type="button" className="list-row" onClick={()=>chooseOption('edit',requestClose)}>Edit history</button>
         <button type="button" className="list-row danger-text" disabled={Boolean(completedWorkoutDeletionGuard(state,workoutId))} onClick={()=>chooseOption('delete',requestClose)}><span>Delete workout{completedWorkoutDeletionGuard(state,workoutId) && <small>{completedWorkoutDeletionGuard(state,workoutId)}</small>}</span></button>
@@ -8410,6 +8509,8 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
           ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
           : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
+      {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
+        <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save workout</button>}
       <WorkoutPhotoMemory workout={session} update={update} onBusyChange={setPhotoBusy} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
@@ -9173,7 +9274,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
     return () => {document.removeEventListener('visibilitychange', foreground);window.removeEventListener('pageshow', restored);};
   }, []);
   const conversationBackRef = useRef(null);
-  const closeHistory = () => { setMenuOpen(false); setHistoryId(null); };
+  const closeHistory = () => { captureCoachNavigation(true); setMenuOpen(false); setHistoryId(null); };
   const scrollRef = useRef(null);
   const transcriptRef = useRef(null);
   const historyScrollRef = useRef(null);
@@ -9181,6 +9282,21 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
   const composerRef = useRef(null);
   const coachRef = useRef(null);
   const contentRef = useRef(null);
+  const coachNavigation = useRef(null);
+  const captureCoachNavigation = back => {
+    const surface = menuOpen ? historyScrollRef.current?.parentElement : contentRef.current;
+    stopPageNavigation(surface);
+    const swipe = surface?.dataset.swipeBackCommitted === 'true';
+    if (surface) delete surface.dataset.swipeBackCommitted;
+    coachNavigation.current = { back, swipe, outgoing: swipe ? null : capturePageSurface(surface) };
+  };
+  const openHistory = () => { captureCoachNavigation(conversationFromHistory); setMenuOpen(true); };
+  useLayoutEffect(() => {
+    const navigation = coachNavigation.current;
+    coachNavigation.current = null;
+    if (!navigation || navigation.swipe) return;
+    return playPageNavigation(menuOpen ? historyScrollRef.current?.parentElement : contentRef.current, navigation.outgoing, navigation);
+  }, [menuOpen, historyId]);
   useLayoutEffect(() => bindCoachViewport(coachRef.current), []);
   useLayoutEffect(() => {
     const composer = composerRef.current;
@@ -9598,7 +9714,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
     if (pendingCoachWorkflows(liveState.current).length) setNewChatConfirm(true);
     else startNewConversation();
   };
-  const openConversation = id => { setMenuOpen(false);setHistoryId(id); };
+  const openConversation = id => { captureCoachNavigation(false); setMenuOpen(false);setHistoryId(id); };
   return (
     <main
       ref={coachRef}
@@ -9607,7 +9723,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
       <div className="coach-content-surface" ref={contentRef}>
         <header className="coach-header">
           <div className="coach-header-context">
-            {conversationFromHistory && <button ref={conversationBackRef} type="button" className="coach-conversation-back" aria-label="Back to conversation history" onClick={() => setMenuOpen(true)}>‹</button>}
+            {conversationFromHistory && <button ref={conversationBackRef} type="button" className="coach-conversation-back" aria-label="Back to conversation history" onClick={openHistory}>‹</button>}
             <div>
             <Eyebrow>COACH</Eyebrow>
             {hasConversation && <strong>{conversationFromHistory ? "Chat history" : "Conversation"}</strong>}
@@ -9618,7 +9734,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
             aria-label="Chat history"
             aria-expanded={menuOpen}
             aria-haspopup="dialog"
-            onClick={() => setMenuOpen(true)}
+            onClick={openHistory}
           >
             <svg aria-hidden="true" viewBox="0 0 24 24">
               <path d="M4.7 8.4A8 8 0 1 1 4 12" />
@@ -10242,7 +10358,7 @@ function WeightEditor({ state, update, request, setDetail }) {
                     (item) => item.id !== entry.id,
                   );
                   return current;
-                });
+                }, { syncDeletes: [{ domain: 'weightCheckins', entityId: entry.localDate }] });
                 setDetail({ weightHistory: true });
               }}
             >
@@ -10952,19 +11068,25 @@ function PersonalizationSummary({ profile, program }) {
     </section>
   );
 }
-export function Profile({ state, update, setDetail, setPage, onLogout }) {
+export function Profile({ state, update, setDetail, setPage, onLogout, accountSync }) {
   const [area, setArea] = useState(null);
-  const previousArea = useRef(null), navigationMotion = useRef(null);
+  const previousArea = useRef(null), navigationMotion = useRef(null), outgoingPage = useRef(null);
   const hubPosition = useRef(0), returnControl = useRef(null), profileRef = useRef(null);
   const dataPosition = useRef(0);
   const restoreDataParent = useRef(null);
   useEffect(() => () => restoreDataParent.current?.(), []);
+  const captureProfilePage = () => {
+    stopPageNavigation(profileRef.current);
+    outgoingPage.current = profileRef.current?.dataset.swipeBackCommitted ? null : capturePageSurface(profileRef.current);
+  };
   const openArea = (next, event) => {
+    captureProfilePage();
     if (next === 'diagnostics') { restoreDataParent.current = rememberSwipeParent(profileRef.current); dataPosition.current = window.scrollY; }
     else { rememberSwipeParent(profileRef.current); hubPosition.current = window.scrollY; returnControl.current = next; }
     setArea(next);
   };
   const backToProfile = () => {
+    captureProfilePage();
     if (area === 'diagnostics') { restoreDataParent.current?.(); restoreDataParent.current = null; setArea('data'); }
     else setArea(null);
   };
@@ -10977,19 +11099,12 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
     if (previousArea.current === area) return;
     const returningToData = previousArea.current === 'diagnostics' && area === 'data';
     previousArea.current = area;
-    navigationMotion.current?.cancel();
+    navigationMotion.current?.();
     const surface = profileRef.current;
     if (surface?.dataset.swipeBackCommitted) { delete surface.dataset.swipeBackCommitted; return; }
-    if (!surface || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
-    const tokens = getComputedStyle(surface);
-    navigationMotion.current = surface.animate([
-      { transform: `translateX(${area && !returningToData ? 18 : -18}px)`, opacity: .96 },
-      { transform: 'translateX(0)', opacity: 1 },
-    ], {
-      duration: parseFloat(tokens.getPropertyValue('--rook-motion-layout')) || 190,
-      easing: tokens.getPropertyValue('--rook-ease-standard').trim() || 'cubic-bezier(.2,0,0,1)',
-    });
-    return () => navigationMotion.current?.cancel();
+    navigationMotion.current = playPageNavigation(surface, outgoingPage.current, { back: !area || returningToData });
+    outgoingPage.current = null;
+    return () => navigationMotion.current?.();
   }, [area]);
   const p = state.profile;
   const preferredStyle = p.preferredTrainingStyle || trainingStyleFor(state);
@@ -11095,8 +11210,9 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
       {!area && <section className="profile-manage"><Eyebrow>MANAGE</Eyebrow>
         {[['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Preferences','Logging, units, appearance and notifications'],['data','Data & backup','Import, export, backup, restore and local data']].map(([id,title,summary])=><button data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><span aria-hidden="true">›</span></button>)}
       </section>}
+      {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
-        <button className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Personal reusable workout templates</small></span><span aria-hidden="true">›</span></button>
+        <button className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><span aria-hidden="true">›</span></button>
         <section className="planning-setup">
           <Eyebrow>TRAINING</Eyebrow>
           <p className="planning-setup-copy">
@@ -11217,7 +11333,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
       </section>}
       {area === 'preferences' && <section>
         <Eyebrow>SETTINGS</Eyebrow>
-        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','My own workouts'],['freestyle','Freestyle']].map(([style,label])=><button key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></button>)}{state.program&&preferredStyle!=='plan'&&<small className="profile-training-style-note">Your current plan stays on Today until you stop following it.</small>}</fieldset>
+        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','My own workouts'],['freestyle','Freestyle']].map(([style,label])=><button key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></button>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
         <button className="list-row" onClick={() => setDetail("logging")}> 
           <span>
             <strong>Logging & increments</strong>
@@ -12104,9 +12220,8 @@ export function ScratchPlan({ state, update, close, onPlanAccepted, preserveDraf
       </main>}
     {!editing && <main className="screen detail-screen initial-import-screen scratch-plan-screen">
       <header className="detail-header">
-        <button aria-label="Back to start" onClick={leaveSetup}>
-          ‹
-        </button>
+        {preserveDraftOnClose ? <FirstRunBackButton onClick={leaveSetup} label="Back to start" />
+          : <button type="button" aria-label="Back to start" onClick={leaveSetup}>‹</button>}
         <strong>Start from scratch</strong>
         <span />
       </header>
@@ -12186,6 +12301,7 @@ function SupersetPartnerPicker({
   className = "",
   helper = "Rook will alternate one set of each exercise, then start your rest.",
 }) {
+  const sheetRef=useRef(null);
   const [selectedPartnerId, setSelectedPartnerId] = useState(null);
   const selectedPartner = candidates.find(
     (candidate) => candidate.id === selectedPartnerId,
@@ -12198,17 +12314,8 @@ function SupersetPartnerPicker({
       setSelectedPartnerId(null);
     }
   }, [candidates, selectedPartnerId]);
-  useEffect(() => {
-    const closeOnEscape = (event) => {
-      if (event.key !== "Escape") return;
-      event.stopPropagation();
-      onClose();
-    };
-    document.addEventListener("keydown", closeOnEscape, true);
-    return () => document.removeEventListener("keydown", closeOnEscape, true);
-  }, [onClose]);
   return (
-    <main
+    <main ref={sheetRef}
       className={`sheet replace-sheet superset-partner-sheet ${className}`.trim()}
       role="dialog"
       aria-modal="true"
@@ -12216,6 +12323,7 @@ function SupersetPartnerPicker({
       onClick={(event) => event.stopPropagation()}
     >
       <header className="superset-partner-header">
+        <SheetHandleSlot/>
         <div className="superset-partner-header-row">
           <Eyebrow>CREATE SUPERSET</Eyebrow>
           <button
@@ -12232,7 +12340,7 @@ function SupersetPartnerPicker({
         </p>
       </header>
       <div
-        className="superset-partner-options"
+        className="sheet-scroll superset-partner-options"
         role="radiogroup"
         aria-label={`Exercise to pair with ${exerciseName(exercise)}`}
       >
@@ -12523,6 +12631,8 @@ export function PlanEditor({
   const workoutActionsBackgroundRef = useRef(null);
   const workoutActionsTriggerRef = useRef(null);
   const [pairingExerciseId, setPairingExerciseId] = useState(null);
+  const pairingBackgroundRef = useRef(null);
+  const pairingTriggerRef = useRef(null);
   const [expandedWarmupDayId, setExpandedWarmupDayId] = useState(null);
   const [collapsedDayIds, setCollapsedDayIds] = useState([]);
   const resetKey = `${source.id}|${reviewExerciseIds.join("|")}`;
@@ -14678,13 +14788,11 @@ export function PlanEditor({
                               aria-expanded={
                                 pairingExerciseId === exercise.id
                               }
-                              onClick={() =>
-                                setPairingExerciseId(
-                                  pairingExerciseId === exercise.id
-                                    ? null
-                                    : exercise.id,
-                                )
-                              }
+                              onClick={() => {
+                                pairingBackgroundRef.current = reorderRootRef.current?.closest('.screen') || null;
+                                pairingTriggerRef.current = document.activeElement;
+                                setPairingExerciseId(pairingExerciseId === exercise.id ? null : exercise.id);
+                              }}
                             >
                               CREATE SUPERSET
                             </button>
@@ -14846,19 +14954,15 @@ export function PlanEditor({
         {workoutOnly?'Cancel':mode === "import" ? "EDIT NOTES" : <BackLabel />}
       </Button>}
       </SheetActionFooter>
-      {pairingContext && pairingContext.candidates.length > 0 && (
-        <div
-          className="modal-layer superset-picker-layer"
-          onClick={(event) => {
-            if (event.target === event.currentTarget) setPairingExerciseId(null);
-          }}
-        >
+      {pairingContext && pairingContext.candidates.length > 0 && createPortal(
+        <ModalLayer close={() => setPairingExerciseId(null)} backgroundRef={pairingBackgroundRef} returnFocusRef={pairingTriggerRef} lockDocument={false}>
+          {requestClose => (
           <SupersetPartnerPicker
             exercise={pairingContext.exercise}
             candidates={pairingContext.candidates}
             profile={profile}
             className="plan-superset-sheet"
-            onClose={() => setPairingExerciseId(null)}
+            onClose={requestClose}
             onConfirm={(partnerId) =>
               createSuperset(
                 pairingContext.day.id,
@@ -14867,7 +14971,8 @@ export function PlanEditor({
               )
             }
           />
-        </div>
+          )}
+        </ModalLayer>, document.body,
       )}
     </>
   );
@@ -15314,6 +15419,7 @@ export function ImportPlan({
     >
       <SheetHeader
         title="Import plan"
+        firstRunBack={initial}
         {...(initial
           ? { onBack: close, backLabel: "Back to start" }
           : { onClose: close, closeLabel: "Close import plan" })}
@@ -15441,7 +15547,7 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
       onClick={(event) => event.stopPropagation()}
     >
       <header className="sheet-header-chrome">
-        <SheetDragHandle sheetRef={sheetRef} close={close} />
+        <SheetHandleSlot/>
         <button className="sheet-close" aria-label="Close" onClick={close}>
           ×
         </button>
@@ -15980,144 +16086,10 @@ function EditPlan({ state, update, close, reviewExerciseIds = [], fullscreen = f
     </main>
   );
 }
-function SheetDragHandle({
-  sheetRef,
-  close,
-  disabled = false,
-  dragAnywhere = false,
-}) {
-  const drag = useRef(null);
-  const dismissTimer = useRef(null);
-  useEffect(() => () => clearTimeout(dismissTimer.current), []);
-  const layer = () =>
-    sheetRef.current?.closest(
-      ".modal-layer, .workout-confirm-layer",
-    );
-  const setPosition = (distance) => {
-    if (!sheetRef.current) return;
-    const value = Math.max(0, distance);
-    sheetRef.current.style.transform = `translateY(${value}px)`;
-    const progress = Math.min(
-      1,
-      value / Math.max(1, sheetRef.current.offsetHeight),
-    );
-    if (layer())
-      layer().style.backgroundColor = `rgba(27,26,25,${0.35 * (1 - progress)})`;
-  };
-  const start = (event) => {
-    if (disabled || event.button > 0 || event.pointerType === "touch") return;
-    if (!dragAnywhere) event.currentTarget.setPointerCapture?.(event.pointerId);
-    drag.current = {
-      y: event.clientY,
-      time: performance.now(),
-      moved: false,
-      pointerId: event.pointerId,
-      captureTarget: event.currentTarget,
-    };
-    sheetRef.current.style.transition = "none";
-  };
-  const move = (event) => {
-    if (!drag.current) return;
-    const distance = Math.max(0, event.clientY - drag.current.y);
-    if (distance > 6 && !drag.current.moved) {
-      drag.current.moved = true;
-      drag.current.captureTarget?.setPointerCapture?.(drag.current.pointerId);
-    }
-    setPosition(distance);
-  };
-  const end = (event, cancelled = false) => {
-    if (!drag.current) return;
-    const activeDrag = drag.current;
-    const distance = Math.max(0, event.clientY - activeDrag.y);
-    const velocity =
-      distance / Math.max(1, performance.now() - activeDrag.time);
-    drag.current = null;
-    const surface = sheetRef.current;
-    if (activeDrag.moved && surface) {
-      const suppress = (click) => {
-        click.preventDefault();
-        click.stopPropagation();
-      };
-      surface.addEventListener("click", suppress, {
-        capture: true,
-        once: true,
-      });
-      setTimeout(() => surface.removeEventListener("click", suppress, true), 0);
-    }
-    sheetRef.current.style.transition = "transform 180ms ease";
-    if (
-      !cancelled && (distance > Math.min(140, sheetRef.current.offsetHeight * 0.22) ||
-      (distance > 28 && velocity > 0.65))
-    ) {
-      setPosition(sheetRef.current.offsetHeight);
-      if (layer()) layer().style.backgroundColor = "rgba(27,26,25,0)";
-      dismissTimer.current = setTimeout(close, 180);
-    } else {
-      setPosition(0);
-      if (layer()) layer().style.backgroundColor = "rgba(27,26,25,.35)";
-    }
-  };
-  useEffect(() => {
-    const surface = sheetRef.current;
-    if (!dragAnywhere || disabled || !surface) return undefined;
-    surface.addEventListener("pointerdown", start);
-    surface.addEventListener("pointermove", move);
-    surface.addEventListener("pointerup", end);
-    const cancel = event => end(event, true);
-    surface.addEventListener("pointercancel", cancel);
-    return () => {
-      surface.removeEventListener("pointerdown", start);
-      surface.removeEventListener("pointermove", move);
-      surface.removeEventListener("pointerup", end);
-      surface.removeEventListener("pointercancel", cancel);
-    };
-  });
-  useEffect(() => {
-    const surface = sheetRef.current;
-    if (!surface || disabled) return undefined;
-    const scroller = surface.querySelector(".sheet-scroll") || surface;
-    return bindScrollableSheetTouch({
-      surface,
-      scroller,
-      disabled: () => disabled,
-      setPosition,
-      onDragStart: () => {
-        surface.style.transition = "none";
-      },
-      onDismiss: () => {
-        surface.style.transition = "transform 180ms ease";
-        setPosition(surface.offsetHeight);
-        if (layer()) layer().style.backgroundColor = "rgba(27,26,25,0)";
-        dismissTimer.current = setTimeout(close, 180);
-      },
-      onReset: () => {
-        surface.style.transition = "transform 180ms ease";
-        setPosition(0);
-        if (layer()) layer().style.backgroundColor = "rgba(27,26,25,.35)";
-      },
-    });
-  }, [disabled]);
-  return (
-    <div
-      className={`sheet-grab-zone${disabled ? " disabled" : ""}`}
-      aria-label="Drag down or tap to close"
-      role="button"
-      tabIndex={disabled ? -1 : 0}
-      onClick={disabled ? undefined : close}
-      onKeyDown={(event) => {
-        if (!disabled && (event.key === "Enter" || event.key === " ")) {
-          event.preventDefault();
-          close();
-        }
-      }}
-      onPointerDown={dragAnywhere ? undefined : start}
-      onPointerMove={dragAnywhere ? undefined : move}
-      onPointerUp={dragAnywhere ? undefined : end}
-      onPointerCancel={dragAnywhere ? undefined : event => end(event, true)}
-    >
-      <i />
-    </div>
-  );
+// Compact headers reserve layout space here; ModalLayer supplies the sole
+// interactive handle, gesture owner and guarded close animation.
+function SheetHandleSlot() {
+  return <div className="sheet-handle-slot" data-sheet-handle-slot="" />;
 }
 function StopFollowingPlanSheet({state,update,close}) {
   const [error,setError]=useState('');
@@ -16133,182 +16105,28 @@ function StopFollowingPlanSheet({state,update,close}) {
 function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
   const imported = state.program?.source === "ai-import";
   const [mode, setMode] = useState("menu");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState("");
-  const [generationStage, setGenerationStage] = useState("preparing");
-  const [preview, setPreview] = useState(null);
-  const requestRef = useRef(false);
-  const requestRun = useRef(0);
   const sheetRef = useRef(null);
   const blocked = Boolean(state.activeWorkout || state.activeOptionalSession);
-  const build = async () => {
-    if (requestRef.current) return;
-    requestRef.current = true;
-    const run = ++requestRun.current;
-    setBusy(true);
-    setError("");
-    setGenerationStage("preparing");
-    try {
-      await afterVisibleFrame();
-      const result = await generatePersonalizedProgram(state.profile, {
-        onStage: setGenerationStage,
-        workouts: state.workouts,
-        currentProgram: state.program,
-      });
-      await afterVisibleFrame();
-      if (run !== requestRun.current) return;
-      setPreview(result);
-      setBusy(false);
-      requestRef.current = false;
-    } catch {
-      if (run !== requestRun.current) return;
-      setError(state.program?"We couldn't build your plan. Your current plan is unchanged.":"We couldn't build your plan. Your workouts are unchanged.");
-      setBusy(false);
-      requestRef.current = false;
-    }
-  };
-  const cancelBuild = () => {
-    requestRun.current++;
-    requestRef.current = false;
-    setBusy(false);
-    setError(state.program?"Plan generation cancelled. Your current plan is unchanged.":"Plan generation cancelled. Your workouts are unchanged.");
-  };
-  const accept = async (program) => {
-    if (requestRef.current) return;
-    requestRef.current = true;
-    setBusy(true);
-    setGenerationStage("saving");
-    await afterVisibleFrame();
-    try {
-      const next = persistProgramReplacement(state, program, {source:preview.source}, saveState);
-      update(() => next, {planVersion:false,persistedState:next});
-    } catch (error) {
-      setError(error.message);setBusy(false);requestRef.current=false;return;
-    }
-    close();
-    onPlanAccepted?.();
-  };
   if (mode === 'scratch') return <ScratchPlan state={state} update={update} close={() => setMode('menu')} onPlanAccepted={() => {close();onPlanAccepted?.();}} />;
-  if (preview)
-    return (
-      <main
-        ref={sheetRef}
-        className="sheet change-plan-sheet plan-editor-sheet"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="change-plan-title"
-      >
-        <header className="long-form-sheet-header">
-          <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
-          <span />
-          <strong id="change-plan-title">Plan preview</strong>
-          <button
-            className="sheet-close"
-            aria-label="Close"
-            disabled={busy}
-            onClick={close}
-          >
-            ×
-          </button>
-        </header>
-        {error && <p className="offline-banner" role="alert">{error}</p>}
-        <PlanEditor
-          source={preview.program}
-          profile={state.profile}
-          generatedAcceptance
-          exerciseState={state}
-          onSave={accept}
-          onCancel={() => setPreview(null)}
-          saving={busy}
-        />
-        {busy && <BuildingOverlay stage={generationStage} />}
-      </main>
-    );
-  return (
-    <main
-      ref={sheetRef}
-      className="sheet change-plan-sheet"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="change-plan-title"
-    >
-      <header className="sheet-header-chrome">
-        <SheetDragHandle sheetRef={sheetRef} close={close} disabled={busy} />
-        <button className="sheet-close" aria-label="Close" onClick={close}>
-          ×
-        </button>
-      </header>
-      {mode === "menu" ? (
-        <>
-          <Eyebrow>PROGRAM</Eyebrow>
-          <h2 id="change-plan-title">{state.program?'Change plan':'Create a plan'}</h2>
-          <p>
-            {state.program?'Your workout history stays saved when you replace the current program.':'Add a structured program when you want one. Your workouts and history stay saved.'}
-          </p>
-          {blocked && (
-            <p className="offline-banner">
-              Finish your active workout before changing plans.
-            </p>
-          )}
-          <button
-            className="plan-choice"
-            disabled={blocked}
-            onClick={() => setMode("confirm-build")}
-          >
-            <span>
-              <strong>Build a personalized plan</strong>
-              <small>Use your current goals, schedule and equipment.</small>
-            </span>
-            <i>›</i>
-          </button>
-          <button
-            className="plan-choice"
-            disabled={blocked}
-            onClick={() => setDetail("import-plan")}
-          >
-            <span>
-              <strong>
-                {imported ? "Import a different plan" : "Import from Notes"}
-              </strong>
-              <small>Replace the program with your existing plan.</small>
-            </span>
-            <i>›</i>
-          </button>
-          <button className="plan-choice" disabled={blocked} onClick={() => setMode('scratch')}>
-            <span><strong>Start from scratch</strong><small>Create the workouts yourself, then review before replacing.</small></span><i>›</i>
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            className="sheet-back text-button"
-            onClick={() => setMode("menu")}
-          >
-            ‹ Back
-          </button>
-          <Eyebrow>{state.program?'REPLACE PROGRAM':'NEW PROGRAM'}</Eyebrow>
-          <h2 id="change-plan-title">Build a personalized plan?</h2>
-          <p>
-            {state.program?'This replaces your current program using the profile details already saved. Workout history will remain.':'This creates a plan using your saved profile details. Workout history will remain.'}
-          </p>
-          {error && <p className="offline-banner">{error}</p>}
-          <Button disabled={busy} onClick={build}>
-            {busy ? "BUILDING…" : error ? "TRY AGAIN" : "BUILD NEW PLAN"}
-          </Button>
-          <Button
-            variant="quiet"
-            disabled={busy}
-            onClick={() => setMode("menu")}
-          >
-            CANCEL
-          </Button>
-        </>
-      )}
-      {busy && (
-        <BuildingOverlay stage={generationStage} onCancel={cancelBuild} />
-      )}
-    </main>
-  );
+  return <main ref={sheetRef} className="sheet change-plan-sheet" role="dialog" aria-modal="true" aria-labelledby="change-plan-title">
+    <header className="sheet-header-chrome">
+      <SheetHandleSlot/>
+      <button className="sheet-close" aria-label="Close" onClick={close}>×</button>
+    </header>
+    <Eyebrow>PROGRAM</Eyebrow>
+    <h2 id="change-plan-title">{state.program ? 'Change plan' : 'Create a plan'}</h2>
+    <p>{state.program ? 'Your workout history stays saved when you replace the current program.' : 'Add a structured program when you want one. Your workouts and history stay saved.'}</p>
+    {blocked && <p className="offline-banner">Finish your active workout before changing plans.</p>}
+    <button className="plan-choice" disabled={blocked} onClick={() => setDetail('plan-builder')}>
+      <span><strong>Build a personalized plan</strong><small>Review your goals, schedule and equipment.</small></span><i>›</i>
+    </button>
+    <button className="plan-choice" disabled={blocked} onClick={() => setDetail('import-plan')}>
+      <span><strong>{imported ? 'Import a different plan' : 'Bring my plan'}</strong><small>Import your current training plan into ROOK.</small></span><i>›</i>
+    </button>
+    <button className="plan-choice" disabled={blocked} onClick={() => setMode('scratch')}>
+      <span><strong>Build my own program</strong><small>Create a weekly training schedule yourself.</small></span><i>›</i>
+    </button>
+  </main>;
 }
 function SettingSwitch({
   label,
@@ -16655,7 +16473,7 @@ export function BackupSheet({ state, update, close, onBackupCreated }) {
   );
 }
 
-export function RestoreBackupSheet({ state, update, close, onRestored }) {
+export function RestoreBackupSheet({ state, update, close, onRestored, firstRun = false, backLabel = 'Back to start' }) {
   const [prepared, setPrepared] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -16710,7 +16528,7 @@ export function RestoreBackupSheet({ state, update, close, onRestored }) {
   if (restored)
     return (
       <main className="screen detail-screen data-backup-screen restore-success-screen">
-        <SheetHeader title="Restore backup" onClose={close} />
+        <SheetHeader title="Restore backup" onBack={firstRun ? close : undefined} onClose={firstRun ? undefined : close} firstRunBack={firstRun} />
         <div className="complete-mark" aria-hidden="true">✓</div>
         <Eyebrow>RESTORE COMPLETE</Eyebrow>
         <h1>ROOK has been restored.</h1>
@@ -16720,7 +16538,7 @@ export function RestoreBackupSheet({ state, update, close, onRestored }) {
     );
   return (
     <main className="screen detail-screen data-backup-screen restore-backup-screen" aria-busy={busy || undefined}>
-      <SheetHeader title="Restore backup" onClose={dismiss} closeDisabled={busy} />
+      <SheetHeader title="Restore backup" onBack={firstRun ? dismiss : undefined} backLabel={backLabel} backDisabled={busy} onClose={firstRun ? undefined : dismiss} closeDisabled={busy} firstRunBack={firstRun} />
       <Eyebrow>{prepared ? "REVIEW BACKUP" : "RESTORE BACKUP"}</Eyebrow>
       {prepared ? (
         <>
@@ -16779,7 +16597,7 @@ function LogoutConfirmSheet({ close, backUpFirst, logOut }) {
     setBusy(true);
     setError("");
     try {
-      await deleteLocalState({ clearPhotos: clearAllWorkoutMedia });
+      await deleteLocalState({ clearPhotos: clearAllWorkoutMedia, clearProfiles: clearAllProfileSlotArchives });
       logOut();
     } catch {
       setError("ROOK couldn’t finish deleting local data. Some data may already have been removed. Try again to finish.");
@@ -17970,7 +17788,7 @@ function GymProfilesSheet({ state, update, close }) {
     update((current) => {
       deleteGymProfile(current, editingId, replacementDefaultId);
       return current;
-    });
+    }, { syncDeletes: [{ domain: 'gymProfiles', entityId: editingId }] });
     back();
   };
 
@@ -18530,6 +18348,7 @@ export function Detail({
         focus={detail.focus}
       />
     );
+  if (detail === "plan-builder") return <Onboarding state={state} update={update} exit={() => setDetail("change-plan")} onPlanAccepted={onPlanAccepted}/>;
   if (detail === "change-plan")
     return (
       <ChangePlanSheet
@@ -18710,6 +18529,8 @@ export function Detail({
         setDetail={setDetail}
       />
     );
+  if (detail?.sessionLoggingSetup)
+    return <ActiveLoggingSetup request={detail.sessionLoggingSetup} state={state} update={update} close={close}/>;
   if (detail?.superset)
     return (
       <ActiveSuperset
@@ -19450,9 +19271,9 @@ function TodayExerciseActions({ request, state, update, close }) {
         aria-labelledby={titleId}
         onClick={(event) => event.stopPropagation()}
       >
-        <button className="sheet-close" aria-label="Close" onClick={close}>
+        <header className="sheet-header-chrome"><button className="sheet-close" aria-label="Close" onClick={close}>
           ×
-        </button>
+        </button></header>
         <Eyebrow>{confirmOccurrence ? "SKIP WORKOUT" : "WEEKLY PLAN"}</Eyebrow>
         <h2 id={titleId}>
           {confirmOccurrence
@@ -19496,9 +19317,9 @@ function TodayExerciseActions({ request, state, update, close }) {
       aria-labelledby={titleId}
       onClick={(event) => event.stopPropagation()}
     >
-      <button className="sheet-close" aria-label="Close" onClick={close}>
+      <header className="sheet-header-chrome"><button className="sheet-close" aria-label="Close" onClick={close}>
         ×
-      </button>
+      </button></header>
       <h2 id={titleId}>{`Remove ${name}?`}</h2>
       <button
         type="button"
@@ -19540,7 +19361,7 @@ function WorkoutOptionsSheet({ children, className, titleId, describedBy, close 
   return <main ref={sheetRef} className={`sheet replace-sheet ${className}`} role="dialog" aria-modal="true"
     aria-labelledby={titleId} aria-describedby={describedBy} onClick={event=>event.stopPropagation()}>
     <header className="sheet-header-chrome">
-      <SheetDragHandle sheetRef={sheetRef} close={close}/>
+      <SheetHandleSlot/>
       <button className="sheet-close" aria-label="Close" onClick={close}>×</button>
     </header>
     <div className="sheet-scroll">{children}</div>
@@ -19745,6 +19566,12 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail }) {
     >
       <Eyebrow>EXERCISE</Eyebrow>
       <h2 id="active-exercise-options-title">Exercise options</h2>
+      {supportsPerSideLogging(current) && (
+        <button className="choice-row" onClick={() => setDetail({sessionLoggingSetup:{sessionId:active.id,exerciseId:current.id}})}>
+          <strong>Edit logging setup</strong>
+          <small>Reps per side or total reps · this workout only.</small>
+        </button>
+      )}
       <button className="list-row active-exercise-note-action" onClick={() => setDetail({ exerciseNote: current })}>
         <span>{!exercisePersonalNote(current) && <span aria-hidden="true">+ </span>}{exercisePersonalNote(current) ? "Edit note" : "Add note"}</span>
       </button>
@@ -19779,6 +19606,41 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail }) {
       )}
     </WorkoutOptionsSheet>
   );
+}
+
+function ActiveLoggingSetup({request,state,update,close}) {
+  const action=useDurableAction(state,update);
+  const [error,setError]=useState('');
+  const active=state.activeWorkout;
+  const exercise=active?.id===request.sessionId && active.exercises.find(entry=>entry.id===request.exerciseId);
+  const available=supportsPerSideLogging(exercise);
+  const locked=hasMeaningfulExerciseProgress(active,request.exerciseId);
+  const mode=loggingModeOf(exercise);
+  const choose=nextMode=>{
+    setError('');
+    try {
+      action.commit(current=>{
+        const result=changeSessionLoggingMode(current,request.sessionId,request.exerciseId,nextMode);
+        if(result.error)throw Error(result.error);
+        return result.state;
+      });
+      close();
+    } catch(failure) { setError(failure.message); }
+  };
+  return <WorkoutOptionsSheet className="active-logging-setup-sheet" titleId="active-logging-setup-title" close={close}>
+    <Eyebrow>THIS WORKOUT ONLY</Eyebrow>
+    <h2 id="active-logging-setup-title">Edit logging setup</h2>
+    {available ? <>
+      <p>{exerciseName(exercise)} · Your program and previous workouts stay unchanged.</p>
+      {locked&&<p id="logging-setup-locked" role="status">Logging setup cannot change after values or completed sets have been recorded. Your logged values will not be reinterpreted.</p>}
+      {[['per_side','Reps per side','Log left and right reps separately.'],['normal','Total reps','Log one rep count for each set.']].map(([value,label,description])=>
+        <button key={value} className="choice-row" type="button" aria-pressed={mode===value}
+          aria-describedby={locked?'logging-setup-locked':undefined} disabled={locked&&mode!==value} onClick={()=>choose(value)}>
+          <strong>{label}{mode===value&&<span aria-hidden="true"> ✓</span>}</strong><small>{description}</small>
+        </button>)}
+    </> : <p role="status">This exercise is no longer available for this logging setup.</p>}
+    {error&&<p role="alert">{error}</p>}
+  </WorkoutOptionsSheet>;
 }
 
 function ActiveSuperset({ exercise, state, update, close }) {
@@ -19862,9 +19724,9 @@ function ActiveSuperset({ exercise, state, update, close }) {
       aria-labelledby="active-superset-title"
       onClick={(event) => event.stopPropagation()}
     >
-      <button className="sheet-close" aria-label="Close" onClick={close}>
+      <header className="sheet-header-chrome"><button className="sheet-close" aria-label="Close" onClick={close}>
         ×
-      </button>
+      </button></header>
       <div className="sheet-scroll">
         <Eyebrow>{pair ? "WORKOUT SUPERSET" : "CREATE SUPERSET"}</Eyebrow>
         <h2 id="active-superset-title">
@@ -20141,7 +20003,7 @@ function Replace({ exercise, state, update, close }) {
       onClick={(event) => event.stopPropagation()}
     >
       <header className="sheet-header-chrome">
-        <SheetDragHandle sheetRef={sheetRef} close={close} />
+        <SheetHandleSlot/>
         <button className="sheet-close" aria-label="Close" onClick={close}>
           ×
         </button>
@@ -20245,6 +20107,7 @@ const StableActiveWorkout = memo(ActiveWorkout);
 function HydratedApp({startup}) {
   useSemanticSwipeBack();
   const [state, update, persistenceFailed] = useLiftState(startup);
+  const accountSync = useAccountSync({ state, update, persistenceFailed });
   const liveCompletion = useRef(null);
   const recordLiveFinish = useCallback(event => { liveCompletion.current = event; }, []);
   useResolvedTheme(
@@ -20264,8 +20127,7 @@ function HydratedApp({startup}) {
   const [detail, setDetail] = useState(null);
   const [detailClosing, setDetailClosing] = useState(false);
   useEffect(() => { setDetailClosing(false); }, [detail]);
-  const [entryMode, setEntryMode] = useState(startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
-  const [repairStage, setRepairStage] = useState("preparing");
+  const [entryMode, setEntryMode] = useState(startup.firstRunVerified && startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
   const [repairPreview, setRepairPreview] = useState(null);
   const [planReadyNotice, setPlanReadyNotice] = useState(null);
   useEffect(() => {
@@ -20286,17 +20148,13 @@ function HydratedApp({startup}) {
     showToday();
     setPlanReadyNotice({ id: Date.now() });
   };
-  const chooseNoPlan = style => {
-    const next = clone(state);
-    next.profile.preferredTrainingStyle = style;
-    next.profile.onboardingComplete = true;
-    next.profile.noPlanReceipt = {kind:'first-run'};
-    next.selectedDate = isoDay();
-    next.selectedDay = weekday();
-    if (!saveState(next, {reason:'first-run:training-style'})) return false;
+  const beginFirstRunFreestyle = () => {
+    if (state.profile.onboardingComplete || state.activeWorkout) return false;
+    const next = startFirstRunFreestyle(state);
+    if (!saveState(next, {reason:'first-run:freestyle'})) return false;
     update(() => next, {persistedState:next});
     setEntryMode(null);
-    setPage('today');
+    setPage('workout');
     return true;
   };
   const closeDetail = () => {
@@ -20312,6 +20170,7 @@ function HydratedApp({startup}) {
       );
   };
   useEffect(() => {
+    if (accountSync.locked) return undefined;
     let active = true;
     (async () => {
       const status = await AIService.status();
@@ -20333,70 +20192,14 @@ function HydratedApp({startup}) {
       replaceablePlan &&
       !state.ai?.planUpgradeDismissed &&
       !state.activeWorkout &&
+      !state.activeOptionalSession &&
       state.workouts.length === 0 &&
       Object.keys(state.weekScheduleOverrides || {}).length === 0;
-    if (canUpgrade)
-      (async () => {
-        setRepairStage("preparing");
-        update((current) => {
-          current.ai = { ...current.ai, repairingPlan: true };
-          return current;
-        });
-        try {
-          const result = await generatePersonalizedProgram(state.profile, {
-            onStage: (stage) => {
-              if (active) setRepairStage(stage);
-            },
-          });
-          if (!active) return;
-          setRepairPreview(result);
-          update((current) => {
-            current.ai = {
-              ...current.ai,
-              lastPlanError: null,
-              repairingPlan: false,
-            };
-            return current;
-          });
-        } catch (error) {
-          if (active)
-            update((current) => {
-              current.ai = {
-                ...current.ai,
-                lastPlanError:
-                  error.message || "AI could not repair the stored plan.",
-                repairingPlan: false,
-              };
-              return current;
-            });
-        }
-      })();
+    if (canUpgrade) setRepairPreview(true);
     return () => {
       active = false;
     };
-  }, []);
-  const acceptRepairPreview = async (program) => {
-    setRepairStage("saving");
-    update((current) => {
-      current.ai = { ...current.ai, repairingPlan: true };
-      return current;
-    });
-    await afterVisibleFrame();
-    update((current) => {
-      current.program = program;
-      current.selectedDay = weekday();
-      current.selectedDate = isoDay();
-      current.ai = {
-        ...current.ai,
-        lastPlanSource: repairPreview.source,
-        repairingPlan: false,
-        planUpgradeDismissed: false,
-      };
-      return current;
-    }, { planVersion: { source: "ROOK plan update", reason: "Plan compatibility update" } });
-    setRepairPreview(null);
-    showGeneratedPlan();
-  };
+  }, [accountSync.locked]);
   const dismissRepairPreview = () => {
     setRepairPreview(null);
     update((current) => {
@@ -20408,27 +20211,41 @@ function HydratedApp({startup}) {
       return current;
     });
   };
+  if (accountSync.locked) return <AccountSyncLock sync={accountSync} Modal={ModalLayer} />;
   if (!state.profile.onboardingComplete) {
+    if (!startup.firstRunVerified) return <main className="fatal-error-screen startup-recovery" role="alert"><p className="eyebrow">ROOK</p><h1>We couldn’t safely open your training data.</h1><p>Your saved data has not been replaced. Reload ROOK to retry recovery.</p></main>;
     const mode = entryMode || 'landing';
-    const back = expected => setEntryMode(current => current === expected ? null : current);
-    const open = next => {
-      if (entryMode !== null) return;
-      if (next !== 'restore') trackFunnelEvent('onboarding_started', { path: next === 'personalize' ? 'personalized' : next });
+    const firstRunParents = { import: 'bring', scratch: 'bring', ...(accountSync.enabled && { restore: 'sign-in' }) };
+    const back = expected => setEntryMode(current => current === expected ? (firstRunParents[expected] || null) : current);
+    const open = (next, from = 'landing') => {
+      if (mode !== from) return;
+      if (!['restore', 'sign-in'].includes(next)) trackFunnelEvent('onboarding_started', { path: next === 'personalize' ? 'personalized' : next });
       setEntryMode(next);
     };
     return <PersistenceHost failed={persistenceFailed}>
-      <FirstRunNavigation mode={mode}>{route => {
-        if (route === 'personalize') return <Onboarding initialUnits={state.profile.units} update={update} exit={() => back('personalize')} onPlanAccepted={showGeneratedPlan}/>;
+      <FirstRunNavigation mode={mode} parents={firstRunParents}>{route => {
+        if (route === 'sign-in') return <FirstRunSignIn back={() => back('sign-in')} restoreBackup={() => open('restore', 'sign-in')}
+          signInWithGoogle={accountSync.signInFirstRunWithGoogle} providerReady={['recovery-available', 'signed-in-new-account'].includes(accountSync.state)}
+          signedIn={accountSync.state === 'signed-in-new-account'} email={accountSync.email} accountStatus={accountSync.state}
+          onSignedIn={result => { if (result?.status === 'new-account') setEntryMode(null); else if (result?.status === 'restored') { setEntryMode(null); setPage('today'); } }}/>
+        if (route === 'bring') return <BringPlanLanding back={() => back('bring')} importPlan={() => open('import', 'bring')} startFromScratch={() => open('scratch', 'bring')}/>;
+        if (route === 'personalize') return <Onboarding state={state} initialUnits={state.profile.units} update={update} exit={() => back('personalize')} onPlanAccepted={showGeneratedPlan}/>;
         if (route === 'import') return <ImportPlan state={state} update={update} close={() => back('import')} onPlanAccepted={showToday} initial/>;
         if (route === 'scratch') return <ScratchPlan state={state} update={update} close={() => back('scratch')} onPlanAccepted={showGeneratedPlan} preserveDraftOnClose/>;
-        if (route === 'restore') return <RestoreBackupSheet state={state} update={update} close={() => back('restore')} onRestored={() => { setEntryMode(null); setPage('today'); }}/>;
-        return <EntryLanding personalize={() => open('personalize')} ownWorkouts={() => chooseNoPlan('own-workouts')} trainFreestyle={() => chooseNoPlan('freestyle')} importPlan={() => open('import')} startFromScratch={() => open('scratch')} restoreBackup={() => open('restore')}/>;
+        if (route === 'restore') return <RestoreBackupSheet state={state} update={update} close={() => back('restore')}
+          onRestored={() => { accountSync.detachFirstRunAccountAfterBackup(); setEntryMode(null); setPage('today'); }}
+          backLabel={accountSync.enabled ? 'Back to sign in' : 'Back to start'} firstRun/>;
+        if (route === 'create-workout') return <SavedWorkouts state={state} update={update} close={() => back('create-workout')} Header={FirstRunSheetHeader} Editor={PlanEditor} Modal={ModalLayer} createNew firstRun onSaved={showToday}/>;
+        if (route === 'freestyle-confirm') return <FirstRunFreestyleConfirm back={() => back('freestyle-confirm')} start={beginFirstRunFreestyle}/>;
+        return <EntryLanding personalize={() => open('personalize')} ownWorkouts={() => open('create-workout')} trainFreestyle={() => open('freestyle-confirm')} bringPlan={() => open('bring')}
+          restoreBackup={() => open('restore')} signIn={accountSync.enabled ? () => open('sign-in') : null}
+          signedIn={accountSync.state === 'signed-in-new-account'} returnToSavedProfile={accountSync.separate ? accountSync.switchToSavedProfile : null}/>;
       }}</FirstRunNavigation>
     </PersistenceHost>;
   }
   const content =
     page === "today" ? (
-      (state.program ? <Today
+      (state.program && trainingStyleFor(state)==='plan' ? <Today
         state={state}
         update={update}
         setPage={setPage}
@@ -20465,6 +20282,7 @@ function HydratedApp({startup}) {
         update={update}
         setDetail={setDetail}
         setPage={setPage}
+        accountSync={accountSync}
         onLogout={() => setDetail("logout-confirm")}
       />
     );
@@ -20489,7 +20307,7 @@ function HydratedApp({startup}) {
           close={closeDetail}
           onCloseStart={() => setDetailClosing(true)}
           backgroundRef={backgroundRef}
-          presentation={detail?.visual ? "fullscreen" : detail?.editPlan?.fullscreen ? "editor-page" : "sheet"}
+          presentation={detail?.visual ? "fullscreen" : (detail === "plan-builder" || detail?.editPlan?.fullscreen) ? "editor-page" : "sheet"}
         >
           <Detail
             detail={detail}
@@ -20500,8 +20318,18 @@ function HydratedApp({startup}) {
             setDetail={setDetail}
             onPlanAccepted={showGeneratedPlan}
             onPlanImported={showToday}
-            onLogout={() => {
+            onLogout={async () => {
               // Only reached after the existing destructive confirmation.
+              try {
+                await Promise.race([
+                  getFirebaseSyncClient().then(client => client && client.authApi.signOut(client.auth)),
+                  new Promise(resolve => setTimeout(resolve, 1500)),
+                ]);
+              } catch { /* Local deletion already succeeded; cloud data is untouched. */ }
+              try {
+                globalThis.localStorage.removeItem(ACCOUNT_SYNC_LEDGER_KEY);
+                globalThis.localStorage.removeItem(ACCOUNT_SIGNED_OUT_KEY);
+              } catch { /* Local storage access may already be unavailable. */ }
               window.location.reload();
             }}
           />
@@ -20511,24 +20339,15 @@ function HydratedApp({startup}) {
         <ModalLayer close={dismissRepairPreview} backgroundRef={backgroundRef}>
           {(requestClose) => (
             <main className="screen detail-screen repair-plan-preview">
-              <SheetHeader
-                title="Plan preview"
-                onClose={requestClose}
-                closeLabel="Close plan preview"
-              />
-              <PlanEditor
-                source={repairPreview.program}
-                profile={state.profile}
-                exerciseState={state}
-                onSave={acceptRepairPreview}
-                onCancel={requestClose}
-                saving={state.ai.repairingPlan}
-              />
+              <SheetHeader title="Review your plan" onClose={requestClose} closeLabel="Close plan review"/>
+              <h1>Build an updated ROOK plan?</h1>
+              <p>Review your training preferences first. Your current plan stays in place until you accept its replacement.</p>
+              <Button onClick={() => {setRepairPreview(null);setDetail('plan-builder');}}>REVIEW PREFERENCES</Button>
+              <Button variant="quiet" onClick={requestClose}>KEEP CURRENT PLAN</Button>
             </main>
           )}
         </ModalLayer>
       )}
-      {state.ai.repairingPlan && <BuildingOverlay stage={repairStage} />}
     </div>
     </MissedWorkoutFeedbackProvider>
     </PersistenceHost>

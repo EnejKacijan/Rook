@@ -18,10 +18,9 @@ it('orders B below D, E above C, C first, first to last by stable IDs while pres
  expect(s.program).toEqual(original.program);expect(s.workouts).toEqual(original.workouts);
  expect(deserializeState(serializeState(s),{strict:true}).activeWorkout.exercises).toEqual(s.activeWorkout.exercises);
 });
-it.each(['current','started','completed','touched','side','segment','superset','warmup'])('pins %s work and never allows an untouched exercise to cross it',kind=>{
+it.each(['current','completed','touched','side','segment','superset','warmup'])('pins %s work and never allows an untouched exercise to cross it',kind=>{
  const s=make(),e=s.activeWorkout.exercises[2];
  if(kind==='current')s.activeWorkout.exerciseIndex=2;
- if(kind==='started')e.startedAt=Date.now();
  if(kind==='completed')e.sets[0].completed=true;
  if(kind==='touched')e.sets[0].touched=true;
  if(kind==='side')e.sets[0].sides={left:{completed:true}};
@@ -30,6 +29,11 @@ it.each(['current','started','completed','touched','side','segment','superset','
  if(kind==='warmup')s.activeWorkout.warmup.stages=[{exerciseInstanceId:'C',completed:true}];
  expect(upNextReorderGroups(s.activeWorkout).some(g=>g.ids.includes('C'))).toBe(false);
  expect(move(s,'D','B')).toBe(s);expect(move(s,'C',null)).toBe(s);
+});
+it('visiting an unlogged exercise does not lock its Up Next reorder position',()=>{
+ const s=make(),e=s.activeWorkout.exercises[2];e.startedAt=Date.now();
+ expect(upNextReorderGroups(s.activeWorkout).some(g=>g.ids.includes(e.id))).toBe(true);
+ expect(ids(move(s,'C',null))).toBe('ABDEC');
 });
 it.each(['session','current','stale','unknown','self'])('rejects %s targets rather than writing a stale order',kind=>{
  const s=make(),request={sessionId:s.activeWorkout.id,currentId:'A',exerciseId:'B',expectedIds:['B','C','D','E'],beforeId:null};

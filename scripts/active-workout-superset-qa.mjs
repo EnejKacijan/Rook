@@ -26,7 +26,7 @@ state.activeWorkout.exercises.forEach((exercise) => {
 });
 const firstId = state.activeWorkout.exercises[0].id;
 let originalProgram = JSON.stringify(state.program);
-const context = await browser.newContext({ viewport: { width: 390, height: 844 } });
+const context = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch:true });
 await context.addInitScript(
   (value) => {
     if (!localStorage.getItem("lift-v2-state"))
@@ -55,6 +55,23 @@ await page.getByRole("button", { name: "RESUME WORKOUT" }).click();
 await page.getByRole("button", { name: "Exercise options" }).click();
 await page.getByRole("button", { name: "Create superset" }).click();
 await page.getByRole("heading", { name: "Choose a second exercise" }).waitFor();
+const pickerSheet=page.locator('.active-superset-sheet');
+const dragHandle=pickerSheet.getByRole('button',{name:'Drag down or tap to close'});
+assert.equal(await dragHandle.count(),1,'Create superset uses the shared sheet drag handle');
+await page.waitForTimeout(280);
+const dragBox=await dragHandle.boundingBox(),dragX=dragBox.x+dragBox.width/2,dragY=dragBox.y+dragBox.height/2;
+await page.mouse.move(dragX,dragY);await page.mouse.down();await page.mouse.move(dragX,dragY+45,{steps:5});
+assert.equal(await pickerSheet.evaluate(node=>new DOMMatrix(getComputedStyle(node).transform).m42),45,'partner picker follows a partial drag before release');
+await page.mouse.up();await page.waitForTimeout(220);
+assert.equal(await pickerSheet.count(),1,'short sheet drag cancels instead of dismissing');
+const touchSession=await context.newCDPSession(page),touchBox=await dragHandle.boundingBox();
+const touchX=touchBox.x+touchBox.width/2,touchY=touchBox.y+touchBox.height/2;
+await touchSession.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchX,y:touchY,id:1}]});
+await touchSession.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchX,y:touchY+48,id:1}]});
+await page.waitForFunction(()=>new DOMMatrix(getComputedStyle(document.querySelector('.active-superset-sheet')).transform).m42===48);
+assert.equal(await pickerSheet.evaluate(node=>new DOMMatrix(getComputedStyle(node).transform).m42),48,'partner picker follows a touch drag before release');
+await touchSession.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});await page.waitForTimeout(220);
+assert.equal(await pickerSheet.count(),1,'short touch drag cancels instead of dismissing');
 assert.match(
   await page.locator(".superset-partner-header > p").innerText(),
   new RegExp(`^Pair it with .+\\. Rook will alternate one set of each exercise`),
@@ -119,7 +136,7 @@ assert.equal(JSON.stringify(stored.program), originalProgram);
 
 await context.setOffline(true);
 await page.getByRole("button", { name: "Manage superset" }).click();
-await page.getByRole("button", { name: "Close" }).click();
+await page.getByRole("button", { name: "Close", exact:true }).click();
 await context.setOffline(false);
 
 await page.getByRole("button", { name: "Replace" }).click();

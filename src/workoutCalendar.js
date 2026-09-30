@@ -41,12 +41,15 @@ export function calendarDayStates(state,dates) {
 // occurrence fulfilment; the legacy flags above are not completion/credit rules.
 export function calendarDayPresentation(state,dates) {
   const facts=calendarDayStates(state,dates);
+  // These dates share weeks. Resolve each canonical occurrence schedule once
+  // for this read, instead of prescribing the same week for every day cell.
+  const occurrenceRead={weeks:new Map(),materialized:null};
   return Object.fromEntries(dates.map(date=>{
     const day=facts[date],provenance=[];
     // Count executions once from history, not again for each linked occurrence
     // (one combined workout can fulfil several source occurrences).
     const counts={active:Number(day.active),completed:(state.workouts||[]).filter(w=>w.completedAt&&workoutPerformedDate(w)===date).length,planned:0,missed:0};
-    for(const occurrence of state.program ? flexibleOccurrencesForDate(state,date) : []){
+    for(const occurrence of state.program ? flexibleOccurrencesForDate(state,date,occurrenceRead) : []){
       // The occurrence can be browsed on its scheduled/source date while its
       // execution is already happening elsewhere. Calendar activity is a fact
       // of the execution date, never provenance of the source occurrence.

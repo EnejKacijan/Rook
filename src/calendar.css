@@ -111,6 +111,8 @@
 .rest-up-next .rest-up-next-descriptor { display: block; margin-top: 4px; color: #6f6c68; font-size: 14px; font-weight: 600; line-height: 1.3; }
 .rest-up-next-summary { display: block; margin-top: 6px; color: var(--rook-secondary); font-size: 13px; }
 .rest-up-next-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 24px; }
+.today-my-workouts { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 20px; color: var(--rook-secondary); }
+.today-my-workouts .inline-navigation-chevron { width: 15px; height: 15px; }
 .rest-day-state > .freestyle-entry:has(.rest-freestyle-action) { margin-top: 28px; }
 .rest-day-state .rest-freestyle-action { min-height: 44px; min-width: 44px; padding: 8px 0; color: var(--rook-secondary); font-size: 13px; font-weight: 500; text-align: left; }
 .today-day-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
@@ -122,8 +124,17 @@
 .today-workout-chooser .list-row > span:first-child { white-space: normal; overflow-wrap: anywhere; }
 .today-workout-chooser .list-row small { color: var(--rook-secondary); line-height: 1.4; }
 .today-missed-row { display: grid; gap: 12px; margin-top: 16px; padding: 8px 0; border-bottom: 1px solid var(--rook-border); }
-.rest-day-state > .today-missed-row { margin-top: 16px; border-bottom: 0; }
-.rest-day-state > .today-missed-row + .rest-up-next { margin-top: 16px; }
+/* Disclosure contains the row's margin, so avoid adding the paragraph's formerly
+   collapsed bottom margin to it (including when the reminder is hidden). */
+.rest-day-state > p:has(+ .today-missed-disclosure) { margin-bottom: 0; }
+.rest-day-state > .today-missed-disclosure .today-missed-row { margin-top: 16px; border-bottom: 0; }
+/* The row's own margin/padding live inside Disclosure's measured height.
+   Keep the existing 16px/30px Up Next gaps, settling with that same collapse. */
+.rest-day-state > .today-missed-disclosure + .rest-up-next { transition: margin-top 200ms cubic-bezier(.2,0,0,1); }
+.rest-day-state > .today-missed-disclosure.is-open + .rest-up-next { margin-top: 16px; }
+@media (prefers-reduced-motion: reduce) {
+  .rest-day-state > .today-missed-disclosure + .rest-up-next { transition: none; }
+}
 .today-missed-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
 .today-missed-label { margin: 0; color: var(--rook-secondary); }
 .today-missed-header > .missed-reminder-hide { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0; color: var(--rook-accent-text); font-size: 13px; }
@@ -152,11 +163,20 @@
 .flexible-week-missed { margin-top: 16px; padding: 12px 0; border-bottom: 1px solid var(--rook-border); display: flex; flex-direction: column; gap: 5px; }
 .flexible-week-missed small, .flexible-week-origin { color: var(--rook-secondary); font-size: 11px; }
 .flexible-week-missed button { align-self: flex-start; min-height: 44px; }
+/* All spacing belongs inside the measured Disclosure so Hide leaves no gap. */
+.temporary-schedule-summary .temporary-schedule-label { margin: 0; }
+.temporary-schedule-summary.is-informational { padding: 8px 0; }
+.temporary-schedule-summary.is-informational .temporary-schedule-label { color: var(--rook-secondary); }
+.temporary-schedule-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 20px; }
+.temporary-schedule-actions .text-button { min-width: 44px; min-height: 44px; padding: 8px 0; font-size: 13px; }
+.temporary-schedule-actions .text-button:last-child { color: var(--rook-secondary); }
 .flexible-week-origin { display: block; margin-top: 8px; }
 .flexible-week-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 20px 0; }
 .flexible-week-dates button { min-height: 48px; border-radius: 12px; border: 1px solid var(--rook-border); background: var(--rook-surface); color: var(--rook-text); font-size: 12px; }
 .flexible-week-dates button.is-selected { background: var(--rook-accent-soft); border-color: var(--rook-accent); }
 .flexible-week-dates button:disabled { opacity: .45; }
+.use-workout-today-sheet .flexible-week-dates button { padding: 8px; overflow-wrap: anywhere; }
+.use-workout-today-sheet .flexible-week-dates button small { display: block; margin-top: 4px; line-height: 1.35; color: var(--rook-secondary); }
 .flexible-availability-note { text-align: left; color: var(--rook-secondary); font-size: 12px; }
 .flexible-availability-dates button { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px; min-width: 0; }
 .flexible-availability-dates small { max-width: 100%; color: var(--rook-secondary); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -253,6 +273,11 @@
 .no-plan-workout-list .list-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .no-plan-workout-list small { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 13px; }
 .no-plan-create-action, .no-plan-plan-action { display: block; min-height: 44px; margin-top: 16px; text-align: left; }
+.no-plan-today .no-plan-create-action.primary { text-align: center; }
+.no-plan-today .no-plan-plan-action.list-row { display: flex; gap: 8px; border: 0; padding: 8px 4px; font-size: 13px; line-height: 1.4; }
+.no-plan-today .no-plan-plan-action > .no-plan-plan-copy { flex-direction: row; flex-wrap: wrap; align-items: baseline; gap: 4px 6px; white-space: normal; color: var(--rook-secondary); }
+.no-plan-today .no-plan-plan-copy strong { font-size: inherit; font-weight: 600; color: var(--rook-accent-text); }
+.no-plan-today .no-plan-plan-action > span:last-child { flex: none; color: var(--rook-secondary); }
 .no-plan-today .freestyle-entry { margin-top: 20px; }
 .no-plan-today .today-completed-workouts { margin-top: 32px; }
 .no-plan-no-history { margin-top: 28px; color: var(--rook-secondary); }

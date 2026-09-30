@@ -30,6 +30,8 @@
 .up-next-queue.is-reordering { user-select:none; }
 .up-next-queue.is-reordering [data-swipe-row] { transition:transform 180ms var(--rook-ease-standard); }
 .up-next-queue .reorder-live-source { visibility:hidden;opacity:0;pointer-events:none; }
+.is-reordering .reorder-live-source,
+.is-reordering .reorder-placeholder { visibility:hidden;opacity:0;pointer-events:none; }
 :root .is-reordering .swipe-remove-background { visibility:hidden!important;pointer-events:none!important;transition:none!important; }
 .queue-order-option { padding:10px 0;border-bottom:1px solid var(--rook-border); }
 .queue-order-option > strong { display:block;font-size:14px;overflow-wrap:anywhere; }

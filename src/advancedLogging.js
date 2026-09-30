@@ -38,10 +38,10 @@ export function setTypeOf(set) {
 }
 
 export function loggingModeOf(exercise) {
-  return exercise?.loggingMode === "per_side" ||
-    exercise?.importedExercise?.loggingMode === "per_side"
-    ? "per_side"
-    : "normal";
+  // An explicit session choice must override an imported prescription's mode.
+  if (exercise?.loggingMode === 'normal' || exercise?.loggingMode === 'per_side')
+    return exercise.loggingMode;
+  return exercise?.importedExercise?.loggingMode === 'per_side' ? 'per_side' : 'normal';
 }
 
 export function setTypeLabel(set) {

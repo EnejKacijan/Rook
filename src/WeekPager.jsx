@@ -14,18 +14,18 @@ export function weekLabel(date) {
     : `${month(monday)} ${day(monday)}–${month(sunday)} ${day(sunday)}`;
 }
 
-function WeekStrip({page, today, selectDate}) {
+function WeekStrip({page, selected, today, selectDate}) {
   return <div className="week-strip" aria-label={page.label}>
     {page.days.map(({day, date, key, status}) => {
-      const selected = key === page.selected, isToday = key === today;
+      const isSelected = key === selected, isToday = key === today;
       const workoutState = status.statuses.includes('completed') ? 'workout-completed'
         : status.planned || status.markers.length ? 'workout-planned' : 'workout-rest';
       return <button key={day} type="button"
         tabIndex={page.offset ? -1 : undefined}
         aria-label={`${day} ${date.getDate()}${isToday ? ', today' : ''}, ${status.label}`}
-        aria-current={isToday ? 'date' : undefined} aria-pressed={selected}
-        className={`${selected ? 'selected-day' : ''} ${isToday ? 'today-date' : ''} ${workoutState}`}
-        onClick={() => { if (!page.offset && !selected) selectDate(day, date); }}>
+        aria-current={isToday ? 'date' : undefined} aria-pressed={isSelected}
+        className={`${isSelected ? 'selected-day' : ''} ${isToday ? 'today-date' : ''} ${workoutState}`}
+        onClick={() => { if (!page.offset && !isSelected) selectDate(day, date); }}>
         <small>{day[0]}</small><CalendarStatusSlot statuses={status.markers} week/><strong>{date.getDate()}</strong>
       </button>;
     })}
@@ -37,14 +37,20 @@ export function WeekPager({state, date, canGoBack, canGoForward, selectDate, onC
   const root = useRef(null), viewport = useRef(null), track = useRef(null), labelTrack = useRef(null);
   const controller = useRef(null), options = useRef(null);
   const selected = isoDay(date), today = isoDay();
+  const monday = isoDay(weekDate('Mon',date));
+  // Date-only navigation preserves every schedule input. Reuse the three
+  // canonical week presentations until one of those inputs really changes.
+  const calendarState = useRef(state);
+  if (Object.keys(state).some(key => key !== 'selectedDate' && key !== 'selectedDay' &&
+    state[key] !== calendarState.current[key])) calendarState.current = state;
   const pages = useMemo(() => [0, -1, 1].map(offset => {
-    const reference = new Date(`${selected}T12:00:00`);
+    const reference = new Date(`${monday}T12:00:00`);
     reference.setDate(reference.getDate() + offset * 7);
     const days = WEEKDAYS.map(day => { const date = weekDate(day, reference); return {day, date, key: isoDay(date)}; });
     const statuses = calendarDayPresentation(state, days.map(day => day.key));
-    return {offset, label: weekLabel(reference), selected: isoDay(reference),
+    return {offset, label: weekLabel(reference),
       days: days.map(day => ({...day, status: statuses[day.key]}))};
-  }), [state, selected, today]);
+  }), [calendarState.current, monday, today]);
   useLayoutEffect(() => {
     options.current = {canGoBack, canGoForward, disabled: calendarOpen, commit(direction) {
       const target = new Date(`${selected}T12:00:00`);
@@ -80,7 +86,7 @@ export function WeekPager({state, date, canGoBack, canGoForward, selectDate, onC
       <div className="week-pager-track" ref={track}>
         {pages.map(page => <div key={page.offset} className="week-pager-page" data-week-offset={page.offset}
           style={{order: page.offset + 1}} aria-hidden={page.offset ? true : undefined} inert={page.offset ? '' : undefined}>
-          {available(page) && <WeekStrip page={page} today={today} selectDate={selectDate}/>}
+          {available(page) && <WeekStrip page={page} selected={selected} today={today} selectDate={selectDate}/>}
         </div>)}
       </div>
     </div>

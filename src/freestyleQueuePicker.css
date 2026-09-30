@@ -67,4 +67,3 @@
 .queue-add-swipe[data-swipe-armed] .queue-swipe-cue{background:#1f6b4c;color:#fff}
 .queue-add-swipe[data-swipe-armed] .queue-swipe-cue svg{transform:scale(1.12)}
 @media(prefers-reduced-motion:reduce){.queue-swipe-cue svg{transition:none}}
-.freestyle-queue-picker [data-exercise-search-scroll],.saved-workouts [data-exercise-search-scroll]{scrollbar-width:thin;scrollbar-color:var(--rook-border) transparent}

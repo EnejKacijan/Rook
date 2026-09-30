@@ -34,7 +34,7 @@ export function reusableWorkoutStructure(workout) {
 const object=value=>value&&typeof value==='object'&&!Array.isArray(value);
 export function assertWorkoutTemplates(templates) {
   if(templates===undefined)return;
-  const bad=()=>{throw Error('Saved workout templates could not be safely loaded.');};
+  const bad=()=>{throw Error('Saved workouts could not be safely loaded.');};
   if(!Array.isArray(templates))bad();
   const ids=new Set();
   for(const template of templates){

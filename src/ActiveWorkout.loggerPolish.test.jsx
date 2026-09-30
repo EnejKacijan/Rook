@@ -80,7 +80,8 @@ it.each([true,false])('groups per-side reps explicitly and keeps independent ent
   mount({kind:'per-side',rirEnabled});
   const row=host.querySelector('.set-row[aria-label="set 2"]'),group=row.querySelector('[role="group"]');
   const original=structuredClone(current.activeWorkout.exercises[0]);
-  expect(group.getAttribute('aria-label')).toBe('Reps per side for set 2');expect(group.textContent).toContain('REPS / SIDE');
+  expect(group.getAttribute('aria-label')).toBe('Reps per side for set 2');
+  expect([...group.querySelectorAll('.unilateral-side > span')].map(label=>label.textContent)).toEqual(['L','R']);
   expect(group.querySelectorAll('input')).toHaveLength(2);expect(row.querySelectorAll('.check')).toHaveLength(1);
   act(()=>group.querySelector('[aria-label="Increase left reps for set 2"]').click());
   expect(current.activeWorkout.exercises[0].sets[1].sides).toEqual({left:{reps:9},right:{reps:7}});

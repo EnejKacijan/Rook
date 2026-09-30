@@ -50,7 +50,7 @@
 .workout-header-actions { width: 90px; min-height: 44px; justify-self: end; align-self: center; display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; }
 .workout-header-actions > .text-button { min-width: 44px; min-height: 44px; padding: 0 3px; }
 .workout-options-trigger { flex:0 0 44px;width:44px;height:44px;padding:0;border:0;border-radius:9px;background:transparent;color:var(--rook-muted);font-size:9px;letter-spacing:1px;appearance:none;-webkit-tap-highlight-color:transparent; }
-.workout-options-trigger:active { background:var(--rook-accent-soft);color:var(--rook-accent); }
+.workout-options-trigger:active { background:transparent;color:var(--rook-accent); }
 .workout-options-trigger:focus:not(:focus-visible) { outline:none; }
 .workout-options-trigger:focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent));outline-offset:-2px; }
 .workout-options-trigger.unavailable { visibility: hidden; pointer-events: none; }

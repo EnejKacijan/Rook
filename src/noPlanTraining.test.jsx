@@ -72,6 +72,25 @@ it('presents saved workouts first without a schedule shell and opens the existin
   click(host.querySelector('.no-plan-workout-list .list-row'));
   expect(detail).toHaveBeenCalledWith({savedWorkout:'template-full-body'});
 });
+it('honors a non-plan training style while preserving an existing plan and history',()=>{
+  const state=createReturningUserFixture(1);
+  const original=structuredClone(state);
+  state.profile.preferredTrainingStyle='own-workouts';
+  expect(trainingStyleFor(state)).toBe('own-workouts');
+  show(state);
+  expect(host.querySelector('.no-plan-today')).not.toBeNull();
+  expect(button('Return to your saved plan')).toBeDefined();
+  expect(host.querySelector('.week-strip')).toBeNull();
+  expect(state.program).toEqual(original.program);
+  expect(state.workouts).toEqual(original.workouts);
+  state.profile.preferredTrainingStyle='freestyle';
+  expect(trainingStyleFor(state)).toBe('freestyle');
+  show(state);
+  expect(button('Start freestyle workout').classList.contains('primary')).toBe(true);
+  state.profile.preferredTrainingStyle='plan';
+  expect(trainingStyleFor(state)).toBe('plan');
+  expect(state.program).toEqual(original.program);
+});
 it('shows Freestyle as the primary action and Create Workout with no saved templates',()=>{
   show(noPlan());
   expect(button('Start freestyle workout').classList.contains('primary')).toBe(true);
@@ -104,11 +123,34 @@ it('creates a reusable workout through the existing Saved Workouts editor and ne
   act(()=>root.render(<Harness/>));
   expect(host.textContent).toContain('Create workout');
   click(button('Add exercise and review'));
-  click(button('Save template'));
+  click(button('SAVE WORKOUT'));
   expect(current.savedWorkoutTemplates).toHaveLength(1);
   expect(current.savedWorkoutTemplates[0].name).toBe('New workout');
   expect(current.program).toBeNull();
   expect(persist).toHaveBeenCalled();
+});
+it('first-run Save commits the reusable workout and onboarding together; Back before Save preserves the landing profile',()=>{
+  const initial=domain.blankState(),definition=templateDraft(addFreestyleExercise(startFreestyleWorkout(initial),'plank').activeWorkout,initial).exercises;
+  const persist=vi.spyOn(domain,'saveState').mockReturnValue(true),leave=vi.fn(),saved=vi.fn();
+  let current;
+  function Editor({source,onSave}) {return <button onClick={()=>onSave({...source,days:[{...source.days[0],exercises:definition}]})}>Add exercise and review</button>;}
+  function Harness(){const[state,setState]=useState(initial);current=state;return <SavedWorkouts state={state} update={fn=>setState(previous=>fn(structuredClone(previous)))} close={leave} onSaved={saved} Header={SheetHeader} Editor={Editor} Modal={ModalLayer} createNew firstRun/>;}
+  act(()=>root.render(<Harness/>));
+  click(host.querySelector('[aria-label="Back to start"]'));
+  expect(leave).toHaveBeenCalledOnce();expect(persist).not.toHaveBeenCalled();expect(current).toEqual(initial);
+  click(button('Add exercise and review'));expect(current).toEqual(initial);expect(persist).not.toHaveBeenCalled();
+  click(button('SAVE WORKOUT'));expect(saved).toHaveBeenCalledOnce();expect(persist).toHaveBeenCalledOnce();
+  expect(current.profile).toMatchObject({onboardingComplete:true,preferredTrainingStyle:'own-workouts',noPlanReceipt:{kind:'first-run'}});
+  expect(current.savedWorkoutTemplates).toHaveLength(1);expect(current.activeWorkout).toBeNull();
+});
+it('first-run editor asks before discarding a meaningful unsaved workout',()=>{
+  const initial=domain.blankState(),definition=templateDraft(addFreestyleExercise(startFreestyleWorkout(initial),'plank').activeWorkout,initial).exercises;
+  const leave=vi.fn(),confirm=vi.spyOn(window,'confirm').mockReturnValue(false);
+  function Editor({source,onSave}) {return <button onClick={()=>onSave({...source,days:[{...source.days[0],exercises:definition}]})}>Add exercise and review</button>;}
+  act(()=>root.render(<SavedWorkouts state={initial} update={()=>{}} close={leave} Header={SheetHeader} Editor={Editor} Modal={ModalLayer} createNew firstRun/>));
+  click(button('Add exercise and review'));click(host.querySelector('[aria-label="Back to start"]'));
+  expect(confirm).toHaveBeenCalledOnce();expect(leave).not.toHaveBeenCalled();
+  confirm.mockReturnValue(true);click(host.querySelector('[aria-label="Back to start"]'));expect(leave).toHaveBeenCalledOnce();
 });
 it('stops a plan after a durable write and retains history, templates, and the archived plan',()=>{
   const state=createReturningUserFixture(0);

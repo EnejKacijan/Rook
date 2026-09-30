@@ -70,6 +70,40 @@ function materialize(state, record) {
   return { ...record, logicalSessionId: record.id, moved: record.scheduledDate !== record.originalDate,
     workout: { ...prescribed, logicalSessionId: record.id, originalScheduledDate: record.originalDate, flexibleWeekMoved: record.scheduledDate !== record.originalDate } };
 }
+// Review the saved occurrence links, not the mere presence of flexibleWeek.
+// A stale link stays visible as unresolved instead of being presented as a
+// successful move to a destination where materialize() cannot show it.
+export function temporaryScheduleReview(state) {
+  const items = records(state).map(record => {
+    const lifecycle = flexibleSessionLifecycle(state, record);
+    const finished = ['active', 'completed', 'combined'].includes(lifecycle.status);
+    const destination = !record.skipped && materialize(state, record);
+    let issue = null;
+    if (!finished && !record.skipped && !destination) {
+      issue = state.program?.days.some(day => day.id === record.workoutId)
+        ? 'The plan changed. Choose how to restore this workout to the current schedule.'
+        : 'The original workout is no longer in this plan. Clear its old temporary move.';
+    }
+    return {
+      id: record.id, name: record.name || destination?.workout?.name || 'Workout',
+      originalDate: record.originalDate, scheduledDate: record.scheduledDate,
+      skipped: Boolean(record.skipped), finished, issue,
+    };
+  }).sort((a,b) => a.originalDate.localeCompare(b.originalDate) || a.id.localeCompare(b.id));
+  const currentWeek=weekKey(isoDay());
+  const activeItems=items.filter(item=>item.issue || !item.finished &&
+    (item.originalDate>=currentWeek || item.scheduledDate>=currentWeek));
+  const savedIds=new Set(activeItems.map(item=>item.id));
+  const unchanged=effectiveWeekSchedule(state,isoDay()).filter(item=>!savedIds.has(item.logicalSessionId))
+    .map(item=>({id:item.logicalSessionId,name:item.workout.name,originalDate:item.originalDate,
+      scheduledDate:item.scheduledDate,skipped:false,finished:false,issue:null,unchanged:true}));
+  return {
+    items:activeItems,
+    resultingItems:[...activeItems,...unchanged].sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)||a.id.localeCompare(b.id)),
+    unresolved: activeItems.filter(item => item.issue),
+    moved: activeItems.filter(item => !item.issue && !item.skipped && item.originalDate !== item.scheduledDate),
+  };
+}
 export function effectiveWeekSchedule(state, date, {includeCombined=false} = {}) {
   const start = weekKey(date), end = addCalendarDays(start, 6);
   const stored = records(state), ids = new Set(stored.map(r => r.id));
@@ -81,11 +115,15 @@ export function effectiveWeekSchedule(state, date, {includeCombined=false} = {})
 export function flexibleSourceForDate(state, date) {
   return records(state).filter(r => r.originalDate === date && (r.skipped || r.scheduledDate !== date));
 }
-export function flexibleOccurrencesForDate(state,date) {
+export function flexibleOccurrencesForDate(state,date,readCache=null) {
   const all=new Map();
   const put=item=>{if(item&&(item.scheduledDate===date||item.originalDate===date)){const id=item.logicalSessionId||item.id||identity(item);all.set(id,{...item,logicalSessionId:id});}};
-  effectiveWeekSchedule(state,date,{includeCombined:true}).forEach(put);
-  records(state).map(record=>materialize(state,record)).forEach(put);
+  const week=weekKey(date);
+  let schedule=readCache?.weeks.get(week);
+  if(!schedule){schedule=effectiveWeekSchedule(state,date,{includeCombined:true});readCache?.weeks.set(week,schedule);}
+  schedule.forEach(put);
+  if(readCache&&!readCache.materialized)readCache.materialized=records(state).map(record=>materialize(state,record));
+  (readCache?.materialized || records(state).map(record=>materialize(state,record))).forEach(put);
   // A legacy explicit skip is absent from baseWeekSchedule. Materialize only
   // its known template/date for truthful read-only presentation, without editing
   // the saved override or inventing a completion.
@@ -115,6 +153,19 @@ export function flexibleSessions(state, today = isoDay()) {
   return [...all.values()].filter(item => item.originalDate >= (state.program?.trainingBlock?.startDate || weekKey(today)) || state.flexibleWeek?.sessions?.[item.logicalSessionId]).map(item => ({ ...item, status: flexibleSessionStatus(state, item, today) })).sort((a, b) => a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 const movable = item => ['planned', 'missed', 'optional'].includes(item.status);
+// The program's canonical calendar occurrence week is Monday–Sunday. Dates
+// shown by the destination picker never extend this source transaction.
+export function availabilityAdjustmentScope(state, today = isoDay(), sessions = flexibleSessions(state, today)) {
+  const start = weekKey(today), end = addCalendarDays(start, 6);
+  const sources = sessions.filter(item => {
+    const ownWeek = item.originalDate >= start && item.originalDate <= end;
+    const carriedIn = item.originalDate < start && item.scheduledDate >= start && item.scheduledDate <= end &&
+      Boolean(state.flexibleWeek?.sessions?.[item.logicalSessionId]);
+    return (ownWeek || carriedIn) && !moveSourceError(state, item, today) &&
+      (item.status !== 'missed' || actionableMissedSession(state, item, today));
+  });
+  return { start, end, sources };
+}
 function scheduleChangeError(state, mode, today) {
   if (state.todayAdaptation?.mode === 'repeat') return 'Finish or cancel the repeated workout before changing the schedule.';
   if (combinedAdjustment(state)) return 'Finish or cancel the combined workout before changing its source schedule.';
@@ -190,7 +241,7 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
   }
   const byId = new Map(all.map(i => [i.logicalSessionId, i]));
   const changes = [];
-  let availabilitySchedule;
+  let availabilitySchedule, availabilityDetails;
   const push = (item, toDate, skipped = false) => {
     const existing = state.flexibleWeek?.sessions?.[item.logicalSessionId];
     const futureWeeks = Math.max(0, Math.round((new Date(`${weekKey(item.originalDate)}T12:00:00`) - new Date(`${weekKey(today)}T12:00:00`)) / 604800000));
@@ -239,27 +290,30 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
   } else if (request.mode === 'available') {
     if (!Array.isArray(request.availableDates) || request.availableDates.some(date => !validDate(date) || date < today || date > end) || (request.windowDays != null && ![7, 14].includes(request.windowDays))) return fail('Choose valid dates within the temporary availability window.');
     const available = [...new Set(request.availableDates || [])].filter(d => validDate(d) && d >= today && d <= end).sort();
-    // Availability constrains the rolling window shown by the picker, not the
-    // calendar week (which ends today when the picker is opened on Sunday).
     const cutoff = request.carry ? addCalendarDays(weekKey(today), 6) : addCalendarDays(today, request.windowDays === 14 ? 13 : 6);
     if (!request.carry && available.some(date => date > cutoff)) return fail('Show more dates before selecting days outside this window.');
-    const outstanding = all.filter(i => movable(i) && (i.status !== 'missed' || actionableMissedSession(state,i,today)) && (i.scheduledDate <= cutoff || records(state).some(r => r.id === i.logicalSessionId)) && i.originalDate >= (state.program.trainingBlock?.startDate || weekKey(today)));
-    const targets = request.carry ? all.filter(i => movable(i) && (i.status!=='missed'||actionableMissedSession(state,i,today)) && i.originalDate >= (outstanding[0]?.originalDate || today) && i.originalDate <= end) : outstanding;
+    const scope = availabilityAdjustmentScope(state, today, all), targets = scope.sources;
     const targetIds = new Set(targets.map(i => i.logicalSessionId));
-    const occupied = new Set(all.filter(i => !targetIds.has(i.logicalSessionId) && i.status !== 'skipped').map(i => i.scheduledDate));
-    if (state.activeOptionalSession) occupied.add(state.activeOptionalSession.date);
+    const occupied = new Map(all.filter(i => !targetIds.has(i.logicalSessionId) && i.status !== 'skipped').map(i => [i.scheduledDate, i]));
+    if (state.activeOptionalSession) occupied.set(state.activeOptionalSession.date, {workout:{name:'Active optional workout'}});
     const dates = request.carry ? [...new Set([...available, ...Array.from({ length: 14 }, (_, i) => addCalendarDays(today, i)).filter(d => d > cutoff)])].sort() : available;
-    const usableDays = dates.filter(date => !occupied.has(date)).length;
-    if (targets.length > usableDays) return { status: 'insufficient-capacity', remainingSessions: targets.length, selectedDays: available.length, usableDays,
-      error: `${targets.length} ${targets.length === 1 ? 'session remains' : 'sessions remain'}, but you selected ${available.length} training ${available.length === 1 ? 'day' : 'days'}.${usableDays < available.length ? ` Only ${usableDays} are usable without moving other sessions.` : ''}` };
-    if (targets.every(item => dates.includes(item.scheduledDate) && !occupied.has(item.scheduledDate))) return { status: 'no-change', message: 'Your current schedule already fits these days.' };
+    const usable = dates.filter(date => !occupied.has(date)), placeCount = Math.min(targets.length, usable.length);
+    availabilityDetails = { sourceScope:{start:scope.start,end:scope.end,sessionIds:targets.map(i=>i.logicalSessionId)},
+      remainingSessions:targets.length, selectedDays:available.length, usableDays:usable.length,
+      placedCount:placeCount, unresolvedCount:targets.length-placeCount, canApplySchedule:placeCount===targets.length && targets.length>0,
+      dateConflicts:available.filter(date=>occupied.has(date)).map(date=>({date,name:occupied.get(date).workout.name,logicalSessionId:occupied.get(date).logicalSessionId||null})) };
+    if (!targets.length) return {status:'no-change',...availabilityDetails,message:'No remaining workouts in this plan week.'};
     let best = null, nodes = 0;
+    // Keep unchanged valid schedules exactly as accepted. Otherwise use the same
+    // displacement/recovery scoring for the longest placeable canonical prefix;
+    // every remaining source receives an explicit unresolved review row.
+    if (targets.every(item => usable.includes(item.scheduledDate))) best = {chosen:targets.map(item=>item.scheduledDate),score:0};
     function search(index, chosen, score) {
       if (++nodes > 30000 || best && score >= best.score) return;
-      if (index === targets.length) { best = { chosen, score }; return; }
+      if (index === placeCount) { best = { chosen, score }; return; }
       const item = targets[index], previous = chosen.at(-1);
-      for (const date of dates) {
-        if (occupied.has(date) || previous && date <= previous || dates.length - dates.indexOf(date) < targets.length - index) continue;
+      for (const [dateIndex, date] of usable.entries()) {
+        if (previous && date <= previous || usable.length - dateIndex < placeCount - index) continue;
         const distance = Math.abs((new Date(`${date}T12:00:00`) - new Date(`${item.scheduledDate}T12:00:00`)) / 86400000);
         const adjacent = previous && addCalendarDays(previous, 1) === date;
         const originalAdjacent = index > 0 && addCalendarDays(targets[index - 1].originalDate, 1) === item.originalDate;
@@ -267,11 +321,14 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
       }
     }
     search(0, [], 0);
-    if (!best) return fail('Not all sessions fit. Carry forward, explicitly skip one session, or choose more available days.');
-    targets.forEach((item, i) => { if (item.scheduledDate !== best.chosen[i]) push(item, best.chosen[i]); });
-    availabilitySchedule = targets.map((item, i) => ({ logicalSessionId: item.logicalSessionId, name: item.workout.name, fromDate: item.scheduledDate, toDate: best.chosen[i] }));
+    if (!best) return fail('Review the selected dates again.');
+    targets.forEach((item, i) => { if (best.chosen[i] && item.scheduledDate !== best.chosen[i]) push(item, best.chosen[i]); });
+    availabilitySchedule = targets.map((item, i) => ({ logicalSessionId:item.logicalSessionId, name:item.workout.name,
+      originalDate:item.originalDate, fromDate:item.scheduledDate, toDate:best.chosen[i] || null }));
+    if (availabilityDetails.unresolvedCount) return {status:'insufficient-capacity',fingerprint,today,request:structuredClone(request),
+      changes,availabilitySchedule,...availabilityDetails,adaptationConflict:false,warnings:[]};
   } else return fail('Choose how you want to adjust the week.');
-  if (!changes.length && request.mode !== 'restore') return fail('No schedule changes are needed.');
+  if (!changes.length && !availabilitySchedule && request.mode !== 'restore') return fail('No schedule changes are needed.');
   let final = all.filter(i => i.status !== 'skipped').map(i => {
     const change = changes.find(c => c.logicalSessionId === i.logicalSessionId);
     return change?.skipped ? null : { ...i, scheduledDate: change?.toDate || i.scheduledDate };
@@ -292,6 +349,7 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
   const rejoinDate = final.filter(item => item.originalDate === item.scheduledDate && item.scheduledDate > lastChangedDate).sort((a,b) => a.scheduledDate.localeCompare(b.scheduledDate))[0]?.scheduledDate || null;
   return { status: 'ready', fingerprint, today, request: structuredClone(request), changes, adaptationConflict,
     availabilitySchedule,
+    ...availabilityDetails,
     rejoinDate,
     warnings: final.some((i, n) => n && addCalendarDays(final[n - 1].scheduledDate, 1) === i.scheduledDate) ? ['This creates back-to-back training days.'] : [] };
 }
@@ -299,7 +357,10 @@ export function applyFlexibleWeek(state, proposal, { adaptationChoice } = {}) {
   if (!proposal || proposal.status !== 'ready' || proposal.today !== isoDay() || proposal.fingerprint !== flexibleReviewFingerprint(state)) return { status: 'stale', state, error: 'The plan or sessions changed. Review the schedule again.' };
   if (proposal.adaptationConflict && !['restore', 'keep'].includes(adaptationChoice)) return { status: 'conflict', state, error: 'Choose what happens to the today-only adjustment.' };
   const checked = proposeFlexibleWeek(state, proposal.request, proposal.today);
-  if (checked.status !== 'ready' || JSON.stringify(checked.changes) !== JSON.stringify(proposal.changes)) return { status: 'stale', state, error: 'The schedule changed. Review it again.' };
+  if (checked.status !== 'ready' || JSON.stringify(checked.changes) !== JSON.stringify(proposal.changes) ||
+      JSON.stringify(checked.availabilitySchedule) !== JSON.stringify(proposal.availabilitySchedule) ||
+      JSON.stringify(checked.sourceScope) !== JSON.stringify(proposal.sourceScope)) return { status: 'stale', state, error: 'The schedule changed. Review it again.' };
+  if (proposal.request.mode === 'available' && !proposal.changes.length) return {status:'applied',state};
   const next = structuredClone(state);
   next.flexibleWeek ||= { schemaVersion: 1, revision: 0, sessions: {} };
   if (proposal.request.mode === 'restore') {

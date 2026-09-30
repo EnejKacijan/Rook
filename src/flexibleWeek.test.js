@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, describe, it, expect, vi } from 'vitest';
 import { blankState, buildProgram, completeWorkout, currentWeekSchedule, deserializeState, plannedWorkoutForDate, startWorkout } from './domain.js';
 import { weeklyPerformanceReview } from './performanceInsights.js';
-import { addCalendarDays, applyFlexibleWeek, flexibleSessions, missedFlexibleSessions, proposeFlexibleWeek, flexibleWeekConflict } from './flexibleWeek.js';
+import { addCalendarDays, applyFlexibleWeek, flexibleSessions, missedFlexibleSessions, proposeFlexibleWeek, flexibleWeekConflict, temporaryScheduleReview } from './flexibleWeek.js';
 import { buildBackupArchive, parseBackupArchive } from './backup.js';
 
 function fixture(days = ['Mon', 'Wed', 'Fri']) {
@@ -81,6 +81,19 @@ describe('Flexible Week logical sessions', () => {
     next.program.days[0].name = 'Edited'; expect(flexibleWeekConflict(next)).toBe(true);
     expect(plannedWorkoutForDate(next, '2026-09-05')).toBeNull();
   });
+  it('distinguishes a valid temporary move from an unresolved stale occurrence without duplicating identity',()=>{
+    const state=fixture(),next=applyFlexibleWeek(state,proposal(state)).state;
+    const valid=temporaryScheduleReview(next);
+    expect(valid.items).toHaveLength(1);expect(valid.unresolved).toHaveLength(0);
+    expect(valid.moved[0]).toMatchObject({originalDate:'2026-08-31',scheduledDate:'2026-09-05'});
+    expect(flexibleSessions(next).filter(item=>item.logicalSessionId===valid.items[0].id)).toHaveLength(1);
+    next.program.days[0].name='Edited';
+    const unresolved=temporaryScheduleReview(next);
+    expect(unresolved.unresolved).toHaveLength(1);
+    expect(unresolved.unresolved[0]).toMatchObject({id:valid.items[0].id,originalDate:'2026-08-31'});
+    expect(unresolved.unresolved[0].issue).toMatch(/plan changed/i);
+    expect(unresolved.moved).toHaveLength(0);
+  });
   it('backup archive restores effective schedule exactly', async () => {
     vi.useRealTimers();
     const state = fixture(), today = new Date();
@@ -127,10 +140,12 @@ describe('Flexible Week logical sessions', () => {
     const review=weeklyPerformanceReview(next);expect(review.skipped).toBe(1);expect(review.completed).toBe(0);expect(review.exercisesHeld).toBe(0);
   });
   it('restore rejects a collision with an immutable moved active session', () => {
-    const state=fixture();const bridge=proposeFlexibleWeek(state,{mode:'available',availableDates:['2026-09-05','2026-09-06'],carry:true});
-    const next=applyFlexibleWeek(state,bridge).state;
-    const item=flexibleSessions(next).find(s=>s.scheduledDate==='2026-09-07');
-    if (item) { next.selectedDate=item.scheduledDate;next.activeWorkout=startWorkout(next,item.workout);expect(proposeFlexibleWeek(next,{mode:'restore'}).status).toBe('conflict'); }
+    const state=fixture(),[a,b]=flexibleSessions(state).filter(s=>s.status==='planned');
+    const swap=proposeFlexibleWeek(state,{mode:'swap',sessionId:a.logicalSessionId,otherSessionId:b.logicalSessionId});
+    expect(swap.status).toBe('ready');const next=applyFlexibleWeek(state,swap).state;
+    const item=flexibleSessions(next).find(s=>s.logicalSessionId===a.logicalSessionId);
+    next.selectedDate=item.scheduledDate;next.activeWorkout=startWorkout(next,item.workout);
+    expect(proposeFlexibleWeek(next,{mode:'restore'}).status).toBe('conflict');
   });
   it('zero remaining is a calm no-change result', () => {
     const state=fixture();state.workouts=flexibleSessions(state).map(item=>({id:item.logicalSessionId,logicalSessionId:item.logicalSessionId,programDayId:item.workoutId,canonicalPlanDate:item.scheduledDate,completedAt:item.scheduledDate+'T12:00:00'}));

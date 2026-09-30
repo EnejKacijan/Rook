@@ -34,8 +34,8 @@ it('raw logger input commits through real Add opening then Do now; previous unfi
 it('template save failure keeps review open, then successful retry saves once without changing the source',()=>{
  let initial=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank'),source=structuredClone(initial.activeWorkout);
  mount(initial,(state,update)=><SavedWorkouts source={source} state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
- type(host.querySelector('.saved-template-name input'),'Owner routine');const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('Save template'));
- expect(current.savedWorkoutTemplates).toEqual([]);expect(closed).not.toHaveBeenCalled();expect(host.textContent).toContain('Could not save');write.mockRestore();click(button('Save template'));
+ type(host.querySelector('.saved-template-name input'),'Owner routine');const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('SAVE WORKOUT'));
+ expect(current.savedWorkoutTemplates).toEqual([]);expect(closed).not.toHaveBeenCalled();expect(host.textContent).toContain('Could not save');write.mockRestore();click(button('SAVE WORKOUT'));
  expect(current.savedWorkoutTemplates).toHaveLength(1);expect(current.savedWorkoutTemplates[0].name).toBe('Owner routine');expect(current.activeWorkout).toEqual(source);expect(closed).toHaveBeenCalledOnce();
 });
 it('saved workout preview requires explicit overlap confirmation, appends once, and safe batch Undo preserves prior work',()=>{
@@ -55,7 +55,7 @@ it('template editor preserves unset timed/per-set targets on no-op review, and C
  expect(host.querySelector('.plan-warmup-preference')).toBeNull();expect(host.querySelector('.plan-workout-overflow')).toBeNull();expect(host.querySelector('.workout-name-field')).toBeNull();
  click(host.querySelector('[data-swipe-fallback]'));expect(host.querySelectorAll('.plan-editor-exercise')).toHaveLength(1);
  click(button('Cancel'));expect(current.savedWorkoutTemplates[0]).toEqual(original);
- templateOption('Edit exercises');click(button('REVIEW TEMPLATE'));click(button('Save template'));
+ templateOption('Edit exercises');click(button('REVIEW WORKOUT'));click(button('SAVE CHANGES'));
  expect(current.savedWorkoutTemplates[0].revision).toBe(2);expect(current.savedWorkoutTemplates[0].exercises).toEqual(original.exercises);expect(current.activeWorkout).toEqual(initial.activeWorkout);
 });
 it('embedded saved browse, preview and editor keep the shared picker identity and draft boundaries',()=>{
@@ -73,28 +73,28 @@ it('embedded saved browse, preview and editor keep the shared picker identity an
 function savedFixture(active=true){let s=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank');s=saveWorkoutTemplate(s,{...templateDraft(s.activeWorkout,s),name:'Saved routine'},{id:'saved'});if(!active)s.activeWorkout=null;return s;}
 function mountSaved(initial){mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);click(host.querySelector('.saved-workout-list .list-row'));}
 it.each(['close','back','backdrop','escape'])('saved options %s dismissal preserves data and returns focus to the trigger',method=>{
- const initial=savedFixture();mountSaved(initial);expect(button('Rename')).toBeUndefined();expect(button('Edit exercises')).toBeUndefined();expect(button('Delete template')).toBeUndefined();
+ const initial=savedFixture();mountSaved(initial);expect(button('Rename')).toBeUndefined();expect(button('Edit exercises')).toBeUndefined();expect(button('Delete saved workout')).toBeUndefined();
  const trigger=host.querySelector('[aria-label="Saved workout options"]');trigger.focus();click(trigger);act(()=>vi.advanceTimersByTime(20));
- const panel=document.querySelector('.saved-template-options');expect(panel).not.toBeNull();expect(host.querySelector('.saved-workouts').inert).toBe(true);expect(panel.querySelector('.danger-text').textContent).toBe('Delete template');
+ const panel=document.querySelector('.saved-template-options');expect(panel).not.toBeNull();expect(host.querySelector('.saved-workouts').inert).toBe(true);expect(panel.querySelector('.danger-text').textContent).toBe('Delete saved workout');
  if(method==='close')click(panel.querySelector('.detail-header-close'));if(method==='back')click(panel.querySelector('.detail-header-back'));if(method==='backdrop')click(panel.parentElement);if(method==='escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})));
  act(()=>vi.advanceTimersByTime(250));act(()=>vi.advanceTimersByTime(40));
  expect(document.querySelector('.saved-template-options')).toBeNull();expect(document.activeElement).toBe(trigger);expect(current).toEqual(initial);expect(host.querySelector('.saved-workouts').inert).toBe(false);expect(closed).not.toHaveBeenCalled();
 });
 it.each([true,false])('rename cancel/save preserves identity, increments revision once, and leaves active=%s untouched',active=>{
  const initial=savedFixture(active);mountSaved(initial);templateOption('Rename');expect(host.querySelector('[aria-label="Saved workout options"]')).toBeNull();type(host.querySelector('.saved-template-name input'),'Cancelled rename');click(host.querySelector('.detail-header-back'));expect(current).toEqual(initial);
- templateOption('Rename');type(host.querySelector('.saved-template-name input'),'Renamed routine');click(button('Save template'));
+ templateOption('Rename');type(host.querySelector('.saved-template-name input'),'Renamed routine');click(button('SAVE CHANGES'));
  expect(current.savedWorkoutTemplates[0]).toMatchObject({id:'saved',revision:2,name:'Renamed routine',createdAt:initial.savedWorkoutTemplates[0].createdAt});expect(current.savedWorkoutTemplates[0].exercises).toEqual(initial.savedWorkoutTemplates[0].exercises);expect(current.activeWorkout).toEqual(initial.activeWorkout);expect(current.workouts).toEqual(initial.workouts);
 });
 it('delete cancel/failure/retry requires confirmation, deletes once and preserves history/session/plan',()=>{
- const initial=savedFixture();mountSaved(initial);templateOption('Delete template');expect(current).toEqual(initial);expect(host.textContent).toContain('Your workout history and active session remain saved.');click(button('Cancel'));expect(current).toEqual(initial);
- templateOption('Delete template');const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('Delete template only'));expect(current).toEqual(initial);expect(host.querySelector('[role=alert]').textContent).toContain('Could not save');write.mockRestore();
- const save=vi.spyOn(domain,'saveState'),confirm=button('Delete template only');act(()=>{confirm.click();confirm.click();});
- expect(save).toHaveBeenCalledOnce();expect(current.savedWorkoutTemplates).toEqual([]);expect(current.activeWorkout).toEqual(initial.activeWorkout);expect(current.workouts).toEqual(initial.workouts);expect(current.program).toEqual(initial.program);expect(host.textContent).toContain('Template deleted');expect(host.querySelector('.saved-workout-preview')).toBeNull();
+ const initial=savedFixture();mountSaved(initial);templateOption('Delete saved workout');expect(current).toEqual(initial);expect(host.textContent).toContain('Your workout history and active session remain saved.');click(button('Cancel'));expect(current).toEqual(initial);
+ templateOption('Delete saved workout');const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('Delete saved workout only'));expect(current).toEqual(initial);expect(host.querySelector('[role=alert]').textContent).toContain('Could not save');write.mockRestore();
+ const save=vi.spyOn(domain,'saveState'),confirm=button('Delete saved workout only');act(()=>{confirm.click();confirm.click();});
+ expect(save).toHaveBeenCalledOnce();expect(current.savedWorkoutTemplates).toEqual([]);expect(current.activeWorkout).toEqual(initial.activeWorkout);expect(current.workouts).toEqual(initial.workouts);expect(current.program).toEqual(initial.program);expect(host.textContent).toContain('Saved workout deleted');expect(host.querySelector('.saved-workout-preview')).toBeNull();
 });
 it('new-template visible Edit cancels draft edits and Review saves only the intended reusable definition',()=>{
  const initial=addFreestyleExercise(savedFixture(),'push-up'),source=initial.activeWorkout;
  mount(initial,(state,update)=><SavedWorkouts source={source} state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
  expect(host.querySelector('[aria-label="Saved workout options"]')).toBeNull();expect(host.querySelector('.saved-template-save-actions .text-button').textContent).toBe('Edit exercises');
  type(host.querySelector('.saved-template-name input'),'New routine');click(button('Edit exercises'));click(host.querySelector('[data-swipe-fallback]'));click(button('Cancel'));expect(host.querySelector('.saved-template-name input').value).toBe('New routine');expect(host.querySelectorAll('.saved-template-exercises li')).toHaveLength(2);expect(current).toEqual(initial);
- click(button('Edit exercises'));click(button('REVIEW TEMPLATE'));click(button('Save template'));expect(current.savedWorkoutTemplates).toHaveLength(2);expect(current.savedWorkoutTemplates[1]).toMatchObject({name:'New routine',revision:1});expect(current.activeWorkout).toEqual(source);expect(closed).toHaveBeenCalledOnce();
+ click(button('Edit exercises'));click(button('REVIEW WORKOUT'));click(button('SAVE WORKOUT'));expect(current.savedWorkoutTemplates).toHaveLength(2);expect(current.savedWorkoutTemplates[1]).toMatchObject({name:'New routine',revision:1});expect(current.activeWorkout).toEqual(source);expect(closed).toHaveBeenCalledOnce();
 });

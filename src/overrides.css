@@ -1,3 +1,5 @@
+@import './scrollbarPresentation.css';
+
 :root {
   --rook-sheet-content-bottom: 20px;
   --rook-sheet-safe-bottom: calc(
@@ -22,6 +24,15 @@
   overflow: hidden;
   overscroll-behavior: none;
   transition: background-color 160ms ease;
+}
+/* The drag scrim is a temporary composited sibling, behind the panel. Keep the
+   panel first: modal focus, viewport and header ownership all depend on it. */
+.sheet-drag-scrim {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  will-change: opacity;
 }
 /* Focus may scroll overflow:hidden ancestors even with a locked document.
    The modal coverage layer is a boundary, never a second sheet scroller. */
@@ -75,11 +86,8 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y pinch-zoom;
-  scrollbar-width: none;
   scroll-padding-bottom: var(--rook-sheet-safe-bottom);
 }
-.modal-layer > :is(.screen, .sheet:not(.replace-sheet))::-webkit-scrollbar,
-.screen.scratch-editor-screen::-webkit-scrollbar { display: none; }
 :root .screen.scratch-editor-screen {
   height: 100dvh;
   max-height: 100dvh;
@@ -126,16 +134,13 @@
   overscroll-behavior: contain;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y pinch-zoom;
-  scrollbar-width: none;
 }
-.workout-confirm::-webkit-scrollbar { display: none; }
 .replace-sheet { min-height: 0; max-height: min(82dvh, 720px); padding: 0; overflow: clip; display: flex; flex-direction: column; overscroll-behavior: contain; will-change: transform; }
 .sheet-header-chrome { position: sticky; z-index: 20; top: 0; flex: 0 0 48px; width: auto; min-height: 48px; margin: 0 -22px 2px; background: inherit; }
 .replace-sheet > .sheet-header-chrome { margin-inline: 0; }
-.sheet-header-chrome > .sheet-grab-zone { width: 100%; height: 100%; min-height: 48px; }
+.sheet-header-chrome > .sheet-handle-slot { width: 100%; height: 100%; min-height: 48px; }
 .sheet-header-chrome > .sheet-close { z-index: 2; }
-.sheet-grab-zone { flex: 0 0 48px; min-height: 48px; padding: 0; border: 0; background: transparent; color: inherit; display: grid; place-items: center; touch-action: none; cursor: default; }
-.sheet-grab-zone i { width: 38px; height: 4px; border-radius: 999px; background: #d0cdc8; }
+.sheet-handle-slot { position: relative; flex: 0 0 48px; min-height: 48px; padding: 0; border: 0; background: transparent; color: inherit; display: grid; place-items: center; touch-action: none; cursor: default; }
 .replace-sheet .sheet-close { z-index: 2; top: 22px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; color: var(--rook-text, #1b1a19); }
 .sheet-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 7px 22px var(--rook-sheet-safe-bottom); }
 .replace-sheet h2 { margin-top: 12px; }
@@ -833,7 +838,6 @@
 .profile-details-screen > .button { margin-top: 22px; }
 .change-plan-sheet { padding-top: 0; will-change: transform; }
 .change-plan-sheet.plan-editor-sheet { padding-top: 0; }
-.change-plan-sheet > .sheet-header-chrome > .sheet-grab-zone.disabled { cursor: default; opacity: .5; }
 .change-plan-sheet > .sheet-header-chrome > .sheet-close { top: 16px; }
 .rest-training-sheet > .sheet-header-chrome { margin-top: -30px; }
 .change-plan-sheet .plan-choice { width: 100%; min-height: 64px; padding: 12px 2px; border: 0; border-bottom: 1px solid rgba(27,26,25,.07); background: transparent; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 14px; text-align: left; }
@@ -1057,6 +1061,7 @@
 .complete-done-dock .complete-done { margin: 0; }
 .complete-screen.can-continue { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
 .complete-done-dock .complete-continue { margin: 8px 0 0; min-height: 44px; }
+.complete-save-workout { display: inline-flex; align-items: center; min-height: 44px; margin-top: 18px; }
 .complete-continue-error { font-size: 13px; margin: 8px 0 0; color: var(--rook-text); }
 .complete-screen:has(.session-note-editor textarea:focus) .complete-done-dock {
   visibility: hidden;
@@ -1744,7 +1749,7 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .completed-workout-options-trigger { width: 44px; height: 44px; background: transparent; border: 0; border-radius: 9px; color: var(--rook-secondary); }
 /* Equal action targets, with a small gap; Close and the title center stay put. */
 .completed-workout-detail > .detail-header.has-trailing-action { grid-template-columns: 94px minmax(0, 1fr) 44px 44px; column-gap: 6px; }
-.completed-workout-options-trigger:active { background: var(--rook-accent-soft); color: var(--rook-accent); }
+.completed-workout-options-trigger:active { background: transparent; color: var(--rook-accent); }
 :root[data-appearance] .completed-workout-options-trigger:focus-visible { outline: 2px solid var(--rook-focus-ring, var(--rook-accent)); outline-offset: -2px; }
 :root .modal-layer > .screen:is(.completed-workout-detail, .completed-workout-options-sheet) > .detail-header { margin-inline: 0; padding-inline: 0; }
 .completed-workout-options-sheet > .list-row { min-height: 48px; }
@@ -2304,3 +2309,20 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   text-align: left;
   white-space: normal;
 }
+
+/* Compact .sheet roots use the same interactive header as detail-screen sheets.
+   Preserve their 22px content gutter and their existing bottom safe area. */
+.modal-layer > .sheet > .detail-header {
+  position: relative;
+  z-index: 20;
+  min-height: 80px;
+  margin: -30px -22px 18px;
+  padding: 30px 22px 6px;
+  background: var(--rook-bg);
+}
+.modal-layer > .sheet > .detail-header > :is(button, span, strong) {
+  position: relative;
+  z-index: 1;
+}
+.modal-layer > .sheet > .detail-header > strong { pointer-events: none; }
+.today-exercise-actions-sheet > .sheet-header-chrome { margin-top: -24px; }

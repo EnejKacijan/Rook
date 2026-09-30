@@ -2,7 +2,7 @@ import {it,expect} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startWorkout,serializeState,deserializeState,completeWorkout} from './domain.js';
 import {startFreestyleWorkout,addFreestyleExercise} from './freestyleWorkout.js';
-import {canRemoveUpNext,removeUpNext,undoUpNextRemoval} from './upNextRemoval.js';
+import {canRemoveUpNext,hasMeaningfulExerciseProgress,removeUpNext,undoUpNextRemoval} from './upNextRemoval.js';
 const make=()=>{const s=createReturningUserFixture(0);s.activeWorkout=startWorkout(s,s.program.days[0]);return s;};
 it.each([false,true])('removes only future work, preserving current values, timer, plan and persistence (RIR %s)',rir=>{
  const s=make();s.profile.rirEnabled=rir;const a=s.activeWorkout,id=a.exercises[1].id;
@@ -24,6 +24,15 @@ it.each(['completed','completedAt','touched','side','segment','current','superse
  else if(kind==='warmup')a.warmup={stages:[{exerciseInstanceId:e.id,completed:true}]};
  else e.sets[0][kind]=true;
  expect(canRemoveUpNext(a,e.id)).toBe(false);expect(removeUpNext(s,e.id)).toEqual({state:s,undo:null});
+});
+it('does not treat a visited exercise as entered work, while preserving side and segment drafts',()=>{
+ const s=make(),e=s.activeWorkout.exercises[1];e.startedAt=Date.now();
+ expect(hasMeaningfulExerciseProgress(s.activeWorkout,e.id)).toBe(false);
+ expect(canRemoveUpNext(s.activeWorkout,e.id)).toBe(true);
+ e.sets[0].sides={left:{reps:5}};
+ expect(hasMeaningfulExerciseProgress(s.activeWorkout,e.id)).toBe(true);
+ delete e.sets[0].sides;e.sets[0].segments=[{weight:12.5,reps:null}];
+ expect(hasMeaningfulExerciseProgress(s.activeWorkout,e.id)).toBe(true);
 });
 it('freestyle last Up Next removal keeps the active workout and exact undo, with no duplicate restore',()=>{
  let s=startFreestyleWorkout(createReturningUserFixture(0));s=addFreestyleExercise(s,'push-up');s=addFreestyleExercise(s,'pull-up');

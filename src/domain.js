@@ -1,5 +1,6 @@
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
 import {intentionalNoPlan} from './trainingStyle.js';
+import {normalizeTemporaryScheduleDismissal} from './temporarySchedulePresentation.js';
 import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
 import {normalizeCoachConversations} from './coachConversations.js';
@@ -2125,6 +2126,7 @@ export function blankState() {
     flexibleWeek: null,
     workoutOccurrenceOverrides: {},
     dismissedMissedReminderKey: null,
+    dismissedTemporarySchedule: null,
     optionalSessions: [],
     workouts: [],
     workoutCorrections: [],
@@ -2531,6 +2533,7 @@ export function deserializeState(input, { strict = false } = {}) {
       ...base,
       ...stored,
       dismissedMissedReminderKey: typeof stored.dismissedMissedReminderKey === 'string' ? stored.dismissedMissedReminderKey : null,
+      dismissedTemporarySchedule: normalizeTemporaryScheduleDismissal(stored.dismissedTemporarySchedule),
       profile,
       program,
       planVersions: stored.planVersions,
@@ -2650,7 +2653,7 @@ export const saveState = (state, options = {}) => {
     const raw = serializeState(state);
     const defaults = blankState();
     defaults.profile.id = state?.profile?.id;
-    if (raw === serializeState(defaults) && options.reason !== 'first-run:user-confirmed') return false;
+    if (raw === serializeState(defaults) && !['first-run:user-confirmed','profile-switch:user-confirmed'].includes(options.reason)) return false;
     return persistLocalState(raw, { ...options, hydrate: hydrateStoredState });
   } catch {
     return false;
@@ -8249,11 +8252,11 @@ export function templateForToday(program, date = new Date(), selectedDay) {
     ) || null
   );
 }
-export function adaptedTemplateForToday(state, date = new Date()) {
+export function adaptedTemplateForToday(state, date = new Date(), plannedTemplate) {
   const repeat=repeatTemplate(state,isoDay(date));if(repeat)return repeat;
   const combined=combinedTemplate(state,isoDay(date));
   if(combined)return combined;
-  const template = plannedWorkoutForDate(state, date);
+  const template = plannedTemplate === undefined ? plannedWorkoutForDate(state, date) : plannedTemplate;
   const adaptation = state.todayAdaptation;
   if (
     !template ||
@@ -9053,16 +9056,24 @@ export function progressionFor(exercise, history, profile = null) {
   return null;
 }
 export function workoutSetSummary(workout) {
-  const sets =
-    workout?.exercises?.flatMap((exercise) => exercise.sets || []) || [];
+  const entries = workout?.exercises?.flatMap((exercise, exerciseIndex) =>
+    (exercise.sets || []).map((set, setIndex) => ({ exercise, exerciseIndex, set, setIndex }))) || [];
+  const sets = entries.map(({ set }) => set);
   const planned = sets.filter((set) => set.planned !== false && !set.added);
   const completed = sets.filter((set) => set.completed);
+  // Finish counts every active-session set (including additions). Use that same
+  // collection and completion flag for recovery navigation, not input validity.
+  const unfinished = entries.find(({ set }) => !set.completed);
   return {
     total: sets.length,
     planned: planned.length,
     completedPlanned: planned.filter((set) => set.completed).length,
     completed: completed.length,
     extras: sets.filter((set) => set.added).length,
+    firstIncomplete: unfinished ? {
+      exerciseId: unfinished.exercise.id, exerciseIndex: unfinished.exerciseIndex,
+      setId: unfinished.set.id, setIndex: unfinished.setIndex,
+    } : null,
   };
 }
 function exerciseObservation(exercise) {

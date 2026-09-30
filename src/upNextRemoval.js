@@ -1,16 +1,25 @@
 import { refreshWorkoutWarmup } from './domain.js';
 
 const worked = set => Boolean(set?.completed || set?.completedAt || set?.touched ||
-  Object.values(set?.sides || {}).some(worked) || (set?.segments || []).some(worked));
+  Object.values(set?.sides || {}).some(side=>side?.reps != null || worked(side)) ||
+  (set?.segments || []).some(segment=>worked(segment) || segment?.weight != null || segment?.reps != null || segment?.rir != null));
 const structure = exercises => JSON.stringify(exercises.map(e=>[e.id,e.exerciseId,e.supersetId]));
+
+// Opening an exercise sets startedAt for navigation/timing, but it is not
+// persisted workout input. Removal and reorder share this safety decision.
+export function hasMeaningfulExerciseProgress(workout, id) {
+  const exercise = workout?.exercises?.find(entry=>entry.id===id);
+  if (!exercise) return false;
+  return Boolean(exercise.completedAt || (exercise.sets || []).some(worked) ||
+    (workout.warmup?.stages || []).some(stage=>stage.exerciseInstanceId===id &&
+      (stage.completed || stage.skipped || [...stage.general||[],...stage.movementPreparation||[],...(stage.rampUpSets||[]).flatMap(row=>row.sets||[])].some(worked))));
+}
 
 export function canRemoveUpNext(workout, id) {
   const index=workout?.exercises?.findIndex(e=>e.id===id) ?? -1;
   const exercise=workout?.exercises?.[index];
-  return index>workout?.exerciseIndex && !exercise.supersetId && !exercise.startedAt &&
-    !exercise.completedAt && !(exercise.sets || []).some(worked) &&
-    !(workout.warmup?.stages || []).some(s=>s.exerciseInstanceId===id &&
-      (s.completed || s.skipped || [...s.general||[],...s.movementPreparation||[],...(s.rampUpSets||[]).flatMap(r=>r.sets||[])].some(worked)));
+  return index>workout?.exerciseIndex && !exercise.supersetId &&
+    !hasMeaningfulExerciseProgress(workout,id);
 }
 
 export function removeUpNext(state,id) {

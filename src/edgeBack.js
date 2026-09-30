@@ -82,6 +82,7 @@ export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear
   surface.addEventListener('touchend', finish, true);
   surface.addEventListener('touchcancel', finish, true);
   surface.addEventListener('click', click, true);
+  surface.addEventListener('pointercancel', interrupt, true);
   window.addEventListener('resize', interrupt);
   window.addEventListener('blur', interrupt);
   document.addEventListener('visibilitychange', interrupt);
@@ -92,6 +93,7 @@ export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear
     surface.removeEventListener('touchend', finish, true);
     surface.removeEventListener('touchcancel', finish, true);
     surface.removeEventListener('click', click, true);
+    surface.removeEventListener('pointercancel', interrupt, true);
     window.removeEventListener('resize', interrupt);
     window.removeEventListener('blur', interrupt);
     document.removeEventListener('visibilitychange', interrupt);

@@ -62,6 +62,9 @@ try{for(const c of cases){
   await button('Build muscle').click();await page.waitForTimeout(360); // existing choice-step duplicate protection
   await page.getByRole('button',{name:/^Intermediate/}).click();await button(`${c.days} days`).click();await page.getByLabel('Any day works').check();await button('60 min').click();await next();
   await button('Commercial gym').click();await next();await button('Balanced').click();await next();await page.getByRole('button',{name:/Balanced (starting point|workload)/}).click();await next();
+  // The canonical builder now requires an explicit weekly-structure and
+  // exercise-style decision; an absent answer is not a default preference.
+  await page.getByRole('button',{name:/^LET ROOK CHOOSE/}).click();await button('No preference').click();
   await button('BUILD MY PLAN').click();await page.getByRole('heading',{name:'Your week is ready.',exact:true}).waitFor({timeout:45000});await settle(page);
   const tag=`${before?'before':'after'}-${c.width}-${c.style}-${c.appearance}-${c.days}days`,screen=page.locator('.generated-plan-preview'),editor=page.locator('.plan-editor');
   const stored=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
@@ -90,7 +93,8 @@ try{for(const c of cases){
   assert.equal(await editor.locator('.plan-preview-mode-status').textContent(),'Reordering');
   assert.equal(await page.getByRole('button',{name:/^Done/}).count(),1);
   assert.equal(await button('USE THIS PLAN').count(),0);
-  assert.equal(await editor.locator('.plan-editor-summary-action:visible,.plan-review-illustration:visible,.plan-editor-fields:visible,.scratch-add-exercise:visible').count(),0);
+  const leakedEditorUI=await editor.locator('.plan-editor-summary-action:visible,.plan-review-illustration:visible,.plan-editor-fields:visible,.scratch-add-exercise:visible').evaluateAll(elements=>elements.map(element=>({className:element.className,parent:element.parentElement?.className,grandparent:element.parentElement?.parentElement?.className,display:getComputedStyle(element).display})));
+  assert.deepEqual(leakedEditorUI,[],'Reorder mode must hide expanded editor controls and illustration');
   const handle=cards.first().locator('.plan-exercise-drag-handle'),handleBox=await handle.boundingBox();assert.ok(handleBox.width>=44&&handleBox.height>=44);
   const scrollMode=await vertical(page,cdp,'.generated-plan-preview',true);
   assert.equal(await editor.locator('.plan-reorder-preview').count(),0);
