@@ -2,10 +2,20 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { ACCOUNT_SYNC_SCHEMA } from './accountSyncModel.js';
 import { activeProfileSlot } from './profileSlotKeys.js';
 
+export function firebaseConfigurationStatus() {
+  // Public Firebase config alone must not activate an unverified account flow.
+  if (import.meta.env?.VITE_ROOK_ACCOUNT_SYNC_ROLLOUT !== 'true') return 'rollout-off';
+  const env = import.meta.env || {};
+  if (['VITE_ROOK_FIREBASE_API_KEY', 'VITE_ROOK_FIREBASE_AUTH_DOMAIN',
+    'VITE_ROOK_FIREBASE_PROJECT_ID', 'VITE_ROOK_FIREBASE_APP_ID'].some(key => !env[key])) return 'missing-config';
+  if (env.VITE_ROOK_FIREBASE_PROJECT_ID !== 'rook-1d2c8') return 'project-mismatch';
+  return 'ready';
+}
+
 const firebaseConfig = () => {
-  // Account recovery is enabled only after the separate Google/iPhone rollout
-  // gate. Public Firebase config alone must not activate an unverified flow.
-  if (import.meta.env?.VITE_ROOK_ACCOUNT_SYNC_ROLLOUT !== 'true') return null;
+  const status = firebaseConfigurationStatus();
+  if (status === 'project-mismatch') throw new Error('ROOK Firebase project ID mismatch.');
+  if (status !== 'ready') return null;
   const env = import.meta.env || {};
   const config = {
     apiKey: env.VITE_ROOK_FIREBASE_API_KEY,
@@ -13,8 +23,6 @@ const firebaseConfig = () => {
     projectId: env.VITE_ROOK_FIREBASE_PROJECT_ID,
     appId: env.VITE_ROOK_FIREBASE_APP_ID,
   };
-  if (Object.values(config).some(value => !value)) return null;
-  if (config.projectId !== 'rook-1d2c8') throw new Error('ROOK Firebase project ID mismatch.');
   if (env.VITE_ROOK_FIREBASE_STORAGE_BUCKET) config.storageBucket = env.VITE_ROOK_FIREBASE_STORAGE_BUCKET;
   if (env.VITE_ROOK_FIREBASE_MESSAGING_SENDER_ID) config.messagingSenderId = env.VITE_ROOK_FIREBASE_MESSAGING_SENDER_ID;
   return config;
@@ -60,8 +68,10 @@ export function createFirebaseSyncAdapter(client) {
   const entity = (uid, entityKey) => f.doc(db, 'rookAccounts', uid, 'entities', firebaseEntityDocumentId(entityKey));
   return {
     async read(uid) {
-      const account = await f.getDocFromServer(root(uid));
-      const rows = await f.getDocsFromServer(f.collection(db, 'rookAccounts', uid, 'entities'));
+      const [account, rows] = await Promise.all([
+        f.getDocFromServer(root(uid)),
+        f.getDocsFromServer(f.collection(db, 'rookAccounts', uid, 'entities')),
+      ]);
       const entities = new Map();
       for (const row of rows.docs) {
         const value = row.data(), entityKey = `${value.domain}:${JSON.stringify(value.entityId)}`;
@@ -129,7 +139,9 @@ export async function linkGoogleAnonymousAccount(client) {
   const before = client.auth.currentUser;
   if (!before?.isAnonymous) throw new Error('No anonymous ROOK account to link.');
   try {
-    const result = await client.authApi.linkWithPopup(before, new client.authApi.GoogleAuthProvider());
+    const provider = new client.authApi.GoogleAuthProvider();
+    provider.setCustomParameters?.({ prompt: 'select_account' });
+    const result = await client.authApi.linkWithPopup(before, provider);
     if (result.user.uid !== before.uid) throw new Error('Account identity changed during linking.');
     return { status: 'linked', uid: before.uid, user: result.user };
   } catch (error) {

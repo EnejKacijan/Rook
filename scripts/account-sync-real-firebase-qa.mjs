@@ -1,12 +1,13 @@
 import assert from 'node:assert/strict';
-import { chromium } from 'playwright-core';
+import { chromium, webkit } from 'playwright-core';
 import { createReturningUserFixture } from '../src/demoFixture.js';
 
 if (process.env.ROOK_REAL_FIREBASE_TEST !== '1') {
   throw new Error('Set ROOK_REAL_FIREBASE_TEST=1 to use isolated synthetic accounts against the real rook-1d2c8 project.');
 }
 
-const url = 'http://127.0.0.1:4273/__firebase_probe__';
+const baseUrl = process.env.ROOK_REAL_FIREBASE_URL || 'http://127.0.0.1:4273';
+const url = `${baseUrl}/__firebase_probe__`;
 const fixture = createReturningUserFixture(1);
 fixture.savedWorkoutTemplates = [{
   schemaVersion: 1, id: 'qa-template', name: 'QA template', revision: 1,
@@ -15,7 +16,8 @@ fixture.savedWorkoutTemplates = [{
 }];
 fixture.workouts[0].photoId = 'local-only-qa-photo';
 
-const browser = await chromium.launch({ channel: 'chrome', headless: true });
+const engine = process.env.ROOK_REAL_FIREBASE_BROWSER === 'webkit' ? webkit : chromium;
+const browser = await engine.launch(engine === webkit ? { headless: true } : { channel: 'chrome', headless: true });
 const context = await browser.newContext({ serviceWorkers: 'block' });
 const page = await context.newPage();
 await page.route('**/__firebase_probe__', route => route.fulfill({ contentType: 'text/html', body: '<!doctype html><title>Isolated ROOK Firebase QA</title>' }));
@@ -58,14 +60,35 @@ try {
 
   const restored = await page.evaluate(async expected => {
     const { resolveAccountStartup } = await import('/src/accountStartup.js');
-    const { getFirebaseSyncClient, createFirebaseSyncAdapter } = await import('/src/firebaseSyncClient.js');
+    const { getFirebaseSyncClient, createFirebaseSyncAdapter, resolveFirebaseIdentity } = await import('/src/firebaseSyncClient.js');
     const { hydrateStoredState } = await import('/src/domain.js');
     const { readLocalState, PRIMARY_KEY, RECOVERY_KEY } = await import('/src/localStateStorage.js');
     const { syncEntities } = await import('/src/accountSyncModel.js');
     localStorage.removeItem(PRIMARY_KEY);
     localStorage.removeItem(RECOVERY_KEY);
     const missing = readLocalState(localStorage, hydrateStoredState);
-    const decision = await resolveAccountStartup(missing);
+    const trace = [];
+    const timed = (label, action) => async (...args) => {
+      const started = performance.now();
+      try {
+        const value = await action(...args);
+        trace.push({ label, ms: Math.round(performance.now() - started) });
+        return value;
+      } catch (error) {
+        trace.push({ label, ms: Math.round(performance.now() - started), code: error.code || error.message });
+        throw error;
+      }
+    };
+    const recoveryStartedAt = performance.now();
+    const decision = await resolveAccountStartup(missing, {
+      getClient: timed('client', getFirebaseSyncClient),
+      resolveIdentity: timed('identity', resolveFirebaseIdentity),
+      getAdapter: client => {
+        const adapter = createFirebaseSyncAdapter(client);
+        return { ...adapter, read: timed('cloud-read', adapter.read) };
+      },
+    });
+    const recoveryElapsedMs = Math.round(performance.now() - recoveryStartedAt);
     if (decision.code !== 'cloud-recovery-available') {
       const { blankState } = await import('/src/domain.js');
       const { materializeCloudProfile, planSyncReconciliation } = await import('/src/accountSyncModel.js');
@@ -74,7 +97,15 @@ try {
       let materializeError = null;
       try { materializeCloudProfile(blankState(), remote); } catch (error) { materializeError = error.message; }
       const plan = planSyncReconciliation({ localEntities: new Map(), cloudEntities: remote.entities });
-      return { missing: missing.code, decision: decision.code, materializeError, remoteCount: remote.entities.size,
+      const { firebaseConfigured } = await import('/src/firebaseSyncClient.js');
+      const ledger = JSON.parse(localStorage.getItem('rook-account-sync-ledger-v1') || 'null');
+      return { missing: missing.code, decision: decision.code, recoveryElapsedMs, trace, materializeError, remoteCount: remote.entities.size,
+        configured: firebaseConfigured(), primaryPresent: localStorage.getItem(PRIMARY_KEY) !== null,
+        recoveryPresent: localStorage.getItem(RECOVERY_KEY) !== null, startupRecoveryPresent: Boolean(missing.recovery),
+        uidPreserved: client.auth.currentUser?.uid === expected.uid,
+        ledgerMatches: ledger?.accountUid === expected.uid && ledger?.profileId === expected.profileId,
+        cloudProfileMatches: remote.profileId === expected.profileId, accountSchemaVersion: remote.accountSchemaVersion,
+        invalidEntitySchemas: [...remote.entities.values()].filter(record => record.syncSchemaVersion !== 1).length,
         blocked: plan.blocked, conflicts: plan.conflicts, uploads: plan.upload.length };
     }
     const result = await decision.restoreCloud();
@@ -91,7 +122,7 @@ try {
       exactEntities: [...localEntities].every(([key, item]) => remote.entities.get(key)?.digest === item.digest),
       entityCount: localEntities.size,
     };
-  }, { profileId: first.profileId });
+  }, { profileId: first.profileId, uid: first.uid });
   assert.equal(restored.missing, 'primary-missing');
   assert.equal(restored.decision, 'cloud-recovery-available', JSON.stringify(restored));
   assert.equal(restored.status, 'ready');
@@ -191,7 +222,7 @@ try {
   });
   assert.equal(offlineMutation.saved, true);
   await context.route('https://firestore.googleapis.com/**', route => route.abort('internetdisconnected'));
-  await page.goto('http://127.0.0.1:4273/');
+  await page.goto(`${baseUrl}/`);
   await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
   const panel = page.getByRole('region', { name: 'Account and sync' });
   await panel.waitFor();
@@ -243,11 +274,11 @@ try {
   await page.evaluate(() => {
     for (const key of ['lift-v2-state', 'rook-recovery-v1', 'rook-install-meta-v1', 'rook-account-sync-ledger-v1']) localStorage.removeItem(key);
   });
-  await page.goto('http://127.0.0.1:4273/');
-  await page.getByRole('heading', { name: 'Your training data was found.' }).waitFor({ timeout: 30000 });
+  await page.goto(`${baseUrl}/`);
+  await page.getByRole('heading', { name: 'Your training data was found.' }).waitFor({ timeout: 60000 });
   assert.equal(await page.getByRole('button', { name: 'BUILD MY PLAN' }).count(), 0);
   await page.getByRole('button', { name: 'RESTORE DATA' }).click();
-  await page.getByRole('button', { name: 'PROFILE', exact: true }).waitFor({ timeout: 30000 });
+  await page.getByRole('button', { name: 'PROFILE', exact: true }).waitFor({ timeout: 60000 });
   const freshRestore = await page.evaluate(() => {
     const state = JSON.parse(localStorage.getItem('lift-v2-state'));
     return { profileId: state?.profile?.id, workoutIds: state?.workouts?.map(item => item.id),
@@ -287,7 +318,7 @@ try {
   const newContext = await browser.newContext({ serviceWorkers: 'block' });
   const newPage = await newContext.newPage();
   try {
-    await newPage.goto('http://127.0.0.1:4273/');
+    await newPage.goto(`${baseUrl}/`);
     await newPage.getByRole('button', { name: 'BUILD MY PLAN' }).waitFor({ timeout: 30000 });
     assert.equal(await newPage.getByRole('heading', { name: 'We couldn’t check your training data.' }).count(), 0);
   } finally { await newContext.close(); }

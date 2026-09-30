@@ -20,6 +20,7 @@ const appName=()=>JSON.parse(localStorage.getItem('rook-active-profile-slot-v1')
 const clients=new Map();
 window.__accountQa={nextUid:'owner-a',error:null,logins:0,signOuts:0};
 export const firebaseConfigured=()=>true;
+export const firebaseConfigurationStatus=()=> 'ready';
 export async function getFirebaseSyncClient(){
  const name=appName(); if(clients.has(name))return clients.get(name);
  const key='qa-auth:'+name, callbacks=new Set();

@@ -6,8 +6,10 @@ import { PRIMARY_KEY, RECOVERY_KEY, checkpointCurrentLocalState, hasEstablishedD
 import { readProfileSlot } from './accountProfileSlots.js';
 import { activeProfileSlot } from './profileSlotKeys.js';
 import { clearFirstRunAccountClaim, readFirstRunAccountClaim } from './firstRunAccountClaim.js';
+import { ACCOUNT_CLOUD_READ_TIMEOUT_MS } from './accountSyncTiming.js';
 
-const STARTUP_TIMEOUT_MS = 15000;
+// Established local profiles still open without waiting for cloud.
+const STARTUP_TIMEOUT_MS = ACCOUNT_CLOUD_READ_TIMEOUT_MS;
 const recovery = (code, extra = {}) => ({ status: 'account-recovery', code, ...extra });
 const withTimeout = (promise, ms) => new Promise((resolve, reject) => {
   const timer = setTimeout(() => reject(Object.assign(new Error('Account check timed out.'), { code: 'account-timeout' })), ms);

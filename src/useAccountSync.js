@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { hydrateStoredState, saveState, serializeState } from './domain.js';
 import { checkpointCurrentLocalState, isLocalSyncSnapshotCurrent, readLocalSyncSnapshot, subscribeLocalStateSaved } from './localStateStorage.js';
-import { createFirebaseSyncAdapter, firebaseConfigured, getFirebaseSyncClient, linkGoogleAnonymousAccount, resolveFirebaseIdentity } from './firebaseSyncClient.js';
+import { createFirebaseSyncAdapter, firebaseConfigurationStatus, firebaseConfigured, getFirebaseSyncClient, linkGoogleAnonymousAccount, resolveFirebaseIdentity } from './firebaseSyncClient.js';
 import { syncAccountOnce } from './accountSyncCoordinator.js';
 import { ensureAccountSyncLedger, readAccountSyncLedger, updateAccountSyncLedger } from './accountSyncOutbox.js';
 import { newSeparateProfileSlot, readProfileSlot,
@@ -21,7 +21,11 @@ const hasSavedParent = slot => Boolean(slot?.parentProfileId && (slot.kind === '
   || (slot.kind === 'account' && slot.creation === 'verified-empty-account')));
 
 export function useAccountSync({ state, update, persistenceFailed }) {
-  const [sync, setSync] = useState(() => ({ state: safelyConfigured() ? 'connecting' : 'not-configured', locked: globalThis.localStorage?.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true' }));
+  const [sync, setSync] = useState(() => {
+    const configuration = firebaseConfigurationStatus();
+    return { state: configuration === 'ready' ? 'connecting' : configuration === 'project-mismatch' ? 'needs-attention' : 'not-configured',
+      category: configuration, locked: globalThis.localStorage?.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true' };
+  });
   const latest = useRef({ state, persistenceFailed });
   const scheduleRef = useRef(null);
   latest.current = { state, persistenceFailed };

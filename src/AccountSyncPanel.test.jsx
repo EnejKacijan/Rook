@@ -20,7 +20,28 @@ describe('account status copy', () => {
     expect(accountSyncStatus({ state: 'synced', pendingCount: 2 })).toBe('Syncing…');
     expect(accountSyncStatus({ state: 'offline', pendingCount: 2 })).toBe('Offline · saved on this device');
     expect(accountSyncStatus({ state: 'not-configured' })).toBe('Cloud backup is not configured');
+    expect(accountSyncStatus({ state: 'not-configured', category: 'rollout-off' })).toBe('Cloud backup is not available yet');
+    expect(accountSyncStatus({ state: 'auth-unavailable' })).toBe('Account connection needs attention');
   });
+  it('does not imply an anonymous cloud copy is recoverable elsewhere or includes photos', () => {
+    render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, secureWithGoogle: vi.fn() }}/>);
+    expect(document.body.textContent).toContain('Cloud copy for this device');
+    expect(document.body.textContent).toContain('Workout photos stay on this device');
+    expect(document.body.textContent).toContain('Secure your account with Google');
+  });
+});
+
+it('keeps a Google identity collision separate and offers a safe retry without switching profiles', async () => {
+  const secureWithGoogle = vi.fn()
+    .mockResolvedValueOnce({ status: 'existing-account-conflict' })
+    .mockResolvedValueOnce({ status: 'linked' });
+  render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, secureWithGoogle }}/>);
+  await click(button('Secure your account with GoogleConnect Google to restore your training data on another device or after reinstalling ROOK›'));
+  expect(document.body.textContent).toContain('will not merge the profiles automatically');
+  expect(button('KEEP THIS PROFILE')).toBeTruthy();
+  await click(button('TRY A DIFFERENT GOOGLE ACCOUNT'));
+  expect(secureWithGoogle).toHaveBeenCalledTimes(2);
+  expect(document.body.textContent).not.toContain('will not merge the profiles automatically');
 });
 
 describe('account sign-out choices', () => {

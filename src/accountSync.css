@@ -4,6 +4,9 @@
 .account-sync-panel > small { display: block; margin-top: 4px; color: var(--rook-muted); }
 .account-sync-panel .list-row { width: 100%; margin-top: 12px; }
 .account-sync-panel .account-sync-error { color: var(--rook-danger, #a54840); overflow-wrap: anywhere; }
+.account-sync-collision { margin-top: 16px; }
+.account-sync-collision p { margin: 0 0 12px; color: var(--rook-muted); overflow-wrap: anywhere; }
+.account-sync-collision .button { display: block; width: 100%; min-height: 44px; margin-top: 8px; white-space: normal; }
 .account-sync-lock { min-height: 100dvh; padding-top: max(60px, env(safe-area-inset-top)); }
 .account-sync-lock h1 { max-width: 18ch; }
 .account-sync-lock > p:not(.eyebrow) { max-width: 34ch; }

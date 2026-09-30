@@ -48,6 +48,13 @@ it('keeps cloud errors and invalid/ambiguous replies out of new-user onboarding'
   await expect(signInFirstRunAccount(options)).rejects.toThrow('could not verify');
   expect(save).not.toHaveBeenCalled();
 });
+it('times out an unresolved cloud lookup without changing local training data', async () => {
+  const { options, save, storage } = setup();
+  options.readCloud = () => new Promise(() => {});
+  await expect(signInFirstRunAccount({ ...options, timeoutMs: 5 })).rejects.toThrow('Account check timed out');
+  expect(save).not.toHaveBeenCalled();
+  expect(readFirstRunAccountClaim(storage)).toBeNull();
+});
 it('blocks populated/protected local data and a different first-run owner before provider sign-in', async () => {
   const { options, client, storage, save } = setup();
   options.readLocal = () => ({ status: 'ready' });

@@ -20,7 +20,7 @@ try {
     await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
     const panel = page.getByRole('region', { name: 'Account and sync' });
     await panel.waitFor();
-    assert.match(await panel.textContent(), /Cloud backup is not configured/);
+    assert.match(await panel.textContent(), /Cloud backup is not available yet/);
     assert.doesNotMatch(await panel.textContent(), /\bSynced\b/);
     const bounds = await panel.boundingBox();
     assert.ok(bounds.x >= 0 && bounds.x + bounds.width <= width + 1, `${width} ${style} ${appearance}: panel fits`);
