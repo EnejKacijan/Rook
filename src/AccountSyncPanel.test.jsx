@@ -19,15 +19,17 @@ describe('account status copy', () => {
     expect(accountSyncStatus({ state: 'synced', pendingCount: 0 })).toBe('Synced');
     expect(accountSyncStatus({ state: 'synced', pendingCount: 2 })).toBe('Syncing…');
     expect(accountSyncStatus({ state: 'offline', pendingCount: 2 })).toBe('Offline · saved on this device');
+    expect(accountSyncStatus({ state: 'offline', linked: true, pendingCount: 2 })).toBe('Sync needs attention · offline');
     expect(accountSyncStatus({ state: 'not-configured' })).toBe('Cloud backup is not configured');
     expect(accountSyncStatus({ state: 'not-configured', category: 'rollout-off' })).toBe('Cloud backup is not available yet');
     expect(accountSyncStatus({ state: 'auth-unavailable' })).toBe('Account connection needs attention');
   });
   it('does not imply an anonymous cloud copy is recoverable elsewhere or includes photos', () => {
-    render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, secureWithGoogle: vi.fn() }}/>);
+    render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, canSecure: true, secureWithGoogle: vi.fn() }}/>);
     expect(document.body.textContent).toContain('Cloud copy for this device');
     expect(document.body.textContent).toContain('Workout photos stay on this device');
-    expect(document.body.textContent).toContain('Secure your account with Google');
+    expect(document.body.textContent).toContain('Create account with Google');
+    expect(document.body.textContent).toContain('Link this profile to Google');
   });
 });
 
@@ -35,13 +37,28 @@ it('keeps a Google identity collision separate and offers a safe retry without s
   const secureWithGoogle = vi.fn()
     .mockResolvedValueOnce({ status: 'existing-account-conflict' })
     .mockResolvedValueOnce({ status: 'linked' });
-  render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, secureWithGoogle }}/>);
-  await click(button('Secure your account with GoogleConnect Google to restore your training data on another device or after reinstalling ROOK›'));
+  render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, canSecure: true, secureWithGoogle }}/>);
+  await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.›'));
   expect(document.body.textContent).toContain('will not merge the profiles automatically');
   expect(button('KEEP THIS PROFILE')).toBeTruthy();
   await click(button('TRY A DIFFERENT GOOGLE ACCOUNT'));
   expect(secureWithGoogle).toHaveBeenCalledTimes(2);
   expect(document.body.textContent).not.toContain('will not merge the profiles automatically');
+});
+
+it('lets an established local profile connect Google while cloud backup is temporarily offline', async () => {
+  const secureWithGoogle = vi.fn(async () => ({ status: 'linked' }));
+  const snapshot = { state: 'offline', linked: false, canSecure: true, secureWithGoogle };
+  render(<AccountSyncPanel Modal={Modal} sync={snapshot}/>);
+  expect(document.body.textContent).toContain('Your training data stays here');
+  await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.›'));
+  expect(secureWithGoogle).toHaveBeenCalledOnce();
+  await act(async () => root.render(<AccountSyncPanel Modal={Modal} sync={{ ...snapshot, state: 'needs-attention', linked: true, canSecure: false, email: 'owner@example.com' }}/>));
+  expect(document.body.textContent).toContain('Google account connected. Cloud backup still needs to finish');
+  expect(document.body.textContent).toContain('Sync needs attention');
+  await act(async () => root.render(<AccountSyncPanel Modal={Modal} sync={{ ...snapshot, state: 'synced', pendingCount: 0, linked: true, canSecure: false, email: 'owner@example.com' }}/>));
+  expect(document.body.textContent).toContain('Google account connected. Your ROOK training data is backed up.');
+  expect(document.body.textContent).not.toContain('Create account with Google');
 });
 
 describe('account sign-out choices', () => {

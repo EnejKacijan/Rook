@@ -124,9 +124,10 @@ export async function linkExistingAnonymousUser(client, credential) {
   if (!before?.isAnonymous) throw new Error('No anonymous ROOK account to link.');
   try {
     const result = await client.authApi.linkWithCredential(before, credential);
-    if (result.user.uid !== before.uid) throw new Error('Account identity changed during linking.');
+    if (result.user.uid !== before.uid || client.auth.currentUser?.uid !== before.uid) throw new Error('Account identity changed during linking.');
     return { status: 'linked', uid: before.uid, user: result.user };
   } catch (error) {
+    if (client.auth.currentUser?.uid !== before.uid) throw new Error('Account identity changed during linking.');
     if (['auth/credential-already-in-use', 'auth/email-already-in-use', 'auth/account-exists-with-different-credential'].includes(error.code)) return { status: 'existing-account-conflict', uid: before.uid };
     throw error;
   }
@@ -142,9 +143,10 @@ export async function linkGoogleAnonymousAccount(client) {
     const provider = new client.authApi.GoogleAuthProvider();
     provider.setCustomParameters?.({ prompt: 'select_account' });
     const result = await client.authApi.linkWithPopup(before, provider);
-    if (result.user.uid !== before.uid) throw new Error('Account identity changed during linking.');
+    if (result.user.uid !== before.uid || client.auth.currentUser?.uid !== before.uid) throw new Error('Account identity changed during linking.');
     return { status: 'linked', uid: before.uid, user: result.user };
   } catch (error) {
+    if (client.auth.currentUser?.uid !== before.uid) throw new Error('Account identity changed during linking.');
     if (['auth/credential-already-in-use', 'auth/email-already-in-use', 'auth/account-exists-with-different-credential'].includes(error.code)) return { status: 'existing-account-conflict', uid: before.uid };
     throw error;
   }

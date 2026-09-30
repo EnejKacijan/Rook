@@ -1,11 +1,25 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { deserializeState, plannedWorkoutForDate, startWorkout } from './domain.js';
-import { addCalendarDays, applyFlexibleWeek, availabilityAdjustmentScope, flexibleSessions, proposeFlexibleWeek, temporaryScheduleReview } from './flexibleWeek.js';
+import { addCalendarDays, applyFlexibleWeek, availabilityAdjustmentScope, flexibleSessions, proposeFlexibleWeek, temporaryScheduleReview, remainingPlanWeekDates } from './flexibleWeek.js';
 import { adjustWeekState, ADJUSTMENT_TODAY as today } from './fixtures/adjustWeekState.js';
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date(today+'T12:00:00'));});
 afterEach(()=>vi.useRealTimers());
 const dates=indices=>indices.map(i=>addCalendarDays(today,i));
 const review=(state,indices,windowDays=7)=>proposeFlexibleWeek(state,{mode:'available',windowDays,availableDates:dates(indices)},today);
+
+it.each([['2026-09-28',7],['2026-09-30',5],['2026-10-04',1]])('remaining calendar-week dates from %s stop on Sunday', (date,count)=>{
+ const remaining=remainingPlanWeekDates(date);
+ expect(remaining).toHaveLength(count);expect(remaining[0]).toBe(date);expect(remaining.at(-1)).toBe('2026-10-04');
+});
+it('current-week availability cannot silently schedule into the following week, while an explicit move still can',()=>{
+ const state=adjustWeekState(),request={mode:'available',dateScope:'current-week',availableDates:dates([0,1,2,3,6])};
+ expect(proposeFlexibleWeek(state,request,today)).toMatchObject({status:'conflict'});
+ const valid=proposeFlexibleWeek(state,{...request,availableDates:dates([0,1,2,3,5])},today);
+ expect(valid).toMatchObject({status:'ready',sourceScope:{start:'2026-09-28',end:'2026-10-04'}});
+ expect(valid.availabilitySchedule.every(row=>row.toDate<='2026-10-04')).toBe(true);
+ const source=availabilityAdjustmentScope(state,today).sources[0];
+ expect(proposeFlexibleWeek(state,{mode:'move',sessionId:source.logicalSessionId,toDate:'2026-10-10'},today).status).toBe('ready');
+});
 
 it('keeps five current sources when next Monday is visible, independent of destination expansion',()=>{
  const state=adjustWeekState(),sources=availabilityAdjustmentScope(state).sources;

@@ -15,8 +15,8 @@ export function saveSessionFeedback(state, workoutId, value, {persist} = {}) {
   return {status:'saved',state:next};
 }
 
-// Session-level context only. Never attribute a whole-session rating to an exercise
-// or feed it into progression/replacement/load/volume decisions.
+// Block-level descriptive summary only. Exercise-level guidance reads the most
+// recent rating separately and never treats it as a logged set result.
 export function summarizeSessionFeedback(workouts) {
   const eligible=workouts.filter(w=>w.completedAt && !w.endedEarly && !w.adjustment && !w.optionalSessionId && !w.trainingBlock?.plannedDeload &&
     w.exercises?.some(e=>e.sets?.some(s=>s.completed)));

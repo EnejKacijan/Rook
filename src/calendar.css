@@ -66,7 +66,7 @@
 .active-workout-notice > button { min-width: 64px; min-height: 44px; padding: 0 7px; color: #1f6b4c; font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 .active-workout-start-lock { max-width: 330px; margin: 20px 0 0 !important; color: #6f6c68; font-size: 13px; line-height: 1.45; }
 .active-workout-notice + .rest-day-state { margin-top: 32px; }
-.today-screen.viewing-other-workout .active-workout-notice + .today-hero { margin-top: 38px; }
+.today-screen > .active-workout-notice + .today-hero { margin-top: 12px; }
 .plan-ready-notice { position: relative; margin-top: 16px; padding: 12px 42px 12px 13px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 14px; background: #eaf2ee; }
 .plan-ready-notice > button { position: absolute; top: 3px; right: 4px; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: #6f837a; font-size: 20px; line-height: 1; }
 .plan-ready-notice .eyebrow { color: #1f6b4c; }

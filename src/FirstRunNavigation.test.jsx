@@ -69,7 +69,7 @@ function swipe(start = 4, end = 200, dy = 0) { touch('touchstart', start); touch
 
 it('Sign in and Restore use the same two-level Back and interactive edge hierarchy', () => {
   act(() => root.render(<AccountEntryHarness/>));
-  click('Sign in'); settle(); expect(page().dataset.firstRunPage).toBe('sign-in');
+  click('Sign in / Create account'); settle(); expect(page().dataset.firstRunPage).toBe('sign-in');
   const iconPath = page().querySelector('.first-run-back-button svg path')?.getAttribute('d');
   click('Restore from backup'); settle(); expect(page().dataset.firstRunPage).toBe('restore');
   expect(page().querySelector('.first-run-back-button svg path')?.getAttribute('d')).toBe(iconPath);

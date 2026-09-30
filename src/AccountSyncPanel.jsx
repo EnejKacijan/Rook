@@ -20,7 +20,7 @@ export function accountSyncStatus(sync) {
   switch (sync?.state) {
     case 'synced': return sync.pendingCount === 0 ? 'Synced' : 'Syncing…';
     case 'syncing': case 'connecting': case 'retry': return 'Syncing…';
-    case 'offline': return 'Offline · saved on this device';
+    case 'offline': return sync.linked ? 'Sync needs attention · offline' : 'Offline · saved on this device';
     case 'auth-unavailable': return 'Account connection needs attention';
     case 'not-configured': return sync.category === 'rollout-off' ? 'Cloud backup is not available yet' : 'Cloud backup is not configured';
     case 'signed-out': return 'Signed out · data stays on this device';
@@ -58,12 +58,14 @@ export function AccountSyncPanel({ sync, Modal, backgroundRef }) {
     {sync?.state === 'synced' && sync.lastSuccessAt && <small>Last synced {new Date(sync.lastSuccessAt).toLocaleString()}</small>}
     {sync?.state === 'not-configured' && <small>{sync.category === 'rollout-off' ? 'Cloud backup is not enabled in this build. Keep a ROOK backup file.' : 'Keep a ROOK backup file until cloud setup is complete.'}</small>}
     {sync?.state === 'needs-attention' && <small>Your saved data on this device is unchanged. Keep a ROOK backup file while this is reviewed.</small>}
+    {sync?.linked && sync?.state === 'synced' && sync.pendingCount === 0 && <small>Google account connected. Your ROOK training data is backed up.</small>}
+    {sync?.linked && sync?.state !== 'synced' && <small>Google account connected. Cloud backup still needs to finish; your data stays on this device.</small>}
     {sync?.state === 'synced' && <small>Workout photos stay on this device; cloud sync does not include them.</small>}
-    {sync?.state !== 'not-configured' && !sync?.linked && !collision && <button type="button" className="list-row" disabled={busy || sync?.state !== 'synced'} onClick={() => act(sync.secureWithGoogle)}><span><strong>Secure your account with Google</strong><small>Connect Google to restore your training data on another device or after reinstalling ROOK</small></span><span aria-hidden="true">›</span></button>}
+    {sync?.state !== 'not-configured' && !sync?.linked && !collision && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span><span aria-hidden="true">›</span></button>}
     {collision && <div className="account-sync-collision" role="status">
       <p>This Google account already has a ROOK profile. Your current training data is unchanged; ROOK will not merge the profiles automatically.</p>
       <button type="button" className="button secondary" disabled={busy} onClick={() => { setCollision(false); setError(''); }}>KEEP THIS PROFILE</button>
-      <button type="button" className="button quiet" disabled={busy || sync?.state !== 'synced'} onClick={() => act(sync.secureWithGoogle)}>TRY A DIFFERENT GOOGLE ACCOUNT</button>
+      <button type="button" className="button quiet" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}>TRY A DIFFERENT GOOGLE ACCOUNT</button>
     </div>}
     {sync?.linked && !sync?.locked && <button type="button" className="list-row" ref={confirmTrigger} disabled={busy} onClick={() => setConfirmation('sign-out')}><span><strong>Sign out</strong><small>Your local data stays on this device</small></span><span aria-hidden="true">›</span></button>}
     {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with its Google account to reopen it</small></span><span aria-hidden="true">›</span></button>}

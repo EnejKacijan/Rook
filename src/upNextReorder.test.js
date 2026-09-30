@@ -1,7 +1,7 @@
 import {it,expect} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startWorkout,serializeState,deserializeState} from './domain.js';
-import {upNextReorderGroups,reorderUpNext,upNextMoveRequest} from './upNextReorder.js';
+import {upNextReorderGroups,reorderUpNext,upNextMoveRequest,canMoveCurrentToUpNext,moveCurrentToUpNext} from './upNextReorder.js';
 import {removeUpNext,undoUpNextRemoval,canUndoUpNextRemoval} from './upNextRemoval.js';
 const make=()=>{const s=createReturningUserFixture(0);s.activeWorkout=startWorkout(s,s.program.days[0]);s.activeWorkout.exercises=s.activeWorkout.exercises.slice(0,5);s.activeWorkout.exercises.forEach((e,i)=>{e.id='ABCDE'[i];e.importedName='Same name';});s.activeWorkout.rest={endsAt:Date.now()+60000};return s;};
 const ids=s=>s.activeWorkout.exercises.map(e=>e.id).join('');
@@ -56,4 +56,30 @@ it('retains freestyle, temporary/combined provenance and every pending per-side/
  let s=make();s.activeWorkout.source='freestyle';s.activeWorkout.exercises[1].sourceOccurrenceIds=['source-a','source-b'];s.activeWorkout.exercises[1].sets[0].sides={left:{reps:12},right:{reps:8}};s.activeWorkout.exercises[2].measure='seconds';s.activeWorkout.exercises[2].sets[0].reps=85;
  const before=structuredClone(s.activeWorkout.exercises);s=move(s,'B',null);
  for(const e of before)expect(s.activeWorkout.exercises.find(x=>x.id===e.id)).toEqual(e);
+});
+it('moves the first untouched exercise behind the next without changing session or plan identity',()=>{
+ const s=make(),before=structuredClone(s),request={sessionId:s.activeWorkout.id,currentId:'A',nextId:'B'};
+ const moved=moveCurrentToUpNext(s,request);
+ expect(ids(moved)).toBe('BACDE');expect(ids(s)).toBe('ABCDE');
+ expect(moved.activeWorkout.exercises[moved.activeWorkout.exerciseIndex].id).toBe('B');
+ expect(moved.activeWorkout.exercises[1]).toBe(s.activeWorkout.exercises[0]);
+ expect(moved.activeWorkout.id).toBe(before.activeWorkout.id);
+ expect(moved.activeWorkout.rest).toEqual(before.activeWorkout.rest);
+ expect(moved.program).toEqual(before.program);
+ expect(deserializeState(serializeState(moved),{strict:true}).activeWorkout.exercises.map(e=>e.id).join('')).toBe('BACDE');
+});
+it.each(['current-work','next-work','current-pair','next-pair','last'])('refuses current move across %s',kind=>{
+ const s=make(),active=s.activeWorkout;
+ if(kind==='current-work')active.exercises[0].sets[0].touched=true;
+ else if(kind==='next-work')active.exercises[1].sets[0].completed=true;
+ else if(kind==='current-pair')active.exercises[0].supersetId='pair';
+ else if(kind==='next-pair')active.exercises[1].supersetId='pair';
+ else active.exercises=[active.exercises[0]];
+ expect(canMoveCurrentToUpNext(active,'A')).toBe(false);
+ expect(moveCurrentToUpNext(s,{sessionId:active.id,currentId:'A',nextId:'B'})).toBe(s);
+});
+it('rejects stale current move requests without changing any exercise',()=>{
+ const s=make(),request={sessionId:s.activeWorkout.id,currentId:'A',nextId:'C'};
+ expect(moveCurrentToUpNext(s,request)).toBe(s);
+ request.nextId='B';request.sessionId='other';expect(moveCurrentToUpNext(s,request)).toBe(s);
 });

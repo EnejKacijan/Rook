@@ -4,14 +4,14 @@ import {ReorderHandle} from './ReorderHandle.jsx';
 import {OverflowIcon} from './OverflowIcon.jsx';
 import {useTrainingReorder} from './useTrainingReorder.js';
 import {UpNextReorderPreview} from './UpNextReorderPreview.jsx';
-import {upNextReorderGroups,reorderUpNext,upNextMoveRequest} from './upNextReorder.js';
+import {upNextReorderGroups,reorderUpNext,upNextMoveRequest,canMoveCurrentToUpNext,moveCurrentToUpNext} from './upNextReorder.js';
 import {useDurableAction} from './useDurableAction.js';
 import {SavedWorkouts} from './SavedWorkouts.jsx';
 import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
-import { canRemoveUpNext, hasMeaningfulExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval } from './upNextRemoval.js';
+import { canRemoveUpNext, hasMeaningfulExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
 import {persistCoachEntry,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
@@ -107,6 +107,8 @@ import { updatePerSideReps, carryPerSideSet } from './advancedLogging.js';
 import { Disclosure } from './Disclosure.jsx';
 import { groupPlanVersions } from './planHistoryGroups.js';
 import { SessionFeedbackPrompt, SessionFeedbackDisplay } from './SessionFeedback.jsx';
+import { nextWorkoutAdvice } from './nextWorkoutAdvice.js';
+import { completedProgressWorkouts, selectProgressionRows, progressionSummary } from './progressionOverview.js';
 import { WorkoutHistoryExport } from './WorkoutHistoryExport.jsx';
 import { HistoryCorrectionEditor } from './HistoryCorrectionEditor.jsx';
 import { WorkoutPhotoCompare } from './WorkoutPhotoCompare.jsx';
@@ -269,7 +271,6 @@ import {
   plannedWorkoutForDate,
   pluralize,
   previousExercise,
-  progressionFor,
   profileIsUnder18,
   recentExerciseProgress,
   refreshWorkoutWarmup,
@@ -2630,7 +2631,7 @@ export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPl
   return <main className="onboarding entry-screen entry-v2">
     <header className="entry-top">
       <div className="brand">ROOK</div>
-      <button type="button" className="restore-backup-action" onClick={signIn || restoreBackup}>{signIn ? signedIn ? 'Account' : 'Sign in' : 'Restore'}</button>
+      <button type="button" className="restore-backup-action" onClick={signIn || restoreBackup}>{signIn ? signedIn ? 'Account' : 'Sign in / Create account' : 'Restore'}</button>
     </header>
     <section className="entry-content" aria-labelledby="entry-title">
       <h1 id="entry-title">A plan that fits your week.</h1>
@@ -2680,9 +2681,9 @@ export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signedIn
     <header className="entry-top"><FirstRunBackButton onClick={back} label="Back to start" /></header>
     <section className="entry-content">
       <p className="entry-micro-label">ROOK ACCOUNT</p>
-      <h1>Welcome back</h1>
+      <h1>Sign in or create account</h1>
       <p>{signedIn ? `Signed in${email ? ` as ${email}` : ''}. Continue with ROOK or restore a backup.`
-        : 'Sign in to continue with an existing ROOK profile.'}</p>
+        : 'Continue with Google. ROOK opens your existing profile, or creates an account if you are new.'}</p>
     </section>
     <div className="entry-sign-in-providers">
       <Button disabled={busy || !providerReady || signedIn} onClick={begin}>
@@ -6178,7 +6179,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const increment =
     state.profile.increments[item?.equipment?.[0]] ?? exercise.defaultIncrement;
   const sessionExercise = active.source === 'freestyle' || isSessionAddedExercise(exercise);
-  const recommendation = sessionExercise ? null : progressionFor(
+  const recommendation = sessionExercise ? null : nextWorkoutAdvice(
     exercise,
     state.workouts,
     state.profile,
@@ -6655,6 +6656,30 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     if(record)upNextUndo.show({message:`${exerciseName(record.exercise)} removed`,valid:()=>canUndoUpNextRemoval(removalStateRef.current,record),undo:()=>{try{queueAction.commit(current=>undoUpNextRemoval(current,record));}catch(error){setQueueError(error.message);}}});
     return Boolean(record);
   };
+  const moveCurrentExercise = id => {
+    if (workoutActionLockRef.current || !commitWorkoutDrafts()) return false;
+    const workout=removalStateRef.current.activeWorkout;
+    const request={sessionId:workout.id,currentId:id,nextId:workout.exercises[workout.exerciseIndex+1]?.id};
+    let changed=false;
+    try {changed=queueAction.commit(current=>moveCurrentToUpNext(current,request)).changed;setQueueError('');}
+    catch(error){setQueueError(error.message);return false;}
+    if(changed)setExerciseNavigationAnnouncement('Exercise moved to Up Next.');
+    return changed;
+  };
+  const removeActiveExercise = id => {
+    if (workoutActionLockRef.current || !commitWorkoutDrafts()) return false;
+    const sessionId=removalStateRef.current.activeWorkout?.id;
+    let record;
+    try {queueAction.commit(current=>{
+      if(current.activeWorkout?.id!==sessionId)return current;
+      const result=removeCurrentExercise(current,id);record=result.undo;return result.state;
+    });setQueueError('');}catch(error){setQueueError(error.message);return false;}
+    if(record)upNextUndo.show({message:`${exerciseName(record.exercise)} removed`,
+      valid:()=>canUndoCurrentExerciseRemoval(removalStateRef.current,record),
+      undo:()=>{try{queueAction.commit(current=>undoCurrentExerciseRemoval(current,record));}catch(error){setQueueError(error.message);}}});
+    if(record)setExerciseNavigationAnnouncement('Exercise removed from this workout.');
+    return Boolean(record);
+  };
   const reorderFutureExercise=request=>{
     if(!request||workoutActionLockRef.current||!commitWorkoutDrafts())return false;
     let changed=false;
@@ -6904,94 +6929,96 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       )}
       <section
         key={`exercise-heading-${exercise.id}`}
-        className={`exercise-heading${exerciseIllustration ? " has-illustration" : ""}${exerciseName(exercise).length > 36 ? " long-title" : ""}`}
+        className={`exercise-heading${exerciseIllustration ? " has-illustration" : ""}`}
       >
-        {exerciseIllustration && (
-          <button
-            type="button"
-            id={`active-exercise-art-${exercise.id}`}
-            className="exercise-heading-art-button"
-            aria-label={`View ${exerciseName(exercise)} illustration`}
-            onClick={() =>
-              setDetail({
-                visual: exercise,
-                returnFocusId: `active-exercise-art-${exercise.id}`,
-              })
-            }
-          >
-            <img
-              className="exercise-heading-art"
-              onError={activeArtwork.onError}
-              src={exerciseIllustration}
-              alt=""
-              aria-hidden="true"
-              decoding="async"
-              fetchpriority="high"
-            />
-          </button>
-        )}
-        <div className="exercise-heading-content">
-          <div className={`exercise-heading-topline${superset ? "" : " exercise-position-topline"}`}>
-            <Eyebrow>
-              {superset
-                ? `SUPERSET · ROUND ${supersetRoundIndex + 1} OF ${superset.roundCount}`
-                : `EXERCISE ${active.exerciseIndex + 1} OF ${active.exercises.length}`}
-            </Eyebrow>
-            <div className="workout-exercise-actions">
-              <button
-                className="text-button"
-                disabled={exercise.sets.some((set) => set.completed)}
-                title={
-                  exercise.sets.some((set) => set.completed)
-                    ? "Replacement is locked after work is logged."
-                    : "Replace this exercise for today"
-                }
-                onClick={() => setDetail({ replace: exercise })}
-              >
-                Replace
-              </button>
-              <button
-                className="exercise-options-button"
-                aria-label="Exercise options"
-                aria-description={exercisePersonalNote(exercise) ? "Note added. Edit note in this menu." : "Includes Add note."}
-                title="Exercise options"
-                onClick={() => setDetail({ options: exercise })}
-              >
-                <OverflowIcon/>
-                {exercisePersonalNote(exercise) && <i className="exercise-note-present" aria-hidden="true" />}
-              </button>
-            </div>
+        <div className={`exercise-heading-topline${superset ? "" : " exercise-position-topline"}`}>
+          <Eyebrow>
+            {superset
+              ? `SUPERSET · ROUND ${supersetRoundIndex + 1} OF ${superset.roundCount}`
+              : `EXERCISE ${active.exerciseIndex + 1} OF ${active.exercises.length}`}
+          </Eyebrow>
+          <div className="workout-exercise-actions">
+            <button
+              className="text-button"
+              disabled={exercise.sets.some((set) => set.completed)}
+              title={
+                exercise.sets.some((set) => set.completed)
+                  ? "Replacement is locked after work is logged."
+                  : "Replace this exercise for today"
+              }
+              onClick={() => setDetail({ replace: exercise })}
+            >
+              Replace
+            </button>
+            <button
+              className="exercise-options-button"
+              aria-label="Exercise options"
+              aria-description={exercisePersonalNote(exercise) ? "Note added. Edit note in this menu." : "Includes Add note."}
+              title="Exercise options"
+              onClick={() => setDetail({ options: exercise, onMoveCurrent: moveCurrentExercise, onRemoveCurrent: removeActiveExercise })}
+            >
+              <OverflowIcon/>
+              {exercisePersonalNote(exercise) && <i className="exercise-note-present" aria-hidden="true" />}
+            </button>
           </div>
-          <h1 ref={exerciseHeadingRef} tabIndex={-1}>
-            {exerciseName(exercise)}
-          </h1>
-          <p className="exercise-meta">
-            {exercise.prescriptionSource==='saved-template'?<>Saved workout · {targetLabel(exercise,state.profile.rirEnabled)}</>:sessionExercise ? `${active.source==='freestyle'?'Freestyle · ':''}Choose your sets and reps` : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
-          </p>
-          {(!sessionExercise || !prior) && <small className="exercise-history-meta">
-            {prior
-              ? `Last ${prior.sets
-                .filter((set) => set.completed)
-                .map((set) => exerciseValueLabel(exercise, set.reps))
-                .join(" / ")}`
-              : "First session"}
-          </small>}
-          {performancePr && (
-            <small className="active-performance-pr" role="status" aria-live="polite" aria-label={performancePr.e1rmPr ? "Estimated one-rep max personal record" : undefined}>
-              {performancePr.label}
-            </small>
+        </div>
+        <div className="exercise-heading-body">
+          {exerciseIllustration && (
+            <button
+              type="button"
+              id={`active-exercise-art-${exercise.id}`}
+              className="exercise-heading-art-button"
+              aria-label={`View ${exerciseName(exercise)} illustration`}
+              onClick={() =>
+                setDetail({
+                  visual: exercise,
+                  returnFocusId: `active-exercise-art-${exercise.id}`,
+                })
+              }
+            >
+              <img
+                className="exercise-heading-art"
+                onError={activeArtwork.onError}
+                src={exerciseIllustration}
+                alt=""
+                aria-hidden="true"
+                decoding="async"
+                fetchpriority="high"
+              />
+            </button>
           )}
-          {exerciseNotePresentation(exercise,state.program).cue && (
-            <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
-          )}
-          {exercisePersonalNote(exercise) && (
-            <small className="exercise-personal-note">
-              <span>Your note</span> · {exercisePersonalNote(exercise)}
-            </small>
-          )}
-          {superset && (
-            <small className="superset-next-step">{supersetNextLabel}</small>
-          )}
+          <div className="exercise-heading-content">
+            <h1 ref={exerciseHeadingRef} tabIndex={-1}>
+              {exerciseName(exercise)}
+            </h1>
+            <p className="exercise-meta">
+              {exercise.prescriptionSource==='saved-template'?<>Saved workout · {targetLabel(exercise,state.profile.rirEnabled)}</>:sessionExercise ? `${active.source==='freestyle'?'Freestyle · ':''}Choose your sets and reps` : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
+            </p>
+            {(!sessionExercise || !prior) && <small className="exercise-history-meta">
+              {prior
+                ? `Last ${prior.sets
+                  .filter((set) => set.completed)
+                  .map((set) => exerciseValueLabel(exercise, set.reps))
+                  .join(" / ")}`
+                : "First session"}
+            </small>}
+            {performancePr && (
+              <small className="active-performance-pr" role="status" aria-live="polite" aria-label={performancePr.e1rmPr ? "Estimated one-rep max personal record" : undefined}>
+                {performancePr.label}
+              </small>
+            )}
+            {exerciseNotePresentation(exercise,state.program).cue && (
+              <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
+            )}
+            {exercisePersonalNote(exercise) && (
+              <small className="exercise-personal-note">
+                <span>Your note</span> · {exercisePersonalNote(exercise)}
+              </small>
+            )}
+            {superset && (
+              <small className="superset-next-step">{supersetNextLabel}</small>
+            )}
+          </div>
         </div>
       </section>
       {sessionExercise && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} screenRef={screenRef} />}
@@ -9978,25 +10005,6 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
     </main>
   );
 }
-function progressionCountLabel(rows = []) {
-  const counts = rows.reduce(
-    (result, { result: status }) => {
-      if (status?.type === "progress") result.improving += 1;
-      else if (status?.type === "stalled") result.stalled += 1;
-      else if (status) result.holding += 1;
-      return result;
-    },
-    { improving: 0, holding: 0, stalled: 0 },
-  );
-  return [
-    counts.improving ? `${counts.improving} improving` : null,
-    counts.holding ? `${counts.holding} holding` : null,
-    counts.stalled ? `${counts.stalled} stalled` : null,
-  ]
-    .filter(Boolean)
-    .join(" · ");
-}
-
 function weightTrendEarlyState(trend) {
   if (!trend.entries.length)
     return {
@@ -10022,7 +10030,7 @@ function GoalProgress({
 }) {
   const focus = effectiveProgressFocus(state);
   const sectionLabel = state.progressFocusOverrideByPlanId?.[state.program?.id] ? 'PROGRESS FOCUS' : 'GOAL PROGRESS';
-  const progressionLabel = progressionCountLabel(progressionRows);
+  const progression = progressionSummary(progressionRows);
   const hasComparableData = progressionRows.length >= 2;
   const trend = weightTrend(state.weightCheckins);
   const earlyTrend = weightTrendEarlyState(trend);
@@ -10038,7 +10046,7 @@ function GoalProgress({
     ? `${trend.changeKg < 0 ? "−" : trend.changeKg > 0 ? "+" : ""}${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trendInterval}`
     : null;
   const trainingProgress = hasComparableData
-    ? progressionLabel
+    ? progression.label
     : "More comparable workouts are needed";
   if (!focus)
     return (
@@ -10064,8 +10072,9 @@ function GoalProgress({
       title: "Muscle-building progress",
       label: "TRAINING PROGRESSION",
       value: hasComparableData
-        ? progressionLabel
+        ? progression.label
         : "Repeat the same exercises to build a trend",
+      breakdown: hasComparableData ? progression.breakdown : null,
       footer:
         "Workout logs can show training progression, not how much muscle you've gained.",
     },
@@ -10081,6 +10090,7 @@ function GoalProgress({
       title: "General fitness",
       label: "BROAD TRAINING PROGRESS",
       value: trainingProgress,
+      breakdown: hasComparableData ? progression.breakdown : null,
       footer:
         "Consistency and broad training progress matter more than a single fitness score.",
     },
@@ -10088,6 +10098,7 @@ function GoalProgress({
       title: "Athletic support",
       label: "GYM PROGRESSION",
       value: trainingProgress,
+      breakdown: hasComparableData ? progression.breakdown : null,
       footer:
         "ROOK tracks your supporting training. It does not infer speed, jump or sport performance from lifting logs.",
     },
@@ -10101,6 +10112,7 @@ function GoalProgress({
           <div className="goal-progress-metric">
             <span>{content.label}</span>
             <strong>{content.value}</strong>
+            {content.breakdown && <small className="goal-progress-breakdown">{content.breakdown}</small>}
           </div>
           <p className="goal-progress-footnote">{content.footer}</p>
         </div>
@@ -10139,6 +10151,7 @@ function GoalProgress({
         <div className="goal-progress-metric">
           <span>STRENGTH WHILE LOSING</span>
           <strong>{trainingProgress}</strong>
+          {hasComparableData && progression.breakdown && <small className="goal-progress-breakdown">{progression.breakdown}</small>}
         </div>
         {trend.stable && (
           <p className="weight-trend-notice">
@@ -10485,11 +10498,48 @@ function LoggedExercises({state,setDetail,close,initial={}}) {
   const filtered=rankExerciseSearch(rows.filter(row=>exerciseMatchesQuery(row,query)),query);
   return <main ref={ref} className="screen detail-screen logged-exercises-sheet"><SheetHeader title="Logged exercises" onClose={close}/><SearchInput aria-label="Search logged exercises" placeholder="Search logged exercises" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/><div>{filtered.map(row=><LoggedExerciseRow key={row.exercise.exerciseId} row={row} state={state} onClick={()=>setDetail({exercise:row.exercise,returnToLogged:{query,scroll:ref.current?.scrollTop||0}})}/>)}</div>{!filtered.length&&<p role="status">{query?`No logged exercises match “${query}”.`:'No exercises logged yet'}</p>}</main>;
 }
+function ProgressionRow({row,units,onClick}) {
+  const {exercise,result}=row;
+  return <ExerciseNavigationButton
+    type="button"
+    data-progression-exercise-id={exercise.exerciseId}
+    className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title)?' progression-caution':''}`}
+    onClick={onClick}
+  >
+    <span>
+      <strong>{exerciseName(exercise)}</strong>
+      <small>{result.title}</small>
+      {result.type==='progress'&&result.weight?<small className="progression-next">Next: {displayWeight(result.weight,units)} {weightUnit(units)}</small>:null}
+    </span>
+    <span className="navigation-chevron" aria-hidden="true">›</span>
+  </ExerciseNavigationButton>;
+}
+function ProgressionOverview({state,setDetail,close,initial={}}) {
+  const ref=useRef(null);
+  const rows=selectProgressionRows(state);
+  useLayoutEffect(()=>{
+    const surface=ref.current;
+    if(!surface)return undefined;
+    surface.scrollTop=initial.scroll||0;
+    if(!initial.focusExerciseId)return undefined;
+    const frame=requestAnimationFrame(()=>{
+      const row=[...surface.querySelectorAll('[data-progression-exercise-id]')].find(item=>item.dataset.progressionExerciseId===initial.focusExerciseId);
+      row?.focus({preventScroll:true});
+      surface.scrollTop=initial.scroll||0;
+    });
+    return()=>cancelAnimationFrame(frame);
+  },[initial.scroll,initial.focusExerciseId]);
+  return <main ref={ref} className="screen detail-screen progression-all-screen">
+    <SheetHeader title="Exercise progression" onBack={close} backLabel="Back to Progress" onClose={close}/>
+    <p className="progression-all-count">{progressionSummary(rows).label}</p>
+    <div className="progression-all-list">
+      {rows.map(row=><ProgressionRow key={row.exercise.exerciseId} row={row} units={state.profile.units} onClick={()=>setDetail({exercise:row.exercise,returnToProgression:{scroll:ref.current?.scrollTop||0,focusExerciseId:row.exercise.exerciseId}})}/>)}
+    </div>
+    {!rows.length&&<p className="progression-empty">More comparable sessions are needed before ROOK can suggest a progression.</p>}
+  </main>;
+}
 function Progress({ state, update, setDetail, setPage }) {
-  const completedWorkouts = state.workouts.filter(
-    (workout) =>
-      workout.completedAt && workoutSetSummary(workout).completed > 0,
-  ).sort((a,b)=>String(workoutPerformedDate(a)).localeCompare(String(workoutPerformedDate(b))) || new Date(a.startedAt || a.completedAt)-new Date(b.startedAt || b.completedAt));
+  const completedWorkouts = completedProgressWorkouts(state.workouts);
   const photos = useWorkoutPhotoCollection(state.workouts);
   const weeklyReview = weeklyPerformanceReview(state, new Date(), {
     e1rmEligible: exerciseSupportsEstimatedOneRepMax,
@@ -10500,49 +10550,8 @@ function Progress({ state, update, setDetail, setPage }) {
     consistency.planned > 0 &&
     consistency.completed === consistency.planned;
   const unit = weightUnit(state.profile.units);
-  const latest = [];
-  const seen = new Set();
-  for (const workout of [...completedWorkouts].reverse())
-    for (const exercise of workout.exercises)
-      if (
-        !seen.has(exercise.exerciseId) &&
-        exercise.sets.some((set) => set.completed)
-      ) {
-        seen.add(exercise.exerciseId);
-        latest.push(exercise);
-      }
-  const earlyExercises = [];
-  const plannedSeen = new Set();
-  for (const day of state.program?.days || [])
-    for (const exercise of day.exercises || [])
-      if (!plannedSeen.has(exercise.exerciseId)) {
-        plannedSeen.add(exercise.exerciseId);
-        earlyExercises.push(exercise);
-      }
   const loggedRows = loggedExercises(state.workouts);
-  const progressionExercises = [];
-  const progressionSeen = new Set();
-  for (const exercise of [...latest, ...earlyExercises])
-    if (!progressionSeen.has(exercise.exerciseId)) {
-      progressionSeen.add(exercise.exerciseId);
-      progressionExercises.push(exercise);
-    }
-  const progressionPriority = (result) => {
-    if (result.type === "progress") return 0;
-    if (/smaller increment/i.test(result.title)) return 1;
-    if (result.type === "stalled") return 2;
-    return 3;
-  };
-  const allProgressionRows = progressionExercises
-    .map((exercise) => ({
-      exercise,
-      result: progressionFor(exercise, state.workouts, state.profile),
-    }))
-    .filter((item) => item.result)
-    .sort(
-      (left, right) =>
-        progressionPriority(left.result) - progressionPriority(right.result),
-    );
+  const allProgressionRows = selectProgressionRows(state, completedWorkouts);
   const progressionRows = allProgressionRows.slice(0, 4);
   const improvements = recentExerciseProgress(completedWorkouts);
   const title =
@@ -10586,31 +10595,15 @@ function Progress({ state, update, setDetail, setPage }) {
   const progressionSection = (<section className="progression-overview">
         <Eyebrow>PROGRESSION</Eyebrow>
         {progressionRows.length ? (
-          progressionRows.map(({ exercise, result }) => (
-            <button
-              key={exercise.exerciseId}
-              className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title) ? " progression-caution" : ""}`}
-              onClick={() => setDetail({ exercise })}
-            >
-              <span>
-                <strong>{exerciseName(exercise)}</strong>
-                <small>{result.title}</small>
-                {result.type === "progress" && result.weight ? (
-                  <small className="progression-next">
-                    Next: {displayWeight(result.weight, state.profile.units)} {unit}
-                  </small>
-                ) : null}
-              </span>
-              <span className="navigation-chevron" aria-hidden="true">
-                ›
-              </span>
-            </button>
+          progressionRows.map(row => (
+            <ProgressionRow key={row.exercise.exerciseId} row={row} units={state.profile.units} onClick={() => setDetail({ exercise: row.exercise })}/>
           ))
         ) : (
           <p className="progression-empty">
             More comparable sessions are needed before ROOK can suggest a progression.
           </p>
         )}
+        {allProgressionRows.length>4&&<ExerciseNavigationButton type="button" className="list-row progression-view-all" onClick={()=>setDetail({progressionOverview:{}})}><span>View all progression ({allProgressionRows.length})</span></ExerciseNavigationButton>}
       </section>);
   const photoSection = (<section className="workout-photo-entry-section">
         <Eyebrow>WORKOUT PHOTOS</Eyebrow>
@@ -10694,7 +10687,7 @@ function Progress({ state, update, setDetail, setPage }) {
       ) : null}
       <section className={`working-weights-section logged-exercises-preview${loggedRows.length ? '' : ' is-empty'}`}>
         <Eyebrow>EXERCISE HISTORY</Eyebrow>
-        {loggedRows.length?<>{loggedRows.slice(0,6).map(row=><LoggedExerciseRow compact key={row.exercise.exerciseId} row={row} state={state} onClick={()=>setDetail({exercise:row.exercise})}/>)}<button className="list-row logged-exercises-all" onClick={()=>setDetail({loggedExercises:{}})}><span>View all logged exercises ({loggedRows.length})</span><span aria-hidden="true">›</span></button></>:<><h3>No exercises logged yet</h3><p>Complete a workout to see your exercises and latest session details here.</p><button className="text-button" onClick={()=>setPage('today')}>Go to Today</button></>}
+        {loggedRows.length?<>{loggedRows.slice(0,6).map(row=><LoggedExerciseRow compact key={row.exercise.exerciseId} row={row} state={state} onClick={()=>setDetail({exercise:row.exercise})}/>)}<ExerciseNavigationButton type="button" className="list-row logged-exercises-all" onClick={()=>setDetail({loggedExercises:{}})}><span>View all logged exercises ({loggedRows.length})</span></ExerciseNavigationButton></>:<><h3>No exercises logged yet</h3><p>Complete a workout to see your exercises and latest session details here.</p><button className="text-button" onClick={()=>setPage('today')}>Go to Today</button></>}
       </section></>);
   return (
     <main className="screen progress-screen">
@@ -18455,6 +18448,8 @@ export function Detail({
     );
   if (detail?.loggedExercises)
     return <LoggedExercises state={state} setDetail={setDetail} close={close} initial={detail.loggedExercises}/>;
+  if (detail?.progressionOverview)
+    return <ProgressionOverview state={state} setDetail={setDetail} close={close} initial={detail.progressionOverview}/>;
   if (detail?.weightHistory)
     return (
       <WeightHistory
@@ -18527,6 +18522,8 @@ export function Detail({
         update={update}
         close={close}
         setDetail={setDetail}
+        onMoveCurrent={detail.onMoveCurrent}
+        onRemoveCurrent={detail.onRemoveCurrent}
       />
     );
   if (detail?.sessionLoggingSetup)
@@ -18594,14 +18591,15 @@ export function Detail({
           : loadRequirement === "optional"
             ? "No added weight"
             : "Not set yet";
-  const progression = sourceOnlyHistory ? null : progressionFor(exercise, state.workouts, state.profile);
+  const progression = sourceOnlyHistory ? null : nextWorkoutAdvice(exercise, state.workouts, state.profile);
   const detailIllustration = detailArtwork.source;
   return (
     <main ref={panelRef} className="screen detail-screen">
       <SheetHeader
         title={exerciseName(exercise)}
         onClose={close}
-        onBack={detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
+        onBack={detail.returnToProgression?()=>setDetail({progressionOverview:detail.returnToProgression}):detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
+        backLabel={detail.returnToProgression?'Back to exercise progression':detail.returnToLogged?'Back to logged exercises':'Back'}
         closeLabel={`Close ${exerciseName(exercise)} details`}
       />
       <div className={`exercise-detail-overview${detailIllustration ? " has-illustration" : ""}`}>
@@ -19529,7 +19527,8 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
   );
 }
 
-function ActiveExerciseOptions({ exercise, state, update, close, setDetail }) {
+function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMoveCurrent, onRemoveCurrent }) {
+  const [error,setError]=useState(''),acting=useRef(false);
   const active = state.activeWorkout;
   const exerciseIndex = active?.exercises.findIndex(
     (item) => item.id === exercise.id,
@@ -19558,6 +19557,13 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail }) {
           !candidate.sets.some((set) => set.completed),
       ),
   );
+  const isCurrent=exerciseIndex===active?.exerciseIndex;
+  const moveable=Boolean(onMoveCurrent)&&isCurrent&&canMoveCurrentToUpNext(active,current.id);
+  const removable=Boolean(onRemoveCurrent)&&isCurrent&&canRemoveCurrentExercise(active,current.id);
+  const apply=action=>{if(acting.current)return;acting.current=true;try{
+    if(action()===false)throw Error('Could not save the change. Nothing was changed. Try again.');
+    close();
+  }catch(failure){acting.current=false;setError(failure.message);}};
   return (
     <WorkoutOptionsSheet
       className="active-exercise-options-sheet"
@@ -19572,15 +19578,18 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail }) {
           <small>Reps per side or total reps · this workout only.</small>
         </button>
       )}
+      {moveable&&<button type="button" className="list-row" onClick={()=>apply(()=>onMoveCurrent?.(current.id))}>Move to Up Next</button>}
+      {removable&&<button type="button" className="list-row danger-text" onClick={()=>apply(()=>onRemoveCurrent?.(current.id))}>Remove from this workout</button>}
       <button className="list-row active-exercise-note-action" onClick={() => setDetail({ exerciseNote: current })}>
         <span>{!exercisePersonalNote(current) && <span aria-hidden="true">+ </span>}{exercisePersonalNote(current) ? "Edit note" : "Add note"}</span>
       </button>
-      {active?.source === 'freestyle' && current && !current.sets.some(set => set.completed) && (
+      {active?.source === 'freestyle' && isCurrent && current && !removable && !hasMeaningfulExerciseProgress(active,current.id) && !current.supersetId && (
         <button className="choice-row" onClick={() => {
           update(state => removeFreestyleExercise(state, current.id));
           close();
         }}>Remove exercise</button>
       )}
+      {error&&<p role="alert">{error}</p>}
       <button
         className="choice-row"
         onClick={() => setDetail({ exercise: current })}

@@ -41,6 +41,17 @@ function recommendedFixture(){
 }
 const recommend=()=>host.querySelector('.recommendation button');
 const pointerRecommend=()=>{const apply=recommend();act(()=>apply.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true})));act(()=>document.activeElement.blur());click(apply);};
+it('shows whole-session feedback as next-workout guidance without applying a load',()=>{
+ const state=recommendedFixture(),before=structuredClone(state.activeWorkout);
+ state.workouts.at(-1).sessionFeedback='harder';mount(state);
+ expect(host.textContent).toContain('Repeat before increasing');
+ expect(host.textContent).toContain('whole last session felt harder than expected');
+ expect(recommend()).toBeNull();
+ expect(current.activeWorkout).toEqual(before);
+ act(()=>changeState(s=>{s.workouts.at(-1).sessionFeedback='easier';return s;}));
+ expect(host.textContent).toContain('whole last session also felt easier than expected');
+ expect(recommend()).toBeTruthy();
+});
 it.each(['','53,','.'])('recommendation resolves only remaining weight drafts (%s) without a preliminary update',raw=>{
  const state=recommendedFixture(),exercise=state.activeWorkout.exercises[0];Object.assign(exercise.sets[2],{weight:65,reps:9,completed:true});mount(state);
  const before=structuredClone(current),node=input('weight');type(node,raw);pointerRecommend();expect(updates).toHaveBeenCalledOnce();expect(node.value).toBe('90');

@@ -76,6 +76,20 @@ function mount({ rirEnabled = true, kind = "weighted" } = {}) {
 const labels = () => [...host.querySelectorAll(".set-labels .logger-column-label")];
 const firstRow = () => host.querySelector('.set-row[aria-label="set 1"]');
 
+it('keeps exercise actions above the title, target and prior performance without changing logging', () => {
+  mount();
+  const header = host.querySelector('.exercise-heading');
+  const topline = header.querySelector('.exercise-heading-topline');
+  const body = header.querySelector('.exercise-heading-body');
+  expect(topline.compareDocumentPosition(body) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  expect(topline.textContent).toContain('EXERCISE 1 OF 1');
+  expect(topline.querySelector('button.text-button').textContent).toBe('Replace');
+  expect(topline.querySelector('[aria-label="Exercise options"]')).not.toBeNull();
+  expect(body.querySelector('.exercise-heading-content h1')).not.toBeNull();
+  expect(body.querySelector('.exercise-meta').textContent).toContain('Target');
+  expect(current.activeWorkout.exercises[0].sets[0].completed).toBe(true);
+});
+
 it.each([true,false])('groups per-side reps explicitly and keeps independent entry and one completion (RIR=%s)', rirEnabled => {
   mount({kind:'per-side',rirEnabled});
   const row=host.querySelector('.set-row[aria-label="set 2"]'),group=row.querySelector('[role="group"]');

@@ -15,7 +15,7 @@ import {
 } from "../src/domain.js";
 
 const root = new URL("../artifacts/active-workout-clarity/", import.meta.url);
-const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4173";
+const appUrl = process.env.ROOK_QA_URL || "http://127.0.0.1:4273";
 await mkdir(root, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, root));
 const today = weekday();
@@ -179,9 +179,10 @@ const [artBox, toplineBox, heroBox, replaceBox, optionsBox] = await Promise.all(
   page.getByRole("button", { name: "Replace", exact: true }).boundingBox(),
   page.getByRole("button", { name: "Exercise options" }).boundingBox(),
 ]);
-assert.ok(artBox.x + artBox.width <= toplineBox.x + 1);
+assert.ok(artBox.y >= toplineBox.y + toplineBox.height - 1, 'the compact actions row stays above the illustration');
+assert.ok((await heading.locator('h1').boundingBox()).x >= artBox.x + artBox.width, 'the title stays beside the illustration');
 assert.ok(replaceBox.y >= toplineBox.y && optionsBox.y >= toplineBox.y);
-assert.ok(heroBox.width > 280, "long narrow titles receive the full hero width below the artwork row");
+assert.ok(heroBox.width > 280, "the header retains a usable full-width actions row on narrow screens");
 const replaceAction = page.getByRole("button", { name: "Replace", exact: true });
 assert.equal(await replaceAction.isEnabled(), true);
 assert.equal(

@@ -164,22 +164,24 @@
 }
 
 .workout-screen .exercise-heading {
-  --active-exercise-art-size: 84px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  align-items: start;
-  column-gap: 12px;
+  /* Keep the artwork footprint independent of title length. */
+  --active-exercise-art-size: clamp(88px, 28.7vw, 112px);
+  display: block;
   margin-top: 18px;
   padding: 0 8px;
 }
-.workout-screen .exercise-heading.has-illustration {
+.exercise-heading-body { min-width: 0; margin-top: 2px; }
+.workout-screen .exercise-heading.has-illustration .exercise-heading-body {
+  display: grid;
   grid-template-columns: var(--active-exercise-art-size) minmax(0, 1fr);
+  align-items: start;
+  column-gap: 12px;
 }
-.exercise-heading-art-button { width: var(--active-exercise-art-size); height: var(--active-exercise-art-size); margin: 1px 0 0; padding: 6px; border: 0; border-radius: 18px; background: #f1eee8; display: grid; place-items: center; color: inherit; }
+.exercise-heading-art-button { width: var(--active-exercise-art-size); height: var(--active-exercise-art-size); margin: 0; padding: 2px; border: 0; border-radius: 18px; background: #f1eee8; display: grid; place-items: center; color: inherit; }
 .exercise-heading-art { display: block; width: 100%; height: 100%; object-fit: contain; }
 .exercise-heading-content { min-width: 0; }
 .exercise-heading-topline {
-  min-height: 28px;
+  min-height: 44px;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -637,18 +639,10 @@
 
 
 @media (max-width: 350px) {
-  .exercise-heading-art-button { padding: 5px; border-radius: 15px; }
+  .exercise-heading-art-button { border-radius: 15px; }
 }
 @media (max-width: 374px) {
-  .workout-screen .exercise-heading.has-illustration { --active-exercise-art-size: 60px; column-gap: 9px; }
-  .workout-screen .exercise-heading.has-illustration.long-title {
-    --active-exercise-art-size: 52px;
-    row-gap: 7px;
-  }
-  .exercise-heading.has-illustration.long-title .exercise-heading-content { display: contents; }
-  .exercise-heading.has-illustration.long-title .exercise-heading-topline { grid-column: 2; grid-row: 1; }
-  .exercise-heading.has-illustration.long-title :is(h1, .exercise-meta, .exercise-history-meta, .exercise-program-note, .exercise-personal-note, .superset-next-step) { grid-column: 1 / -1; }
-  .exercise-heading.has-illustration.long-title h1 { margin-top: 0; }
+  .workout-screen .exercise-heading.has-illustration .exercise-heading-body { column-gap: 9px; }
   .set-labels.with-rir,
   .set-row.with-rir { grid-template-columns: 34px minmax(0, 1fr) minmax(0, 1fr) 54px 42px; }
   .set-labels,

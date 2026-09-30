@@ -1,5 +1,23 @@
 import {refreshWorkoutWarmup} from './domain.js';
-import {canRemoveUpNext} from './upNextRemoval.js';
+import {canRemoveUpNext,hasMeaningfulExerciseProgress} from './upNextRemoval.js';
+
+export function canMoveCurrentToUpNext(workout,id) {
+  const index=workout?.exerciseIndex ?? -1;
+  const current=workout?.exercises?.[index],next=workout?.exercises?.[index+1];
+  return Boolean(current?.id===id && next && !current.supersetId && !next.supersetId &&
+    !hasMeaningfulExerciseProgress(workout,id) && !hasMeaningfulExerciseProgress(workout,next.id));
+}
+
+export function moveCurrentToUpNext(state,{sessionId,currentId,nextId}) {
+  const active=state.activeWorkout;
+  if(active?.id!==sessionId || !canMoveCurrentToUpNext(active,currentId) ||
+    active.exercises[active.exerciseIndex+1]?.id!==nextId)return state;
+  const exercises=[...active.exercises],index=active.exerciseIndex;
+  [exercises[index],exercises[index+1]]=[exercises[index+1],exercises[index]];
+  const workout={...active,exercises,updatedAt:Date.now()};
+  refreshWorkoutWarmup(workout,state.profile,state.program);
+  return {...state,activeWorkout:workout};
+}
 
 // Started work and supersets are barriers, not merely disabled drag sources.
 export function upNextReorderGroups(workout) {

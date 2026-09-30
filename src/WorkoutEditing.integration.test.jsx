@@ -72,6 +72,20 @@ it('embedded saved browse, preview and editor keep the shared picker identity an
 
 function savedFixture(active=true){let s=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank');s=saveWorkoutTemplate(s,{...templateDraft(s.activeWorkout,s),name:'Saved routine'},{id:'saved'});if(!active)s.activeWorkout=null;return s;}
 function mountSaved(initial){mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);click(host.querySelector('.saved-workout-list .list-row'));}
+it('uses workout, not template, in saved-workout browse, preview, actions and editor copy',()=>{
+ const initial=savedFixture(false);
+ mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
+ const visibleCopy=()=>[document.body.textContent,...document.querySelectorAll('[aria-label],[title],[placeholder]')].map(item=>typeof item==='string'?item:[item.getAttribute('aria-label'),item.getAttribute('title'),item.getAttribute('placeholder')].filter(Boolean).join(' ')).join(' ');
+ expect(visibleCopy()).toMatch(/saved workouts/i);
+ expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
+ click(host.querySelector('.saved-workout-list .list-row'));
+ expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
+ templateOption('Edit exercises');
+ expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
+ click(button('Cancel'));
+ templateOption('Delete saved workout');
+ expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
+});
 it.each(['close','back','backdrop','escape'])('saved options %s dismissal preserves data and returns focus to the trigger',method=>{
  const initial=savedFixture();mountSaved(initial);expect(button('Rename')).toBeUndefined();expect(button('Edit exercises')).toBeUndefined();expect(button('Delete saved workout')).toBeUndefined();
  const trigger=host.querySelector('[aria-label="Saved workout options"]');trigger.focus();click(trigger);act(()=>vi.advanceTimersByTime(20));

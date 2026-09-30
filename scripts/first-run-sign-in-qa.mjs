@@ -39,10 +39,13 @@ try {
     try {
       await page.goto(`${base}/${out}/review.html?style=${style}&appearance=${appearance}`);
       await page.getByRole('heading', { name: 'A plan that fits your week.' }).waitFor();
-      const signIn = page.getByRole('button', { name: 'Sign in', exact: true });
+      const signIn = page.getByRole('button', { name: 'Sign in / Create account', exact: true });
       assert.ok((await signIn.boundingBox()).height >= 44);
+      const landingWidth = await page.evaluate(() => ({ content: document.documentElement.scrollWidth, viewport: innerWidth }));
+      assert.ok(landingWidth.content <= landingWidth.viewport, `${label} landing horizontal overflow: ${JSON.stringify(landingWidth)}`);
+      if (width === 320 && style === 'standard' && appearance === 'dark') await page.screenshot({ path: `${out}/${engine}-${label}-landing.png` });
       await signIn.click();
-      await page.getByRole('heading', { name: 'Welcome back' }).waitFor();
+      await page.getByRole('heading', { name: 'Sign in or create account' }).waitFor();
       await page.locator('[data-swipe-parent]').waitFor({ state: 'detached' });
       const signBack = await page.locator('.entry-sign-in .first-run-back-button').evaluate(node => ({
         color: getComputedStyle(node).color, height: node.getBoundingClientRect().height,
@@ -69,7 +72,7 @@ try {
       assert.deepEqual(restoreBack, signBack, `${label} Restore and Sign in Back presentation`);
       if (width === 390) await page.screenshot({ path: `${out}/${engine}-${label}-restore.png` });
       await page.getByRole('button', { name: /Back/ }).first().click();
-      await page.getByRole('heading', { name: 'Welcome back' }).waitFor();
+      await page.getByRole('heading', { name: 'Sign in or create account' }).waitFor();
       await page.getByRole('button', { name: 'Back to start' }).click();
       await page.getByRole('heading', { name: 'A plan that fits your week.' }).waitFor();
       assert.deepEqual(errors, []);

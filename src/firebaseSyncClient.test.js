@@ -43,5 +43,10 @@ describe('Firebase identity boundary', () => {
     expect(await linkGoogleAnonymousAccount(sdk)).toMatchObject({ status: 'existing-account-conflict', uid: 'original' });
     sdk.authApi.linkWithPopup.mockResolvedValueOnce({ user: { uid: 'other' } });
     await expect(linkGoogleAnonymousAccount(sdk)).rejects.toThrow(/identity changed/);
+    sdk.authApi.linkWithPopup.mockImplementationOnce(async original => {
+      sdk.auth.currentUser = { uid: 'other', isAnonymous: false };
+      return { user: { uid: original.uid, isAnonymous: false } };
+    });
+    await expect(linkGoogleAnonymousAccount(sdk)).rejects.toThrow(/identity changed/);
   });
 });

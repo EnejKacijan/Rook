@@ -68,15 +68,15 @@ it('Bring my plan keeps manual weekly creation distinct from reusable workouts',
   act(()=>host.querySelector('[aria-label="Back to start"]').click());expect(back).toHaveBeenCalledOnce();
   expect(host.textContent).toContain('weekly program day by day');expect(host.textContent).not.toContain('Create a workout');
 });
-it('offers a quiet returning-user Sign in only when the existing account gate supplies the route', () => {
+it('offers one quiet sign-in and account-creation entry only when the account gate supplies the route', () => {
   const signIn=vi.fn();
   act(()=>root.render(<EntryLanding {...actions} signIn={signIn}/>));
-  expect(button('Sign in').parentElement.className).toBe('entry-top');
+  expect(button('Sign in / Create account').parentElement.className).toBe('entry-top');
   expect(button('Restore')).toBeUndefined();
-  click('Sign in'); expect(signIn).toHaveBeenCalledOnce();
+  click('Sign in / Create account'); expect(signIn).toHaveBeenCalledOnce();
   expect(actions.personalize).not.toHaveBeenCalled();
   act(()=>root.render(<EntryLanding {...actions}/>));
-  expect(button('Restore')).toBeTruthy(); expect(button('Sign in')).toBeUndefined();
+  expect(button('Restore')).toBeTruthy(); expect(button('Sign in / Create account')).toBeUndefined();
 });
 it('keeps provider cancellation on the child screen without changing the Landing',async()=>{
   const back=vi.fn(),restoreBackup=vi.fn(),onSignedIn=vi.fn();
@@ -84,6 +84,8 @@ it('keeps provider cancellation on the child screen without changing the Landing
   const signInWithGoogle=vi.fn().mockRejectedValue(cancelled);
   act(()=>root.render(<FirstRunSignIn back={back} restoreBackup={restoreBackup}
     providerReady signInWithGoogle={signInWithGoogle} onSignedIn={onSignedIn}/>));
+  expect(host.querySelector('h1').textContent).toBe('Sign in or create account');
+  expect(host.textContent).toContain('ROOK opens your existing profile, or creates an account if you are new.');
   expect(host.querySelector('.first-run-back-button svg path')?.getAttribute('d')).toBe('m12.5 4.5-5.5 5.5 5.5 5.5');
   expect(host.querySelector('.entry-sign-in-restore svg')).toBeTruthy();
   await act(async()=>button('CONTINUE WITH GOOGLE').click());

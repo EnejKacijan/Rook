@@ -7,6 +7,11 @@ export const addCalendarDays = (date, amount) => {
   value.setDate(value.getDate() + amount);
   return isoDay(value);
 };
+export function remainingPlanWeekDates(today = isoDay()) {
+  const end = addCalendarDays(weekKey(today), 6), dates = [];
+  for (let date = today; date <= end; date = addCalendarDays(date, 1)) dates.push(date);
+  return dates;
+}
 const validDate = date => /^\d{4}-\d{2}-\d{2}$/.test(date || '') && isoDay(new Date(`${date}T12:00:00`)) === date;
 const identity = item => `${item.workoutId}:${item.originalDate}`;
 const records = state => Object.values(state.flexibleWeek?.sessions || {});
@@ -288,10 +293,16 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
       push(item, request.toDate);
     }
   } else if (request.mode === 'available') {
-    if (!Array.isArray(request.availableDates) || request.availableDates.some(date => !validDate(date) || date < today || date > end) || (request.windowDays != null && ![7, 14].includes(request.windowDays))) return fail('Choose valid dates within the temporary availability window.');
+    if (!Array.isArray(request.availableDates) || request.availableDates.some(date => !validDate(date) || date < today || date > end) ||
+      (request.windowDays != null && ![7, 14].includes(request.windowDays)) ||
+      (request.dateScope != null && request.dateScope !== 'current-week') ||
+      (request.dateScope === 'current-week' && (request.windowDays != null || request.carry)))
+      return fail('Choose valid dates within the temporary availability window.');
     const available = [...new Set(request.availableDates || [])].filter(d => validDate(d) && d >= today && d <= end).sort();
-    const cutoff = request.carry ? addCalendarDays(weekKey(today), 6) : addCalendarDays(today, request.windowDays === 14 ? 13 : 6);
-    if (!request.carry && available.some(date => date > cutoff)) return fail('Show more dates before selecting days outside this window.');
+    const cutoff = request.dateScope === 'current-week' || request.carry ? addCalendarDays(weekKey(today), 6) : addCalendarDays(today, request.windowDays === 14 ? 13 : 6);
+    if (!request.carry && available.some(date => date > cutoff)) return fail(request.dateScope === 'current-week'
+      ? 'Adjust week can only use dates through this Sunday. Move a workout to choose a later date.'
+      : 'Show more dates before selecting days outside this window.');
     const scope = availabilityAdjustmentScope(state, today, all), targets = scope.sources;
     const targetIds = new Set(targets.map(i => i.logicalSessionId));
     const occupied = new Map(all.filter(i => !targetIds.has(i.logicalSessionId) && i.status !== 'skipped').map(i => [i.scheduledDate, i]));

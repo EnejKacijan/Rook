@@ -38,11 +38,14 @@ try{
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     assert.equal(await page.locator('.flexible-week-sheet').evaluate(n=>n.scrollWidth<=n.clientWidth+1),true);
    };
-   await open();assert.equal(await page.locator('[data-available-date]').count(),7);
+   await open();assert.equal(await page.locator('[data-available-date]').count(),6);
+   assert.equal(await page.locator('[data-available-date="2026-10-05"]').count(),0);
    assert.match(await page.locator('.flexible-week-sheet [role="status"]').innerText(),/4 of 5/);
-   // Five selected dates with occupied next Monday: review the conflict, don't absorb it.
+   if(width===390)await page.screenshot({path:out+'/'+label+'-remaining-week.png'});
+   // Only the remaining Tuesday–Sunday dates can be selected; next Monday is
+   // outside Adjust week even though the separate Move flow can reach it.
    await review();assert.equal(await page.locator('.flexible-week-review article').count(),5);
-   assert.match(await page.locator('.flexible-week-sheet').innerText(),/Mon, Oct 5 already has UPPER A/);
+   assert.doesNotMatch(await page.locator('.flexible-week-sheet').innerText(),/Mon, Oct 5/);
    assert.equal(await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).isDisabled(),true);
    const ids=await page.locator('.flexible-week-review article').evaluateAll(nodes=>nodes.map(n=>n.dataset.sessionId));
    await page.getByRole('button',{name:'EDIT DAYS',exact:true}).click();
@@ -58,8 +61,8 @@ try{
    if(width===390&&style==='premium'&&appearance==='dark')await page.screenshot({path:out+'/'+label+'-unresolved.png'});
    await page.getByRole('button',{name:'Back',exact:true}).click();
    assert.equal(await page.locator('[data-available-date][aria-pressed="true"]').count(),4);
-   await page.getByRole('button',{name:'SHOW LATER DATES',exact:true}).click();assert.equal(await page.locator('[data-available-date]').count(),14);
-   await select(['2026-09-29','2026-09-30','2026-10-01','2026-10-02','2026-10-10']);
+   assert.match(await page.locator('.flexible-week-sheet').innerText(),/Use Move a workout/);
+   await select(['2026-09-29','2026-09-30','2026-10-01','2026-10-02','2026-10-04']);
    await review();assert.deepEqual(await page.locator('.flexible-week-review article').evaluateAll(nodes=>nodes.map(n=>n.dataset.sessionId)),ids);
    assert.equal(await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).isEnabled(),true);
    await page.getByRole('button',{name:'CANCEL',exact:true}).click();await page.locator('.modal-layer').waitFor({state:'detached'});

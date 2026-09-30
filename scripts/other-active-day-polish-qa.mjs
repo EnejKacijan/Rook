@@ -21,7 +21,7 @@ for (const width of [320, 390, 430]) for (const appearance of ['light', 'dark'])
   const page = await context.newPage(), errors = [];
   page.on('pageerror', error => errors.push(error.message));
   await page.route('**/api/ai/status', r => r.fulfill({ status: 200, contentType: 'application/json', body: '{"available":false}' }));
-  await page.goto(process.env.ROOK_QA_URL || 'http://127.0.0.1:4173', { waitUntil: 'networkidle' });
+  await page.goto(process.env.ROOK_QA_URL || 'http://127.0.0.1:4273', { waitUntil: 'networkidle' });
   await page.locator('.active-workout-start-lock').waitFor();
   await page.waitForTimeout(350);
   assert.equal(await page.locator('.active-workout-notice').count(), 1);
@@ -37,7 +37,7 @@ for (const width of [320, 390, 430]) for (const appearance of ['light', 'dark'])
   assert.equal(geometry.overflow, false);
   if (phase === 'after') {
     // Current regression invariant; do not depend on an old date/fixture's screenshot geometry.
-    assert.ok(geometry.gap >= 38 && geometry.gap <= 64, 'selected-day content retains restrained separation');
+    assert.ok(geometry.gap >= 20 && geometry.gap <= 28, 'selected-day content retains a compact separation');
     assert.equal(await page.getByText('Finish your active workout to edit exercises.', { exact: true }).count(), 0);
     assert.equal(await page.locator('.active-workout-start-lock').count(), 1);
     assert.match(await page.locator('.active-workout-start-lock').innerText(), /Finish the active session/);

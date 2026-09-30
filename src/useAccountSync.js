@@ -41,14 +41,26 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     finally { if (accountActions.current.epoch === epoch) accountActions.current.busy = false; }
   }, []);
   const secureWithGoogle = useCallback(() => accountAction(async current => {
-    const client = clientRef.current, user = client?.auth.currentUser;
-    const ledger = readAccountSyncLedger(globalThis.localStorage, latest.current.state.profile.id);
-    if (!client || !user?.isAnonymous || ledger?.accountUid !== user.uid || sync.state !== 'synced') throw new Error('Finish syncing this account before securing it.');
+    const storage = globalThis.localStorage, client = clientRef.current, user = client?.auth.currentUser;
+    const profileId = latest.current.state.profile.id;
+    const ledger = readAccountSyncLedger(storage, profileId);
+    const snapshot = readLocalSyncSnapshot(storage, hydrateStoredState);
+    if (!client || !user?.isAnonymous || !latest.current.state.profile.onboardingComplete
+      || latest.current.persistenceFailed || ledger?.accountUid !== user.uid
+      || snapshot.state.profile.id !== profileId || serializeState(latest.current.state) !== snapshot.raw
+      || storage.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true' || storage.getItem(PROFILE_SWITCHING_KEY) === 'true')
+      throw new Error('Save this profile and finish account setup before connecting Google.');
     const result = await linkGoogleAnonymousAccount(client);
-    if (!current()) throw new Error('Account changed during linking. Reopen this profile to continue.');
-    if (result.status === 'linked') setSync(current => ({ ...current, linked: true, email: result.user.email || null }));
+    if (!current() || client.auth.currentUser?.uid !== user.uid
+      || readAccountSyncLedger(storage, profileId)?.accountUid !== user.uid
+      || readLocalSyncSnapshot(storage, hydrateStoredState).state.profile.id !== profileId)
+      throw new Error('Account changed during linking. Reopen this profile to continue.');
+    if (result.status === 'linked') {
+      setSync(previous => ({ ...previous, state: 'syncing', linked: true, email: result.user.email || null }));
+      scheduleRef.current?.(0);
+    }
     return result;
-  }), [sync.state, accountAction]);
+  }), [accountAction]);
   const signOutAccount = useCallback(() => accountAction(async () => {
     const client = clientRef.current, user = client?.auth.currentUser;
     const ledger = readAccountSyncLedger(globalThis.localStorage, latest.current.state.profile.id);
@@ -267,6 +279,14 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     };
   }, [state.profile.onboardingComplete, state.profile.id, update]);
   const separate = hasSavedParent(activeProfileSlot());
-  return { ...sync, enabled: safelyConfigured(), separate, secureWithGoogle, signOutAccount, signInToThisDevice, signInWithAnotherAccount,
+  let canSecure = false;
+  try {
+    const user = clientRef.current?.auth.currentUser;
+    canSecure = Boolean(state.profile.onboardingComplete && !persistenceFailed && !sync.locked && user?.isAnonymous
+      && readAccountSyncLedger(globalThis.localStorage, state.profile.id)?.accountUid === user.uid
+      && globalThis.localStorage.getItem(ACCOUNT_SIGNED_OUT_KEY) !== 'true'
+      && globalThis.localStorage.getItem(PROFILE_SWITCHING_KEY) !== 'true');
+  } catch { /* Unreadable local account metadata cannot authorize linking. */ }
+  return { ...sync, enabled: safelyConfigured(), separate, canSecure, secureWithGoogle, signOutAccount, signInToThisDevice, signInWithAnotherAccount,
     useSeparateProfile, switchToSavedProfile, signInFirstRunWithGoogle, detachFirstRunAccountAfterBackup };
 }

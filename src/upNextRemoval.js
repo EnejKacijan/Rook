@@ -22,6 +22,39 @@ export function canRemoveUpNext(workout, id) {
     !hasMeaningfulExerciseProgress(workout,id);
 }
 
+// The current exercise can leave the session only when another exercise can
+// become current. A target's prefilled reps/load are not logged results.
+export function canRemoveCurrentExercise(workout, id) {
+  const index=workout?.exerciseIndex ?? -1;
+  const exercise=workout?.exercises?.[index];
+  return Boolean(exercise?.id===id && workout.exercises[index+1] && !exercise.supersetId &&
+    !hasMeaningfulExerciseProgress(workout,id));
+}
+
+export function removeCurrentExercise(state,id) {
+  const active=state.activeWorkout;
+  if(!canRemoveCurrentExercise(active,id))return {state,undo:null};
+  const index=active.exerciseIndex;
+  const exercise=structuredClone(active.exercises[index]);
+  const exercises=active.exercises.filter(entry=>entry.id!==id);
+  const next={...state,activeWorkout:{...active,exercises,updatedAt:Date.now(),
+    removedUpNextExercises:[...(active.removedUpNextExercises||[]),exercise]}};
+  refreshWorkoutWarmup(next.activeWorkout,state.profile,state.program);
+  return {state:next,undo:{kind:'current',sessionId:active.id,currentId:exercises[index].id,
+    index,exercise,remainingStructure:structure(exercises)}};
+}
+
+export function canUndoCurrentExerciseRemoval(state,record) {
+  return record?.kind==='current' && canUndoUpNextRemoval(state,record);
+}
+
+export function undoCurrentExerciseRemoval(state,record) {
+  if(!canUndoCurrentExerciseRemoval(state,record))return state;
+  // The original current exercise resumes; the temporarily selected next
+  // exercise returns to Up Next with its identity and target intact.
+  return undoUpNextRemoval(state,record);
+}
+
 export function removeUpNext(state,id) {
   const active=state.activeWorkout;
   if(!canRemoveUpNext(active,id))return {state,undo:null};
