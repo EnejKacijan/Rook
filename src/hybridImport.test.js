@@ -1,4 +1,5 @@
 import {afterEach,it,expect,vi} from 'vitest';
+vi.mock('./aiAuthorization.js',()=>({aiAuthorizationHeaders:async()=>({authorization:'Bearer synthetic-test-user'})}));
 import {AIService} from './aiService.js';
 import {hybridOwnerNotes} from './hybridImportFixture.js';
 import {validateHybridInterpretation,mergeHybridInterpretation,hybridInterpretationSchema} from './hybridImport.js';

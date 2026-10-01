@@ -1,12 +1,13 @@
 // @vitest-environment node
 import { createServer, request as httpRequest } from 'node:http';
 import { afterAll, afterEach, beforeAll, expect, it, vi } from 'vitest';
+import { testAiSecurity } from './fixtures/aiTestSecurity.js';
 
 let server, base;
 beforeAll(async () => {
   vi.stubEnv('OPENAI_API_KEY', 'test-only-not-a-secret');
   const { rookRequestHandler } = await import('../server.mjs');
-  server = createServer(rookRequestHandler);
+  server = createServer((req, res) => rookRequestHandler(req, res, { securityFactory: async () => testAiSecurity() }));
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   base = `http://127.0.0.1:${server.address().port}`;
 });
@@ -14,7 +15,7 @@ afterEach(() => vi.unstubAllGlobals());
 afterAll(async () => { await new Promise(resolve => server.close(resolve)); vi.unstubAllEnvs(); });
 
 const post = (operation, payload) => new Promise((resolve, reject) => {
-  const request = httpRequest(`${base}/api/ai`, { method:'POST', headers:{'content-type':'application/json'} }, response => {
+  const request = httpRequest(`${base}/api/ai`, { method:'POST', headers:{'content-type':'application/json', authorization:'Bearer test-alice'} }, response => {
     let body = '';
     response.on('data', part => { body += part; });
     response.on('end', () => resolve({status:response.statusCode, body:JSON.parse(body)}));

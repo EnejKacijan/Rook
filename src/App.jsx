@@ -4965,9 +4965,12 @@ export function Today({
   if(!completed && occurrence && occurrence.status==='active' && sourceLinkedActive)return <main className="screen today-screen">{calendar()}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>Started early · {shortDisplayDate(activeDateKey)}</p><Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>{freestyleEntry}</section></main>;
   if(!completed && occurrence && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{occurrence.status==='skipped'?'Skipped this session':occurrence.status==='active'?'Workout in progress':occurrence.status==='reserved'?'Included in a combined workout':'Completed in a combined workout'}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
   const isHistoricalWeek = selectedMonday < currentMonday;
-  const movedSource = occurrence?.originalDate===selectedIso && occurrence.scheduledDate!==selectedIso ? occurrence : flexibleSourceForDate(state, selectedIso)[0];
-  const movedSourceIssue = scheduleReview.unresolved.find(item=>item.id===(movedSource?.logicalSessionId||movedSource?.id));
-  if (!template && !completed && movedSource) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSourceIssue ? 'Needs a destination' : movedSource.skipped ? 'Skipped this week' : `Moved to ${displayDate(localDate(movedSource.scheduledDate))}`}</p>{movedSourceIssue ? <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button> : !movedSource.skipped && <Button variant="secondary" onClick={() => selectDate(weekday(movedSource.scheduledDate), localDate(movedSource.scheduledDate))}>VIEW DESTINATION</Button>}{freestyleEntry}</section></main>;
+  const movedSources = flexibleSourceForDate(state, selectedIso);
+  const movedSourceIssue = scheduleReview.unresolved.find(item=>movedSources.some(source=>source.id===item.id));
+  const movedSource = movedSources.find(source=>source.id===movedSourceIssue?.id) || movedSources[0];
+  // Invalid links and explicit skips retain their existing actionable meaning.
+  // A successful move, in contrast, is provenance, not this date's workout.
+  if (!template && !completed && movedSource && (movedSourceIssue || movedSource.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSourceIssue ? 'Needs a destination' : 'Skipped this week'}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
   if (!template && !completed) {
     const upcoming = scheduleReader.next(selectedIso);
     const upcomingTitle = upcoming
@@ -4980,6 +4983,13 @@ export function Today({
         ["Cardio", "Mobility"].includes(item.kind),
     );
     const isToday = selectedIso === isoDay();
+    const dateOccurrences = scheduleReader.occurrences(selectedIso);
+    const movedAway = dateOccurrences.filter(item=>item.originalDate===selectedIso && item.scheduledDate!==selectedIso && item.moved && !item.skipped);
+    const movedAwayRest = movedAway.length>0 && !movedSourceIssue &&
+      !dateOccurrences.some(item=>item.scheduledDate===selectedIso) &&
+      !datedWorkouts.some(workout=>workoutPerformedDate(workout)===selectedIso) &&
+      !selectedActiveWorkout && !sourceLinkedActive && completedOptional.length===0 &&
+      !(state.activeOptionalSession?.date===selectedIso);
     return (
       <main className={`screen today-screen${trackedActive ? " viewing-other-workout" : ""}`}>
         {calendar(false)}
@@ -4987,13 +4997,17 @@ export function Today({
         {activeOptionalNotice}
         {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
         <section className="rest-day-state">
-          {dayHeader('REST DAY')}
+          {dayHeader(movedAwayRest ? displayDate(selectedDate) : 'REST DAY')}
           <h1>Rest day</h1>
           <p>
-            {isHistoricalWeek
+            {movedAwayRest ? "No workout scheduled for this day." : isHistoricalWeek
               ? "No workout was planned on this date."
               : "This is a planned recovery day."}
           </p>
+          {movedAwayRest && <div className="today-moved-provenance" aria-label="Moved workouts">{movedAway.map(item=><div key={item.logicalSessionId}>
+            <p>{item.workout.name} moved to {displayDate(localDate(item.scheduledDate))}</p>
+            <button type="button" className="text-button" onClick={()=>selectDate(weekday(item.scheduledDate),localDate(item.scheduledDate))}>View workout <span aria-hidden="true">›</span></button>
+          </div>)}</div>}
           {missedReminder}
           <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso}
             historyOnly />
@@ -11304,7 +11318,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <span>›</span>
         </button>
         <button
-          className="list-row"
+          className="list-row program-group-last-row"
           onClick={() =>
             setDetail({ export: { date: state.selectedDate } })
           }

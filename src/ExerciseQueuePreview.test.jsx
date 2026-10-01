@@ -62,11 +62,13 @@ it('owner flow uses truthful priority, one durable addition, retained browser id
  mount();const initial=structuredClone(current),sheet=host.querySelector('.freestyle-queue-picker'),header=sheet.querySelector('header'),input=host.querySelector('input'),list=host.querySelector('[data-exercise-search-scroll]');
  type(input,'hack squat');list.scrollTop=123;click(host.querySelector('.queue-search-body'));
  expect(sheet.querySelector('header')).toBe(header);expect(sheet.classList.contains('exercise-search-sheet')).toBe(true);expect(sheet.classList.contains('has-sheet-action-footer')).toBe(true);expect(header.textContent).toContain('Exercise');expect(current).toEqual(initial);expect(button('Back to workout')).toBeUndefined();
+ expect(sheet.classList.contains('has-exercise-preview')).toBe(true);
  expect(button('Add to Up Next').className).toContain('primary');expect(button('Do now').className).toContain('secondary');expect(sheet.querySelector('[aria-label="View Hack Squat image"]')).not.toBeNull();
  const add=button('Add to Up Next'),save=vi.spyOn(domain,'saveState');act(()=>{add.click();add.click();});
  expect(save).toHaveBeenCalledOnce();expect(current.activeWorkout.exercises).toHaveLength(2);expect(current.activeWorkout.exercises[0]).toEqual(initial.activeWorkout.exercises[0]);expect(current.activeWorkout.rest).toEqual(initial.activeWorkout.rest);expect(close).not.toHaveBeenCalled();
  expect(button('✓ In Up Next').disabled).toBe(true);expect(host.querySelector('.queue-preview-added').className).toContain('is-acknowledged');
  click(host.querySelector('.detail-header-back'));expect(host.querySelector('input')).toBe(input);expect(input.value).toBe('hack squat');expect(host.querySelector('[data-exercise-search-scroll]')).toBe(list);expect(list.scrollTop).toBe(123);expect(document.activeElement.className).toBe('queue-search-body');expect(button('Back to workout')).toBeDefined();
+ expect(sheet.classList.contains('has-exercise-preview')).toBe(false);
  click(host.querySelector('.queue-search-body'));expect(button('✓ In Up Next').disabled).toBe(true);expect(host.querySelector('.queue-exercise-preview').scrollTop).toBe(0);
  click(host.querySelector('.detail-header-close'));expect(close).toHaveBeenCalledOnce();expect(domain.deserializeState(domain.serializeState(current),{strict:true}).activeWorkout.exercises).toEqual(current.activeWorkout.exercises);
 });

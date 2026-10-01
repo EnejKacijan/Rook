@@ -3,6 +3,8 @@ import { appendFile, mkdir, readFile } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { extname, join, normalize } from "node:path";
 import { gzipSync } from "node:zlib";
+import { AsyncLocalStorage } from 'node:async_hooks';
+import { ApiError, getAiSecurity, securityConfiguration, readJsonBody, readProviderJson, validateAiInput, importRequestKey } from './server/aiSecurity.mjs';
 import {hybridInterpretationSchema,hybridInterpretationInstructions,hybridInterpretationRoleRules,validateHybridInterpretation} from './src/hybridImport.js';
 import {
   applyExpertPolicyToPlan,
@@ -26,10 +28,11 @@ const expertReasoning = process.env.OPENAI_EXPERT_REASONING || "high";
 const defaultReasoning = process.env.OPENAI_REASONING || "low";
 const importReasoning = process.env.OPENAI_IMPORT_REASONING || "low";
 const apiKey = process.env.OPENAI_API_KEY;
-const expertLabEnabled = process.env.EXPERT_LAB_ENABLED === "true";
-const expertPolicyEnabled = process.env.EXPERT_POLICY_ENABLED !== "false";
+const expertLabEnabled = process.env.EXPERT_LAB_ENABLED === "true" && process.env.NODE_ENV !== 'production' && !process.env.NETLIFY;
+const expertPolicyEnabled = process.env.EXPERT_POLICY_ENABLED === "true";
 const developmentLogging = process.env.NODE_ENV !== "production";
 const activeImportRequests = new Map();
+const aiContext = new AsyncLocalStorage();
 const expertFeedbackFile = join(process.cwd(), "data", "expert-feedback.jsonl");
 const mime = {
   ".html": "text/html",
@@ -702,6 +705,8 @@ function operationConfiguration(operation, payload = {}) {
 }
 
 async function callProvider(operation, payload) {
+  const context = aiContext.getStore();
+  if (!context) throw new ApiError(503, 'ai-disabled', 'AI is temporarily unavailable.');
   const schema = operation==='interpret-import'?{name:'source_backed_import_fragments',schema:hybridInterpretationSchema}:schemas[operation];
   if (!schema) throw new Error("Unknown AI operation.");
   const input =
@@ -744,6 +749,7 @@ async function callProvider(operation, payload) {
   const requestBody = {
     model: selectedModel,
     store: false,
+    max_output_tokens: context.security.config.maxOutputTokens,
     instructions: operation==='interpret-import'?`${hybridInterpretationInstructions}\n${hybridInterpretationRoleRules}`:instructions[operation],
     input,
     text: {
@@ -756,8 +762,9 @@ async function callProvider(operation, payload) {
     },
   };
   if (supportsReasoning(selectedModel)) requestBody.reasoning = { effort };
-  let response;
+  let response, data;
   const startedAt = Date.now();
+  const release = await context.security.reserveProvider(context.user, requestBody);
   try {
     response = await fetch("https://api.openai.com/v1/responses", {
       method: "POST",
@@ -768,16 +775,19 @@ async function callProvider(operation, payload) {
       body: JSON.stringify(requestBody),
       signal: AbortSignal.timeout(upstreamTimeoutMs),
     });
+    data = await readProviderJson(response);
   } catch (error) {
     if (error?.name === "TimeoutError" || error?.name === "AbortError") {
       const timeoutError = new Error("Provider request took too long.");
       timeoutError.retryable = true;
       throw timeoutError;
     }
-    error.retryable = true;
+    if (!(error instanceof ApiError)) error.retryable = true;
     throw error;
+  } finally {
+    // Release failures leave a bounded expiring lease; never refund spend.
+    await release().catch(() => {});
   }
-  const data = await response.json();
   const latencyMs = Date.now() - startedAt;
   if (developmentLogging)
     console.log(
@@ -1008,7 +1018,7 @@ async function openAI(operation, payload) {
   }
   if (operation === "plan") return generatePlan(payload);
   if (operation === "import-plan") {
-    const attemptId = String(payload?.importAttemptId || "").trim();
+    const attemptId = importRequestKey(aiContext.getStore()?.user.uid, payload);
     if (attemptId && activeImportRequests.has(attemptId))
       return activeImportRequests.get(attemptId);
     const importing = (async () => {
@@ -1037,10 +1047,28 @@ async function openAI(operation, payload) {
   return callProvider(operation, payload);
 }
 
-export async function rookRequestHandler(request, response) {
+export async function rookRequestHandler(request, response, { securityFactory = getAiSecurity, production = false } = {}) {
+  // The trusted hosting adapter closes local-only surfaces explicitly, even
+  // if platform environment labels are absent or accidentally misconfigured.
+  const labEnabled = expertLabEnabled && !production;
+  response.setHeader('X-Content-Type-Options', 'nosniff');
+  const sendError = error => {
+    response.writeHead(error instanceof ApiError ? error.status : 502, { 'content-type': 'application/json', 'cache-control': 'no-store', ...(error.status === 429 ? { 'retry-after': '60' } : {}) });
+    return response.end(JSON.stringify({ error: error instanceof ApiError ? error.message : 'AI request failed. Please try again.', code: error instanceof ApiError ? error.code : 'ai-failed' }));
+  };
+  if (request.url?.startsWith('/api/') && !['/api/ai', '/api/ai/status', '/api/expert-lab/status', '/api/expert-feedback'].includes(request.url)) {
+    response.writeHead(404, { 'content-type': 'application/json' });
+    return response.end(JSON.stringify({ error: 'Not found.' }));
+  }
   if (request.url === "/api/expert-lab/status") {
+    if (!labEnabled) {
+      response.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+      return response.end(JSON.stringify({ enabled: false, feedbackCount: 0 }));
+    }
+    try { const security = await securityFactory(); await security.authenticate(request, { admin: true }); }
+    catch (error) { return sendError(error); }
     let feedbackCount = 0;
-    if (expertLabEnabled) {
+    if (labEnabled) {
       try {
         feedbackCount = (await readFile(expertFeedbackFile, "utf8"))
           .split(/\r?\n/u)
@@ -1054,22 +1082,18 @@ export async function rookRequestHandler(request, response) {
       "cache-control": "no-store",
     });
     return response.end(
-      JSON.stringify({ enabled: expertLabEnabled, feedbackCount }),
+      JSON.stringify({ enabled: labEnabled, feedbackCount }),
     );
   }
   if (request.url === "/api/expert-feedback" && request.method === "POST") {
-    if (!expertLabEnabled) {
+    if (!labEnabled) {
       response.writeHead(404, { "content-type": "application/json" });
       return response.end(JSON.stringify({ error: "Expert Lab is disabled." }));
     }
     try {
-      let raw = "";
-      for await (const chunk of request) {
-        raw += chunk;
-        if (raw.length > 2_000_000)
-          throw new Error("Expert feedback is too large.");
-      }
-      const feedback = normalizeExpertFeedback(JSON.parse(raw), {
+      const security = await securityFactory();
+      await security.authenticate(request, { admin: true });
+      const feedback = normalizeExpertFeedback(await readJsonBody(request, 256 * 1024), {
         id: `expert-${randomUUID()}`,
         createdAt: new Date().toISOString(),
       });
@@ -1089,24 +1113,21 @@ export async function rookRequestHandler(request, response) {
         }),
       );
     } catch (error) {
-      response.writeHead(400, { "content-type": "application/json" });
-      return response.end(
-        JSON.stringify({
-          error: error.message || "Expert feedback could not be saved.",
-        }),
-      );
+      return sendError(error instanceof ApiError ? error : new ApiError(400, 'feedback-invalid', 'Expert feedback is invalid.'));
     }
   }
   if (request.url === "/api/ai/status") {
+    let configured = false;
+    try { const config = securityConfiguration(); configured = [model, planModel, importModel, expertModel].every(value => Object.hasOwn(config.prices, value)); } catch { /* Fail closed. */ }
     response.writeHead(200, {
       "content-type": "application/json",
       "cache-control": "no-store",
     });
     return response.end(
       JSON.stringify({
-        available: Boolean(apiKey),
-        provider: apiKey ? "openai" : null,
-        model: apiKey ? model : null,
+        available: Boolean(apiKey) && configured,
+        provider: apiKey && configured ? "openai" : null,
+        requiresSignIn: true,
       }),
     );
   }
@@ -1114,26 +1135,27 @@ export async function rookRequestHandler(request, response) {
     if (!apiKey) {
       response.writeHead(503, { "content-type": "application/json" });
       return response.end(
-        JSON.stringify({ error: "OPENAI_API_KEY is not configured." }),
+        JSON.stringify({ error: 'AI is temporarily unavailable.', code: 'ai-disabled' }),
       );
     }
     try {
-      let raw = "";
-      for await (const chunk of request) {
-        raw += chunk;
-        if (raw.length > 8_000_000) throw new Error("Request too large.");
-      }
-      const { operation, payload } = JSON.parse(raw);
-      const data = await openAI(operation, payload);
+      const security = await securityFactory();
+      const user = await security.authenticate(request);
+      const { operation, payload } = await readJsonBody(request, security.config.maxRequestBytes);
+      const safePayload = validateAiInput(operation, payload, { admin: user.admin && labEnabled });
+      const data = await aiContext.run({ security, user }, () => openAI(operation, safePayload));
       response.writeHead(200, {
         "content-type": "application/json",
         "cache-control": "no-store",
       });
       return response.end(JSON.stringify({ data }));
     } catch (error) {
-      response.writeHead(502, { "content-type": "application/json" });
-      return response.end(JSON.stringify({ error: error.message }));
+      return sendError(error);
     }
+  }
+  if (request.url?.startsWith('/api/')) {
+    response.writeHead(405, { 'content-type': 'application/json', 'cache-control': 'no-store' });
+    return response.end(JSON.stringify({ error: 'Method not allowed.' }));
   }
   try {
     const urlPath =

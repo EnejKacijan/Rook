@@ -26,6 +26,17 @@
 .freestyle-queue-picker.is-search-browsing[data-sheet-keyboard-open] .queue-picker-feedback { position:absolute;width:1px;height:1px;min-height:0;padding:0;margin:-1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap; }
 .freestyle-queue-picker.is-search-browsing[data-sheet-keyboard-open] > .exercise-remove-undo { bottom:8px; }
 :root .freestyle-queue-picker .queue-exercise-preview { min-height:0;overflow-y:auto;min-width:0;margin:0; }
+/* Only the queue's detail destination is content-sized. Search retains its
+   stable expanded viewport, and the same panel/scroll/footer owners survive Back. */
+:root .modal-layer > .freestyle-queue-picker.exercise-search-sheet.has-exercise-preview {
+  height:auto;
+  max-height:calc(var(--sheet-visible-height,100dvh) - max(12px,env(safe-area-inset-top)));
+}
+:root .freestyle-queue-picker.has-exercise-preview > .queue-exercise-preview {
+  flex:0 1 auto;
+  padding-bottom:12px;
+  scroll-padding-bottom:12px;
+}
 :root .freestyle-queue-picker .queue-exercise-preview h1 { font-size:26px;line-height:1.15;overflow-wrap:anywhere;margin:16px 0 8px; }
 .queue-exercise-preview h1:focus { outline:none; }
 .queue-preview-choice:focus { outline:none; }

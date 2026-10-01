@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+vi.mock('./aiAuthorization.js',()=>({aiAuthorizationHeaders:async()=>({authorization:'Bearer synthetic-test-user'})}));
 import {
   AI_REQUEST_TIMEOUT_MS,
   IMPORT_PLAN_TIMEOUT_MS,

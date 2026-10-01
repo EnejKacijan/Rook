@@ -1,5 +1,6 @@
 import readXlsxFile from 'read-excel-file/universal';
-import { unzipSync, strFromU8 } from 'fflate';
+import { strFromU8 } from 'fflate';
+import { readBoundedArchive } from './boundedZip.js';
 import { readHistoryCsv } from './historyImportTable.js';
 
 export const HISTORY_FILE_LIMITS = { bytes:25*1024*1024, expanded:64*1024*1024, rows:150000, columns:250 };
@@ -13,14 +14,10 @@ export async function readHistoricalFile(name, buffer) {
     const table=readHistoryCsv(text);sheets=[{name:'CSV',...table}];
   } else if(/\.xlsx$/i.test(name)) {
     try {
-      let total=0;
-      // Check advertised uncompressed sizes before allocating XML. No formulas,
-      // macros, external links or executable content are evaluated by this reader.
-      const xml=unzipSync(new Uint8Array(buffer),{filter:entry=>{
-        total+=entry.originalSize;
-        if(total>HISTORY_FILE_LIMITS.expanded)throw new Error('Expanded workbook exceeds the 64 MB safety limit.');
-        return /^xl\/worksheets\/.*\.xml$/.test(entry.name);
-      }});
+      // Validate actual expansion before the workbook library can unzip the
+      // input again. The shared worker also rejects forged ZIP size metadata.
+      const entries=await readBoundedArchive(new Uint8Array(buffer),{limits:{compressed:HISTORY_FILE_LIMITS.bytes,expanded:HISTORY_FILE_LIMITS.expanded,entry:HISTORY_FILE_LIMITS.expanded,entries:2048}});
+      const xml=Object.fromEntries(Object.entries(entries).filter(([name])=>/^xl\/worksheets\/.*\.xml$/.test(name)));
       if(Object.values(xml).some(bytes=>/<(?:\w+:)?f(?:\s|\/?>)/.test(strFromU8(bytes))))throw new Error('Formula cells are not imported as factual results. Export a values-only CSV/XLSX first.');
       const workbook=await readXlsxFile(buffer);
       sheets=workbook.map(sheet=>({name:sheet.sheet,rows:sheet.data,format:'xlsx',encoding:'XLSX cell values',delimiter:null}));

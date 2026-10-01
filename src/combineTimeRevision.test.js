@@ -1,4 +1,5 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
+vi.mock('./aiAuthorization.js',()=>({aiAuthorizationHeaders:async()=>({authorization:'Bearer synthetic-test-user'})}));
 import {combineExample} from './combineWorkouts.fixture.js';
 import {buildCombinedProposal,buildCombinedRevision,applyCombinedProposal,combineSources,reviewCombinedSelection} from './combineWorkouts.js';
 import {coachCombineReply,combineRevisionTargets} from './coachCombine.js';

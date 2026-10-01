@@ -78,14 +78,14 @@ try{
    assert.equal(Object.keys(saved.flexibleWeek.sessions).length,5);
    assert.deepEqual(Object.keys(saved.flexibleWeek.sessions).sort(),ids.slice().sort());
    assert.deepEqual(Object.values(saved.flexibleWeek.sessions).map(s=>s.scheduledDate).sort(),['2026-09-30','2026-10-01','2026-10-02','2026-10-03','2026-10-04']);
-   assert.equal(await page.getByRole('button',{name:'VIEW DESTINATION',exact:true}).count(),1);
+   assert.equal(await page.getByRole('button',{name:'View workout',exact:true}).count(),1);
    assert.doesNotMatch(await page.locator('.today-screen').innerText(),/needs review|review required/i);
-   await page.getByRole('button',{name:'VIEW DESTINATION',exact:true}).click();
+   await page.getByRole('button',{name:'View workout',exact:true}).click();
    // Tuesday is the original NOGE A date; its canonical source link follows
    // that identity, not the UPPER A that temporarily occupied Tuesday before.
    assert.match(await page.locator('.today-hero').innerText(),/NOGE A/);
    assert.match(await page.locator('.today-hero').innerText(),/THURSDAY, OCT 1/);
-   await page.reload();await page.locator('.today-hero').waitFor();assert.deepEqual((await read()).flexibleWeek,saved.flexibleWeek);
+   await page.reload();await page.locator('.today-screen').waitFor();assert.deepEqual((await read()).flexibleWeek,saved.flexibleWeek);
    await open();const handle=page.getByRole('button',{name:'Drag down or tap to close',exact:true});assert.equal(await handle.count(),1);
    const panel=page.locator('.flexible-week-sheet');await panel.evaluate(async n=>{await Promise.all(n.getAnimations({subtree:true}).map(a=>a.finished.catch(()=>{})));});
    const box=await handle.boundingBox(),x=box.x+box.width/2,y=box.y+12;

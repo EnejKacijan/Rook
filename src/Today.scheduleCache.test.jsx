@@ -17,7 +17,7 @@ it('Today reuses navigation reads but invalidates the same selected date when th
  render(state);expect(document.querySelector('.today-hero').textContent).toContain('UPPER A');
  const id=Object.keys(state.flexibleWeek.sessions)[0];
  const next=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:id,toDate:'2026-10-04'})).state;
- render(next);expect(document.body.textContent).toContain('VIEW DESTINATION');
+ render(next);expect(document.querySelector('.rest-day-state h1').textContent).toBe('Rest day');expect(document.querySelector('.today-moved-provenance').textContent).toContain('View workout');
  expect(document.body.textContent).not.toContain('needs review');
  render({...next,selectedDate:'2026-10-04',selectedDay:'Sun'});
  expect(document.querySelector('.today-hero').textContent).toContain('UPPER A');

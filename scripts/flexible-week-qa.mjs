@@ -16,7 +16,7 @@ for (const width of [320,390,430]) for (const appearance of ['light','dark']) fo
   const page = await context.newPage(), errors = [];
   page.on('pageerror', e => errors.push(e.message));
   await page.route('**/api/ai/status', r => r.fulfill({ status: 200, contentType:'application/json', body:'{"available":false}' }));
-  await page.goto('http://127.0.0.1:4173', { waitUntil:'networkidle' });
+  await page.goto(process.env.ROOK_QA_URL || 'http://127.0.0.1:4173', { waitUntil:'networkidle' });
   const plan = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).program);
   const shot = async name => { await page.waitForTimeout(350); assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true); await page.screenshot({ path: fileURLToPath(new URL(`${width}-${style}-${appearance}-${name}.png`,out)) }); };
   await shot('01-today');
@@ -34,7 +34,7 @@ for (const width of [320,390,430]) for (const appearance of ['light','dark']) fo
   await page.getByRole('button',{name:'APPLY MOVE',exact:true}).click();await page.getByRole('button',{name:'DONE',exact:true}).click();
   await shot('06-source');
   assert.equal(await page.getByRole('button',{name:'START WORKOUT',exact:true}).count(),0);
-  await page.getByRole('button',{name:'VIEW DESTINATION',exact:true}).click();
+  await page.getByRole('button',{name:'View workout',exact:true}).click();
   await shot('07-destination');
   assert.equal(await page.getByRole('button',{name:'START TODAY',exact:true}).count(),1);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')));

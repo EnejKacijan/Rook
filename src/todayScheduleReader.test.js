@@ -42,3 +42,13 @@ it('caches only menu eligibility and recomputes it when active ownership changes
  const active={...state,activeWorkout:startWorkout(state,reader.read('2026-09-29').template)};
  expect(createTodayScheduleReader(active).canUseToday(request)).toBe(false);
 });
+it('caches the full canonical date projection for moved-away rest presentation without another scheduling authority',()=>{
+ const state=adjustWeekState(),before=structuredClone(state),reader=createTodayScheduleReader(state);
+ const occurrences=reader.occurrences('2026-09-29');expect(reader.occurrences('2026-09-29')).toBe(occurrences);
+ expect(occurrences.some(item=>item.scheduledDate==='2026-09-29')).toBe(true);expect(state).toEqual(before);
+ const source=reader.read('2026-09-29').occurrence.logicalSessionId;
+ const next=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:source,toDate:'2026-10-04'})).state;
+ const fresh=createTodayScheduleReader(next).occurrences('2026-09-29');
+ expect(fresh).not.toBe(occurrences);expect(fresh.some(item=>item.logicalSessionId===source)).toBe(false);
+ expect(createTodayScheduleReader(next).occurrences('2026-10-04').some(item=>item.logicalSessionId===source)).toBe(true);
+});

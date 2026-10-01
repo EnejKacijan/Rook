@@ -157,8 +157,9 @@ it('moved source/destination and week navigation switch directly without changin
   act(() => vi.advanceTimersByTime(260));
   expect(current.selectedDate).toBe('2026-09-20');
   selectDay('Wed'); expect(current.selectedDate).toBe('2026-09-16');
-  expect(host.querySelector('.today-hero').textContent).toContain('Moved to Sunday, Sep 20');
-  act(() => [...host.querySelectorAll('button')].find(button => button.textContent === 'VIEW DESTINATION').click());
+  expect(host.querySelector('.rest-day-state h1').textContent).toBe('Rest day');
+  expect(host.querySelector('.today-moved-provenance').textContent).toContain('moved to Sunday, Sep 20');
+  act(() => host.querySelector('.today-moved-provenance button').click());
   expect(current).toEqual(state); expect(host.querySelector('.today-planned-workout').textContent).toContain('Moved from Wednesday, Sep 16');
   expect(animate).not.toHaveBeenCalled(); pressResume(); expect(navigate).toHaveBeenCalledOnce();
 });

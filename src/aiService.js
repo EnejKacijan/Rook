@@ -1,4 +1,5 @@
 import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
+import { aiAuthorizationHeaders } from './aiAuthorization.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
 import {
@@ -75,9 +76,10 @@ async function request(
   const abortFromCaller = () => controller.abort();
   signal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
+    const authorization = await aiAuthorizationHeaders();
     const response = await fetch("/api/ai", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...authorization },
       body: JSON.stringify({ operation, payload }),
       signal: controller.signal,
     });
@@ -1831,6 +1833,7 @@ export const AIService = {
     try {
       const response = await fetch("/api/expert-lab/status", {
         cache: "no-store",
+        headers: await aiAuthorizationHeaders(),
       });
       if (!response.ok) return { enabled: false, feedbackCount: 0 };
       return await response.json();
@@ -1841,7 +1844,7 @@ export const AIService = {
   async saveExpertFeedback(feedback) {
     const response = await fetch("/api/expert-feedback", {
       method: "POST",
-      headers: { "content-type": "application/json" },
+      headers: { "content-type": "application/json", ...await aiAuthorizationHeaders() },
       body: JSON.stringify(feedback),
     });
     const body = await response.json().catch(() => ({}));

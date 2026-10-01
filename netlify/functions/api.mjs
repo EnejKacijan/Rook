@@ -12,6 +12,8 @@ const apiPath = (eventPath = "") => {
 };
 
 export async function handler(event = {}) {
+  // Reject before base64 decoding/allocating an oversized function body.
+  if (String(event.body || '').length > 3 * 1024 * 1024) return { statusCode: 413, headers: { 'content-type': 'application/json', 'cache-control': 'no-store' }, body: JSON.stringify({ error: 'Request is too large.' }) };
   return new Promise((resolve, reject) => {
     const requestBody = event.body
       ? Buffer.from(event.body, event.isBase64Encoded ? "base64" : "utf8")
@@ -51,6 +53,6 @@ export async function handler(event = {}) {
       end: finish,
     };
 
-    Promise.resolve(rookRequestHandler(request, response)).catch(reject);
+    Promise.resolve(rookRequestHandler(request, response, { production: true })).catch(reject);
   });
 }

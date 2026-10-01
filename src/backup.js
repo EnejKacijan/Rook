@@ -4,8 +4,8 @@ import {
   ZipPassThrough,
   strFromU8,
   strToU8,
-  unzipSync,
 } from "fflate";
+import { ArchiveError, BACKUP_ARCHIVE_LIMITS, readBoundedArchive } from './boundedZip.js';
 import { validSessionFeedback } from './sessionFeedback.js';
 import { canonicalBackupCounts, compareBackupCounts } from './backupCounts.js';
 import {flexibleSessionStatus} from './flexibleWeek.js';
@@ -287,6 +287,11 @@ export async function buildBackupArchive(
     );
   }
   const references = photoReferences(durableState);
+  const serializedState = serializeState(durableState);
+  const stateBytes = strToU8(serializedState);
+  if (stateBytes.byteLength > BACKUP_ARCHIVE_LIMITS.entry || references.size + 2 > BACKUP_ARCHIVE_LIMITS.entries)
+    fail('archive-limit', 'This backup exceeds the safe restore size or photo-count limit. No backup was created.');
+  let expandedSize = stateBytes.byteLength;
   const byId = new Map((photoRecords || []).map((record) => [record?.id, record]));
   const chunks = [];
   let finishZip;
@@ -325,6 +330,9 @@ export async function buildBackupArchive(
     if (!mimeType.startsWith("image/"))
       fail("photo-read-failed", "A workout photo has an invalid format. No backup was created.");
     const bytes = await blobBytes(record.blob);
+    expandedSize += bytes.byteLength;
+    if (bytes.byteLength > BACKUP_ARCHIVE_LIMITS.entry || expandedSize > BACKUP_ARCHIVE_LIMITS.expanded)
+      fail('archive-limit', 'This backup exceeds the safe restore size limit. No backup was created.');
     if (!hasImageSignature(bytes, mimeType))
       fail("photo-read-failed", "A workout photo is unreadable. No backup was created.");
     const path = `photos/${String(++index).padStart(6, "0")}.${extensionFor(mimeType)}`;
@@ -343,7 +351,6 @@ export async function buildBackupArchive(
       createdAt: record.createdAt || null,
     });
   }
-  const serializedState = serializeState(durableState);
   const counts = canonicalBackupCounts(JSON.parse(serializedState), photos);
   const manifest = {
     type: BACKUP_TYPE,
@@ -358,13 +365,19 @@ export async function buildBackupArchive(
     photos,
   };
   const manifestEntry = new ZipDeflate("manifest.json", { level: 6 });
+  const manifestBytes = strToU8(JSON.stringify(manifest, null, 2));
+  if (manifestBytes.byteLength > BACKUP_ARCHIVE_LIMITS.entry || expandedSize + manifestBytes.byteLength > BACKUP_ARCHIVE_LIMITS.expanded)
+    fail('archive-limit', 'This backup exceeds the safe restore size limit. No backup was created.');
   zip.add(manifestEntry);
-  manifestEntry.push(strToU8(JSON.stringify(manifest, null, 2)), true);
+  manifestEntry.push(manifestBytes, true);
   const stateEntry = new ZipDeflate("data/state.json", { level: 6 });
   zip.add(stateEntry);
-  stateEntry.push(strToU8(serializedState), true);
+  stateEntry.push(stateBytes, true);
   zip.end();
   const output = await completedZip;
+  const archiveSize = output.bytes?.byteLength ?? output.parts.reduce((size, part) => size + part.byteLength, 0);
+  if (archiveSize > BACKUP_ARCHIVE_LIMITS.compressed)
+    fail('archive-limit', 'This backup exceeds the safe 100 MB restore limit. No backup was created.');
   return {
     ...output,
     manifest,
@@ -385,11 +398,9 @@ function parseJsonEntry(entries, path, label) {
 export async function parseBackupArchive(source) {
   let entries;
   try {
-    const bytes = source instanceof Uint8Array
-      ? source
-      : new Uint8Array(await source.arrayBuffer());
-    entries = unzipSync(bytes);
-  } catch {
+    entries = await readBoundedArchive(source);
+  } catch (error) {
+    if (error instanceof ArchiveError) fail(error.code, error.message);
     fail("wrong-file-type", "This file is not a valid ROOK backup ZIP.");
   }
   const manifest = migrateBackupManifest(parseJsonEntry(entries, "manifest.json", "Backup metadata"));

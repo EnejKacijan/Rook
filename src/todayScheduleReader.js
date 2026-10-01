@@ -1,5 +1,5 @@
 import { plannedWorkoutForDate, adaptedTemplateForToday, optionalStrengthForDate, nextScheduledWorkout, calendarDate } from './domain.js';
-import { flexibleOccurrenceForDate } from './flexibleWeek.js';
+import { flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
 import { canUseWorkoutToday } from './useWorkoutToday.js';
 
 // Ephemeral, read-only projection of one state revision. The Today owner replaces
@@ -18,6 +18,11 @@ export function createTodayScheduleReader(state) {
         if(dates.size>64)dates.delete(dates.keys().next().value);
       }
       return dates.get(key);
+    },
+    occurrences(key) {
+      const entry=this.read(key);
+      if (!('occurrences' in entry)) entry.occurrences=flexibleOccurrencesForDate(state,key);
+      return entry.occurrences;
     },
     next(key) {
       const entry=this.read(key);

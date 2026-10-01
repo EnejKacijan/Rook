@@ -6,6 +6,15 @@ const program = (id = 'plan-1') => ({ id, name: 'Upper / Lower', profileSnapshot
 const profile = { id: 'private-id', name: 'Private name', goal: 'Build muscle', experience: 'Intermediate', daysPerWeek: 4, availableDays: ['Mon', 'Tue', 'Thu', 'Sat'], sessionMinutes: 60, environment: 'Commercial gym', equipment: ['full gym'], priorities: ['Chest'], followUpAnswers: [{ question: 'Preferred split?', answer: 'Upper lower' }] };
 
 describe('expert feedback dataset', () => {
+  it('never consumes pending, rejected, or legacy unapproved feedback', () => {
+    const entry = normalizeExpertFeedback({ verdict:'needs_improvement', issue:'other', explanation:'Never use more than 1 sets.', profile, candidateProgram:program() });
+    for (const status of ['pending', 'rejected', undefined]) {
+      const entries = [{ ...entry, status }];
+      expect(expertExamplesForProfile(entries, profile)).toEqual([]);
+      expect(expertPolicyForProfile(entries, profile).instructions).toEqual([]);
+      expect(recentExpertCandidateSignatures(entries)).toEqual([]);
+    }
+  });
   it('stores programming context without user identity or workout history', () => {
     const snapshot = expertProfileSnapshot({ ...profile, workouts: [{ secret: true }] });
     expect(snapshot).toMatchObject({ goal: 'Build muscle', experience: 'Intermediate', daysPerWeek: 4 });
@@ -22,6 +31,7 @@ describe('expert feedback dataset', () => {
   it('rejects incomplete custom feedback and turns matching reviews into compact AI examples', () => {
     expect(() => normalizeExpertFeedback({ verdict: 'needs_improvement', issue: 'other', explanation: '', profile, candidateProgram: program() })).toThrow(/Explain/i);
     const entry = normalizeExpertFeedback({ verdict: 'needs_improvement', issue: 'exercise_selection', selectedDayId: 'day-1', selectedExerciseIds: ['exercise-1'], explanation: 'Use a different purpose here.', profile, candidateProgram: program() }, { id: 'expert-1', createdAt: 'now' });
+    entry.status = 'approved';
     const examples = expertExamplesForProfile([entry], profile);
     expect(examples[0]).toMatchObject({ verdict: 'needs_improvement', issue: 'exercise_selection', expertInstruction: 'Use a different purpose here.', reviewScope: 'selected_part', reviewedSelection: { weekday: 'Mon', exercises: [{ exerciseId: 'barbell-bench-press', sets: 2 }] } });
     expect(JSON.stringify(examples[0])).not.toContain('Private name');
@@ -29,6 +39,7 @@ describe('expert feedback dataset', () => {
 
   it('treats a plan-wide written explanation as the primary instruction and a correction as an example', () => {
     const entry = normalizeExpertFeedback({ verdict: 'needs_improvement', issue: 'volume', explanation: 'Never use more than four sets per exercise.', profile, candidateProgram: program(), correctedProgram: program('corrected') }, { id: 'expert-2', createdAt: 'now' });
+    entry.status = 'approved';
     const [example] = expertExamplesForProfile([entry], profile);
     expect(example).toMatchObject({ expertInstruction: 'Never use more than four sets per exercise.', reviewScope: 'whole_program', correctionExample: null });
     expect(example).not.toHaveProperty('preferredCorrection');
@@ -37,6 +48,7 @@ describe('expert feedback dataset', () => {
   it('distills explicit natural-language rules and enforces them on a generated plan', () => {
     const explanation = 'Never include Dead Bug or Prone W Raise. Never use more than 4 sets. Use 6-10 reps for every exercise, except calves 10-15. In an upper/lower split every upper should include every upper-body muscle group. Abs should be at the end of lower days; use hanging leg raises or crunches, at most two per week. Never include two consecutive exercises for the same muscle except back.';
     const entry = normalizeExpertFeedback({ verdict: 'needs_improvement', issue: 'other', explanation, profile, candidateProgram: program() }, { id: 'expert-policy', createdAt: 'now' });
+    entry.status = 'approved';
     const catalog = Object.values(exerciseCatalog); const policy = expertPolicyForProfile([entry], profile, catalog);
     expect(policy).toMatchObject({ maxSetsPerExercise: 4, defaultRepRange: [6, 10], requireCompleteUpperInUpperLower: true, avoidConsecutiveMuscleGroups: true, coreAtEndOfLower: true, maxCoreExercisesPerWeek: 2 });
     expect(policy.forbiddenExerciseIds).toEqual(expect.arrayContaining(['dead-bug', 'prone-w-raise'])); expect(policy.preferredCoreIds).toEqual(expect.arrayContaining(['hanging-leg-raise', 'cable-crunch']));

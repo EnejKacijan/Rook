@@ -3,6 +3,7 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {bindTrainingReorder} from './trainingReorder.js';
 import {bindSwipeRowActions,registerSwipeRemoval} from './swipeRowAction.js';
 import {createInteractionFeedback,createVibrationAdapter} from './interactionFeedback.js';
+import {readFileSync} from 'node:fs';
 let root,release,swipeRelease,view,commit,gesture,preview,feedback;
 beforeEach(()=>{
  vi.useFakeTimers();vi.stubGlobal('matchMedia',()=>({matches:false}));vi.stubGlobal('requestAnimationFrame',fn=>setTimeout(()=>fn(performance.now()),16));vi.stubGlobal('cancelAnimationFrame',clearTimeout);
@@ -18,6 +19,18 @@ beforeEach(()=>{
 });
 afterEach(()=>{release();swipeRelease();root.remove();preview.remove();vi.useRealTimers();vi.unstubAllGlobals();});
 const handle=i=>root.children[i].querySelector('[data-reorder-kind]'),body=i=>root.children[i].querySelector('span');
+it('shared grip opts out of native tap paint without removing keyboard focus styling',()=>{
+ const css=readFileSync('src/trainingReorder.css','utf8');
+ expect(css).toMatch(/button\.rook-reorder-handle\s*\{[^}]*-webkit-tap-highlight-color:transparent/s);
+ expect(css).toMatch(/button\.rook-reorder-handle:focus-visible\s*\{[^}]*outline:2px solid var\(--rook-accent\)/);
+});
+it('activation immediately clears source feedback, hides the whole source, and cancellation restores a neutral row',()=>{
+ handle(0).setAttribute('data-row-pressed','');
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);
+ expect(root.querySelector('[data-row-pressed]')).toBeNull();expect(root.children[0].classList.contains('reorder-live-source')).toBe(true);
+ touch('touchmove',handle(0),195);expect(root.children[0].classList.contains('reorder-live-source')).toBe(true);
+ touch('touchcancel',handle(0),195);expect(root.querySelector('.reorder-live-source')).toBeNull();expect(root.querySelector('[data-row-pressed]')).toBeNull();expect(commit).not.toHaveBeenCalled();
+});
 function pointer(type,target,y,x=320,extra={}){const e=new Event(type,{bubbles:true,cancelable:true});Object.assign(e,{pointerId:1,pointerType:'mouse',button:0,clientX:x,clientY:y,...extra});target.dispatchEvent(e);return e;}
 function touch(type,target,y,x=320,multi=false){const e=new Event(type,{bubbles:true,cancelable:true});const point={identifier:1,clientX:x,clientY:y};Object.assign(e,{touches:type==='touchend'||type==='touchcancel'?[]:[point,...multi?[{...point,identifier:2}]:[]],changedTouches:[point]});target.dispatchEvent(e);return e;}
 it('a handle tap is a no-op; mouse and pen require a deliberate hold; row body never reorders',()=>{

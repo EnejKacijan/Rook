@@ -1,12 +1,13 @@
 // @vitest-environment node
 import {createServer,request as httpRequest} from 'node:http';
 import {afterAll,afterEach,beforeAll,expect,it,vi} from 'vitest';
+import { testAiSecurity } from './fixtures/aiTestSecurity.js';
 
 let server,base;
 beforeAll(async()=>{
   vi.stubEnv('OPENAI_API_KEY','test-only-not-a-secret');
   const {rookRequestHandler}=await import('../server.mjs');
-  server=createServer(rookRequestHandler);
+  server=createServer((req,res)=>rookRequestHandler(req,res,{securityFactory:async()=>testAiSecurity()}));
   await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
   base=`http://127.0.0.1:${server.address().port}`;
 });
@@ -15,7 +16,7 @@ afterAll(async()=>{await new Promise(resolve=>server.close(resolve));vi.unstubAl
 const fragment={id:'f',text:'Please perform Cable Row for three sets of ten reps.',executable:true};
 const interpretation={fragments:[{id:'f',kind:'exercise',nameQuote:'Cable Row',facts:[{kind:'sets',evidence:'three sets',value:'3'},{kind:'reps',evidence:'ten reps',value:'10'}]}]};
 const post=payload=>new Promise((resolve,reject)=>{
-  const req=httpRequest(`${base}/api/ai`,{method:'POST',headers:{'content-type':'application/json'}},res=>{
+  const req=httpRequest(`${base}/api/ai`,{method:'POST',headers:{'content-type':'application/json',authorization:'Bearer test-alice'}},res=>{
     let body='';res.on('data',part=>body+=part);res.on('end',()=>resolve({status:res.statusCode,body:JSON.parse(body)}));
   });req.on('error',reject);req.end(JSON.stringify({operation:'interpret-import',payload}));
 });
@@ -37,9 +38,9 @@ it.each([
   {id:'f',kind:'exercise',nameQuote:'Squat',facts:[]},
   {id:'f',kind:'note',nameQuote:'',facts:[]},
 ])('rejects ungrounded AI results at the server boundary %#',async item=>{
-  provider({fragments:[item]});const r=await post({consent:true,fragments:[fragment]});expect(r.status).not.toBe(200);expect(r.body.error).toMatch(/local draft remains available/);
+  provider({fragments:[item]});const r=await post({consent:true,fragments:[fragment]});expect(r.status).not.toBe(200);expect(r.body.error).toMatch(/AI request failed/);
 });
 it('returns a recoverable provider failure without a candidate plan',async()=>{
   vi.stubGlobal('fetch',vi.fn(async()=>{const error=new Error('timed out');error.name='TimeoutError';throw error;}));
-  const r=await post({consent:true,fragments:[fragment]});expect(r.status).not.toBe(200);expect(r.body.data).toBeUndefined();expect(r.body.error).toMatch(/too long/);
+  const r=await post({consent:true,fragments:[fragment]});expect(r.status).not.toBe(200);expect(r.body.data).toBeUndefined();expect(r.body.error).toMatch(/AI request failed/);
 });

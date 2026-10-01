@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
   // These values remain server-only. Loading them here lets local Vite use
   // the same /api routes as the production Netlify function.
   for (const [key, value] of Object.entries(loadEnv(mode, process.cwd(), '')))
-    if (/^(?:OPENAI_|EXPERT_)/.test(key)) process.env[key] = value;
+    if (/^(?:OPENAI_|EXPERT_|ROOK_AI_|ROOK_FIREBASE_|GOOGLE_APPLICATION_CREDENTIALS$)/.test(key)) process.env[key] = value;
   return {
     plugins: [react(), rookLocalApi()],
     define: {

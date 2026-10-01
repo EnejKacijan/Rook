@@ -73,7 +73,7 @@ const exerciseOutline = exercise => ({ exerciseId: exercise.exerciseId, sets: Ar
 const programOutline = program => ({ name: text(program?.name, 160), days: (program?.days || []).map(day => ({ weekday: day.weekday, name: text(day.name, 160), exercises: (day.exercises || []).map(exerciseOutline) })) });
 const normalizedText = value => String(value || '').normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 const entryScore = (entry, profile) => Number(entry.profile?.goal === profile.goal) * 4 + Number(entry.profile?.experience === profile.experience) * 2 + Number(Number(entry.profile?.daysPerWeek) === Number(profile.daysPerWeek)) * 3 + Number(entry.profile?.environment === profile.environment);
-const rankedEntries = (entries, profile = {}) => (Array.isArray(entries) ? entries : []).filter(entry => entry?.candidateProgram && ['good', 'needs_improvement'].includes(entry.verdict)).map((entry, index) => ({ entry, index, score: entryScore(entry, profile) })).sort((a, b) => b.score - a.score || b.index - a.index);
+const rankedEntries = (entries, profile = {}) => (Array.isArray(entries) ? entries : []).filter(entry => entry?.status === 'approved' && entry?.candidateProgram && ['good', 'needs_improvement'].includes(entry.verdict)).map((entry, index) => ({ entry, index, score: entryScore(entry, profile) })).sort((a, b) => b.score - a.score || b.index - a.index);
 const candidateSignature = program => (program?.days || []).map(day => `${day.name}:${(day.exercises || []).map(exercise => exercise.exerciseId).join(',')}`).join('|');
 
 export function expertPolicyForProfile(entries, profile = {}, catalog = []) {
@@ -106,7 +106,7 @@ export function expertPolicyForProfile(entries, profile = {}, catalog = []) {
 }
 
 export function recentExpertCandidateSignatures(entries, limit = 8) {
-  return [...(Array.isArray(entries) ? entries : [])].reverse().map(entry => candidateSignature(entry?.candidateProgram)).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).slice(0, limit);
+  return [...(Array.isArray(entries) ? entries : [])].filter(entry => entry?.status === 'approved').reverse().map(entry => candidateSignature(entry?.candidateProgram)).filter(Boolean).filter((value, index, values) => values.indexOf(value) === index).slice(0, limit);
 }
 
 function stableHash(value) { let hash = 2166136261; for (const character of String(value)) { hash ^= character.charCodeAt(0); hash = Math.imul(hash, 16777619); } return hash >>> 0; }

@@ -103,6 +103,9 @@
 .rest-day-state { margin-top: 48px; }
 .rest-day-state h1 { margin: 10px 0 0; font-size: 36px; }
 .rest-day-state > p { margin-top: 8px; }
+.today-moved-provenance { margin-top:20px; }
+.today-moved-provenance p { margin:0;color:var(--rook-secondary);font-size:14px;overflow-wrap:anywhere; }
+.today-moved-provenance .text-button { min-height:44px;margin:0;padding:8px 0;text-align:left; }
 .rest-up-next { margin-top: 30px; padding-top: 18px; border-top: 1px solid var(--rook-border); }
 .rest-up-next-row { display: flex; align-items: center; gap: 16px; width: 100%; min-height: 44px; margin-top: 4px; padding: 10px 0; border: 0; background: transparent; color: var(--rook-text); text-align: left; }
 .rest-up-next-row > span:first-child { flex: 1; min-width: 0; }
