@@ -35,3 +35,15 @@ it.each(['touched','completed','side'])('never reinterprets %s session data',kin
  const before=structuredClone(state),result=changeSessionLoggingMode(state,active.id,exercise.id,'normal');
  expect(result.error).toMatch(/cannot change/i);expect(result.state).toBe(state);expect(state).toEqual(before);
 });
+
+it('explicit per-side capability remains available after Total reps and reload without classifying a bilateral exercise as unilateral',()=>{
+ const state=make(),active=state.activeWorkout,e=active.exercises[0];delete e.unilateral;e.exerciseId='dumbbell-rear-delt-fly';e.loggingMode='per_side';
+ const before=deserializeState(serializeState(state),{strict:true}),total=changeSessionLoggingMode(state,active.id,e.id,'normal');expect(total.error).toBeNull();
+ const loaded=deserializeState(serializeState(total.state),{strict:true}),entry=loaded.activeWorkout.exercises[0];expect(supportsPerSideLogging(entry)).toBe(true);expect(entry.unilateral).toBeUndefined();
+ const result=changeSessionLoggingMode(loaded,active.id,e.id,'per_side');expect(result.error).toBeNull();expect(result.state.activeWorkout.exercises[0].id).toBe(e.id);expect(result.state.activeWorkout.exercises[0].sets.map(s=>s.id)).toEqual(e.sets.map(s=>s.id));
+ expect(result.state.program).toEqual(before.program);expect(result.state.workouts).toEqual(before.workouts);expect(result.state.activeWorkout.exercises.slice(1)).toEqual(before.activeWorkout.exercises.slice(1));
+});
+it('does not fabricate per-side eligibility for an ordinary bilateral exercise',()=>{
+ const state=make(),e=state.activeWorkout.exercises[0];delete e.unilateral;e.exerciseId='dumbbell-rear-delt-fly';e.loggingMode='normal';expect(supportsPerSideLogging(e)).toBe(false);
+ expect(changeSessionLoggingMode(state,state.activeWorkout.id,e.id,'per_side').error).toMatch(/not available/);
+});

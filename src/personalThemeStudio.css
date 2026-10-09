@@ -1,0 +1,42 @@
+/* The mounted app and studio share the staged root palette. */
+:root[data-personal-theme] .pro-theme-studio .button.primary:not(:disabled) { background:var(--rook-accent-fill);color:var(--rook-on-accent-fill);border-color:var(--rook-accent-fill); }
+:root[data-personal-theme] .pro-theme-studio .button.primary:not(:disabled):active { background:var(--rook-accent-fill-strong);border-color:var(--rook-accent-fill-strong); }
+:root[data-personal-theme] .pro-theme-studio .button.quiet { color:var(--rook-secondary); }
+/* Personal appearances share readable disabled CTA roles across the real app. */
+:root[data-personal-theme] button.button:is(.primary,.dark):disabled { opacity:1;background:var(--rook-disabled-surface);color:var(--rook-disabled-text);border-color:var(--rook-control-border); }
+.pro-theme-studio .pro-theme-intro { margin:0 0 14px;font-size:13px;color:var(--rook-secondary); }
+.pro-theme-studio fieldset { border:0;padding:0;margin:16px 0 0;min-width:0; }
+.pro-theme-studio .pro-theme-appearance { margin-top:0; }
+.pro-theme-studio legend { width:100%;font-size:12px;font-weight:650;color:var(--rook-secondary);margin-bottom:8px; }
+.pro-theme-studio .pro-theme-accents legend { display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px 10px; }
+.pro-theme-studio legend > span { color:var(--rook-text);font-weight:500; }
+.pro-theme-studio fieldset button { min-height:44px;border:1px solid var(--rook-control-border,var(--rook-border));border-radius:10px;background:var(--rook-surface);color:var(--rook-text);padding:9px;font-size:12px;text-align:center; }
+.pro-theme-studio fieldset button[aria-pressed="true"] { border-color:var(--rook-accent-text);background:var(--rook-accent-soft); }
+.pro-theme-studio :is(button,summary):focus-visible { outline:2px solid var(--rook-focus-ring);outline-offset:3px; }
+:root[data-personal-theme] .pro-theme-studio button:disabled { opacity:1;color:var(--rook-disabled-text); }
+:root[data-personal-theme] .pro-theme-studio .pro-theme-actions button.button.primary:disabled { opacity:1;background:var(--rook-disabled-surface);color:var(--rook-disabled-text); }
+.pro-theme-bases { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
+.pro-theme-presets { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+.pro-theme-studio .pro-theme-presets button { display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:7px;align-items:center;text-align:left;min-height:68px; }
+.pro-theme-swatches { display:flex;grid-column:1 / -1;gap:4px; }
+.pro-theme-swatches i { display:block;width:26px;height:14px;border-radius:4px;border:1px solid var(--rook-border);background:var(--rook-bg); }
+.pro-theme-swatches i:nth-child(2) { background:var(--rook-surface); }
+.pro-theme-swatches i:nth-child(3) { background:var(--rook-accent-fill); }
+.pro-theme-choice-check { color:var(--rook-accent-text); }
+.pro-theme-custom { border-top:1px solid var(--rook-border);margin-top:16px;padding-top:4px; }
+.pro-theme-custom > summary { min-height:44px;align-content:center;font-size:13px;color:var(--rook-accent-text);cursor:pointer; }
+.pro-theme-accents { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px; }
+.pro-theme-studio .pro-theme-accents button { display:grid;place-items:center;min-width:0;padding:5px;background:transparent;border-color:transparent; }
+.pro-theme-studio .pro-theme-accents button[aria-pressed="true"] { border-color:var(--rook-accent-text);background:var(--rook-accent-soft); }
+.pro-theme-accents i { display:grid;place-items:center;width:30px;height:30px;border-radius:50%;font-style:normal;font-size:16px; }
+.pro-theme-bases button { display:grid;grid-template-columns:1fr 12px;gap:6px;align-items:center; }
+.pro-theme-base-swatches { display:flex;gap:3px;grid-column:1 / -1; }
+.pro-theme-base-swatches i { flex:1;display:block;height:20px;border-radius:4px;border:1px solid var(--rook-control-border); }
+.pro-theme-base-check { color:var(--rook-accent-text); }
+.pro-theme-reset-row { display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:4px 12px;margin-top:10px; }
+.pro-theme-reset-row > p { flex:1 1 160px;min-width:0;font-size:12px;line-height:1.5;margin:0;color:var(--rook-secondary); }
+.pro-theme-reset-row > button { flex:0 0 auto;min-height:44px;border:0;background:transparent;color:var(--rook-accent-text);font-size:12px;padding:8px 0 8px 8px; }
+.pro-theme-action-row { display:grid;grid-template-columns:minmax(72px,max-content) minmax(0,1fr);gap:10px; }
+.pro-theme-action-row > .button { min-height:48px; }
+:root .pro-theme-studio .pro-theme-actions { margin-top:14px; }
+@media(prefers-reduced-motion:reduce){.pro-theme-studio *{transition:none;animation:none;}}

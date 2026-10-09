@@ -77,7 +77,7 @@ describe('conservative progression next steps', () => {
   });
   it('keeps the existing plateau branch reachable before generic advice', () => {
     const target={...exercise,repMin:6,repMax:10};
-    const history=[1,8,15,22].map(day=>session([8,7],{date:`2026-08-${String(day).padStart(2,'0')}T12:00:00Z`}));
+    const history=[1,8,15,22].map(day=>session([8,7],{exercise:target,date:`2026-08-${String(day).padStart(2,'0')}T12:00:00Z`}));
     expect(progressionFor(target,history).type).toBe('stalled');
   });
   it('does not write into prescription or history', () => {

@@ -1,4 +1,5 @@
 import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
+import { buildProgram } from './domain.js';
 import { aiAuthorizationHeaders } from './aiAuthorization.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
@@ -76,7 +77,14 @@ async function request(
   const abortFromCaller = () => controller.abort();
   signal?.addEventListener("abort", abortFromCaller, { once: true });
   try {
-    const authorization = await aiAuthorizationHeaders();
+    // Auth restoration/token refresh may outlive fetch's signal. Bound that
+    // wait as well, and never issue a late request after the deadline.
+    const authorization = await new Promise((resolve, reject) => {
+      const aborted = () => reject(new DOMException('Aborted', 'AbortError'));
+      if (controller.signal.aborted) return aborted();
+      controller.signal.addEventListener('abort', aborted, { once: true });
+      Promise.resolve().then(aiAuthorizationHeaders).then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', aborted));
+    });
     const response = await fetch("/api/ai", {
       method: "POST",
       headers: { "content-type": "application/json", ...authorization },
@@ -84,13 +92,16 @@ async function request(
       signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.error || "AI service unavailable.");
+    if (!response.ok) throw Object.assign(new Error('The request could not be completed. Please try again.'), {
+      status: response.status, code: body.code,
+      retryAt: response.status === 429 ? Date.now() + Math.max(1000, Number(response.headers?.get?.('retry-after')) * 1000 || 60000) : null,
+    });
     return body.data;
   } catch (error) {
     if (error?.name === "AbortError" && signal?.aborted)
       throw new Error("Import cancelled. Your notes are still here.");
     if (error?.name === "AbortError")
-      throw new Error("The request took too long. Please try again.");
+      throw Object.assign(new Error("The request took too long. Please try again."), { code: 'timeout' });
     throw error;
   } finally {
     clearTimeout(timeout);
@@ -1861,10 +1872,16 @@ export const AIService = {
         cache: "no-store",
         headers: { accept: "application/json" },
       });
-      if (!response.ok) return { available: false, provider: null };
-      return await response.json();
-    } catch {
-      return { available: false, provider: null };
+      if (!response.ok) {
+        const body = await response.json().catch(() => ({}));
+        return { available: false, provider: null, reason: body.code || 'server_error', status: response.status,
+          retryAt: response.status === 429 ? Date.now() + (Number(response.headers?.get?.('retry-after')) * 1000 || 60000) : null };
+      }
+      const body = await response.json();
+      if (typeof body.available !== 'boolean') return { available: false, provider: null, reason: 'server_error' };
+      return body.available ? body : { ...body, reason: 'config_missing' };
+    } catch (error) {
+      return { available: false, provider: null, reason: error?.name === 'AbortError' ? 'timeout' : error instanceof TypeError ? 'network_error' : 'server_error' };
     } finally {
       clearTimeout(timeout);
     }
@@ -2065,8 +2082,12 @@ export const AIService = {
     const deterministic = deterministicCoach(state, message);
     if (deterministic.final) return deterministic;
     try {
-      const status = await this.status();
-      if (!status.available) return deterministic;
+      // The UI has already checked configuration. A real send needs no probe
+      // and must retain a retryable entry if the provider fails.
+      if (!combineOptions.requireRemoteSuccess) {
+        const status = await this.status();
+        if (!status.available) return deterministic;
+      }
       const payload = {
         message,
         responseLanguage,
@@ -2107,11 +2128,12 @@ export const AIService = {
           : data.text;
       return { text, action, source: "ai" };
     } catch (error) {
+      if (combineOptions.requireRemoteSuccess) throw error;
       return {
         ...deterministic,
-        text: `AI Coach request failed: ${error.message} ${deterministic.text}`,
+        text: `Coach is temporarily unavailable. ${deterministic.text}`,
         degraded: true,
-        error: error.message,
+        error: 'Coach is temporarily unavailable.',
       };
     }
   },

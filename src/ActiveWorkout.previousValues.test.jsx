@@ -59,12 +59,12 @@ it.each(['','53,','.'])('recommendation resolves only remaining weight drafts (%
  expect(sets[1]).toEqual({...before.activeWorkout.exercises[0].sets[1],weight:90,touched:true,weightEntryMode:'auto',weightSourceSetId:sets[0].id});expect(sets[2]).toEqual(before.activeWorkout.exercises[0].sets[2]);
  act(()=>node.blur());expect(updates).toHaveBeenCalledOnce();
 });
-it('recommendation does not own an invalid reps draft in the same set',()=>{
- mount(recommendedFixture());type(input('reps'),'');const before=structuredClone(current);pointerRecommend();expect(current).toEqual(before);expect(updates).not.toHaveBeenCalled();expect(document.activeElement).toBe(input('reps'));expect(recommend()).toBeTruthy();
+it('recommendation settles an unrelated empty reps edit without inventing reps or blocking its load action',()=>{
+ mount(recommendedFixture());type(input('reps'),'');pointerRecommend();expect(set().weight).toBe(90);expect(set().reps).toBeNull();expect(set().completed).toBe(false);expect(updates).toHaveBeenCalledOnce();expect(document.activeElement).not.toBe(input('reps'));
 });
 it('recommendation excludes a completed set even for its weight draft',()=>{
  const state=recommendedFixture();Object.assign(state.activeWorkout.exercises[0].sets[2],{weight:65,reps:9,completed:true});mount(state);const other=host.querySelectorAll('[data-workout-field="weight"] input')[2];
- type(other,'');const before=structuredClone(current);pointerRecommend();expect(current).toEqual(before);expect(updates).not.toHaveBeenCalled();expect(document.activeElement).toBe(other);
+ type(other,'');const before=structuredClone(current.activeWorkout.exercises[0].sets[2]);pointerRecommend();expect(current.activeWorkout.exercises[0].sets[2]).toEqual(before);expect(other.value).toBe('65');expect(set().weight).toBe(90);expect(updates).toHaveBeenCalledOnce();
 });
 it('moving focus to the declared resolver preserves the exact draft until keyboard activation',()=>{
  mount();type(input('weight'),'53,');const save=vi.spyOn(domain,'saveState');act(()=>use().focus());expect(updates).not.toHaveBeenCalled();click(use());expect(save).toHaveBeenCalledOnce();click(button('Undo'));expect(input('weight').value).toBe('53,');expect(set().weight).toBeNull();
@@ -82,14 +82,16 @@ it.each(['53,','082,50','.'])('pointerdown/blur/capture/click replaces raw %s wi
  mount();const before=structuredClone(current),node=input('weight'),save=vi.spyOn(domain,'saveState');type(node,raw);pointerApply();expect(set().weight).toBe(90);expect(save).toHaveBeenCalledOnce();expect(updates).toHaveBeenCalledOnce();
  click(button('Undo'));expect(current).toEqual(before);expect(node.value).toBe(raw);expect(save).toHaveBeenCalledTimes(2);expect(updates).toHaveBeenCalledTimes(2);
 });
-it('an unrelated invalid set draft blocks replacement without losing either raw draft',()=>{
+it('an unrelated empty set draft does not block explicit replacement or turn that other set into completed work',()=>{
  mount();const node=input('weight');type(node,'53,');const other=host.querySelectorAll('[data-workout-field="reps"] input')[1];
  act(()=>other.dispatchEvent(new CustomEvent('rook-restore-draft',{detail:{snapshot:{draft:'',committed:null}}})));
- const before=structuredClone(current),save=vi.spyOn(domain,'saveState');pointerApply();expect(current).toEqual(before);expect(node.value).toBe('53,');expect(other.value).toBe('');expect(document.activeElement).toBe(other);expect(button('Undo')).toBeUndefined();expect(save).not.toHaveBeenCalled();expect(updates).not.toHaveBeenCalled();
+ const before=structuredClone(current),save=vi.spyOn(domain,'saveState');pointerApply();expect(set()).toMatchObject({weight:90,reps:7,completed:false});expect(node.value).toBe('90');expect(other.value).toBe('');expect(current.activeWorkout.exercises[0].sets[1]).toEqual(before.activeWorkout.exercises[0].sets[1]);expect(document.activeElement).not.toBe(other);expect(button('Undo')).toBeDefined();expect(save).toHaveBeenCalledOnce();expect(updates).toHaveBeenCalledOnce();
+ click(button('Undo'));expect(current).toEqual(before);expect(node.value).toBe('53,');
 });
-it.each(['next','finish','back'])('ordinary %s remains guarded by an invalid required draft',action=>{
- mount();type(input('weight'),'');const before=structuredClone(current);const target=action==='next'?host.querySelector('.workout-primary-action .exercise-navigation-button')||button('NEXT EXERCISE →'):action==='finish'?button('Finish'):host.querySelector('[aria-label="Back to Today"]');click(target);
- expect(current).toEqual(before);expect(navigate).not.toHaveBeenCalled();expect(details).not.toHaveBeenCalled();expect(host.querySelector('[role="alertdialog"]')).toBeNull();expect(updates).not.toHaveBeenCalled();
+it.each(['next','finish','back'])('ordinary %s settles an invalid required draft without a focus trap or logging it',action=>{
+ const initial=fixture();if(action==='finish')Object.assign(initial.activeWorkout.exercises[1].sets[0],{weight:40,reps:8,completed:true});mount(initial);type(input('weight'),'');const before=structuredClone(current);const target=action==='next'?button('NEXT EXERCISE →'):action==='finish'?button('Finish'):host.querySelector('[aria-label="Back to Today"]');click(target);
+ expect(current).toEqual(before);expect(input('weight').value).toBe('');expect(details).not.toHaveBeenCalled();expect(updates).not.toHaveBeenCalled();
+ if(action==='back')expect(navigate).toHaveBeenCalledWith('today');else expect(document.querySelector('.workout-confirm')).not.toBeNull();
 });
 it.each([{id:'pull-up',field:'weight'},{id:'assisted-pull-up',field:'weight'},{id:'plank',field:'reps'},{mode:'per_side',field:'sides.left'},{mode:'per_side',field:'sides.right'}])('focused blank %j follows the same set-scoped domain copy and Undo',options=>{
  mount(fixture(options));const before=structuredClone(current),node=input(options.field);act(()=>node.focus());pointerApply();expect(set().reps).toBe(options.id==='plank'?45:7);if(options.mode==='per_side')expect(set().sides).toEqual({left:{reps:7},right:{reps:9}});click(button('Undo'));expect(current).toEqual(before);expect(node.value).toBe('');

@@ -7,7 +7,7 @@ import {interactionFeedback} from './interactionFeedback.js';
 export function bindTrainingReorder(root, {
   reorderGestureRef, reorderFrameRef, reorderPreviewRef, cancelReorderRef,
   suppressReorderClickUntil, commitReorderRef, setReorderView,
-  getCandidate, beforeStart, getScroller, getViewport, feedback=interactionFeedback, selectionFeedback=true,
+  getCandidate, beforeStart, getScroller, getViewport, feedback=interactionFeedback, selectionFeedback=true, fixedSlots=false,
 }) {
   let settles=[];
   const clearSettles=()=>{settles.forEach(animation=>animation?.cancel());settles=[];};
@@ -148,6 +148,12 @@ export function bindTrainingReorder(root, {
     const remaining = gesture.units.filter(unit => unit.index !== gesture.sourceIndex);
     gesture.units.forEach((unit) => {
       let offset = 0;
+      if(fixedSlots) {
+        const destination=unit.index===gesture.sourceIndex ? unit.index
+          : targetIndex>gesture.sourceIndex && unit.index>gesture.sourceIndex && unit.index<=targetIndex ? unit.index-1
+          : targetIndex<gesture.sourceIndex && unit.index>=targetIndex && unit.index<gesture.sourceIndex ? unit.index+1 : unit.index;
+        offset=gesture.units[destination].top-unit.top;
+      } else {
       if (
         targetIndex > gesture.sourceIndex &&
         unit.index > gesture.sourceIndex &&
@@ -160,6 +166,7 @@ export function bindTrainingReorder(root, {
         unit.index < gesture.sourceIndex
       )
         offset = gesture.sourceSpan;
+      }
       unit.elements.forEach((element) => {
         element.classList.toggle("reorder-drop-before", unit === remaining[targetIndex] && element === unit.elements[0]);
         element.classList.toggle("reorder-drop-after", targetIndex === remaining.length && unit === remaining.at(-1) && element === unit.elements.at(-1));

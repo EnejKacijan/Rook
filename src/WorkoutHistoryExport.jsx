@@ -2,6 +2,7 @@ import { useRef, useState, useEffect } from 'react';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { completedExportWorkouts, createWorkoutHistoryExport, presentHistoryExport } from './workoutHistoryExport.js';
 import './workoutHistoryExport.css';
+import {SegmentedControl} from './SegmentedControl.jsx';
 
 export function WorkoutHistoryExport({state,close,SheetHeader,Button}) {
   const [format,setFormat]=useState('csv'),[notes,setNotes]=useState(false),[busy,setBusy]=useState(false),[file,setFile]=useState(null),[message,setMessage]=useState(''),[error,setError]=useState(false);
@@ -29,7 +30,7 @@ export function WorkoutHistoryExport({state,close,SheetHeader,Button}) {
     <h1>Your training history.</h1>
     <p>Generated on this device. CSV or JSON for your own records — not a recovery backup.</p>
     <p className="history-export-count">{count} completed {count===1?'workout':'workouts'}</p>
-    <fieldset disabled={busy}><legend>FORMAT</legend><div className="history-export-formats" role="radiogroup" aria-label="Format" onKeyDown={event=>{if(!busy&&['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(event.key)){event.preventDefault();setFormat(format==='csv'?'json':'csv');reset();event.currentTarget.querySelector(format==='csv'?'button:last-child':'button:first-child')?.focus();}}}>{['csv','json'].map(value=><button key={value} role="radio" tabIndex={format===value?0:-1} aria-checked={format===value} className={format===value?'is-selected':''} onClick={()=>{setFormat(value);reset();}}>{value.toUpperCase()}</button>)}</div></fieldset>
+    <fieldset disabled={busy}><legend className="eyebrow">FORMAT</legend><SegmentedControl label="Format" options={[{value:'csv',label:'CSV'},{value:'json',label:'JSON'}]} value={format} disabled={busy} onChange={value=>{setFormat(value);reset();}}/></fieldset>
     <label className="history-export-notes"><span><strong>Include notes</strong><small>{notes?'Session and exercise notes will be included.':'Session and exercise notes are excluded.'}</small></span><input type="checkbox" checked={notes} disabled={busy} onChange={e=>{setNotes(e.target.checked);reset();}}/></label>
     <p className="history-export-explanation">Weights use stored kg values. Photos are not included. Nothing is uploaded by ROOK.</p>
     {!!(state.weightCheckins?.length||state.importedMeasurementSources?.length)&&<p>{format==='json'?'JSON also includes body-weight check-ins and preserved measurement-source records.':'CSV contains workout sets only. Choose JSON to include body-weight check-ins and preserved measurement-source records.'}</p>}

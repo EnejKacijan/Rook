@@ -15,7 +15,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
     const reveal = () => {
       // Search chrome is outside the results scroller and already positioned by
       // the viewport owner. A footer must not pan its outer panel to reveal it.
-      if (screen.classList.contains('is-search-browsing')) return;
+      if (footer.hidden || screen.classList.contains('is-search-browsing')) return;
       const input = document.activeElement;
       if (!screen.contains(input) || !input.matches('input, textarea, select')) return;
       const scroller = (containViewport && input.closest('.sheet-scroll')) || input.closest('.profile-setting-scroll, .superset-partner-options, .import-decision-scroll') || screen;
@@ -57,5 +57,5 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
     };
   }, [enabled, pageScroll, containViewport, importViewport, anchorPlanViewport, hideWhileSearching]);
   if (!enabled) return children;
-  return <footer ref={ref} data-separate={separate || undefined} style={{'--sheet-action-inner-gutter': `${gutter}px`}} className={`sheet-action-footer ${className}`}>{children}</footer>;
+  return <footer ref={ref} data-separate={separate || undefined} style={{'--sheet-action-inner-gutter': typeof gutter === 'number' ? `${gutter}px` : gutter}} className={`sheet-action-footer ${className}`}>{children}</footer>;
 }

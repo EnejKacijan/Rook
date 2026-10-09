@@ -31,3 +31,9 @@ it('handoff failure retains the exact payload for retry',async()=>{
 it('failed preparation can be retried without handing off',async()=>{
   vi.mocked(createWorkoutHistoryExport).mockRejectedValueOnce(Error('failed'));await click('PREPARE EXPORT');expect(host.querySelector('[role=alert]')).not.toBeNull();await click('PREPARE EXPORT');expect(host.textContent).toContain('File ready');expect(presentHistoryExport).not.toHaveBeenCalled();
 });
+it.each(['CSV','JSON'])('%s choice reaches export unchanged, with independent notes and no automatic preparation',async label=>{
+  await click(label);const checkbox=host.querySelector('input[type="checkbox"]');act(()=>checkbox.click());await click(label==='CSV'?'JSON':'CSV');await click(label);
+  expect(checkbox.checked).toBe(true);expect(createWorkoutHistoryExport).not.toHaveBeenCalled();expect(presentHistoryExport).not.toHaveBeenCalled();
+  await click('PREPARE EXPORT');expect(createWorkoutHistoryExport).toHaveBeenCalledExactlyOnceWith({}, {format:label.toLowerCase(),includeNotes:true});expect(presentHistoryExport).not.toHaveBeenCalled();
+});
+it('reopening preserves the existing CSV / notes-off defaults without preparing data',()=>{act(()=>root.unmount());root=createRoot(host);act(()=>root.render(<WorkoutHistoryExport state={{}} close={()=>{}} SheetHeader={()=>null} Button={props=><button {...props}/>}/>));expect(host.querySelector('[role="radio"][aria-checked="true"]').textContent).toBe('CSV');expect(host.querySelector('input').checked).toBe(false);expect(createWorkoutHistoryExport).not.toHaveBeenCalled();});

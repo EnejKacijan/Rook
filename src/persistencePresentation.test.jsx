@@ -20,10 +20,11 @@ for(const outcome of ['retry','cancel'])it(`optional feedback failure → ${outc
  else{act(()=>button('DONE').click());expect(done).toHaveBeenCalledOnce();expect(saveState).toHaveBeenCalledOnce();expect(update).not.toHaveBeenCalled();}
 });
 for(const outcome of ['retry','cancel'])it(`schedule failure → ${outcome} preserves original until saved`,()=>{
+ vi.setSystemTime(new Date('2026-09-02T12:00:00'));
  const state=blankState();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:['Mon','Wed','Fri'],sessionMinutes:60,equipment:['full gym'],priorities:['Balanced'],onboardingComplete:true});state.program=buildProgram(state.profile);
  const before=structuredClone(state),update=vi.fn(),close=vi.fn();saveState.mockReturnValueOnce(false).mockReturnValue(true);
  render(<FlexibleWeekSheet state={state} update={update} close={close} Header={()=>null}/>);
- act(()=>document.querySelectorAll('.adjust-option-list button')[2].click());act(()=>document.querySelector('.flexible-workout-list button').click());act(()=>document.querySelector('.flexible-week-dates button:not([disabled])').click());act(()=>button('APPLY MOVE').click());
+ act(()=>[...document.querySelectorAll('.adjust-option-list button')].find(b=>b.querySelector('strong')?.textContent==='Move a workout').click());act(()=>document.querySelector('.flexible-workout-list button').click());act(()=>document.querySelector('.flexible-week-dates button:not([disabled])').click());act(()=>button('APPLY MOVE').click());
  expect(update).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();expect(state).toEqual(before);expect(button('TRY AGAIN').disabled).toBe(false);
  act(()=>button(outcome==='retry'?'TRY AGAIN':'CANCEL').click());if(outcome==='retry'){expect(document.querySelector('[role="alert"]')).toBeNull();act(()=>button('DONE').click());}expect(close).toHaveBeenCalledOnce();expect(saveState).toHaveBeenCalledTimes(outcome==='retry'?2:1);expect(update).toHaveBeenCalledTimes(outcome==='retry'?1:0);expect(state).toEqual(before);
 });

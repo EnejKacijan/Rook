@@ -330,7 +330,10 @@ export function verifiedRawCoverageConstraintReason(plan, profile, catalog, prog
   if (!supportedDays.some(day => (compatibleByDay.get(day) || []).length)) return 'equipment-or-restriction';
   const fixedTwo = String(profile.effortStyle || '').startsWith('Fewer hard');
   const priorityMuscles = [...priorityStimulusMusclesForProfile(profile)];
-  const canMutate = ({ addItem, addSets = 0, removeItem = null, removeSets = 0, protectTargets = [] }) => stimulusMutationPreservesPolicy({
+  // A feasible way to close this deficit must increase its credited volume.
+  // Moving sets between two equally credited exercises does not close a gap.
+  const canMutate = ({ addItem, addSets = 0, removeItem = null, removeSets = 0, protectTargets = [] }) =>
+    addSets * (addItem?.stimulusProfile?.[muscle] || 0) > removeSets * (removeItem?.stimulusProfile?.[muscle] || 0) && stimulusMutationPreservesPolicy({
     volume,
     targets,
     addProfile: addItem?.stimulusProfile || {},

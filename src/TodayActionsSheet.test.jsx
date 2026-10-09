@@ -69,7 +69,7 @@ it('date-only imports do not fabricate a completion time',()=>{
 });
 it.each(['mixed','planned','freestyle'])('%s completed records retain detail access on Today itself',kind=>{
   state=dayOverflowFixture({count:3,kind});act(()=>root.render(<Today state={state} update={()=>{}} setPage={()=>{}} setDetail={setDetail}/>));
-  for(const record of state.workouts){const row=document.querySelector(`.today-completed-workouts [data-workout-id="${record.id}"]`) || button('WORKOUT COMPLETE · VIEW HISTORY');expect(row).toBeTruthy();click(row);expect(setDetail).toHaveBeenLastCalledWith({completedWorkout:record.id});}
+  for(const record of state.workouts){const row=document.querySelector(`.today-completed-workouts [data-workout-id="${record.id}"]`) || button('VIEW WORKOUT DETAILS');expect(row).toBeTruthy();click(row);expect(setDetail).toHaveBeenLastCalledWith({completedWorkout:record.id});}
 });
 it('historical repeat routes to today and canonical apply/start preserve old facts through reload',()=>{
   state=dayOverflowFixture({count:2,date:'2026-09-18',sameName:true});draw();expect(button('Start freestyle workout')).toBeUndefined();click(button('Repeat today'));

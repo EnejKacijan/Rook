@@ -1,3 +1,4 @@
+import { presentNativeFile } from './platformFileActions.js';
 import {
   Zip,
   ZipDeflate,
@@ -549,6 +550,8 @@ export function downloadBackupFile(file) {
 }
 
 export async function presentBackupFile(file) {
+  const nativeResult = await presentNativeFile(file, { title: 'ROOK backup' });
+  if (nativeResult) return nativeResult;
   if (navigator.share && navigator.canShare?.({ files: [file] })) {
     try {
       await navigator.share({ files: [file], title: "ROOK backup" });

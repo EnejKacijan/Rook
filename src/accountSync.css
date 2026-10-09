@@ -11,7 +11,7 @@
 .account-sync-lock h1 { max-width: 18ch; }
 .account-sync-lock > p:not(.eyebrow) { max-width: 34ch; }
 .account-sync-lock .button { margin-top: 20px; min-height: 48px; }
-.account-sync-lock .account-sync-secondary { display: block; width: 100%; min-height: 48px; margin-top: 12px; padding: 10px 12px; border: 0; background: transparent; color: var(--rook-accent); text-align: center; font: inherit; cursor: pointer; }
+.account-sync-lock .account-sync-secondary { display: block; width: 100%; min-height: 48px; margin-top: 12px; padding: 10px 12px; border: 0; background: transparent; color: var(--rook-accent-text); text-align: center; font: inherit; cursor: pointer; }
 .account-sync-lock > small { display: block; margin-top: 4px; color: var(--rook-muted); text-align: center; }
 .account-confirm-sheet { padding: 32px max(20px, env(safe-area-inset-left)) max(24px, env(safe-area-inset-bottom)); }
 .account-confirm-sheet > .sheet-header-chrome { margin: -32px 0 16px; }

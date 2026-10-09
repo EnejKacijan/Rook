@@ -49,14 +49,14 @@ it('one becomes multiple without stale header or accessible names',()=>{
 });
 it.each(['move','skip'])('%s feedback survives sheet close and Undo restores only the exact occurrence mutation',kind=>{
  const before=draw(2),ids=missedFlexibleSessions(before).map(s=>s.logicalSessionId);recover(kind);
- expect(document.querySelector('.flexible-week-sheet')).toBeNull();expect(missedFlexibleSessions(current).map(s=>s.logicalSessionId)).toEqual([ids[1]]);expect(hide().getAttribute('aria-label')).toBe('Hide missed workout reminder');expect(status().textContent).toContain(kind==='move'?'UPPER B moved to Sat, Sep 19':'UPPER B skipped');
- change(s=>({...s,profile:{...s.profile,units:'lb'}}));click(undo());expect(current).toEqual({...before,profile:{...before.profile,units:'lb'}});expect(missedFlexibleSessions(saved()).map(s=>s.logicalSessionId)).toEqual(ids);expect(status()).toBeNull();
+ expect(document.querySelector('.flexible-week-sheet')).toBeNull();expect(missedFlexibleSessions(current).map(s=>s.logicalSessionId)).toEqual([ids[1]]);expect(hide().getAttribute('aria-label')).toBe('Hide missed workout reminder');expect(status().textContent).toContain(kind==='move'?'Schedule updated':'UPPER B skipped');
+ change(s=>({...s,profile:{...s.profile,units:'lb'}}));click(undo());expect(current).toEqual({...before,profile:{...before.profile,units:'lb'},...(kind==='move'?{flexibleWeek:current.flexibleWeek}:{})});if(kind==='move')expect(current.flexibleWeek.sessions).toEqual(before.flexibleWeek?.sessions||{});expect(missedFlexibleSessions(saved()).map(s=>s.logicalSessionId)).toEqual(ids);expect(status()).toBeNull();
 });
 it.each(['move','skip'])('Hide after %s replaces feedback; Undo Hide never reverses the schedule',kind=>{
  draw(2);recover(kind);const schedule=structuredClone(current.flexibleWeek);click(hide());expect(document.querySelectorAll('.exercise-remove-undo')).toHaveLength(1);expect(status().textContent).toContain('reminder hidden');click(undo());expect(current.flexibleWeek).toEqual(schedule);expect(missedFlexibleSessions(current)).toHaveLength(1);
 });
 it('new workout data invalidates schedule Undo rather than replacing later work',()=>{
- draw(2);recover('move');change(s=>({...s,workouts:[...s.workouts,{id:'later',completedAt:'2026-09-19T12:00:00'}]}));expect(status()).toBeNull();expect(current.workouts.at(-1).id).toBe('later');
+ draw(2);recover('move');change(s=>({...s,workouts:[...s.workouts,{id:'later',completedAt:'2026-09-19T12:00:00'}]}));click(undo());expect(status()).toBeNull();expect(document.querySelector('[role="alert"]').textContent).toContain('schedule or workouts changed');expect(current.workouts.at(-1).id).toBe('later');
 });
 it('when the final skip advances the block, later program metadata also invalidates its snapshot Undo',()=>{
  const before=draw(1);recover('skip');expect(current.program).not.toEqual(before.program);

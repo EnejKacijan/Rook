@@ -9,6 +9,24 @@ afterEach(()=>{act(()=>root?.unmount());root=null;document.body.innerHTML='';});
 function render(element){const container=document.createElement('div');document.body.append(container);root=createRoot(container);const rerender=e=>act(()=>root.render(e));rerender(element);return {container,rerender};}
 const screen={getByText:text=>[...document.querySelectorAll('button')].find(e=>e.textContent===text),getAllByRole:role=>[...document.querySelectorAll(`[role="${role}"]`)]};
 const fireEvent={click:e=>act(()=>e.click())};
+it('separate action areas accept the responsive sheet gutter without freezing it to pixels',()=>{
+  const commit=vi.fn();
+  const view=render(<main className="sheet replace-sheet"><SheetActionFooter separate gutter="var(--rook-sheet-content-inline)"><button onClick={commit}>Save</button></SheetActionFooter></main>);
+  const footer=view.container.querySelector('footer');
+  expect(footer.style.getPropertyValue('--sheet-action-inner-gutter')).toBe('var(--rook-sheet-content-inline)');
+  expect(footer.hasAttribute('data-separate')).toBe(true);
+  fireEvent.click(screen.getByText('Save'));expect(commit).toHaveBeenCalledOnce();
+  view.rerender(<main className="sheet"><SheetActionFooter gutter={22}><button>Save</button></SheetActionFooter></main>);
+  expect(view.container.querySelector('footer').style.getPropertyValue('--sheet-action-inner-gutter')).toBe('22px');
+});
+it('a hidden search footer cannot pan the editor toward its empty rectangle',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:350,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try{
+  const view=render(<main className="detail-screen"><input/><SheetActionFooter anchorPlanViewport hideWhileSearching><button>Review</button></SheetActionFooter></main>);
+  const panel=view.container.firstChild,input=panel.querySelector('input');input.getBoundingClientRect=()=>({top:200,bottom:240});panel.scrollTop=50;
+  expect(panel.querySelector('footer').hidden).toBe(true);act(()=>input.focus());expect(panel.scrollTop).toBe(50);expect(document.activeElement).toBe(input);
+ }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
 it('keeps disabled/enabled action and secondary callbacks unchanged', () => {
   const commit=vi.fn(), cancel=vi.fn();
   const view=render(<main className="detail-screen"><SheetActionFooter><button disabled onClick={commit}>Save</button><button onClick={cancel}>Back</button></SheetActionFooter></main>);

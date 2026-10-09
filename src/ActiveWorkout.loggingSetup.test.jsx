@@ -53,3 +53,11 @@ it('does not publish a mode change when persistence fails',()=>{
  mount(fixture('one-arm-dumbbell-row'));const before=structuredClone(current);open();vi.mocked(domain.saveState).mockReturnValueOnce(false);
  click('Reps per side');expect(current).toEqual(before);expect(host.querySelector('.active-logging-setup-sheet [role="alert"]').textContent).toContain('Could not save');
 });
+
+it('Rear Delt Fly per-side -> Total reps -> reload -> per-side keeps the same menu and exercise/set identities',()=>{
+ const s=fixture('dumbbell-rear-delt-fly');s.activeWorkout.exercises[0].loggingMode='per_side';mount(domain.deserializeState(domain.serializeState(s),{strict:true}));const before=structuredClone(current);
+ open();click('Total reps');expect(host.querySelector('.set-row.per-side')).toBeNull();
+ const saved=domain.deserializeState(domain.serializeState(current),{strict:true});act(()=>root.render(null));mount(saved);
+ open();click('Reps per side');expect(host.querySelector('.set-row.per-side')).toBeTruthy();expect(current.activeWorkout.exercises[0].id).toBe(before.activeWorkout.exercises[0].id);
+ expect(current.activeWorkout.exercises[0].sets.map(s=>s.id)).toEqual(before.activeWorkout.exercises[0].sets.map(s=>s.id));expect(current.program).toEqual(before.program);expect(current.workouts).toEqual(before.workouts);
+});

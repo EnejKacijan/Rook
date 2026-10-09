@@ -161,6 +161,22 @@ it('does not reuse a touch that dismisses the age picker as page Back', () => {
   swipe(); expect(page().dataset.firstRunPage).toBe('personalize');
   swipe(); expect(page().dataset.firstRunPage).toBe('landing');
 });
+it('pointer travel does not move age-option focus; keyboard arrows and selection still work', () => {
+  click('BUILD MY PLAN'); settle(); click('Age range'); settle();
+  const options = [...page().querySelectorAll('[role="option"]')];
+  expect(document.activeElement).toBe(options[0]);
+  const pointerMove = new Event('pointermove', { bubbles: true });
+  Object.defineProperty(pointerMove, 'pointerType', { value: 'mouse' });
+  act(() => options.at(-1).dispatchEvent(pointerMove)); settle();
+  expect(document.activeElement).toBe(options[0]);
+  expect(options[0].tabIndex).toBe(0); expect(options.at(-1).tabIndex).toBe(-1);
+  expect(options.every(option => option.getAttribute('aria-selected') === 'false')).toBe(true);
+  act(() => options[0].dispatchEvent(new KeyboardEvent('keydown', { key: 'ArrowDown', bubbles: true, cancelable: true }))); settle();
+  expect(document.activeElement).toBe(options[1]); expect(options[1].tabIndex).toBe(0);
+  act(() => options[1].click()); settle();
+  expect(page().querySelector('[role="listbox"]')).toBeNull();
+  expect(button('Age range').textContent).toContain(options[1].textContent);
+});
 it('consumes the step swipe marker so a later button Back to Landing still animates', () => {
   click('BUILD MY PLAN'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
   swipe(); expect(page().textContent).toContain('Set the right starting point.');

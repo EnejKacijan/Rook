@@ -133,6 +133,7 @@ describe("AI service boundary", () => {
     await expect(AIService.status()).resolves.toEqual({
       available: false,
       provider: null,
+      reason: 'server_error',
     });
     await expect(AIService.expertLabStatus()).resolves.toEqual({
       enabled: false,

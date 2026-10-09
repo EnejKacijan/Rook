@@ -1,3 +1,4 @@
+import {NavigationChevron} from './NavigationChevron.jsx';
 import {missedFlexibleSessions} from './flexibleWeek.js';
 import {missedReminderKey} from './missedWorkoutActions.js';
 import {ExerciseNavigationButton} from './ExerciseNavigationButton.jsx';
@@ -24,7 +25,7 @@ export function MissedWorkoutSummary({state,onSelect,update}) {
    onClick={()=>onSelect(single?{sessionId:first.logicalSessionId}:{missed:true})}>
    <span><strong>{single?first.workout.name:`${missed.length} missed workouts`}</strong>
     {single&&<time dateTime={first.scheduledDate}>Missed · {dateLabel(first.scheduledDate)}</time>}</span>
-   <span className="today-missed-chevron" aria-hidden="true">›</span>
+   <NavigationChevron className="today-missed-chevron"/>
   </ExerciseNavigationButton>
  </aside></Disclosure>;
 }

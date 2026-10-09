@@ -1,4 +1,18 @@
+import {IllustrationCredits} from './IllustrationCredits.jsx';
+import {CompletedSessionOverview} from './CompletedSessionOverview.jsx';
+import {ExercisePrSheet} from './ExercisePrSheet.jsx';
+import { SettingSwitch } from './SettingSwitch.jsx';
+import { useResolvedTheme, legacyThemePreference } from './useResolvedTheme.js';
+export { resolvedTheme, resolvedAppearance, legacyThemePreference } from './useResolvedTheme.js';
 import {bindTrainingReorder} from './trainingReorder.js';
+import { StandalonePageZoomPreference } from './StandalonePageZoomPreference.jsx';
+import { subscribeNativeForeground } from './nativeLifecycle.js';
+import { presentNativeFile } from './platformFileActions.js';
+import { handleExternalLinkClick } from './externalLink.js';
+import { PersonalThemesProvider, usePersonalThemes } from './PersonalThemesContext.jsx';
+import { personalThemeFromProfile, personalThemeSummary } from './personalThemes.js';
+import { TemporaryPlanSheet } from './TemporaryPlanSheet.jsx';
+import { temporaryPlanScheduleUntouched, temporaryPlanStatus } from './temporaryPlan.js';
 import {WorkoutPreparation} from './WorkoutPreparation.jsx';
 import {ReorderHandle} from './ReorderHandle.jsx';
 import {OverflowIcon} from './OverflowIcon.jsx';
@@ -6,6 +20,10 @@ import {useTrainingReorder} from './useTrainingReorder.js';
 import {UpNextReorderPreview} from './UpNextReorderPreview.jsx';
 import {upNextReorderGroups,reorderUpNext,upNextMoveRequest,canMoveCurrentToUpNext,moveCurrentToUpNext} from './upNextReorder.js';
 import {useDurableAction} from './useDurableAction.js';
+import { OptionalActivityEditor } from './OptionalActivityEditor.jsx';
+import { OptionalActivityDetails } from './OptionalActivityDetails.jsx';
+import { ConditioningSheet, TodayOptionalActivities } from './ConditioningSheet.jsx';
+import { isConditioning, optionalActivitySummary, optionalActivityDurationLabel } from './optionalActivity.js';
 import {SavedWorkouts} from './SavedWorkouts.jsx';
 import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
@@ -18,7 +36,9 @@ import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers}
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
 export {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
 import {ExercisePickerIdentity} from './ExercisePickerIdentity.jsx';
+import {ExerciseIllustration} from './ExerciseIllustration.jsx';
 import {UseWorkoutTodaySheet} from './UseWorkoutTodaySheet.jsx';
+import {useCalendarDay} from './useCalendarDay.js';
 import {workoutDraftScope,ownsWorkoutDraft} from './workoutDraftScope.js';
 import {isRepeatAdjustment,cancelRepeatedWorkout,canUseWorkoutToday,proposeWorkoutToday} from './useWorkoutToday.js';
 import {MissedWorkoutSummary} from './missedWorkoutPresentation.jsx';
@@ -29,8 +49,10 @@ import { capturePageSurface, playPageNavigation, stopPageNavigation } from './pa
 import { FirstRunNavigation, FirstRunStepMotion } from './FirstRunNavigation.jsx';
 import { FirstRunBackButton, NavigationChevron } from './NavigationChevron.jsx';
 import { WorkoutMotion, workoutMotionDuration } from './WorkoutMotion.jsx';
+import { CurrentExerciseContext } from './CurrentExerciseContext.jsx';
 import { createTodayScheduleReader } from './todayScheduleReader.js';
 import { useMainTabTransition } from './mainTabTransition.js';
+import { retapActiveTab, useActiveTabRetap, scrollTabRootToTop, tabNavigationBlocked } from './activeTabNavigation.js';
 import { useBottomNavFeedback } from './useBottomNavFeedback.js';
 import { focusNavigationTarget } from './navigationFocus.js';
 import { combinedAdjustment, isCombinedAdjustment, combinedTransition, reconcileCombinedTermination, persistCombinedState } from './combinedWorkoutLifecycle.js';
@@ -57,6 +79,8 @@ import { importedSetComparable,importedSessionTimeLabel } from './historicalSetS
 import { StartupBoundary } from './StartupBoundary.jsx';
 import { StorageDiagnostics } from './StorageDiagnostics.jsx';
 import { ACCOUNT_SIGNED_OUT_KEY, useAccountSync } from './useAccountSync.js';
+import { useCoachAvailability } from './useCoachAvailability.js';
+import { coachAvailabilityCopy } from './coachAvailability.js';
 import { resolveAccountStartup } from './accountStartup.js';
 import { clearAllProfileSlotArchives, recoverInterruptedProfileSwitch } from './accountProfileSlots.js';
 import { AccountSyncLock, AccountSyncPanel } from './AccountSyncPanel.jsx';
@@ -83,6 +107,7 @@ import './actionHierarchy.css';
 import './bottomNav.css';
 import { SearchInput } from './SearchInput.jsx';
 import { CustomExerciseFallback } from './CustomExerciseFallback.jsx';
+import { PlanEditorExercisePicker } from './PlanEditorExercisePicker.jsx';
 import { PlanConflictResolution, planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './PlanConflictResolution.jsx';
 import { removalRows, stagePlanRemoval, undoPlanRemoval } from './planRemovalDraft.js';
 import './planRemovalDraft.css';
@@ -94,8 +119,10 @@ import { PlanImportIssues } from './PlanImportIssues.jsx';
 import { ImportResolution } from './ImportResolution.jsx';
 import { useImportNotesPaste } from './useImportNotesPaste.js';
 import { StepProgress } from './StepProgress.jsx';
-import { exerciseNotePresentation, upNextExerciseNote } from './exerciseNotePresentation.js';
+import { SessionProgress, sessionDurationValueText } from './SessionProgress.jsx';
+import { exerciseNotePresentation } from './exerciseNotePresentation.js';
 import { ExerciseNavigationButton } from './ExerciseNavigationButton.jsx';
+import { workoutVisibleStatus } from './workoutStatusPresentation.js';
 import { importMatchEntries, importResolutionGroups, importExerciseReviewGroups } from './importResolution.js';
 import { OptionalPlanMatches } from './OptionalPlanMatches.jsx';
 import { applySavedPlanImportMatch, keepPlanImportOriginal, planImportSafetyIssues } from './planImportMatching.js';
@@ -117,6 +144,8 @@ import { useSheetBack } from './useSheetBack.js';
 import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
 import { MissedWorkoutFeedbackProvider } from './MissedWorkoutFeedback.jsx';
 import { flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek, flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
+import {hasMoveWorkoutDestination,hasTemporaryScheduleAction,moveWorkoutCandidates} from './flexibleWeek.js';
+import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import {
   Component,
@@ -267,6 +296,7 @@ import {
   normalizeSessionNote,
   optionalStrengthForDate,
   optionalSessionElapsedSeconds,
+  optionalSessionTiming,
   pauseOptionalSession,
   plannedWorkoutForDate,
   pluralize,
@@ -687,59 +717,6 @@ function PersistenceHost({ failed, onBackup, children }) {
       {children}
     </div>
   );
-}
-export function resolvedTheme(preference, systemDark = false) {
-  if (preference === "premium") return "premium";
-  return preference === "dark" || (preference === "system" && systemDark)
-    ? "dark"
-    : "light";
-}
-export function resolvedAppearance(preference, systemDark = false) {
-  return preference === "dark" || (preference === "system" && systemDark)
-    ? "dark"
-    : "light";
-}
-export function legacyThemePreference(appearance, style) {
-  return style === "premium" ? "premium" : appearance;
-}
-function useResolvedTheme(
-  appearancePreference = "system",
-  stylePreference = "standard",
-) {
-  useLayoutEffect(() => {
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      const appearance = resolvedAppearance(
-        appearancePreference,
-        media.matches,
-      );
-      const style = stylePreference === "premium" ? "premium" : "standard";
-      document.documentElement.dataset.appearance = appearance;
-      document.documentElement.dataset.style = style;
-      document.documentElement.dataset.theme = legacyThemePreference(
-        appearance,
-        style,
-      );
-      if (style === "premium")
-        document.documentElement.dataset.premiumScheme = appearance;
-      else delete document.documentElement.dataset.premiumScheme;
-      document.documentElement.style.colorScheme = appearance;
-      document
-        .querySelector('meta[name="theme-color"]')
-        ?.setAttribute(
-          "content",
-          style === "premium"
-            ? appearance === "dark" ? "#11110f" : "#f7f5f0"
-            : appearance === "dark"
-              ? "#111413"
-              : "#f6f5f2",
-        );
-    };
-    apply();
-    if (appearancePreference !== "system") return undefined;
-    media.addEventListener?.("change", apply);
-    return () => media.removeEventListener?.("change", apply);
-  }, [appearancePreference, stylePreference]);
 }
 function Button({ children, variant = "primary", className = "", ...props }) {
   return (
@@ -1548,9 +1525,9 @@ function FirstRunSheetHeader(props) {
   return <SheetHeader {...props} firstRunBack />;
 }
 function MyWorkoutsLink({ onClick }) {
-  return <button type="button" className="text-button today-my-workouts" onClick={onClick}>
+  return <ExerciseNavigationButton className="text-button today-my-workouts" onClick={onClick}>
     <span>My workouts</span><NavigationChevron className="inline-navigation-chevron" />
-  </button>;
+  </ExerciseNavigationButton>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
   return (
@@ -1610,7 +1587,7 @@ function ProgressNavGlyph({filled=false}) {
     )}
   </g>;
 }
-export function BottomNav({ page, setPage }) {
+export function BottomNav({ page, setPage, onActiveTabRetap }) {
   const navRef = useRef(null);
   const cancelNavFeedback = useBottomNavFeedback(page,navRef);
   useLayoutEffect(() => {
@@ -1636,7 +1613,9 @@ export function BottomNav({ page, setPage }) {
           aria-label={label}
           aria-current={page === id ? "page" : undefined}
           className={page === id ? "nav-active" : ""}
-          onClick={() => setPage(id)}
+          onClick={() => id === page
+            ? (onActiveTabRetap ? onActiveTabRetap(id) : retapActiveTab(id, navRef.current?.closest('.app-content')))
+            : setPage(id)}
         >
           <span className="nav-icon" aria-hidden="true">
             <svg viewBox="0 0 24 24" focusable="false" data-nav-icon={id}>
@@ -1934,7 +1913,19 @@ function ModalDragHandle({ layerRef, close, closing }) {
     header,
   );
 }
-export function ModalLayer({ children, close, backgroundRef, presentation = "sheet", onCloseStart, instantClose = false, returnFocusRef, lockDocument = true }) {
+export function TabRouteNavigation({page, setPage, leave, backgroundRef}) {
+  const returnToTab = next => leave(() => {
+    next();
+    // The editor's nav unmounts with its focus scope. Its initiating Program
+    // control may also disappear on pop-to-root; focus the surviving tab.
+    requestAnimationFrame(() => focusNavigationTarget(backgroundRef.current?.querySelector('.bottom-nav [aria-current="page"]')));
+  });
+  return <BottomNav page={page}
+    setPage={next => returnToTab(() => setPage(next))}
+    onActiveTabRetap={tab => returnToTab(() => retapActiveTab(tab, backgroundRef.current))} />;
+}
+
+export function ModalLayer({ children, close, backgroundRef, presentation = "sheet", onCloseStart, instantClose = false, returnFocusRef, lockDocument = true, tabNavigation }) {
   const layerRef = useRef(null);
   const viewerDrag = useRef(null);
   const closeViewerDrag = useRef(null);
@@ -2242,6 +2233,16 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
       }}
     >
       {content}
+      {tabNavigation?.((next) => {
+        const layer = layerRef.current;
+        if (tabNavigationBlocked(layer, layer)) return false;
+        let accepted;
+        // Use the editor's existing cancelable close/dirty guard, exactly once.
+        flushSync(() => { accepted = requestClose(); });
+        if (accepted === false) return false;
+        next();
+        return true;
+      })}
       {!fullscreen && presentation !== "editor-page" && (
         <ModalDragHandle
           layerRef={layerRef}
@@ -2576,7 +2577,7 @@ function PhysiqueReview({ profile, onUse, onClose }) {
           disabled, but processing and safety retention still apply: abuse
           monitoring normally lasts up to 30 days, with legal and flagged-image
           safety exceptions. Immediate deletion is not guaranteed.{" "}
-          <a href="https://developers.openai.com/api/docs/guides/your-data" target="_blank" rel="noopener noreferrer">OpenAI data policy</a>
+          <a href="https://developers.openai.com/api/docs/guides/your-data" target="_blank" rel="noopener noreferrer" onClick={event => handleExternalLinkClick(event, 'https://developers.openai.com/api/docs/guides/your-data')}>OpenAI data policy</a>
         </p>
         <div className="photo-inputs">
           {["front", "back", "side"].map((angle) => (
@@ -2626,6 +2627,7 @@ function EntryActionRow({ title, description, onClick }) {
   </ExerciseNavigationButton>;
 }
 export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPlan, restoreBackup, signIn, signedIn, returnToSavedProfile }) {
+  const personalThemes = usePersonalThemes();
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
   return <main className="onboarding entry-screen entry-v2">
@@ -2739,6 +2741,7 @@ export function BringPlanLanding({ back, importPlan, startFromScratch }) {
   </main>;
 }
 export function Onboarding({ state = null, update, exit, onPlanAccepted, initialUnits = state?.profile?.units || 'kg' }) {
+  const personalThemes = usePersonalThemes();
   const [step, setStep] = useState(0);
   const currentStateRef = useRef(state);
   currentStateRef.current = state;
@@ -3304,7 +3307,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
     setBuildFailed(false);
     setNotice("Generation cancelled. Your answers are still here.");
   };
-  const acceptGenerated = async (program) => {
+  const acceptGenerated = async program => {
     if (generationRef.current) return;
     generationRef.current = true;
     setBusy(true);
@@ -3649,8 +3652,6 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
                         role="option"
                         tabIndex={index === activeAgeIndex ? 0 : -1}
                         aria-selected={answers.ageRange === option}
-                        className={index === activeAgeIndex ? "is-active" : ""}
-                        onPointerMove={() => setActiveAgeIndex(index)}
                         onClick={() => {
                           setAnswers((current) => ({
                             ...current,
@@ -4056,7 +4057,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
               <strong>Not sure what to prioritize?</strong>
               <small>Get an optional physique review</small>
             </span>
-            <i aria-hidden="true">›</i>
+            <NavigationChevron/>
           </button>
           <TrainingPriorityChoices
             selected={value}
@@ -4488,11 +4489,14 @@ function ActiveOptionalSessionNotice({ session, now, onResume }) {
   );
 }
 
-function ActiveOptionalSession({ state, update, setPage }) {
+export function ActiveOptionalSession({ state, update, setPage }) {
   const active = state.activeOptionalSession;
   const [now, setNow] = useState(Date.now());
   const [completedSummary, setCompletedSummary] = useState(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
+  const [sessionError, setSessionError] = useState('');
+  const { commit } = useDurableAction(state, update);
+  const completing = useRef(false);
   const screenRef = useRef(null);
   const session = completedSummary || active;
 
@@ -4502,11 +4506,15 @@ function ActiveOptionalSession({ state, update, setPage }) {
   useEffect(() => {
     if (!active || active.status !== "active") return undefined;
     setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(timer);
+    const refresh = () => setNow(Date.now());
+    const timer = setInterval(refresh, 1000);
+    window.addEventListener('focus', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    const unsubscribe = subscribeNativeForeground(refresh);
+    return () => { clearInterval(timer); window.removeEventListener('focus', refresh); document.removeEventListener('visibilitychange', refresh); unsubscribe?.(); };
   }, [active?.id, active?.status, active?.runningSince]);
   useEffect(() => {
-    if (!session) setPage("today");
+    if (!session && !completing.current) setPage("today");
   }, [session, setPage]);
   if (!session) return null;
 
@@ -4527,16 +4535,16 @@ function ActiveOptionalSession({ state, update, setPage }) {
           <dl className="optional-session-facts">
             <div>
               <dt>Target</dt>
-              <dd>{completedSummary.duration} min</dd>
+              <dd>{isConditioning(completedSummary) && completedSummary.format === 'intervals' ? `${completedSummary.intervals.rounds} × ${completedSummary.intervals.workSeconds}/${completedSummary.intervals.restSeconds} sec` : optionalActivityDurationLabel(completedSummary.duration * 60)}</dd>
             </div>
-            {completedSummary.kind === "Cardio" && (
+            {completedSummary.kind !== "Mobility" && (
               <div>
                 <dt>Intensity</dt>
                 <dd>{completedSummary.intensity}</dd>
               </div>
             )}
           </dl>
-          <p>Your planned rest day is unchanged.</p>
+          <p>{isConditioning(completedSummary) ? 'Your strength plan is unchanged.' : 'Your planned rest day is unchanged.'}</p>
           <Button onClick={() => setPage("today")}>DONE</Button>
         </section>
       </main>
@@ -4544,28 +4552,31 @@ function ActiveOptionalSession({ state, update, setPage }) {
   }
 
   const elapsed = optionalSessionElapsedSeconds(active, now);
+  const timing = optionalSessionTiming(active, now), intervals = isConditioning(active) && active.format === 'intervals';
+  const targetSeconds = Number(active.duration) * 60;
+  const hasTimeTarget = Number.isFinite(targetSeconds) && targetSeconds > 0;
+  // Mobility currently has no canonical movement list/completion state. Keep its
+  // duration-only logger truthful rather than inventing movement progress.
+  const timedProgress = hasTimeTarget && !intervals && active.kind !== 'Mobility';
   const togglePause = () => {
     const changedAt = Date.now();
-    update((current) =>
-      active.status === "paused"
+    try { commit((current) =>
+      current.activeOptionalSession?.id !== active.id ? current : current.activeOptionalSession.status === "paused"
         ? resumeOptionalSession(current, changedAt)
         : pauseOptionalSession(current, changedAt),
-    );
+    ); setSessionError(''); } catch (failure) { setSessionError(failure.message); }
     setNow(changedAt);
     triggerHaptic("tap");
   };
   const finish = () => {
     const finishedAt = Date.now();
-    setCompletedSummary({
-      ...active,
-      status: "completed",
-      elapsedSeconds: Math.max(
-        0,
-        Math.round(optionalSessionElapsedSeconds(active, finishedAt)),
-      ),
-    });
-    update((current) => finishOptionalSession(current, finishedAt));
-    triggerHaptic("success");
+    completing.current = true;
+    try {
+      const result = commit(current => current.activeOptionalSession?.id === active.id ? finishOptionalSession(current, finishedAt) : current);
+      const completed = result.state.optionalSessions.find(item => item.id === active.id && item.status === 'completed');
+      if (completed) { setCompletedSummary(completed); setSessionError(''); triggerHaptic('success'); }
+    } catch (failure) { setSessionError(failure.message); }
+    finally { completing.current = false; }
   };
   return (
     <main
@@ -4576,23 +4587,35 @@ function ActiveOptionalSession({ state, update, setPage }) {
       <header className="optional-session-header">
         <button aria-label="Back to Today" onClick={() => setPage("today")}>‹</button>
         <div>
-          <strong>OPTIONAL SESSION</strong>
+          <strong>{isConditioning(active) ? 'CONDITIONING' : 'OPTIONAL SESSION'}</strong>
           <small>{active.status === "paused" ? "Paused" : "In progress"}</small>
         </div>
         <button className="text-button" onClick={finish}>Finish</button>
       </header>
       <section className="optional-session-body">
-        <Eyebrow>OPTIONAL SESSION</Eyebrow>
+        <Eyebrow>{isConditioning(active) ? 'OPTIONAL CONDITIONING' : 'OPTIONAL SESSION'}</Eyebrow>
         <h1>{active.activity}</h1>
-        <strong className="optional-session-clock" aria-label={`${Math.floor(elapsed)} seconds elapsed`}>
-          {formatDuration(Math.floor(elapsed))}
+        {intervals && <div className="conditioning-phase"><span>Round {timing.round} of {active.intervals.rounds}</span><strong>{timing.phase === 'Complete' ? 'INTERVALS COMPLETE' : timing.phase.toUpperCase()}</strong></div>}
+        <strong className="optional-session-clock" aria-label={intervals ? `${timing.remainingSeconds} seconds remaining` : `${Math.floor(elapsed)} seconds elapsed`}>
+          {formatDuration(intervals ? timing.remainingSeconds : Math.floor(elapsed))}
         </strong>
+        {timedProgress && <div className="optional-session-progress-block">
+          <span className="optional-session-target-time">/ {formatDuration(targetSeconds)}</span>
+          <SessionProgress value={elapsed} max={targetSeconds} label="Session duration progress"
+            valueText={sessionDurationValueText(elapsed, targetSeconds)} />
+          {elapsed >= targetSeconds && <span className="optional-session-target-reached" role="status">Target reached</span>}
+        </div>}
+        {intervals && <div className="optional-session-progress-block">
+          <SessionProgress mode="segmented" value={timing.completedRounds} max={active.intervals.rounds}
+            current={timing.phase === 'Complete' ? undefined : timing.round} label="Interval session progress"
+            valueText={`Round ${timing.round} of ${active.intervals.rounds} · ${timing.phase} · ${timing.remainingSeconds} seconds remaining · ${timing.completedRounds} rounds completed`} />
+        </div>}
         <dl className="optional-session-facts">
-          <div>
+          {!timedProgress && <div>
             <dt>Target</dt>
-            <dd>{active.duration} min</dd>
-          </div>
-          {active.kind === "Cardio" && (
+            <dd>{intervals ? `${active.intervals.rounds} × ${active.intervals.workSeconds}/${active.intervals.restSeconds} sec` : hasTimeTarget ? optionalActivityDurationLabel(targetSeconds) : 'Open-ended'}</dd>
+          </div>}
+          {active.kind !== "Mobility" && (
             <div>
               <dt>Intensity</dt>
               <dd>{active.intensity}</dd>
@@ -4602,6 +4625,7 @@ function ActiveOptionalSession({ state, update, setPage }) {
         <p className="optional-session-plan-note">
           This optional activity does not replace or complete a strength workout.
         </p>
+        {sessionError && <p role="alert">{sessionError}</p>}
         <div className="optional-session-actions">
           <Button variant="secondary" onClick={togglePause}>
             {active.status === "paused" ? "RESUME" : "PAUSE"}
@@ -4624,8 +4648,8 @@ function ActiveOptionalSession({ state, update, setPage }) {
               <button
                 type="button"
                 onClick={() => {
-                  update((current) => cancelOptionalSession(current));
-                  setPage("today");
+                  try { commit((current) => current.activeOptionalSession?.id === active.id ? cancelOptionalSession(current) : current); setPage('today'); }
+                  catch (failure) { setSessionError(failure.message); }
                 }}
               >
                 CANCEL SESSION
@@ -4664,13 +4688,14 @@ export function NoPlanToday({state,update,setPage,setDetail}) {
     {optional&&<ActiveOptionalSessionNotice session={optional} now={now} onResume={resume}/>}
     {today&&!active&&!optional&&<>
       {style==='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} primary noPlan hideHistory/>}
-      {templates.length>0&&<section className="no-plan-my-workouts" aria-label="My workouts"><Eyebrow>MY WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><span aria-hidden="true">›</span></button>)}</div></section>}
+      {templates.length>0&&<section className="no-plan-my-workouts" aria-label="My workouts"><Eyebrow>MY WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><NavigationChevron/></button>)}</div></section>}
       <button type="button" className={style==='own-workouts'&&!templates.length?'button primary no-plan-create-action':'text-button no-plan-create-action'} onClick={()=>setDetail({createSavedWorkout:true})}>+ CREATE WORKOUT</button>
       {style!=='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} noPlan hideHistory/>}
       {state.program ? <button type="button" className="text-button no-plan-plan-action" onClick={()=>update(current=>{current.profile.preferredTrainingStyle='plan';return current;})}>Return to your saved plan</button>
-        : <button type="button" className="list-row no-plan-plan-action" onClick={()=>setDetail('change-plan')}><span className="no-plan-plan-copy"><span>Want a structured plan?</span>{' '}<strong>Create or import one</strong></span><span aria-hidden="true">›</span></button>}
+        : <button type="button" className="list-row no-plan-plan-action" onClick={()=>setDetail('change-plan')}><span className="no-plan-plan-copy"><span>Want a structured plan?</span>{' '}<strong>Create or import one</strong></span><NavigationChevron/></button>}
     </>}
     <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly/>
+    <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} />
     {!today&&!state.workouts.some(workout=>workout.completedAt&&workoutPerformedDate(workout)===selectedIso)&&<p className="no-plan-no-history">No workouts logged on this date.</p>}
   </main>;
 }
@@ -4853,6 +4878,10 @@ export function Today({
     planReady && Boolean(plannedWorkoutForDate(state, new Date())), [scheduleState.current,planReady,todayKey]);
   const missedReminder = selectedIso === isoDay() && !trackedActive && <MissedWorkoutSummary state={state} update={update} onSelect={request=>setDetail({flexibleWeek:request})}/>;
   const scheduleReview = useMemo(() => temporaryScheduleReview(state), [scheduleState.current,todayKey]);
+  const temporaryPeriod = temporaryPlanStatus(state);
+  const periodOwnsSchedule = temporaryPeriod && !temporaryPeriod.planChanged && temporaryPlanScheduleUntouched(state);
+  const periodIds = new Set(periodOwnsSchedule ? temporaryPeriod.changes.map(change => change.id) : []);
+  const otherScheduleReview = { ...scheduleReview, items: scheduleReview.items.filter(item => !periodIds.has(item.id)), moved: scheduleReview.moved.filter(item => !periodIds.has(item.id)) };
   const calendar = (showMissed = true) => (
     <>
       {calendarOpen && createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso}
@@ -4863,7 +4892,8 @@ export function Today({
         calendarOpen={calendarOpen}
         openCalendar={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}/>
       {combinedAdjustment(state) && <CombinedWorkoutNotice state={state} update={update} />}
-      <TemporaryScheduleSummary state={state} review={scheduleReview} update={update} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
+      {temporaryPeriod && temporaryPeriod.status !== 'ended' && <button className="list-row temporary-plan-notice" onClick={() => setDetail('temporary-plan')}><span><strong>{temporaryPeriod.planChanged ? 'Review temporary plan' : 'Temporary plan'}</strong><small>{temporaryPeriod.startDate} – {temporaryPeriod.endDate} · {temporaryPeriod.days.length} days a week · {temporaryPeriod.equipment.join(', ')}</small></span><NavigationChevron/></button>}
+      <TemporaryScheduleSummary state={state} review={otherScheduleReview} update={update} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
       {showMissed && missedReminder}
       {planReady && (
         <PlanReadyNotice
@@ -4947,6 +4977,7 @@ export function Today({
           </span></div>
         </section>}
         {active.source === 'freestyle' && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
+        <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} />
         {undoBanner}
       </main>
     );
@@ -4963,14 +4994,14 @@ export function Today({
     {freestyleEntry}
   </section></main>;
   if(!completed && occurrence && occurrence.status==='active' && sourceLinkedActive)return <main className="screen today-screen">{calendar()}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>Started early · {shortDisplayDate(activeDateKey)}</p><Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>{freestyleEntry}</section></main>;
-  if(!completed && occurrence && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{occurrence.status==='skipped'?'Skipped this session':occurrence.status==='active'?'Workout in progress':occurrence.status==='reserved'?'Included in a combined workout':'Completed in a combined workout'}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
+  if(!completed && occurrence && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{workoutVisibleStatus({status:occurrence.status})}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
   const isHistoricalWeek = selectedMonday < currentMonday;
   const movedSources = flexibleSourceForDate(state, selectedIso);
   const movedSourceIssue = scheduleReview.unresolved.find(item=>movedSources.some(source=>source.id===item.id));
   const movedSource = movedSources.find(source=>source.id===movedSourceIssue?.id) || movedSources[0];
   // Invalid links and explicit skips retain their existing actionable meaning.
   // A successful move, in contrast, is provenance, not this date's workout.
-  if (!template && !completed && movedSource && (movedSourceIssue || movedSource.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSourceIssue ? 'Needs a destination' : 'Skipped this week'}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
+  if (!template && !completed && movedSource && (movedSourceIssue || movedSource.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSourceIssue ? 'Needs a destination' : workoutVisibleStatus({status:'skipped'})}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
   if (!template && !completed) {
     const upcoming = scheduleReader.next(selectedIso);
     const upcomingTitle = upcoming
@@ -4980,7 +5011,7 @@ export function Today({
       (item) =>
         item.date === selectedIso &&
         item.status === "completed" &&
-        ["Cardio", "Mobility"].includes(item.kind),
+        (["Cardio", "Mobility"].includes(item.kind) || isConditioning(item)),
     );
     const isToday = selectedIso === isoDay();
     const dateOccurrences = scheduleReader.occurrences(selectedIso);
@@ -5005,7 +5036,7 @@ export function Today({
               : "This is a planned recovery day."}
           </p>
           {movedAwayRest && <div className="today-moved-provenance" aria-label="Moved workouts">{movedAway.map(item=><div key={item.logicalSessionId}>
-            <p>{item.workout.name} moved to {displayDate(localDate(item.scheduledDate))}</p>
+            <p>{item.workout.name} · {workoutVisibleStatus({status:'moved',destination:displayDate(localDate(item.scheduledDate))})}</p>
             <button type="button" className="text-button" onClick={()=>selectDate(weekday(item.scheduledDate),localDate(item.scheduledDate))}>View workout <span aria-hidden="true">›</span></button>
           </div>)}</div>}
           {missedReminder}
@@ -5035,27 +5066,25 @@ export function Today({
                     {roundedEstimate(upcoming.workout.estimatedMinutes)} min
                   </span>
                 </span>
-                <span className="rest-up-next-chevron" aria-hidden="true">›</span>
+                <NavigationChevron className="rest-up-next-chevron"/>
               </ExerciseNavigationButton>
             </div>
           )}
-          <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso}
-            tertiary hideHistory historyOnly={completedWorkoutsForDate(state.workouts, selectedIso).length > 0} />
-          {completedOptional.length > 0 && (
-            <div className="optional-session-history" aria-label="Completed optional activities">
-              {completedOptional.map((optional) => (
-                <div className="optional-session-note" key={optional.id}>
-                  <strong>✓ {optional.activity} completed</strong>
-                  <small>
-                    {formatDuration(Math.max(0, Number(optional.elapsedSeconds) || 0))}
-                    {optional.kind === "Cardio" ? ` · ${optional.intensity}` : ""}
-                  </small>
-                </div>
-              ))}
-            </div>
-          )}
+          <div className="rest-day-actions">
+            {isToday && <ExerciseNavigationButton className="text-button rest-day-action" aria-haspopup="dialog"
+              onClick={() => setDetail({ restDayAction: { date: selectedIso, kind: 'optional' } })}>
+              <span><span aria-hidden="true">+ </span>Add optional activity</span>
+            </ExerciseNavigationButton>}
+            <ExerciseNavigationButton className="text-button rest-day-action" aria-haspopup="dialog"
+              onClick={() => setDetail({ restDayAction: { date: selectedIso, kind: 'training' } })}>
+              <span>Train anyway</span><NavigationChevron className="inline-navigation-chevron" />
+            </ExerciseNavigationButton>
+          </div>
+          {completedOptional.length > 0 && <section className="rest-day-activity-history" aria-label="Today's completed activities">
+            <Eyebrow>TODAY</Eyebrow>
+            <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
+          </section>}
         </section>
-        <MyWorkoutsLink onClick={() => setDetail('saved-workouts')} />
         {undoBanner}
       </main>
     );
@@ -5064,6 +5093,7 @@ export function Today({
   const completedSummary = completed ? workoutSetSummary(completed) : null;
   const endedWithoutSets = completedSummary?.completed === 0;
   const endedEarly = completed && (completed.endedEarly || completed.status === 'ended-early' || completedSummary.completed < completedSummary.total);
+  const fullyCompleted = Boolean(completed && !endedWithoutSets && !endedEarly);
   const blockPhaseLabel = (session.trainingBlock?.label || (session.trainingBlock?.plannedDeload ? "Planned deload" : "")).trim();
   const editableTodayWorkout = Boolean(
     !completed &&
@@ -5500,7 +5530,7 @@ export function Today({
       )}
       <section className="today-hero">
         {dayHeader(displayDate(selectedDate))}
-        <WorkoutTitle workout={session} day={selectedDay} />
+        {fullyCompleted ? <CompletedSessionOverview workout={completed} /> : <WorkoutTitle workout={session} day={selectedDay} />}
         <CombinedProvenance adjustment={session.adjustment || session.todayOnlyAdjustment} />
         {session.flexibleWeekMoved && <small className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))}</small>}
         {session.trainingBlock && (
@@ -5511,30 +5541,32 @@ export function Today({
             ) : <span className="today-block-chevron" aria-hidden="true">›</span>}
           </button>
         )}
-        <p>
+        {!fullyCompleted && <p>
           {session.exercises.length} exercises · {duration}
           {completed
-            ? endedWithoutSets ? " · ended without logged sets" : endedEarly ? " · ended early" : " · completed"
+            ? ` · ${workoutVisibleStatus({workout:completed,summary:completedSummary})}`
             : occurrence?.status === 'missed'
-              ? " · missed · not performed"
+              ? ` · ${workoutVisibleStatus({status:occurrence.status})}`
               : prior
                 ? ` · last done ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(workoutPerformedDate(prior)))}`
                 : isFirstSession
                   ? " · first session"
                   : ""}
-        </p>
+        </p>}
         {!completed && !isHistoricalWeek && trainingPaused && (
           <TrainingSafetySummary safety={todaySafety} />
         )}
         {selectedIso!==isoDay() && (completed || occurrence) && scheduleReader.canUseToday(completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}})}>{completed?'Repeat today':'Train today instead'}</button>}
         {isRepeatAdjustment(session.todayOnlyAdjustment) && <><p>Repeating workout from {session.todayOnlyAdjustment.sourceDate}. Original history is unchanged.</p><button className="text-button" onClick={()=>{try{const next=cancelRepeatedWorkout(state);update(()=>next,{planVersion:false,persistedState:next});}catch(e){setStartError(e.message);}}}>Cancel repeated workout</button></>}
         {completed ? (
-          <Button
-            variant="secondary"
-            onClick={() => setDetail({ completedWorkout: completed.id })}
-          >
-            {endedWithoutSets || endedEarly ? 'SESSION ENDED · VIEW HISTORY' : 'WORKOUT COMPLETE · VIEW HISTORY'}
-          </Button>
+          <div className={fullyCompleted ? "completion-actions" : undefined}>
+            <Button
+              variant={fullyCompleted ? "primary" : "secondary"}
+              onClick={() => setDetail({ completedWorkout: completed.id })}
+            >
+              VIEW WORKOUT DETAILS
+            </Button>
+          </div>
         ) : selectedIso < isoDay() ? null : trackedActive ? (
           <p id="other-active-workout-edit-lock" className="active-workout-start-lock">
             Finish the active session before starting this workout.
@@ -5621,14 +5653,14 @@ export function Today({
         )}
         <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly representedWorkoutId={completed?.id} />
       </section>
-      <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
+      {!fullyCompleted && <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
         <div className="today-exercise-edit-header">
           <div className="today-exercise-list-heading">
             <Eyebrow>
               {todayEditMode
                 ? "EDIT EXERCISES"
                 : completed
-                  ? "WORKOUT EXERCISES"
+                  ? "WORKOUT DETAILS"
                   : viewingToday
                     ? "TODAY'S EXERCISES"
                     : "WORKOUT EXERCISES"}
@@ -5700,7 +5732,8 @@ export function Today({
             <small>{todayReorderPreview.target}</small>
           </div>
         )}
-      </section>
+      </section>}
+      <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} />
       <MyWorkoutsLink onClick={() => setDetail('saved-workouts')} />
       {undoBanner}
     </main>
@@ -5790,10 +5823,24 @@ export function Stepper({
     if (next !== normalizeStepperValue(currentValue.current ?? "", {min, integer})) { currentValue.current = next; onChange(next); }
     return true;
   };
+  // Leaving an edit is navigation, not an attempt to log a set. Abandon an
+  // unfinished required draft and reveal its last canonical value (or null).
+  const settleDraft = () => {
+    if (draftRef.current !== null) {
+      const parsed = normalizeStepperValue(draftRef.current, { min, integer });
+      if (parsed !== undefined && !(required && parsed === null)) commit(draftRef.current);
+    }
+    draftRef.current = null;
+    committedDraft.current = null;
+    setDraft(null);
+  };
   useEffect(() => {
     if (!deferred) return;
     const input = inputRef.current;
-    const listener = event => { if (draftRef.current !== null && !commit(draftRef.current)) event.preventDefault(); };
+    const listener = event => {
+      if (event.detail?.validation === 'navigation') settleDraft();
+      else if (draftRef.current !== null && !commit(draftRef.current)) event.preventDefault();
+    };
     const snapshot = event => { event.detail.snapshot={draft:draftRef.current,committed:committedDraft.current,value:currentValue.current}; };
     const restore = event => {
       const saved=event.detail?.snapshot;
@@ -5822,6 +5869,7 @@ export function Stepper({
         <span className="stepper-sign" aria-hidden="true">−</span>
       </button>
       <input
+        className="stepper-value"
         aria-label={label}
         aria-describedby={idleDescription ? descriptionId : undefined}
         style={presentedLabel ? {color:'transparent'} : undefined}
@@ -5848,16 +5896,12 @@ export function Stepper({
           setDraft(nextDraft);
           if (!deferred) commit(nextDraft);
         }}
-        onBlur={() => {
-          if (draftRef.current !== null && !commit(draftRef.current)) return;
-          draftRef.current = null;
-          setDraft(null);
-        }}
+        onBlur={settleDraft}
         onKeyDown={(event) => {
           if (event.key === "Enter") event.currentTarget.blur();
         }}
       />
-      {draft === null && (presentedLabel || empty && emptyLabel) && <span className={`stepper-empty-label${presentedLabel ? ' stepper-display-label' : ''}${presentedLabel && idleLabelKind === 'bodyweight-load' ? ' bodyweight-load-value' : ''}`} aria-hidden="true">{presentedLabel && idleLabelKind === 'bodyweight-load'
+      {draft === null && (presentedLabel || empty && emptyLabel) && <span className={`stepper-empty-label${presentedLabel ? ' stepper-display-label stepper-value' : ''}${presentedLabel && idleLabelKind === 'bodyweight-load' ? ' bodyweight-load-value' : ''}`} aria-hidden="true">{presentedLabel && idleLabelKind === 'bodyweight-load'
         ? presentedLabel === 'BW'
           ? <span className="bodyweight-load-token">BW</span>
           : presentedLabel.startsWith('+')
@@ -5968,28 +6012,37 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const [rirSet, setRirSet] = useState(null);
   const preserveWorkoutDraftsRef = useRef(false);
   const draftResolverRef = useRef(null);
+  const [inputValidation, setInputValidation] = useState(null);
 
   const upNextUndo = useExerciseRemoveUndo();
   const queueAction = useDurableAction(state,update);
   const [queueError,setQueueError]=useState('');
   const removalStateRef = useRef(state);
   removalStateRef.current = state;
-  const commitWorkoutDrafts = (exceptStepper = null, replacementScope = null) => {
+  const commitWorkoutDrafts = (exceptStepper = null, replacementScope = null, completingRow = null) => {
     let invalid;
-    flushSync(() => { for (const input of screenRef.current?.querySelectorAll('[data-workout-draft]') || []) {
+    if (!completingRow) setInputValidation(null);
+    flushSync(() => { for (const input of (completingRow || screenRef.current)?.querySelectorAll('[data-workout-draft]') || []) {
       if (exceptStepper && input.closest('.stepper') === exceptStepper) continue;
       if (ownsWorkoutDraft(input, replacementScope)) continue;
-      if (!input.dispatchEvent(new Event('rook-commit-draft', {cancelable:true}))) invalid ||= input;
+      if (!input.dispatchEvent(new CustomEvent('rook-commit-draft', {
+        cancelable:true, detail:{validation:completingRow ? 'completion' : 'navigation'},
+      }))) invalid ||= input;
     }});
-    if (invalid) { invalid.focus({preventScroll:true}); return false; }
+    if (invalid) {
+      setInputValidation({setId:completingRow.dataset.setId,message:'Enter a value before logging this set.'});
+      invalid.focus({preventScroll:true});
+      return false;
+    }
     return true;
   };
   const commitBeforeAction = event => {
     const button = event.target.closest('button,select');
-    if (!button || button.closest('[role="dialog"]') || button.hasAttribute('data-workout-options')) return;
+    if (!button || button.closest('[role="dialog"]') || button.hasAttribute('data-workout-options') || button.hasAttribute('data-workout-scroll')) return;
     draftResolverRef.current = button;
     try {
-      if (!commitWorkoutDrafts(button.closest('.stepper'), workoutDraftScope(button))) { event.preventDefault(); event.stopPropagation(); }
+      const completingRow = button.hasAttribute('data-workout-complete') ? button.closest('.set-row') : null;
+      if (!commitWorkoutDrafts(button.closest('.stepper'), workoutDraftScope(button), completingRow)) { event.preventDefault(); event.stopPropagation(); }
     } finally { draftResolverRef.current = null; }
   };
   // Both button and semantic edge Back use this exact navigation-only path.
@@ -6073,10 +6126,12 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     };
     document.addEventListener("visibilitychange", syncWhenVisible);
     window.addEventListener("pageshow", syncNow);
+    const releaseNativeForeground = subscribeNativeForeground(syncNow);
     return () => {
       clearInterval(timer);
       document.removeEventListener("visibilitychange", syncWhenVisible);
       window.removeEventListener("pageshow", syncNow);
+      releaseNativeForeground();
     };
   }, []);
   useEffect(() => {
@@ -6345,7 +6400,16 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         Number(segment.reps) > 0 &&
         (loadRequirement !== "required" || Number(segment.weight) > 0);
     });
-  const toggleSet = (index) =>
+  const toggleSet = (index) => {
+    const current = removalStateRef.current.activeWorkout?.exercises[removalStateRef.current.activeWorkout.exerciseIndex];
+    const set = current?.sets[index];
+    if (set && !set.completed && !workingSetCanComplete(current, set)) {
+      setInputValidation({setId:set.id,message:'Enter the required values before logging this set.'});
+      const row = [...screenRef.current?.querySelectorAll('.set-row') || []].find(node=>node.dataset.setId===set.id);
+      row?.querySelector('[aria-invalid="true"]')?.focus({preventScroll:true});
+      return;
+    }
+    setInputValidation(null);
     mutate((workout) => {
       const current = workout.exercises[workout.exerciseIndex];
       const currentExerciseIndex = workout.exerciseIndex;
@@ -6417,6 +6481,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             : { pending: true, seconds: restSeconds }
           : null;
     });
+  };
   const addSet = () =>
     runRookViewTransition(() => mutate((workout) => {
       const sets = workout.exercises[workout.exerciseIndex].sets;
@@ -6779,17 +6844,21 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       data-active-workout="true"
       aria-busy={finishing || undefined}
       onClickCapture={commitBeforeAction}
-      onPointerDownCapture={event=>{draftResolverRef.current=event.target.closest('button[data-workout-replaces]');}}
+      onPointerDownCapture={event=>{draftResolverRef.current=event.target.closest('button[data-workout-replaces],button[data-workout-complete]');}}
+      onChangeCapture={()=>{if(inputValidation)setInputValidation(null);}}
       onPointerCancelCapture={()=>{draftResolverRef.current=null;}}
       onKeyDownCapture={()=>{draftResolverRef.current=null;}}
       // A cancellation decision must not commit or erase a raw numeric draft.
       // Retain the mounted inputs; the next ordinary logger action still commits them.
       onBlurCapture={event=>{
-        const action=event.relatedTarget?.closest?.('button[data-workout-replaces]')||draftResolverRef.current;
+        const action=event.relatedTarget?.closest?.('button[data-workout-replaces],button[data-workout-complete]')||draftResolverRef.current;
         draftResolverRef.current=null;
         // Preserve the resolver's raw snapshot through native blur. The click
         // remains the mutation boundary, including browsers with null relatedTarget.
-        if(preserveWorkoutDraftsRef.current || event.relatedTarget?.closest?.('[data-workout-options]') || screenRef.current?.contains(action)&&ownsWorkoutDraft(event.target,workoutDraftScope(action)))event.stopPropagation();
+        if(preserveWorkoutDraftsRef.current || event.relatedTarget?.closest?.('[data-workout-options],[data-workout-scroll]') || screenRef.current?.contains(action) && (ownsWorkoutDraft(event.target,workoutDraftScope(action)) || action.hasAttribute('data-workout-complete') && action.closest('.set-row')===event.target.closest('.set-row')))event.stopPropagation();
+        // Do not remove feedback on button focus before pointerup: that would
+        // move the tapped control underneath the finger. Its click settles it.
+        else if(inputValidation && event.relatedTarget?.matches?.('input,textarea'))setInputValidation(null);
       }}
       className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}${active.source === 'freestyle' ? ' freestyle-workout' : ''}`}
     >
@@ -6830,6 +6899,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <OverflowIcon/>
           </button>
         </span>
+        <CurrentExerciseContext name={exerciseName(exercise)}
+          identity={`${active.id}:${exercise.id}:${exercise.exerciseId}`}
+          screenRef={screenRef} titleRef={exerciseHeadingRef}/>
       </header>
       <WorkoutMotion kind="exercise" identity={exercise.id}><div
         key={`exercise-panel-${exercise.id}`}
@@ -6878,6 +6950,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                           {warmupPrescriptionLabel(item) && <strong>{warmupPrescriptionLabel(item)}</strong>}
                           <i aria-hidden="true">✓</i>
                         </button>
+                      ))}
+                      {warmup.general.filter(item => item.guidance).map(item => (
+                        <p className="warmup-general-guidance" key={`guidance-${item.id}`}>
+                          {item.guidance}
+                        </p>
                       ))}
                     </div>
                   )}
@@ -6990,7 +7067,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 })
               }
             >
-              <img
+              <ExerciseIllustration
                 className="exercise-heading-art"
                 onError={activeArtwork.onError}
                 src={exerciseIllustration}
@@ -7017,9 +7094,17 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 : "First session"}
             </small>}
             {performancePr && (
-              <small className="active-performance-pr" role="status" aria-live="polite" aria-label={performancePr.e1rmPr ? "Estimated one-rep max personal record" : undefined}>
-                {performancePr.label}
-              </small>
+              <span role="status" aria-live="polite">
+                <ExerciseNavigationButton
+                  id={`active-exercise-pr-${exercise.id}`}
+                  className="active-performance-pr-trigger"
+                  aria-label={`View ${performancePr.e1rmPr ? "estimated 1RM" : performancePr.weightPr ? "weight" : "rep"} personal record`}
+                  aria-haspopup="dialog"
+                  onClick={() => setDetail({ exercisePr: { sessionId: active.id, exerciseInstanceId: exercise.id }, returnFocusId: `active-exercise-pr-${exercise.id}` })}
+                >
+                  <span className="active-performance-pr">{performancePr.label}<span aria-hidden="true">ⓘ</span></span>
+                </ExerciseNavigationButton>
+              </span>
             )}
             {exerciseNotePresentation(exercise,state.program).cue && (
               <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
@@ -7142,7 +7227,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           const canComplete = workingSetCanComplete(exercise, set);
           const ready = activeSet && canComplete;
           const edited = activeSet && Boolean(set.touched);
-          const checkDisabled = !set.completed && (!activeSet || !canComplete);
+          // The current checkmark is an available validation action even while
+          // editing. Future-set sequencing remains disabled as before.
+          const checkDisabled = !set.completed && !activeSet;
           const specialType = setTypeLabel(set);
           const segmentKind = segmentKindForSet(set);
           return (
@@ -7228,6 +7315,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               )}
               <button
                 className="check"
+                data-workout-complete={!set.completed ? set.id : undefined}
+                aria-describedby={inputValidation?.setId===set.id ? `${set.id}-input-error` : undefined}
                 data-check-state={set.completed ? "completed" : ready ? "ready" : activeSet ? "current" : "disabled"}
                 disabled={future}
                 aria-disabled={checkDisabled}
@@ -7238,6 +7327,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 <span className="check-mark" aria-hidden="true"><svg viewBox="0 0 14 14"><path d="M3.2 7.3l2.5 2.5L10.8 4.6" /></svg></span>
               </button>
             </div>
+            {inputValidation?.setId===set.id && <p className="workout-input-error error" id={`${set.id}-input-error`} role="alert">{inputValidation.message}</p>}
             {segmentKind && (set.segments || []).length > 0 && (
               <div className={`set-segments ${set.completed ? "is-completed" : ""}`} aria-label={`${specialType} segments for set ${index + 1}`}>
                 {(set.segments || []).map((segment, segmentIndex) => (
@@ -7347,17 +7437,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                     : exerciseName(block.entries[0])}
                 </strong>
                 {block.entries.some(entry=>hasMeaningfulExerciseProgress(active,entry.id))&&<small className="up-next-note">Started · saved progress</small>}
-                {block.entries.length === 1 && upNextExerciseNote(block.entries[0], state.program) && (
-                  <small className="up-next-note up-next-program-note">
-                    {upNextExerciseNote(block.entries[0], state.program)}
-                  </small>
-                )}
-                {block.entries.length === 1 &&
-                  exercisePersonalNote(block.entries[0]) && (
-                    <small className="up-next-note up-next-personal-note">
-                      <span>Your note</span> · {exercisePersonalNote(block.entries[0])}
-                    </small>
-                  )}
               </span>
               <small className="up-next-prescription">
                 {block.entries.length === 2
@@ -7596,6 +7675,7 @@ export function PrivateWorkoutPhotoViewer({
         ) : (
           <img
             src={photoUrl}
+            data-rook-zoom="native"
             alt="Private workout photo"
             onLoad={() => setPhotoLoaded(true)}
             onError={() => setViewerError(true)}
@@ -8044,10 +8124,13 @@ function ExportSheet({ request, state, close }) {
       setFeedback("Couldn’t copy. Download the text file instead.");
     }
   };
-  const download = () => {
+  const download = async () => {
     try {
+      const file = new File([artifact.text], artifact.filename, { type: 'text/plain;charset=utf-8' });
+      const nativeResult = await presentNativeFile(file, { title: 'ROOK plan' });
+      if (nativeResult) { if (nativeResult === 'shared') setFeedback('Shared.'); return; }
       const url = URL.createObjectURL(
-        new Blob([artifact.text], { type: "text/plain;charset=utf-8" }),
+        file,
       );
       const link = document.createElement("a");
       link.href = url;
@@ -8227,13 +8310,15 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
       );
 }
 export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout}) {
+  const today=useCalendarDay();
   const records=completedWorkoutsForDate(state.workouts,date);
-  const missed=missedFlexibleSessions(state);
+  const missed=missedFlexibleSessions(state,today);
   const occurrences=flexibleOccurrencesForDate(state,date);
   const occurrence=occurrences.find(s=>s.scheduledDate===date && ['planned','missed','optional'].includes(s.status));
+  const canMove=Boolean(occurrence && hasMoveWorkoutDestination(state,occurrence.logicalSessionId,today));
   const linkedRecords=occurrences.map(s=>s.completedWorkout).filter(w=>w && !records.some(record=>record.id===w.id));
   const actionRecords=[...new Map([...records,...linkedRecords].map(w=>[w.id,w])).values()];
-  const repeatRecords=actionRecords.filter(w=>canUseWorkoutToday(state,{workoutId:w.id}));
+  const repeatRecords=actionRecords.filter(w=>canUseWorkoutToday(state,{workoutId:w.id},today));
   const deleteRecords=records.filter(w=>!completedWorkoutDeletionGuard(state,w.id));
   const [choosing,setChoosing]=useState(null),[deleting,setDeleting]=useState(null);
   const panel=useRef(null),trigger=useRef(null);
@@ -8264,12 +8349,12 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout}
     <SheetHeader title="More options" onClose={close}/>
     {repeatRecords.length>0 && <button className="list-row" data-day-action="repeat" onClick={event=>chooseRecord('repeat',event)}>{repeatLabel}</button>}
     {occurrence && <>
-      {date!==isoDay() && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId}) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}>Train today instead</button>}
-      <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId}})}>Move to another day</button>
+      {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}>{occurrence.status==='missed'?'Train this workout today':'Train today instead'}</button>}
+      {canMove && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,destination:true}})}>Move to another day</button>}
       {flexibleSessions(state).some(other=>proposeFlexibleWeek(state,{mode:'swap',sessionId:occurrence.logicalSessionId,otherSessionId:other.logicalSessionId}).status==='ready') && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}>Swap with another workout</button>}
     </>}
     {missed.length>0 && <button className="list-row" onClick={()=>setDetail({flexibleWeek:missed.length===1?{sessionId:missed[0].logicalSessionId}:{missed:true}})}>Missed workouts</button>}
-    <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}>Adjust week</button>
+    {hasTemporaryScheduleAction(state,today) && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}>Adjust week</button>}
     {hasWorkout && state.program && <button className="list-row" disabled={blocked} onClick={()=>setDetail('edit-plan')}><span>Edit in plan<small>Changes the recurring plan</small></span></button>}
     {date===isoDay() && !hasWorkout && !occurrences.length && !blocked && <button className="list-row" onClick={()=>setDetail({restTraining:date})}>Rest-day activities</button>}
     {(hasWorkout || records.length>0) && date===isoDay() && !blocked && <button className="list-row" onClick={()=>setDetail({todayFreestyle:{date}})}>Start freestyle workout</button>}
@@ -8289,7 +8374,7 @@ function CompletedWorkoutChooser({records,date,action,onSelect}) {
       const count=workoutSetSummary(workout).completed;
       const metadata=[performed && performed!==date?displayDate(localDate(performed)):null,time,`${count} ${count===1?'set':'sets'} logged`].filter(Boolean).join(' · ');
       return <button type="button" key={workout.id} className="list-row" data-workout-id={workout.id} onClick={event=>onSelect(workout.id,event.currentTarget)}>
-        <span><strong>{workout.name || 'Workout'}</strong><small>{metadata}</small></span><span aria-hidden="true">›</span>
+        <span><strong>{workout.name || 'Workout'}</strong><small>{metadata}</small></span><NavigationChevron/>
       </button>;
     })}
     {!records.length && <p role="status">No workouts are available for this action. Go back to review the day.</p>}
@@ -8365,8 +8450,9 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
       />
       <Eyebrow>{date ? displayDate(localDate(date)) : "COMPLETED WORKOUT"}</Eyebrow>
       <h1>{workout.name}</h1>
+      <p className="workout-status">{workoutVisibleStatus({workout,summary})}</p>
       <CombinedProvenance adjustment={workout.adjustment} />
-      {isCombinedAdjustment(workout.adjustment) && !workout.combinedSourcesResolved && <small>Finished early · source sessions remain available</small>}
+      {isCombinedAdjustment(workout.adjustment) && !workout.combinedSourcesResolved && <small>Source sessions remain available</small>}
       {notice && <p role="status">{notice}</p>}
       {workout.source!=='freestyle' && !workout.historicalImport && (workout.originalScheduledDate || workout.canonicalPlanDate) !== date && (workout.originalScheduledDate || workout.canonicalPlanDate) && <small className="completed-adjustment-marker">Originally planned for {displayDate(localDate(workout.originalScheduledDate || workout.canonicalPlanDate))}</small>}
       {workout.adjustment && (
@@ -8522,8 +8608,13 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   if (!session) return null;
   return (
     <main
-      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : ""} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
+      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : "fully-completed"} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
     >
+      {!endedEarly ? <CompletedSessionOverview
+        ref={headingRef}
+        workout={session}
+        recognitionId={!persistenceFailed && recognition ? "completion-recognition" : undefined}
+      /> : <>
       <div className="complete-mark" aria-hidden="true">
         <span>✓</span>
       </div>
@@ -8544,22 +8635,31 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
           <small>{endedEarly ? "COMPLETED" : "LOGGED"}</small>
         </div>
       </div>
+      </>}
+      {!endedEarly && <div className="completion-actions">
+        <Button onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
+      </div>}
       {!persistenceFailed && recognition && <p id="completion-recognition" className="completion-recognition">
         <strong>{recognition.label}</strong>
         {recognition.type==='pr' && <span>{exerciseName(recognition.exercise)} · {recognition.record.repPr || recognition.record.weightPr
           ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
           : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
+      {!endedEarly && <WorkoutSessionLog
+        exercises={visibleExercises}
+        units={state.profile.units}
+        label="WORKOUT DETAILS"
+      />}
       {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
         <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save workout</button>}
       <WorkoutPhotoMemory workout={session} update={update} onBusyChange={setPhotoBusy} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
-      <WorkoutSessionLog
+      {endedEarly && <WorkoutSessionLog
         exercises={visibleExercises}
         units={state.profile.units}
-        label={endedEarly ? "SESSION LOG" : "LOGGED"}
-      />
+        label="SESSION LOG"
+      />}
       <section className="coach-note">
         <Eyebrow>{endedEarly ? "SAVED" : "NEXT SESSION"}</Eyebrow>
         <p>
@@ -8571,7 +8671,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       {continueError && <p className="complete-continue-error" role="alert">{continueError}</p>}
       <div className="complete-done-dock">
         <Button
-          variant="primary"
+          variant={endedEarly ? "primary" : "secondary"}
           className="complete-done"
           onClick={() => {
             if (workoutPerformedDate(session) !== isoDay())
@@ -9271,13 +9371,15 @@ export function contextualCoachPrompts(state, now = Date.now()) {
     .filter(prompt => prompt !== move || canMove)
     .filter(prompt => prompt !== progress || hasHistory).slice(0, 3);
 }
-export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
+export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' } }) {
+  const personalThemes = usePersonalThemes();
   const [message, setMessage] = useState(state.coachDraft || "");
   const [sendingId, setSendingId] = useState(null);
   const sending = Boolean(sendingId && sendingId === state.activeCoachConversationId);
   const sendingRef = useRef(null);
   const [online, setOnline] = useState(navigator.onLine);
-  const coachAvailable = online && state.ai.available !== false;
+  const coachAvailable = online && availability.state === 'ready';
+  const availabilityCopy = coachAvailabilityCopy(online ? availability : { state: 'offline' });
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyId, setHistoryId] = useState(null);
   const conversationFromHistory = historyId !== null;
@@ -9324,6 +9426,16 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
   const coachRef = useRef(null);
   const contentRef = useRef(null);
   const coachNavigation = useRef(null);
+  useActiveTabRetap(coachRef, () => {
+    if (menuOpen || conversationFromHistory) {
+      stopPageNavigation(historyScrollRef.current?.parentElement);
+      stopPageNavigation(contentRef.current);
+      coachNavigation.current = null;
+      setMenuOpen(false); setHistoryId(null);
+    }
+    // Main Coach is a transcript. Never seek old messages or change follow mode.
+    return true;
+  });
   const captureCoachNavigation = back => {
     const surface = menuOpen ? historyScrollRef.current?.parentElement : contentRef.current;
     stopPageNavigation(surface);
@@ -9466,6 +9578,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
         ?.querySelectorAll(
           "button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled])",
         ) || []),
+      ...(coachRef.current?.closest('.app-content')?.querySelectorAll('.bottom-nav button') || []),
     ];
     const frame = requestAnimationFrame(() => {
       if (historyScrollRef.current)
@@ -9525,13 +9638,19 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
     if (!preserveDraft) setMessage('');
     transcriptScroll.latest();
     try {
-      const reply = await AIService.coach(before, text, {selection:combineSelection});
-      update(current => {
-        const entry = current.conversations.find(item => item.id === entryId);
-        if (entry) {entry.reply = reply;delete entry.requestError;}
-        return touchCoachConversation(current, conversationId);
-      });
-    } catch {
+      const reply = await AIService.coach(before, text, {selection:combineSelection,requireRemoteSuccess:true});
+      availability.success?.();
+      const answered = structuredClone(liveState.current);
+      const entry = answered.conversations.find(item => item.id === entryId);
+      if (entry) {
+        entry.reply = reply; delete entry.requestError;
+        touchCoachConversation(answered, conversationId);
+        if (!saveState(answered)) { setConversationError('Couldn’t save the reply. Retry this message.'); throw Object.assign(new Error('Reply persistence failed'), { code: 'local-persistence' }); }
+        liveState.current = answered;
+        update(() => answered, { planVersion: false, persistedState: answered });
+      }
+    } catch (error) {
+      if (error?.code !== 'local-persistence') availability.failure?.(error);
       update(current => {const entry=current.conversations.find(item=>item.id===entryId);if(entry)entry.requestError=true;return current;});
     } finally {
       if (sendingRef.current?.entryId === entryId) {sendingRef.current=null;setSendingId(null);}
@@ -9795,10 +9914,12 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
         )}
         {!coachAvailable && (
           <div className="offline-banner" role="status">
-            Coach unavailable. Logging and data-based progression still work
-            locally.
+            <p>{availabilityCopy?.text}</p>
+            {availabilityCopy?.action && <button type="button" className="text-button" onClick={() => availability.retry?.()}>{availabilityCopy.action}</button>}
+            {availabilityCopy?.signIn && <button type="button" className="text-button" onClick={() => setPage('profile')}>Account &amp; Sync</button>}
           </div>
         )}
+        {import.meta.env.DEV && new URLSearchParams(location.search).get('coachDebug') === '1' && <details className="coach-runtime-diagnostics"><summary>Coach diagnostics · local only</summary><p>State: {availability.state} · reason: {availability.reason || 'ready'} · auth: {availability.auth || 'ready'} · network: {online ? 'online' : 'offline'}</p>{availability.lastFailure && <p>Last failure: {availability.lastFailure.reason} · {new Date(availability.lastFailure.at).toLocaleTimeString()}</p>}</details>}
         {!hasConversation && (
           <>
             <aside className="coach-empty" role="note">
@@ -9900,7 +10021,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
               if (!sending && coachAvailable && message.trim()) send(message);
             }
           }}
-          placeholder={coachAvailable ? "Ask about your training…" : "Coach unavailable"}
+          placeholder={coachAvailable ? "Ask about your training…" : availabilityCopy?.placeholder}
         />
         <Button
           type="submit"
@@ -9924,8 +10045,8 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
           className={`coach-history-surface${menuOpen ? "" : " coach-history-parent"}`}
           inert={menuOpen ? undefined : ""}
           aria-hidden={menuOpen ? undefined : true}
-          role="dialog"
-          aria-modal={menuOpen ? true : undefined}
+          role="region"
+          data-tab-route="coach"
           aria-labelledby="coach-history-title"
         >
           <header className="coach-history-header">
@@ -9987,12 +10108,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
                               {recency ? ` · ${recency}` : ""}
                             </small>
                           </span>
-                          <span
-                            className="coach-history-chevron"
-                            aria-hidden="true"
-                          >
-                            ›
-                          </span>
+                          <NavigationChevron className="coach-history-chevron"/>
                         </button>
                       );
                     })}
@@ -10145,7 +10261,7 @@ function GoalProgress({
             onClick={() => setDetail({ weightHistory: true })}
           >
             <h2>Weight trend</h2>
-            <span aria-hidden="true">›</span>
+            <NavigationChevron/>
           </button>
         ) : (
           <h2>Fat-loss support</h2>
@@ -10475,7 +10591,7 @@ function WeightHistory({ state, setDetail, close, saved }) {
                 <strong>{bodyWeightFromKg(entry.weightKg, unit).toFixed(1)} {unit}</strong>
                 <small>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(`${entry.localDate}T12:00:00`))}</small>
               </span>
-              <span className="navigation-chevron" aria-hidden="true">›</span>
+              <NavigationChevron className="navigation-chevron"/>
             </button>
           ))
         ) : (
@@ -10503,7 +10619,7 @@ function LoggedExerciseRow({row,state,onClick,compact=false}) {
   const item=row.exercise,bodyweight=Boolean(exerciseCatalog[item.exerciseId]?.bodyweight||item.importedExercise?.bodyweight);
   const load=exerciseMeasure(item)==='seconds'||exerciseLoadRequirement(item)==='none'?null:highestSimpleLoggedLoad(item);
   const compactMeta=[row.date?new Intl.DateTimeFormat('en',{day:'numeric',month:'short'}).format(localDate(row.date)):'Date unavailable',load!==null?`${bodyweight?'Highest added load':'Highest load'} ${displayWeight(load,state.profile.units)} ${weightUnit(state.profile.units)}`:bodyweight?'Bodyweight':null].filter(Boolean).join(' · ');
-  return <ExerciseNavigationButton ref={rowRef} className="list-row logged-exercise-row" onClick={onClick} onPointerDown={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}} onFocus={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}}><span><strong>{exerciseName(item)}</strong>{compact?<small>{compactMeta}</small>:<><small>{row.date?`Latest logged session · ${new Intl.DateTimeFormat('en',{day:'numeric',month:'short',year:'numeric'}).format(localDate(row.date))}`:'Date unavailable'}</small>{load!==null?<small>{bodyweight?'Highest added load':'Highest logged load'} · {displayWeight(load,state.profile.units)} {weightUnit(state.profile.units)}</small>:bodyweight&&<small>Bodyweight</small>}</>}</span><span className="navigation-chevron" aria-hidden="true">›</span></ExerciseNavigationButton>;
+  return <ExerciseNavigationButton ref={rowRef} className="list-row logged-exercise-row" onClick={onClick} onPointerDown={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}} onFocus={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}}><span><strong>{exerciseName(item)}</strong>{compact?<small>{compactMeta}</small>:<><small>{row.date?`Latest logged session · ${new Intl.DateTimeFormat('en',{day:'numeric',month:'short',year:'numeric'}).format(localDate(row.date))}`:'Date unavailable'}</small>{load!==null?<small>{bodyweight?'Highest added load':'Highest logged load'} · {displayWeight(load,state.profile.units)} {weightUnit(state.profile.units)}</small>:bodyweight&&<small>Bodyweight</small>}</>}</span><NavigationChevron className="navigation-chevron"/></ExerciseNavigationButton>;
 }
 function LoggedExercises({state,setDetail,close,initial={}}) {
   const [query,setQuery]=useState(initial.query||'');const ref=useRef(null);
@@ -10525,7 +10641,7 @@ function ProgressionRow({row,units,onClick}) {
       <small>{result.title}</small>
       {result.type==='progress'&&result.weight?<small className="progression-next">Next: {displayWeight(result.weight,units)} {weightUnit(units)}</small>:null}
     </span>
-    <span className="navigation-chevron" aria-hidden="true">›</span>
+    <NavigationChevron className="navigation-chevron"/>
   </ExerciseNavigationButton>;
 }
 function ProgressionOverview({state,setDetail,close,initial={}}) {
@@ -10552,7 +10668,7 @@ function ProgressionOverview({state,setDetail,close,initial={}}) {
     {!rows.length&&<p className="progression-empty">More comparable sessions are needed before ROOK can suggest a progression.</p>}
   </main>;
 }
-function Progress({ state, update, setDetail, setPage }) {
+export function Progress({ state, update, setDetail, setPage }) {
   const completedWorkouts = completedProgressWorkouts(state.workouts);
   const photos = useWorkoutPhotoCollection(state.workouts);
   const weeklyReview = weeklyPerformanceReview(state, new Date(), {
@@ -10642,7 +10758,7 @@ function Progress({ state, update, setDetail, setPage }) {
                 : "Reading saved photos on this device."}
             </small>
           </span>
-          <span className="navigation-chevron" aria-hidden="true">›</span>
+          <NavigationChevron className="navigation-chevron"/>
         </button>
         <small className="workout-photo-entry-privacy">Stored privately on this device.</small>
       </section>);
@@ -10665,9 +10781,7 @@ function Progress({ state, update, setDetail, setPage }) {
                   {item.type === "weight" ? ' since last session' : item.weight !== null ? ` at ${displayWeight(item.weight, state.profile.units)} ${unit}` : ''}
                 </small>
               </span>
-              <span className="navigation-chevron" aria-hidden="true">
-                ›
-              </span>
+              <NavigationChevron className="navigation-chevron"/>
             </button>
           ))}
           </div>
@@ -10693,7 +10807,7 @@ function Progress({ state, update, setDetail, setPage }) {
                       {pluralize(sets, "set")}
                     </small>
                   </span>
-                  <span className="navigation-chevron" aria-hidden="true">›</span>
+                  <NavigationChevron className="navigation-chevron"/>
                 </button>
               );
             })}
@@ -10965,13 +11079,13 @@ export function formatScheduleDays(days = []) {
 function InfoRow({ label, value, onClick }) {
   if (onClick)
     return (
-      <button className="info-row info-row-action" onClick={onClick}>
+      <ExerciseNavigationButton className="info-row info-row-action" onClick={onClick}>
         <span>{label}</span>
         <span className="info-row-end">
           <strong>{value}</strong>
-          <i aria-hidden="true">›</i>
+          <NavigationChevron/>
         </span>
-      </button>
+      </ExerciseNavigationButton>
     );
   return (
     <div className="info-row">
@@ -11076,11 +11190,23 @@ function PersonalizationSummary({ profile, program }) {
   );
 }
 export function Profile({ state, update, setDetail, setPage, onLogout, accountSync }) {
+  const personalThemes = usePersonalThemes();
+  const temporaryPeriod = temporaryPlanStatus(state);
   const [area, setArea] = useState(null);
   const previousArea = useRef(null), navigationMotion = useRef(null), outgoingPage = useRef(null);
   const hubPosition = useRef(0), returnControl = useRef(null), profileRef = useRef(null);
   const dataPosition = useRef(0);
   const restoreDataParent = useRef(null);
+  const tabRetap = useRef(false);
+  useActiveTabRetap(profileRef, () => {
+    if (!area) return false;
+    navigationMotion.current?.(); stopPageNavigation(profileRef.current);
+    outgoingPage.current = null; previousArea.current = null;
+    restoreDataParent.current?.(); restoreDataParent.current = null;
+    hubPosition.current = 0; tabRetap.current = true;
+    setArea(null);
+    return true;
+  });
   useEffect(() => () => restoreDataParent.current?.(), []);
   const captureProfilePage = () => {
     stopPageNavigation(profileRef.current);
@@ -11098,6 +11224,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
     else setArea(null);
   };
   useLayoutEffect(() => {
+    if (tabRetap.current) { tabRetap.current = false; scrollTabRootToTop(profileRef.current, {immediate: true}); return; }
     if (area === 'data' && previousArea.current === 'diagnostics') { window.scrollTo(0, dataPosition.current); focusNavigationTarget(profileRef.current?.querySelector('[data-profile-area="diagnostics"]')); }
     else if (area) { window.scrollTo(0, 0); focusNavigationTarget(profileRef.current?.querySelector('.detail-header-back')); }
     else { window.scrollTo(0, hubPosition.current); focusNavigationTarget(profileRef.current?.querySelector(`[data-profile-area="${returnControl.current}"]`)); }
@@ -11182,9 +11309,9 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <Eyebrow>PROFILE</Eyebrow>
         <h1>Training profile</h1>
         </>}
-        {!area ? <button data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`${state.program?'Current program':'Training setup'}: ${programTitle}, ${programSummary}`}>
-          <span><Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><span aria-hidden="true">›</span>
-        </button> : area === 'program' &&
+        {!area ? <ExerciseNavigationButton data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`${state.program?'Current program':'Training setup'}: ${programTitle}, ${programSummary}`}>
+          <span><Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><NavigationChevron/>
+        </ExerciseNavigationButton> : area === 'program' &&
         <div className="profile-current-program">
           <Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow>
           <h2>{programTitle}</h2>
@@ -11196,13 +11323,13 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
       {area === 'training' && (
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
-          <button className="list-row" onClick={()=>setDetail('profile-details')}><span><strong>Personal details</strong><small>{personal.length ? personal.map(([,value])=>value).join(' · ') : 'Add name, age or sex'}</small></span><span aria-hidden="true">›</span></button>
+          <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('profile-details')}><span><strong>Personal details</strong><small>{personal.length ? personal.map(([,value])=>value).join(' · ') : 'Add name, age or sex'}</small></span><NavigationChevron/></ExerciseNavigationButton>
         </section>
       )}
       {!area && personalIncomplete && (
         <section className="complete-profile">
           <Eyebrow>COMPLETE YOUR PROFILE</Eyebrow>
-          <button
+          <ExerciseNavigationButton
             className="list-row"
             onClick={() => setDetail("profile-details")}
           >
@@ -11210,16 +11337,16 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
               <strong>Add a few details</strong>
               <small>Improve Coach recommendations.</small>
             </span>
-            <span>›</span>
-          </button>
+            <NavigationChevron/>
+          </ExerciseNavigationButton>
         </section>
       )}
       {!area && <section className="profile-manage"><Eyebrow>MANAGE</Eyebrow>
-        {[['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Preferences','Logging, units, appearance and notifications'],['data','Data & backup','Import, export, backup, restore and local data']].map(([id,title,summary])=><button data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><span aria-hidden="true">›</span></button>)}
+        {[['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Preferences','Logging, units, appearance and notifications'],['data','Data & backup','Import, export, backup, restore and local data']].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
       </section>}
       {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
-        <button className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><span aria-hidden="true">›</span></button>
+        <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><NavigationChevron/></ExerciseNavigationButton>
         <section className="planning-setup">
           <Eyebrow>TRAINING</Eyebrow>
           <p className="planning-setup-copy">
@@ -11242,7 +11369,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
             value={gymSummary}
             onClick={() => setDetail("gym-profiles")}
           />
-          <button
+          <ExerciseNavigationButton
             className="list-row"
             onClick={() => setDetail("training-restrictions")}
           >
@@ -11260,8 +11387,8 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
                       : "None added"}
               </small>
             </span>
-            <span>›</span>
-          </button>
+            <NavigationChevron/>
+          </ExerciseNavigationButton>
         </section>
       </>}
       {area === 'program' && state.program?.conditioning && (
@@ -11274,7 +11401,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <Eyebrow>
           {preferencesOnly ? "COACHING PREFERENCES" : "TRAINING PRIORITIES"}
         </Eyebrow>
-        <button
+        <ExerciseNavigationButton
           className="list-row"
           onClick={() => setDetail("training-priorities")}
         >
@@ -11286,16 +11413,17 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
               {hasPriorities ? [...manualPriorities,...confirmedPriorities.map(item=>item.label)].join(' · ') : 'None selected'}
             </small>
           </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" onClick={() => setDetail("custom-exercises")}>
-          <span><strong>Custom exercises</strong><small>{pluralize((state.customExercises || []).filter(item=>!item.deletedAt).length,"exercise")} · {pluralize((state.exerciseAliases || []).filter(item=>!item.deletedAt).length,"alias","aliases")}</small></span><span aria-hidden="true">›</span>
-        </button>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("custom-exercises")}>
+          <span><strong>Custom exercises</strong><small>{pluralize((state.customExercises || []).filter(item=>!item.deletedAt).length,"exercise")} · {pluralize((state.exerciseAliases || []).filter(item=>!item.deletedAt).length,"alias","aliases")}</small></span><NavigationChevron/>
+        </ExerciseNavigationButton>
       </section>}
-      {area === 'program' && !state.program && <section className="program-actions"><Eyebrow>YOUR TRAINING</Eyebrow><button className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>My workouts</strong><small>Create or use reusable workouts</small></span><span aria-hidden="true">›</span></button><button className="list-row" onClick={()=>setDetail('change-plan')}><span><strong>Create or import a plan</strong><small>Optional structured training</small></span><span aria-hidden="true">›</span></button></section>}
+      {area === 'program' && !state.program && <section className="program-actions"><Eyebrow>YOUR TRAINING</Eyebrow><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>My workouts</strong><small>Create or use reusable workouts</small></span><NavigationChevron/></ExerciseNavigationButton><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('change-plan')}><span><strong>Create or import a plan</strong><small>Optional structured training</small></span><NavigationChevron/></ExerciseNavigationButton></section>}
       {area === 'program' && state.program && <section className="program-actions">
         <Eyebrow>PROGRAM</Eyebrow>
-        <button className="list-row" onClick={() => setDetail("training-block")}>
+        {<button className="list-row" onClick={() => setDetail('temporary-plan')}><span><strong>Temporary plan</strong><small>{temporaryPeriod?.status === 'active' || temporaryPeriod?.status === 'upcoming' ? `${temporaryPeriod.startDate} – ${temporaryPeriod.endDate}` : 'Different days or equipment for 2–4 weeks · Review first'}</small></span><NavigationChevron/></button>}
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("training-block")}>
           <span>
             <strong>Training block</strong>
             <small>
@@ -11304,20 +11432,20 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
                 : `${state.program.trainingBlock?.name || "Current block"} · Week ${state.program.trainingBlock?.currentWeek || 1} of ${state.program.trainingBlock?.totalWeeks || 1}`}
             </small>
           </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" disabled={Boolean(state.activeWorkout)} onClick={() => setDetail("edit-plan")}>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" disabled={Boolean(state.activeWorkout)} onClick={() => setDetail("edit-plan")}>
           <span><strong>Edit plan</strong><small>{state.activeWorkout ? "Finish your active workout first." : "Names, exercises, sets, reps and weights"}</small></span>
-          {!state.activeWorkout && <span>›</span>}
-        </button>
-        <button className="list-row" onClick={() => setDetail("plan-history")}>
+          {!state.activeWorkout && <NavigationChevron/>}
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("plan-history")}>
           <span>
             <strong>Plan history</strong>
             <small>{pluralize(state.planVersions?.length || 0, "saved version")}</small>
           </span>
-          <span>›</span>
-        </button>
-        <button
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton
           className="list-row program-group-last-row"
           onClick={() =>
             setDetail({ export: { date: state.selectedDate } })
@@ -11327,21 +11455,21 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
             <strong>Export workout plan</strong>
             <small>Share, copy or download the full plan</small>
           </span>
-          <span>›</span>
-        </button>
-        <button className="list-row profile-separated-action" onClick={() => setDetail("change-plan")}>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row profile-separated-action" onClick={() => setDetail("change-plan")}>
           <span>
             <strong>Replace plan</strong>
             <small>Build or import a different program</small>
           </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" disabled={Boolean(state.activeWorkout||state.activeOptionalSession)} onClick={()=>setDetail('stop-plan')}><span><strong>Stop following this plan</strong><small>Keep workout history and saved workouts</small></span><span aria-hidden="true">›</span></button>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" disabled={Boolean(state.activeWorkout||state.activeOptionalSession)} onClick={()=>setDetail('stop-plan')}><span><strong>Stop following this plan</strong><small>Keep workout history and saved workouts</small></span><NavigationChevron/></ExerciseNavigationButton>
       </section>}
       {area === 'preferences' && <section>
         <Eyebrow>SETTINGS</Eyebrow>
-        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','My own workouts'],['freestyle','Freestyle']].map(([style,label])=><button key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></button>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
-        <button className="list-row" onClick={() => setDetail("logging")}> 
+        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','My own workouts'],['freestyle','Freestyle']].map(([style,label])=><ExerciseNavigationButton key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></ExerciseNavigationButton>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("logging")}>
           <span>
             <strong>Logging & increments</strong>
             <small>
@@ -11354,58 +11482,59 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
                 : "off"}
             </small>
           </span>
-          <span>›</span>
-        </button>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
         <button className="list-row" onClick={() => setDetail("appearance")}>
           <span>
             <strong>Appearance</strong>
             <small>
-              {titleCase(p.appearancePreference || "system")} · {titleCase(
+              {personalThemes.personalTheme ? personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p)) : <>{titleCase(p.appearancePreference || "system")} · {titleCase(
                 p.stylePreference || "standard",
-              )} · Illustrations{" "}
+              )}</>} · Illustrations{" "}
               {p.showExerciseImages === false ? "off" : "on"}
             </small>
           </span>
-          <span>›</span>
+          <NavigationChevron/>
         </button>
       </section>}
+      {area === 'preferences' && <StandalonePageZoomPreference Switch={SettingSwitch} />}
       {area === 'data' && <><section className="profile-data-actions">
         <Eyebrow>DATA</Eyebrow>
-        <button className="list-row" onClick={() => setDetail("import-workout-history")}>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("import-workout-history")}>
           <span>
             <strong>Import workout history</strong>
             <small>Hevy, Strong or other CSV / XLSX · Parsed on this device</small>
           </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" onClick={() => setDetail("export-workout-history")}>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("export-workout-history")}>
           <span><strong>Export workout history</strong><small>CSV or JSON · Your training records</small></span>
-          <span>›</span>
-        </button>
-        <button className="list-row" onClick={() => setDetail("backup-rook")}>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("backup-rook")}>
           <span>
             <strong>Back up ROOK</strong>
             <small>Create a complete local recovery file</small>
           </span>
-          <span>›</span>
-        </button>
-        <button className="list-row" onClick={() => setDetail("restore-backup")}>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("restore-backup")}>
           <span>
             <strong>Restore backup</strong>
             <small>Replace local data from a ROOK backup</small>
           </span>
-          <span>›</span>
-        </button>
+          <NavigationChevron/>
+        </ExerciseNavigationButton>
       </section>
       <section className="profile-troubleshooting">
         <Eyebrow>TROUBLESHOOTING</Eyebrow>
-        <button type="button" data-profile-area="diagnostics" className="list-row" onClick={event => openArea('diagnostics', event)}>
-          <span><strong>Storage diagnostics</strong><small>Technical information for troubleshooting</small></span><span aria-hidden="true">›</span>
-        </button>
+        <ExerciseNavigationButton type="button" data-profile-area="diagnostics" className="list-row" onClick={event => openArea('diagnostics', event)}>
+          <span><strong>Storage diagnostics</strong><small>Technical information for troubleshooting</small></span><NavigationChevron/>
+        </ExerciseNavigationButton>
         <p className="storage-local-copy-warning">Local copies can be lost with device or browser data. Keep a ROOK backup file somewhere safe.</p>
       </section>
       <button className="list-row profile-separated-action profile-delete-action" onClick={onLogout}>
-        <span><strong className="danger-text">Delete local data</strong><small>Erase ROOK data from this device</small></span><span aria-hidden="true">›</span>
+        <span><strong className="danger-text">Delete local data</strong><small>Erase ROOK data from this device</small></span><NavigationChevron/>
       </button>
       </>}
     </main>
@@ -12012,7 +12141,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
           <strong>{confirmed.length ? "Run another optional review" : "Not sure what to prioritize?"}</strong>
           <small>Get an optional physique review</small>
         </span>
-        <i>›</i>
+        <NavigationChevron/>
       </button>}
       <TrainingPriorityChoices
         selected={manual}
@@ -12085,7 +12214,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
           </strong>
           <small>Get an optional physique review</small>
         </span>
-        <i>›</i>
+        <NavigationChevron/>
       </button>}
       <SheetActionFooter>
       <Button onClick={save}>
@@ -12373,7 +12502,7 @@ function SupersetPartnerPicker({
           );
         })}
       </div>
-      <SheetActionFooter className="superset-partner-footer" separate gutter={22}>
+      <SheetActionFooter className="superset-partner-footer" separate gutter="var(--rook-sheet-content-inline)">
         <Button
           disabled={!selectedPartner}
           onClick={() => selectedPartner && onConfirm(selectedPartner.id)}
@@ -12413,7 +12542,7 @@ function WorkoutActionsSheet({ day, days, collapsed, onToggle, onCopy, close }) 
         </div>
       </> : <>
         <button type="button" className="choice-row plan-copy-open" disabled={!canCopy} onClick={() => { navigated.current = true; setCopyOpen(true); }}>
-          <span>Copy exercises to another day{!canCopy && <small>{day.exercises.length ? 'No empty workout available' : 'Add an exercise first'}</small>}</span><span aria-hidden="true">›</span>
+          <span>Copy exercises to another day{!canCopy && <small>{day.exercises.length ? 'No empty workout available' : 'Add an exercise first'}</small>}</span><NavigationChevron/>
         </button>
         <button type="button" className="choice-row" onClick={() => { onToggle(); close(); }}>{collapsed ? 'Expand workout' : 'Collapse workout'}</button>
       </>}
@@ -12629,6 +12758,8 @@ export function PlanEditor({
   const [prescriptionEditorId, setPrescriptionEditorId] = useState(null);
   const [weightEditorId, setWeightEditorId] = useState(null);
   const [addingToDayId, setAddingToDayId] = useState(null);
+  // One selection owns each picker opening, even before React commits it.
+  const exerciseAddPicker = useRef(null);
   const [removedExercises, setRemovedExercises] = useState([]);
   const [customCreation, setCustomCreation] = useState(null);
   const [customAddNotice, setCustomAddNotice] = useState('');
@@ -12745,6 +12876,7 @@ export function PlanEditor({
     setPrescriptionEditorId(null);
     setWeightEditorId(null);
     setAddingToDayId(null);
+    exerciseAddPicker.current = null;
     setRemovedExercises([]);
     setWorkoutActionsDayId(null);
     setPairingExerciseId(null);
@@ -13062,6 +13194,8 @@ export function PlanEditor({
     });
   };
   const addExercise = (dayId, catalogId, createdRecord = null) => {
+    const picker = exerciseAddPicker.current;
+    if (!active || !picker || picker.dayId !== dayId || picker.resetKey !== resetKey || initializedKey.current !== resetKey) return false;
     const item = createdRecord ? customExerciseCatalogItem(createdRecord) : editorCatalog[catalogId];
     const targetDay = programRef.current?.days.find(day => day.id === dayId);
     if (!item || !planEditorExerciseAllowed(item, profile) || !targetDay || (!workoutOnly && targetDay.exercises.length >= 8) || targetDay.exercises.some(exercise => exercise.exerciseId === item.id)) return false;
@@ -13079,9 +13213,12 @@ export function PlanEditor({
         : compound
           ? 10
           : 15;
-    runRookViewTransition(() => {
-      setDirty(true);
-      setProgram((current) => {
+    // This is an unsaved editor draft. A View Transition would defer the
+    // mutation until its old-screen snapshot and then fade in the new row.
+    // Consume the picker now; keyboard dismissal, artwork and Save stay separate.
+    exerciseAddPicker.current = null;
+    setDirty(true);
+    setProgram((current) => {
       const next = clone(current);
       const day = next.days.find((value) => value.id === dayId);
       if (
@@ -13120,11 +13257,10 @@ export function PlanEditor({
         defaultIncrement: item.increment,
       });
       day.estimatedMinutes = estimateWorkoutMinutes(day, profile, next);
-        return next;
-      });
-      setAddingToDayId(null);
-      setExerciseQuery("");
+      return next;
     });
+    setAddingToDayId(null);
+    setExerciseQuery("");
     return true;
   };
   const replaceExercise = (dayId, exerciseId, catalogId) => {
@@ -13793,8 +13929,6 @@ export function PlanEditor({
           );
           const ready = exerciseCount >= 1 && dayNameValid;
           const collapsed = directEditor && collapsedDayIds.includes(day.id);
-          const addCandidates = addingToDayId === day.id ? rankExerciseSearch(catalog.filter(item =>
-            !day.exercises.some(exercise => exercise.exerciseId === item.id) && exerciseMatchesQuery(item, exerciseQuery)), exerciseQuery) : [];
           const exerciseBlocks = buildExerciseReorderBlocks(day.exercises);
           const warmupMode = day.warmupPlan?.mode || "auto";
           const warmupIncluded =
@@ -14827,51 +14961,14 @@ export function PlanEditor({
               <div className="scratch-add-exercise">
                 {customAddNotice && addingToDayId === day.id && <p role="alert" className="profile-setting-error">{customAddNotice}</p>}
                 {!collapsed && addingToDayId === day.id ? (
-                  <>
-                    <div className="scratch-exercise-search">
-                      <SearchInput resultsRoot=".plan-editor-picker,.scratch-add-exercise" resultsSelector="[role=listbox]" onClear={() => setExerciseQuery("")}
-                        type="search"
-                        aria-label={`Search exercise for ${day.weekday}`}
-                        placeholder="Search exercises"
-                        value={exerciseQuery}
-                        onChange={(event) =>
-                          setExerciseQuery(event.target.value)
-                        }
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setAddingToDayId(null);
-                          setExerciseQuery("");
-                        }}
-                      >
-                        CANCEL
-                      </button>
-                    </div>
-                    {onRegisterCustomExercise && <CustomExerciseFallback onCreate={() => beginCustomCreation(exerciseQuery, day.id)} />}
-                    <div
-                      className="scratch-exercise-results"
-                      role="listbox"
-                      aria-label={`Exercises for ${day.weekday}`}
-                    >
-                      {addCandidates.map((item) => (
-                          <button
-                            type="button"
-                            role="option"
-                            key={item.id}
-                            onClick={() => addExercise(day.id, item.id)}
-                          >
-                            <ExercisePickerIdentity item={item} enabled={profile.showExerciseImages!==false} deferOffscreen/>
-                          </button>
-                        ))}
-                    </div>
-                    {!addCandidates.length && <p className="plan-picker-empty" role="status">No matching exercises</p>}
-                    <small>Saved restrictions apply. Custom exercises that cannot be verified are not offered.</small>
-                  </>
+                  <PlanEditorExercisePicker catalog={catalog} day={day} images={profile.showExerciseImages!==false}
+                    onSelect={id => addExercise(day.id, id)}
+                    onCreate={onRegisterCustomExercise ? query => beginCustomCreation(query, day.id) : undefined}
+                    onCancel={() => { exerciseAddPicker.current = null; setAddingToDayId(null); setExerciseQuery(''); }} />
                 ) : (
                   <div className="plan-workout-tools">
                     <button type="button" className="plan-workout-add" disabled={!workoutOnly && day.exercises.length >= 8}
-                      onClick={() => { setCollapsedDayIds(current => current.filter(id => id !== day.id)); setAddingToDayId(day.id); setExerciseQuery(''); }}>
+                      onClick={() => { exerciseAddPicker.current = { dayId: day.id, resetKey }; setCollapsedDayIds(current => current.filter(id => id !== day.id)); setAddingToDayId(day.id); setExerciseQuery(''); }}>
                       {exerciseCount === 0 ? '+ Add first exercise' : '+ Add exercise'}
                     </button>
                     {directEditor && !scratch && !workoutOnly && <button type="button" className="plan-workout-overflow" aria-label={`Workout options for ${day.weekday} ${dayTitleParts.primary}`}
@@ -14935,7 +15032,7 @@ export function PlanEditor({
           )}
         </section>
       )}
-      <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'}>
+      <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'} hideWhileSearching={Boolean(addingToDayId)}>
       {saveError && <p className="offline-banner" role="alert">{saveError}</p>}
       {scratchReadiness && <p className="scratch-readiness" role="status">{scratchReadiness}</p>}
       {openDurationReview && <p role="status">Set the duration for {exerciseName(openDurationReview)} in Edit prescription, or choose a rep-based exercise.</p>}
@@ -15502,10 +15599,45 @@ export function ImportPlan({
   );
 }
 
-export function RestTrainingSheet({ date, state, update, close, setPage, setDetail }) {
-  const [mode, setMode] = useState("menu");
+export function RestDayActionSheet({ date, kind, state, update, close, setPage, setDetail }) {
+  const [view, setView] = useState('menu');
+  const back = () => setView('menu');
+  const childHeader = props => <SheetHeader {...props} onBack={props.onBack || back} backLabel={props.onBack ? props.backLabel : `Back to ${kind === 'optional' ? 'optional activity' : 'Train anyway'}`} />;
+  if (view === 'cardio' || view === 'mobility') return <RestTrainingSheet date={date} state={state} update={update} close={close} setPage={setPage} setDetail={setDetail} initialMode={view} onBack={back} />;
+  if (view === 'conditioning') return <ConditioningSheet date={date} state={state} update={update} close={close} setPage={setPage} Header={childHeader} />;
+  if (view === 'saved') return <SavedWorkouts state={state} update={update} close={close} dialogLabel="My workouts" Header={childHeader} Editor={PlanEditor} Modal={ModalLayer} onStarted={() => { close(); setPage('workout'); }} />;
+  if (view === 'freestyle') return <main className="sheet today-actions-sheet" role="dialog" aria-modal="true" aria-label="Freestyle workout">
+    <SheetHeader title="Freestyle workout" onClose={close} onBack={back} backLabel="Back to Train anyway" />
+    <FreestyleEntry state={state} update={update} setPage={page => { close(); setPage(page); }} setDetail={setDetail} date={date} hideHistory />
+  </main>;
+  const optional = kind === 'optional';
+  const unavailable = date !== isoDay() || state.activeWorkout || state.activeOptionalSession;
+  const option = (title, body, nextView, disabled = false) => <ExerciseNavigationButton className="rest-day-choice" disabled={disabled} onClick={() => setView(nextView)}>
+    <span><strong>{title}</strong><small>{body}</small></span><NavigationChevron className="inline-navigation-chevron" />
+  </ExerciseNavigationButton>;
+  return <main className="sheet rest-day-action-sheet" role="dialog" aria-modal="true" aria-label={optional ? 'Optional activity' : 'Train anyway'}>
+    <SheetHeader title={optional ? 'Optional activity' : 'Train anyway'} onClose={close} />
+    <div className="sheet-scroll">
+      {optional ? <>
+        <section aria-label="Recovery"><Eyebrow>RECOVERY</Eyebrow>
+          {option('Light cardio', 'Easy aerobic movement.', 'cardio')}
+          {option('Mobility / recovery', 'Guided mobility and recovery.', 'mobility')}
+        </section>
+        <section aria-label="Training"><Eyebrow>TRAINING</Eyebrow>
+          {option('Conditioning', 'Optional cardio / conditioning work.', 'conditioning')}
+        </section>
+      </> : <>
+        {option('Start freestyle workout', unavailable ? date !== isoDay() ? 'Workouts can only be started for today.' : 'Resume or finish your active session first.' : 'Start empty. Add exercises as you go.', 'freestyle', Boolean(unavailable))}
+        {option('My workouts', 'Start one of your reusable or plan workouts.', 'saved')}
+      </>}
+    </div>
+  </main>;
+}
+
+export function RestTrainingSheet({ date, state, update, close, setPage, setDetail, initialMode = 'menu', onBack }) {
+  const [mode, setMode] = useState(initialMode);
   const [cardioType, setCardioType] = useState("Walking");
-  const [duration, setDuration] = useState(20);
+  const [duration, setDuration] = useState(initialMode === 'mobility' ? 15 : 20);
   const [intensity, setIntensity] = useState("Easy");
   const [startError, setStartError] = useState("");
   const sheetRef = useRef(null);
@@ -15541,7 +15673,7 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
         <strong>{title}</strong>
         <small>{body}</small>
       </span>
-      <i>›</i>
+      <NavigationChevron/>
     </button>
   );
   return (
@@ -15553,17 +15685,17 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
       aria-labelledby="rest-training-title"
       onClick={(event) => event.stopPropagation()}
     >
-      <header className="sheet-header-chrome">
+      {onBack ? <SheetHeader title={mode === 'cardio' ? 'Light cardio' : 'Mobility / recovery'} onClose={close} onBack={onBack} backLabel="Back to optional activity" /> : <header className="sheet-header-chrome">
         <SheetHandleSlot/>
         <button className="sheet-close" aria-label="Close" onClick={close}>
           ×
         </button>
-      </header>
-      {mode !== "menu" && (
+      </header>}
+      {mode !== "menu" && !onBack && (
         <button
           className="sheet-back text-button"
           onClick={() => {
-            setMode("menu");
+            if (onBack) onBack(); else setMode("menu");
           }}
         >
           ‹ Back
@@ -15576,7 +15708,7 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
           <p>
             Keep recovery light, or reschedule a missed or upcoming workout.
           </p>
-          {option(
+          {moveWorkoutCandidates(state).length>0 && option(
             "MOVE A WORKOUT",
             "Choose a missed or upcoming planned session.",
             () => setDetail({flexibleWeek:{move:true}}),
@@ -15607,57 +15739,17 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
               setPage("coach");
             },
           )}
+          <button type="button" className="text-button" onClick={() => setDetail({ conditioning: date })}>+ Conditioning</button>
         </>
       )}
       {mode === "cardio" && (
         <>
           <Eyebrow>OPTIONAL SESSION</Eyebrow>
           <h2 id="rest-training-title">Light cardio</h2>
-          <label className="optional-field">
-            <span>Type</span>
-            <select
-              value={cardioType}
-              onChange={(event) => setCardioType(event.target.value)}
-            >
-              {["Walking", "Cycling", "Elliptical", "Easy run", "Other"].map(
-                (value) => (
-                  <option key={value}>{value}</option>
-                ),
-              )}
-            </select>
-          </label>
-          <div className="optional-duration">
-            <span>Duration</span>
-            <div>
-              <button
-                onClick={() => setDuration((value) => Math.max(10, value - 5))}
-              >
-                −
-              </button>
-              <strong>{duration} min</strong>
-              <button
-                onClick={() => setDuration((value) => Math.min(90, value + 5))}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          <div className="segmented">
-            {["Easy", "Moderate"].map((value) => (
-              <button
-                key={value}
-                className={intensity === value ? "active" : ""}
-                onClick={() => setIntensity(value)}
-              >
-                {value}
-              </button>
-            ))}
-          </div>
-          {startError && <p className="offline-banner" role="alert">{startError}</p>}
-          <Button onClick={() => startOptional("Cardio")}>START SESSION</Button>
-          <small className="sheet-footnote">
-            Optional · does not complete a planned strength workout.
-          </small>
+          <OptionalActivityEditor kind="Cardio"
+            value={{ activity: cardioType, durationSeconds: duration * 60, intensity }}
+            onChange={patch => { if (patch.activity !== undefined) setCardioType(patch.activity); if (patch.durationSeconds !== undefined) setDuration(patch.durationSeconds / 60); if (patch.intensity !== undefined) setIntensity(patch.intensity); }}
+            onSubmit={() => startOptional("Cardio")} error={startError} />
         </>
       )}
       {mode === "mobility" && (
@@ -15668,24 +15760,10 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
             A short, easy recovery session. It will not modify your strength
             plan.
           </p>
-          <div className="optional-duration">
-            <span>Duration</span>
-            <div>
-              <button
-                onClick={() => setDuration((value) => Math.max(5, value - 5))}
-              >
-                −
-              </button>
-              <strong>{duration} min</strong>
-              <button
-                onClick={() => setDuration((value) => Math.min(45, value + 5))}
-              >
-                +
-              </button>
-            </div>
-          </div>
-          {startError && <p className="offline-banner" role="alert">{startError}</p>}
-          <Button onClick={() => startOptional("Mobility")}>START SESSION</Button>
+          <OptionalActivityEditor kind="Mobility"
+            value={{ activity: "Mobility / recovery", durationSeconds: duration * 60, intensity: "Easy" }}
+            onChange={patch => { if (patch.durationSeconds !== undefined) setDuration(patch.durationSeconds / 60); }}
+            onSubmit={() => startOptional("Mobility")} error={startError} />
         </>
       )}
     </main>
@@ -16125,80 +16203,16 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
     <p>{state.program ? 'Your workout history stays saved when you replace the current program.' : 'Add a structured program when you want one. Your workouts and history stay saved.'}</p>
     {blocked && <p className="offline-banner">Finish your active workout before changing plans.</p>}
     <button className="plan-choice" disabled={blocked} onClick={() => setDetail('plan-builder')}>
-      <span><strong>Build a personalized plan</strong><small>Review your goals, schedule and equipment.</small></span><i>›</i>
+      <span><strong>Build a personalized plan</strong><small>Review your goals, schedule and equipment.</small></span><NavigationChevron/>
     </button>
     <button className="plan-choice" disabled={blocked} onClick={() => setDetail('import-plan')}>
-      <span><strong>{imported ? 'Import a different plan' : 'Bring my plan'}</strong><small>Import your current training plan into ROOK.</small></span><i>›</i>
+      <span><strong>{imported ? 'Import a different plan' : 'Bring my plan'}</strong><small>Import your current training plan into ROOK.</small></span><NavigationChevron/>
     </button>
     <button className="plan-choice" disabled={blocked} onClick={() => setMode('scratch')}>
-      <span><strong>Build my own program</strong><small>Create a weekly training schedule yourself.</small></span><i>›</i>
+      <span><strong>Build my own program</strong><small>Create a weekly training schedule yourself.</small></span><NavigationChevron/>
     </button>
   </main>;
 }
-function SettingSwitch({
-  label,
-  help,
-  accessory,
-  checked,
-  onChange,
-  disabled = false,
-  className = "",
-}) {
-  const inputId = accessory ? `setting-${String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-")}` : undefined;
-  if (accessory) {
-    return (
-      <div
-        className={`setting-switch setting-switch-with-accessory${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
-      >
-        <label className="setting-switch-text" htmlFor={inputId}>
-          {label}
-        </label>
-        {accessory}
-        <input
-          id={inputId}
-          type="checkbox"
-          role="switch"
-          aria-label={label}
-          checked={checked}
-          disabled={disabled}
-          onChange={(event) => onChange(event.target.checked)}
-        />
-        <label
-          className="setting-switch-toggle"
-          htmlFor={inputId}
-          aria-hidden="true"
-        >
-          <i />
-        </label>
-      </div>
-    );
-  }
-  return (
-    <label
-      className={`setting-switch${disabled ? " disabled" : ""}${className ? ` ${className}` : ""}`}
-    >
-      <span>
-        {help ? (
-          <>
-            <strong>{label}</strong>
-            <small>{help}</small>
-          </>
-        ) : (
-          label
-        )}
-      </span>
-      <input
-        type="checkbox"
-        role="switch"
-        checked={checked}
-        disabled={disabled}
-        onChange={(event) => onChange(event.target.checked)}
-      />
-      <i aria-hidden="true" />
-    </label>
-  );
-}
-
 function HelpPopover({ id, label, title, term, children, circleOnly=false, termInTrigger=false }) {
   const [open, setOpen] = useState(false);
   const [position, setPosition] = useState({ left: 12, top: 12, width: 260 });
@@ -16706,20 +16720,8 @@ function PlateSetupFields({ setup, onChange }) {
           <strong>Plate unit</strong>
           <small>Match the plates at this gym</small>
         </div>
-        <div className="segmented plate-unit-segmented" aria-label="Plate units">
-          {["kg", "lb"].map((unit) => (
-            <button
-              key={unit}
-              className={setup.unit === unit ? "active" : ""}
-              aria-pressed={setup.unit === unit}
-              onClick={() => {
-                if (setup.unit !== unit) onChange(defaultPlateSetup(unit));
-              }}
-            >
-              {unit}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl className="plate-unit-segmented" label="Plate units" options={['kg','lb']} value={setup.unit}
+          onChange={unit=>{if(setup.unit!==unit)onChange(defaultPlateSetup(unit));}}/>
       </section>
       <section className="plate-config-section">
         <div className="onboarding-group-heading">
@@ -16924,7 +16926,7 @@ function PlateCalculatorSheet({ request, state, update, close }) {
             {[result.lower, result.upper].filter(Boolean).map((option) => (
               <button key={option.total} onClick={() => applyAlternative(option)}>
                 <span><strong>{plateValue(option.total)} {setup.unit}</strong><small>Use for this set</small></span>
-                <i aria-hidden="true">›</i>
+                <NavigationChevron/>
               </button>
             ))}
             {!result.lower && !result.upper && <p>No load is possible with this setup.</p>}
@@ -17077,7 +17079,7 @@ function TrainingBlockScreen({ state, update, close }) {
         <p>{state.program.days.map((day) => day.name || day.weekday).join(" · ")}</p>
       </section>
       {state.completedTrainingBlocks?.length > 0 && (
-        <section className="training-block-history-count"><p>{pluralize(state.completedTrainingBlocks.length, "completed block")} saved locally.</p>{state.completedTrainingBlocks.filter(item=>item.id!==block.id).slice().reverse().map(item=><button className="list-row" key={item.id} onClick={()=>{setArchivedId(item.id);setView('history');}}><span>{item.name}<small>{item.completedAt?.slice(0,10)}</small></span><span aria-hidden="true">›</span></button>)}</section>
+        <section className="training-block-history-count"><p>{pluralize(state.completedTrainingBlocks.length, "completed block")} saved locally.</p>{state.completedTrainingBlocks.filter(item=>item.id!==block.id).slice().reverse().map(item=><button className="list-row" key={item.id} onClick={()=>{setArchivedId(item.id);setView('history');}}><span>{item.name}<small>{item.completedAt?.slice(0,10)}</small></span><NavigationChevron/></button>)}</section>
       )}
       {block.completed ? (
         <div className="training-block-complete-actions">
@@ -17212,7 +17214,7 @@ function PlanHistoryScreen({ state, update, close }) {
                 {versionDayCounts.get(planVersionDayKey(version.timestamp)) > 1 && <small>{planVersionTime(version.timestamp)}</small>}
               </time>
               <span><strong>{version.summary}</strong><small>{version.source}{version.id === latestId ? " · Current" : ""}</small></span>
-              <i aria-hidden="true">›</i>
+              <NavigationChevron/>
             </button>
             ));
             if (group.versions.length === 1) return rows;
@@ -17434,9 +17436,9 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
       {!query && mapping.match?.tier === 'B' && <section className="history-import-suggestion" aria-label="Suggested match"><Eyebrow>SUGGESTED MATCH</Eyebrow><strong>{historicalExerciseLabel(state,mapping.match.suggestedExerciseId)}</strong><Button disabled={busy} variant="secondary" onClick={() => resolve({type:'match',exerciseId:mapping.match.suggestedExerciseId})}>USE MATCH</Button><Button variant="quiet" disabled={busy} onClick={() => mappingScreenRef.current?.querySelector('input[type="search"]')?.focus()}>CHOOSE ANOTHER</Button></section>}
       <Button disabled={busy} variant="quiet" onClick={() => resolve({type:'custom'})}>KEEP ORIGINAL</Button>
       <SearchInput onClear={() => setQuery("")} className="text-answer" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search exercises" aria-label="Search exercises" />
-      {!query && mapping.match?.tier === 'C' && mapping.match.candidates?.some(item=>item.score>=.4) && <div className="history-import-match-list"><Eyebrow>POSSIBLE MATCHES · CHECK VARIANT</Eyebrow>{mapping.match.candidates.filter(item=>item.score>=.4).map(item=><button disabled={busy} key={item.exerciseId} className="list-row" onClick={()=>resolve({type:'match',exerciseId:item.exerciseId})}><span><strong>{item.name}</strong><small>{item.conflicts.length?'Different variant · review carefully':'Confirm the source setup'}</small></span><span>›</span></button>)}</div>}
+      {!query && mapping.match?.tier === 'C' && mapping.match.candidates?.some(item=>item.score>=.4) && <div className="history-import-match-list"><Eyebrow>POSSIBLE MATCHES · CHECK VARIANT</Eyebrow>{mapping.match.candidates.filter(item=>item.score>=.4).map(item=><button disabled={busy} key={item.exerciseId} className="list-row" onClick={()=>resolve({type:'match',exerciseId:item.exerciseId})}><span><strong>{item.name}</strong><small>{item.conflicts.length?'Different variant · review carefully':'Confirm the source setup'}</small></span><NavigationChevron/></button>)}</div>}
       <div className="history-import-match-list">{choices.map((item) => (
-        <button disabled={busy} key={item.id} className="list-row" onClick={() => resolve({ type: "match", exerciseId: item.id })}><span><strong>{item.name}</strong>{item.custom && <small>Your custom exercise</small>}</span><span>›</span></button>
+        <button disabled={busy} key={item.id} className="list-row" onClick={() => resolve({ type: "match", exerciseId: item.id })}><span><strong>{item.name}</strong>{item.custom && <small>Your custom exercise</small>}</span><NavigationChevron/></button>
       ))}</div>
       {!query && <div className="history-import-special-actions"><button disabled={busy} className="choice-row" onClick={() => resolve({ type: "ignore" })}><span><strong>Ignore this exercise</strong><small>Its rows will not be imported.</small></span></button></div>}
     </main>
@@ -17621,7 +17623,7 @@ function CustomExercisesScreen({ state, update, close, createOnly = false, initi
                     <strong>{exercise.name}</strong>
                     <small>{exercise.equipment.map((value) => CUSTOM_EXERCISE_EQUIPMENT.find(([id]) => id === value)?.[1] || value).join(" · ")} · {CUSTOM_EXERCISE_LOGGING_TYPES.find(([id]) => id === exercise.loggingType)?.[1]}</small>
                   </span>
-                  <i>›</i>
+                  <NavigationChevron/>
                 </button>
               ))}
           </section>
@@ -17826,7 +17828,7 @@ function GymProfilesSheet({ state, update, close }) {
               </span>
               <span className="gym-profile-row-end">
                 {gym.id === state.defaultGymProfileId && <small>DEFAULT</small>}
-                <i aria-hidden="true">›</i>
+                <NavigationChevron/>
               </span>
             </button>
           ))}
@@ -17882,7 +17884,7 @@ function GymProfilesSheet({ state, update, close }) {
             <strong>Plate calculator setup</strong>
             <small>{plateValue(selectedPlateBar(editing?.plateSetup).weight)} {editing?.plateSetup?.unit || state.profile.units} bar · {editing?.plateSetup?.plates?.length || 0} plate sizes</small>
           </span>
-          <i aria-hidden="true">›</i>
+          <NavigationChevron/>
         </button>
       )}
       {isDefault ? (
@@ -18242,10 +18244,13 @@ export function Detail({
     const source=detail?.saveWorkoutTemplate?(detail.saveWorkoutTemplate.workoutId?state.workouts.find(w=>w.id===detail.saveWorkoutTemplate.workoutId):state.activeWorkout):null;
     return <SavedWorkouts state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} source={source} initialTemplateId={detail?.savedWorkout} createNew={Boolean(detail?.createSavedWorkout)} onStarted={()=>{close();setPage('workout');}}/>;
   }
+  if (detail?.conditioning) return <ConditioningSheet date={detail.conditioning} state={state} update={update} close={close} setPage={setPage} Header={SheetHeader} />;
+  if (detail?.restDayAction) return <RestDayActionSheet key={`${detail.restDayAction.kind}:${detail.restDayAction.date}`} {...detail.restDayAction} state={state} update={update} close={close} setPage={setPage} setDetail={setDetail} />;
   if (detail?.restTraining)
     return (
       <RestTrainingSheet
         date={detail.restTraining}
+        initialMode={detail.optionalMode}
         state={state}
         update={update}
         close={close}
@@ -18253,6 +18258,8 @@ export function Detail({
         setDetail={setDetail}
       />
     );
+  if (detail?.optionalActivity)
+    return <OptionalActivityDetails id={detail.optionalActivity} state={state} update={update} close={close} Header={SheetHeader} Modal={ModalLayer} />;
   if (detail === "week") {
     const schedule = new Map(
       currentWeekSchedule(state).map((item) => [
@@ -18418,6 +18425,7 @@ export function Detail({
   if (detail?.useWorkoutToday) return <UseWorkoutTodaySheet state={state} update={update} close={close} Header={SheetHeader} setDetail={setDetail} request={detail.useWorkoutToday}/>;
   if (detail?.flexibleWeek)
     return <FlexibleWeekSheet state={state} update={update} close={close} Header={SheetHeader} setDetail={setDetail} request={detail.flexibleWeek} />;
+  if (detail === 'temporary-plan') return <TemporaryPlanSheet state={state} update={update} close={close} Header={SheetHeader}/>;
   if (detail === "training-block")
     return <TrainingBlockScreen state={state} update={update} close={close} />;
   if (detail === "block-review")
@@ -18505,6 +18513,15 @@ export function Detail({
     return (
       <ExerciseVisualViewer exercise={detail.visual} close={close} />
     );
+  if (detail?.exercisePr) {
+    const request = detail.exercisePr;
+    const activeExercise = state.activeWorkout?.id === request.sessionId
+      ? state.activeWorkout.exercises.find(item => item.id === request.exerciseInstanceId)
+      : null;
+    return <ExercisePrSheet exercise={activeExercise} workouts={state.workouts} units={state.profile.units}
+      e1rmEligible={exerciseSupportsEstimatedOneRepMax(activeExercise)} Header={SheetHeader} close={close}
+      onHistory={exercise => setDetail({ exercise, returnToPr: request, returnFocusId: detail.returnFocusId })}/>;
+  }
   if (detail?.workoutOptions)
     return (
       <ActiveWorkoutOptions
@@ -18612,8 +18629,8 @@ export function Detail({
       <SheetHeader
         title={exerciseName(exercise)}
         onClose={close}
-        onBack={detail.returnToProgression?()=>setDetail({progressionOverview:detail.returnToProgression}):detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
-        backLabel={detail.returnToProgression?'Back to exercise progression':detail.returnToLogged?'Back to logged exercises':'Back'}
+        onBack={detail.returnToPr?()=>setDetail({exercisePr:detail.returnToPr,returnFocusId:detail.returnFocusId}):detail.returnToProgression?()=>setDetail({progressionOverview:detail.returnToProgression}):detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
+        backLabel={detail.returnToPr?'Back to personal record':detail.returnToProgression?'Back to exercise progression':detail.returnToLogged?'Back to logged exercises':'Back'}
         closeLabel={`Close ${exerciseName(exercise)} details`}
       />
       <div className={`exercise-detail-overview${detailIllustration ? " has-illustration" : ""}`}>
@@ -18921,28 +18938,8 @@ function Logging({ state, update, close }) {
       </section>
       <section className="logging-group increments-group">
         <Eyebrow>UNITS</Eyebrow>
-        <div
-          className="segmented unit-segmented"
-          data-unit={p.units}
-          aria-label="Weight units"
-        >
-          {["kg", "lb"].map((unit) => (
-            <button
-              key={unit}
-              className={p.units === unit ? "active" : ""}
-              aria-pressed={p.units === unit}
-              onClick={() => {
-                if (p.units === unit) return;
-                update((current) => {
-                  current.profile.units = unit;
-                  return current;
-                });
-              }}
-            >
-              {unit}
-            </button>
-          ))}
-        </div>
+        <SegmentedControl className="logging-unit-choice" label="Weight units" options={['kg','lb']} value={p.units}
+          onChange={unit=>{if(p.units===unit)return;update(current=>{current.profile.units=unit;return current;});}}/>
         <div
           key={p.units}
           className="unit-dependent-values"
@@ -18973,6 +18970,7 @@ function Logging({ state, update, close }) {
   );
 }
 function Appearance({ state, update, close }) {
+  const personalThemes = usePersonalThemes();
   const showExerciseImages = state.profile.showExerciseImages !== false;
   const appearancePreference = ["system", "light", "dark"].includes(
     state.profile.appearancePreference,
@@ -19006,7 +19004,8 @@ function Appearance({ state, update, close }) {
       : appearancePreference === "dark"
         ? "Always use ROOK’s dark appearance."
         : "Always use ROOK’s light appearance.";
-  const setAppearance = (value) =>
+  const setAppearance = (value) => {
+    personalThemes.clearTheme();
     update((current) => {
       current.profile.appearancePreference = value;
       current.profile.themePreference = legacyThemePreference(
@@ -19015,7 +19014,9 @@ function Appearance({ state, update, close }) {
       );
       return current;
     });
-  const setStyle = (value) =>
+  };
+  const setStyle = (value) => {
+    personalThemes.clearTheme();
     update((current) => {
       current.profile.stylePreference = value;
       current.profile.themePreference = legacyThemePreference(
@@ -19024,6 +19025,7 @@ function Appearance({ state, update, close }) {
       );
       return current;
     });
+  };
   return (
     <main className="screen detail-screen logging-screen appearance-screen">
       <SheetHeader
@@ -19031,34 +19033,15 @@ function Appearance({ state, update, close }) {
         onClose={close}
         closeLabel="Close Appearance"
       />
-      <section className="logging-group appearance-theme-group">
+      {!personalThemes.personalTheme && <section className="logging-group appearance-theme-group">
         <Eyebrow>THEME</Eyebrow>
-        <div
-          className="appearance-segmented"
-          role="group"
-          aria-label="Theme"
-        >
-          {[
-            ["system", "System"],
-            ["light", "Light"],
-            ["dark", "Dark"],
-          ].map(([value, label]) => (
-            <button
-              type="button"
-              key={value}
-              aria-pressed={appearancePreference === value}
-              onClick={() => setAppearance(value)}
-            >
-              <i aria-hidden="true">✓</i>
-              <strong>{label}</strong>
-            </button>
-          ))}
-        </div>
+        <SegmentedControl label="Theme" options={[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}]}
+          value={appearancePreference} onChange={setAppearance}/>
         <small className="appearance-theme-help" aria-live="polite">
           {themeHelp}
         </small>
-      </section>
-      <section className="logging-group appearance-style-group">
+      </section>}
+      {!personalThemes.personalTheme && <section className="logging-group appearance-style-group">
         <Eyebrow>STYLE</Eyebrow>
         <div className="appearance-style-choices">
           {[
@@ -19081,7 +19064,8 @@ function Appearance({ state, update, close }) {
             </button>
           ))}
         </div>
-      </section>
+      </section>}
+      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Personal themes</strong><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>
         <SettingSwitch
@@ -19095,32 +19079,12 @@ function Appearance({ state, update, close }) {
           }
         />
         <p className="setting-help">
-          Show exercise images while training and in exercise details.
+          {showExerciseImages
+            ? 'Exercise images are shown while training and in exercise details.'
+            : 'Exercise images are hidden while training and in exercise details.'}
         </p>
       </section>
-      <section className="appearance-credits">
-        <Eyebrow>ILLUSTRATION CREDITS</Eyebrow>
-        <p>
-          Library illustrations by{" "}
-          <a
-            href="https://bryllim.github.io/workout-guide/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            Bryl Lim / Everkinetic
-          </a>
-          , color-adapted for ROOK. Licensed under{" "}
-          <a
-            href="https://creativecommons.org/licenses/by-sa/4.0/"
-            target="_blank"
-            rel="noreferrer"
-          >
-            CC BY-SA 4.0
-          </a>
-          .
-        </p>
-        <p>Additional exercise illustrations created for ROOK with AI assistance.</p>
-      </section>
+      <IllustrationCredits />
     </main>
   );
 }
@@ -19132,7 +19096,7 @@ function ExerciseDetailIllustration({ exercise, src, onError, label, children })
     <button ref={trigger} type="button" id={`detail-exercise-art-${exercise.id}`} className="exercise-detail-art-button"
       aria-label={label || `View ${exerciseName(exercise)} illustration`}
       onClick={event=>{background.current=event.currentTarget.closest('main');setOpen(true);}}>
-      <img className="exercise-detail-art" onError={onError} src={src} alt="" aria-hidden="true" decoding="async" fetchpriority="high" />
+      <ExerciseIllustration className="exercise-detail-art" onError={onError} src={src} alt="" aria-hidden="true" decoding="async" fetchpriority="high" />
       {children}
     </button>
     {open && createPortal(<ModalLayer presentation="fullscreen" instantClose lockDocument={false} backgroundRef={background} returnFocusRef={trigger} close={()=>setOpen(false)}>
@@ -19165,9 +19129,9 @@ export function ExerciseVisualViewer({ exercise, close }) {
           ×
         </button>
       </header>
-      <div className="exercise-visual-stage">
+      <div className="exercise-visual-stage" data-rook-zoom="native">
         {availableArtwork.source ? (
-        <img
+        <ExerciseIllustration
           src={availableArtwork.source}
           onError={availableArtwork.onError}
           alt=""
@@ -19456,7 +19420,7 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
   const current =
     active?.exercises?.find((item) => item.id === exercise.id) || exercise;
   const initialNote = exercisePersonalNote(current) || "";
-  const {reference}=exerciseNotePresentation(current,state.program);
+  const {reference,cue}=exerciseNotePresentation(current,state.program);
   const [draft, setDraft] = useState(initialNote);
   const templateDay = state.program?.days?.find(
     (day) => day.id === active?.programDayId,
@@ -19491,6 +19455,10 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
       <div className="sheet-scroll">
       <h2 id="exercise-note-title">Exercise notes</h2>
       <p className="exercise-note-exercise">{exerciseName(current)}</p>
+      {cue && <section className="exercise-plan-note" aria-label="From your plan">
+        <Eyebrow>FROM YOUR PLAN</Eyebrow>
+        <p className="rook-selectable">{cue}</p>
+      </section>}
       {reference&&<section className="exercise-source-reference" aria-label="Original import reference">
         <Eyebrow>ORIGINAL IMPORT · REFERENCE ONLY</Eyebrow>
         <p>Original wording may include unselected options. Follow the prescription under Target.</p>
@@ -19523,7 +19491,7 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
         </small>
       </div>
       </div>
-      <SheetActionFooter separate gutter={22} containViewport>
+      <SheetActionFooter separate gutter="var(--rook-sheet-content-inline)" containViewport>
       <button type="button" className="button primary exercise-note-save" onPointerDown={event=>{if(event.button===0)event.preventDefault();}} onClick={() => save()}>
         SAVE
       </button>
@@ -19984,7 +19952,7 @@ function Replace({ exercise, state, update, close }) {
           replacementExerciseId: choice.id,
           gymProfileId: effectiveGymContext(current, active).id,
         });
-      refreshWorkoutWarmup(active, current.profile, current.program);
+      refreshWorkoutWarmup(active, active.temporaryPlanAdjustment ? effectiveGymProfile(current, active) : current.profile, current.program);
       active.updatedAt = Date.now();
       return current;
     });
@@ -20124,20 +20092,23 @@ function Replace({ exercise, state, update, close }) {
 }
 
 export default function App() {
-  return <StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup}/>}</StartupBoundary>;
+  return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup}/>}</StartupBoundary></PersonalThemesProvider>;
 }
 const StableActiveWorkout = memo(ActiveWorkout);
 function HydratedApp({startup}) {
   useSemanticSwipeBack();
   const [state, update, persistenceFailed] = useLiftState(startup);
+  const personalThemes = usePersonalThemes();
   const accountSync = useAccountSync({ state, update, persistenceFailed });
   const liveCompletion = useRef(null);
   const recordLiveFinish = useCallback(event => { liveCompletion.current = event; }, []);
   useResolvedTheme(
     state.profile.appearancePreference,
     state.profile.stylePreference,
+    personalThemes.renderedPersonalTheme,
   );
   const [page, setPageState] = useState("today");
+  const coachAvailability = useCoachAvailability({ profileId: state.profile.id, enabled: !accountSync.locked, visiting: page === 'coach' });
   const backgroundRef = useRef(null);
   const coachScrollMemory = useRef(new Map());
   const prepareTabTransition = useMainTabTransition(page, backgroundRef);
@@ -20181,7 +20152,7 @@ function HydratedApp({startup}) {
     return true;
   };
   const closeDetail = () => {
-    const returnFocusId = detail?.visual ? detail.returnFocusId : null;
+    const returnFocusId = detail?.visual || detail?.exercisePr || detail?.returnToPr ? detail.returnFocusId : null;
     setDetail((current) =>
       current?.visual && current.returnTo ? current.returnTo : null,
     );
@@ -20194,15 +20165,6 @@ function HydratedApp({startup}) {
   };
   useEffect(() => {
     if (accountSync.locked) return undefined;
-    let active = true;
-    (async () => {
-      const status = await AIService.status();
-      if (!active) return;
-      update((current) => {
-        current.ai = { ...current.ai, ...status };
-        return current;
-      });
-    })();
     const poorAIPlan =
       state.program?.source === "ai" &&
       !validateProgram(state.program, state.profile, {
@@ -20219,9 +20181,6 @@ function HydratedApp({startup}) {
       state.workouts.length === 0 &&
       Object.keys(state.weekScheduleOverrides || {}).length === 0;
     if (canUpgrade) setRepairPreview(true);
-    return () => {
-      active = false;
-    };
   }, [accountSync.locked]);
   const dismissRepairPreview = () => {
     setRepairPreview(null);
@@ -20296,7 +20255,7 @@ function HydratedApp({startup}) {
         persistenceFailed={persistenceFailed}
       />
     ) : page === "coach" ? (
-      <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} />
+      <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} />
     ) : page === "progress" ? (
       <Progress state={state} update={update} setDetail={setDetail} setPage={setPage} />
     ) : (
@@ -20314,7 +20273,7 @@ function HydratedApp({startup}) {
       failed={persistenceFailed}
       onBackup={() => setDetail("backup-rook")}
     >
-    <MissedWorkoutFeedbackProvider state={state} update={update}>
+    <MissedWorkoutFeedbackProvider state={state} update={update} onViewSchedule={()=>setDetail({flexibleWeek:{reviewExisting:true}})}>
     <div className="app-shell">
       <div className="app-content" ref={backgroundRef}>
         {['workout','complete'].includes(page) ? <WorkoutMotion kind="completion" identity={page}>{content}</WorkoutMotion> : content}
@@ -20331,6 +20290,7 @@ function HydratedApp({startup}) {
           onCloseStart={() => setDetailClosing(true)}
           backgroundRef={backgroundRef}
           presentation={detail?.visual ? "fullscreen" : (detail === "plan-builder" || detail?.editPlan?.fullscreen) ? "editor-page" : "sheet"}
+          tabNavigation={detail?.editPlan?.fullscreen ? leave => <TabRouteNavigation page={page} setPage={setPage} leave={leave} backgroundRef={backgroundRef} /> : undefined}
         >
           <Detail
             detail={detail}

@@ -94,16 +94,16 @@ describe("personalized warm-ups", () => {
         .sets,
     ).toHaveLength(1);
   });
-  it("keeps non-ramp preparation compact and reduces it for short sessions", () => {
+  it("uses a flexible five-minute general warm-up even for a short session", () => {
     const normal = generateWarmup(workout(), profile(), exerciseCatalog);
     const short = generateWarmup(
       workout(),
       profile({ sessionMinutes: 25 }),
       exerciseCatalog,
     );
-    expect(normal.nonRampMinutes).toBeGreaterThanOrEqual(3);
-    expect(normal.nonRampMinutes).toBeLessThanOrEqual(8);
-    expect(short.nonRampMinutes).toBe(0);
+    expect(normal.nonRampMinutes).toBe(5);
+    expect(short.nonRampMinutes).toBe(5);
+    expect(short.general[0].guidance).toContain("Shorten this if you're already warm");
     expect(short.movementPreparation).toEqual([]);
     expect(short.rampUpSets).toHaveLength(1);
   });
@@ -123,6 +123,52 @@ describe("personalized warm-ups", () => {
     );
     expect(restricted.general).toEqual([]);
   });
+
+  it.each(["barbell-bench-press", "chest-supported-row", "leg-press", "romanian-deadlift"])(
+    "keeps the same neutral cardio default for %s instead of a lift-family machine rule",
+    exerciseId => {
+      const result = generateWarmup(workout([exerciseId]), profile(), exerciseCatalog);
+      expect(result.general[0]).toMatchObject({ label: "Easy treadmill walk", minutes: 5 });
+      expect(result.general[0].guidance).toContain("the bike or the elliptical");
+      expect(result.general[0].guidance).toContain("talk comfortably");
+    },
+  );
+
+  it("filters both the default and alternatives through the existing restrictions", () => {
+    const bike = generateWarmup(workout(), profile({ avoid: "Avoid walking and elliptical." }), exerciseCatalog);
+    expect(bike.general[0].label).toBe("Easy stationary bike");
+    expect(bike.general[0].guidance).not.toMatch(/walk|elliptical/i);
+    const elliptical = generateWarmup(workout(), profile({ avoid: "Avoid walking and cycling." }), exerciseCatalog);
+    expect(elliptical.general[0].label).toBe("Easy elliptical");
+    expect(elliptical.general[0].guidance).not.toMatch(/walk|bike/i);
+  });
+
+  it("does not assume unclassified home cardio equipment and allows the existing march fallback", () => {
+    const result = generateWarmup(workout(), profile({ environment: "Home gym", equipment: ["machines"], avoid: "Avoid walking." }), exerciseCatalog);
+    expect(result.general[0].label).toBe("Easy marching in place");
+    expect(result.general[0].guidance).not.toMatch(/bike|elliptical|treadmill/i);
+  });
+
+  it("offers general preparation for a single isolation exercise without inventing ramp sets", () => {
+    const result = generateWarmup(workout(["lateral-raise"]), profile(), exerciseCatalog);
+    expect(result.general[0].minutes).toBe(5);
+    expect(result.rampUpSets).toEqual([]);
+    expect(result.stages).toHaveLength(1);
+    expect(generateWarmup(workout([]), profile(), exerciseCatalog)).toBeNull();
+  });
+
+  it.each(["user", "imported", "generated-materialized"])(
+    "preserves the %s custom choice and duration instead of applying new auto defaults",
+    provenance => {
+      const day = workout();
+      day.warmupPlan = { mode: "custom", provenance, items: [{ id: "my-cardio", label: "My elliptical", minutes: 3 }], rampUpSets: [] };
+      const original = structuredClone(day);
+      const result = warmupForWorkout(day, profile());
+      expect(result.general[0]).toMatchObject({ label: "My elliptical", minutes: 3, custom: true });
+      expect(result.general[0].guidance).toBeUndefined();
+      expect(day).toEqual(original);
+    },
+  );
 
   it("does not invent rehabilitation for unresolved pain or recent surgery", () => {
     const held = generateWarmup(
@@ -282,9 +328,9 @@ describe("personalized warm-ups", () => {
       profile({ sessionMinutes: 90 }),
       exerciseCatalog,
     );
-    expect(short.general).toEqual([]);
+    expect(short.general[0].minutes).toBe(5);
     expect(short.rampUpSets).toHaveLength(1);
-    expect(long.general[0].minutes).toBe(4);
+    expect(long.general[0].minutes).toBe(5);
     expect(long.rampUpSets).toHaveLength(3);
   });
 

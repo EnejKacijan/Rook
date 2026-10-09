@@ -1,3 +1,4 @@
+import {NavigationChevron} from './NavigationChevron.jsx';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { focusNavigationTarget } from './navigationFocus.js';
@@ -61,14 +62,14 @@ export function AccountSyncPanel({ sync, Modal, backgroundRef }) {
     {sync?.linked && sync?.state === 'synced' && sync.pendingCount === 0 && <small>Google account connected. Your ROOK training data is backed up.</small>}
     {sync?.linked && sync?.state !== 'synced' && <small>Google account connected. Cloud backup still needs to finish; your data stays on this device.</small>}
     {sync?.state === 'synced' && <small>Workout photos stay on this device; cloud sync does not include them.</small>}
-    {sync?.state !== 'not-configured' && !sync?.linked && !collision && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span><span aria-hidden="true">›</span></button>}
+    {sync?.state !== 'not-configured' && !sync?.linked && !collision && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span><NavigationChevron/></button>}
     {collision && <div className="account-sync-collision" role="status">
       <p>This Google account already has a ROOK profile. Your current training data is unchanged; ROOK will not merge the profiles automatically.</p>
       <button type="button" className="button secondary" disabled={busy} onClick={() => { setCollision(false); setError(''); }}>KEEP THIS PROFILE</button>
       <button type="button" className="button quiet" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}>TRY A DIFFERENT GOOGLE ACCOUNT</button>
     </div>}
-    {sync?.linked && !sync?.locked && <button type="button" className="list-row" ref={confirmTrigger} disabled={busy} onClick={() => setConfirmation('sign-out')}><span><strong>Sign out</strong><small>Your local data stays on this device</small></span><span aria-hidden="true">›</span></button>}
-    {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with its Google account to reopen it</small></span><span aria-hidden="true">›</span></button>}
+    {sync?.linked && !sync?.locked && <button type="button" className="list-row" ref={confirmTrigger} disabled={busy} onClick={() => setConfirmation('sign-out')}><span><strong>Sign out</strong><small>Your local data stays on this device</small></span><NavigationChevron/></button>}
+    {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with its Google account to reopen it</small></span><NavigationChevron/></button>}
     {error && <p className="account-sync-error" role="alert">{error}</p>}
     {confirmation && <AccountConfirmation Modal={Modal}
       title={confirmation === 'sign-out' ? 'Sign out?' : 'Return to saved profile?'}

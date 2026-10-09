@@ -166,14 +166,15 @@ describe('Flexible Week logical sessions', () => {
     const active=startWorkout(next,plannedWorkoutForDate(next,'2026-09-08'));
     expect(active.canonicalPlanDate).toBe('2026-09-08');expect(active.workoutDateKey).toBe('2026-09-05');expect(active.originalScheduledDate).toBe('2026-08-31');
   });
-  it('restoring a past moved session clears orphaned temporary edits', () => {
+  it('restoring retains a past source and its occurrence edits without rewriting history', () => {
     const state=fixture(), next=applyFlexibleWeek(state,proposal(state)).state;
     const record=Object.values(next.flexibleWeek.sessions)[0];
     next.todayAdaptation={programDayId:record.workoutId,date:record.scheduledDate};
     next.workoutOccurrenceOverrides={[record.scheduledDate]:{[record.workoutId]:{orderedEntryIds:['example']}}};
     const restored=applyFlexibleWeek(next,proposeFlexibleWeek(next,{mode:'restore'})).state;
-    expect(restored.todayAdaptation).toBeNull();
-    expect(restored.workoutOccurrenceOverrides[record.scheduledDate][record.workoutId]).toBeUndefined();
+    expect(restored.todayAdaptation).toEqual(next.todayAdaptation);
+    expect(restored.workoutOccurrenceOverrides).toEqual(next.workoutOccurrenceOverrides);
+    expect(restored.flexibleWeek.sessions).toEqual(next.flexibleWeek.sessions);
   });
   it('Weekly Review identifies mixed carried program weeks', () => {
     const state=fixture();

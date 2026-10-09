@@ -1,7 +1,9 @@
-import React,{useId,useRef,useState,useLayoutEffect,useMemo} from 'react';
+import {NavigationChevron} from './NavigationChevron.jsx';
+import React,{useId,useRef,useState,useLayoutEffect,useEffect,useMemo} from 'react';
 import {createPortal} from 'react-dom';
 import {SearchInput} from './SearchInput.jsx';
 import {OverflowIcon} from './OverflowIcon.jsx';
+import {DestructiveConfirmationSheet} from './DestructiveConfirmationSheet.jsx';
 import {ExercisePickerIdentity} from './ExercisePickerIdentity.jsx';
 import {exerciseName,exerciseMeasure,exerciseCatalog,uid,pluralize} from './domain.js';
 import {useDurableAction} from './useDurableAction.js';
@@ -14,12 +16,14 @@ import {saveFirstRunWorkout} from './firstRunNoPlan.js';
 import {recordAccountSyncDeleteIntent} from './accountSyncOutbox.js';
 import './savedWorkouts.css';
 
-export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,initialTemplateId=null,createNew=false,firstRun=false,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved}) {
+export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,initialTemplateId=null,createNew=false,firstRun=false,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved,dialogLabel}) {
   const {commit,latest}=useDurableAction(state,update);
   const screen=useRef(null),browseScroll=useRef(0),undo=useExerciseRemoveUndo();
   const overlapDescriptionId=useId();
   const [query,setQuery]=useState(''),[selection,setSelection]=useState(()=>initialTemplateId?structuredClone(state.savedWorkoutTemplates?.find(t=>t.id===initialTemplateId)||null):null),[draft,setDraft]=useState(()=>source?templateDraft(source,state):createNew?{name:'New workout',exercises:[]}:null);
-  const [editing,setEditing]=useState(createNew),[renaming,setRenaming]=useState(false),[deleting,setDeleting]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[confirmed,setConfirmed]=useState(false);
+  const [editing,setEditing]=useState(createNew),[renaming,setRenaming]=useState(false),[error,setError]=useState(''),[notice,setNotice]=useState(''),[confirmed,setConfirmed]=useState(false);
+  const [deleteConfirmation,setDeleteConfirmation]=useState(null),[deleteError,setDeleteError]=useState('');
+  const pendingDelete=useRef(null),deleteBackground=useRef(null),deleteSubmitted=useRef(false),deleteOutcome=useRef(null);
   const [optionsOpen,setOptionsOpen]=useState(false);
   const optionsBackground=useRef(null),optionsTrigger=useRef(null),optionsAction=useRef(null),actionFocus=useRef(null),editPosition=useRef(null);
   const editorDirty=useRef(false);
@@ -44,20 +48,52 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
       focusNavigationTarget(target);
     });});
     return()=>cancelAnimationFrame(frame);
-  },[optionsOpen,editing,renaming,deleting]);
+  },[optionsOpen,editing,renaming]);
+  useEffect(()=>{
+    if(optionsOpen||!pendingDelete.current)return;
+    // Mount the next nested sheet after the options sheet has released its
+    // focus/background ownership, keeping the original detail and scroller.
+    const frame=requestAnimationFrame(()=>{
+      deleteBackground.current=screen.current?.closest('.modal-layer')?.firstElementChild||screen.current;
+      setDeleteError('');deleteSubmitted.current=false;deleteOutcome.current=null;
+      setDeleteConfirmation(pendingDelete.current);pendingDelete.current=null;
+    });
+    return()=>cancelAnimationFrame(frame);
+  },[optionsOpen]);
   const edit=()=>{editPosition.current=screen.current?.querySelector('.saved-workout-preview')?.scrollTop||0;setEditing(true);};
   const dismissOptions=()=>{
     const action=optionsAction.current;optionsAction.current=null;setOptionsOpen(false);
     if(action==='rename'){setDraft(structuredClone(selected));setRenaming(true);actionFocus.current='.saved-template-name input';}
     if(action==='edit'){edit();actionFocus.current='h1';}
-    if(action==='delete'){setDeleting(true);actionFocus.current='.saved-template-delete .secondary';}
+    if(action==='delete')pendingDelete.current={id:selected.id,revision:selected.revision,name:selected.name};
   };
   const chooseOption=(action,requestClose)=>{
     if(optionsAction.current)return;
     optionsAction.current=action;
     if(requestClose()===false)optionsAction.current=null;
   };
-  const reset=()=>{setDraft(null);setSelection(null);setRenaming(false);setDeleting(false);setEditing(false);setError('');setConfirmed(false);};
+  const reset=()=>{setDraft(null);setSelection(null);setRenaming(false);setEditing(false);setError('');setConfirmed(false);};
+  const closeDelete=()=>{
+    setDeleteConfirmation(null);setDeleteError('');
+    if(deleteOutcome.current){
+      const {syncDeleteFailed}=deleteOutcome.current;deleteOutcome.current=null;
+      reset();
+      setNotice('');
+      undo.show({message:syncDeleteFailed?'Saved workout deleted locally. Cloud removal needs attention.':'Saved workout deleted'});
+    }
+  };
+  const confirmDelete=requestClose=>{
+    if(deleteSubmitted.current||!deleteConfirmation)return;
+    deleteSubmitted.current=true;
+    try{
+      const {id,revision}=deleteConfirmation;
+      const result=commit(current=>deleteWorkoutTemplate(current,id,revision));
+      let syncDeleteFailed=false;
+      if(result.changed){try{recordAccountSyncDeleteIntent(globalThis.localStorage,result.state.profile.id,'savedWorkoutTemplates',id);}catch{syncDeleteFailed=true;}}
+      deleteOutcome.current={syncDeleteFailed};
+      requestClose();
+    }catch(e){deleteSubmitted.current=false;setDeleteError(e.message);}
+  };
   const leaveFirstRun=()=>{
     if ((editorDirty.current || draft?.exercises.length || draft?.name !== 'New workout') &&
         !window.confirm('Discard this workout draft and return to the start?')) return;
@@ -74,7 +110,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
   const issues=review?templateUseIssues(state,review):[],overlaps=selected?templateOverlaps(state,selected):[];
   const editorSource=useMemo(()=>editing&&review&&{id:'saved-workout-editor',source:'manual',name:review.name,days:[{id:'saved-workout-day',name:review.name,workoutName:review.name,weekday:'Mon',exercises:structuredClone(review.exercises).map(e=>({...e,sets:e.sets.map(s=>({...s,completed:false}))}))}]},[editing,review]);
   const applied=state.activeWorkout?.queueCommandIds?.includes(request.current);
-  return <><main hidden={hidden} ref={screen} className={`${embedded?'':'screen detail-screen '}${editing?'edit-plan-screen ':''}saved-workouts`}>
+  return <><main hidden={hidden} ref={screen} role={dialogLabel ? 'dialog' : undefined} aria-modal={dialogLabel ? 'true' : undefined} aria-label={dialogLabel} className={`${embedded?'':'screen detail-screen '}${editing?'edit-plan-screen ':''}saved-workouts`}>
     {!embedded&&<Header title={source?'Save workout':editing&&!selected?'Create workout':editing?'Edit saved workout':review?'Saved workout':'Saved workouts'} onBack={firstRun||review?back:undefined} backLabel={firstRun?'Back to start':'Back'} onClose={firstRun?undefined:close}/>}
     {!review&&scopeBar}
     {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
@@ -96,14 +132,13 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
         </div>}
         {new Set(review.exercises.map(e=>e.exerciseId)).size<review.exercises.length&&<p>Repeated exercises in this workout remain separate instances.</p>}
         {state.activeOptionalSession?<p>Finish your current workout before using this saved workout.</p>:<button className="button primary" type="button" disabled={applied||issues.length>0||overlaps.length>0&&!confirmed} onClick={use}>{applied?'Added to Up Next':state.activeWorkout?`Add ${review.exercises.length} exercises to Up Next`:'Start workout'}</button>}
-        {deleting&&<div className="saved-template-delete" role="group" aria-label="Delete saved workout"><p>Delete this saved workout? Your workout history and active session remain saved.</p><button className="button secondary" onClick={()=>setDeleting(false)}>Cancel</button><button className="button danger" onClick={()=>{try{const result=commit(current=>deleteWorkoutTemplate(current,selected.id,selected.revision));let syncDeleteFailed=false;if(result.changed){try{recordAccountSyncDeleteIntent(globalThis.localStorage,result.state.profile.id,'savedWorkoutTemplates',selected.id);}catch{syncDeleteFailed=true;}}reset();setNotice('Saved workout deleted');if(syncDeleteFailed)setError('Saved workout deleted locally. Cloud removal needs attention.');}catch(e){setError(e.message);}}}>Delete saved workout only</button></div>}
       </>}
       </div>
     </>:<>
-      {!embedded&&<button className="button secondary saved-workout-create" type="button" onClick={()=>{setDraft({name:'New workout',exercises:[]});setEditing(true);setError('');}}>+ CREATE WORKOUT</button>}
+      {!embedded&&<button className="button secondary saved-workout-create" type="button" onClick={()=>{const start=()=>{setDraft({name:'New workout',exercises:[]});setEditing(true);setError('');};start();}}>+ CREATE WORKOUT</button>}
       {!embedded&&<SearchInput className="exercise-search" aria-label="Search saved workouts" placeholder="Search saved workouts" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/>}
       <div className="saved-workout-list" data-exercise-search-scroll>
-      {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><span aria-hidden="true">›</span></button>)}
+      {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><NavigationChevron/></button>)}
       {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Create a reusable workout here, or save a completed session for reuse.</p></div>}
       {state.savedWorkoutTemplates?.length>0&&!(state.savedWorkoutTemplates||[]).some(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()))&&<p>No saved workouts match your search.</p>}
       </div>
@@ -117,5 +152,11 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
       <button className="list-row" type="button" onClick={()=>chooseOption('edit',requestClose)}>Edit exercises</button>
       <button className="list-row danger-text" type="button" onClick={()=>chooseOption('delete',requestClose)}>Delete saved workout</button>
     </main>}</Modal>,document.body)}
+    {deleteConfirmation&&<DestructiveConfirmationSheet Modal={Modal} Header={Header}
+      title={`Delete “${deleteConfirmation.name}”?`}
+      description={<><span>This removes only the saved workout.</span><span>Your workout history and active session stay saved.</span></>}
+      confirmLabel="DELETE SAVED WORKOUT" keepLabel="KEEP WORKOUT" closeLabel="Close deletion confirmation" backLabel="Back to saved workout"
+      confirm={confirmDelete} close={closeDelete} error={deleteError}
+      backgroundRef={deleteBackground} returnFocusRef={optionsTrigger}/>}
   </>;
 }

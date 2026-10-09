@@ -3,9 +3,9 @@
 .logged-exercise-row strong { overflow-wrap:anywhere; }
 .logged-exercise-row small { color:var(--rook-secondary);font-size:12px;line-height:1.4; }
 .logged-exercise-row .navigation-chevron { flex:0 0 auto;color:var(--rook-secondary); }
-:is(.logged-exercises-all,.progression-view-all) { width:100%;text-align:left;color:var(--rook-accent);font-size:13px;min-height:48px; }
+:is(.logged-exercises-all,.progression-view-all) { width:100%;text-align:left;color:var(--rook-accent-text);font-size:13px;min-height:48px; }
 :root :is(.logged-exercises-all,.progression-view-all) { border-bottom: 0; font-weight: 650; }
-:root :is(.logged-exercises-all,.progression-view-all) > span:first-child { color: var(--rook-accent); white-space: normal; overflow-wrap: anywhere; }
+:root :is(.logged-exercises-all,.progression-view-all) > span:first-child { color: var(--rook-accent-text); white-space: normal; overflow-wrap: anywhere; }
 .progression-all-count { margin: 0 0 8px; color: var(--rook-secondary); font-size: 12px; }
 .progression-all-list .progression-row { min-height: 60px; }
 .logged-exercises-preview > h3 { margin-bottom:6px; }
@@ -17,7 +17,7 @@
 .recent-improvements-group .list-row { color:var(--rook-text);border-color:var(--rook-border); }
 .recent-improvements-group .list-row:last-child { border-bottom:0; }
 .recent-improvements-group .list-row small { color:var(--rook-secondary);line-height:1.45; }
-.recent-improvements-group .improvement-delta { color:var(--rook-accent);font-weight:600; }
+.recent-improvements-group .improvement-delta { color:var(--rook-accent-text);font-weight:600; }
 .progress-screen .recent-improvements-section + .logged-exercises-preview { margin-top:32px; }
 .logged-exercises-sheet .rook-search-field { display:block;margin:16px 0; }
 .logged-exercises-sheet input[type="search"] { width:100%;min-height:48px;padding:12px 44px 12px 12px;background:var(--rook-surface);color:var(--rook-text);border:1px solid var(--rook-control-border);border-radius:12px; }

@@ -1,0 +1,30 @@
+.session-progress {
+  width: 100%;
+  min-width: 0;
+  height: 4px;
+  border-radius: 3px;
+  background: var(--rook-surface-raised, var(--rook-surface-muted));
+  overflow: hidden;
+}
+.session-progress > span {
+  display: block;
+  height: 100%;
+  background: var(--rook-progress);
+  border-radius: inherit;
+  /* Values reflect canonical state immediately, including foreground refresh. */
+  transition: none;
+}
+.session-progress-segmented {
+  display: grid;
+  grid-template-columns: repeat(var(--session-progress-segments), minmax(0, 1fr));
+  gap: 4px;
+  height: 5px;
+  background: transparent;
+  overflow: visible;
+}
+.session-progress-segmented > span { background: var(--rook-surface-raised, var(--rook-surface-muted)); }
+.session-progress-segmented > span[data-state="complete"] { background: var(--rook-progress); }
+.session-progress-segmented > span[data-current] { box-shadow: inset 0 0 0 1px var(--rook-progress); }
+@media (prefers-reduced-motion: reduce) {
+  .session-progress, .session-progress > span { transition: none; animation: none; }
+}

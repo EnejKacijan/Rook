@@ -3,6 +3,7 @@ import {useExerciseRemoveUndo} from './SwipeActionRow.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {missedFlexibleSessions} from './flexibleWeek.js';
 import {canUndoMissedRecovery,canUndoMissedReminderHide,dismissMissedReminder,undoMissedRecovery,undoMissedReminderHide} from './missedWorkoutActions.js';
+import {scheduleRevisionUndo,undoScheduleRevision,STALE_SCHEDULE_UNDO} from './scheduleTransactions.js';
 
 const FeedbackContext=createContext(null);
 export const useMissedWorkoutFeedback=()=>useContext(FeedbackContext);
@@ -10,7 +11,7 @@ const alreadyPersisted=()=>true;
 
 // Owned above Today and its recovery sheet so closing the sheet does not destroy
 // the five-second notice. Hide and schedule actions replace the same notice.
-export function MissedWorkoutFeedbackProvider({state,update,children}) {
+export function MissedWorkoutFeedbackProvider({state,update,children,onViewSchedule}) {
  const notice=useExerciseRemoveUndo();
  const {commit,latest}=useDurableAction(state,update);
  const [error,setError]=useState('');
@@ -40,10 +41,22 @@ export function MissedWorkoutFeedbackProvider({state,update,children}) {
   notice.show({message,valid:()=>canUndoMissedRecovery(latest.current,undo),
    undo:()=>reverse(value=>undoMissedRecovery(value,undo,{persist:alreadyPersisted}))});
  };
- return <FeedbackContext.Provider value={{hide,applied}}>
+ const scheduleApplied=(before,after)=>{
+  if(before===after)return;
+  setError('');const inverse=scheduleRevisionUndo(before,after);
+  notice.show({message:'Schedule updated',undo:()=>{
+   try{commit(value=>undoScheduleRevision(value,inverse));setError('');return true;}
+   catch(error){
+    setError(error.message===STALE_SCHEDULE_UNDO?STALE_SCHEDULE_UNDO:'Couldn’t save Undo. Your schedule is unchanged. Try again.');
+    if(error.message===STALE_SCHEDULE_UNDO){notice.clear();return true;}
+    return false;
+   }
+  }});
+ };
+ return <FeedbackContext.Provider value={{hide,applied,scheduleApplied}}>
   {children}
   <div className="missed-workout-feedback">{notice.surface}
-   {error&&<aside className="today-undo missed-feedback-error" role="alert"><span>{error}</span><button type="button" onClick={()=>setError('')}>Dismiss</button></aside>}
+   {error&&<aside className="today-undo missed-feedback-error" role="alert"><span>{error}</span>{error===STALE_SCHEDULE_UNDO&&onViewSchedule&&<button type="button" onClick={()=>{setError('');onViewSchedule();}}>View schedule</button>}<button type="button" onClick={()=>setError('')}>Dismiss</button></aside>}
   </div>
  </FeedbackContext.Provider>;
 }

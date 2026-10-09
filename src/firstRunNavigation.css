@@ -1,6 +1,5 @@
 .first-run-navigation, .first-run-page, .first-run-step-motion { display: contents; }
 .first-run-page[hidden] { display: none !important; }
-.rook-navigation-chevron { display: block; width: 18px; height: 18px; flex: 0 0 auto; pointer-events: none; }
 .first-run-back-button {
   appearance: none; display: grid; place-items: center; width: 44px; height: 44px;
   min-width: 44px; min-height: 44px; padding: 0; border: 0; border-radius: 8px;
@@ -14,7 +13,6 @@
 @media (max-width: 374px) {
   .first-run-page .detail-header > .first-run-back-button { margin-inline-start: -5px; }
 }
-.first-run-back-button:active { opacity: .7; }
 .first-run-back-button:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
 .first-run-navigation { overflow-anchor: none; }
 .first-run-page:not([hidden]) > main { overflow-anchor: none; }

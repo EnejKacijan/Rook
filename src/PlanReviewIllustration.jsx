@@ -1,4 +1,5 @@
 import { useAvailableImage } from './useAvailableImage.js';
+import {ExerciseIllustration} from './ExerciseIllustration.jsx';
 import './planReviewIllustration.css';
 
 export function canonicalPlanReviewArt(exercise, catalog, resolveArt) {
@@ -14,7 +15,7 @@ export function PlanReviewIllustration({ exercise, catalog, resolveArt, enabled 
   const image = useAvailableImage(enabled ? canonicalPlanReviewArt(exercise, catalog, resolveArt) : null);
   if (!image.source) return null;
   return <span className={`plan-review-illustration${expanded ? ' is-expanded' : ''}`} aria-hidden={expanded ? undefined : true}>
-    <img src={image.source} onError={image.onError} alt={expanded ? `${name} illustration` : ''}
+    <ExerciseIllustration src={image.source} onError={image.onError} alt={expanded ? `${name} illustration` : ''}
       width={expanded ? 120 : 48} height={expanded ? 120 : 48} loading="lazy" decoding="async" draggable={false} />
   </span>;
 }

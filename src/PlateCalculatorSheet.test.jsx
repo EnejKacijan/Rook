@@ -94,7 +94,7 @@ it('nested setup keeps one modal/header/handle, Back discards the unsaved draft 
   expect(panel().getAttribute('aria-labelledby')).toBe('calculator-plate-setup-title');expect(panel().querySelector('#calculator-plate-setup-title').textContent).toBe('Bars and plates');
   expect(panel().querySelector('.detail-header-back')).not.toBeNull();expect(panel().querySelector('.detail-header-close')).not.toBeNull();
   click(button('lb'));back();expect(panel().matches('.plate-calculator-sheet')).toBe(true);expect(panel().textContent).toContain('80 kg');expect(closed).not.toHaveBeenCalled();expect(current).toEqual(original);
-  configure();expect(panel().querySelector('.plate-unit-segmented [aria-pressed=true]').textContent).toBe('kg');
+  configure();expect(panel().querySelector('.plate-unit-segmented [aria-checked=true]').textContent).toBe('kg');
 });
 it.each(['drag','x','escape'])('nested %s dismisses the whole flow and discards unsaved setup exactly like Close',method=>{
   mount();const original=structuredClone(current);configure();click(button('lb'));

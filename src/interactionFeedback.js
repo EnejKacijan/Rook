@@ -1,3 +1,5 @@
+import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { rookPlatform } from './platform.js';
 // Discrete training-list feedback only. No audio session or native-control hacks.
 const pulses = Object.freeze({selection:6, threshold:9, pickup:9, drop:10});
 
@@ -18,8 +20,18 @@ export function createVibrationAdapter({navigator: nav = () => globalThis.naviga
   };
 }
 
-// An explicit adapter is also the future native-wrapper/test integration point.
-export function createInteractionFeedback({adapter=createVibrationAdapter(), enabled=()=>true,
+export function createNativeHapticsAdapter({ haptics = Haptics, platform = rookPlatform,
+  document: doc = () => globalThis.document } = {}) {
+  return { capabilities: () => ({ transport: platform.hasPlugin('Haptics') ? 'native-haptics' : 'none', hardware: 'unverified' }),
+    request(event) {
+      if (!platform.hasPlugin('Haptics')) return 'unavailable';
+      if (doc()?.visibilityState === 'hidden') return 'suppressed';
+      const action = event === 'selection' || event === 'threshold' ? haptics.selectionChanged() : haptics.impact({ style: ImpactStyle.Light });
+      void Promise.resolve(action).catch(() => {}); return 'requested';
+    } };
+}
+// Native and web hosts use the same semantic feedback events.
+export function createInteractionFeedback({adapter=rookPlatform.isIOSNative ? createNativeHapticsAdapter() : createVibrationAdapter(), enabled=()=>true,
   reducedMotion=()=>globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches,
   now=()=>performance.now()} = {}) {
   let lastRequest=-Infinity, lastDiscrete=-Infinity;

@@ -1,0 +1,68 @@
+.optional-activity-editor > .button { margin-top: 22px; min-height: 48px; height: auto; white-space: normal; padding: 14px; }
+.optional-control-field { display: grid; gap: 8px; margin-top: 20px; }
+.optional-control-field > span { color: var(--rook-secondary); font-size: 12px; }
+.conditioning-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.conditioning-sheet > :is(.detail-header, .sheet-header-chrome) { flex: 0 0 auto; }
+.conditioning-sheet > .sheet-scroll { min-height: 0; flex: 0 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 0 16px; scroll-padding-block: 12px; }
+.conditioning-sheet .sheet-scroll > .eyebrow { margin: 0 0 16px; }
+.conditioning-sheet .optional-activity-editor { display: grid; gap: 16px; }
+.conditioning-sheet .optional-activity-editor :is(.optional-field, .optional-control-field) { margin: 0; }
+/* The separate canonical action area reserves its own space in this flex sheet.
+   Only the body scrolls; no fixed/absolute overlay or duplicate spacer is used. */
+:root .conditioning-sheet > .sheet-action-footer.conditioning-action-footer[data-separate] { margin-bottom: calc(-1 * var(--rook-sheet-safe-bottom)); padding-bottom: calc(var(--rook-sheet-content-bottom, 20px) + var(--sheet-action-safe-bottom)); }
+.conditioning-action-footer > .sheet-footnote { margin: 0; color: var(--rook-secondary); font-size: 12px; line-height: 1.45; text-align: left; }
+.today-optional-activities { margin-block: 22px; }
+.today-optional-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
+.today-optional-actions > button { min-height: 44px; height: auto; padding: 8px 0; text-align: left; white-space: normal; font-size: 13px; }
+.rest-day-actions { display: grid; margin-top: 20px; }
+.rest-day-actions > .rest-day-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; height: auto; padding: 10px 0; text-align: left; white-space: normal; color: var(--rook-accent-text); font-size: 13px; font-weight: 500; line-height: 1.4; }
+.rest-day-action > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.rest-day-action > .inline-navigation-chevron { flex: 0 0 auto; }
+.rest-day-activity-history { margin-top: 24px; }
+.rest-day-activity-history > .today-optional-activities { margin-block: 8px 0; }
+.rest-day-activity-history .optional-session-history { margin-top: 0; }
+.rest-day-action-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.rest-day-action-sheet > .sheet-scroll { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.rest-day-action-sheet section + section { margin-top: 24px; }
+.rest-day-choice { display: flex; align-items: center; justify-content: space-between; gap: 14px; width: 100%; min-height: 64px; height: auto; padding: 14px 0; border: 0; border-bottom: 1px solid var(--rook-border); color: var(--rook-text); text-align: left; font: inherit; }
+.rest-day-choice > span { display: grid; gap: 5px; min-width: 0; }
+.rest-day-choice strong { font-size: 14px; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.rest-day-choice small { color: var(--rook-secondary); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+.rest-day-choice > .inline-navigation-chevron { flex: 0 0 auto; color: var(--rook-secondary); }
+.rest-day-choice:disabled { opacity: .6; }
+:root .rest-day-action-sheet .rest-day-choice:focus-visible { outline-offset: -2px; }
+.conditioning-phase { display: grid; gap: 8px; margin-top: 24px; color: var(--rook-secondary); }
+.conditioning-phase strong { color: var(--rook-text); }
+.conditioning-phase + .optional-session-clock { margin-top: 14px; }
+.optional-session-progress-block { display: grid; gap: 16px; margin-top: 10px; }
+.optional-session-target-time { color: var(--rook-secondary); font-size: 16px; line-height: 1.4; font-variant-numeric: tabular-nums; }
+.optional-session-target-reached { color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
+.conditioning-phase ~ .optional-session-progress-block { margin-top: 24px; }
+.optional-session-actions .button { height: auto; min-height: 48px; white-space: normal; }
+:root .optional-session-screen .optional-session-header > button { min-width: 44px; min-height: 44px; }
+:root .optional-session-cancel-confirm button { min-width: 44px; min-height: 44px; height: auto; }
+.optional-session-cancel-confirm > div { flex-wrap: wrap; }
+.rest-training-sheet > .sheet-back { min-height: 44px; min-width: 44px; }
+.optional-parameters { display: grid; gap: 12px; }
+.conditioning-sheet .optional-parameters { animation: optional-parameters-in var(--rook-motion-state, 200ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)); }
+@keyframes optional-parameters-in { from { opacity: .45; } to { opacity: 1; } }
+.optional-activity-editor .stepper-row { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin: 0; }
+.optional-activity-editor .stepper-row > span { flex: 1 1 90px; min-width: 0; font-size: 12px; font-weight: 600; line-height: 1.4; letter-spacing: normal; overflow-wrap: anywhere; }
+.optional-activity-editor .stepper-row > .stepper-row-controls { display: grid; grid-template-columns: 44px minmax(0,1fr) 44px; gap: 8px; width: 190px; max-width: 100%; flex: 0 0 auto; margin-left: auto; }
+.optional-activity-editor .optional-duration button { min-width: 44px; min-height: 44px; color: var(--rook-text); background: var(--rook-surface); border-color: var(--rook-control-border, var(--rook-border)); }
+.optional-activity-editor .optional-duration output { min-width: 0; text-align: center; font-weight: 650; font-variant-numeric: tabular-nums; line-height: 1.35; overflow-wrap: anywhere; }
+.optional-activity-editor .optional-field > span, .optional-activity-editor .optional-duration > span { color: var(--rook-secondary); }
+.optional-activity-editor .optional-field select { color: var(--rook-text); background: var(--rook-surface); border-color: var(--rook-control-border, var(--rook-border)); min-height: 52px; height: auto; padding-block: 14px; font: inherit; }
+/* These controls reach the sheet scroller's edge. Keep keyboard focus inside
+   their rounded bounds so overflow clipping cannot cut the ring's sides. */
+:root .optional-activity-editor :is(.optional-field select, .optional-duration button):focus-visible { outline-width: 2px; outline-offset: -2px; }
+.optional-activity-details { min-height: 0; overflow: hidden; display: flex; flex-direction: column; padding-bottom: var(--rook-sheet-safe-bottom, max(20px, env(safe-area-inset-bottom))); }
+.optional-activity-details > .detail-header { flex: none; }
+.optional-activity-details .optional-activity-content { min-height: 0; padding: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+.optional-activity-details h2 { margin: 0; line-height: 1.22; overflow-wrap: anywhere; }
+.optional-activity-details .optional-activity-summary { margin-block: 10px 0; color: var(--rook-text); }
+.optional-activity-details .optional-activity-date { margin-block: 8px 0; font-size: 12px; color: var(--rook-secondary); }
+.optional-activity-actions { display: grid; gap: 8px; margin-top: 24px; }
+.optional-activity-actions > button { min-height: 48px; height: auto; white-space: normal; }
+:root .optional-activity-details .optional-activity-delete.text-button { color: var(--rook-error-text, #8c2f2a); }
+@media (prefers-reduced-motion: reduce) { .conditioning-sheet .optional-parameters { animation: none !important; } }

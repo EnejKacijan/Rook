@@ -1,0 +1,2 @@
+.rook-navigation-chevron { display:block;width:18px;height:18px;flex:0 0 auto;pointer-events:none; }
+:where(.list-row) > .rook-navigation-chevron { color:var(--rook-secondary); }

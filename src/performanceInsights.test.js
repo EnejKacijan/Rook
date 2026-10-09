@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   E1RM_FORMULA,
   activeExercisePr,
+  activeExercisePrDetails,
   analyzeSetPr,
   estimatedOneRepMax,
   exercisePerformance,
@@ -77,6 +78,34 @@ describe("Performance Insights", () => {
     };
     expect(prEventsForWorkouts(history)).toHaveLength(0);
     expect(activeExercisePr(history, active).label).toBe("Est. 1RM PR");
+  });
+
+  it("explains the active record using the same comparable-set evidence as the badge", () => {
+    const history = [workout("previous", "2026-10-04", [set(30, 7)])];
+    const active = { exerciseId: "bench", sets: [set(30, 8, {id: "logged"}), set(40, 9, {completed: false})] };
+    const details = activeExercisePrDetails(history, active);
+    expect(details.record).toEqual(activeExercisePr(history, active));
+    expect(details.record).toMatchObject({estimatedOneRepMax: 38, setId: "logged"});
+    expect(details.previous).toEqual({estimatedOneRepMax: 37, weight: 30, repsAtWeight: 7});
+  });
+
+  it("includes earlier logged sets in this session when describing the next new record", () => {
+    const history = [workout("previous", "2026-10-04", [set(30, 7)])];
+    const active = { exerciseId: "bench", sets: [set(30, 8, {id: "first"}), set(30, 9, {id: "second"})] };
+    const details = activeExercisePrDetails(history, active);
+    expect(details.record).toMatchObject({setId: "second", estimatedOneRepMax: 39});
+    expect(details.previous).toMatchObject({estimatedOneRepMax: 38, repsAtWeight: 8});
+  });
+
+  it("keeps ineligible estimates, high-rep records and baselines distinct", () => {
+    const history = [workout("previous", "2026-10-04", [set(30, 14)])];
+    const active = { exerciseId: "bench", sets: [set(30, 15)] };
+    expect(activeExercisePrDetails(history, active, {e1rmEligible: false})).toMatchObject({
+      record: {repPr: true, e1rmPr: false, estimatedOneRepMax: null},
+      previous: {estimatedOneRepMax: null, repsAtWeight: 14},
+    });
+    expect(activeExercisePrDetails([], active)).toBeNull();
+    expect(activeExercisePrDetails(history, {...active, sets: [set(30, 14)]})).toBeNull();
   });
 
   it("builds bests and an estimated 1RM session history", () => {

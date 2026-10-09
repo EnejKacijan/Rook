@@ -1,4 +1,5 @@
 import {exerciseCatalog,matchImportedExerciseName,splitImportedExerciseLabel,EXERCISE_THUMBNAIL_NORMALIZATION} from './domain.js';
+import {illustrationProvenanceForAsset} from './illustrationProvenance.js';
 const EXERCISE_ART_ASSETS = import.meta.glob("./assets/exercise-art/wg-*.svg", {
   eager: true,
   query: "?url",
@@ -25,6 +26,9 @@ export function exerciseArt(exercise) {
   return artId
     ? EXERCISE_ART_ASSETS[`./assets/exercise-art/${artId}.svg`] || null
     : null;
+}
+export function exerciseIllustrationProvenance(exercise) {
+  return illustrationProvenanceForAsset(exerciseArtId(exercise));
 }
 const preloadedExerciseArt = new Map();
 export function preloadExerciseArt(exercise, fetchPriority = "auto") {

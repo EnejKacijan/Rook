@@ -1,0 +1,13 @@
+/* Ordinary browser tabs keep their existing accessible viewport and zoom.
+   A native fullscreen visual temporarily releases ancestor touch-action:
+   descendants cannot re-enable pinch that an ancestor has forbidden. The
+   scoped event guard still protects app chrome and underlying app surfaces. */
+:root[data-rook-page-zoom="locked"]:not(:has([data-rook-zoom="native"]))
+  :is(#root, .app-shell, .onboarding, .entry-v2, .modal-layer, .workout-confirm-layer, .workout-photo-viewer) {
+  touch-action: pan-x pan-y;
+}
+:root[data-rook-page-zoom="locked"]:not(:has([data-rook-zoom="native"]))
+  :is(.screen, .sheet, .sheet-scroll, .conversation, .workout-confirm) {
+  touch-action: pan-y;
+}
+.standalone-zoom-preference { margin-top: 24px; }

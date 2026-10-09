@@ -194,6 +194,8 @@ describe('deterministic programming context and plan validation', () => {
     const user = profile({ experience: 'Advanced', daysPerWeek: 5, availableDays: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'], sessionMinutes: 30 });
     const plan = raw(buildProgram(user), user);
     const issues = validateRawPlan(plan, user, catalog, buildProgrammingContext(user, catalog)).issues;
+    // Equal-credit donor transfers merely move the deficit within this muscle;
+    // they must not be mistaken for feasible extra volume.
     expect(issues.filter(issue => ['weekly_volume_floor', 'coverage_constraint_mismatch', 'coverage_constraint_reason'].includes(issue.code))).toEqual([]);
   });
 

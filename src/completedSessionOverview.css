@@ -1,0 +1,38 @@
+.completed-session-overview { margin: 0; }
+.completion-hero { display: grid; grid-template-columns: 44px minmax(0, 1fr); align-items: center; gap: 14px; }
+.completed-session-overview .completion-badge {
+  width: 44px; height: 44px; margin: 0; border-radius: 50%;
+  display: grid; place-items: center; pointer-events: none;
+  background: color-mix(in srgb, var(--rook-accent) 12%, var(--rook-surface));
+  border: 1px solid color-mix(in srgb, var(--rook-accent) 35%, var(--rook-border));
+  color: var(--rook-accent-text); font-size: 22px;
+}
+.completion-eyebrow { color: var(--rook-secondary); font-size: .6875rem; line-height: 1.5; letter-spacing: .14em; font-weight: 700; }
+.completed-session-overview .completion-hero h1 {
+  grid-column: 1 / -1; margin: 4px 0 0; color: var(--rook-text);
+  font-size: 2.25rem; font-weight: 750; line-height: 1.1; letter-spacing: -.035em;
+  overflow-wrap: anywhere;
+}
+.completion-summary {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 4.5rem), 1fr)); gap: 14px;
+  margin: 22px 0 0; padding: 18px 16px; border-radius: 18px;
+  border: 1px solid var(--rook-border); background: var(--rook-surface);
+}
+.completion-summary > div { min-width: 0; display: grid; grid-template-rows: 1fr auto; gap: 7px; }
+.completion-summary dt { grid-row: 2; color: var(--rook-secondary); font-size: .6875rem; line-height: 1.45; letter-spacing: .04em; }
+.completion-summary dd { grid-row: 1; margin: 0; color: var(--rook-text); font-size: 1.375rem; font-weight: 700; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.completion-actions { margin-top: 20px; }
+.completion-actions .button, .today-hero .completion-actions .button { margin: 0; }
+.today-hero .completed-session-overview { margin-top: 18px; }
+.complete-screen.fully-completed { padding-top: calc(36px + env(safe-area-inset-top)); }
+.complete-screen.fully-completed > .complete-session-log { margin-top: 30px; }
+.is-live-completion .completion-badge {
+  animation: rook-workout-complete-mark var(--rook-motion-state, 200ms) var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1)) 1 both;
+}
+@media (prefers-reduced-motion: reduce) {
+  .complete-screen .completion-badge { animation: none; }
+}
+@media (max-width: 350px) {
+  .completed-session-overview .completion-hero h1 { font-size: 2rem; }
+  .completion-summary { gap: 10px; padding: 16px 12px; }
+}

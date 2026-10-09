@@ -165,6 +165,16 @@ export function activeExercisePr(
   exercise,
   { e1rmEligible = true } = {},
 ) {
+  return activeExercisePrDetails(workouts, exercise, { e1rmEligible })?.record ?? null;
+}
+
+// Presentation evidence from the exact same comparison used by the live badge.
+// Earlier comparable sets in this workout can also establish the previous best.
+export function activeExercisePrDetails(
+  workouts = [],
+  exercise,
+  { e1rmEligible = true } = {},
+) {
   if (!exercise?.exerciseId) return null;
   const priorSets = chronologicalWorkouts(workouts).flatMap((workout) =>
     (workout.exercises || [])
@@ -176,7 +186,20 @@ export function activeExercisePr(
   const comparison = [...priorSets];
   for (const set of completedWeightedSets(exercise)) {
     const result = analyzeSetPr(set, comparison, { e1rmEligible });
-    if (result) latest = { ...result, setId: set.id };
+    if (result) {
+      const estimates = e1rmEligible
+        ? comparison.map(item => estimatedOneRepMax(item.weight, item.reps)).filter(value => value !== null)
+        : [];
+      const sameLoad = comparison.filter(item => item.weight === result.weight);
+      latest = {
+        record: { ...result, setId: set.id },
+        previous: {
+          estimatedOneRepMax: estimates.length ? Math.max(...estimates) : null,
+          weight: Math.max(...comparison.map(item => item.weight)),
+          repsAtWeight: sameLoad.length ? Math.max(...sameLoad.map(item => item.reps)) : null,
+        },
+      };
+    }
     comparison.push(set);
   }
   return latest;

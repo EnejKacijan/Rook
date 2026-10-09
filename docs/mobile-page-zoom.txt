@@ -1,0 +1,139 @@
+ROOK: installed PWA page-pinch policy
+2 October 2026
+
+Scope
+Implemented only in the current local Pro/native review worktree, branch
+codex/pro-native-review. Existing training, subscription, sync and native-shell
+changes are retained. No commit, push, deployment or native installation.
+
+Recording and cause
+The supplied physical-iPhone recording lasts approximately 2.75 seconds.
+Sampled frames show a full-width Today screen, the entire page shrinking into
+a centered narrow region with margins, and then returning to full width.
+This is consistent with viewport pinch/rubber-banding, rather than a week-track
+transform or a permanent layout-width change. The recording does not expose
+the iOS version, visualViewport.scale, or finger positions.
+
+The viewport meta is width=device-width, initial-scale=1, viewport-fit=cover.
+The app shell has max-width:500px and margin:0 auto, with no installed-PWA
+pinch policy. Several sheet/viewer scroll owners explicitly allow pinch-zoom.
+Therefore the entire page may be scaled, including its shell and navigation.
+The 500px shell width is appropriate for the existing responsive layout and
+was not changed. The manifest's display:standalone configures an installed
+window; it does not disable page zoom.
+
+Exact changes
+1. Viewport meta: NO CHANGE. No user-scalable, maximum-scale, minimum-scale,
+   CSS zoom, forced scale reset, or keyboard/visualViewport resize interception.
+2. Before app mount, bindStandalonePageZoom sets
+   html[data-rook-page-zoom="locked"] only for a detected standalone PWA whose
+   device accessibility preference permits the lock. Detection uses both
+   navigator.standalone and (display-mode: standalone), not width/user-agent.
+   Native Capacitor explicitly bypasses this web policy.
+3. Scoped CSS declares touch-action:pan-x pan-y on #root, app-shell, onboarding,
+   entry-v2 and ROOK portal shells; touch-action:pan-y on screen, sheet,
+   sheet-scroll, conversation and workout-confirm scrolling surfaces.
+   Existing nested touch-action:none handles and custom canvas owners remain.
+4. CSS restrictions are suspended while an explicitly marked native-zoom
+   fullscreen visual exists. This matters because a descendant cannot undo
+   a pinch restriction imposed by an ancestor. Safari gesture guards still
+   protect app chrome and the underlying app while this exception is active.
+5. Only while locked, capture listeners cancel cancelable multi-touch touchmove
+   and Safari gesturestart/gesturechange defaults whose sequence originated
+   in ROOK's root or owned body portals. touchstart/end/cancel are passive.
+   No stopPropagation, wheel/key/focus cancellation, or one-finger touchmove
+   cancellation is introduced. Existing owners can still yield/cancel on
+   multi-touch and receive their own pointer streams.
+6. The exercise fullscreen stage and private fullscreen photo image have
+   data-rook-zoom="native". The comparison Swipe canvas has
+   data-rook-zoom="custom" and retains its existing local 1x-4x zoom, divider
+   and pan behavior. Visual exceptions require live, non-inert/non-hidden
+   ownership; a second finger on surrounding controls does not borrow them.
+7. Week-selector and week-pager-viewport change from pan-y to pan-y pinch-zoom
+   so ordinary browser users can zoom this region too. Installed restrictions
+   remove page pinch through its ancestor while keeping horizontal JS paging.
+8. Profile > Preferences > Accessibility offers Allow page zoom in PWA mode.
+   It applies immediately, survives reload, and is stored only on that device
+   under rook-allow-page-zoom. A failed save keeps the prior behavior and shows
+   an error. Display-mode, pageshow and storage changes refresh the policy;
+   disposal removes interceptors and restores prior document attributes.
+
+Standalone versus browser
+- Installed standalone PWA, default: page-level pinch is blocked on app chrome,
+  pages, logger and sheets; intentional visual zoom remains available.
+- Installed PWA, Allow page zoom enabled: restrictions/listeners are removed.
+- Ordinary browser: no new interceptors or page lock; viewport stays zoomable.
+- Capacitor: native recognizers remain in charge; this web binder is inactive.
+
+Accessibility
+Blocking page pinch removes a familiar way to enlarge text in installed mode.
+The visible, persisted Allow page zoom override preserves that user choice.
+Keyboard zoom and OS accessibility magnification are not intercepted. Existing
+mobile inputs retain their 16px font floor and keyboard/selection behavior.
+No claim of WCAG conformance or verified 200% text layout is made: that requires
+real browser/device checks. Browser mode remains unrestricted by this patch.
+
+The two native-zoom fullscreen surfaces currently use browser zoom, rather than
+a new local image transform. Their existing behavior is intentionally retained;
+this patch does not forcibly reset viewport scale when a visual closes.
+
+Future Capacitor / WKWebView
+Use the native container's supported zoom policy, not restrictive viewport meta.
+Capacitor 8 documents ios.zoomEnabled (default false). The installed iOS 8.5.2
+source initializes zoomingEnabled=NO; CAPBridgeViewController sets the scroll
+view delegate when disabled, and WebViewDelegationHandler disables the scroll
+view's pinchGestureRecognizer on scrollViewWillBeginZooming.
+For an explicit future release config, ios:{zoomEnabled:false} makes the intent
+clear. Do not disable the scrollView panGestureRecognizer or all gestures.
+For a custom WKWebView shell, its scrollView.pinchGestureRecognizer is the
+relevant iOS recognizer; WKWebView.allowsMagnification is a macOS API.
+Image/exercise zoom in a native build should be a local image transform or an
+explicitly scoped native viewer with accessible zoom controls. The comparison
+canvas already uses a local transform and does not require page magnification.
+Native accessibility text resizing/zoom needs its own design and device QA.
+No native configuration or Swift project is changed by this patch.
+
+Verification
+15 focused test files / 369 tests passed, including 35 new policy/integration
+cases. Tests cover browser/PWA/native gates, accessibility choice, cleanup,
+ROOK body portals, single-touch and input preservation, intentional visual
+exceptions, week/month touch paging, sheet dragging and active logger edge Back.
+320/390/430 are mocked component geometry, NOT physical-device or browser-layout
+results. Native scrolling/keyboard and visual viewport scaling are not simulated
+by jsdom. Both final ordinary and local-review web builds passed, including
+the final native-platform gate. git diff --check passed. Existing bundle-size
+warnings remain; no native asset sync, Swift compile or physical install ran.
+
+Physical-device result
+BEFORE: the supplied iPhone recording confirms transient whole-page shrink.
+AFTER: NOT TESTED. No physical iPhone is controllable from this Windows session.
+Actual Safari/browser and responsive visual checks are also pending: both
+Codex in-app browser state acquisition and direct screenshot timed out.
+No post-fix screenshot or physical-device success is claimed.
+
+Required final device/engine checks before release
+Open the changed build on a physical iPhone via an approved secure test origin,
+then install it to the Home Screen. Do not substitute the old deployed build.
+Test both fast and slow inward/outward pinches on Today, logger, preferences,
+sheet body/header and background margins, including immediately after scroll.
+Confirm ordinary vertical/momentum scroll, both horizontal pagers, sheet drag
+cancel/dismiss, edge Back, focused numeric/text inputs and keyboard dismissal.
+Confirm fullscreen photo/exercise zoom and comparison pinch/divider/pan, then
+close and resume the logger. Enable Allow page zoom, enlarge text, reload, and
+confirm persistence; disable it and retry a pinch. Repeat in ordinary Safari
+with native pinch/page zoom available. Check 320/390/430 responsive viewports,
+rotation, keyboard open/close and app resume. Record iOS/device/build identifiers.
+
+Sources checked
+WebKit: New Interaction Behaviors in iOS 10 (Safari's viewport-limit override)
+https://webkit.org/blog/7367/new-interaction-behaviors-in-ios-10/
+WebKit: More Responsive Tapping on iOS (manipulation still permits pinch)
+https://webkit.org/blog/5610/more-responsive-tapping-on-ios/
+W3C Pointer Events (ancestor touch-action arbitration)
+https://www.w3.org/TR/pointerevents/
+W3C Understanding 1.4.4 Resize Text (200% without loss)
+https://www.w3.org/WAI/WCAG22/Understanding/resize-text.html
+Capacitor 8 Configuration (zoomEnabled)
+https://capacitorjs.com/docs/config
+Apple UIScrollView.pinchGestureRecognizer
+https://developer.apple.com/documentation/uikit/uiscrollview/pinchgesturerecognizer

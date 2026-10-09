@@ -1,0 +1,60 @@
+/* Same sticky owner and safe-area calculation as the workout toolbar. An
+   out-of-flow row cannot move the content or change scrollTop on reveal. */
+.workout-screen .workout-header > .logger-exercise-context {
+  position: absolute;
+  inset: 100% 0 auto;
+  display: block;
+  min-width: 0;
+  margin: 0;
+  background: var(--rook-bg);
+  border-bottom: 1px solid var(--rook-border);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(-4px);
+  transition: opacity var(--rook-motion-layout, 190ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)),
+    transform var(--rook-motion-layout, 190ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)),
+    visibility 0s var(--rook-motion-layout, 190ms);
+}
+.workout-screen .workout-header > .logger-exercise-context.is-visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: none;
+  transition-delay: 0s;
+}
+.workout-screen .logger-exercise-context .logger-exercise-context-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-width: 0;
+  min-height: 44px;
+  padding: 10px 8px;
+  margin: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--rook-secondary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 650;
+  line-height: 1.25;
+  text-align: left;
+}
+.logger-exercise-context-button > span {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.workout-screen .logger-exercise-context-button:focus-visible {
+  outline: 2px solid var(--rook-focus-ring, var(--rook-accent-text));
+  outline-offset: -3px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .workout-screen .workout-header > .logger-exercise-context {
+    transition: none;
+    transform: none;
+  }
+}

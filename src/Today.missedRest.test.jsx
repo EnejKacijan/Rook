@@ -25,7 +25,7 @@ it.each([0,1,2,3])('rest hierarchy and routing with %i missed occurrences',count
  expect(document.body.textContent).not.toMatch(/View all|Oldest:|Train today instead|Choose exercises as you go/);
  expect(Boolean(summary)).toBe(count>0);
  if(count){expect(rest.contains(summary)).toBe(true);expect(rest.querySelector('p').compareDocumentPosition(summary)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(summary.compareDocumentPosition(rest.querySelector('.rest-up-next'))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true}});}
- expect(rest.querySelector('.rest-up-next-row').tagName).toBe('BUTTON');expect(rest.querySelector('.rest-freestyle-action').textContent).toBe('+ Start freestyle workout');
+ expect(rest.querySelector('.rest-up-next-row').tagName).toBe('BUTTON');expect(rest.querySelector('.rest-freestyle-action')).toBeNull();expect(rest.querySelector('.rest-day-actions').textContent).toBe('+ Add optional activityTrain anyway');
  expect(serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();
 });
 it.each([1,2,3])('dismissed %i occurrences remain accessible through overflow after reload',count=>{

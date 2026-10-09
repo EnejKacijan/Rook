@@ -5,6 +5,7 @@ import { Disclosure } from './Disclosure.jsx';
 import { partialPrescriptionSourceFields } from './importPartialPrescription.js';
 import { exerciseMeasure } from './domain.js';
 import {hasUnspecifiedRepTarget,loggingUnit} from './advancedLogging.js';
+import {SegmentedControl} from './SegmentedControl.jsx';
 const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 export function PlanImportIssues({ review, resolved, program, onResolve, reviewRequest = 0, summaryOnly = false, onChange, decisionGroups=[] }) {
   const [detailsOpen,setDetailsOpen]=useState(false);
@@ -99,7 +100,7 @@ export function ImportIssue({issue,program,resolved,onResolve,focused=false,grou
     {!grouped&&<><span className="eyebrow">SOURCE</span><blockquote>{issue.source}</blockquote>{context&&comparable(context)!==comparable(issue.source)&&<small>{context}</small>}{exercise?.importRole&&<strong className="import-source-role">{exercise.importRole}</strong>}</>}
     {partial?.setRange&&<small>Source: {partial.setRange[0]}–{partial.setRange[1]} sets.{!correctingSource&&!correctedFields.includes('sets')?' Choose a count in this range.':''}</small>}
     {issue.field==='optional'&&<div className="import-resolution-options">{[['include','INCLUDE IN THIS PLAN'],['exclude','KEEP IN SOURCE NOTES ONLY']].map(([value,label])=><button type="button" key={value} className="button secondary" aria-pressed={resolved?.value===value} onClick={()=>onResolve({value})}>{label}</button>)}</div>}
-    {issue.field==='sourceUnit'&&<div className="import-resolution-options">{['kg','lb'].map(unit=><button type="button" className="button secondary" key={unit} aria-pressed={resolved?.unit===unit} onClick={()=>onResolve({unit})}>{unit}</button>)}</div>}
+    {issue.field==='sourceUnit'&&<SegmentedControl label="Source weight unit" options={['kg','lb']} value={resolved?.unit} onChange={unit=>onResolve({unit})}/>}
     {issue.field==='day'&&<label>Workout day<select aria-label="Workout day" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose day</option>{days.map(d=><option key={d} value={d} disabled={program.days.some(other=>other.id!==day.id&&other.weekday===d)}>{d}</option>)}</select></label>}
     {issue.field==='rir'&&<label>RIR<select aria-label="Reviewed RIR" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose RIR</option><option value="">Unspecified</option>{[0,1,2,3,4].map(n=><option key={n}>{n}</option>)}</select></label>}
     {issue.field==='loggingMode'&&<label>Logging mode<select aria-label="Reviewed logging mode" value={value} onChange={e=>choose(e.target.value)}><option value="__choose" disabled>Choose logging mode</option><option value="normal">One representative value</option><option value="per_side">Left and right separately</option></select></label>}

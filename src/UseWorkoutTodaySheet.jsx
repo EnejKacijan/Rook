@@ -4,13 +4,15 @@ import {proposeWorkoutToday,applyWorkoutToday,canUseWorkoutToday} from './useWor
 import {workoutPerformedDate} from './workoutDates.js';
 import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {focusNavigationTarget} from './navigationFocus.js';
+import {useCalendarDay} from './useCalendarDay.js';
 const label=date=>new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).format(new Date(`${date}T12:00:00`));
 export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetail,onBack,className=''}) {
+  const today=useCalendarDay();
   const [reviewState,setReviewState]=useState(state),[repeatId,setRepeatId]=useState(null);
   const [destination,setDestination]=useState(null),[error,setError]=useState(''),[choosingDate,setChoosingDate]=useState(false);
   const applied=useRef(false),screen=useRef(null),dateAction=useRef(null);
   const effectiveRequest=repeatId?{workoutId:repeatId}:request;
-  const liveProposal=proposeWorkoutToday(state,{...effectiveRequest,displacedToDate:destination});
+  const liveProposal=proposeWorkoutToday(state,{...effectiveRequest,displacedToDate:destination},today);
   const changed=flexibleReviewFingerprint(state)!==flexibleReviewFingerprint(reviewState);
   const proposal=changed ? liveProposal.status==='conflict'?liveProposal:{status:'stale',error:'Your schedule changed. Review the updated workout before applying.'} : liveProposal;
   const completed=state.workouts.find(w=>w.id===proposal.completedWorkoutId && w.completedAt);
@@ -41,9 +43,10 @@ export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetai
       conflict?<><div className="eyebrow">TRAIN TODAY</div><h1 tabIndex={-1}>Train {proposal.sourceName} today?</h1><p>Today already has {displacedName}.</p>{swapDestination && <p>{proposal.sourceName} today<br/>{displacedName} moves to {label(swapDestination)}</p>}</>:
       proposal.status==='ready'?<><h1 tabIndex={-1}>Use {proposal.sourceName} today{proposal.displaced?` instead of ${displacedName}`:''}?</h1>{proposal.sourceDate && <p>From {label(proposal.sourceDate)}.</p>}<p>{proposal.kind==='repeat'?'Start a new session from this workout. Your original history stays unchanged; no completed sets are copied.':'Move this uncompleted occurrence to today. It is not marked completed until you train.'}</p>{proposal.displaced && <p>{displacedName} moves to {label(destination)} and stays uncompleted.</p>}<p>Your permanent plan stays unchanged.</p></>:<p role="alert">{proposal.error}</p>}
     {error && <p role="alert">{error}</p>}
+    {proposal.status==='conflict' && !completed && setDetail && <button className="button secondary" onClick={()=>setDetail({flexibleWeek:{}})}>Review current schedule</button>}
     {proposal.status==='stale' && <button className="button secondary" onClick={()=>{setReviewState(state);setDestination(null);setChoosingDate(false);setError('');}}>Review updated workout</button>}
     <SheetActionFooter>
-      {conflict&&!picker&&<>{swapDestination&&<button className="button primary" onClick={()=>apply(proposeWorkoutToday(state,{...effectiveRequest,swap:true}))}>SWAP WORKOUTS</button>}<button ref={dateAction} className="button secondary" onClick={()=>{setChoosingDate(true);setError('');}}>Choose another date for {displacedName}</button></>}
+      {conflict&&!picker&&<>{swapDestination&&<button className="button primary" onClick={()=>apply(proposeWorkoutToday(state,{...effectiveRequest,swap:true}))}>SWAP WORKOUTS</button>}{proposal.dates.length>0 && <button ref={dateAction} className="button secondary" onClick={()=>{setChoosingDate(true);setError('');}}>Choose another date for {displacedName}</button>}</>}
       {proposal.status==='ready' && <button className="button primary" onClick={()=>apply(proposal)}>APPLY</button>}
       <button className="button quiet" onClick={onBack||close}>CANCEL</button>
     </SheetActionFooter>

@@ -19,7 +19,7 @@ it('copies only to an empty draft day, preserving prescriptions, pair and custom
  try{
   await act(async()=>root.render(<PlanEditor source={source} profile={state.profile} exerciseState={state} mode="edit" onSave={saved} onCancel={()=>{}}/>));
   await act(async()=>host.querySelector('.plan-workout-overflow').click());
-  await act(async()=>button('Copy exercises to another day›').click());
+  await act(async()=>button('Copy exercises to another day').click());
   const sheet=document.querySelector('.plan-workout-actions-sheet');
   expect(sheet.querySelectorAll('[role="radio"]')).toHaveLength(2);
   expect(sheet.querySelectorAll('[role="radio"]')[1].disabled).toBe(true);

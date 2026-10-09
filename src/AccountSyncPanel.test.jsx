@@ -38,7 +38,7 @@ it('keeps a Google identity collision separate and offers a safe retry without s
     .mockResolvedValueOnce({ status: 'existing-account-conflict' })
     .mockResolvedValueOnce({ status: 'linked' });
   render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, canSecure: true, secureWithGoogle }}/>);
-  await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.›'));
+  await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.'));
   expect(document.body.textContent).toContain('will not merge the profiles automatically');
   expect(button('KEEP THIS PROFILE')).toBeTruthy();
   await click(button('TRY A DIFFERENT GOOGLE ACCOUNT'));
@@ -51,7 +51,7 @@ it('lets an established local profile connect Google while cloud backup is tempo
   const snapshot = { state: 'offline', linked: false, canSecure: true, secureWithGoogle };
   render(<AccountSyncPanel Modal={Modal} sync={snapshot}/>);
   expect(document.body.textContent).toContain('Your training data stays here');
-  await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.›'));
+  await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.'));
   expect(secureWithGoogle).toHaveBeenCalledOnce();
   await act(async () => root.render(<AccountSyncPanel Modal={Modal} sync={{ ...snapshot, state: 'needs-attention', linked: true, canSecure: false, email: 'owner@example.com' }}/>));
   expect(document.body.textContent).toContain('Google account connected. Cloud backup still needs to finish');
@@ -65,7 +65,7 @@ describe('account sign-out choices', () => {
   it('keeps the linked profile open when sign-out is cancelled', async () => {
     const signOutAccount = vi.fn(async () => {});
     render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', linked: true, signOutAccount }}/>);
-    await click(button('Sign outYour local data stays on this device›'));
+    await click(button('Sign outYour local data stays on this device'));
     expect(document.body.textContent).toContain('Your ROOK data will stay on this device');
     await click(button('CANCEL'));
     expect(signOutAccount).not.toHaveBeenCalled();
@@ -73,7 +73,7 @@ describe('account sign-out choices', () => {
   it('signs out only after explicit confirmation', async () => {
     const signOutAccount = vi.fn(async () => {});
     render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', linked: true, signOutAccount }}/>);
-    await click(button('Sign outYour local data stays on this device›'));
+    await click(button('Sign outYour local data stays on this device'));
     await click(button('SIGN OUT'));
     expect(signOutAccount).toHaveBeenCalledOnce();
   });

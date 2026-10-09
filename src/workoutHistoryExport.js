@@ -1,4 +1,5 @@
 import { workoutPerformedDate as dateOf } from './workoutDates.js';
+import { presentNativeFile } from './platformFileActions.js';
 import { exerciseName, exerciseMeasure } from './domain.js';
 import { loggingModeOf } from './advancedLogging.js';
 import { validSessionFeedback } from './sessionFeedback.js';
@@ -87,6 +88,8 @@ export async function createWorkoutHistoryExport(state, { format = 'csv', includ
 
 // Same Web Share Files → anchor-download pattern as Backup, without recovery-specific wording.
 export async function presentHistoryExport(file, { navigator: nav = globalThis.navigator, document: doc = globalThis.document, URL: urls = globalThis.URL } = {}) {
+  const nativeResult = await presentNativeFile(file, { title: 'ROOK workout history' });
+  if (nativeResult) return nativeResult;
   try {
     if (nav?.share && nav.canShare?.({files:[file]})) {
       try { await nav.share({files:[file],title:'ROOK workout history'}); return 'shared'; }

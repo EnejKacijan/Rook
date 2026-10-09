@@ -1,11 +1,12 @@
 export const REST_NOTIFICATION_TITLE = "Rest complete";
+import { rookPlatform } from './platform.js';
 export const REST_NOTIFICATION_BODY = "Ready for your next set.";
 export const REST_NOTIFICATION_TAG = "rook-rest-complete";
 
 export function restNotificationCapability(scope = globalThis) {
   const notification = scope?.Notification;
   const serviceWorker = scope?.navigator?.serviceWorker;
-  const supported = Boolean(notification && serviceWorker);
+  const supported = !rookPlatform.isNative && Boolean(notification && serviceWorker);
   const permission = supported && ["default", "granted", "denied"].includes(notification.permission)
     ? notification.permission
     : "unsupported";

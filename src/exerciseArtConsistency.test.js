@@ -30,5 +30,5 @@ it('only supersedes earlier correction masters after renewed full-system visual 
 });
 it('keeps the expanded image inside its padded viewer stage at narrow widths',()=>{
  const css=readFileSync(new URL('./workout-controls.css',import.meta.url),'utf8');
- expect(css).toMatch(/\.exercise-visual-stage img\s*\{[^}]*width:\s*min\(100%,\s*560px\)/);
+ expect(css).toMatch(/\.exercise-visual-stage \.exercise-illustration\s*\{[^}]*width:\s*min\(100%,\s*560px\)/);
 });

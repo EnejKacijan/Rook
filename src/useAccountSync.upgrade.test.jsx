@@ -29,6 +29,7 @@ afterEach(()=>{
   host?.remove();root=null;host=null;
   localStorage.clear();
   firebase.client=null;firebase.cloud=null;firebase.link.mockReset();
+  vi.useRealTimers();
 });
 
 function cloud() {
@@ -73,8 +74,12 @@ async function waitForState(read,expected,timeout=3000) {
 
 it('upgrades a populated local profile in place while Firestore is offline, then backs it up once and reloads',async()=>{
   localStorage.clear();
+  // Keep the historical fixture independent of the date the suite is run.
+  vi.useFakeTimers({toFake:['Date']});vi.setSystemTime(new Date('2026-10-01T12:00:00'));
   let state=createReturningUserFixture(1);
+  vi.useRealTimers();
   state.program.trainingBlock.startDate='2026-09-28';
+  state.program.createdAt='2026-09-28T00:00:00';
   const missed=missedFlexibleSessions(state,'2026-10-01');
   expect(missed.length).toBeGreaterThan(0);
   const proposal=proposeFlexibleWeek(state,{mode:'move',sessionId:missed[0].logicalSessionId,toDate:'2026-10-02'},'2026-10-01');

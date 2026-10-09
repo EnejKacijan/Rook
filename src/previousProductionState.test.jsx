@@ -11,14 +11,15 @@ function memory(fixture) {
   const values=new Map([[P,fixture.raw],[M,fixture.metadata],[B,fixture.backup]]);
   return {values,getItem:key=>values.get(key)??null,setItem:vi.fn((key,value)=>values.set(key,String(value))),removeItem:vi.fn(key=>values.delete(key))};
 }
-// Explicit neutral defaults only; never regenerate the prior writer's raw data
-// with current code or omit established fields from the equality assertions.
+// Keep prior writer output immutable and compare every stored domain field.
+// Only neutral defaults and the approved derived duration estimate differ:
+// the current automatic warm-up estimate is two minutes longer.
 const currentExpected=expected=>({...expected,dismissedTemporarySchedule:null,
+  ...(expected.program ? {program:{...expected.program,days:expected.program.days.map(day=>({...day,estimatedMinutes:day.estimatedMinutes+2}))}} : {}),
   profile:{preferredTrainingStyle:null,noPlanReceipt:null,...expected.profile}});
 const allFixtures=[fixtures,olderFixtures].flatMap(collection=>collection.fixtures.map(fixture=>({
   ...fixture,name:`${collection.commit.slice(0,7)}/${fixture.name}`,
-  // These fields did not exist in 80765c6. Neutral optional defaults are the
-  // only permitted difference; compare every established domain value/ID.
+  // Prescriptions, sessions, elapsed durations, history and IDs stay identical.
   expected:currentExpected(fixture.expected),
 })));
 for(const fixture of allFixtures){

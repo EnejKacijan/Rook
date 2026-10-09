@@ -24,7 +24,7 @@ it('sole valid move makes the selected date rest, with secondary provenance and 
   const s=move(initial()),before=structuredClone(s),record=Object.values(s.flexibleWeek.sessions)[0];mount(s);
   expect(title()).toBe('Rest day');expect(host.querySelector('.rest-day-state').textContent).toContain('No workout scheduled for this day.');
   expect(host.querySelector('.today-day-header').textContent).toContain('Thursday, Oct 1');
-  expect(host.querySelector('.today-moved-provenance').textContent).toContain('moved to Saturday, Oct 3');
+  expect(host.querySelector('.today-moved-provenance').textContent).toContain('Moved to Saturday, Oct 3');
   expect(current).toEqual(before);act(()=>host.querySelector('.today-moved-provenance button').click());
   expect(current).toEqual({...before,selectedDate:record.scheduledDate,selectedDay:'Sat'});expect(title()).not.toBe('Rest day');
   expect(current.flexibleWeek).toEqual(before.flexibleWeek);expect(current.workouts).toEqual(before.workouts);
@@ -34,7 +34,7 @@ it.each(['active','completed','ended'])('%s on the selected date retains its can
   let s=move(initial());const source=flexibleSessions(s).find(item=>item.originalDate==='2026-10-01');s.activeWorkout=startWorkout(s,source.workout);
   if(kind!=='active'){if(kind==='completed')s.activeWorkout.exercises.forEach(e=>e.sets.forEach(set=>Object.assign(set,{completed:true,reps:10})));s=completeWorkout(s);}
   mount(s);expect(title()).not.toBe('Rest day');expect(host.querySelector('.today-moved-provenance')).toBeNull();
-  expect(host.textContent).toContain(kind==='active'?'RESUME WORKOUT':kind==='completed'?'WORKOUT COMPLETE':'VIEW HISTORY');
+  expect(host.textContent).toContain(kind==='active'?'RESUME WORKOUT':kind==='completed'?'WORKOUT COMPLETE':'VIEW WORKOUT');
 });
 it('freestyle history is not swallowed by the moved-source branch',()=>{
   let s=move(initial());s=addFreestyleExercise(startFreestyleWorkout(s),'plank');Object.assign(s.activeWorkout.exercises[0].sets[0],{completed:true,reps:40});s=completeWorkout(s);mount(s);

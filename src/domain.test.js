@@ -597,10 +597,10 @@ describe("personalized training domain", () => {
 
   it("includes the complete Workout Guide catalog without auto-programming unreviewed additions", () => {
     const sourced = Object.values(exerciseCatalog).filter(
-      (item) => item.visualSource === "Workout Guide",
+      (item) => item.exerciseReferenceSources.some(reference => reference.sourceId === "workout-guide"),
     );
-    expect(sourced.length).toBeGreaterThan(302);
-    expect(new Set(sourced.map((item) => item.artId)).size).toBe(302);
+    expect(sourced).toHaveLength(302);
+    expect(new Set(sourced.flatMap(item => item.exerciseReferenceSources.map(reference => reference.catalogRecordId))).size).toBe(302);
     expect(
       sourced
         .filter((item) => item.id.startsWith("wg-"))

@@ -4,7 +4,7 @@ import {hasMeaningfulExerciseProgress} from './upNextRemoval.js';
 
 export function supportsPerSideLogging(exercise) {
   return Boolean(exercise && exerciseMeasure(exercise)!=='seconds' &&
-    (loggingModeOf(exercise)==='per_side' || exercise.unilateral ||
+    (exercise.perSideLoggingAvailable === true || loggingModeOf(exercise)==='per_side' || exercise.unilateral ||
       exerciseCatalog[exercise.exerciseId]?.unilateral ||
       exercise.importedExercise?.loggingMode==='per_side'));
 }
@@ -21,7 +21,9 @@ export function changeSessionLoggingMode(state,sessionId,exerciseId,mode) {
     return {state,error:'Logging setup cannot change after values or completed sets have been recorded.'};
   const next={...state,activeWorkout:{...active,exercises:active.exercises.map(entry=>{
     if(entry.id!==exerciseId)return entry;
-    const updated={...entry,loggingMode:mode,sets:entry.sets.map(set=>normalizeSetLogging({...set}, {loggingMode:mode}))};
+    // Remember the existing capability before changing the selected mode. This
+    // is session metadata, not a new unilateral classification or program edit.
+    const updated={...entry,perSideLoggingAvailable:supportsPerSideLogging(entry),loggingMode:mode,sets:entry.sets.map(set=>normalizeSetLogging({...set}, {loggingMode:mode}))};
     return updated;
   }),updatedAt:Date.now()}};
   return {state:next,error:null};

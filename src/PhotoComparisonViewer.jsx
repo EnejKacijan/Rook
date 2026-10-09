@@ -4,6 +4,7 @@ import { bindFullscreenPhotoScope } from './fullscreenPhotoScope.js';
 import { bindFullscreenViewerDrag } from './fullscreenViewerDrag.js';
 import { bindPhotoComparisonGesture, COMPARISON_MAX_ZOOM } from './photoComparisonGesture.js';
 import { focusNavigationTarget } from './navigationFocus.js';
+import {SegmentedControl} from './SegmentedControl.jsx';
 
 export function PhotoComparisonViewer({ pair, images, onLoad, onError, onInspect, onChooseAnother, onBack, onClose, Header }) {
   const [mode, setMode] = useState('swipe'), [zoom, setZoom] = useState(1);
@@ -29,15 +30,13 @@ export function PhotoComparisonViewer({ pair, images, onLoad, onError, onInspect
   return createPortal(<div ref={layer} className="workout-photo-viewer photo-comparison-viewer" data-fullscreen-photo role="dialog" aria-modal="true" aria-label="Compare photos">
     <div ref={content} className="workout-photo-viewer-content photo-comparison-content">
       <Header title="Compare photos" onBack={onBack} onClose={onClose} closeLabel="Close photo comparison" />
-      <div className="segmented photo-comparison-modes" role="group" aria-label="Comparison mode">
-        {[['swipe','Swipe'],['side','Side by side']].map(([value,label]) => <button key={value} type="button" aria-pressed={mode===value} className={mode===value?'active':''} onClick={()=>changeMode(value)}>{label}</button>)}
-      </div>
+      <SegmentedControl className="photo-comparison-modes" label="Comparison mode" options={[{value:'swipe',label:'Swipe'},{value:'side',label:'Side by side'}]} value={mode} onChange={changeMode}/>
       <div className="photo-comparison-canvas">
         <div className="photo-comparison-labels">{pair.map(entry => <div className="photo-compare-context" key={entry.id} id={`compare-${entry.id}`}>
           <time dateTime={entry.day}>{new Intl.DateTimeFormat('en', { month:'short', day:'numeric', year:'numeric' }).format(new Date(`${entry.day}T12:00:00`))}</time>
           <strong title={entry.workoutName}>{entry.workoutName}</strong>
         </div>)}</div>
-        <div ref={stage} className="photo-comparison-stage" data-mode={mode} aria-label={mode==='swipe'?'Swipe photo comparison':'Side by side photo comparison'}>
+        <div ref={stage} className="photo-comparison-stage" data-mode={mode} data-rook-zoom={mode==='swipe'?'custom':undefined} aria-label={mode==='swipe'?'Swipe photo comparison':'Side by side photo comparison'}>
           {pair.map((entry,index) => <div className={`photo-comparison-layer${index===0?' is-earlier':''}`} key={entry.id} data-photo-id={entry.id}>
             {images[entry.id]?.url && <img src={images[entry.id].url} alt={`Private workout photo, ${entry.workoutName}, ${entry.day}`} draggable="false" decoding="async" onLoad={()=>onLoad(entry.id)} onError={()=>onError(entry.id)} />}
             {!images[entry.id]?.ready && <span className="photo-comparison-loading" role="status">{images[entry.id]?.unavailable?'Photo unavailable':'Loading photo…'}</span>}

@@ -179,6 +179,9 @@ export function deleteGymProfile(state, id, replacementDefaultId = null) {
 
 export function effectiveGymContext(state, workout = state?.activeWorkout) {
   const adjustment = workout?.adjustment || (workout ? null : state?.todayAdaptation);
+  if (!adjustment?.temporaryEquipment?.length && workout?.temporaryPlanAdjustment?.equipment?.length) {
+    return { id: null, name: 'Temporary plan equipment', profile: equipmentProfile(state.profile, workout.temporaryPlanAdjustment.equipment), todayOnly: true };
+  }
   if (adjustment?.temporaryEquipment?.length) {
     const gym = (state.gymProfiles || []).find((item) => item.id === adjustment.gymProfileId);
     return {

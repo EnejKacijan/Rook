@@ -1,6 +1,9 @@
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
+import { illustrationProvenanceForAsset } from './illustrationProvenance.js';
+import { conditioningConfiguration, isConditioning, intervalProgress, LIGHT_CARDIO_INTENSITIES } from './optionalActivity.js';
 import {intentionalNoPlan} from './trainingStyle.js';
 import {normalizeTemporaryScheduleDismissal} from './temporarySchedulePresentation.js';
+import { assertTemporaryPlanState, temporaryOccurrenceWorkout, temporaryPlanBlockSkipRecords } from './temporaryPlan.js';
 import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
 import {normalizeCoachConversations} from './coachConversations.js';
@@ -47,6 +50,7 @@ import {
   hasOpenRepTarget,
   hasUnspecifiedRepTarget,
   loggingUnit,
+  loggingModeOf,
   openRepTargetLabel,
   effectiveSetReps,
   normalizeAdvancedLoggingState,
@@ -1148,8 +1152,7 @@ for (const rawSource of workoutGuideExercises) {
       ]),
     ];
     existing.artId = source.artId;
-    existing.visualSource = source.visualSource;
-    existing.visualLicense = source.visualLicense;
+    existing.exerciseReferenceSources = source.exerciseReferenceSources;
     catalogEntriesLinkedToWorkoutGuide.add(existing.id);
     continue;
   }
@@ -1308,15 +1311,11 @@ for (const [exerciseId, assetSlug] of Object.entries(ROOK_ADAPTED_ILLUSTRATIONS)
   const exercise = exerciseCatalog[exerciseId];
   if (!exercise) continue;
   exercise.artId = `wg-${assetSlug}`;
-  exercise.visualSource = "Bryl Lim / Everkinetic · ROOK adaptation";
-  exercise.visualLicense = "CC BY-SA 4.0";
 }
 for (const [exerciseId, assetSlug] of Object.entries(ROOK_ORIGINAL_ILLUSTRATIONS)) {
   const exercise = exerciseCatalog[exerciseId];
   if (!exercise) continue;
   exercise.artId = `wg-${assetSlug}`;
-  exercise.visualSource = "ROOK original";
-  exercise.visualLicense = "Proprietary";
 }
 
 // Share artwork only when the visible setup and movement are equivalent.
@@ -1357,8 +1356,13 @@ for (const [exerciseId, sourceSlug] of Object.entries(
   const source = workoutGuideBySlug.get(sourceSlug);
   if (!exercise || !source) continue;
   exercise.artId = source.artId;
-  exercise.visualSource = source.visualSource;
-  exercise.visualLicense = source.visualLicense;
+}
+
+// Image authorship follows the installed asset. Catalog references follow the
+// exercise information actually imported, never an equivalent-artwork mapping.
+for (const exercise of Object.values(exerciseCatalog)) {
+  exercise.illustrationProvenance = illustrationProvenanceForAsset(exercise.artId);
+  exercise.exerciseReferenceSources ||= [];
 }
 
 const GLOBALLY_BLOCKED_EXERCISE_IDS = new Set([
@@ -2143,7 +2147,10 @@ export function blankState() {
   };
 }
 function normalizeActiveOptionalSession(session) {
-  if (!session || !["Cardio", "Mobility"].includes(session.kind)) return null;
+  if (!session || !(["Cardio", "Mobility"].includes(session.kind) || isConditioning(session))) return null;
+  if (isConditioning(session)) {
+    try { conditioningConfiguration({ ...session, durationSeconds: session.duration * 60 }); } catch { return null; }
+  }
   const startedAt = Number(session.startedAt);
   if (!Number.isFinite(startedAt)) return null;
   const paused = session.status === "paused";
@@ -2353,6 +2360,7 @@ export function deserializeState(input, { strict = false } = {}) {
       }
     }
     validateCombinedState(stored);
+    assertTemporaryPlanState(stored);
     assertWorkoutTemplates(stored.savedWorkoutTemplates);
     stored.schemaVersion = 3;
     migrateBlockedExercises(stored);
@@ -2745,7 +2753,7 @@ export function baseWeekSchedule(state, date = new Date()) {
         ? { ...sourceWorkout, exercises: occurrenceExercises }
         : sourceWorkout;
       if (!workout.exercises.length) return null;
-      const prescribedWorkout = prescribeTrainingBlockWorkout(state, workout);
+      const prescribedWorkout = temporaryOccurrenceWorkout(state, occurrence, prescribeTrainingBlockWorkout(state, workout), scheduledDate);
       prescribedWorkout.estimatedMinutes = estimateWorkoutMinutes(prescribedWorkout, state.profile, state.program);
       return {
         workout: prescribedWorkout,
@@ -7550,6 +7558,50 @@ export function rankExerciseSearch(candidates, query) {
     .sort((a, b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
     .map(entry => entry.item);
 }
+// Prepared local search for the Add Exercise picker. This is the same query
+// membership and relevance policy as the functions above, with name/alias
+// normalization performed once per catalog rather than on every keystroke.
+export function createExerciseSearchIndex(items) {
+  const prepared = new Map();
+  const name = value => {
+    const normalized = normalizedExerciseName(value);
+    const plural = pluralizedExerciseName(value);
+    return { normalized, plural, compact: normalized.replace(/\s+/g, ''), pluralCompact: plural.replace(/\s+/g, '') };
+  };
+  const prepare = item => {
+    if (!prepared.has(item)) prepared.set(item, { item, primary: name(item.name), aliases: (item.aliases || []).filter(Boolean).map(name) });
+    return prepared.get(item);
+  };
+  const entries = items.map(prepare);
+  const canonical = Object.values(exerciseCatalog).map(prepare);
+  return (query, occupied = new Set()) => {
+    const normalized = normalizedExerciseName(query);
+    const available = entries.filter(entry => !occupied.has(entry.item.id));
+    if (!normalized) return available.map(entry => entry.item);
+    const compact = normalized.replace(/\s+/g, ''), tokens = normalized.split(' ');
+    const queryForms = new Set([compact, pluralizedExerciseName(query).replace(/\s+/g, '')]);
+    const whole = form => queryForms.has(form.compact) || queryForms.has(form.pluralCompact);
+    const names = entry => [entry.primary, ...entry.aliases];
+    const primary = canonical.filter(entry => whole(entry.primary));
+    const fullMatches = primary.length ? primary : canonical.filter(entry => entry.aliases.some(whole));
+    const targets = fullMatches.filter(entry => !entry.item.id.startsWith('wg-'));
+    const target = targets.length === 1 ? targets[0].item.id : fullMatches.length === 1 ? fullMatches[0].item.id : null;
+    const matches = form => form.normalized.includes(normalized) || form.plural.includes(normalized) ||
+      tokens.every(token => form.normalized.includes(token)) || form.compact.includes(compact) || form.pluralCompact.includes(compact);
+    const tier = entry => {
+      if (whole(entry.primary)) return 0;
+      if (entry.aliases.some(whole)) return 1;
+      const forms = names(entry);
+      if (forms.some(form => form.normalized.startsWith(normalized) || form.plural.startsWith(normalized) || form.compact.startsWith(compact) || form.pluralCompact.startsWith(compact))) return 2;
+      if (forms.some(form => tokens.every(token => form.normalized.includes(token)))) return 3;
+      return 4;
+    };
+    return available.filter(entry => names(entry).some(matches))
+      .map((entry, index) => ({ item: entry.item, index, tier: tier(entry) }))
+      .sort((a,b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
+      .map(entry => entry.item);
+  };
+}
 function importedSourceName(value) {
   const cleaned = String(value || "")
     .trim()
@@ -8594,6 +8646,7 @@ export function startWorkout(state, template) {
       (template.id ? `${template.id}:${canonicalPlanDate}` : null),
     optionalSessionId: template.optionalSessionId || null,
     ...(logicalSessionId ? { logicalSessionId, originalScheduledDate: template.originalScheduledDate || occurrence?.originalDate || canonicalPlanDate, flexibleWeekMoved: template.flexibleWeekMoved || occurrence?.moved || false } : {}),
+    ...(template.temporaryPlanAdjustment ? { temporaryPlanAdjustment: structuredClone(template.temporaryPlanAdjustment) } : {}),
     name: template.name,
     workoutName: template.workoutName,
     workoutDescriptor: template.workoutDescriptor,
@@ -8606,7 +8659,7 @@ export function startWorkout(state, template) {
     exerciseIndex: 0,
     rest: null,
     handledSupersetRestRounds: [],
-    adapted: Boolean(template.optionalSessionId || template.adapted),
+    adapted: Boolean(template.optionalSessionId || template.adapted || template.temporaryPlanAdjustment),
     ...(template.trainingBlock
       ? { trainingBlock: structuredClone(template.trainingBlock) }
       : {}),
@@ -8665,7 +8718,7 @@ export function startWorkout(state, template) {
     }),
   };
   normalizeAdvancedLoggingState({ activeWorkout: workout, workouts: [] });
-  const prepared = refreshWorkoutWarmup(workout, state.profile, state.program);
+  const prepared = refreshWorkoutWarmup(workout, workout.temporaryPlanAdjustment ? effectiveGymContext(state, workout).profile : state.profile, state.program);
   prepared.restartSnapshot = sessionStartSnapshot(prepared);
   return prepared;
 }
@@ -8792,6 +8845,24 @@ export function resumeCompletedWorkout(
     workoutCorrections: [...(state.workoutCorrections || []), correction],
   };
 }
+// Missing legacy prescription metadata is not fabricated. Known differences
+// start a new evidence context; exercise IDs remain the variation authority.
+function progressionContextMatches(left, right) {
+  if (left.exerciseId !== right.exerciseId ||
+      exerciseMeasure(left) !== exerciseMeasure(right) ||
+      exerciseLoadRequirement(left) !== exerciseLoadRequirement(right) ||
+      loggingModeOf(left) !== loggingModeOf(right) ||
+      Boolean(left.supersetId) !== Boolean(right.supersetId) ||
+      (left.importRole || null) !== (right.importRole || null)) return false;
+  return ['repMin', 'repMax', 'targetRir'].every((key, index) => {
+    const a = left[key] ?? (index < 2 ? left.repRange?.[index] : null);
+    const b = right[key] ?? (index < 2 ? right.repRange?.[index] : null);
+    return a == null || b == null || Number(a) === Number(b);
+  });
+}
+const progressionRir = set => set.rir == null || set.rir === '' ||
+  !Number.isFinite(Number(set.rir)) ? null : Number(set.rir);
+
 export function progressionFor(exercise, history, profile = null) {
   const min = exercise.repMin ?? exercise.repRange?.[0];
   const max = exercise.repMax ?? exercise.repRange?.[1];
@@ -8803,9 +8874,10 @@ export function progressionFor(exercise, history, profile = null) {
     .map((workout, index) => ({
       workout,
       index,
-      item: workout.exercises?.find(
-        (item) => item.exerciseId === exercise.exerciseId,
-      ),
+      // A known slot with a different variation interrupts evidence instead of
+      // silently recovering an older appearance of the original exercise.
+      item: (exercise.id && workout.exercises?.find(item => item.id === exercise.id)) ||
+        workout.exercises?.find(item => item.exerciseId === exercise.exerciseId),
     }))
     .filter((entry) => entry.item);
   const observations = appearances
@@ -8816,20 +8888,29 @@ export function progressionFor(exercise, history, profile = null) {
       );
       const completed = planned.filter(
         (set) =>
-          set.completed && Number.isFinite(Number(effectiveSetReps(entry.item, set))),
+          set.completed && effectiveSetReps(entry.item, set) != null &&
+          Number(effectiveSetReps(entry.item, set)) > 0 &&
+          (timed || Number.isInteger(Number(effectiveSetReps(entry.item, set)))),
       );
       const complete =
         planned.length > 0 && completed.length === planned.length;
+      // Stored weights are already canonical kilograms. On optional-load
+      // exercises zero and no added load represent the same BW setup.
       const loads = completed.map((set) =>
         set.weight === null ||
         set.weight === undefined ||
-        !Number.isFinite(Number(set.weight))
+        set.weight === "" ||
+        !Number.isFinite(Number(set.weight)) || Number(set.weight) < 0 ||
+        (loadRequirement === "optional" && Number(set.weight) === 0)
           ? null
           : Number(set.weight),
       );
       const hasLoad =
         loads.length > 0 && loads.every((value) => value !== null);
       const loadKey = hasLoad ? loads.join("|") : null;
+      const loadKinds = completed.map(set => set.rawImport?.loadKind ||
+        (loadRequirement === "none" ? "none" : loadRequirement === "optional" &&
+          (catalogItem?.bodyweight || entry.item.importedExercise?.bodyweight) ? "added" : "external"));
       const effortOkay = completed.every(
         (set) =>
           set.rir === null ||
@@ -8848,6 +8929,9 @@ export function progressionFor(exercise, history, profile = null) {
         planned,
         completed,
         complete,
+        hasNoLoad: loads.every(value => value === null),
+        positions: planned.map(set => entry.item.sets.indexOf(set)).join("|"),
+        loadKinds: loadKinds.join("|"),
         hasLoad,
         loadKey,
         weight: hasLoad ? loads[0] : null,
@@ -8874,17 +8958,28 @@ export function progressionFor(exercise, history, profile = null) {
     .filter((entry) => entry.completed.length);
   if (!observations.length) return null;
   const latest = observations.at(-1);
-  if (!latest.complete || latest.index !== appearances.at(-1)?.index) return null;
+  if (!latest.complete || latest.index !== appearances.at(-1)?.index ||
+      !progressionContextMatches(latest.item, exercise)) return null;
+  if (loadRequirement === "optional" && !latest.hasLoad && !latest.hasNoLoad) return null;
   const structurallyComparable = observations.filter(
-    (entry) => entry.complete && entry.planned.length === latest.planned.length,
+    (entry) => entry.complete && entry.planned.length === latest.planned.length &&
+      entry.positions === latest.positions && entry.loadKinds === latest.loadKinds &&
+      progressionContextMatches(entry.item, latest.item),
   );
   const comparable = structurallyComparable.filter((entry) => {
     if (loadRequirement === "none") return true;
     if (loadRequirement === "optional" && !latest.hasLoad)
-      return !entry.hasLoad;
+      return entry.hasNoLoad;
     return entry.loadKey !== null && entry.loadKey === latest.loadKey;
   });
   const previous = comparable.at(-2);
+  // Underperformance needs consecutive evidence, not an old matching load
+  // recovered across changed/partial sessions. Compare effort per working set
+  // when recorded; missing effort never becomes a fabricated RIR value.
+  const previousAppearance = appearances.at(-2);
+  const underperformancePrevious = previous && previous.index === previousAppearance?.index &&
+    latest.completed.every((set, index) => progressionRir(set) === progressionRir(previous.completed[index]))
+      ? previous : null;
   const previousWithoutLoad = structurallyComparable
     .filter((entry) => !entry.hasLoad)
     .at(-2);
@@ -8901,9 +8996,10 @@ export function progressionFor(exercise, history, profile = null) {
       detail:
         "The rep target was reached twice, but no external load was logged. Keep the prescription and record the load before increasing it.",
     };
-  if (previous && (timed
-    ? latest.anyBelowMin && previous.anyBelowMin
-    : latest.broadlyBelow && previous.broadlyBelow))
+  if (underperformancePrevious && (timed
+    ? latest.anyBelowMin && underperformancePrevious.anyBelowMin
+    : latest.broadlyBelow && underperformancePrevious.broadlyBelow &&
+      latest.effortOkay && underperformancePrevious.effortOkay))
     return {
       type: "hold",
       title: timed ? "Reduce the hold target slightly" : loadRequirement !== "required" && !latest.hasLoad ? "Review the variation" : "Review the load",
@@ -8919,6 +9015,15 @@ export function progressionFor(exercise, history, profile = null) {
       type: "hold",
       title: sameSetup === "same variation" ? "Hold the variation" : "Hold the load",
       detail: "Logged effort was higher than planned. Prioritize your target reps in reserve before adding reps or weight.",
+    };
+  if (!timed && latest.broadlyBelow && underperformancePrevious &&
+      latest.completed.filter((set, index) =>
+        Number(effectiveSetReps(underperformancePrevious.item, underperformancePrevious.completed[index])) -
+        Number(effectiveSetReps(latest.item, set)) >= 2).length > latest.completed.length / 2)
+    return {
+      type: "hold",
+      title: sameSetup === "same variation" ? "Repeat this variation" : "Repeat this load",
+      detail: `Last session was below your recent performance. Repeat the ${sameSetup === "same variation" ? "variation" : "load"} before increasing.`,
     };
   const effortUnconfirmed = exercise.targetRir !== null && exercise.targetRir !== undefined &&
     (!latest.effortRecorded || !previous?.effortRecorded);
@@ -9004,7 +9109,7 @@ export function progressionFor(exercise, history, profile = null) {
       title: "Repeat to confirm",
       detail: `You reached the rep target last workout. Repeat at the ${sameSetup} to confirm before increasing.`,
     };
-  const completeRecent = observations.filter((entry) => entry.complete);
+  const completeRecent = structurallyComparable;
   const plateauWindow = completeRecent.slice(
     -Math.max(4, completeRecent.length >= 6 ? 6 : 4),
   );
@@ -9241,7 +9346,7 @@ export function completeWorkout(state) {
   }
   if(isRepeatAdjustment(session.adjustment)){next.todayAdaptation=null;return next;}
   if (session.source === 'freestyle') return next;
-  return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), Object.values(next.flexibleWeek?.sessions || {}).filter(record => record.blockId === next.program?.trainingBlock?.id));
+  return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), temporaryPlanBlockSkipRecords(next, session).filter(record => record.blockId === next.program?.trainingBlock?.id));
 }
 export function optionalSessionElapsedSeconds(session, now = Date.now()) {
   if (!session) return 0;
@@ -9254,6 +9359,10 @@ export function optionalSessionElapsedSeconds(session, now = Date.now()) {
   if (!Number.isFinite(runningSince)) return accumulated;
   return accumulated + Math.max(0, Number(now) - runningSince) / 1000;
 }
+export function optionalSessionTiming(session, now = Date.now()) {
+  const elapsedSeconds = optionalSessionElapsedSeconds(session, now);
+  return { elapsedSeconds, ...(isConditioning(session) && session.format === 'intervals' ? intervalProgress(session.intervals, elapsedSeconds) : {}) };
+}
 export function startOptionalSession(
   state,
   {
@@ -9262,6 +9371,9 @@ export function startOptionalSession(
     activity,
     duration,
     intensity = "Easy",
+    intent,
+    format = 'steady',
+    intervals,
   },
   now = Date.now(),
 ) {
@@ -9270,9 +9382,14 @@ export function startOptionalSession(
     state.activeWorkout ||
     state.activeOptionalSession ||
     date !== isoDay(new Date(now)) ||
-    !["Cardio", "Mobility"].includes(kind)
+    !["Cardio", "Mobility", "Conditioning"].includes(kind)
   )
     return state;
+  let configuration = {};
+  if (kind === 'Conditioning') {
+    if (intent !== 'conditioning') return state;
+    try { configuration = conditioningConfiguration({ activity, intensity, format, intervals, durationSeconds: Number(duration) * 60 }); } catch { return state; }
+  } else if (kind === 'Cardio' && !LIGHT_CARDIO_INTENSITIES.includes(intensity)) return state;
   const targetMinutes = Math.max(
     1,
     Math.min(180, Math.round(Number(duration) || 15)),
@@ -9283,11 +9400,14 @@ export function startOptionalSession(
       id: uid("optional-session"),
       date,
       kind,
+      intent: kind === 'Conditioning' ? 'conditioning' : kind === 'Cardio' ? 'recoveryCardio' : 'recoveryMobility',
       activity: String(
         activity || (kind === "Cardio" ? "Light cardio" : "Mobility / recovery"),
       ).slice(0, 60),
       duration: targetMinutes,
-      intensity: kind === "Cardio" ? String(intensity || "Easy") : "Easy",
+      format: 'steady',
+      ...configuration,
+      intensity: kind !== "Mobility" ? String(intensity || "Easy") : "Easy",
       status: "active",
       startedAt: Number(now),
       runningSince: Number(now),
@@ -9337,6 +9457,7 @@ export function finishOptionalSession(state, now = Date.now()) {
     runningSince: null,
   };
   delete completed.pausedAt;
+  if (isConditioning(session) && session.format === 'intervals') completed.completedRounds = optionalSessionTiming(session, now).completedRounds;
   return {
     ...state,
     activeOptionalSession: null,

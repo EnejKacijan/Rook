@@ -32,38 +32,22 @@ const movementFamily = (pattern) =>
           ? "pull"
           : pattern;
 
-function generalCandidates(profile, family) {
+function generalCandidates(profile) {
   const fullGym =
     profile.environment === "Commercial gym" ||
     (profile.equipment || []).includes("full gym");
   if (!fullGym)
     return [
-      { label: "Brisk walk", words: ["walk", "walking"] },
-      { label: "Easy marching in place", words: ["march", "marching"] },
+      { label: "Easy walk", words: ["walk", "walking"] },
+      { label: "Easy marching in place", alternative: "marching in place", words: ["march", "marching"] },
     ];
-  const candidates = {
-    lower: [
-      { label: "Easy stationary bike", words: ["bike", "biking", "cycle", "cycling"] },
-      { label: "Easy treadmill walk", words: ["walk", "walking", "treadmill"] },
-      { label: "Easy elliptical", words: ["elliptical"] },
-    ],
-    posterior: [
-      { label: "Easy treadmill walk", words: ["walk", "walking", "treadmill"] },
-      { label: "Easy stationary bike", words: ["bike", "biking", "cycle", "cycling"] },
-      { label: "Easy elliptical", words: ["elliptical"] },
-    ],
-    push: [
-      { label: "Easy elliptical", words: ["elliptical"] },
-      { label: "Easy treadmill walk", words: ["walk", "walking", "treadmill"] },
-      { label: "Easy stationary bike", words: ["bike", "biking", "cycle", "cycling"] },
-    ],
-    pull: [
-      { label: "Easy treadmill walk", words: ["walk", "walking", "treadmill"] },
-      { label: "Easy elliptical", words: ["elliptical"] },
-      { label: "Easy stationary bike", words: ["bike", "biking", "cycle", "cycling"] },
-    ],
-  };
-  return candidates[family] || candidates.lower;
+  // A neutral default, not a claim that one machine prepares a lift better.
+  // Individual cardio machines are not classified by the current gym profile.
+  return [
+    { label: "Easy treadmill walk", words: ["walk", "walking", "treadmill"] },
+    { label: "Easy stationary bike", alternative: "the bike", words: ["bike", "biking", "cycle", "cycling"] },
+    { label: "Easy elliptical", alternative: "the elliptical", words: ["elliptical"] },
+  ];
 }
 
 function equipmentIncrement(item, profile) {
@@ -190,26 +174,25 @@ export function generateWarmup(
   }
 
   const general = [];
-  const firstDemanding = exercises.find(
-    ({ item }) => item.kind === "compound" || item.kind === "power",
-  );
   const includeGeneral =
     includeRecommendedWarmups &&
-    Number(profile.sessionMinutes || 60) > 30 &&
-    (workout?.exercises || []).length > 1 &&
-    Boolean(firstDemanding);
+    (workout?.exercises || []).length > 0;
   if (includeGeneral) {
-    const choice = generalCandidates(
-      profile,
-      movementFamily(firstDemanding.item.pattern),
-    ).find(
+    const allowed = generalCandidates(profile).filter(
       (candidate) => !restrictionBlocks(restrictions, candidate.words),
     );
+    const [choice, ...alternatives] = allowed;
     if (choice)
       general.push({
         id: choice.label.toLowerCase().replace(/[^a-z0-9]+/g, "-"),
         label: choice.label,
-        minutes: Number(profile.sessionMinutes) >= 90 ? 4 : 3,
+        minutes: 5,
+        guidance: [
+          alternatives.length
+            ? `Or try ${alternatives.map((item) => item.alternative).join(" or ")}.`
+            : null,
+          "Keep it easy enough to talk comfortably. Shorten this if you're already warm.",
+        ].filter(Boolean).join(" "),
         completed: false,
       });
   }

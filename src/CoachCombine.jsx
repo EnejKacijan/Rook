@@ -38,8 +38,8 @@ export function CoachCombineChoices({request,onSend,busy,selection,onSelectionCh
  return <fieldset className="combine-choices" onMouseDownCapture={keepComposerFocus}><legend>Choose two planned sessions</legend>{request.choices.map(s=><label key={s.id}><input type="checkbox" checked={selected.includes(s.id)} disabled={busy||selected.length===2&&!selected.includes(s.id)} onChange={()=>setSelected(current=>current.includes(s.id)?current.filter(id=>id!==s.id):[...current,s.id])}/><span>{s.label}</span></label>)}
  <button type="button" className="button secondary" disabled={busy||selected.length!==2} onClick={()=>onSend(`Combine ${request.choices.filter(s=>selected.includes(s.id)).map(s=>s.label).join(' and ')}.`,{sourceIds:selected})}>CONTINUE</button></fieldset>;
 }
-export function CoachCombineCard({action,result,state,onAccept,onViewToday,reviewDraft,onReviewChange,onReviewCancelled}){
- const [reviewing,setReviewing]=useState(false),[error,setError]=useState(''),[proposal,setProposal]=useState(reviewDraft||action.proposal),lock=useRef(false);
+export function CoachCombineCard({action,result,state,onAccept,onViewToday,reviewDraft,onReviewChange,onReviewCancelled,initialReviewing=false,draftSchedule=false}){
+ const [reviewing,setReviewing]=useState(initialReviewing),[error,setError]=useState(''),[proposal,setProposal]=useState(reviewDraft||action.proposal),lock=useRef(false);
  const backRef=useRef(null),reviewRef=useRef(null),wasReviewing=useRef(false);
  useLayoutEffect(()=>{
    if(reviewing)backRef.current?.focus({preventScroll:true});
@@ -61,7 +61,7 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
  };
  const apply=()=>{if(lock.current)return;lock.current=true;setError('');try{onAccept({...action,proposal});}catch(e){lock.current=false;setError(e.message);}};
  return <div onMouseDownCapture={keepComposerFocus} className={`action-card combine-card${reviewing?' action-card-reviewing combine-review-surface':''}`}>
-   {reviewing&&<button ref={backRef} type="button" className="text-button" aria-label="Back to combined workout proposal" onClick={()=>{setReviewing(false);setError('');}}>‹ Back</button>}
+   {reviewing&&!draftSchedule&&<button ref={backRef} type="button" className="text-button" aria-label="Back to combined workout proposal" onClick={()=>{setReviewing(false);setError('');}}>‹ Back</button>}
    <h3>{proposal.revisionSummary?'Updated combined workout':'Combined workout'}</h3><p>~{Math.round(proposal.workout.estimatedMinutes)} min · Today only</p><CombinedProvenance adjustment={proposal}/>
    {!reviewing?<button ref={reviewRef} type="button" className="button secondary" onClick={()=>{setReviewing(true);onReviewCancelled?.(false);}}>REVIEW COMBINED WORKOUT</button>:<>
      {proposal.revisionSummary&&<div className="combine-revision-summary"><strong>Estimate: ~{Math.round(proposal.revisionSummary.previousMinutes)} → ~{Math.round(proposal.estimatedMinutes)} min</strong><span>New total-time target: {proposal.requestedMinutes===null?'No strict limit':`${proposal.requestedMinutes} min`}</span>
@@ -74,8 +74,8 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
        const next=candidate(e);
        return <button type="button" key={e.id} aria-pressed={selected.has(e.id)} disabled={!next} onClick={()=>{setProposal(next);onReviewChange?.(next);setError('');}}><span aria-hidden="true">{selected.has(e.id)?'✓':'+'}</span><span><strong>{exerciseName(e)}</strong><small>{e.sets.length} sets · {formatExportSet(e,e.sets[0],{units:state.profile.units,completed:false})}{e.supersetId?' · Superset':''}{e.combinedOrigin==='coach-added'?' · Coach-added recommendation':''}</small></span></button>;
      })}</div><small>Main movement coverage and linked supersets stay together.</small>
-     {error&&<p role="alert">{error}</p>}<div className="action-card-buttons"><button type="button" className="button primary" onClick={apply}>{proposal.revisionSummary?'USE UPDATED WORKOUT':'USE THIS WORKOUT'}</button><button type="button" className="button secondary" onClick={()=>{setReviewing(false);setError('');onReviewCancelled?.(true);}}>CANCEL</button></div>
-     <small>Nothing changes until you use this workout. Your permanent plan stays unchanged.</small>
+     {error&&<p role="alert">{error}</p>}<div className="action-card-buttons"><button type="button" className="button primary" onClick={apply}>{draftSchedule?'ADD TO SCHEDULE':proposal.revisionSummary?'USE UPDATED WORKOUT':'USE THIS WORKOUT'}</button><button type="button" className="button secondary" onClick={()=>{setReviewing(false);setError('');onReviewCancelled?.(true);}}>CANCEL</button></div>
+     <small>{draftSchedule?'Added to your review only. Nothing is saved until you use this schedule.':'Nothing changes until you use this workout. Your permanent plan stays unchanged.'}</small>
    </>}
  </div>;
 }

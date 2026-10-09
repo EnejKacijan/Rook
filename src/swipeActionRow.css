@@ -31,8 +31,8 @@
 :root .plan-editor-summary-action.swipe-editor-edit { border:0;background:transparent;padding:0;min-width:44px;min-height:44px;justify-content:flex-end; }
 .up-next .swipe-action-row { background:var(--rook-bg); }
 .up-next .swipe-up-next-body { position:relative;min-height:48px;padding:11px 0;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:baseline;gap:12px;border-bottom:1px solid var(--rook-border);cursor:pointer; }
-.swipe-up-next-body:focus-within { outline:2px solid var(--rook-accent);outline-offset:-2px;border-radius:8px; }
-.swipe-up-next-body[data-row-pressed] { background:color-mix(in srgb,var(--rook-accent) 5%,transparent); }
+.swipe-up-next-body:focus-visible,
+.swipe-up-next-body:has(button:focus-visible) { outline:2px solid var(--rook-focus-ring);outline-offset:-2px;border-radius:8px; }
 .swipe-up-next-body > .up-next-main { font-weight:600;overflow-wrap:anywhere; }
 :root .exercise-remove-undo { z-index:125;bottom:calc(90px + env(safe-area-inset-bottom,0px)); }
 :root .exercise-remove-undo button { min-height:44px; }

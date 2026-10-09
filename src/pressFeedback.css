@@ -1,0 +1,9 @@
+/* Press never supplies a background. Resting, selected, open and disabled
+   surfaces retain their own meaning. No release animation or scale travel. */
+:root { --rook-press-opacity: .84; --rook-primary-press-opacity: .94; }
+:root :is(button,[role="button"],[role="tab"],[role="radio"],summary,a.rook-ui,.exercise-row-feedback):not(:disabled):not([aria-disabled="true"])[data-row-pressed] { opacity:var(--rook-press-opacity); }
+:root :is(.button.primary,.button.dark,.warmup-finish):not(:disabled):not([aria-disabled="true"])[data-row-pressed] { opacity:var(--rook-primary-press-opacity); }
+/* A tab acknowledges through its icon; it never gains a pressed cell tile. */
+:root .bottom-nav button:not(:disabled):not([aria-disabled="true"])[data-row-pressed] { opacity:1; }
+:root .bottom-nav button[data-row-pressed] .nav-icon { opacity:var(--rook-press-opacity); }
+/* These are labels/links acting as controls, rather than copyable content. */

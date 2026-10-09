@@ -50,6 +50,14 @@ it('14/15 finished at the final exercise returns to the earlier third set, prese
   expect(workoutSetSummary(current.activeWorkout)).toMatchObject({total:15,completed:14});
   finish(); keep(); expectTarget(before, 1, 2);
 });
+it('returns to set 1 of the first whole skipped exercise, ahead of a later skipped exercise', () => {
+  mount(keepTrainingState([[1,0],[1,1],[1,2],[3,0],[3,1],[3,2]]));
+  const before = structuredClone(current); finish(); keep(); expectTarget(before,1,0);
+});
+it('returns to the very first set when the first exercise was left unlogged', () => {
+  mount(keepTrainingState([[0,0],[0,1],[0,2],[2,1]]));
+  const before = structuredClone(current); finish(); keep(); expectTarget(before,0,0);
+});
 it('uses canonical exercise/set order, including superset members rather than alternating next-step order', () => {
   const state = keepTrainingState([[1,2],[2,0],[4,1]]);
   for (const i of [1,2]) Object.assign(state.activeWorkout.exercises[i], {supersetId:'pair', supersetOrder:i});

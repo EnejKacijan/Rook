@@ -3,7 +3,7 @@
 .workout-screen { padding-inline:calc(12px + env(safe-area-inset-left)) calc(12px + env(safe-area-inset-right)); }
 .workout-screen .sets { container:logger-sets / inline-size; padding-top:20px; margin:0; font-size:1rem; }
 .workout-screen .sets :is(.set-row,.set-labels) {
- --logger-height:max(52px,3.25rem); --logger-tile:30px; --logger-number:1.3125rem;
+ --logger-height:max(52px,3.25rem); --logger-tile:30px; --logger-number:max(16px,1rem);
  --logger-label-size:10px; --logger-label-weight:700; --logger-label-line:1; --logger-label-track:.13em;
  --logger-index:20px; --logger-start-gap:4px; --logger-metric-gap:12px; --logger-rir-gap:8px; --logger-done-gap:6px;
  --logger-rir:40px; --logger-done:44px; --logger-check-face:38px;
@@ -41,22 +41,21 @@
 .workout-screen .sets .stepper > button::before,.workout-screen .sets .stepper > button::after { content:none; }
 .workout-screen .sets .stepper-sign { display:flex; align-items:center; justify-content:center; width:var(--logger-tile); height:var(--logger-tile); border-radius:8px; background:var(--logger-tool-fill); font-size:17px; font-weight:400; line-height:1; pointer-events:none; }
 .workout-screen .sets .stepper > button:disabled { opacity:.42; }
-.workout-screen .sets .stepper > input { width:100%; min-width:0; height:100%; margin:0; padding:0; border:0; border-radius:0; background:transparent; font:inherit; font-size:var(--logger-number); font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:-.015em; text-align:center; }
-/* Valid decimals and long numbers fit without moving any hit region. Keep the
-   native editable input at least 16px; raw drafts can still scroll the caret. */
-.workout-screen .sets .logger-load[data-value-length="4"] > input { font-size:min(var(--logger-number),1.1875rem); }
-.workout-screen .sets .logger-load[data-value-length="5"] > input { font-size:min(var(--logger-number),1.0625rem); }
-.workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > input { font-size:1rem; letter-spacing:-.06em; }
-.workout-screen .sets .logger-reps[data-value-length="3"] > input { font-size:min(var(--logger-number),1.1875rem); }
-.workout-screen .sets .logger-reps:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"]) > input { font-size:1rem; letter-spacing:-.06em; }
+.workout-screen .sets .stepper > input { width:100%; min-width:0; height:100%; margin:0; padding:0; border:0; border-radius:0; background:transparent; text-align:center; }
+/* Native numeric editing and idle BW/+load are one value system. Preserve the
+   approved mobile 16px size, grow with user text size, and never shrink a value
+   based on its length or column width. The scoped !important keeps the iOS
+   input zoom floor from overriding enlarged logger text independently. */
+.workout-screen .sets .stepper > .stepper-value {
+ font-family:inherit; font-size:var(--logger-number) !important; font-weight:650;
+ line-height:1.2; font-feature-settings:normal; font-variant-numeric:tabular-nums;
+ letter-spacing:-.015em;
+}
 .workout-screen .sets .stepper-empty-label { inset-inline:var(--logger-hit); font-size:9px; line-height:1.1; text-align:center; pointer-events:none; }
-.workout-screen .sets .stepper-display-label { font-size:var(--logger-number); font-weight:650; line-height:normal; font-variant-numeric:tabular-nums; letter-spacing:-.015em; color:var(--rook-text); }
+.workout-screen .sets .stepper-display-label { color:var(--rook-text); }
 .workout-screen .sets .bodyweight-load-value { gap:0; align-items:center; }
 .workout-screen .sets :is(.bodyweight-load-prefix,.bodyweight-load-token) { font:inherit; letter-spacing:inherit; }
 .workout-screen .sets .set-done .stepper-display-label { color:var(--rook-secondary); }
-.workout-screen .sets .logger-load[data-value-length="4"] > .stepper-display-label { font-size:min(var(--logger-number),1.1875rem); }
-.workout-screen .sets .logger-load[data-value-length="5"] > .stepper-display-label { font-size:min(var(--logger-number),1.0625rem); }
-.workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > .stepper-display-label { font-size:1rem; letter-spacing:-.06em; }
 .workout-screen .sets .stepper.unset:focus-within { border:0; box-shadow:none; }
 .workout-screen .sets .set-row > .rir-trigger { width:100%; height:var(--logger-height); margin:0; padding:0; border:0; border-radius:8px; display:flex; align-items:center; justify-content:center; background:transparent; font:inherit; font-size:15px; font-weight:650; font-variant-numeric:tabular-nums; }
 .workout-screen .sets .rir-face { width:100%; max-width:42px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; gap:3px; background:var(--logger-tool-fill); pointer-events:none; }
@@ -74,12 +73,12 @@
 :root[data-appearance][data-style] .workout-screen .sets .set-row :is(input,.rir-trigger,.set-load-context) { color:var(--rook-text); }
 :root[data-appearance][data-style] .workout-screen .sets .set-row.set-done :is(input,.rir-trigger,.set-load-context) { color:var(--rook-secondary); }
 :root[data-appearance][data-style] .workout-screen .sets .set-row > .check { border:0; background:transparent; box-shadow:none; opacity:1; }
-.workout-screen .sets .set-active .check-mark { color:var(--rook-accent); background:color-mix(in srgb,var(--rook-accent) 8%,transparent); box-shadow:inset 0 0 0 1.5px var(--rook-accent); }
+.workout-screen .sets .set-active .check-mark { color:var(--rook-accent-text); background:color-mix(in srgb,var(--rook-accent) 8%,transparent); box-shadow:inset 0 0 0 1.5px var(--rook-accent); }
 .workout-screen .sets .set-active .check-mark svg { width:17px; height:17px; stroke-width:2.1; }
 .workout-screen .sets .set-done .check-mark { color:var(--rook-accent-text); background:color-mix(in srgb,var(--rook-accent) 14%,transparent); box-shadow:none; }
 .workout-screen .sets .set-done .check-mark svg { width:17px; height:17px; stroke-width:2.3; }
 .workout-screen .sets .set-index-label > b { font-size:13px; font-weight:600; color:var(--rook-secondary); }
-.workout-screen .sets .set-active .set-index-label > b { color:var(--rook-accent); font-weight:800; }
+.workout-screen .sets .set-active .set-index-label > b { color:var(--rook-accent-text); font-weight:800; }
 /* Small gold labels need more contrast on ivory. Reuse the existing stronger
    gold only for the current set and these inline actions, leaving theme-wide
    accents, completed rows, inactive actions and primary actions unchanged. */
@@ -97,7 +96,6 @@
 :root[data-appearance="light"][data-style="premium"] .workout-screen :is(.freestyle-copy,.freestyle-previous .text-button,.workout-previous):not(:disabled):focus-visible {
  outline-color:var(--rook-workout-action-accent);
 }
-:root[data-appearance="light"][data-style="premium"] .workout-screen .freestyle-copy:not(:disabled):active { opacity:.88; }
 .workout-screen .sets .set-load-context { min-height:var(--logger-height); background:transparent; border:0; font-family:inherit; font-size:1rem !important; line-height:1.2; letter-spacing:-.015em; }
 .workout-screen .sets :is(button,input):focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset:-3px; }
 .workout-screen .sets input[aria-invalid="true"] { box-shadow:inset 0 -2px var(--rook-error-text,var(--rook-accent)); }
@@ -121,28 +119,22 @@
 .workout-screen .sets .unilateral-side { gap:2px; }
 .workout-screen .sets .set-labels.per-side > .set-reps-heading { display:none; }
 @container logger-sets (min-width:396px) {
- .workout-screen .sets :is(.set-row,.set-labels) { --logger-index:22px; --logger-height:max(54px,3.375rem); --logger-tile:32px; --logger-number:1.375rem; --logger-metric-gap:14px; --logger-done-gap:8px; --logger-rir:44px; --logger-done:48px; --logger-check-face:40px; }
+ .workout-screen .sets :is(.set-row,.set-labels) { --logger-index:22px; --logger-height:max(54px,3.375rem); --logger-tile:32px; --logger-metric-gap:14px; --logger-done-gap:8px; --logger-rir:44px; --logger-done:48px; --logger-check-face:40px; }
  .workout-screen .sets :is(.set-row,.set-labels).with-rir { --logger-load-ratio:140fr; --logger-reps-ratio:118fr; --logger-load-hit:44px; --logger-reps-hit:40px; }
  .workout-screen .sets .rir-face { height:34px; }
 }
 @media (max-width:359px) { .workout-screen { padding-inline:calc(8px + env(safe-area-inset-left)) calc(8px + env(safe-area-inset-right)); } }
 @container logger-sets (max-width:335px) {
- .workout-screen .sets :is(.set-row,.set-labels) { --logger-index:16px; --logger-start-gap:2px; --logger-metric-gap:8px; --logger-rir-gap:5px; --logger-done-gap:3px; --logger-rir:36px; --logger-done:42px; --logger-check-face:34px; --logger-tile:26px; --logger-number:1.1875rem; --logger-load-hit:36px; --logger-reps-hit:36px; --logger-end-gap:8px; }
+ .workout-screen .sets :is(.set-row,.set-labels) { --logger-index:16px; --logger-start-gap:2px; --logger-metric-gap:8px; --logger-rir-gap:5px; --logger-done-gap:3px; --logger-rir:36px; --logger-done:42px; --logger-check-face:34px; --logger-tile:26px; --logger-load-hit:36px; --logger-reps-hit:36px; --logger-end-gap:8px; }
  .workout-screen .sets :is(.set-row,.set-labels).with-rir { --logger-load-ratio:104fr; --logger-reps-ratio:88fr; --logger-load-hit:32px; --logger-reps-hit:32px; }
  .workout-screen .sets .rir-face { width:34px; height:30px; }
- .workout-screen .sets .logger-load[data-value-length="4"] > input { font-size:1.0625rem; }
- .workout-screen .sets .logger-load[data-value-length="5"] > input { font-size:1rem; }
- .workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > input { letter-spacing:-.1em; }
- .workout-screen .sets .logger-load[data-value-length="4"] > .stepper-display-label { font-size:1.0625rem; }
- .workout-screen .sets .logger-load[data-value-length="5"] > .stepper-display-label { font-size:1rem; }
- .workout-screen .sets .logger-load:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"]) > .stepper-display-label { letter-spacing:-.1em; }
- .workout-screen .sets .logger-reps[data-value-length="3"] > input { font-size:1rem; letter-spacing:-.065em; }
  .workout-screen .sets :is(.set-row,.set-labels):is(.no-load,.per-side) { --logger-load-hit:44px; --logger-reps-hit:44px; }
 }
 /* Mobile columns stay stable when rest-timer padding makes the page scroll. */
-/* Preserve the existing accessibility reflow for enlarged text. This cannot
-   match the normal-size 320/390/430 layouts, with or without RIR. */
-@container logger-sets (width < 18em) {
+/* Preserve the existing accessibility reflow for enlarged text. At the normal
+   16px text size the threshold is still 288px, below all 320/390/430 layouts.
+   Reserve more value space as text grows, instead of shrinking +100/decimals. */
+@container logger-sets (width < calc(22em - 64px)) {
  .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) { grid-template-columns:repeat(4,minmax(0,1fr)); column-gap:4px; }
  .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-load,.set-load-context,.set-load-heading) { grid-column:1/3; grid-row:1; }
  .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-reps,.set-reps-heading) { grid-column:3/5; grid-row:1; }
@@ -214,11 +206,8 @@
  --logger-hit:44px; grid-template-columns:44px minmax(0,1fr) 44px;
  height:44px;
 }
-/* Match the shared mobile native-input zoom floor. Idle BW/+load text must
-   not switch to a different size when the same native input receives focus. */
-@media (hover:none) and (pointer:coarse) and (max-width:768px) {
- .workout-screen .sets .stepper-display-label { font-size:16px !important; }
-}
 @container logger-sets (width < 19em) {
  .workout-screen .sets .set-row.per-side > .unilateral-reps { grid-template-columns:minmax(0,1fr); }
 }
+
+.workout-screen .sets .workout-input-error { margin: 0 0 12px; font-size: 0.875rem; color: var(--rook-error-text); }

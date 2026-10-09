@@ -1,3 +1,4 @@
+import { presentNativeFile } from './platformFileActions.js';
 // Export an already loaded local asset; never re-encode or upload it.
 export function workoutPhotoFile(blob, date) {
   const extensions = {'image/jpeg':'jpg','image/png':'png','image/webp':'webp','image/gif':'gif','image/avif':'avif','image/heic':'heic'};
@@ -9,6 +10,8 @@ export function workoutPhotoFile(blob, date) {
 
 export async function exportWorkoutPhoto(file) {
   if (!file) throw new Error('Photo unavailable.');
+  const nativeResult = await presentNativeFile(file, { title: 'ROOK workout photo' });
+  if (nativeResult) return nativeResult;
   const files = [file];
   if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({files})) {
     try { await navigator.share({files}); return 'shared'; }

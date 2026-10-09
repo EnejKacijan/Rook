@@ -1,0 +1,8 @@
+.sheet.destructive-confirmation-sheet { min-height: 0; display: flex; flex-direction: column; overflow: hidden; padding-bottom: max(18px, env(safe-area-inset-bottom)); }
+.destructive-confirmation-sheet > .detail-header { flex: none; }
+.destructive-confirmation-sheet .destructive-confirmation-copy { min-height: 0; padding: 0; overflow-y: auto; overscroll-behavior-y: contain; }
+.sheet.destructive-confirmation-sheet h2 { margin: 0; padding-right: 0; line-height: 1.22; overflow-wrap: anywhere; }
+.destructive-confirmation-sheet p { overflow-wrap: anywhere; }
+.destructive-confirmation-sheet p > span { display: block; }
+.destructive-confirmation-actions { flex: none; display: grid; gap: 10px; margin-top: 20px; }
+.destructive-confirmation-actions .button { min-height: 48px; height: auto; padding: 14px 18px; white-space: normal; }

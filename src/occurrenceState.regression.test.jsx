@@ -27,13 +27,13 @@ it('reproduces a legacy week move whose completed identity differs from the sele
  s.weekScheduleOverrides[weekKey(s.selectedDate)]={[tue.id]:'2026-09-17',[thu.id]:'2026-09-15'};
  s.program.userEdited=true;s=deserializeState(serializeState(finish(s)),{strict:true});render(s);
  expect(s.workouts[0].originalScheduledDate).toBe('2026-09-15');
- expect(document.body.textContent).not.toContain('missed · not performed');
+ expect(document.body.textContent).not.toContain('Missed');
  expect(document.body.textContent).toContain('Performed');
  expect(document.body.textContent).not.toContain('Train today instead');
 });
 it('A unresolved Thursday exposes exactly the same eligible Train today request as the action',()=>{
  const s=fixture(),item=flexibleOccurrenceForDate(s,s.selectedDate);render(s);
- expect(item.status).toBe('missed');expect(document.body.textContent).toContain('missed · not performed');expect(button('Train today instead')).toBeTruthy();
+ expect(item.status).toBe('missed');expect(document.body.textContent).toContain('Missed');expect(button('Train today instead')).toBeTruthy();
  expect(canUseWorkoutToday(s,{sessionId:item.logicalSessionId})).toBe(true);expect(proposeWorkoutToday(s,{sessionId:item.logicalSessionId}).status).toBe('ready');
  const plan=structuredClone(s.program),next=applyWorkoutToday(s,proposeWorkoutToday(s,{sessionId:item.logicalSessionId}),{persist:()=>true});
  expect(plannedWorkoutForDate(next,'2026-09-18').logicalSessionId).toBe(item.logicalSessionId);expect(next.program).toEqual(plan);expect(flexibleSessionById(next,item.logicalSessionId).originalDate).toBe('2026-09-17');
@@ -42,7 +42,7 @@ it.each(['logicalSessionId','sourceOccurrenceId'])('B explicit %s resolves Thurs
  let s=fixture();const item=flexibleOccurrenceForDate(s,s.selectedDate);s=finish(s);
  if(field==='sourceOccurrenceId'){s.workouts[0].sourceOccurrenceId=item.logicalSessionId;delete s.workouts[0].logicalSessionId;delete s.workouts[0].programDayId;delete s.workouts[0].templateId;}
  const history=structuredClone(s.workouts);render(s);
- expect(document.body.textContent).not.toContain('missed · not performed');expect(button('Train today instead')).toBeUndefined();expect(button('View completed workout')).toBeTruthy();expect(button('Repeat today')).toBeTruthy();
+ expect(document.body.textContent).not.toContain('Missed');expect(button('Train today instead')).toBeUndefined();expect(button('View completed workout')).toBeTruthy();expect(button('Repeat today')).toBeTruthy();
  expect(flexibleOccurrenceForDate(s,s.selectedDate).status).toBe('completed');expect(completedWorkoutsForDate(s.workouts,'2026-09-17')).toEqual([]);expect(completedWorkoutsForDate(s.workouts,'2026-09-18')).toHaveLength(1);
  expect(calendarDayStates(s,['2026-09-17','2026-09-18'])['2026-09-17'].complete).toBe(false);expect(s.workouts).toEqual(history);
  const reloaded=deserializeState(serializeState(s));expect(flexibleOccurrenceForDate(reloaded,'2026-09-17').status).toBe('completed');
@@ -91,11 +91,11 @@ it('completed historical overflow repeats the linked record without duplicating 
 it.each(['active','skipped'])('a %s occurrence never receives missed copy or a Train today CTA',status=>{
  let s=fixture();const item=flexibleOccurrenceForDate(s,s.selectedDate);
  if(status==='active')s.activeWorkout=startWorkout(s,plannedWorkoutForDate(s,s.selectedDate));else s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'skip',sessionId:item.logicalSessionId})).state;
- render(s);expect(document.body.textContent).not.toContain('missed · not performed');expect(button('Train today instead')).toBeUndefined();expect(flexibleOccurrenceForDate(s,s.selectedDate).status).toBe(status);
+ render(s);expect(document.body.textContent).not.toContain('Missed');expect(button('Train today instead')).toBeUndefined();expect(flexibleOccurrenceForDate(s,s.selectedDate).status).toBe(status);
 });
 it('a legacy explicit skip stays skipped without changing its saved override',()=>{
  const s=fixture(),item=flexibleOccurrenceForDate(s,s.selectedDate);s.workoutOccurrenceOverrides[s.selectedDate]={[item.workoutId]:{skipWorkout:true}};const snapshot=structuredClone(s);
- render(s);expect(document.body.textContent).toContain('Skipped this session');expect(button('Train today instead')).toBeUndefined();expect(s).toEqual(snapshot);
+ render(s);expect(document.body.textContent).toContain('Skipped');expect(button('Train today instead')).toBeUndefined();expect(s).toEqual(snapshot);
 });
 it('combined reservations and valid resolutions share the same historical presentation and record link',()=>{
  let s=fixture();const item=flexibleOccurrenceForDate(s,s.selectedDate),other=flexibleOccurrenceForDate(s,'2026-09-15');

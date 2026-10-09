@@ -1,0 +1,18 @@
+.temporary-plan-sheet h1 { margin: 10px 0; font-size: 28px; line-height: 1.15; }
+.temporary-plan-sheet p { color: var(--rook-secondary); font-size: 14px; line-height: 1.5; }
+.temporary-plan-sheet fieldset { border: 0; padding: 0; margin: 22px 0; min-width: 0; }
+.temporary-plan-sheet legend, .temporary-plan-start { font-size: 13px; font-weight: 600; }
+.temporary-plan-start { display: grid; gap: 8px; }
+.temporary-plan-start input { width: 100%; min-height: 44px; font-size: 16px; box-sizing: border-box; }
+.temporary-plan-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.temporary-plan-choices button { min-width: 44px; min-height: 44px; width: auto; padding: 10px 12px; border: 1px solid var(--rook-control-border,var(--rook-border)); border-radius: 10px; color: var(--rook-text); background: var(--rook-surface); }
+.temporary-plan-choices button[aria-pressed="true"] { color: var(--rook-accent-text); background: var(--rook-accent-soft); border-color: var(--rook-accent-text); }
+.temporary-plan-equipment { display: grid; gap: 6px; margin-top: 8px; }
+.temporary-plan-equipment label { display: flex; gap: 10px; align-items: center; min-height: 44px; font-size: 14px; }
+.temporary-plan-equipment input { accent-color: var(--rook-accent); width: 18px; height: 18px; }
+.temporary-plan-changes article { padding: 16px 0; border-bottom: 1px solid var(--rook-border); }
+.temporary-plan-changes article p { margin: 5px 0; }
+.temporary-plan-changes summary { color: var(--rook-accent-text); font-size: 13px; padding: 8px 0; cursor: pointer; }
+.temporary-plan-changes li { font-size: 13px; line-height: 1.5; margin: 6px 0; }
+.temporary-plan-sheet .temporary-plan-error { color: var(--rook-danger-text,var(--rook-text)); }
+.temporary-plan-notice { margin: 12px 0; font-size: 13px; }

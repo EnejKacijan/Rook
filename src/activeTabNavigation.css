@@ -1,0 +1,19 @@
+/* Chat history is a tab-owned subpage, with the same persistent navigation.
+   Decision sheets above it still own their full modal focus/inert scope. */
+:root .app-content > .coach-screen.coach-menu-open {
+  /* Keep Coach's existing inline viewport/scroll ownership. Its former modal
+     stacking context must no longer intercept taps over the persistent nav. */
+  z-index: 0;
+}
+.coach-screen > .coach-history-surface[data-tab-route] {
+  bottom: var(--bottom-nav-total-height);
+}
+
+/* The expanded editor remains the same mounted editor/guard/scroll owner.
+   Reserve space for its navigation; sheet presentation still hides the bar. */
+:root .edit-plan-page-layer:has(> .bottom-nav) > .screen.detail-screen.edit-plan-screen {
+  height: calc(100% - var(--bottom-nav-total-height));
+  /* Anchored editor footers already require an important max-height. Keep
+     that contract bounded above the newly available navigation. */
+  max-height: calc(100% - var(--bottom-nav-total-height)) !important;
+}

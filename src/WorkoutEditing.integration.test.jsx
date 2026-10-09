@@ -7,12 +7,13 @@ import {createReturningUserFixture} from './demoFixture.js';
 import * as domain from './domain.js';
 import {startFreestyleWorkout,addFreestyleExercise} from './freestyleWorkout.js';
 import {saveWorkoutTemplate,templateDraft} from './savedWorkouts.js';
+import {useAnimationClock} from './testAnimationClock.js';
 let host,root,current,closed;
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
-beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-21T12:00:00'));vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('scrollTo',()=>{});HTMLElement.prototype.scrollTo=()=>{};HTMLElement.prototype.scrollIntoView=()=>{};HTMLElement.prototype.getAnimations=()=>[];host=document.createElement('div');document.body.append(host);root=createRoot(host);closed=vi.fn();});
+beforeEach(()=>{useAnimationClock();vi.setSystemTime(new Date('2026-09-21T12:00:00'));vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));vi.stubGlobal('scrollTo',()=>{});HTMLElement.prototype.scrollTo=()=>{};HTMLElement.prototype.scrollIntoView=()=>{};HTMLElement.prototype.getAnimations=()=>[];host=document.createElement('div');document.body.append(host);root=createRoot(host);closed=vi.fn();});
 afterEach(()=>{act(()=>root.unmount());host.remove();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 const click=e=>act(()=>e.click()),button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
-const templateOption=text=>{click(host.querySelector('[aria-label="Saved workout options"]'));click(button(text));act(()=>vi.advanceTimersByTime(250));};
+const templateOption=text=>{click(host.querySelector('[aria-label="Saved workout options"]'));click(button(text));act(()=>vi.advanceTimersByTime(250));act(()=>vi.advanceTimersByTime(100));};
 const type=(input,value)=>act(()=>{input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
 function mount(initial,render){function Harness(){const[state,setState]=useState(initial);current=state;return render(state,fn=>setState(prev=>fn(structuredClone(prev))));}act(()=>root.render(<Harness/>));}
 it('actual Adjust Today editor keeps Remove/Undo in the draft, Cancel preserves prior state, and Apply persists only preparation',()=>{
@@ -100,9 +101,9 @@ it.each([true,false])('rename cancel/save preserves identity, increments revisio
  expect(current.savedWorkoutTemplates[0]).toMatchObject({id:'saved',revision:2,name:'Renamed routine',createdAt:initial.savedWorkoutTemplates[0].createdAt});expect(current.savedWorkoutTemplates[0].exercises).toEqual(initial.savedWorkoutTemplates[0].exercises);expect(current.activeWorkout).toEqual(initial.activeWorkout);expect(current.workouts).toEqual(initial.workouts);
 });
 it('delete cancel/failure/retry requires confirmation, deletes once and preserves history/session/plan',()=>{
- const initial=savedFixture();mountSaved(initial);templateOption('Delete saved workout');expect(current).toEqual(initial);expect(host.textContent).toContain('Your workout history and active session remain saved.');click(button('Cancel'));expect(current).toEqual(initial);
- templateOption('Delete saved workout');const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('Delete saved workout only'));expect(current).toEqual(initial);expect(host.querySelector('[role=alert]').textContent).toContain('Could not save');write.mockRestore();
- const save=vi.spyOn(domain,'saveState'),confirm=button('Delete saved workout only');act(()=>{confirm.click();confirm.click();});
+ const initial=savedFixture();mountSaved(initial);templateOption('Delete saved workout');expect(current).toEqual(initial);expect(document.body.textContent).toContain('Your workout history and active session stay saved.');click(button('KEEP WORKOUT'));act(()=>vi.advanceTimersByTime(250));expect(current).toEqual(initial);
+ templateOption('Delete saved workout');const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('DELETE SAVED WORKOUT'));expect(current).toEqual(initial);expect(document.querySelector('[role=alert]').textContent).toContain('Could not save');write.mockRestore();
+ const save=vi.spyOn(domain,'saveState'),confirm=button('DELETE SAVED WORKOUT');act(()=>{confirm.click();confirm.click();});act(()=>vi.advanceTimersByTime(250));
  expect(save).toHaveBeenCalledOnce();expect(current.savedWorkoutTemplates).toEqual([]);expect(current.activeWorkout).toEqual(initial.activeWorkout);expect(current.workouts).toEqual(initial.workouts);expect(current.program).toEqual(initial.program);expect(host.textContent).toContain('Saved workout deleted');expect(host.querySelector('.saved-workout-preview')).toBeNull();
 });
 it('new-template visible Edit cancels draft edits and Review saves only the intended reusable definition',()=>{

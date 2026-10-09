@@ -26,17 +26,17 @@
   width: 34px;
   height: 34px;
   margin: 24px auto 0;
-  border: 3px solid #d9e4de;
-  border-top-color: #1f6b4c;
+  border: 3px solid var(--rook-accent-text);
+  border-top-color: var(--rook-accent-text);
   border-radius: 50%;
   animation: building-spin 0.8s linear infinite;
 }
 
-.building-card .eyebrow { color: #1f6b4c; }
+.building-card .eyebrow { color: var(--rook-accent-text); }
 .building-card h2 { margin: 13px 0 0; font-size: 25px; letter-spacing: -0.02em; }
 .building-card p { min-height: 42px; margin: 11px 0 0; color: #6f6c68; font-size: 14px; line-height: 1.5; }
 .building-card small { display: block; margin-top: 18px; color: #a3a09b; font-size: 11px; }
-.building-cancel { min-height: 42px; margin-top: 16px; padding: 0 10px; border: 0; background: transparent; color: #1f6b4c; font-size: 11px; font-weight: 750; letter-spacing: .08em; }
+.building-cancel { min-height: 42px; margin-top: 16px; padding: 0 10px; border: 0; background: transparent; color: var(--rook-accent-text); font-size: 11px; font-weight: 750; letter-spacing: .08em; }
 
 @keyframes building-spin { to { transform: rotate(360deg); } }
 @keyframes building-fade-in { from { opacity: 0; } }

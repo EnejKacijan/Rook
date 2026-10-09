@@ -39,7 +39,7 @@
 .queue-order-option { padding:10px 0;border-bottom:1px solid var(--rook-border); }
 .queue-order-option > strong { display:block;font-size:14px;overflow-wrap:anywhere; }
 .queue-order-option > div { display:flex;gap:10px; }
-.queue-order-option button { min-height:44px;min-width:88px;padding:0 8px;border:0;background:transparent;color:var(--rook-accent); }
+.queue-order-option button { min-height:44px;min-width:88px;padding:0 8px;border:0;background:transparent;color:var(--rook-accent-text); }
 .queue-reorder-preview.up-next { position:fixed;z-index:120;display:block;margin:0;padding:0;pointer-events:none;border:0;border-radius:0;box-shadow:0 3px 8px #00000010;transform:translate3d(0,var(--reorder-drag-y,0px),0); }
 .queue-reorder-preview.up-next .swipe-action-row { background:var(--rook-surface); }
 @media(prefers-reduced-motion:reduce) { .up-next-queue.is-reordering [data-swipe-row] { transition:none; } }

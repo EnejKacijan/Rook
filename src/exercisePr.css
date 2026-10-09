@@ -1,0 +1,37 @@
+.exercise-pr-sheet { display: flex; flex-direction: column; overflow: hidden; }
+.exercise-pr-sheet > :is(.detail-header, .sheet-header-chrome) { flex: 0 0 auto; }
+.exercise-pr-sheet > .sheet-scroll { min-height: 0; flex: 0 1 auto; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 12px; }
+.workout-screen .active-performance-pr-trigger {
+  display: flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  min-height: 44px;
+  padding: 0;
+  border: 0;
+  text-align: left;
+  color: var(--rook-accent-text);
+}
+.active-performance-pr-trigger .active-performance-pr {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+}
+.exercise-pr-sheet .exercise-pr-value {
+  margin: 8px 0;
+  font-size: 40px;
+  line-height: 1.1;
+  color: var(--rook-text);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.exercise-pr-sheet .exercise-pr-value small { font-size: .45em; color: var(--rook-secondary); }
+:root .sheet.exercise-pr-sheet .exercise-pr-name { margin: 0 0 20px; font-weight: 600; color: var(--rook-text); }
+.exercise-pr-evidence { display: grid; gap: 12px; margin: 0; padding: 16px 0; border-block: 1px solid var(--rook-border); }
+.exercise-pr-evidence > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; }
+.exercise-pr-evidence dt { color: var(--rook-secondary); }
+.exercise-pr-evidence dd { margin: 0; font-weight: 600; color: var(--rook-text); }
+:root .sheet.exercise-pr-sheet .exercise-pr-change { margin: 12px 0; color: var(--rook-accent-text); font-weight: 600; }
+.exercise-pr-sheet .exercise-pr-explanation { margin: 14px 0; color: var(--rook-secondary); font-size: 13px; line-height: 1.5; }
+.exercise-pr-history { display: flex; width: 100%; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 0; border: 0; color: var(--rook-accent-text); text-align: left; }

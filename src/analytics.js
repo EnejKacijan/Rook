@@ -1,5 +1,6 @@
 export const FUNNEL_EVENTS = Object.freeze([
   'app_open',
+  'coach_availability_changed',
   'onboarding_started',
   'onboarding_step_viewed',
   'onboarding_step_completed',
@@ -20,7 +21,7 @@ export const ANALYTICS_STORAGE_KEY = 'lift-funnel-events-v1';
 const LIFETIME_ONCE_KEY = 'lift-funnel-once-v1';
 const SESSION_ONCE_KEY = 'lift-funnel-session-once-v1';
 const MAX_EVENTS = 250;
-const allowedProperties = new Set(['path', 'step', 'stepIndex', 'totalSteps', 'planType', 'source', 'durationMs', 'daysPerWeek', 'sessionMinutes', 'exerciseCount', 'setCount', 'endedEarly', 'placement', 'offeringId', 'productId', 'reason']);
+const allowedProperties = new Set(['path', 'step', 'stepIndex', 'totalSteps', 'planType', 'source', 'durationMs', 'daysPerWeek', 'sessionMinutes', 'exerciseCount', 'setCount', 'endedEarly', 'placement', 'offeringId', 'productId', 'reason', 'context']);
 
 function readJson(storage, key, fallback) {
   try { const value = JSON.parse(storage?.getItem(key) || 'null'); return value ?? fallback; }

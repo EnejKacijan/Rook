@@ -3,6 +3,7 @@ import {exerciseCatalog} from './domain.js';
 import {exerciseArt} from './exerciseArt.js';
 import {canonicalPlanReviewArt} from './PlanReviewIllustration.jsx';
 import {useAvailableImage} from './useAvailableImage.js';
+import {ExerciseIllustration} from './ExerciseIllustration.jsx';
 import './exercisePickerIdentity.css';
 
 export function ExercisePickerIdentity({item,enabled=true,deferOffscreen=true,priority=false,children}) {
@@ -22,7 +23,7 @@ export function ExercisePickerIdentity({item,enabled=true,deferOffscreen=true,pr
   const image=useAvailableImage(enabled && (!deferOffscreen || priority || visible) && !item.custom ? canonicalPlanReviewArt(exercise,exerciseCatalog,exerciseArt) : null);
   return <span className="exercise-picker-identity">
     {enabled && <span ref={thumbnail} className="exercise-picker-thumbnail" aria-hidden="true">
-      {image.source?<img src={image.source} onError={image.onError} alt="" width="44" height="44" loading="eager" fetchpriority={priority?'high':'auto'} decoding="async" draggable={false}/>:<span className="exercise-picker-placeholder">—</span>}
+      {image.source?<ExerciseIllustration src={image.source} onError={image.onError} alt="" width="44" height="44" loading="eager" fetchpriority={priority?'high':'auto'} decoding="async" draggable={false}/>:<span className="exercise-picker-placeholder">—</span>}
     </span>}
     <span className="exercise-picker-label">{children || <strong>{item.name}</strong>}</span>
   </span>;

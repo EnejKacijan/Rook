@@ -5,13 +5,13 @@ import { BottomNav } from './App.jsx';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let root,host,resize,disconnect;
 afterEach(()=>{if(root)act(()=>root.unmount());host?.remove();root=null;vi.unstubAllGlobals();vi.restoreAllMocks();});
-function render(page='today'){
+function render(page='today',onActiveTabRetap){
  disconnect=vi.fn();vi.stubGlobal('ResizeObserver',class {constructor(callback){resize=callback;}observe(){}disconnect(){disconnect();}});
  host=document.createElement('div');document.body.append(host);root=createRoot(host);
- const setPage=vi.fn();act(()=>root.render(<BottomNav page={page} setPage={setPage}/>));return setPage;
+ const setPage=vi.fn();act(()=>root.render(<BottomNav page={page} setPage={setPage} onActiveTabRetap={onActiveTabRetap}/>));return setPage;
 }
 it.each(['today','coach','progress','profile'])('preserves four destinations and current-page semantics for %s',page=>{
- const setPage=render(page),buttons=[...host.querySelectorAll('button')];
+ const retap=vi.fn(),setPage=render(page,retap),buttons=[...host.querySelectorAll('button')];
  expect(buttons.map(b=>b.textContent)).toEqual(['TODAY','COACH','PROGRESS','PROFILE']);
  expect(host.querySelectorAll('.nav-icon-line')).toHaveLength(4);
  expect(host.querySelectorAll('.nav-icon-solid')).toHaveLength(4);
@@ -19,7 +19,9 @@ it.each(['today','coach','progress','profile'])('preserves four destinations and
  expect(host.querySelector('[aria-current="page"]').getAttribute('aria-label')).toBe(page.toUpperCase());
  expect(host.querySelectorAll('.nav-icon[aria-hidden="true"] svg')).toHaveLength(4);
  expect(host.querySelectorAll('svg[focusable="false"]')).toHaveLength(4);
- act(()=>buttons[2].click());expect(setPage).toHaveBeenCalledWith('progress');
+ act(()=>buttons[2].click());
+ if(page==='progress'){expect(retap).toHaveBeenCalledWith('progress');expect(setPage).not.toHaveBeenCalled();}
+ else {expect(setPage).toHaveBeenCalledWith('progress');expect(retap).not.toHaveBeenCalled();}
 });
 it('publishes measured total height including safe area and text growth, ignoring temporarily hidden nav',()=>{
  render();const nav=host.querySelector('nav');let height=98;

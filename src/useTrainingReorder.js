@@ -15,6 +15,7 @@ export function useTrainingReorder(ref,options) {
       getCandidate:value=>latest.current.getCandidate(value),beforeStart:value=>latest.current.beforeStart?.(value),
       getScroller:element=>latest.current.getScroller?.(element),getViewport:element=>latest.current.getViewport?.(element),
       selectionFeedback:options.selectionFeedback,
+      fixedSlots:options.fixedSlots,
     })}:null;
   });
   useLayoutEffect(()=>{if(view&&preview.current&&gesture.current)preview.current.style.setProperty('--reorder-drag-y',`${gesture.current.clientY-gesture.current.startY}px`);},[view]);

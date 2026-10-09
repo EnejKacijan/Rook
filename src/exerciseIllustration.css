@@ -1,0 +1,29 @@
+.exercise-illustration { position: relative; display: block; }
+.exercise-illustration > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+
+/* Scoped to canonical exercise art. Photos, logos and other images keep their
+   own colors. Keep the original image as a fallback in older browsers. */
+@supports ((mask-image: url("")) or (-webkit-mask-image: url(""))) {
+  .exercise-illustration > img { opacity: 0; }
+  .exercise-illustration::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    padding: inherit;
+    pointer-events: none;
+    background: var(--rook-illustration-ink, var(--rook-accent-text, #176b49));
+    -webkit-mask-image: var(--exercise-illustration-source);
+    mask-image: var(--exercise-illustration-source);
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-position: center;
+    mask-position: center;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    -webkit-mask-origin: content-box;
+    mask-origin: content-box;
+    -webkit-mask-clip: content-box;
+    mask-clip: content-box;
+    mask-mode: alpha;
+  }
+}

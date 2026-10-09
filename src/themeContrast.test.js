@@ -7,19 +7,27 @@ const rules=postcss.parse(css);
 function palette(style,appearance='dark'){
  const values={};
  const selectors=[':root',...(appearance==='dark'?[':root[data-appearance="dark"]']:[]),...(style==='premium'?[':root[data-style="premium"]']:[]),...(style==='premium'&&appearance==='light'?[':root[data-appearance="light"][data-style="premium"]']:[])];
- for(const selector of selectors)rules.walkRules(rule=>{if(rule.selector===selector)rule.walkDecls(d=>{if(d.prop.startsWith('--rook-'))values[d.prop]=d.value;});});
+ for(const selector of selectors)rules.walkRules(rule=>{if(rule.selectors.includes(selector))rule.walkDecls(d=>{if(d.prop.startsWith('--rook-'))values[d.prop]=d.value;});});
  const resolve=(name,depth=0)=>{if(depth>8)throw Error(`Circular token ${name}`);const value=values[name];if(!value)throw Error(`Missing token ${name}`);return value.replace(/var\((--rook-[\w-]+)\)/g,(_,token)=>resolve(token,depth+1));};
  return resolve;
 }
 function channels(hex){return hex.slice(1).match(/../g).map(v=>parseInt(v,16));}
 function contrast(a,b){const lum=hex=>channels(hex).reduce((s,c,i)=>{const v=c/255;return s+[.2126,.7152,.0722][i]*(v<=.04045?v/12.92:((v+.055)/1.055)**2.4);},0);const x=lum(a),y=lum(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
-describe.each(['standard','premium'])('%s dark semantic roles',style=>{
- const token=palette(style);
+describe.each(['standard','premium'].flatMap(style=>['light','dark'].map(appearance=>({style,appearance}))))('$style $appearance semantic text roles',({style,appearance})=>{
+ const token=palette(style,appearance);
  for(const [fg,bg,min]of [
   ['text','bg',4.5],['text','surface',4.5],['secondary','bg',4.5],['secondary','surface',4.5],['secondary','surface-muted',4.5],
-  ['muted','bg',4.5],['muted','surface',4.5],['disabled-text','disabled-surface',4.5],['on-selected','selected',4.5],
-  ['accent-text','accent-soft',4.5],['warning-text','warning-surface',4.5],['error-text','error-surface',4.5],['control-border','surface',3],
+  ['muted','bg',4.5],['muted','surface',4.5],['muted','surface-raised',4.5],['on-selected','selected',4.5],
+  ['accent-text','bg',4.5],['accent-text','surface-raised',4.5],['accent-text','accent-soft',4.5],
+  ['progress','surface-raised',3],
+  ['warning-text','bg',4.5],['warning-text','surface-raised',4.5],['warning-text','warning-surface',4.5],
+  ['error-text','bg',4.5],['error-text','surface-raised',4.5],['error-text','error-surface',4.5],
  ])it(`${fg} / ${bg} >= ${min}`,()=>expect(contrast(token('--rook-'+fg),token('--rook-'+bg))).toBeGreaterThanOrEqual(min));
+});
+describe.each(['standard','premium'])('%s dark control roles',style=>{
+ const token=palette(style);
+ for(const [fg,bg,min]of [['disabled-text','disabled-surface',4.5],['control-border','surface',3]])
+  it(`${fg} / ${bg} >= ${min}`,()=>expect(contrast(token('--rook-'+fg),token('--rook-'+bg))).toBeGreaterThanOrEqual(min));
 });
 it('Edit block uses defined surface roles, not white fallbacks to missing tokens',()=>{
  const local=readFileSync('src/overrides.css','utf8');

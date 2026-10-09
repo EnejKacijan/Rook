@@ -28,7 +28,7 @@ function fixture(kind='active'){
  if(state.activeWorkout.exercises[0])Object.assign(state.activeWorkout.exercises[0].sets[0],{weight:52.5,reps:10,rir:2,touched:true});
  return state;
 }
-function mount(initial=fixture(),workout=false){function Harness(){const[state,setState]=useState(initial);current=state;const update=fn=>setState(s=>fn(structuredClone(s)));updateWorkout=update;return <>{workout&&<ActiveWorkout state={state} update={update} setPage={()=>{}} setDetail={()=>{}}/>}<Detail detail={{freestylePicker:true}} state={state} update={update} close={close} setDetail={()=>{}}/></>;}act(()=>root.render(<Harness/>));act(()=>vi.advanceTimersByTime(80));}
+function mount(initial=fixture(),workout=false,{cloudSync}={}){function Harness(){const[state,setState]=useState(initial);current=state;const update=fn=>{setState(s=>fn(structuredClone(s)));return cloudSync?.();};updateWorkout=update;return <>{workout&&<ActiveWorkout state={state} update={update} setPage={()=>{}} setDetail={()=>{}}/>}<Detail detail={{freestylePicker:true}} state={state} update={update} close={close} setDetail={()=>{}}/></>;}act(()=>root.render(<Harness/>));act(()=>vi.advanceTimersByTime(80));}
 function preview(query='hack squat'){type(host.querySelector('input[type=search]'),query);click(host.querySelector('.queue-search-body'));}
 it('preview addition expires at five seconds through clock ticks, workout updates and preview state changes',()=>{
  mount(fixture(),true);preview();click(button('Add to Up Next'));
@@ -36,6 +36,7 @@ it('preview addition expires at five seconds through clock ticks, workout update
  expect(notice().textContent).toBe('Hack Squat addedUndo');
  act(()=>vi.advanceTimersByTime(2000));
  act(()=>updateWorkout(s=>{s.activeWorkout.exercises[0].sets[0].reps=12;return s;}));
+ preview(); // Inspecting the added item stays open until another explicit action.
  click(button('Add again')); // Opening confirmation is not another addition.
  const pane=host.querySelector('.queue-exercise-preview');act(()=>{pane.scrollTop=90;pane.dispatchEvent(new Event('scroll'));});
  act(()=>vi.advanceTimersByTime(2999));expect(notice()).not.toBeNull();
@@ -46,7 +47,7 @@ it('preview addition expires at five seconds through clock ticks, workout update
 it('Add again restarts Undo and a near-expiry Undo removes only that instance while retaining later workout data',()=>{
  mount();preview();click(button('Add to Up Next'));
  const session=structuredClone(current.activeWorkout),first=session.exercises[1].id;
- act(()=>vi.advanceTimersByTime(4000));click(button('Add again'));click(button('Add another instance'));
+ act(()=>vi.advanceTimersByTime(4000));preview();click(button('Add again'));const addAgain=button('Add another instance');act(()=>{addAgain.click();addAgain.click();});
  const second=current.activeWorkout.exercises[2].id;expect(second).not.toBe(first);
  act(()=>vi.advanceTimersByTime(1000));expect(button('Undo')).toBeDefined();
  act(()=>updateWorkout(s=>{Object.assign(s.activeWorkout.exercises[0].sets[0],{weight:65,reps:14,completed:true});return s;}));
@@ -55,7 +56,7 @@ it('Add again restarts Undo and a near-expiry Undo removes only that instance wh
  expect(current.activeWorkout.exercises[0].sets[0]).toMatchObject({weight:65,reps:14,completed:true});
  expect(current.activeWorkout.id).toBe(session.id);expect(current.activeWorkout.startedAt).toBe(session.startedAt);
  expect(current.activeWorkout.exerciseIndex).toBe(session.exerciseIndex);expect(current.activeWorkout.rest).toEqual(session.rest);
- expect(button('Undo')).toBeUndefined();expect(button('✓ In Up Next').disabled).toBe(true);
+ expect(button('Undo')).toBeUndefined();expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(host.querySelector('[data-catalog-id="hack-squat"] .queue-add-button').disabled).toBe(true);
  expect(domain.deserializeState(domain.serializeState(current),{strict:true}).activeWorkout.exercises).toEqual(current.activeWorkout.exercises);
 });
 it('owner flow uses truthful priority, one durable addition, retained browser identity, and no preview Back-to-workout footer',()=>{
@@ -66,8 +67,8 @@ it('owner flow uses truthful priority, one durable addition, retained browser id
  expect(button('Add to Up Next').className).toContain('primary');expect(button('Do now').className).toContain('secondary');expect(sheet.querySelector('[aria-label="View Hack Squat image"]')).not.toBeNull();
  const add=button('Add to Up Next'),save=vi.spyOn(domain,'saveState');act(()=>{add.click();add.click();});
  expect(save).toHaveBeenCalledOnce();expect(current.activeWorkout.exercises).toHaveLength(2);expect(current.activeWorkout.exercises[0]).toEqual(initial.activeWorkout.exercises[0]);expect(current.activeWorkout.rest).toEqual(initial.activeWorkout.rest);expect(close).not.toHaveBeenCalled();
- expect(button('✓ In Up Next').disabled).toBe(true);expect(host.querySelector('.queue-preview-added').className).toContain('is-acknowledged');
- click(host.querySelector('.detail-header-back'));expect(host.querySelector('input')).toBe(input);expect(input.value).toBe('hack squat');expect(host.querySelector('[data-exercise-search-scroll]')).toBe(list);expect(list.scrollTop).toBe(123);expect(document.activeElement.className).toBe('queue-search-body');expect(button('Back to workout')).toBeDefined();
+ expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(header.textContent).toContain('Add exercise');expect(host.querySelector('[data-catalog-id="hack-squat"]').textContent).toContain('In Up Next');
+ expect(host.querySelector('input')).toBe(input);expect(input.value).toBe('hack squat');expect(host.querySelector('[data-exercise-search-scroll]')).toBe(list);expect(list.scrollTop).toBe(123);expect(document.activeElement.className).toBe('queue-search-body');expect(button('Back to workout')).toBeDefined();
  expect(sheet.classList.contains('has-exercise-preview')).toBe(false);
  click(host.querySelector('.queue-search-body'));expect(button('✓ In Up Next').disabled).toBe(true);expect(host.querySelector('.queue-exercise-preview').scrollTop).toBe(0);
  click(host.querySelector('.detail-header-close'));expect(close).toHaveBeenCalledOnce();expect(domain.deserializeState(domain.serializeState(current),{strict:true}).activeWorkout.exercises).toEqual(current.activeWorkout.exercises);
@@ -90,10 +91,32 @@ it('Do now twice selects the exact queued instance once and reuses scoped workou
 it('ambiguous duplicates require explicit instance choice and Add again remains explicit',()=>{
  mount(fixture('duplicates'));preview();const before=structuredClone(current);click(button('Do now'));expect(current).toEqual(before);expect(close).not.toHaveBeenCalled();expect(document.activeElement).toBe(host.querySelector('.queue-preview-choice'));const choices=host.querySelectorAll('.queue-preview-choice button');expect(choices).toHaveLength(2);click(choices[1]);expect(current.activeWorkout.exercises[0].id).toBe(before.activeWorkout.exercises[2].id);
 });
-it('a Do now attempt during an in-progress durable Add cannot interleave mutations; retry selects the existing instance',()=>{
+it('a Do now attempt during an in-progress durable Add cannot interleave mutations; reopening permits selecting the existing instance',()=>{
  mount();preview();const original=domain.saveState,doNow=button('Do now');let reentered=false;
  const save=vi.spyOn(domain,'saveState').mockImplementation(state=>{if(!reentered){reentered=true;doNow.click();}return original(state);});
- click(button('Add to Up Next'));expect(current.activeWorkout.exercises).toHaveLength(2);expect(current.activeWorkout.exercises[0].exerciseId).toBe('leg-press');expect(close).not.toHaveBeenCalled();expect(host.querySelector('[role=alert]').textContent).toContain('Please wait');save.mockRestore();click(button('Do now'));expect(current.activeWorkout.exercises).toHaveLength(2);expect(current.activeWorkout.exercises[0].exerciseId).toBe('hack-squat');expect(close).toHaveBeenCalledOnce();
+ click(button('Add to Up Next'));expect(current.activeWorkout.exercises).toHaveLength(2);expect(current.activeWorkout.exercises[0].exerciseId).toBe('leg-press');expect(close).not.toHaveBeenCalled();expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(host.querySelector('[role=alert]')).toBeNull();save.mockRestore();preview();click(button('Do now'));expect(current.activeWorkout.exercises).toHaveLength(2);expect(current.activeWorkout.exercises[0].exerciseId).toBe('hack-squat');expect(close).toHaveBeenCalledOnce();
+});
+it('returns after local success without waiting for a pending cloud write',()=>{
+ const cloudSync=vi.fn(()=>new Promise(()=>{}));mount(fixture(),false,{cloudSync});preview();click(button('Add to Up Next'));
+ expect(cloudSync).toHaveBeenCalledOnce();expect(current.activeWorkout.exercises).toHaveLength(2);expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(close).not.toHaveBeenCalled();expect(host.querySelector('input[type=search]').value).toBe('hack squat');
+});
+it('failed Add stays on its detail and a successful retry returns exactly one level',()=>{
+ mount();preview();const before=structuredClone(current),save=vi.spyOn(domain,'saveState').mockReturnValue(false);
+ click(button('Add to Up Next'));expect(current).toEqual(before);expect(host.querySelector('.queue-exercise-preview')).not.toBeNull();expect(button('Undo')).toBeUndefined();
+ save.mockRestore();click(button('Add to Up Next'));expect(current.activeWorkout.exercises).toHaveLength(2);expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(close).not.toHaveBeenCalled();
+});
+it('a rapid pointer replay cannot activate the revealed picker row or close it; other targets and virtual activation stay available',()=>{
+ mount();preview();const pointer=(target,detail=1,x=150,y=500)=>act(()=>target.dispatchEvent(new MouseEvent('click',{bubbles:true,cancelable:true,detail,clientX:x,clientY:y})));
+ pointer(button('Add to Up Next'));const row=host.querySelector('.queue-search-body');
+ pointer(row,2);pointer(button('Back to workout'),2);expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(close).not.toHaveBeenCalled();expect(current.activeWorkout.exercises).toHaveLength(2);
+ pointer(row,1,15,150);expect(host.querySelector('.queue-exercise-preview')).not.toBeNull();click(host.querySelector('.detail-header-back'));
+ click(button('Back to workout'));expect(close).toHaveBeenCalledOnce();
+});
+it('confirmed Add again suppresses only the immediate pointer replay, then permits ordinary inspection',()=>{
+ mount(fixture('queued'));preview();click(button('Add again'));act(()=>button('Add another instance').dispatchEvent(new MouseEvent('click',{bubbles:true,detail:1,clientX:150,clientY:500})));
+ const row=host.querySelector('.queue-search-body'),replay=()=>act(()=>row.dispatchEvent(new MouseEvent('click',{bubbles:true,detail:2,clientX:150,clientY:500})));
+ replay();expect(host.querySelector('.queue-exercise-preview')).toBeNull();expect(current.activeWorkout.exercises).toHaveLength(3);expect(close).not.toHaveBeenCalled();
+ act(()=>vi.advanceTimersByTime(350));replay();expect(host.querySelector('.queue-exercise-preview')).not.toBeNull();expect(button('Add again')).toBeDefined();expect(current.activeWorkout.exercises).toHaveLength(3);
 });
 it('Add followed immediately by X retains the durable addition with no deferred reopen',()=>{
  mount();preview();act(()=>{button('Add to Up Next').click();host.querySelector('.detail-header-close').click();});expect(current.activeWorkout.exercises).toHaveLength(2);expect(close).toHaveBeenCalledOnce();act(()=>root.render(null));act(()=>vi.advanceTimersByTime(1000));expect(host.children).toHaveLength(0);expect(close).toHaveBeenCalledOnce();
@@ -117,4 +140,12 @@ it.each([false,true])('inner motion preserves shell/search and cleans up on rapi
  click(host.querySelector('.detail-header-back'));
  if(!reduced)expect(animations.filter(a=>!a.node.classList.contains('queue-preview-paint')).at(-1).frames[0].transform).toBe('translateX(-5px)');
  act(()=>host.querySelector('main').dispatchEvent(new CustomEvent('rook:before-sheet-close')));expect(host.querySelector('.queue-preview-paint')).toBeNull();act(()=>root.render(null));expect(document.querySelector('.queue-preview-paint')).toBeNull();expect(animations.every(a=>a.cancel.mock.calls.length>0)).toBe(true);
+});
+it.each([false,true])('successful Add reuses one-level Back motion and retained search (reduced %s)',motionReduced=>{
+ reduced=motionReduced;mount();const input=host.querySelector('input[type=search]');preview();act(()=>vi.advanceTimersByTime(160));animations=[];
+ click(button('Add to Up Next'));expect(host.querySelector('.queue-exercise-preview:not(.queue-preview-paint)')).toBeNull();expect(host.querySelector('input[type=search]')).toBe(input);expect(input.value).toBe('hack squat');expect(close).not.toHaveBeenCalled();
+ const incoming=animations.filter(a=>!a.node.classList.contains('queue-preview-paint'));
+ if(reduced)expect(incoming).toHaveLength(0);
+ else {expect(incoming.length).toBeGreaterThan(0);expect(incoming.every(a=>a.timing.duration===160&&a.frames[0].transform==='translateX(-5px)')).toBe(true);}
+ act(()=>vi.advanceTimersByTime(160));expect(host.querySelector('.queue-preview-paint')).toBeNull();
 });

@@ -66,12 +66,24 @@ it('a session-added exercise makes a previously ready final Finish neutral again
  expect(current.activeWorkout.exercises.at(-1).sets.some(set=>!set.completed)).toBe(true);
  expect(button('FINISH WORKOUT').classList.contains('secondary')).toBe(true);
 });
-it('preview Add and deliberate Add again create exact separate instances with the existing five-second Undo',()=>{
+it('preview Add and confirmed Add again return to the picker with separate instances and the existing five-second Undo',()=>{
  const initial=mount();open();search('Lateral Raise');click(picker().querySelector('[data-catalog-id="lateral-raise"] .queue-search-body'));
- click(button('Add to Up Next',picker()));const first=current.activeWorkout.exercises.at(-1);expect(button('In Up Next',picker())||picker().querySelector('.queue-preview-added')).toBeTruthy();
- click(button('Add again',picker()));expect(current.activeWorkout.exercises).toHaveLength(4);click(button('Add another instance',picker()));const second=current.activeWorkout.exercises.at(-1);expect(second.id).not.toBe(first.id);expect(second.exerciseId).toBe(first.exerciseId);
+ click(button('Add to Up Next',picker()));const first=current.activeWorkout.exercises.at(-1);expect(picker().querySelector('.queue-exercise-preview')).toBeNull();expect(picker().querySelector('[data-catalog-id="lateral-raise"]').textContent).toContain('In Up Next');
+ click(picker().querySelector('[data-catalog-id="lateral-raise"] .queue-search-body'));expect(picker().querySelector('.queue-exercise-preview')).not.toBeNull();
+ click(button('Add again',picker()));expect(current.activeWorkout.exercises).toHaveLength(4);click(button('Add another instance',picker()));const second=current.activeWorkout.exercises.at(-1);expect(second.id).not.toBe(first.id);expect(second.exerciseId).toBe(first.exerciseId);expect(picker().querySelector('.queue-exercise-preview')).toBeNull();
  advance(4999);expect(button('Undo',picker())).toBeTruthy();click(button('Undo',picker()));expect(current.activeWorkout.exercises.at(-1).id).toBe(first.id);expect(current.program).toEqual(initial.program);
  const loaded=domain.loadState();expect(loaded.activeWorkout.exercises.map(e=>e.id)).toEqual(current.activeWorkout.exercises.map(e=>e.id));
+});
+it('multi-add keeps one picker and its query until X returns to the same logger without phantom detail history',()=>{
+ const initial=mount(),logger=host.querySelector('.workout-screen');open();const pane=picker(),input=pane.querySelector('input[type=search]'),push=vi.spyOn(window.history,'pushState'),replace=vi.spyOn(window.history,'replaceState');
+ for(const [query,id] of [['Lateral Raise','lateral-raise'],['Hack Squat','hack-squat']]){
+  search(query);click(picker().querySelector(`[data-catalog-id="${id}"] .queue-search-body`));click(button('Add to Up Next',picker()));
+  expect(picker()).toBe(pane);expect(picker().querySelector('input[type=search]')).toBe(input);expect(input.value).toBe(query);expect(picker().querySelector('.queue-exercise-preview')).toBeNull();
+ }
+ expect(current.activeWorkout.exercises).toHaveLength(initial.activeWorkout.exercises.length+2);expect(current.activeWorkout.exerciseIndex).toBe(initial.activeWorkout.exerciseIndex);
+ expect(push).not.toHaveBeenCalled();expect(replace).not.toHaveBeenCalled();close();
+ expect(host.querySelector('.workout-screen')).toBe(logger);expect(current.activeWorkout.exercises[0].sets).toEqual(initial.activeWorkout.exercises[0].sets);
+ expect(host.querySelector('.up-next').textContent).toContain('Lateral Raise');expect(host.querySelector('.up-next').textContent).toContain('Hack Squat');
 });
 it('Do now from preview preserves and parks the previous exercise in the same planned session',()=>{
  const initial=mount(1);open();search('Lateral Raise');click(picker().querySelector('[data-catalog-id="lateral-raise"] .queue-search-body'));click(button('Do now',picker()));advance(250);
@@ -79,7 +91,7 @@ it('Do now from preview preserves and parks the previous exercise in the same pl
  expect(host.querySelector('.exercise-meta').textContent).toBe('Choose your sets and reps');expect(host.querySelector('.recommendation')).toBeNull();expect(current.program).toEqual(initial.program);
 });
 it('Saved scope preserves search/header, requires duplicate confirmation and uses atomic batch Undo',()=>{
- const initial=mount();open();const input=picker().querySelector('input'),header=picker().querySelector('.detail-header');click(button('Saved workouts',picker()));click(button('Saved extras2 exercises›',picker()));
+ const initial=mount();open();const input=picker().querySelector('input'),header=picker().querySelector('.detail-header');click(button('Saved workouts',picker()));click([...picker().querySelectorAll('.saved-workout-list button')].find(row=>row.querySelector('strong')?.textContent==='Saved extras'));
  const add=button('Add 2 exercises to Up Next',picker());expect(add.disabled).toBe(true);const checkbox=picker().querySelector('input[type=checkbox]');click(checkbox);click(add);
  expect(current.activeWorkout.exercises).toHaveLength(5);expect(current.program).toEqual(initial.program);expect(current.activeWorkout.id).toBe(initial.activeWorkout.id);expect(picker().querySelector('.detail-header')).toBe(header);expect(picker().querySelector('input[type=search]')).toBe(input);
  click(button('Undo',picker()));expect(current.activeWorkout.exercises).toEqual(initial.activeWorkout.exercises);

@@ -1,5 +1,10 @@
 # Exercise illustration surface audit — 2026-09-12
 
+The [2026-10-04 provenance audit](visual-provenance-audit.md) records current
+authorship, licensing, branding exceptions and the shared picker thumbnail path.
+The table below describes the September visual-review checkpoint, not current
+source attribution or every later picker presentation change.
+
 ## Source of truth
 
 349 records in `exerciseCatalog`, 331 unique `artId` values. `exerciseArt` in
@@ -23,8 +28,10 @@ art library. 92 other root SVG files are not in that runtime manifest.
 | Custom or unknown exercise | Existing no-art behavior | Do not invent a similar movement image. |
 
 The five existing thumbnail-only scale adjustments are independent of full-view
-art; no duplicate image files or theme-specific drawings are selected. Theme
-filters adapt the common green ink to existing theme tokens. Viewer title,
+art; no duplicate image files or theme-specific drawings are selected. Since
+2026-10-04, the shared `ExerciseIllustration` alpha-mask renderer paints the
+resolved theme's readable accent, including every personal Fine-tune combination.
+It replaces the old fixed Green/Gold filters without changing asset bytes. Viewer title,
 centering, close hit area and image containment are covered by the browser audit.
 
 ## Migration status

@@ -1,3 +1,4 @@
+import {NavigationChevron} from './NavigationChevron.jsx';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { displayWeight, displayEstimatedOneRepMax, weightUnit, saveState, rankExerciseSearch } from './domain.js';
@@ -57,7 +58,7 @@ export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
       {review.deloadCompleted && <p className="sheet-footnote">Deload recorded. Lower programmed targets are not regression.</p>}
       {review.sessionFeedback && <p className="sheet-footnote session-feedback-block">{review.sessionFeedback.text} Subjective difficulty relative to expectation; not a recovery measure.</p>}
       <h2 className="eyebrow">PERFORMANCE</h2><dl className="training-block-summary"><div><dt>Progressed</dt><dd>{review.progressed}</dd></div><div><dt>Held</dt><dd>{review.held}</dd></div><div><dt>PR highlights</dt><dd>{review.prs}</dd></div><div><dt>For review</dt><dd>{review.review}</dd></div></dl>
-      <button className="list-row" onClick={()=>setStep('exercises')}><span>Exercise outcomes</span><span aria-hidden="true">›</span></button>
+      <button className="list-row" onClick={()=>setStep('exercises')}><span>Exercise outcomes</span><NavigationChevron/></button>
       {!historical && <section className="block-review-next"><h2 className="eyebrow">NEXT BLOCK</h2><p>{review.rows.every(r=>r.status==='insufficient')?'There isn’t enough comparable data to justify major changes. Keep the current structure and continue collecting training history.':'Keep most of the program. Review supported working-load changes and any replacement suggestions before starting.'}</p><p className="sheet-footnote">{block.totalWeeks}-week structure{block.plannedDeloadWeek?`, planned deload in Week ${block.plannedDeloadWeek}`:''}. No automatic volume increases.</p><button className="button primary" disabled={!block.completed} onClick={()=>prepare(false)}>REVIEW NEXT BLOCK</button><button className="button secondary" disabled={!block.completed} onClick={()=>prepare(true)}>REPEAT BLOCK</button></section>}
       <button className="button quiet" onClick={close}>NOT NOW</button>
     </>}

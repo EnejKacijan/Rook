@@ -1,0 +1,23 @@
+/* Controls and short app chrome are UI, while content and editing surfaces
+   retain native copying. Never put this policy on the app/body or a wildcard. */
+:where(button, [role="button"], [role="tab"], [role="menuitem"], summary,
+  .rook-ui, .eyebrow, .bottom-nav, .detail-header, .screen-top, .workout-header,
+  .week-selector, .month-calendar-grid, .calendar-status-mark, .set-labels,
+  .today-hero, .rest-day-state > h1, .rest-day-state > p,
+  .workout-status, .modal-drag-handle, .sheet-grab-zone, .sheet-handle-slot) {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Explicit escape hatches also work inside a non-selectable control surface.
+   Genuine detail prose, notes and import/export text otherwise inherit normal
+   browser behavior because their containers never opt into the UI policy. */
+:where(input, textarea, [contenteditable="true"], .rook-selectable,
+  .coach-message p, .user-message, pre, code) {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+:where(select) { -webkit-user-select: auto; user-select: auto; -webkit-touch-callout: default; }

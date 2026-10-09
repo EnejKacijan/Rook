@@ -38,7 +38,7 @@ it.each([['completed-freestyle',1],['multiple-completed',2]])('keeps completed a
       expect(cell.getAttribute('aria-pressed')).toBe(String(selected===calendarStatusDate));
     }
     if(selected===calendarStatusDate){
-      expect(host.querySelector('.today-hero').textContent).toContain('missed · not performed');
+      expect(host.querySelector('.today-hero').textContent).toContain('Missed');
       expect(host.querySelector('.today-hero').textContent).toContain(missed.workout.name);
       expect(host.querySelectorAll('.today-completed-workouts .list-row')).toHaveLength(count);
       expect(host.querySelector('.today-completed-workouts').textContent).toContain(state.workouts[0].name);

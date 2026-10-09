@@ -72,14 +72,13 @@ it('keeps semantic keyboard activation and dialog accessibility',()=>{
   expect(click(0).defaultPrevented).toBe(false);expectOpen();
   expect(panels()[0].getAttribute('role')).toBe('dialog');expect(panels()[0].getAttribute('aria-modal')).toBe('true');
 });
-it('restricts the week hover fill to fine hover pointers, leaving native keyboard focus rules intact',()=>{
+it('does not paint week controls on hover and keeps native keyboard focus rules intact',()=>{
   const css=readFileSync('src/calendar.css','utf8'),style=document.createElement('style');style.textContent=css;document.head.append(style);
   try {
     const hoverRules=[];
     const walk=(rules,media=[])=>{for(const rule of rules){if(rule.selectorText?.includes('.week-navigation button:hover'))hoverRules.push({rule,media});if(rule.cssRules)walk(rule.cssRules,[...media,rule.conditionText]);}};
     walk(style.sheet.cssRules);
-    expect(hoverRules).toHaveLength(1);expect(hoverRules[0].media).toEqual(['(hover: hover) and (pointer: fine)']);
-    expect(hoverRules[0].rule.style.background).toBe('#e9efec');
+    expect(hoverRules).toHaveLength(0);
     expect(css).not.toMatch(/\.week-calendar-trigger[^{}]*:focus[^{}]*\{[^}]*outline:\s*none/);
   }finally{style.remove();}
 });

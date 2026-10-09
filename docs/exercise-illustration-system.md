@@ -6,6 +6,12 @@
 
 The durable review registry is `scripts/illustration-system-decisions.mjs` with `scripts/illustration-system-audited-ids.json`. Local generation/contact-sheet evidence remains excluded from Git. Release tests verify registry coverage, live/master parity, mapping resolution, shared viewer rendering and offline asset reuse; technical checks are not a claim of a new physical-device visual review.
 
+**Provenance checkpoint — 2026-10-04:** visual acceptance is separate from authorship.
+The [provenance audit](visual-provenance-audit.md), [manifest](visual-provenance.json)
+and [policy](visual-provenance-policy.md) supersede the older blanket source labels.
+330 current illustrations have AI-generation evidence; Cable Crunch remains
+attribution-required Workout Guide artwork. Catalog references are separate data.
+
 ## Canonical art direction
 
 The full 328-asset audit found source-style drift inside the imported Workout Guide set as well as later ROOK additions. File format, a shared tint, and identical canvas dimensions alone do not establish visual consistency.
@@ -18,7 +24,7 @@ Use the clean technical line-art family as the quality reference (the reviewed S
 - Movement correctness takes precedence over reuse. Bilateral/unilateral, cable/band, bench angles, grip types, knee/hip motion and attachment points must remain distinct.
 - One complete subject and required apparatus, no cropped limbs or equipment. Center **painted bounds**, not an arbitrary nominal artboard.
 - Shared framing: square 512px SVG; longest painted extent occupies `1 / 1.14` (87.72%) of the viewBox. Transparent background and transparent unpainted interiors.
-- Shared ink: existing `#1f6b4c` filled paths. The existing theme renderer owns appearance adaptation. No baked-in tile, labels, shadows, gradient or embedded bitmap. The color is an existing asset convention, not a new UI theme token.
+- Source ink: existing `#1f6b4c` filled paths. `ExerciseIllustration` uses the SVG's alpha mask to paint `--rook-illustration-ink`, the resolved readable accent. All six personal palettes, five shades per palette, three background tones and Light/Dark (180 combinations) share this renderer, including System appearance and staged preview/cancellation. No theme-specific asset copies or color filters; asset bytes, transparent interiors and reviewed geometry remain unchanged. Photos and branding are outside this component.
 
 ## Source and regeneration
 

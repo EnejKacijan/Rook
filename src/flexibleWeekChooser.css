@@ -14,3 +14,42 @@
 .missed-recovery-options .list-row > span { flex-shrink:0; }
 .missed-recovery-today > .text-button { min-height:44px; }
 .missed-destination-sheet [data-move-date][aria-pressed="true"] { background:var(--rook-accent-soft); border-color:var(--rook-accent); }
+.flexible-resolution-actions { display:flex; flex-direction:column; align-items:stretch; gap:2px; margin-top:10px; }
+.flexible-resolution-actions button { min-height:44px; margin:0; text-align:left; overflow-wrap:anywhere; white-space:normal; }
+.flexible-week-sheet .flexible-move-later { display:flex; justify-content:space-between; align-items:center; gap:12px; padding:10px 14px; border:1px solid var(--rook-accent); border-radius:12px; background:var(--rook-accent-soft); color:var(--rook-text); font-size:12px; font-weight:700; letter-spacing:.06em; }
+.flexible-resolution-actions .text-button { align-self:flex-start; padding:8px 0; font-size:13px; line-height:1.5; }
+.flexible-week-review .flexible-needs-day { color:var(--rook-secondary); }
+.flexible-week-review .flexible-resolution-edit { align-self:flex-start; min-height:44px; padding:8px 0; margin:0; font-size:13px; }
+.flexible-skip-sheet .eyebrow { display:none; }
+:root .flexible-skip-confirm h1 { font-size:24px; line-height:1.2; margin-top:8px; }
+.flexible-skip-confirm .button { margin-top:12px; }
+.flexible-week-sheet .combine-card { margin-top:16px; }
+.flexible-week-sheet .combine-card .adapt-review-list button { min-width:0; }
+.flexible-week-sheet .combine-card strong { overflow-wrap:anywhere; }
+:root .flexible-week-sheet .adapt-review-list > button { display:flex; align-items:center; gap:11px; width:100%; min-height:56px; padding:10px 0; border:0; border-bottom:1px solid var(--rook-border); background:transparent; color:var(--rook-text); text-align:left; }
+:root .flexible-week-sheet .adapt-review-list > button:disabled { opacity:1; }
+.flexible-week-sheet .adapt-review-list > button > span:first-child { flex:0 0 20px; color:var(--rook-accent-text); }
+.flexible-week-sheet .adapt-review-list strong { font-size:13px; }
+.flexible-week-sheet .adapt-review-list small { margin:0; color:var(--rook-secondary); font-size:11px; text-align:left; }
+.flexible-week-sheet .combined-provenance small { text-align:left; }
+.flexible-week-sheet .action-card-buttons { display:flex; flex-direction:column; gap:8px; margin-top:18px; }
+.flexible-week-sheet .action-card-buttons .button { margin:0; white-space:normal; }
+.flexible-review-controls { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+.flexible-review-controls .button { min-width:0; margin:0; padding:8px; white-space:normal; }
+.flexible-schedule-changes article { overflow-wrap:anywhere; }
+.flexible-schedule-changes article > .eyebrow { margin:0; color:var(--rook-secondary); }
+.flexible-week-sheet .flexible-restore-action { align-self:center; min-height:44px; margin:0; padding:10px 0; white-space:normal; }
+.flexible-compact-sheet h1 { overflow-wrap:anywhere; }
+.flexible-week-sheet .flexible-reorder-action { display:flex;align-items:center;justify-content:space-between;min-height:44px;margin:0;padding:8px 0;color:var(--rook-accent-text); }
+.flexible-reorder-list { margin:20px 0;overflow-anchor:none; }
+.flexible-reorder-slot { border-bottom:1px solid var(--rook-border);padding:14px 0; }
+.flexible-reorder-slot > .eyebrow { margin:0 0 4px;font-size:11px; }
+.flexible-reorder-body { display:flex;align-items:center;gap:12px;min-height:var(--flexible-reorder-row-height,48px);user-select:none;-webkit-user-select:none; }
+.flexible-reorder-body > strong { flex:1;min-width:0;font-size:16px;line-height:1.4;overflow-wrap:anywhere; }
+.flexible-reorder-accessible { display:flex;flex-wrap:wrap;gap:8px;border:0;padding:4px 0; }
+.flexible-reorder-accessible button { min-height:44px; }
+.flexible-reorder-preview { position:fixed;z-index:120;pointer-events:none;padding:0;background:var(--rook-surface);box-shadow:0 3px 8px #00000010;transform:translate3d(0,var(--reorder-drag-y,0px),0); }
+.flexible-reorder-grip { width:44px;height:44px;display:flex;align-items:center;justify-content:center; }
+.flexible-reorder-grip > i { width:20px;height:16px;background:repeating-linear-gradient(to bottom,var(--rook-secondary) 0 1.5px,transparent 1.5px 6px);opacity:.72; }
+.flexible-reorder-list.is-reordering .flexible-reorder-body { transition:transform 180ms var(--rook-ease-standard); }
+@media(prefers-reduced-motion:reduce) { .flexible-reorder-list.is-reordering .flexible-reorder-body { transition:none; } }

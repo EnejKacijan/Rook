@@ -18,8 +18,8 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
   const sessionId=useRef(state.activeWorkout?.id).current;
   const [query,setQuery]=useState(''),[preview,setPreview]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState('');
   const [repeatRequest,setRepeatRequest]=useState(null);
-  const [chooseInstance,setChooseInstance]=useState(false),[acknowledged,setAcknowledged]=useState(null);
-  const leaving=useRef(false),exitPresentation=useRef(null);
+  const [chooseInstance,setChooseInstance]=useState(false);
+  const leaving=useRef(false),addingPreview=useRef(false),returnedAddTap=useRef(null),exitPresentation=useRef(null);
   const capturePreview=useExercisePreviewMotion(screen,preview);
   const [scope,setScope]=useState('exercises');
   const previousScope=useRef(scope);
@@ -81,17 +81,34 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
   // Keep search focus at the compatibility mouse event, as SearchInput's Clear
   // does. Cancelling touch pointerdown can suppress WebKit's semantic click.
   const keepSearchFocus=event=>{if(event.button===0&&screen.current?.querySelector('.rook-search-field input')===document.activeElement)event.preventDefault();};
-  const open=item=>{position.current=list.current?.scrollTop||0;capturePreview(false);setPreview(item);setRepeatRequest(null);setChooseInstance(false);setAcknowledged(null);setError('');};
+  const open=item=>{position.current=list.current?.scrollTop||0;capturePreview(false);addingPreview.current=false;returnedAddTap.current=null;setPreview(item);setRepeatRequest(null);setChooseInstance(false);setError('');};
   const back=()=>{capturePreview(true);returnFocus.current=preview?.id;setPreview(null);};
   useSwipeActionList(list,!preview&&scope==='exercises',{mode:'add',onAdd:id=>{const item=catalog.find(e=>e.id===id);return item?add(item):false;}});
   const doNow=(instanceId)=>{
-    if(leaving.current)return;
+    if(leaving.current||addingPreview.current)return;
     if(!instanceId&&entries(preview.id).length>1){setChooseInstance(true);return;}
     leaving.current=true;setError('');
     try{commit(current=>doWorkoutExerciseNow(current,{sessionId,requestId:uid('do-now'),exerciseId:preview.id,instanceId}));if(latest.current.activeWorkout?.id!==sessionId)throw Error('This workout has ended.');close();}
     catch(e){leaving.current=false;setError(e.message);}
   };
-  const addPreview=()=>{if(!latest.current.activeWorkout?.exercises.some(e=>e.exerciseId===preview.id)&&add(preview))setAcknowledged(preview.id);};
+  const addPreview=(options={},event)=>{
+    if(!preview||addingPreview.current)return;
+    // Lock this explicit preview action through its canonical one-level Back.
+    // Failed/no-op durable writes leave the detail actionable for a safe retry.
+    addingPreview.current=true;
+    if(add(preview,options)){
+      returnedAddTap.current=event?.detail>0?{at:Date.now(),x:event.clientX,y:event.clientY}:null;
+      back();setRepeatRequest(null);setChooseInstance(false);
+    }
+    else addingPreview.current=false;
+  };
+  const guardReturnedTap=event=>{
+    const tap=returnedAddTap.current;
+    // Back can expose a different control under the just-used Add target.
+    // Suppress only a rapid pointer replay there; new targets, keyboard and
+    // screen-reader activations remain immediately available.
+    if(!preview&&tap&&event.detail>0&&Date.now()-tap.at<350&&Math.abs(event.clientX-tap.x)<=24&&Math.abs(event.clientY-tap.y)<=24){event.preventDefault();event.stopPropagation();}
+  };
   const changeScope=next=>{if(next==='saved')setSavedVisited(true);setScope(next);};
   const scopes=<nav className="queue-search-scopes" data-scope={scope} aria-label="Search scope"><button type="button" aria-pressed={scope==='exercises'} onMouseDown={keepSearchFocus} onClick={()=>changeScope('exercises')}>Exercises</button><button type="button" aria-pressed={scope==='saved'} onMouseDown={keepSearchFocus} onClick={()=>changeScope('saved')}>Saved workouts</button></nav>;
   useLayoutEffect(()=>{if(preview){screen.current.querySelector('.queue-exercise-preview h1')?.focus({preventScroll:true});}else if(list.current){list.current.scrollTop=position.current;if(returnFocus.current){[...list.current.querySelectorAll('[data-catalog-id]')].find(row=>row.dataset.catalogId===returnFocus.current)?.querySelector('.queue-search-body')?.focus({preventScroll:true});returnFocus.current=null;}}},[preview]);
@@ -112,7 +129,7 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
   if(!leaving.current)exitPresentation.current={status:preview?status(preview.id):'',empty:!state.activeWorkout?.exercises.length};
   const {status:previewStatus,empty}=exitPresentation.current;
   const repeatAction=<button type="button" className="text-button queue-preview-repeat" onClick={()=>{setRepeatRequest(uid('queue-repeat'));setChooseInstance(false);}}>Add again</button>;
-  return <main ref={screen} className="screen detail-screen freestyle-picker freestyle-queue-picker">
+  return <main ref={screen} className="screen detail-screen freestyle-picker freestyle-queue-picker" onClickCapture={guardReturnedTap}>
     <Header title={preview?'Exercise':'Add exercise'} onBack={preview?back:scope==='saved'&&savedView?()=>savedBack.current?.():undefined} onClose={close} closeLabel="Back to workout"/>
     <div className="queue-picker-search-chrome" hidden={!browsing} data-preview-motion>
       {scopes}
@@ -130,13 +147,13 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
     {preview&&<ExerciseQueuePreview item={preview} showImages={state.profile.showExerciseImages!==false} status={previewStatus} Illustration={Illustration}>
       {previewStatus&&previewStatus!=='Current'&&!repeatRequest&&repeatAction}
       {chooseInstance&&<div className="queue-preview-choice" tabIndex={-1} role="group" aria-label="Choose which instance to do now"><p>Choose which instance to do now</p>{entries(preview.id).filter(entry=>entry.id!==state.activeWorkout.exercises[state.activeWorkout.exerciseIndex]?.id).map(entry=><button type="button" className="button secondary" key={entry.id} onClick={()=>doNow(entry.id)}>Do now · exercise {state.activeWorkout.exercises.indexOf(entry)+1} · {entry.sets.length} sets{entry.repMin!=null?` · ${entry.repMin}–${entry.repMax} reps`:''}</button>)}</div>}
-      {repeatRequest&&<div className="queue-preview-choice" tabIndex={-1} role="group" aria-label="Add a separate instance"><p>Add a separate instance of {preview.name}?</p><button type="button" className="button secondary" onClick={()=>{if(add(preview,{again:true,requestId:repeatRequest}))setRepeatRequest(null);}}>Add another instance</button><button className="text-button" onClick={()=>setRepeatRequest(null)}>Cancel</button></div>}
+      {repeatRequest&&<div className="queue-preview-choice" tabIndex={-1} role="group" aria-label="Add a separate instance"><p>Add a separate instance of {preview.name}?</p><button type="button" className="button secondary" onClick={event=>addPreview({again:true,requestId:repeatRequest},event)}>Add another instance</button><button className="text-button" onClick={()=>setRepeatRequest(null)}>Cancel</button></div>}
     </ExerciseQueuePreview>}
     {error&&<p role="alert">{error}</p>}
     {!savedEditing&&<SheetActionFooter separate hideWhileSearching={browsing} className={preview?'queue-preview-actions':''}>
       {!preview?<button type="button" className="text-button queue-picker-back" onClick={close}>Back to workout</button>:empty?<button type="button" className="button primary" disabled={leaving.current} onClick={()=>doNow()}>Start with this exercise</button>:<>
-        {!previewStatus&&<button type="button" className="button primary" onClick={addPreview}>Add to Up Next</button>}
-        {previewStatus==='In Up Next'&&<button type="button" className={`button secondary queue-preview-added${acknowledged===preview.id?' is-acknowledged':''}`} disabled><span><span aria-hidden="true">✓ </span>In Up Next</span></button>}
+        {!previewStatus&&<button type="button" className="button primary" onClick={event=>addPreview({},event)}>Add to Up Next</button>}
+        {previewStatus==='In Up Next'&&<button type="button" className="button secondary queue-preview-added" disabled><span><span aria-hidden="true">✓ </span>In Up Next</span></button>}
         {previewStatus!=='Current'&&<button type="button" className="button secondary" disabled={leaving.current} onClick={()=>doNow()}>Do now</button>}
         {previewStatus==='Current'&&!repeatRequest&&repeatAction}
       </>}

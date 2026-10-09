@@ -1,3 +1,5 @@
+import './navigationChevron.css';
+
 export function NavigationChevron({ direction = 'right', className = '' }) {
   return <svg className={`rook-navigation-chevron${className ? ` ${className}` : ''}`}
     viewBox="0 0 20 20" fill="none" stroke="currentColor" strokeWidth="1.8"

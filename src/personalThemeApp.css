@@ -1,0 +1,4 @@
+html[data-personal-theme] .button.primary:not(:disabled) { background:var(--rook-accent-fill);color:var(--rook-on-accent-fill);border-color:var(--rook-accent-fill); }
+html[data-personal-theme] .button.primary:not(:disabled):active { background:var(--rook-accent-fill-strong);border-color:var(--rook-accent-fill-strong); }
+html[data-personal-theme] .button.secondary { background:var(--rook-surface);color:var(--rook-text);border-color:var(--rook-control-border); }
+html[data-personal-theme] .brand { color:var(--rook-accent-text); }

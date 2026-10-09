@@ -32,7 +32,7 @@
 .import-resolution .plan-import-choice :is(input,select) { font-size: 16px; }
 .import-resolution .plan-import-choice + .plan-import-choice { margin-top: 8px; }
 .import-resolution .plan-import-choice button { position: relative; white-space: normal; overflow-wrap: anywhere; padding-right: 38px; }
-:root .import-resolution .plan-import-choice button[aria-pressed="true"] { border-color: var(--rook-accent); color: var(--rook-accent); background: var(--rook-surface-muted); }
+:root .import-resolution .plan-import-choice button[aria-pressed="true"] { border-color: var(--rook-accent); color: var(--rook-accent-text); background: var(--rook-surface-muted); }
 .import-resolution .plan-import-choice button[aria-pressed="true"]::before { content: '✓'; position: absolute; right: 14px; top: 50%; transform: translateY(-50%); }
 .import-resolution-match h3 { overflow-wrap: anywhere; }
 .import-resolution-match label { display: grid; gap: 8px; }
@@ -54,4 +54,4 @@
 .plan-import-choice .import-source-value strong { color: var(--rook-text); font-size: 18px; line-height: 1.35; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
 .plan-import-choice .import-source-value small { color: var(--rook-secondary); font-size: 12px; line-height: 1.35; text-align: left; }
 .plan-import-choice .import-open-target { grid-column: span 2; }
-:root .plan-import-choice .import-edit-source { min-height: 44px; margin: 0; padding: 8px 0; background: transparent; border: 0; color: var(--rook-accent); font-size: 14px; font-weight: 600; letter-spacing: normal; text-transform: none; text-align: left; }
+:root .plan-import-choice .import-edit-source { min-height: 44px; margin: 0; padding: 8px 0; background: transparent; border: 0; color: var(--rook-accent-text); font-size: 14px; font-weight: 600; letter-spacing: normal; text-transform: none; text-align: left; }

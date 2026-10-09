@@ -22,8 +22,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bench-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bench-press"
+      }
+    ]
   },
   {
     "sourceSlug": "incline-bench-press",
@@ -47,8 +51,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-incline-bench-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "incline-bench-press"
+      }
+    ]
   },
   {
     "sourceSlug": "incline-dumbbell-press",
@@ -72,8 +80,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-incline-dumbbell-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "incline-dumbbell-press"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-bench-press",
@@ -97,8 +109,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-bench-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-bench-press"
+      }
+    ]
   },
   {
     "sourceSlug": "decline-bench-press",
@@ -122,8 +138,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-decline-bench-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "decline-bench-press"
+      }
+    ]
   },
   {
     "sourceSlug": "machine-chest-press",
@@ -147,8 +167,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-machine-chest-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "machine-chest-press"
+      }
+    ]
   },
   {
     "sourceSlug": "pec-deck",
@@ -171,8 +195,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-pec-deck",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "pec-deck"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-fly",
@@ -195,8 +223,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-fly",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-fly"
+      }
+    ]
   },
   {
     "sourceSlug": "push-up",
@@ -220,8 +252,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "weighted-push-up",
@@ -245,8 +281,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-weighted-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "weighted-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "overhead-press",
@@ -269,8 +309,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-overhead-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "overhead-press"
+      }
+    ]
   },
   {
     "sourceSlug": "seated-dumbbell-press",
@@ -293,8 +337,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-seated-dumbbell-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seated-dumbbell-press"
+      }
+    ]
   },
   {
     "sourceSlug": "arnold-press",
@@ -317,8 +365,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-arnold-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "arnold-press"
+      }
+    ]
   },
   {
     "sourceSlug": "lateral-raise",
@@ -341,8 +393,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-lateral-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lateral-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-lateral-raise",
@@ -365,8 +421,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-lateral-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-lateral-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "front-raise",
@@ -389,8 +449,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-front-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "front-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "rear-delt-fly",
@@ -413,8 +477,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-rear-delt-fly",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "rear-delt-fly"
+      }
+    ]
   },
   {
     "sourceSlug": "reverse-pec-deck",
@@ -437,8 +505,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-reverse-pec-deck",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "reverse-pec-deck"
+      }
+    ]
   },
   {
     "sourceSlug": "face-pull",
@@ -461,8 +533,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-face-pull",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "face-pull"
+      }
+    ]
   },
   {
     "sourceSlug": "upright-row",
@@ -486,8 +562,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-upright-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "upright-row"
+      }
+    ]
   },
   {
     "sourceSlug": "deadlift",
@@ -510,8 +590,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "romanian-deadlift",
@@ -534,8 +618,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-romanian-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "romanian-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "barbell-row",
@@ -559,8 +647,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-barbell-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "barbell-row"
+      }
+    ]
   },
   {
     "sourceSlug": "t-bar-row",
@@ -584,8 +676,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-t-bar-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "t-bar-row"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-bent-over-row",
@@ -609,8 +705,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-bent-over-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-bent-over-row"
+      }
+    ]
   },
   {
     "sourceSlug": "one-arm-dumbbell-row",
@@ -633,8 +733,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-one-arm-dumbbell-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "one-arm-dumbbell-row"
+      }
+    ]
   },
   {
     "sourceSlug": "chest-supported-row",
@@ -658,8 +762,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-chest-supported-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "chest-supported-row"
+      }
+    ]
   },
   {
     "sourceSlug": "seated-row",
@@ -683,8 +791,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-seated-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seated-row"
+      }
+    ]
   },
   {
     "sourceSlug": "machine-row",
@@ -707,8 +819,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-machine-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "machine-row"
+      }
+    ]
   },
   {
     "sourceSlug": "lat-pulldown",
@@ -731,8 +847,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-lat-pulldown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lat-pulldown"
+      }
+    ]
   },
   {
     "sourceSlug": "close-grip-lat-pulldown",
@@ -755,8 +875,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-close-grip-lat-pulldown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "close-grip-lat-pulldown"
+      }
+    ]
   },
   {
     "sourceSlug": "straight-arm-pulldown",
@@ -779,8 +903,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-straight-arm-pulldown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "straight-arm-pulldown"
+      }
+    ]
   },
   {
     "sourceSlug": "pull-up",
@@ -804,8 +932,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "assisted-pull-up",
@@ -828,8 +960,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-assisted-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "assisted-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "weighted-pull-up",
@@ -852,8 +988,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-weighted-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "weighted-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "chin-up",
@@ -876,8 +1016,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-chin-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "chin-up"
+      }
+    ]
   },
   {
     "sourceSlug": "shrug",
@@ -900,8 +1044,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-shrug",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "shrug"
+      }
+    ]
   },
   {
     "sourceSlug": "squat",
@@ -925,8 +1073,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "squat"
+      }
+    ]
   },
   {
     "sourceSlug": "front-squat",
@@ -950,8 +1102,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-front-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "front-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "hack-squat",
@@ -974,8 +1130,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hack-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hack-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "leg-press",
@@ -998,8 +1158,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-leg-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "leg-press"
+      }
+    ]
   },
   {
     "sourceSlug": "bulgarian-split-squat",
@@ -1023,8 +1187,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bulgarian-split-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bulgarian-split-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "walking-lunge",
@@ -1047,8 +1215,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-walking-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "walking-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "step-up",
@@ -1071,8 +1243,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-step-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "step-up"
+      }
+    ]
   },
   {
     "sourceSlug": "leg-extension",
@@ -1094,8 +1270,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-leg-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "leg-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "leg-curl",
@@ -1118,8 +1298,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-leg-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "leg-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "seated-leg-curl",
@@ -1142,8 +1326,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-seated-leg-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seated-leg-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "hip-thrust",
@@ -1165,8 +1353,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hip-thrust",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hip-thrust"
+      }
+    ]
   },
   {
     "sourceSlug": "glute-bridge",
@@ -1188,8 +1380,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-glute-bridge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "glute-bridge"
+      }
+    ]
   },
   {
     "sourceSlug": "good-morning",
@@ -1212,8 +1408,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-good-morning",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "good-morning"
+      }
+    ]
   },
   {
     "sourceSlug": "standing-calf-raise",
@@ -1235,8 +1435,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-standing-calf-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "standing-calf-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "seated-calf-raise",
@@ -1258,8 +1462,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-seated-calf-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seated-calf-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "bicep-curl",
@@ -1281,8 +1489,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bicep-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bicep-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "hammer-curl",
@@ -1304,8 +1516,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hammer-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hammer-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "preacher-curl",
@@ -1327,8 +1543,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-preacher-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "preacher-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-curl",
@@ -1350,8 +1570,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "reverse-curl",
@@ -1373,8 +1597,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-reverse-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "reverse-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "wrist-curl",
@@ -1396,8 +1624,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wrist-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wrist-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "tricep-pushdown",
@@ -1420,8 +1652,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-tricep-pushdown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "tricep-pushdown"
+      }
+    ]
   },
   {
     "sourceSlug": "overhead-tricep-extension",
@@ -1444,8 +1680,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-overhead-tricep-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "overhead-tricep-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "skull-crusher",
@@ -1468,8 +1708,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-skull-crusher",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "skull-crusher"
+      }
+    ]
   },
   {
     "sourceSlug": "close-grip-bench-press",
@@ -1493,8 +1737,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-close-grip-bench-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "close-grip-bench-press"
+      }
+    ]
   },
   {
     "sourceSlug": "dip",
@@ -1518,8 +1766,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dip"
+      }
+    ]
   },
   {
     "sourceSlug": "assisted-dip",
@@ -1542,8 +1794,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-assisted-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "assisted-dip"
+      }
+    ]
   },
   {
     "sourceSlug": "plank",
@@ -1570,8 +1826,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-plank",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "plank"
+      }
+    ]
   },
   {
     "sourceSlug": "side-plank",
@@ -1598,8 +1858,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-side-plank",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "side-plank"
+      }
+    ]
   },
   {
     "sourceSlug": "hanging-leg-raise",
@@ -1621,8 +1885,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hanging-leg-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hanging-leg-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-crunch",
@@ -1644,8 +1912,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-crunch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-crunch"
+      }
+    ]
   },
   {
     "sourceSlug": "ab-wheel",
@@ -1668,8 +1940,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-ab-wheel",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "ab-wheel"
+      }
+    ]
   },
   {
     "sourceSlug": "running",
@@ -1695,8 +1971,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-running",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "running"
+      }
+    ]
   },
   {
     "sourceSlug": "walking",
@@ -1722,8 +2002,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-walking",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "walking"
+      }
+    ]
   },
   {
     "sourceSlug": "cycling",
@@ -1749,8 +2033,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-cycling",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cycling"
+      }
+    ]
   },
   {
     "sourceSlug": "rowing",
@@ -1777,8 +2065,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-rowing",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "rowing"
+      }
+    ]
   },
   {
     "sourceSlug": "stair-climber",
@@ -1804,8 +2096,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-stair-climber",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "stair-climber"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-fly",
@@ -1828,8 +2124,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-fly",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-fly"
+      }
+    ]
   },
   {
     "sourceSlug": "incline-cable-fly",
@@ -1852,8 +2152,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-incline-cable-fly",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "incline-cable-fly"
+      }
+    ]
   },
   {
     "sourceSlug": "decline-dumbbell-press",
@@ -1877,8 +2181,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-decline-dumbbell-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "decline-dumbbell-press"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-bench-press",
@@ -1902,8 +2210,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-bench-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-bench-press"
+      }
+    ]
   },
   {
     "sourceSlug": "landmine-press",
@@ -1927,8 +2239,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-landmine-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "landmine-press"
+      }
+    ]
   },
   {
     "sourceSlug": "chest-dip",
@@ -1952,8 +2268,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-chest-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "chest-dip"
+      }
+    ]
   },
   {
     "sourceSlug": "weighted-dip",
@@ -1977,8 +2297,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-weighted-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "weighted-dip"
+      }
+    ]
   },
   {
     "sourceSlug": "machine-shoulder-press",
@@ -2001,8 +2325,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-machine-shoulder-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "machine-shoulder-press"
+      }
+    ]
   },
   {
     "sourceSlug": "standing-dumbbell-press",
@@ -2026,8 +2354,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-standing-dumbbell-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "standing-dumbbell-press"
+      }
+    ]
   },
   {
     "sourceSlug": "push-press",
@@ -2051,8 +2383,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-push-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "push-press"
+      }
+    ]
   },
   {
     "sourceSlug": "machine-lateral-raise",
@@ -2075,8 +2411,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-machine-lateral-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "machine-lateral-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-front-raise",
@@ -2099,8 +2439,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-front-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-front-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "plate-front-raise",
@@ -2123,8 +2467,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-plate-front-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "plate-front-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "bent-over-rear-delt-raise",
@@ -2147,8 +2495,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bent-over-rear-delt-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bent-over-rear-delt-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-rear-delt-fly",
@@ -2171,8 +2523,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-rear-delt-fly",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-rear-delt-fly"
+      }
+    ]
   },
   {
     "sourceSlug": "pendlay-row",
@@ -2196,8 +2552,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-pendlay-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "pendlay-row"
+      }
+    ]
   },
   {
     "sourceSlug": "inverted-row",
@@ -2221,8 +2581,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-inverted-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "inverted-row"
+      }
+    ]
   },
   {
     "sourceSlug": "meadows-row",
@@ -2246,8 +2610,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-meadows-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "meadows-row"
+      }
+    ]
   },
   {
     "sourceSlug": "single-arm-cable-row",
@@ -2271,8 +2639,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-arm-cable-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-arm-cable-row"
+      }
+    ]
   },
   {
     "sourceSlug": "wide-grip-lat-pulldown",
@@ -2295,8 +2667,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wide-grip-lat-pulldown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wide-grip-lat-pulldown"
+      }
+    ]
   },
   {
     "sourceSlug": "neutral-grip-pull-up",
@@ -2320,8 +2696,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-neutral-grip-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "neutral-grip-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "assisted-chin-up",
@@ -2344,8 +2724,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-assisted-chin-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "assisted-chin-up"
+      }
+    ]
   },
   {
     "sourceSlug": "weighted-chin-up",
@@ -2368,8 +2752,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-weighted-chin-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "weighted-chin-up"
+      }
+    ]
   },
   {
     "sourceSlug": "rack-pull",
@@ -2392,8 +2780,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-rack-pull",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "rack-pull"
+      }
+    ]
   },
   {
     "sourceSlug": "back-extension",
@@ -2416,8 +2808,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-back-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "back-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-shrug",
@@ -2440,8 +2836,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-shrug",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-shrug"
+      }
+    ]
   },
   {
     "sourceSlug": "goblet-squat",
@@ -2465,8 +2865,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-goblet-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "goblet-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-squat",
@@ -2490,8 +2894,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "belt-squat",
@@ -2514,8 +2922,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-belt-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "belt-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "sumo-deadlift",
@@ -2538,8 +2950,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-sumo-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "sumo-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "trap-bar-deadlift",
@@ -2562,8 +2978,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-trap-bar-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "trap-bar-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "lying-leg-curl",
@@ -2586,8 +3006,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-lying-leg-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lying-leg-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "nordic-hamstring-curl",
@@ -2610,8 +3034,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-nordic-hamstring-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "nordic-hamstring-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "single-leg-romanian-deadlift",
@@ -2634,8 +3062,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-leg-romanian-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-leg-romanian-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "reverse-lunge",
@@ -2658,8 +3090,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-reverse-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "reverse-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "split-squat",
@@ -2683,8 +3119,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-split-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "split-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-kickback",
@@ -2706,8 +3146,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-kickback",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-kickback"
+      }
+    ]
   },
   {
     "sourceSlug": "hip-abduction-machine",
@@ -2730,8 +3174,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hip-abduction-machine",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hip-abduction-machine"
+      }
+    ]
   },
   {
     "sourceSlug": "single-leg-glute-bridge",
@@ -2753,8 +3201,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-leg-glute-bridge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-leg-glute-bridge"
+      }
+    ]
   },
   {
     "sourceSlug": "barbell-glute-bridge",
@@ -2777,8 +3229,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-barbell-glute-bridge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "barbell-glute-bridge"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-glute-bridge",
@@ -2801,8 +3257,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-glute-bridge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-glute-bridge"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-hip-thrust",
@@ -2824,8 +3284,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-hip-thrust",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-hip-thrust"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-hip-thrust",
@@ -2848,8 +3312,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-hip-thrust",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-hip-thrust"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-romanian-deadlift",
@@ -2872,8 +3340,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-romanian-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-romanian-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-romanian-deadlift",
@@ -2896,8 +3368,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-romanian-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-romanian-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "kettlebell-romanian-deadlift",
@@ -2920,8 +3396,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-kettlebell-romanian-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "kettlebell-romanian-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-pull-through",
@@ -2944,8 +3424,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-pull-through",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-pull-through"
+      }
+    ]
   },
   {
     "sourceSlug": "machine-glute-kickback",
@@ -2967,8 +3451,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-machine-glute-kickback",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "machine-glute-kickback"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-standing-hip-abduction",
@@ -2991,8 +3479,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-standing-hip-abduction",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-standing-hip-abduction"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-standing-hip-adduction",
@@ -3016,8 +3508,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-standing-hip-adduction",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-standing-hip-adduction"
+      }
+    ]
   },
   {
     "sourceSlug": "hip-adduction-machine",
@@ -3040,8 +3536,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hip-adduction-machine",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hip-adduction-machine"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-bulgarian-split-squat",
@@ -3065,8 +3565,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-bulgarian-split-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-bulgarian-split-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-reverse-lunge",
@@ -3090,8 +3594,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-reverse-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-reverse-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "smith-machine-split-squat",
@@ -3115,8 +3623,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-smith-machine-split-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "smith-machine-split-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "heel-elevated-goblet-squat",
@@ -3140,8 +3652,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-heel-elevated-goblet-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "heel-elevated-goblet-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-sumo-squat",
@@ -3165,8 +3681,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-sumo-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-sumo-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-sumo-deadlift",
@@ -3190,8 +3710,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-sumo-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-sumo-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "front-foot-elevated-split-squat",
@@ -3215,8 +3739,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-front-foot-elevated-split-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "front-foot-elevated-split-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "deficit-reverse-lunge",
@@ -3240,8 +3768,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-deficit-reverse-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "deficit-reverse-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-lateral-lunge",
@@ -3265,8 +3797,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-lateral-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-lateral-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-curtsy-lunge",
@@ -3290,8 +3826,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-curtsy-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-curtsy-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "landmine-squat",
@@ -3315,8 +3855,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-landmine-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "landmine-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "landmine-romanian-deadlift",
@@ -3339,8 +3883,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-landmine-romanian-deadlift",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "landmine-romanian-deadlift"
+      }
+    ]
   },
   {
     "sourceSlug": "kettlebell-swing",
@@ -3363,8 +3911,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-kettlebell-swing",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "kettlebell-swing"
+      }
+    ]
   },
   {
     "sourceSlug": "glute-focused-back-extension",
@@ -3387,8 +3939,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-glute-focused-back-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "glute-focused-back-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "reverse-hyperextension",
@@ -3411,8 +3967,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-reverse-hyperextension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "reverse-hyperextension"
+      }
+    ]
   },
   {
     "sourceSlug": "donkey-calf-raise",
@@ -3434,8 +3994,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-donkey-calf-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "donkey-calf-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "leg-press-calf-raise",
@@ -3457,8 +4021,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-leg-press-calf-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "leg-press-calf-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "wall-sit",
@@ -3486,8 +4054,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-wall-sit",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wall-sit"
+      }
+    ]
   },
   {
     "sourceSlug": "jump-squat",
@@ -3511,8 +4083,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-jump-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "jump-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "incline-dumbbell-curl",
@@ -3534,8 +4110,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-incline-dumbbell-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "incline-dumbbell-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "concentration-curl",
@@ -3557,8 +4137,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-concentration-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "concentration-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "ez-bar-curl",
@@ -3580,8 +4164,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-ez-bar-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "ez-bar-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "spider-curl",
@@ -3603,8 +4191,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-spider-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "spider-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "rope-hammer-curl",
@@ -3626,8 +4218,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-rope-hammer-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "rope-hammer-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "drag-curl",
@@ -3649,8 +4245,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-drag-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "drag-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "rope-tricep-pushdown",
@@ -3673,8 +4273,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-rope-tricep-pushdown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "rope-tricep-pushdown"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-skull-crusher",
@@ -3697,8 +4301,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-skull-crusher",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-skull-crusher"
+      }
+    ]
   },
   {
     "sourceSlug": "single-dumbbell-skullcrusher",
@@ -3721,8 +4329,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-dumbbell-skullcrusher",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-dumbbell-skullcrusher"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-overhead-tricep-extension",
@@ -3745,8 +4357,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-overhead-tricep-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-overhead-tricep-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "single-arm-dumbbell-tricep-extension",
@@ -3769,8 +4385,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-arm-dumbbell-tricep-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-arm-dumbbell-tricep-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "bench-dip",
@@ -3794,8 +4414,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bench-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bench-dip"
+      }
+    ]
   },
   {
     "sourceSlug": "tricep-kickback",
@@ -3818,8 +4442,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-tricep-kickback",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "tricep-kickback"
+      }
+    ]
   },
   {
     "sourceSlug": "wrist-extension",
@@ -3841,8 +4469,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wrist-extension",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wrist-extension"
+      }
+    ]
   },
   {
     "sourceSlug": "farmer-carry",
@@ -3870,8 +4502,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-farmer-carry",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "farmer-carry"
+      }
+    ]
   },
   {
     "sourceSlug": "crunch",
@@ -3893,8 +4529,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-crunch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "crunch"
+      }
+    ]
   },
   {
     "sourceSlug": "reverse-crunch",
@@ -3916,8 +4556,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-reverse-crunch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "reverse-crunch"
+      }
+    ]
   },
   {
     "sourceSlug": "russian-twist",
@@ -3940,8 +4584,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-russian-twist",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "russian-twist"
+      }
+    ]
   },
   {
     "sourceSlug": "bicycle-crunch",
@@ -3964,8 +4612,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bicycle-crunch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bicycle-crunch"
+      }
+    ]
   },
   {
     "sourceSlug": "mountain-climber",
@@ -3993,8 +4645,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-mountain-climber",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "mountain-climber"
+      }
+    ]
   },
   {
     "sourceSlug": "dead-bug",
@@ -4017,8 +4673,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dead-bug",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dead-bug"
+      }
+    ]
   },
   {
     "sourceSlug": "bird-dog",
@@ -4042,8 +4702,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bird-dog",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bird-dog"
+      }
+    ]
   },
   {
     "sourceSlug": "pallof-press",
@@ -4066,8 +4730,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-pallof-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "pallof-press"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-woodchop",
@@ -4090,8 +4758,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cable-woodchop",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-woodchop"
+      }
+    ]
   },
   {
     "sourceSlug": "half-kneeling-pallof-press",
@@ -4115,8 +4787,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-half-kneeling-pallof-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "half-kneeling-pallof-press"
+      }
+    ]
   },
   {
     "sourceSlug": "cable-pallof-hold",
@@ -4144,8 +4820,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-cable-pallof-hold",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cable-pallof-hold"
+      }
+    ]
   },
   {
     "sourceSlug": "hanging-knee-raise",
@@ -4167,8 +4847,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hanging-knee-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hanging-knee-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "captains-chair-knee-raise",
@@ -4191,8 +4875,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-captains-chair-knee-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "captains-chair-knee-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "decline-sit-up",
@@ -4215,8 +4903,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-decline-sit-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "decline-sit-up"
+      }
+    ]
   },
   {
     "sourceSlug": "weighted-crunch",
@@ -4238,8 +4930,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-weighted-crunch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "weighted-crunch"
+      }
+    ]
   },
   {
     "sourceSlug": "weighted-russian-twist",
@@ -4262,8 +4958,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-weighted-russian-twist",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "weighted-russian-twist"
+      }
+    ]
   },
   {
     "sourceSlug": "dumbbell-side-bend",
@@ -4285,8 +4985,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dumbbell-side-bend",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dumbbell-side-bend"
+      }
+    ]
   },
   {
     "sourceSlug": "elliptical",
@@ -4312,8 +5016,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-elliptical",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "elliptical"
+      }
+    ]
   },
   {
     "sourceSlug": "swimming",
@@ -4340,8 +5048,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-swimming",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "swimming"
+      }
+    ]
   },
   {
     "sourceSlug": "jump-rope",
@@ -4368,8 +5080,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-jump-rope",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "jump-rope"
+      }
+    ]
   },
   {
     "sourceSlug": "assault-bike",
@@ -4396,8 +5112,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-assault-bike",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "assault-bike"
+      }
+    ]
   },
   {
     "sourceSlug": "skierg",
@@ -4425,8 +5145,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-skierg",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "skierg"
+      }
+    ]
   },
   {
     "sourceSlug": "hiking",
@@ -4453,8 +5177,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-hiking",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hiking"
+      }
+    ]
   },
   {
     "sourceSlug": "treadmill-incline-walk",
@@ -4481,8 +5209,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-treadmill-incline-walk",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "treadmill-incline-walk"
+      }
+    ]
   },
   {
     "sourceSlug": "battle-ropes",
@@ -4509,8 +5241,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-battle-ropes",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "battle-ropes"
+      }
+    ]
   },
   {
     "sourceSlug": "incline-push-up",
@@ -4535,8 +5271,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-incline-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "incline-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "knee-push-up",
@@ -4561,8 +5301,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-knee-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "knee-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "wide-push-up",
@@ -4587,8 +5331,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wide-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wide-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "diamond-push-up",
@@ -4613,8 +5361,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-diamond-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "diamond-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "decline-push-up",
@@ -4639,8 +5391,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-decline-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "decline-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "pike-push-up",
@@ -4665,8 +5421,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-pike-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "pike-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "feet-elevated-pike-push-up",
@@ -4691,8 +5451,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-feet-elevated-pike-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "feet-elevated-pike-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "archer-push-up",
@@ -4717,8 +5481,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-archer-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "archer-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "typewriter-push-up",
@@ -4743,8 +5511,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-typewriter-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "typewriter-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "explosive-push-up",
@@ -4769,8 +5541,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-explosive-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "explosive-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "hindu-push-up",
@@ -4795,8 +5571,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hindu-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hindu-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "scapular-push-up",
@@ -4821,8 +5601,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-scapular-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "scapular-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "push-up-shoulder-tap",
@@ -4847,8 +5631,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-push-up-shoulder-tap",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "push-up-shoulder-tap"
+      }
+    ]
   },
   {
     "sourceSlug": "wall-push-up",
@@ -4872,8 +5660,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wall-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wall-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "wall-walk",
@@ -4898,8 +5690,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wall-walk",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wall-walk"
+      }
+    ]
   },
   {
     "sourceSlug": "wall-handstand-push-up",
@@ -4924,8 +5720,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-wall-handstand-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wall-handstand-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "handstand-push-up",
@@ -4950,8 +5750,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-handstand-push-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "handstand-push-up"
+      }
+    ]
   },
   {
     "sourceSlug": "chair-dip",
@@ -4975,8 +5779,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-chair-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "chair-dip"
+      }
+    ]
   },
   {
     "sourceSlug": "doorway-row",
@@ -5000,8 +5808,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-doorway-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "doorway-row"
+      }
+    ]
   },
   {
     "sourceSlug": "towel-row",
@@ -5025,8 +5837,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-towel-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "towel-row"
+      }
+    ]
   },
   {
     "sourceSlug": "prone-y-raise",
@@ -5049,8 +5865,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-prone-y-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "prone-y-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "prone-t-raise",
@@ -5073,8 +5893,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-prone-t-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "prone-t-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "superman",
@@ -5097,8 +5921,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-superman",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "superman"
+      }
+    ]
   },
   {
     "sourceSlug": "superman-hold",
@@ -5125,8 +5953,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-superman-hold",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "superman-hold"
+      }
+    ]
   },
   {
     "sourceSlug": "reverse-snow-angel",
@@ -5149,8 +5981,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-reverse-snow-angel",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "reverse-snow-angel"
+      }
+    ]
   },
   {
     "sourceSlug": "dead-hang",
@@ -5179,8 +6015,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-dead-hang",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dead-hang"
+      }
+    ]
   },
   {
     "sourceSlug": "active-hang",
@@ -5208,8 +6048,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-active-hang",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "active-hang"
+      }
+    ]
   },
   {
     "sourceSlug": "scapular-pull-up",
@@ -5233,8 +6077,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-scapular-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "scapular-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "negative-pull-up",
@@ -5257,8 +6105,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-negative-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "negative-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "commando-pull-up",
@@ -5282,8 +6134,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-commando-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "commando-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "l-sit-pull-up",
@@ -5307,8 +6163,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-l-sit-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "l-sit-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "towel-pull-up",
@@ -5331,8 +6191,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-towel-pull-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "towel-pull-up"
+      }
+    ]
   },
   {
     "sourceSlug": "bodyweight-squat",
@@ -5356,8 +6220,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-bodyweight-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bodyweight-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "pistol-squat",
@@ -5381,8 +6249,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-pistol-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "pistol-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "assisted-pistol-squat",
@@ -5406,8 +6278,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-assisted-pistol-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "assisted-pistol-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "shrimp-squat",
@@ -5431,8 +6307,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-shrimp-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "shrimp-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "cossack-squat",
@@ -5456,8 +6336,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-cossack-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cossack-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "sissy-squat",
@@ -5481,8 +6365,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-sissy-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "sissy-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "forward-lunge",
@@ -5506,8 +6394,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-forward-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "forward-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "lateral-lunge",
@@ -5531,8 +6423,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-lateral-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lateral-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "curtsy-lunge",
@@ -5556,8 +6452,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-curtsy-lunge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "curtsy-lunge"
+      }
+    ]
   },
   {
     "sourceSlug": "skater-squat",
@@ -5581,8 +6481,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-skater-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "skater-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "single-leg-box-squat",
@@ -5606,8 +6510,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-leg-box-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-leg-box-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "step-down",
@@ -5631,8 +6539,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-step-down",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "step-down"
+      }
+    ]
   },
   {
     "sourceSlug": "calf-raise",
@@ -5654,13 +6566,19 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-calf-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "calf-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "single-leg-calf-raise",
     "name": "Single-Leg Calf Raise",
-    "aliases": ["Single-Leg Standing Calf Raise"],
+    "aliases": [
+      "Single-Leg Standing Calf Raise"
+    ],
     "pattern": "calf",
     "muscles": [
       "Calves",
@@ -5678,8 +6596,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-single-leg-calf-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "single-leg-calf-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "glute-bridge-march",
@@ -5702,8 +6624,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-glute-bridge-march",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "glute-bridge-march"
+      }
+    ]
   },
   {
     "sourceSlug": "frog-pump",
@@ -5725,8 +6651,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-frog-pump",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "frog-pump"
+      }
+    ]
   },
   {
     "sourceSlug": "donkey-kick",
@@ -5749,8 +6679,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-donkey-kick",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "donkey-kick"
+      }
+    ]
   },
   {
     "sourceSlug": "fire-hydrant",
@@ -5773,8 +6707,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-fire-hydrant",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "fire-hydrant"
+      }
+    ]
   },
   {
     "sourceSlug": "clamshell",
@@ -5797,8 +6735,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-clamshell",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "clamshell"
+      }
+    ]
   },
   {
     "sourceSlug": "hip-airplane",
@@ -5821,8 +6763,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hip-airplane",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hip-airplane"
+      }
+    ]
   },
   {
     "sourceSlug": "side-lying-hip-abduction",
@@ -5845,8 +6791,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-side-lying-hip-abduction",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "side-lying-hip-abduction"
+      }
+    ]
   },
   {
     "sourceSlug": "side-lying-leg-raise",
@@ -5869,8 +6819,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-side-lying-leg-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "side-lying-leg-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "lying-hamstring-walkout",
@@ -5893,8 +6847,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-lying-hamstring-walkout",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lying-hamstring-walkout"
+      }
+    ]
   },
   {
     "sourceSlug": "towel-hamstring-curl",
@@ -5917,8 +6875,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-towel-hamstring-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "towel-hamstring-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "stability-ball-hamstring-curl",
@@ -5941,8 +6903,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-stability-ball-hamstring-curl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "stability-ball-hamstring-curl"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-glute-bridge",
@@ -5965,8 +6931,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-glute-bridge",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-glute-bridge"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-hip-thrust",
@@ -5989,8 +6959,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-hip-thrust",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-hip-thrust"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-frog-pump",
@@ -6012,8 +6986,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-frog-pump",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-frog-pump"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-clamshell",
@@ -6036,8 +7014,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-clamshell",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-clamshell"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-lateral-walk",
@@ -6061,8 +7043,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-lateral-walk",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-lateral-walk"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-monster-walk",
@@ -6086,8 +7072,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-monster-walk",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-monster-walk"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-squat",
@@ -6111,8 +7101,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-squat",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-squat"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-donkey-kick",
@@ -6135,8 +7129,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-donkey-kick",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-donkey-kick"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-fire-hydrant",
@@ -6159,8 +7157,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-fire-hydrant",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-fire-hydrant"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-kickback",
@@ -6183,8 +7185,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-kickback",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-kickback"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-standing-hip-abduction",
@@ -6207,8 +7213,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-standing-hip-abduction",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-standing-hip-abduction"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-seated-hip-abduction",
@@ -6231,8 +7241,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-seated-hip-abduction",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-seated-hip-abduction"
+      }
+    ]
   },
   {
     "sourceSlug": "band-pull-apart",
@@ -6255,8 +7269,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-band-pull-apart",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "band-pull-apart"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-face-pull",
@@ -6279,8 +7297,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-face-pull",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-face-pull"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-row",
@@ -6303,8 +7325,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-row",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-row"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-lat-pulldown",
@@ -6328,8 +7354,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-lat-pulldown",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-lat-pulldown"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-pallof-press",
@@ -6353,8 +7383,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-pallof-press",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-pallof-press"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-woodchop",
@@ -6378,8 +7412,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-woodchop",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-woodchop"
+      }
+    ]
   },
   {
     "sourceSlug": "banded-dead-bug",
@@ -6403,8 +7441,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-banded-dead-bug",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "banded-dead-bug"
+      }
+    ]
   },
   {
     "sourceSlug": "hollow-body-hold",
@@ -6431,8 +7473,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-hollow-body-hold",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hollow-body-hold"
+      }
+    ]
   },
   {
     "sourceSlug": "hollow-rock",
@@ -6455,8 +7501,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-hollow-rock",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hollow-rock"
+      }
+    ]
   },
   {
     "sourceSlug": "v-up",
@@ -6479,8 +7529,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-v-up",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "v-up"
+      }
+    ]
   },
   {
     "sourceSlug": "flutter-kick",
@@ -6507,8 +7561,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-flutter-kick",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "flutter-kick"
+      }
+    ]
   },
   {
     "sourceSlug": "lying-leg-raise",
@@ -6531,8 +7589,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-lying-leg-raise",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lying-leg-raise"
+      }
+    ]
   },
   {
     "sourceSlug": "toe-touch",
@@ -6554,8 +7616,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-toe-touch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "toe-touch"
+      }
+    ]
   },
   {
     "sourceSlug": "heel-tap",
@@ -6577,8 +7643,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-heel-tap",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "heel-tap"
+      }
+    ]
   },
   {
     "sourceSlug": "plank-shoulder-tap",
@@ -6602,8 +7672,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-plank-shoulder-tap",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "plank-shoulder-tap"
+      }
+    ]
   },
   {
     "sourceSlug": "plank-jack",
@@ -6630,8 +7704,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-plank-jack",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "plank-jack"
+      }
+    ]
   },
   {
     "sourceSlug": "bear-plank",
@@ -6659,8 +7737,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-bear-plank",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bear-plank"
+      }
+    ]
   },
   {
     "sourceSlug": "bear-crawl",
@@ -6688,8 +7770,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-bear-crawl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "bear-crawl"
+      }
+    ]
   },
   {
     "sourceSlug": "crab-walk",
@@ -6718,8 +7804,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-crab-walk",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "crab-walk"
+      }
+    ]
   },
   {
     "sourceSlug": "inchworm",
@@ -6744,8 +7834,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-inchworm",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "inchworm"
+      }
+    ]
   },
   {
     "sourceSlug": "l-sit-hold",
@@ -6774,8 +7868,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-l-sit-hold",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "l-sit-hold"
+      }
+    ]
   },
   {
     "sourceSlug": "seated-knee-tuck",
@@ -6798,8 +7896,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-seated-knee-tuck",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seated-knee-tuck"
+      }
+    ]
   },
   {
     "sourceSlug": "side-plank-hip-dip",
@@ -6823,8 +7925,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-side-plank-hip-dip",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "side-plank-hip-dip"
+      }
+    ]
   },
   {
     "sourceSlug": "copenhagen-plank",
@@ -6852,8 +7958,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-copenhagen-plank",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "copenhagen-plank"
+      }
+    ]
   },
   {
     "sourceSlug": "dragon-flag",
@@ -6877,8 +7987,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-dragon-flag",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "dragon-flag"
+      }
+    ]
   },
   {
     "sourceSlug": "burpee",
@@ -6903,8 +8017,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-burpee",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "burpee"
+      }
+    ]
   },
   {
     "sourceSlug": "half-burpee",
@@ -6928,8 +8046,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-half-burpee",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "half-burpee"
+      }
+    ]
   },
   {
     "sourceSlug": "squat-thrust",
@@ -6953,8 +8075,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-squat-thrust",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "squat-thrust"
+      }
+    ]
   },
   {
     "sourceSlug": "high-knees",
@@ -6981,8 +8107,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-high-knees",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "high-knees"
+      }
+    ]
   },
   {
     "sourceSlug": "jumping-jack",
@@ -7010,8 +8140,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-jumping-jack",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "jumping-jack"
+      }
+    ]
   },
   {
     "sourceSlug": "skater-hop",
@@ -7035,8 +8169,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-skater-hop",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "skater-hop"
+      }
+    ]
   },
   {
     "sourceSlug": "lateral-shuffle",
@@ -7064,8 +8202,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-lateral-shuffle",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "lateral-shuffle"
+      }
+    ]
   },
   {
     "sourceSlug": "fast-feet",
@@ -7092,8 +8234,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-fast-feet",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "fast-feet"
+      }
+    ]
   },
   {
     "sourceSlug": "sprawl",
@@ -7117,8 +8263,12 @@ export const workoutGuideExercises = [
     "isStretch": false,
     "measure": "reps",
     "artId": "wg-sprawl",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "sprawl"
+      }
+    ]
   },
   {
     "sourceSlug": "seal-jack",
@@ -7146,8 +8296,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-seal-jack",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seal-jack"
+      }
+    ]
   },
   {
     "sourceSlug": "cat-cow-stretch",
@@ -7174,8 +8328,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-cat-cow-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cat-cow-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "arm-circles",
@@ -7204,8 +8362,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-arm-circles",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "arm-circles"
+      }
+    ]
   },
   {
     "sourceSlug": "worlds-greatest-stretch",
@@ -7233,8 +8395,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-worlds-greatest-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "worlds-greatest-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "leg-swings-stretch",
@@ -7262,8 +8428,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-leg-swings-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "leg-swings-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "torso-twist-stretch",
@@ -7290,8 +8460,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-torso-twist-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "torso-twist-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "doorway-chest-stretch",
@@ -7319,8 +8493,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-doorway-chest-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "doorway-chest-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "childs-pose",
@@ -7349,8 +8527,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-childs-pose",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "childs-pose"
+      }
+    ]
   },
   {
     "sourceSlug": "kneeling-hip-flexor-stretch",
@@ -7378,8 +8560,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-kneeling-hip-flexor-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "kneeling-hip-flexor-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "hamstring-stretch",
@@ -7407,8 +8593,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-hamstring-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "hamstring-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "standing-quad-stretch",
@@ -7436,8 +8626,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-standing-quad-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "standing-quad-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "seated-forward-fold-stretch",
@@ -7466,8 +8660,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-seated-forward-fold-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "seated-forward-fold-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "cross-body-shoulder-stretch",
@@ -7495,8 +8693,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-cross-body-shoulder-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "cross-body-shoulder-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "wall-calf-stretch",
@@ -7523,8 +8725,12 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-wall-calf-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "wall-calf-stretch"
+      }
+    ]
   },
   {
     "sourceSlug": "butterfly-stretch",
@@ -7551,7 +8757,11 @@ export const workoutGuideExercises = [
       60
     ],
     "artId": "wg-butterfly-stretch",
-    "visualSource": "Workout Guide",
-    "visualLicense": "CC BY-SA 4.0"
+    "exerciseReferenceSources": [
+      {
+        "sourceId": "workout-guide",
+        "catalogRecordId": "butterfly-stretch"
+      }
+    ]
   }
 ];

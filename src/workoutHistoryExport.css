@@ -3,10 +3,7 @@
 .history-export-screen > p { line-height:1.5; color:var(--rook-secondary); }
 .history-export-count { font-size:13px; }
 .history-export-screen fieldset { border:0;padding:0;margin:24px 0;min-width:0; }
-.history-export-screen legend { font-size:12px;letter-spacing:.09em;color:var(--rook-secondary);margin-bottom:12px; }
-.history-export-formats { display:grid;grid-template-columns:1fr 1fr;gap:10px; }
-.history-export-formats button { min-height:52px;border:1px solid var(--rook-border);border-radius:16px;background:var(--rook-surface);color:var(--rook-text);font:inherit;font-weight:700; }
-:root[data-appearance] .history-export-formats .is-selected { background:var(--rook-text);color:var(--rook-surface); }
+.history-export-screen legend { margin-bottom:12px; }
 .history-export-notes { display:flex;align-items:center;gap:20px;justify-content:space-between;padding:18px 0;border-block:1px solid var(--rook-border); }
 .history-export-notes span { display:grid;gap:6px; }
 .history-export-notes small { color:var(--rook-secondary);line-height:1.4; }

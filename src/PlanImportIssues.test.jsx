@@ -89,6 +89,8 @@ it('keeps optional blank load unresolved until explicitly chosen',()=>{
 it('asks only the source unit, resolving immediately without an optional-load escape',()=>{
   const resolve=render({issues:[{id:'unit',field:'sourceUnit',dayId:'day',exerciseId:'exercise',source:'3x8 185',sourceLoads:[185]}]});
   expect(resolve).not.toHaveBeenCalled();expect(host.querySelector('input')).toBeNull();
+  expect(host.querySelector('[role="radiogroup"]').getAttribute('aria-label')).toBe('Source weight unit');
+  expect(host.querySelector('[role="radio"][aria-checked="true"]')).toBeNull();
   expect(host.textContent).not.toContain('Leave load unspecified');
   const button=[...host.querySelectorAll('button')].find(b=>b.textContent==='lb');
   act(()=>button.click());expect(resolve).toHaveBeenCalledExactlyOnceWith(expect.objectContaining({field:'sourceUnit'}),{unit:'lb'});

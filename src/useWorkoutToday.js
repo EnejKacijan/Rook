@@ -24,6 +24,7 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
   const fail=error=>({status:'conflict',error,...(resolved?{completedWorkoutId:resolved.id}:{}),sourceStatus:source?.status});
   if(resolved&&!record)return fail(`This workout was already performed. View the completed workout or start a new repeat.`);
   if(!record && (!source || !['planned','missed','optional'].includes(source.status)))return fail(source?.status==='active'?'This workout is already in progress.':source?.status==='skipped'?'This session was skipped.':source?.status==='reserved'?'This session is included in a combined workout.':'The schedule changed. Choose another workout.');
+  if(record && !record.exercises?.length)return fail('This workout has no exercises to repeat.');
   if(state.activeWorkout || state.activeOptionalSession)return fail('Finish or cancel your active workout first.');
   if(state.todayAdaptation)return fail('Finish or cancel the pending workout adjustment first.');
   if(source?.scheduledDate===today)return fail('This workout is already scheduled for today.');
@@ -60,7 +61,6 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
     moveProposal=proposeFlexibleWeek(staged,{mode:'move',sessionId:source.logicalSessionId,toDate:today,allowCompletedToday:true},today);
     if(moveProposal.status!=='ready')return moveProposal;
   }
-  if(record && !record.exercises?.length)return fail('This workout has no exercises to repeat.');
   return {status:'ready',today,request:structuredClone(request),fingerprint:flexibleReviewFingerprint(state),kind:record?'repeat':'move',
     sourceName:record?.name || source.workout.name,sourceDate:record?workoutPerformedDate(record):source.originalDate,displaced,displacedProposal,moveProposal};
 }

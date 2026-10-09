@@ -1,8 +1,10 @@
 import { sha256 } from '@noble/hashes/sha2.js';
 import { ACCOUNT_SYNC_SCHEMA } from './accountSyncModel.js';
 import { activeProfileSlot } from './profileSlotKeys.js';
+import { rookPlatform } from './platform.js';
 
 export function firebaseConfigurationStatus() {
+  if (rookPlatform.isNative) return 'rollout-off';
   // Public Firebase config alone must not activate an unverified account flow.
   if (import.meta.env?.VITE_ROOK_ACCOUNT_SYNC_ROLLOUT !== 'true') return 'rollout-off';
   const env = import.meta.env || {};
@@ -45,7 +47,13 @@ export async function getFirebaseSyncClient() {
     const db = firestoreApi.getFirestore(app);
     return { auth, db, authApi, firestoreApi };
   })());
-  return initializations.get(appName);
+  const initialization = initializations.get(appName);
+  try { return await initialization; }
+  catch (error) {
+    // A transient failure must not poison this auth namespace for the session.
+    if (initializations.get(appName) === initialization) initializations.delete(appName);
+    throw error;
+  }
 }
 
 

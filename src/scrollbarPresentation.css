@@ -7,8 +7,8 @@
    Textareas, pre/code, horizontal tables/previews, photo viewers and provider UI
    retain their own scrollbar presentation. See docs/mobile-scrollbar-audit.md. */
 @media (hover: none) and (pointer: coarse) and (max-width: 768px) and (forced-colors: none) and (prefers-contrast: no-preference) {
-  :is(
-    html:has(> body > #root),
+  html:not(.ios-native):has(> body > #root),
+  html:not(.ios-native) :is(
     .screen, .onboarding, .sheet, .sheet-scroll, .workout-confirm,
     .coach-scroll, .coach-history-scroll, .profile-setting-scroll,
     .onboarding-priorities .onboarding-content,
@@ -21,8 +21,8 @@
     .history-import-match-list
   ) { scrollbar-width: none; }
 
-  :is(
-    html:has(> body > #root),
+  html:not(.ios-native):has(> body > #root)::-webkit-scrollbar,
+  html:not(.ios-native) :is(
     .screen, .onboarding, .sheet, .sheet-scroll, .workout-confirm,
     .coach-scroll, .coach-history-scroll, .profile-setting-scroll,
     .onboarding-priorities .onboarding-content,

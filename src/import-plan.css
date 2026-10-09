@@ -8,7 +8,7 @@
 .import-plan-compose > p { margin: 10px 0; }
 .import-plan-text-wrap { position: relative; min-height: 160px; height: clamp(160px, 28dvh, 352px); flex: 0 0 auto; margin-top: 12px; }
 .import-plan-text { width: 100%; height: 100%; min-height: 132px; margin: 0; padding-right: 66px; font-family: inherit; line-height: 1.5; resize: none; }
-.import-plan-paste { position: absolute; top: 2px; right: 8px; min-height: 44px; min-width: 44px; padding: 0 4px; border: 0; background: transparent; color: #1f6b4c; font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .09em; }
+.import-plan-paste { position: absolute; top: 2px; right: 8px; min-height: 44px; min-width: 44px; padding: 0 4px; border: 0; background: transparent; color: var(--rook-accent-text); font: inherit; font-size: 11px; font-weight: 800; letter-spacing: .09em; }
 .import-plan-paste:disabled { color: #aaa7a2; }
 .import-plan-helper { flex: 0 0 auto; display: block; margin: 7px 0 0; color: var(--rook-secondary); font-size: 13px; line-height: 1.4; }
 .import-plan-screen .eyebrow { color: var(--rook-secondary); }
@@ -57,21 +57,21 @@
 .workout-descriptor-field > input { font-size: 13px !important; font-weight: 580 !important; }
 .plan-editor-workout-title { display: grid; gap: 4px; }
 .plan-editor-workout-title > small { color: #8a8783; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
-.plan-conditioning-card { margin: 14px 0 2px; padding: 14px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 15px; background: #eaf2ee; color: #1b1a19; }
+.plan-conditioning-card { margin: 14px 0 2px; padding: 14px; border: 1px solid color-mix(in srgb, var(--rook-accent) 16%, transparent); border-radius: 15px; background: var(--rook-accent-soft); color: #1b1a19; }
 .plan-conditioning-card > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
-.plan-conditioning-card > div span { color: #1f6b4c; font-size: 9px; font-weight: 750; letter-spacing: .1em; }
-.plan-conditioning-card > div strong { flex: 0 0 auto; color: #1f6b4c; font-size: 15px; }
-.plan-conditioning-card p { margin: 8px 0 6px; color: #4e6258; font-size: 12px; font-weight: 700; }
-.plan-conditioning-card small,.plan-conditioning-card em { display: block; color: #6b746f; font-size: 11px; line-height: 1.4; text-align: left; }
-.plan-conditioning-card em { margin-top: 7px; color: #7d827f; font-style: normal; }
-.personalization-summary { margin: 18px 0 0; padding: 15px; border: 1px solid rgba(31, 107, 76, .16); border-radius: 16px; background: #eaf2ee; }
+.plan-conditioning-card > div span { color: var(--rook-accent-text); font-size: 9px; font-weight: 750; letter-spacing: .1em; }
+.plan-conditioning-card > div strong { flex: 0 0 auto; color: var(--rook-accent-text); font-size: 15px; }
+.plan-conditioning-card p { margin: 8px 0 6px; color: var(--rook-secondary); font-size: 12px; font-weight: 700; }
+.plan-conditioning-card small,.plan-conditioning-card em { display: block; color: var(--rook-secondary); font-size: 11px; line-height: 1.4; text-align: left; }
+.plan-conditioning-card em { margin-top: 7px; color: var(--rook-secondary); font-style: normal; }
+.personalization-summary { margin: 18px 0 0; padding: 15px; border: 1px solid color-mix(in srgb, var(--rook-accent) 16%, transparent); border-radius: 16px; background: var(--rook-accent-soft); }
 .personalization-summary > div > .eyebrow { color: var(--rook-secondary, #6f6b64); }
 .personalization-summary > div > strong { display: block; margin-top: 6px; color: var(--rook-accent-strong, #17553c); font-size: 13px; }
 .personalization-summary dl { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 13px 0 0; }
 .personalization-summary dl > div { min-width: 0; padding: 9px 10px; border-radius: 11px; background: rgba(255, 255, 255, .72); }
 .personalization-summary dt { color: var(--rook-secondary, #6f6b64); font-size: 8px; font-weight: 800; letter-spacing: .1em; }
-.personalization-summary dd { margin: 4px 0 0; color: #234b3a; font-size: 11px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
-.personalization-summary .split-adaptation-note { margin: 11px 2px 0; color: #527363; font-size: 10.5px; line-height: 1.45; }
+.personalization-summary dd { margin: 4px 0 0; color: var(--rook-secondary); font-size: 11px; font-weight: 700; line-height: 1.35; overflow-wrap: anywhere; }
+.personalization-summary .split-adaptation-note { margin: 11px 2px 0; color: var(--rook-secondary); font-size: 10.5px; line-height: 1.45; }
 .personalization-summary + .import-preview { margin-top: 20px; }
 .import-day { position: relative; padding: 18px 0; border-bottom: 1px solid rgba(27, 26, 25, 0.08); }
 .plan-edit-day-section { padding: 24px 0 28px; border-bottom: 0; }
@@ -100,10 +100,10 @@
 .scratch-plan-name input { width: 100%; height: 48px; padding: 0 13px; border: 1px solid rgba(27,26,25,.11); border-radius: 12px; background: #fff; color: #1b1a19; font: inherit; font-size: 16px; font-weight: 700; }
 .scratch-days { margin-top: 26px; }
 .scratch-days-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.scratch-days-heading > button { padding: 2px 0; border: 0; background: transparent; color: #1f6b4c; font: inherit; font-size: 10px; font-weight: 750; }
+.scratch-days-heading > button { padding: 2px 0; border: 0; background: transparent; color: var(--rook-accent-text); font: inherit; font-size: 10px; font-weight: 750; }
 .scratch-days > .scratch-day-options { margin-top: 10px; display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
 .scratch-day-options button { min-width: 0; height: 44px; padding: 0; border: 1px solid rgba(27,26,25,.11); border-radius: 12px; background: #fff; color: #1b1a19; font: inherit; font-size: 10px; font-weight: 750; }
-.scratch-day-options button.selected { border-color: #1f6b4c; background: #1f6b4c; color: #fff; }
+.scratch-day-options button.selected { border-color: var(--rook-accent-text); background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); }
 .scratch-day-options button:disabled:not(.selected) { background: rgba(255,255,255,.52); color: #b8b4af; }
 @media (max-width: 350px) {
   .scratch-days > .scratch-day-options { grid-template-columns: repeat(4, minmax(0, 1fr)); }
@@ -125,7 +125,6 @@
 :root .scratch-editor-screen > .plan-name-field > input:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
 :root .scratch-editor-screen .plan-workout-reorder-bar { margin-block: 0 8px; border-bottom: 0; }
 :root .scratch-editor-screen .plan-workout-reorder-bar > .plan-workout-overflow { margin-left: auto; flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-secondary); font: inherit; font-size: 18px; letter-spacing: 1px; }
-:root .scratch-editor-screen .plan-workout-overflow:active { opacity: .7; }
 :root .scratch-editor-screen .plan-workout-overflow:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; border-radius: 8px; }
 :root .scratch-editor-screen .is-week-reordering .plan-workout-overflow { display: none; }
 :root .scratch-editor-screen .workout-name-field > input { font-size: 16px; }
@@ -134,25 +133,25 @@
 :root .scratch-editor-screen .scratch-warmup-row { margin: 4px 2px 0; padding: 0; border: 0; background: transparent; }
 :root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header { min-height: 44px; gap: 8px; }
 :root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header > strong { min-width: 0; color: var(--rook-secondary); font-size: 14px; font-weight: 500; line-height: 1.4; }
-:root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header > button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0 8px 8px; color: var(--rook-accent); font-size: 14px; letter-spacing: 0; }
+:root .scratch-editor-screen .scratch-warmup-row > .plan-warmup-card-header > button { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0 8px 8px; color: var(--rook-accent-text); font-size: 14px; letter-spacing: 0; }
 :root .scratch-editor-screen .sheet-action-footer > .scratch-readiness { color: var(--rook-secondary); font-size: 13px; line-height: 1.4; text-align: center; }
 .scratch-workout-day { padding: 15px 0; }
 .scratch-workout-day .workout-name-field { margin-bottom: 7px; }
-.scratch-workout-day .workout-name-field > input { height: 44px; border-color: rgba(31,107,76,.2); background: #fff; box-shadow: 0 1px 0 rgba(27,26,25,.02); }
-.scratch-workout-day .workout-name-field > input:focus { border-color: rgba(31,107,76,.52); outline: 3px solid rgba(31,107,76,.1); }
+.scratch-workout-day .workout-name-field > input { height: 44px; border-color: color-mix(in srgb, var(--rook-accent) 20%, transparent); background: #fff; box-shadow: 0 1px 0 rgba(27,26,25,.02); }
+.scratch-workout-day .workout-name-field > input:focus { border-color: var(--rook-accent-text); outline: 3px solid var(--rook-focus-ring); }
 .scratch-day-status { min-height: 24px; margin: 0 1px 8px; display: flex; align-items: center; }
 .scratch-workout-day .scratch-day-status > small { color: #77736f; font-size: 10.5px; text-align: left; }
-.scratch-workout-day .scratch-day-status > small.ready { color: #1f6b4c; font-weight: 750; }
+.scratch-workout-day .scratch-day-status > small.ready { color: var(--rook-success); font-weight: 750; }
 .scratch-workout-day .scratch-day-status > small.validation-error { color: #8b6440; }
 .scratch-workout-day.is-collapsed { padding-bottom: 12px; }
 .scratch-add-exercise { margin-top: 9px; }
-.scratch-add-exercise > button { width: 100%; min-height: 48px; border: 1px dashed rgba(31,107,76,.3); border-radius: 13px; background: transparent; color: #1f6b4c; font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
+:root .plan-editor-add-picker > small { color: var(--rook-secondary); }
+.scratch-add-exercise > button { width: 100%; min-height: 48px; border: 1px dashed color-mix(in srgb, var(--rook-accent) 30%, transparent); border-radius: 13px; background: transparent; color: var(--rook-accent-text); font: inherit; font-size: 10px; font-weight: 800; letter-spacing: .08em; }
 :root .plan-workout-tools { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-:root[data-appearance] .plan-workout-tools > button { min-height: 44px; min-width: 44px; padding: 8px 2px; border: 0; background: transparent; color: var(--rook-accent); font: inherit; font-size: 12px; font-weight: 650; text-align: left; }
+:root[data-appearance] .plan-workout-tools > button { min-height: 44px; min-width: 44px; padding: 8px 2px; border: 0; background: transparent; color: var(--rook-accent-text); font: inherit; font-size: 12px; font-weight: 650; text-align: left; }
 :root .plan-workout-tools > .plan-workout-add { min-width: 0; overflow-wrap: anywhere; }
 :root[data-appearance] .plan-workout-tools > .plan-workout-overflow { flex: 0 0 44px; color: var(--rook-secondary); text-align: center; font-size: 18px; letter-spacing: 1px; }
 :root .plan-workout-tools > button:disabled { opacity: .45; }
-:root .plan-workout-tools > button:active { opacity: .7; }
 :root .plan-workout-tools > button:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; }
 :root .plan-workout-actions-sheet { display: flex; flex-direction: column; max-height: min(80dvh, 640px); background: var(--rook-bg); color: var(--rook-text); }
 :root[data-appearance] .plan-workout-actions-sheet { --workout-utility-gutter: 24px; padding-inline: var(--workout-utility-gutter); }
@@ -171,7 +170,7 @@
 :root .plan-copy-destinations > button > span { min-width: 0; }
 :root .plan-copy-destinations strong { font-size: 14px; overflow-wrap: anywhere; }
 :root .plan-copy-destinations small { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 12px; }
-:root .plan-copy-destinations i { flex: 0 0 18px; color: var(--rook-accent); font-style: normal; }
+:root .plan-copy-destinations i { flex: 0 0 18px; color: var(--rook-accent-text); font-style: normal; }
 :root .plan-copy-destinations > button[aria-checked="true"] { border-color: var(--rook-accent); }
 :root[data-appearance] .plan-copy-destinations > button:disabled { opacity: 1; color: var(--rook-secondary); background: var(--rook-bg); }
 :root[data-appearance] .plan-copy-destinations > button:disabled strong { color: var(--rook-secondary); }
@@ -182,8 +181,9 @@
 .scratch-exercise-search button { padding: 0 5px; border: 0; background: transparent; color: #6f6c68; font-size: 9px; font-weight: 800; letter-spacing: .08em; }
 .scratch-exercise-results { max-height: 220px; margin-top: 7px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid rgba(27,26,25,.08); border-radius: 11px; background: #fff; }
 .scratch-exercise-results button { width: 100%; min-height: 43px; padding: 9px 11px; border: 0; border-bottom: 1px solid rgba(27,26,25,.06); background: #fff; color: #1b1a19; text-align: left; font: inherit; font-size: 12px; }
+.scratch-exercise-results button { touch-action: manipulation; }
 .scratch-exercise-results button:last-child { border-bottom: 0; }
-.scratch-exercise-results .scratch-custom-exercise { display: flex; flex-direction: column; gap: 3px; color: #1f6b4c; }
+.scratch-exercise-results .scratch-custom-exercise { display: flex; flex-direction: column; gap: 3px; color: var(--rook-accent-text); }
 .scratch-exercise-results .scratch-custom-exercise strong { font-size: 12px; overflow-wrap: anywhere; }
 .scratch-exercise-results .scratch-custom-exercise small { color: #8a8783; font-size: 10px; }
 .initial-import-screen { width: 100%; max-width: 500px; min-height: 100dvh; margin: 0 auto; background: #f6f5f2; }
@@ -223,50 +223,50 @@
   .plan-editor.is-reordering :is(.import-day,.plan-editor-exercise),
   .plan-editor-exercise { transition: none; }
 }
-.plan-editor-exercise.is-expanded { border-color: rgba(31, 107, 76, .3); box-shadow: 0 8px 24px rgba(27, 26, 25, .055); }
+.plan-editor-exercise.is-expanded { border-color: color-mix(in srgb, var(--rook-accent) 30%, transparent); box-shadow: 0 8px 24px rgba(27, 26, 25, .055); }
 .plan-editor-exercise.needs-review { border-color: var(--rook-review-border, rgba(31,107,76,.42)); }
-.import-review-summary { width: 100%; min-height: 58px; margin: 14px 0 2px; padding: 10px 4px 10px 13px; border: 0; border-block: 1px solid rgba(27,26,25,.09); border-left: 2px solid rgba(31,107,76,.58); border-radius: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+.import-review-summary { width: 100%; min-height: 58px; margin: 14px 0 2px; padding: 10px 4px 10px 13px; border: 0; border-block: 1px solid rgba(27,26,25,.09); border-left: 2px solid color-mix(in srgb, var(--rook-accent) 58%, transparent); border-radius: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
 .import-review-summary.has-issues { background: transparent; }
 .import-review-summary > span { min-width: 0; display: grid; gap: 4px; }
 .import-review-summary strong { font-size: 12px; }
 .import-review-summary small { color: #77736f; font-size: 10px; text-align: left; }
-.import-review-summary b { flex: 0 0 auto; color: #1f6b4c; font-size: 8.5px; letter-spacing: .09em; white-space: nowrap; }
-.import-review-summary i { color: #1f6b4c; font-style: normal; font-weight: 800; }
+.import-review-summary b { flex: 0 0 auto; color: var(--rook-accent-text); font-size: 8.5px; letter-spacing: .09em; white-space: nowrap; }
+.import-review-summary i { color: var(--rook-accent-text); font-style: normal; font-weight: 800; }
 .plan-editor-summary { width: 100%; min-height: 70px; padding: 13px 14px 13px 15px; border: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
 .plan-editor-heading { min-width: 0; display: grid; gap: 5px; }
 .plan-editor-heading > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; white-space: nowrap; }
 .plan-editor-heading > small { color: #77736f; font-size: 11px; text-align: left; }
-.plan-editor-exercise.is-superset { border-left: 3px solid rgba(31,107,76,.46); }
+.plan-editor-exercise.is-superset { border-left: 3px solid color-mix(in srgb, var(--rook-accent) 46%, transparent); }
 .plan-editor-exercise.superset-a1 { margin-bottom: -5px; border-bottom-left-radius: 8px; }
 .plan-editor-exercise.superset-a2 { border-top-left-radius: 8px; }
-.superset-role { display: inline-grid; place-items: center; min-width: 34px; height: 21px; margin-right: 8px; padding: 0 6px; border-radius: 7px; background: #eaf2ee; color: #1f6b4c; font-size: 8px; font-style: normal; letter-spacing: .06em; vertical-align: middle; }
-.plan-editor-heading > .superset-round-rest { color: #1f6b4c; font-size: 10px; }
-.plan-editor-summary-action { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; color: var(--rook-accent, #1f6b4c); }
+.superset-role { display: inline-grid; place-items: center; min-width: 34px; height: 21px; margin-right: 8px; padding: 0 6px; border-radius: 7px; background: var(--rook-accent-soft); color: var(--rook-accent-text); font-size: 8px; font-style: normal; letter-spacing: .06em; vertical-align: middle; }
+.plan-editor-heading > .superset-round-rest { color: var(--rook-accent-text); font-size: 10px; }
+.plan-editor-summary-action { flex: 0 0 auto; display: flex; align-items: center; gap: 8px; color: var(--rook-accent-text, #1f6b4c); }
 .plan-editor-summary-action b { font-size: 9px; letter-spacing: .1em; }
 .plan-editor-summary-action i { width: 20px; height: 20px; flex: 0 0 20px; display: flex; align-items: center; justify-content: center; overflow: hidden; color: inherit; font-size: 0; font-style: normal; line-height: 0; }
 .plan-editor-summary-action i::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); transform-origin: center; transition: transform 190ms var(--rook-ease-standard, cubic-bezier(.2,0,0,1)); }
 .plan-editor-summary[aria-expanded="true"] .plan-editor-summary-action i::before { transform: rotate(225deg); }
-.needs-review .plan-editor-summary-action { color: var(--rook-review-text, var(--rook-accent, #1f6b4c)); }
+.needs-review .plan-editor-summary-action { color: var(--rook-review-text, var(--rook-accent-text, #1f6b4c)); }
 .needs-review .plan-editor-summary-action b { max-width: 54px; line-height: 1.2; text-align: right; }
 .plan-editor-fields { padding: 2px 14px 14px; border-top: 1px solid rgba(27, 26, 25, .07); }
-.import-review-resolution { margin-top: 11px; padding: 12px; border: 1px solid rgba(31,107,76,.14); border-radius: 12px; background: #f6f5f2; }
-.import-review-status { display: inline-flex; min-height: 22px; padding: 0 7px; border-radius: 7px; background: #e5efe9; color: #1f6b4c; align-items: center; font-size: 8px; font-weight: 800; letter-spacing: .09em; }
+.import-review-resolution { margin-top: 11px; padding: 12px; border: 1px solid color-mix(in srgb, var(--rook-accent) 14%, transparent); border-radius: 12px; background: #f6f5f2; }
+.import-review-status { display: inline-flex; min-height: 22px; padding: 0 7px; border-radius: 7px; background: var(--rook-accent-soft); color: var(--rook-accent-text); align-items: center; font-size: 8px; font-weight: 800; letter-spacing: .09em; }
 .import-review-resolution > p { margin: 8px 0 10px; color: #5f5b57; font-size: 11px; line-height: 1.45; }
-.import-review-resolution .import-review-primary { border-color: #1f6b4c; background: #1f6b4c; color: #fff; }
+.import-review-resolution .import-review-primary { border-color: var(--rook-accent-text); background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); }
 .import-review-resolution .import-review-primary strong { color: inherit; font-size: 10px; letter-spacing: .07em; }
 .import-review-resolution .import-review-primary i { color: inherit; }
-.import-review-custom-trigger { width: 100%; min-height: 48px; margin-top: 8px; padding: 9px 11px; border: 1px solid rgba(31,107,76,.3); border-radius: 10px; background: transparent; color: #1f6b4c; display: grid; gap: 3px; font: inherit; text-align: left; }
+.import-review-custom-trigger { width: 100%; min-height: 48px; margin-top: 8px; padding: 9px 11px; border: 1px solid color-mix(in srgb, var(--rook-accent) 30%, transparent); border-radius: 10px; background: transparent; color: var(--rook-accent-text); display: grid; gap: 3px; font: inherit; text-align: left; }
 .import-review-custom-trigger strong { font-size: 10px; letter-spacing: .07em; }
 .import-review-custom-trigger small { color: #77736f; font-size: 9.5px; line-height: 1.35; overflow-wrap: anywhere; }
 .import-review-custom-name { display: grid; gap: 6px; margin-top: 4px; }
 .import-review-custom-name > span { color: #8a8783; font-size: 9px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
-.import-review-custom-name > button { min-height: 40px; border: 0; border-radius: 10px; background: #1f6b4c; color: #fff; font: inherit; font-size: 9px; font-weight: 800; letter-spacing: .07em; }
+.import-review-custom-name > button { min-height: 40px; border: 0; border-radius: 10px; background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); font: inherit; font-size: 9px; font-weight: 800; letter-spacing: .07em; }
 .import-review-picker .import-review-picker-label { display: block; padding: 9px 10px 5px; color: #8a8783; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-align: left; text-transform: uppercase; }
 .import-review-compact-editor { min-height: 48px; margin-top: 9px; padding: 8px 1px; border-top: 1px solid rgba(27,26,25,.07); display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .import-review-compact-editor > span { min-width: 0; display: grid; gap: 4px; }
 .import-review-compact-editor small { color: #a3a09b; font-size: 8px; font-weight: 800; letter-spacing: .09em; text-align: left; }
 .import-review-compact-editor strong { color: #5f5b57; font-size: 11px; font-weight: 650; overflow-wrap: anywhere; }
-.import-review-compact-editor > button { flex: 0 0 auto; min-height: 34px; padding: 0 2px; border: 0; background: transparent; color: #1f6b4c; font: inherit; font-size: 8.5px; font-weight: 800; letter-spacing: .07em; }
+.import-review-compact-editor > button { flex: 0 0 auto; min-height: 34px; padding: 0 2px; border: 0; background: transparent; color: var(--rook-accent-text); font: inherit; font-size: 8.5px; font-weight: 800; letter-spacing: .07em; }
 .import-review-weights .plan-editor-weights.is-on-demand { margin-top: 0; padding-bottom: 6px; }
 .import-review-footer-actions { justify-content: flex-start; border-top: 1px solid rgba(27,26,25,.07); padding-top: 5px; }
 .import-review-footer-actions .import-review-remove { color: #8b554b; font-weight: 650; }
@@ -301,14 +301,14 @@
 .plan-editor select,.plan-editor input { width: 100%; height: 40px; padding: 0 10px; border: 1px solid rgba(27, 26, 25, .11); border-radius: 10px; background: #fff; color: #1b1a19; }
 .plan-editor-picker-trigger { width: 100%; min-height: 42px; padding: 0 11px; border: 1px solid rgba(27, 26, 25, .11); border-radius: 10px; background: #fff; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; }
 .plan-editor-picker-trigger strong { min-width: 0; font-size: 13px; overflow-wrap: anywhere; }
-.plan-editor-picker-trigger i { width: 20px; height: 20px; flex: 0 0 20px; display: flex; align-items: center; justify-content: center; color: #1f6b4c; font-size: 0; font-style: normal; line-height: 0; }
+.plan-editor-picker-trigger i { width: 20px; height: 20px; flex: 0 0 20px; display: flex; align-items: center; justify-content: center; color: var(--rook-accent-text); font-size: 0; font-style: normal; line-height: 0; }
 .plan-editor-picker-trigger i::before { content: ''; width: 7px; height: 7px; flex: 0 0 7px; border-right: 1.5px solid currentColor; border-bottom: 1.5px solid currentColor; transform: rotate(45deg); }
-.plan-editor-picker { padding: 9px; border: 1px solid rgba(31,107,76,.2); border-radius: 12px; background: #f8fbf9; box-shadow: 0 8px 20px rgba(27,26,25,.08); }
+.plan-editor-picker { padding: 9px; border: 1px solid color-mix(in srgb, var(--rook-accent) 20%, transparent); border-radius: 12px; background: #f8fbf9; box-shadow: 0 8px 20px rgba(27,26,25,.08); }
 .plan-editor-picker > input { height: 38px; }
 .plan-editor-picker > div { max-height: 220px; margin-top: 7px; overflow-y: auto; overscroll-behavior: contain; border: 1px solid rgba(27,26,25,.08); border-radius: 9px; background: #fff; }
 .plan-editor-picker > div > button { width: 100%; min-height: 42px; padding: 9px 10px; border: 0; border-bottom: 1px solid rgba(27,26,25,.06); background: #fff; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 10px; text-align: left; font-size: 12px; }
 .plan-editor-picker > div > button:last-of-type { border-bottom: 0; }
-.plan-editor-picker > div > button[aria-selected="true"] { color: #1f6b4c; font-weight: 750; }
+.plan-editor-picker > div > button[aria-selected="true"] { color: var(--rook-accent-text); font-weight: 750; }
 .plan-editor-picker > div > button i { font-style: normal; }
 .plan-editor-picker > div > small { display: block; padding: 13px 10px; color: #77736f; font-size: 11px; }
 .plan-editor-prescription { display: grid; grid-template-columns: 72px 1fr 1fr; gap: 8px; margin-top: 9px; }
@@ -328,19 +328,19 @@
 .plan-editor-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; margin-top: 12px; }
 .plan-editor-actions button { min-height: 38px; padding: 0 4px; border: 0; background: transparent; font: inherit; font-size: 10px; font-weight: 750; letter-spacing: .08em; }
 .plan-editor-actions button:first-child { color: #8b554b; }
-.plan-editor-actions button:last-child { color: #1f6b4c; }
+.plan-editor-actions button:last-child { color: var(--rook-accent-text); }
 .plan-editor-actions button:disabled { color: #aaa7a2; }
-.bulk-match-review { margin: 18px 0 4px; padding: 15px; border: 1px solid rgba(31,107,76,.2); border-radius: 15px; background: #f6f5f2; }
-.bulk-match-review .eyebrow { color: #1f6b4c; }
+.bulk-match-review { margin: 18px 0 4px; padding: 15px; border: 1px solid color-mix(in srgb, var(--rook-accent) 20%, transparent); border-radius: 15px; background: #f6f5f2; }
+.bulk-match-review .eyebrow { color: var(--rook-accent-text); }
 .bulk-match-review > button { width: 100%; margin-top: 10px; padding: 0; border: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; gap: 12px; text-align: left; }
-.bulk-match-review > button > i { width: 34px; height: 34px; flex: 0 0 auto; border: 1px solid rgba(31,107,76,.28); border-radius: 10px; background: #fff; color: #1f6b4c; display: grid; place-items: center; font-style: normal; font-weight: 800; }
+.bulk-match-review > button > i { width: 34px; height: 34px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--rook-accent) 28%, transparent); border-radius: 10px; background: #fff; color: var(--rook-accent-text); display: grid; place-items: center; font-style: normal; font-weight: 800; }
 .bulk-match-review > button > span { display: grid; gap: 4px; }
 .bulk-match-review strong { font-size: 11px; letter-spacing: .06em; }
 .bulk-match-review small { color: #77736f; font-size: 10px; line-height: 1.35; }
 .bulk-match-review.is-complete { padding: 13px 15px; border-color: rgba(27,26,25,.1); background: #f6f5f2; }
 .plan-editor.has-ready-sticky-action + .bulk-match-review.is-complete { margin-top: 10px; }
 .bulk-match-review-complete { display: flex; align-items: center; gap: 9px; }
-.bulk-match-review-complete > i { width: 28px; height: 28px; flex: 0 0 auto; border: 1px solid rgba(31,107,76,.18); border-radius: 9px; color: #4e765f; display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; }
+.bulk-match-review-complete > i { width: 28px; height: 28px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--rook-success) 18%, transparent); border-radius: 9px; color: var(--rook-success); display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; }
 .bulk-match-review-complete > span { display: grid; gap: 3px; }
 .bulk-match-review-complete strong { color: #56534f; font-weight: 720; }
 @media (max-width: 374px) {
@@ -369,5 +369,5 @@
 .import-plan-screen .import-interpretation-offer h2 { margin: 0; color: var(--rook-text); font-size: 18px; line-height: 1.3; }
 .import-plan-screen .import-interpretation-offer p { margin: 8px 0 14px; color: var(--rook-secondary); font-size: 14px; line-height: 1.45; }
 .import-plan-screen .import-interpretation-offer > .button { width: 100%; min-height: 52px; margin: 0; padding: 12px; font-size: 12px; }
-.import-plan-screen .import-interpretation-offer > .import-local-review { display: block; width: 100%; min-height: 44px; margin: 4px 0 8px; padding: 10px; background: transparent; color: var(--rook-accent); font-size: 14px; font-weight: 600; letter-spacing: normal; text-transform: none; }
+.import-plan-screen .import-interpretation-offer > .import-local-review { display: block; width: 100%; min-height: 44px; margin: 4px 0 8px; padding: 10px; background: transparent; color: var(--rook-accent-text); font-size: 14px; font-weight: 600; letter-spacing: normal; text-transform: none; }
 .import-plan-screen .import-interpretation-offer > small { display: block; color: var(--rook-secondary); font-size: 13px; line-height: 1.45; }

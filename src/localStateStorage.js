@@ -3,6 +3,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import {assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {intentionalNoPlan} from './trainingStyle.js';
 import { FIRST_RUN_ACCOUNT_CLAIM_KEY } from './firstRunAccountClaim.js';
+import { isConditioning, conditioningConfiguration } from './optionalActivity.js';
 
 // Application data lives only in PRIMARY and the bounded recovery checkpoint.
 // Metadata never contains names, exercises, notes, messages, or state payloads.
@@ -43,7 +44,11 @@ export function assertStateShape(state) {
   for (const workout of workouts)
     if (!workout || !Array.isArray(workout.exercises) || workout.exercises.some(e => !e || !Array.isArray(e.sets) || e.sets.some(s => !object(s)))) fail('validation-error');
   if (state.profile.onboardingComplete && !state.program && !intentionalNoPlan(state)) fail('validation-error');
-  if (state.activeOptionalSession != null && (!object(state.activeOptionalSession) || !['Cardio','Mobility'].includes(state.activeOptionalSession.kind) || !Number.isFinite(Number(state.activeOptionalSession.startedAt)))) fail('validation-error');
+  if (state.activeOptionalSession != null && (!object(state.activeOptionalSession) || !(['Cardio','Mobility'].includes(state.activeOptionalSession.kind) || isConditioning(state.activeOptionalSession)) || !Number.isFinite(Number(state.activeOptionalSession.startedAt)))) fail('validation-error');
+  for (const session of [state.activeOptionalSession, ...(state.optionalSessions || [])].filter(item => item?.kind === 'Conditioning')) {
+    if (!isConditioning(session)) fail('validation-error');
+    try { conditioningConfiguration({ ...session, durationSeconds: session.duration * 60 }); } catch { fail('validation-error'); }
+  }
   for (const entry of state.weightCheckins || []) if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.localDate) || !Number.isFinite(Number(entry.weightKg)) || Number(entry.weightKg) < 10 || Number(entry.weightKg) > 700) fail('validation-error');
   for (const entry of state.customExercises || []) if (!entry.id || !String(entry.name || '').trim()) fail('validation-error');
   for (const entry of state.completedTrainingBlocks || []) if (!entry.id || !Array.isArray(entry.weeks)) fail('validation-error');
@@ -59,10 +64,10 @@ const continuity = state => ({
   profileId: state?.profile?.id,
   established: hasEstablishedData(state),
   noPlanReceipt: JSON.stringify(state?.profile?.noPlanReceipt ?? null),
-  // A first-run Freestyle user's only established data can be the empty active
-  // session. Removing that exact session must not be mistaken for profile loss.
-  activeOnlyNoPlan: Boolean(state?.activeWorkout) && intentionalNoPlan(state) &&
-    !hasEstablishedData({ ...state, activeWorkout: null }),
+  // A first-run user's only established data can be an active session.
+  // Explicitly canceling it must not be mistaken for profile loss.
+  activeOnlyNoPlan: Boolean(state?.activeWorkout || state?.activeOptionalSession) && intentionalNoPlan(state) &&
+    !hasEstablishedData({ ...state, activeWorkout: null, activeOptionalSession: null }),
   emptyNoPlan: !hasEstablishedData(state) && intentionalNoPlan(state),
 });
 function assertContinuity(previous, next) {

@@ -105,3 +105,30 @@ it('custom absolute loads and instructions keep their prescription when working 
   expect(rows().map(row=>row.textContent)).toContain('42.5 kg × 6✓');
   expect(rows().map(row=>row.textContent)).toContain('Comfortable load × 12✓');
 });
+
+it('shows the flexible cardio recommendation without changing checks or working sets',()=>{
+  mount();const before=structuredClone(current.activeWorkout.exercises);
+  tap('.workout-warmup-toggle');settle();
+  expect(rows()[0].textContent).toContain('5 min');
+  expect(node('.warmup-general-guidance').textContent).toContain("Shorten this if you're already warm");
+  expect(node('.warmup-general-guidance').closest('button')).toBeNull();
+  expect(progress().done).toBe(0);
+  expect(current.activeWorkout.exercises).toEqual(before);
+});
+
+it('reload keeps an already-started automatic warm-up prescription and its progress intact',()=>{
+  const state=fixture();
+  const general=state.activeWorkout.warmup.general[0];
+  Object.assign(general,{label:'Easy elliptical',minutes:3,completed:true});
+  delete general.guidance;
+  Object.assign(state.activeWorkout.warmup.stages[0].general[0],general);
+  delete state.activeWorkout.warmup.stages[0].general[0].guidance;
+  const saved=structuredClone(state.activeWorkout);
+  const restored=deserializeState(serializeState(state),{strict:true});
+  expect(restored.activeWorkout).toEqual(saved);
+  mount(restored);tap('.workout-warmup-toggle');settle();
+  expect(rows()[0].textContent).toContain('Easy elliptical');
+  expect(rows()[0].textContent).toContain('3 min');
+  expect(rows()[0].getAttribute('aria-checked')).toBe('true');
+  expect(node('.warmup-general-guidance')).toBeNull();
+});
