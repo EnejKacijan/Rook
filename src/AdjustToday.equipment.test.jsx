@@ -113,6 +113,8 @@ it('review shows current and target delta; Apply persists only one-workout adjus
   const s = fixture(), original = structuredClone(s); mount(s); check('Home'); await review();
   const delta = host.querySelector('.adjust-equipment-delta'); expect(delta.textContent).toContain('CurrentMain Gym · Full gym');
   expect(delta.textContent).toContain('For this workoutHome · Dumbbells, Barbell / rack / bench, Cables');
+  expect(host.textContent).toContain('WORKOUT PREVIEW');
+  expect(host.textContent).not.toContain('KEEPING');
   expect(save).not.toHaveBeenCalled(); expect(update).not.toHaveBeenCalled();
   expect(button('USE THIS WORKOUT').disabled).toBe(false); click(button('USE THIS WORKOUT'));
   expect(current.todayAdaptation.gymProfileId).toBe('home'); expect(current.todayAdaptation.temporaryEquipment).toEqual(s.gymProfiles[1].equipment);

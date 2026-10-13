@@ -104,10 +104,11 @@ it.each([320, 390, 430])('keeps logger inputs and edge Back without completing a
   touch(surface, 'touchstart', 4); touch(surface, 'touchmove', w * .65); advance(120); touch(surface, 'touchend', w * .65); advance(250);
   expect(back).toHaveBeenCalledExactlyOnceWith('today'); expect(finish).not.toHaveBeenCalled(); expect(initial.activeWorkout).toEqual(before);
 });
-it('keeps the real Preferences accessibility switch reversible, persisted and absent in browser mode', () => {
+it('keeps the real Display accessibility switch reversible, persisted and absent in browser mode', () => {
   const state = createReturningUserFixture(0);
   mount(<Profile state={state} update={() => {}} setDetail={() => {}} setPage={() => {}} />);
-  act(() => host.querySelector('[data-profile-area="preferences"]').click());
+  act(() => host.querySelector('[data-profile-area="display"]').click());
+  expect(host.querySelector('.profile-subpage-header strong').textContent).toBe('Display');
   const control = host.querySelector('.standalone-zoom-preference input'); expect(control.checked).toBe(false);
   act(() => control.click()); expect(control.checked).toBe(true); expect(localStorage.getItem(PAGE_ZOOM_PREFERENCE)).toBe('true');
   expect(document.documentElement.hasAttribute('data-rook-page-zoom')).toBe(false);

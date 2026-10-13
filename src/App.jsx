@@ -33,6 +33,7 @@ import { useTransientSnackbar } from './TransientSnackbar.jsx';
 import { canRemoveUpNext, hasMeaningfulExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
 import {persistCoachEntry,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
+import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
 export {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -638,10 +639,14 @@ export function useLiftState(startup) {
         }
         const draft = clone(previous);
         const previousProgram = clone(previous.program);
+        const transition = fn(draft) || draft;
+        // Transactions may attach their durable receipt while evaluating fn.
+        // Normalizers must never mutate that receipt or a caller-owned result.
+        const persistedReceipt = options.persistedState ? JSON.stringify(options.persistedState) : null;
         const next = normalizeTrainingBlocksState(
           normalizeSubstitutionPreferencesState(
             normalizeCustomExercisesState(
-              normalizeGymProfilesState(fn(draft) || draft),
+              normalizeGymProfilesState(transition === draft && transition !== options.persistedState ? draft : clone(transition)),
             ),
           ),
         );
@@ -677,7 +682,7 @@ export function useLiftState(startup) {
         // An atomic importer can publish the exact state it has just saved.
         if (options.syncDeletes?.length) pendingSyncDeletes.current.push(...options.syncDeletes);
         // Only skip the automatic write if normalization changed nothing.
-        if (options.persistedState && JSON.stringify(next) === JSON.stringify(options.persistedState)) alreadyPersistedState.current = next;
+        if (persistedReceipt && JSON.stringify(next) === persistedReceipt) alreadyPersistedState.current = next;
         return next;
       }), []);
   return [state, update, persistenceFailed];
@@ -1985,18 +1990,29 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
   );
   useLayoutEffect(() => {
     const layer = layerRef.current;
+    if (!layer) return undefined;
+    const updateDialogOwner = () => {
+      const panel = layer.firstElementChild;
+      if (!panel || panel.matches('[role="dialog"], [role="alertdialog"]')) {
+        layer.removeAttribute('role');
+        layer.removeAttribute('aria-modal');
+        layer.removeAttribute('aria-label');
+        return;
+      }
+      layer.setAttribute('role', 'dialog');
+      layer.setAttribute('aria-modal', 'true');
+      const title = panel.querySelector('h1, h2, .detail-header strong, .long-form-sheet-header strong')?.textContent?.trim();
+      layer.setAttribute('aria-label', title || 'Rook dialog');
+    };
+    updateDialogOwner();
+    const observer = new MutationObserver(updateDialogOwner);
+    observer.observe(layer, {childList:true, subtree:true, characterData:true});
+    return () => observer.disconnect();
+  }, [children]);
+  useLayoutEffect(() => {
+    const layer = layerRef.current;
     const panel = layer?.firstElementChild;
     if (!panel) return undefined;
-    if (!panel.matches('[role="dialog"], [role="alertdialog"]')) {
-      layer.setAttribute("role", "dialog");
-      layer.setAttribute("aria-modal", "true");
-      const dialogLabel = panel
-        .querySelector(
-          "h1, h2, .detail-header strong, .long-form-sheet-header strong",
-        )
-        ?.textContent?.trim();
-      layer.setAttribute("aria-label", dialogLabel || "Rook dialog");
-    }
     const header = Array.from(panel.children).find((child) =>
       child.matches?.(".detail-header, .long-form-sheet-header"),
     );
@@ -2140,10 +2156,13 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
     const focusable = () =>
       [...layerRef.current?.querySelectorAll(
         'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])',
-      ) || []].filter((element) => element.getClientRects().length > 0);
+      ) || []].filter((element) => element.getClientRects().length > 0
+        && !element.closest('[inert], [aria-hidden="true"], [hidden]'));
     const keydown = (event) => {
       // A nested viewer owns keyboard dismissal while its parent is inert.
-      if (layerRef.current?.firstElementChild?.inert) return;
+      const layer = layerRef.current;
+      if (layer?.inert || layer?.firstElementChild?.inert
+        || layer?.closest('[inert], [aria-hidden="true"]')) return;
       if (event.key === "Escape") {
         requestClose();
         return;
@@ -6540,7 +6559,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       const previous = sets.at(-1);
       sets.push({
         ...clone(previous),
-        id: `set-${Date.now()}`,
+        id: uid('set'),
         planned: false,
         completed: false,
         added: true,
@@ -9556,10 +9575,13 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const activeId = state.activeCoachConversationId;
   const displayedId = historyId || activeId;
   displayedConversationRef.current = displayedId;
-  useEffect(() => () => {
-    copyMountedRef.current = false;
-    copyTimersRef.current.forEach(timer => clearTimeout(timer));
-    copyTimersRef.current.clear();
+  useEffect(() => {
+    copyMountedRef.current = true;
+    return () => {
+      copyMountedRef.current = false;
+      copyTimersRef.current.forEach(timer => clearTimeout(timer));
+      copyTimersRef.current.clear();
+    };
   }, []);
   useEffect(() => {
     setCopyFeedback(null);
@@ -9715,39 +9737,49 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     if (!before) return;
     const conversationId = before.activeCoachConversationId;
     const entryId = retryEntry?.id || uid('msg');
+    const requestId = uid('coach-request');
+    const identity = {profileId:before.profile.id, conversationId, entryId, requestId};
     const next = structuredClone(before);
     if (!preserveDraft) next.coachDraft = '';
     if (retryEntry) {
       const entry = next.conversations.find(item => item.id === entryId);
-      if (!entry || entry.coachWorkflowStatus === 'cancelled') return;
+      if (!entry || entry.conversationId !== conversationId || entry.reply
+        || entry.coachWorkflowStatus === 'cancelled') return;
       delete entry.requestError;
     } else next.conversations.push({id:entryId,conversationId,user:value,reply:null,createdAt:Date.now()});
+    next.conversations.find(item => item.id === entryId).coachRequestId = requestId;
     touchCoachConversation(next, conversationId);
     if (!saveState(next)) {setConversationError('Couldn’t save your message. Try again.');return;}
     liveState.current = next;
     update(() => next, {planVersion:false,persistedState:next});
-    sendingRef.current = {entryId,conversationId};
+    sendingRef.current = {entryId,conversationId,requestId};
     setSendingId(conversationId);
     setConversationError('');
     if (!preserveDraft) setMessage('');
     transcriptScroll.latest();
     try {
       const reply = await AIService.coach(before, text, {selection:combineSelection,requireRemoteSuccess:true});
-      availability.success?.();
-      const answered = structuredClone(liveState.current);
-      const entry = answered.conversations.find(item => item.id === entryId);
-      if (entry) {
-        entry.reply = reply; delete entry.requestError;
-        touchCoachConversation(answered, conversationId);
-        if (!saveState(answered)) { setConversationError('Couldn’t save the reply. Retry this message.'); throw Object.assign(new Error('Reply persistence failed'), { code: 'local-persistence' }); }
-        liveState.current = answered;
-        update(() => answered, { planVersion: false, persistedState: answered });
+      const commit = createCoachReplyCommit(identity, reply, saveState);
+      flushSync(() => update(commit.update, commit.options));
+      if (commit.result.state) liveState.current = commit.result.state;
+      if (commit.result.persistenceError) {
+        if (copyMountedRef.current) setConversationError('Couldn’t save the reply. Retry this message.');
+        throw Object.assign(new Error('Reply persistence failed'), {code:'local-persistence'});
       }
+      if (commit.result.applied && copyMountedRef.current) availability.success?.();
     } catch (error) {
-      if (error?.code !== 'local-persistence') availability.failure?.(error);
-      update(current => {const entry=current.conversations.find(item=>item.id===entryId);if(entry)entry.requestError=true;return current;});
+      let applied = false;
+      flushSync(() => update(current => {
+        const next = applyCoachRequestResult(current, identity, {requestError:true});
+        applied = next !== current;
+        return next;
+      }, {planVersion:false}));
+      if (applied && copyMountedRef.current && error?.code !== 'local-persistence') availability.failure?.(error);
     } finally {
-      if (sendingRef.current?.entryId === entryId) {sendingRef.current=null;setSendingId(null);}
+      if (sendingRef.current?.requestId === requestId) {
+        sendingRef.current=null;
+        if (copyMountedRef.current) setSendingId(null);
+      }
     }
   };
   const applyEntryAction = (entry, reviewedAction) => {
@@ -11393,7 +11425,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
   const frequency = state.program ? `${pluralize(state.program.days.length, "day")}/week` : '';
   const block = state.program?.trainingBlock;
   const programSummary = state.program ? `${frequency}${block ? ` · ${block.completed ? "Block complete" : `Week ${block.currentWeek || 1} of ${block.totalWeeks || 1}`}` : !imported && goalContext ? ` · ${goalContext}` : ""}` : trainingStyleFor(state)==='own-workouts'?'Choose a saved workout whenever you train':'Train freestyle whenever you like';
-  const areaTitle = {program:"Program",training:"Training setup",preferences:"Preferences",data:"Data & backup",diagnostics:"Storage diagnostics"}[area];
+  const areaTitle = {program:"Program",training:"Training setup",preferences:"Workout preferences",display:"Display",data:"Data & backup",diagnostics:"Storage diagnostics"}[area];
   return (
     <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape'){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}`}>
       {area && <div className="profile-subpage-header"><SheetHeader title={areaTitle} onBack={backToProfile} backLabel={area === 'diagnostics' ? 'Back to Data & backup' : 'Back to Profile'} /></div>}
@@ -11435,9 +11467,13 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           </ExerciseNavigationButton>
         </section>
       )}
-      {!area && <section className="profile-manage"><Eyebrow>MANAGE</Eyebrow>
-        {[['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Preferences','Logging, units, appearance and notifications'],['data','Data & backup','Import, export, backup, restore and local data']].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
-      </section>}
+      {!area && [
+        ['Training', [['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Workout preferences','Training style, logging and increments']]],
+        ['Display', [['display','Display',`${personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations ${p.showExerciseImages === false ? 'off' : 'on'}`]]],
+        ['Data', [['data','Data & backup','Import, export, backup, restore and local data']]],
+      ].map(([group,rows])=><section className="profile-manage" aria-label={group} key={group}><Eyebrow>{group.toUpperCase()}</Eyebrow>
+        {rows.map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
+      </section>)}
       {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
         <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><NavigationChevron/></ExerciseNavigationButton>
@@ -11578,7 +11614,10 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           </span>
           <NavigationChevron/>
         </ExerciseNavigationButton>
-        <button className="list-row" onClick={() => setDetail("appearance")}>
+      </section>}
+      {area === 'display' && <section>
+        <Eyebrow>APPEARANCE</Eyebrow>
+        <ExerciseNavigationButton className="list-row" onClick={() => setDetail("appearance")}>
           <span>
             <strong>Appearance</strong>
             <small>
@@ -11587,9 +11626,9 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
             </small>
           </span>
           <NavigationChevron/>
-        </button>
+        </ExerciseNavigationButton>
       </section>}
-      {area === 'preferences' && <StandalonePageZoomPreference Switch={SettingSwitch} />}
+      {area === 'display' && <StandalonePageZoomPreference Switch={SettingSwitch} />}
       {area === 'data' && <><section className="profile-data-actions">
         <Eyebrow>DATA</Eyebrow>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("import-workout-history")}>
@@ -11641,7 +11680,7 @@ export function plannedExerciseSafetyConflicts(program, safety) {
   );
   return (program.days || []).flatMap((day) =>
     (day.exercises || []).flatMap((exercise) => {
-      const item = exerciseCatalog[exercise.exerciseId];
+      const item = exerciseCatalog[exercise.exerciseId] || exercise.importedExercise;
       const minimumRir =
         safety.constraints?.minRirByExerciseId?.[exercise.exerciseId];
       const conflictsWithMovement =
@@ -16621,7 +16660,7 @@ export function RestoreBackupSheet({ state, update, close, onRestored, firstRun 
     try {
       const { commitPreparedRestore } = await loadBackupTools();
       const restoredState = await commitPreparedRestore(prepared, { currentState: state });
-      update(() => restoredState, { persistedState: restoredState, replacement: true });
+      update(() => restoredState, { planVersion: false, persistedState: restoredState, replacement: true });
       if (onRestored) {
         onRestored(restoredState);
         triggerHaptic("success");
@@ -18295,7 +18334,7 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           <p>{proposal.workout.exercises.length} exercises · Estimated ~{roundedEstimate(proposal.originalWorkout.estimatedMinutes || estimateSessionMinutes(proposal.originalWorkout.exercises))} min → ~{roundedEstimate(proposal.workout.estimatedMinutes)} min</p>
           {proposal.mode === ADJUST_TODAY_MODES.equipment ? <dl className="adjust-equipment-delta"><div><dt>Current</dt><dd>{currentEquipmentContext.name ? `${currentEquipmentContext.name} · ` : ""}{gymEquipmentSummary(currentEquipmentContext.equipment)}</dd></div><div><dt>For this workout</dt><dd>{proposal.gymProfileName ? `${proposal.gymProfileName} · ` : ""}{gymEquipmentSummary(proposal.temporaryEquipment)}</dd></div></dl> : proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
           <section className="adjust-review-section">
-            <Eyebrow>KEEPING</Eyebrow>
+            <Eyebrow>WORKOUT PREVIEW</Eyebrow>
             {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small></div>)}
           </section>
           <section className="adjust-review-section">
