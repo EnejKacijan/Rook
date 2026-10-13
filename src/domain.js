@@ -3193,6 +3193,11 @@ function equipmentSet(profile) {
     if (selected.has(value)) result.add(value);
   return result;
 }
+// A stable comparison of the existing programming capabilities, including
+// implicit bodyweight and the complete Full gym preset. Does not change rules.
+export function equipmentAvailabilityKey(equipment = []) {
+  return [...equipmentSet({ equipment })].sort().join("|");
+}
 export function isExerciseAllowed(item, profile, compiledTrainingSafety) {
   if (!item || isExerciseGloballyBlocked(item)) return false;
   if (!profile?.ignoreTrainingSafety) {
@@ -9363,6 +9368,11 @@ export function optionalSessionTiming(session, now = Date.now()) {
   const elapsedSeconds = optionalSessionElapsedSeconds(session, now);
   return { elapsedSeconds, ...(isConditioning(session) && session.format === 'intervals' ? intervalProgress(session.intervals, elapsedSeconds) : {}) };
 }
+export function canStartOptionalSession(state, date = isoDay(), now = Date.now()) {
+  return date === isoDay(new Date(now)) && !combinedAdjustment(state) &&
+    !isRepeatAdjustment(state.todayAdaptation) && !state.activeWorkout &&
+    !state.activeOptionalSession;
+}
 export function startOptionalSession(
   state,
   {
@@ -9378,10 +9388,7 @@ export function startOptionalSession(
   now = Date.now(),
 ) {
   if (
-    combinedAdjustment(state) || isRepeatAdjustment(state.todayAdaptation) ||
-    state.activeWorkout ||
-    state.activeOptionalSession ||
-    date !== isoDay(new Date(now)) ||
+    !canStartOptionalSession(state, date, now) ||
     !["Cardio", "Mobility", "Conditioning"].includes(kind)
   )
     return state;

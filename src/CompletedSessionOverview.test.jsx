@@ -48,9 +48,18 @@ it('reads the finished record even after the recurring plan changes',()=>{
 });
 it('Done retains the existing canonical Today destination without changing the completed record',()=>{
   const state=fixture(),workouts=structuredClone(state.workouts);render(<Complete {...props(state)}/>);
-  expect(button('VIEW WORKOUT DETAILS').classList.contains('primary')).toBe(true);
-  expect(button('DONE').classList.contains('secondary')).toBe(true);
+  expect(button('VIEW WORKOUT DETAILS').classList.contains('secondary')).toBe(true);
+  expect(button('DONE').classList.contains('primary')).toBe(true);
   act(()=>button('DONE').click());expect(setPage).toHaveBeenCalledWith('today');expect(update).not.toHaveBeenCalled();expect(state.workouts).toEqual(workouts);
+});
+it.each([1,8,24])('Done stays primary through scroll and rerender with %i exercises, without a new completion write',count=>{
+  const state=fixture(),w=state.workouts.at(-1),source=w.exercises[0];
+  w.exercises=Array.from({length:count},(_,i)=>({...structuredClone(source),id:`display-${i}`}));
+  const before=structuredClone(state.workouts);render(<Complete {...props(state)}/>);
+  const done=button('DONE'),details=button('VIEW WORKOUT DETAILS');expect(host.querySelectorAll('.complete-done-dock')).toHaveLength(1);
+  act(()=>document.dispatchEvent(new Event('scroll')));render(<Complete {...props({...state})}/>);
+  expect(button('DONE')).toBe(done);expect(done.classList.contains('primary')).toBe(true);expect(details.classList.contains('secondary')).toBe(true);
+  act(()=>{done.click();done.click();});expect(setPage).toHaveBeenLastCalledWith('today');expect(update).not.toHaveBeenCalled();expect(state.workouts).toEqual(before);
 });
 it('Done after a midnight finish uses the existing today/date correction and preserves session facts',()=>{
   const state=fixture();Object.assign(state.workouts.at(-1),{actualPerformedDate:'2026-10-07',workoutDateKey:'2026-10-07',completedAt:'2026-10-07T23:59:00',startedAt:new Date('2026-10-07T22:47:00').getTime()});render(<Complete {...props(state)}/>);

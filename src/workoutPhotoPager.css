@@ -1,0 +1,15 @@
+.workout-photo-viewer:has(.workout-photo-pager) .workout-photo-viewer-panel { height: 100%; align-self: stretch; }
+.workout-photo-viewer-panel > .workout-photo-pager { flex: 1 1 auto; min-height: 240px; width: 100%; overflow: hidden; touch-action: pan-y pinch-zoom; }
+.workout-photo-pager-track { display: flex; width: 100%; height: 100%; transform: translate3d(-100%,0,0); }
+.workout-photo-pager[data-paging] .workout-photo-pager-track { will-change: transform; user-select: none; }
+.workout-photo-page { flex: 0 0 100%; min-width: 0; height: 100%; display: grid; grid-template-rows: minmax(0,1fr) auto; gap: 14px; }
+.workout-photo-page-image { min-height: 0; display: grid; place-items: center; }
+.workout-photo-page-image img { width: 100%; height: 100%; min-height: 0; object-fit: contain; border-radius: 14px; }
+.workout-photo-page-image .workout-photo-viewer-error { min-height: 0; height: 100%; width: 100%; }
+.workout-photo-page .workout-photo-viewer-context { overflow-wrap: anywhere; }
+.workout-photo-page .workout-photo-position { color: #929994; font-size: 11px; }
+.workout-photo-viewer-chrome .workout-photo-pager-navigation { margin-right: auto; display: flex; align-items: center; gap: 4px; }
+.workout-photo-pager-navigation button { min-width: 44px; min-height: 44px; display: grid; place-items: center; border: 0; background: transparent; color: #c8ccc9; font: inherit; border-radius: 50%; }
+.workout-photo-pager-navigation button:disabled { opacity: .35; }
+.workout-photo-announcement { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (prefers-reduced-motion: reduce) { .workout-photo-pager-track { transition: none !important; } }

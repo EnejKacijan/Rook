@@ -6,7 +6,7 @@ import {createReturningUserFixture} from './demoFixture.js';
 import * as domain from './domain.js';
 import {semanticBackSurface} from './useSemanticSwipeBack.js';
 
-let host,root,current,route,target,initial,closed,navigate,persist;
+let host,root,current,route,target,initial,closed,navigate,persist,changeState;
 const detail=()=>document.querySelector('.completed-workout-detail');
 const options=()=>document.querySelector('.completed-workout-options-sheet');
 const trigger=()=>detail().querySelector('[aria-label="Workout options"]');
@@ -33,6 +33,7 @@ function mount(){
  function Harness(){
   const[state,setState]=useState(initial),[selection,setSelection]=useState({completedWorkout:target.id});const background=useRef(null);
   current=state;route=selection;
+  changeState=fn=>setState(s=>fn(structuredClone(s)));
   const close=()=>{closed();setSelection(null);};
   return <><div ref={background}><button>Today</button></div>{selection&&<ModalLayer close={close} backgroundRef={background}>{requestClose=><Detail detail={selection} state={state} update={fn=>setState(s=>fn(structuredClone(s)))} close={requestClose} setDetail={next=>{navigate(next);setSelection(next);}} setPage={navigate}/>}</ModalLayer>}</>;
  }
@@ -96,4 +97,54 @@ it.each(['activeWorkout','activeOptionalSession'])('keeps %s Repeat/Delete guard
 });
 it.each(['Save workout','Edit history','Repeat today'])('%s explicit Close still closes the complete stack',action=>{
  mount();choose(action);click(document.querySelector('.modal-layer > main .detail-header-close'));settle();expect(route).toBeNull();expect(closed).toHaveBeenCalledOnce();
+});
+
+function completedToday(partial=false) {
+ initial.activeWorkout=domain.startWorkout(initial,initial.program.days[0]);
+ initial.activeWorkout.startedAt=Date.now()-45*60000;
+ initial.activeWorkout.exercises.forEach((exercise,i)=>exercise.sets.forEach((set,j)=>Object.assign(set,{completed:!partial || i===0&&j===0,weight:30,reps:8})));
+ initial=domain.completeWorkout(initial);target=initial.workouts.at(-1);
+ target.sessionNote='Keep this completed strength workout';
+}
+it.each([false,true])('completed today (ended early %s) opens Conditioning without starting or changing the strength workout',partial=>{
+ completedToday(partial);mount();const before=structuredClone(current);detail().scrollTop=118;
+ choose('Conditioning');parentRoute();
+ expect(document.querySelector('.conditioning-sheet')).not.toBeNull();expect(button('START SESSION').disabled).toBe(false);
+ expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
+ click(document.querySelector('.conditioning-sheet [aria-label="Back to workout details"]'));settle();parent();expect(detail().scrollTop).toBe(118);expect(document.activeElement).toBe(trigger());expect(current).toEqual(before);
+});
+function parentRoute(){expect(route).toEqual({completedWorkout:target.id});expect(document.querySelectorAll('.modal-layer')).toHaveLength(1);expect(closed).not.toHaveBeenCalled();expect(navigate).not.toHaveBeenCalled();}
+it('Conditioning Start persists one independent optional session and preserves strength history, notes and the plan',()=>{
+ completedToday();mount();const before=structuredClone(current);choose('Conditioning');
+ const start=button('START SESSION');act(()=>{start.click();start.click();});settle();
+ expect(current.activeOptionalSession).toMatchObject({date:domain.isoDay(),kind:'Conditioning',intent:'conditioning',activity:'Running',status:'active'});
+ expect({...current,activeOptionalSession:before.activeOptionalSession}).toEqual(before);expect(persist).toHaveBeenCalledOnce();
+ expect(route).toBeNull();expect(closed).toHaveBeenCalledOnce();expect(navigate).toHaveBeenCalledExactlyOnceWith('optional-session');
+ const finished=domain.finishOptionalSession(current,Date.now()+1200000);
+ expect(finished.workouts).toEqual(before.workouts);expect(finished.program).toEqual(before.program);expect(finished.optionalSessions).toHaveLength(before.optionalSessions.length+1);
+});
+it('Conditioning storage failure preserves the finished workout and can retry without a duplicate session',()=>{
+ completedToday();mount();const before=structuredClone(current);choose('Conditioning');persist.mockReturnValueOnce(false);click(button('START SESSION'));
+ expect(current).toEqual(before);expect(document.querySelector('[role="alert"]').textContent).toContain('Could not save');parentRoute();
+ click(button('START SESSION'));settle();expect(current.activeOptionalSession.kind).toBe('Conditioning');expect(current.workouts).toEqual(before.workouts);expect(navigate).toHaveBeenCalledExactlyOnceWith('optional-session');
+});
+it.each(['activeWorkout','activeOptionalSession','repeat','combine'])('does not offer Conditioning while canonical %s start guard blocks it',guard=>{
+ completedToday();if(guard==='repeat'||guard==='combine')initial.todayAdaptation={schemaVersion:1,mode:guard};else initial[guard]={id:'active'};
+ mount();click(trigger());expect(button('Conditioning')).toBeUndefined();expect(persist).not.toHaveBeenCalled();
+});
+it('historical workout options do not offer a session on a past date',()=>{
+ mount();click(trigger());expect(button('Conditioning')).toBeUndefined();
+});
+it('menu availability refreshes when another session starts while options are open',()=>{
+ completedToday();mount();click(trigger());expect(button('Conditioning')).toBeDefined();
+ act(()=>changeState(s=>({...s,activeOptionalSession:{id:'another-session'}})));
+ expect(button('Conditioning')).toBeUndefined();expect(persist).not.toHaveBeenCalled();
+});
+it('rechecks availability after closing options, including date rollover',()=>{
+ completedToday();mount();click(trigger());click(button('Conditioning'));vi.setSystemTime(new Date('2026-09-21T00:01:00'));settle();
+ parent();expect(document.querySelector('.conditioning-sheet')).toBeNull();expect(persist).not.toHaveBeenCalled();
+});
+it('Conditioning explicit Close still dismisses the details stack without starting',()=>{
+ completedToday();mount();const before=structuredClone(current);choose('Conditioning');click(document.querySelector('.conditioning-sheet .detail-header-close'));settle();
+ expect(route).toBeNull();expect(closed).toHaveBeenCalledOnce();expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
 });

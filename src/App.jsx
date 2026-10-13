@@ -1,4 +1,5 @@
 import {IllustrationCredits} from './IllustrationCredits.jsx';
+import { physiqueReviewFailureCopy, physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {CompletedSessionOverview} from './CompletedSessionOverview.jsx';
 import {ExercisePrSheet} from './ExercisePrSheet.jsx';
 import { SettingSwitch } from './SettingSwitch.jsx';
@@ -180,6 +181,8 @@ import {
   groupWorkoutPhotoTimeline,
 } from "./workoutPhotoTimeline.js";
 import { useWorkoutPhotoCollection } from "./useWorkoutPhotoCollection.js";
+import { WorkoutPhotoPager } from './WorkoutPhotoPager.jsx';
+import { bindWorkoutPhotoPager } from './workoutPhotoPagerGesture.js';
 import { useSelectionAcknowledgement, useScheduleContinueReveal } from "./useOnboardingInteractions.js";
 import { useStepSwipeForward } from "./useStepSwipeForward.js";
 import {
@@ -322,6 +325,7 @@ import {
   saveActiveExercisePersonalNote,
   splitImportedExerciseLabel,
   startWorkout,
+  canStartOptionalSession,
   startOptionalSession,
   storedWeight,
   SESSION_NOTE_MAX_LENGTH,
@@ -370,6 +374,8 @@ import {
   resolveTodayAdjustment,
   restoreOriginalTodayWorkout,
 } from "./adjustToday.js";
+import { todayEquipmentContext, initialTodayEquipmentSelection, hasMeaningfulEquipmentChange, toggleTodayEquipment } from './todayEquipmentSelection.js';
+import './todayEquipmentSelection.css';
 import {
   CANONICAL_GYM_EQUIPMENT,
   createGymProfile,
@@ -2383,13 +2389,34 @@ export function effortGuidanceFor(experience) {
 export function shouldEnableRir(experience, effortStyle) {
   return experience !== "Beginner" && Boolean(effortStyle);
 }
-function PhysiqueReview({ profile, onUse, onClose }) {
+export function PhysiqueReview({ profile, onUse, onClose }) {
   const [mode, setMode] = useState("intro");
   const [photos, setPhotos] = useState({});
   const [preparing, setPreparing] = useState(null);
   const [result, setResult] = useState(null);
   const [selected, setSelected] = useState([]);
   const [error, setError] = useState("");
+  const [reviewFailure, setReviewFailure] = useState(null);
+  const [availability, setAvailability] = useState(null);
+  const [checkingAvailability, setCheckingAvailability] = useState(true);
+  const availabilityCheck = useRef(0);
+  const reviewing = useRef(false);
+  const checkAvailability = async () => {
+    const check = ++availabilityCheck.current;
+    setCheckingAvailability(true);
+    const status = await AIService.status().catch(() => ({ available: false, reason: 'server_error' }));
+    if (check !== availabilityCheck.current) return null;
+    setAvailability(status);
+    setCheckingAvailability(false);
+    return status;
+  };
+  useEffect(() => {
+    void checkAvailability();
+    return () => { availabilityCheck.current++; };
+  }, []);
+  const unavailableCopy = availability && !availability.available
+    ? physiqueReviewFailureCopy(physiqueReviewUnavailableError(availability), { photosSelected: false })
+    : null;
   const choosePhoto = async (angle, file) => {
     if (!file) return;
     setPreparing(angle);
@@ -2407,8 +2434,11 @@ function PhysiqueReview({ profile, onUse, onClose }) {
     }
   };
   const analyze = async () => {
+    if (reviewing.current) return;
+    reviewing.current = true;
     setMode("analyzing");
     setError("");
+    setReviewFailure(null);
     try {
       const review = await AIService.reviewPhysique(
         profile,
@@ -2419,11 +2449,25 @@ function PhysiqueReview({ profile, onUse, onClose }) {
         setSelected(review.suggestions.map((item) => item.priorityId));
         setMode("review");
       } else setMode("failure");
-    } catch {
+    } catch (reason) {
       setResult(null);
-      setError("We couldn't get a useful physique review from these photos.");
+      setReviewFailure(physiqueReviewFailureCopy(reason));
       setMode("failure");
+    } finally {
+      reviewing.current = false;
     }
+  };
+  const retryReview = async () => {
+    if (reviewFailure?.checkAvailability) {
+      const status = await checkAvailability();
+      if (!status) return;
+      if (status.available) {
+        setReviewFailure(null);
+        setMode('upload');
+      } else setReviewFailure(physiqueReviewFailureCopy(physiqueReviewUnavailableError(status)));
+    } else if (!reviewFailure || reviewFailure.changePhotos) {
+      setMode('upload');
+    } else await analyze();
   };
   const toggle = (id) =>
     setSelected((current) =>
@@ -2459,9 +2503,16 @@ function PhysiqueReview({ profile, onUse, onClose }) {
             pump and body composition. Suggestions are not objective facts, and
             you choose what to use.
           </div>
+          {checkingAvailability && <p role="status">Checking photo review availability…</p>}
+          {!checkingAvailability && unavailableCopy && <p className="offline-banner" role="status">
+            {unavailableCopy.title} {unavailableCopy.message}
+          </p>}
         </div>
         <div className="onboarding-footer">
-          <Button onClick={() => setMode("upload")}>CONTINUE</Button>
+          <Button disabled={checkingAvailability} onClick={() => {
+            if (unavailableCopy) void checkAvailability();
+            else setMode("upload");
+          }}>{unavailableCopy ? 'CHECK AGAIN' : 'CONTINUE'}</Button>
           <Button variant="quiet" onClick={onClose}>
             SKIP
           </Button>
@@ -2485,16 +2536,16 @@ function PhysiqueReview({ profile, onUse, onClose }) {
       <>
         <div className="physique-review-content">
           <Eyebrow>PHYSIQUE REVIEW</Eyebrow>
-          <h1>We couldn't get a useful physique review from these photos.</h1>
+          <h1>{reviewFailure?.title || "We couldn't get a useful physique review from these photos."}</h1>
           <p>
-            {result?.retryMessage ||
+            {reviewFailure?.message || result?.retryMessage ||
               error ||
               "Try clearer framing and lighting, or choose priorities yourself."}
           </p>
         </div>
         <div className="onboarding-footer">
-          <Button onClick={() => setMode("upload")}>
-            TRY DIFFERENT PHOTOS
+          <Button disabled={checkingAvailability} onClick={retryReview}>
+            {reviewFailure?.action || 'TRY DIFFERENT PHOTOS'}
           </Button>
           <Button variant="quiet" onClick={onClose}>
             CHOOSE PRIORITIES MYSELF
@@ -7120,7 +7171,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           </div>
         </div>
       </section>
-      {sessionExercise && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} screenRef={screenRef} />}
+      {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} screenRef={screenRef} />}
       {recommendation && (
         <section
           className={`recommendation ${recommendation.type} ${recommendationApplied ? "applied" : ""}`}
@@ -7585,6 +7636,9 @@ function SessionNoteEditor({ workout, update, optional = true }) {
 
 export function PrivateWorkoutPhotoViewer({
   photoUrl,
+  photoId,
+  loading = false,
+  paging,
   workout,
   busy = false,
   onClose,
@@ -7599,27 +7653,44 @@ export function PrivateWorkoutPhotoViewer({
   const [exportBusy, setExportBusy] = useState(false);
   const [exportStatus, setExportStatus] = useState('');
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [pagingMoving, setPagingMoving] = useState(false);
+  const pagerRef = useRef(null), pagerGesture = useRef(null);
   const closeViewerRef = useRef(null);
   const viewerRef = useRef(null);
   const previousFocus = useRef(returnFocusRef?.current || document.activeElement);
   const viewerDrag = useRef(null);
   const viewerState = useRef(null);
-  viewerState.current = { confirmDelete, busy, exportBusy, onClose };
+  viewerState.current = { confirmDelete, busy, exportBusy, onClose, paging };
   useLayoutEffect(() => {
     const layer = viewerRef.current;
     const releaseScope = bindFullscreenPhotoScope(layer, previousFocus.current);
     viewerDrag.current = bindFullscreenViewerDrag({ layer, visual: layer.querySelector('.workout-photo-viewer-content'),
       scroller: layer.querySelector('.workout-photo-viewer-panel'),
-      disabled: () => viewerState.current.confirmDelete || viewerState.current.busy || viewerState.current.exportBusy,
+      disabled: () => viewerState.current.confirmDelete || viewerState.current.busy || viewerState.current.exportBusy || pagerRef.current?.dataset.paging === 'true',
       onDismiss: () => viewerState.current.onClose() });
     return () => { viewerDrag.current?.(); viewerDrag.current = null; releaseScope(); };
   }, []);
   const date = workoutPerformedDate(workout);
   const summary = workoutSetSummary(workout);
 
+  useLayoutEffect(() => {
+    const viewport = pagerRef.current;
+    if (!viewport) return;
+    pagerGesture.current = bindWorkoutPhotoPager({ viewport, track: viewport.querySelector('.workout-photo-pager-track'),
+      state: () => ({ ...viewerState.current.paging, disabled: viewerState.current.confirmDelete || viewerState.current.busy || viewerState.current.exportBusy }),
+      onNavigate: direction => viewerState.current.paging?.navigate(direction), onMoving: setPagingMoving });
+    return () => { pagerGesture.current?.(); pagerGesture.current = null; };
+  }, [Boolean(paging)]);
+  useLayoutEffect(() => {
+    pagerGesture.current?.cancel();
+    setConfirmDelete(false); setViewerError(false); setPhotoLoaded(false);
+  }, [photoId]);
+
   useEffect(() => {
     let disposed = false;
     setExportFile(null); setPhotoLoaded(false); setViewerError(false); setExportStatus('');
+    const image = viewerRef.current?.querySelector('[data-current-photo]') || viewerRef.current?.querySelector('.workout-photo-viewer-panel > img');
+    if (image?.complete && image.naturalWidth > 0) setPhotoLoaded(true);
     // All viewer URLs are leases over locally stored blobs. Never fetch a remote photo.
     if (photoUrl?.startsWith('blob:')) {
       fetch(photoUrl).then(response => { if (!response.ok) throw new Error(); return response.blob(); })
@@ -7627,7 +7698,7 @@ export function PrivateWorkoutPhotoViewer({
         .catch(() => { if (!disposed) setExportStatus('This photo is unavailable for export.'); });
     }
     return () => { disposed = true; };
-  }, [photoUrl, date]);
+  }, [photoUrl, date, photoId]);
   const savePhoto = async () => {
     if (!exportFile || !photoLoaded || viewerError || exportBusy) return;
     setExportBusy(true); setExportStatus('');
@@ -7638,38 +7709,71 @@ export function PrivateWorkoutPhotoViewer({
     finally { setExportBusy(false); }
   };
 
+  useEffect(() => { focusNavigationTarget(closeViewerRef.current); }, []);
   useEffect(() => {
-    focusNavigationTarget(closeViewerRef.current);
     const closeOnEscape = (event) => {
       if (event.key !== "Escape") return;
       // The photo is the topmost dialog; do not also dismiss its parent sheet.
       event.preventDefault();
       event.stopImmediatePropagation();
-      if (confirmDelete) setConfirmDelete(false);
-      else onClose();
+      if (viewerState.current.busy || viewerState.current.exportBusy) return;
+      if (viewerState.current.confirmDelete) setConfirmDelete(false);
+      else viewerState.current.onClose();
+    };
+    const pageWithKeyboard = event => {
+      if (!['ArrowLeft', 'ArrowRight'].includes(event.key) || !viewerState.current.paging || viewerState.current.confirmDelete || viewerState.current.busy || viewerState.current.exportBusy || pagerRef.current?.dataset.paging) return;
+      event.preventDefault(); event.stopImmediatePropagation();
+      viewerState.current.paging.navigate(event.key === 'ArrowRight' ? 1 : -1);
     };
     window.addEventListener("keydown", closeOnEscape, true);
-    return () => window.removeEventListener("keydown", closeOnEscape, true);
-  }, [confirmDelete, onClose]);
+    window.addEventListener('keydown', pageWithKeyboard, true);
+    return () => { window.removeEventListener("keydown", closeOnEscape, true); window.removeEventListener('keydown', pageWithKeyboard, true); };
+  }, []);
+
+  const context = (item, position) => {
+    const itemDate = workoutPerformedDate(item), itemSummary = workoutSetSummary(item);
+    return <div className="workout-photo-viewer-context">
+      <strong>{item.name || 'Completed workout'}</strong>
+      <span>{itemDate ? displayDate(localDate(itemDate)) : 'Completed workout'}{itemSummary.completed > 0 ? ` · ${pluralize(itemSummary.completed, 'working set')}` : ''}</span>
+      {paging?.total > 1 && <span className="workout-photo-position">{position + 1} of {paging.total}</span>}
+      <small>Stored privately on this device. Never uploaded by ROOK.</small>
+    </div>;
+  };
 
   return createPortal(
     <div ref={viewerRef} className="workout-photo-viewer" data-fullscreen-photo role="dialog" aria-modal="true" aria-label="Workout photo">
       <div className="workout-photo-viewer-content">
       <header className="workout-photo-viewer-chrome">
+        {paging?.total > 1 && <nav className="workout-photo-pager-navigation" aria-label="Photo navigation">
+          <button type="button" aria-label="Previous photo" disabled={!paging.previous || confirmDelete || busy || exportBusy || pagingMoving} onClick={() => paging.navigate(-1)}><NavigationChevron direction="left"/></button>
+          <button type="button" aria-label="Next photo" disabled={!paging.next || confirmDelete || busy || exportBusy || pagingMoving} onClick={() => paging.navigate(1)}><NavigationChevron/></button>
+        </nav>}
         <button
           ref={closeViewerRef}
           type="button"
           className="workout-photo-viewer-close"
           aria-label="Close workout photo"
+          disabled={busy || exportBusy}
           onClick={onClose}
         >
           ×
         </button>
       </header>
       <div className="workout-photo-viewer-panel">
-        {viewerError || !photoUrl ? (
+        {paging ? <div ref={pagerRef} className="workout-photo-pager">
+          <div className="workout-photo-pager-track">{paging.pages.map((page, offset) => <section key={page?.entry.id || `boundary-${offset}`} className="workout-photo-page" aria-hidden={offset !== 1}>
+            {page && <><div className="workout-photo-page-image">
+              {page.photoUrl && !page.error && !(offset === 1 && viewerError) ? <img src={page.photoUrl} data-rook-zoom="native" data-current-photo={offset === 1 ? '' : undefined} alt="Private workout photo" draggable="false"
+                onLoad={() => { if (offset === 1) setPhotoLoaded(true); }} onError={() => { paging.imageError(page.entry.id); if (offset === 1) setViewerError(true); }} />
+                : <div className="workout-photo-viewer-error" role={offset === 1 && page.error ? 'alert' : undefined}>
+                  <strong>{page.error || viewerError && offset === 1 ? 'Photo unavailable' : 'Loading photo…'}</strong>
+                  {page.error && <p>This private photo couldn’t be displayed on this device.</p>}
+                </div>}
+            </div>{context(page.entry.workout, paging.index + offset - 1)}</>}
+          </section>)}</div>
+        </div> : viewerError || !photoUrl ? (
           <div className="workout-photo-viewer-error" role="alert">
-            <strong>Photo unavailable</strong>
+            <strong>{loading ? 'Loading photo…' : 'Photo unavailable'}</strong>
             <p>This private photo couldn’t be displayed on this device.</p>
           </div>
         ) : (
@@ -7681,21 +7785,22 @@ export function PrivateWorkoutPhotoViewer({
             onError={() => setViewerError(true)}
           />
         )}
-        <div className="workout-photo-viewer-context">
+        {!paging && <div className="workout-photo-viewer-context">
           <strong>{workout.name || "Completed workout"}</strong>
           <span>
             {date ? displayDate(localDate(date)) : "Completed workout"}
             {summary.completed > 0 ? ` · ${pluralize(summary.completed, "working set")}` : ""}
           </span>
           <small>Stored privately on this device. Never uploaded by ROOK.</small>
-        </div>
+        </div>}
+        {paging?.total > 1 && <span className="workout-photo-announcement" role="status" aria-live="polite" aria-atomic="true">Photo {paging.index + 1} of {paging.total}</span>}
         {!confirmDelete ? (
           <div className="workout-photo-viewer-actions">
             {onViewWorkout && (
-              <button type="button" onClick={onViewWorkout}>VIEW WORKOUT</button>
+              <button type="button" disabled={busy || exportBusy || pagingMoving} onClick={onViewWorkout}>VIEW WORKOUT</button>
             )}
-            <button type="button" disabled={!exportFile || !photoLoaded || viewerError || exportBusy} onClick={savePhoto}>SAVE PHOTO</button>
-            <button type="button" className="workout-photo-delete" onClick={() => setConfirmDelete(true)}>
+            <button type="button" disabled={!exportFile || !photoLoaded || viewerError || exportBusy || busy || pagingMoving} onClick={savePhoto}>SAVE PHOTO</button>
+            <button type="button" className="workout-photo-delete" disabled={busy || exportBusy || pagingMoving} onClick={() => setConfirmDelete(true)}>
               DELETE PHOTO
             </button>
           </div>
@@ -7703,7 +7808,7 @@ export function PrivateWorkoutPhotoViewer({
           <div className="workout-photo-delete-confirm" role="group" aria-label="Confirm photo deletion">
             <p>Delete this photo? Your workout will remain saved.</p>
             {error && <p role="alert">{error}</p>}
-            <button type="button" onClick={() => setConfirmDelete(false)}>KEEP PHOTO</button>
+            <button type="button" disabled={busy} onClick={() => setConfirmDelete(false)}>KEEP PHOTO</button>
             <button type="button" disabled={busy} onClick={onDelete}>DELETE PHOTO</button>
           </div>
         )}
@@ -7802,48 +7907,22 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMod
   );
 }
 
-function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
+export function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
   const photoTrigger = useRef(null);
   const [compareMode, setCompareMode] = useState(false);
   const [availability, setAvailability] = useState({});
   const onAvailability = useCallback((id, usable) => setAvailability(current => current[id] === usable ? current : { ...current, [id]: usable }), []);
   const photos = useWorkoutPhotoCollection(state.workouts);
   const [selected, setSelected] = useState(null);
-  const [viewerUrl, setViewerUrl] = useState("");
-  const [viewerLoading, setViewerLoading] = useState(false);
-  const [viewerUnavailable, setViewerUnavailable] = useState(false);
+  const deletePending = useRef(false);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState("");
   const entries = photos.entries;
   const groups = useMemo(() => groupWorkoutPhotoTimeline(entries), [entries]);
 
-  useEffect(() => {
-    let current = true;
-    let lease = null;
-    setViewerUrl("");
-    setViewerUnavailable(false);
-    setViewerLoading(Boolean(selected));
-    if (!selected) return () => { current = false; };
-    getWorkoutPhoto(selected.id)
-      .then((record) => {
-        if (!current) return;
-        if (!record?.blob) {
-          setViewerUnavailable(true);
-          return;
-        }
-        lease = createObjectUrlLease(record.blob);
-        setViewerUrl(lease.url);
-      })
-      .catch(() => { if (current) setViewerUnavailable(true); })
-      .finally(() => { if (current) setViewerLoading(false); });
-    return () => {
-      current = false;
-      lease?.revoke();
-    };
-  }, [selected]);
-
   const removePhoto = async (photo) => {
-    if (!photo || busy) return false;
+    if (!photo || deletePending.current) return false;
+    deletePending.current = true;
     setBusy(true);
     try {
       await deleteWorkoutPhoto(photo.id);
@@ -7853,7 +7932,6 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
         return current;
       });
       onAvailability(photo.id, false);
-      setSelected(null);
       setStatus("Photo deleted. Your workout is unchanged.");
       triggerHaptic("tap");
       return true;
@@ -7861,6 +7939,7 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
       setStatus("Photo couldn’t be deleted. Try again.");
       return false;
     } finally {
+      deletePending.current = false;
       setBusy(false);
     }
   };
@@ -7904,23 +7983,17 @@ function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) {
           <p>If you ever save one after a workout, it will appear here. Photos are always optional.</p>
         </section>
       ) : null}
-      {selected && !viewerLoading && (viewerUrl || viewerUnavailable) && (
-        <PrivateWorkoutPhotoViewer
-          photoUrl={viewerUrl}
-          returnFocusRef={photoTrigger}
-          workout={selected.workout}
-          busy={busy}
-          onClose={() => setSelected(null)}
-          onDelete={() => removePhoto(selected)}
-          onViewWorkout={() => setDetail({ completedWorkout: selected.workoutId })}
-        />
-      )}
+      {selected && <WorkoutPhotoPager entries={entries} initialId={selected.id} Viewer={PrivateWorkoutPhotoViewer}
+        returnFocusRef={photoTrigger} busy={busy} onClose={() => setSelected(null)} onDelete={removePhoto}
+        onViewWorkout={id => setDetail({ completedWorkout: id })} />}
     </main>
   );
 }
 
-function WorkoutPhotoMemory({ workout, update, onBusyChange }) {
+export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, onViewWorkout }) {
   const photoTrigger = useRef(null);
+  const photos = useWorkoutPhotoCollection(workouts || [workout]);
+  const viewerInitialId = useRef(null), deletePending = useRef(false);
   const [photoUrl, setPhotoUrl] = useState("");
   const [loading, setLoading] = useState(Boolean(workout.photoId));
   const [missing, setMissing] = useState(false);
@@ -7989,20 +8062,30 @@ function WorkoutPhotoMemory({ workout, update, onBusyChange }) {
     }
   };
 
-  const removePhoto = async () => {
-    if (!workout.photoId || busy) return;
+  const removePhoto = async (entry) => {
+    const fromPager = Boolean(entry?.workoutId && entry?.id);
+    const target = fromPager ? entry : { id: workout.photoId, workoutId: workout.id };
+    if (!target.id || busy || deletePending.current) return false;
+    deletePending.current = true;
     setBusy(true);
     setStatus("Deleting photo…");
     try {
-      await deleteWorkoutPhoto(workout.photoId);
-      updateReference(null);
-      setViewerOpen(false);
+      await deleteWorkoutPhoto(target.id);
+      update(current => {
+        const stored = current.workouts.find(item => item.id === target.workoutId);
+        if (stored?.photoId === target.id) delete stored.photoId;
+        return current;
+      });
+      if (!fromPager) setViewerOpen(false);
       setConfirmDelete(false);
       setStatus("Photo deleted. Your workout is unchanged.");
       triggerHaptic("tap");
+      return true;
     } catch {
       setStatus("Photo couldn’t be deleted. Try again.");
+      return false;
     } finally {
+      deletePending.current = false;
       setBusy(false);
     }
   };
@@ -8038,7 +8121,7 @@ function WorkoutPhotoMemory({ workout, update, onBusyChange }) {
             className="workout-photo-thumbnail"
             ref={photoTrigger}
             aria-label="View workout photo"
-            onClick={() => setViewerOpen(true)}
+            onClick={() => { viewerInitialId.current = workout.photoId; setViewerOpen(true); }}
           >
             <img src={photoUrl} alt="Private workout photo" />
             <span>VIEW PHOTO</span>
@@ -8068,14 +8151,17 @@ function WorkoutPhotoMemory({ workout, update, onBusyChange }) {
       <p className="workout-photo-status" role="status" aria-live="polite">
         {status}
       </p>
-      {viewerOpen && photoUrl && (
-        <PrivateWorkoutPhotoViewer
-          photoUrl={photoUrl}
+      {viewerOpen && (
+        <WorkoutPhotoPager
+          entries={photos.records ? photos.entries : [{ id: viewerInitialId.current, workoutId: workout.id, workout }]}
+          initialId={viewerInitialId.current}
+          initialPhotoUrl={photoUrl}
+          Viewer={PrivateWorkoutPhotoViewer}
           returnFocusRef={photoTrigger}
-          workout={workout}
           busy={busy}
           onClose={() => setViewerOpen(false)}
           onDelete={removePhoto}
+          onViewWorkout={onViewWorkout}
         />
       )}
       {confirmDelete && !viewerOpen && (
@@ -8347,6 +8433,7 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout}
       <CompletedWorkoutChooser records={choices} date={date} action={choosing} onSelect={(id,element)=>selectRecord(choosing,id,element)}/>
     </> : <>
     <SheetHeader title="More options" onClose={close}/>
+    {records.length>0 && canStartOptionalSession(state,date) && <button type="button" className="list-row" onClick={()=>{if(canStartOptionalSession(state,date))setDetail({conditioning:date});}}>Conditioning</button>}
     {repeatRecords.length>0 && <button className="list-row" data-day-action="repeat" onClick={event=>chooseRecord('repeat',event)}>{repeatLabel}</button>}
     {occurrence && <>
       {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}>{occurrence.status==='missed'?'Train this workout today':'Train today instead'}</button>}
@@ -8383,6 +8470,8 @@ function CompletedWorkoutChooser({records,date,action,onSelect}) {
 
 export function CompletedWorkoutDetail({ workoutId, state, update, close, setPage, setDetail }) {
   const workout = state.workouts.find((item) => item.id === workoutId);
+  const date = workout && workoutPerformedDate(workout);
+  const canAddConditioning = date === isoDay() && canStartOptionalSession(state, date);
   const [confirmingResume, setConfirmingResume] = useState(false);
   // This detail owns its child tasks; the outer detail route keeps the workout ID.
   const [child, setChild] = useState(null);
@@ -8408,6 +8497,10 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
   const dismissOptions = () => {
     const action = optionsAction.current; optionsAction.current = null;
     setOptionsOpen(false);
+    // Recheck after the options exit: another session or date rollover can
+    // invalidate the operation while this menu is open.
+    if (action === 'conditioning' &&
+      (date !== isoDay() || !canStartOptionalSession(state, date))) return;
     if (action === 'delete') setDeleting(true);
     else if (action) {
       returnPosition.current = detailRef.current?.scrollTop || 0;
@@ -8424,8 +8517,8 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
   if (child === 'edit') return <HistoryCorrectionEditor workout={workout} state={state} update={update} onDone={returnToWorkout} closeSheet={close} Header={SheetHeader}/>;
   if (child === 'save') return <SavedWorkouts state={state} update={update} source={workout} close={close} onBack={returnToWorkout} onSaved={()=>{setNotice('Workout saved');returnToWorkout();}} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>;
   if (child === 'repeat') return <UseWorkoutTodaySheet state={state} update={update} request={{workoutId}} close={close} onBack={returnToWorkout} Header={SheetHeader}/>;
+  if (child === 'conditioning') return <ConditioningSheet date={date} state={state} update={update} close={close} setPage={setPage} Header={props => <SheetHeader {...props} onBack={returnToWorkout} backLabel="Back to workout details"/>}/>;
   const summary = workoutSetSummary(workout);
-  const date = workoutPerformedDate(workout);
   const canResume = completedWorkoutCanResume(state, workout.id);
   const resume = () => {
     const resumedAt = Date.now();
@@ -8476,7 +8569,7 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
           <small>SETS</small>
         </span>
       </div>
-      <WorkoutPhotoMemory workout={workout} update={update} />
+      <WorkoutPhotoMemory workout={workout} workouts={state.workouts} update={update} onViewWorkout={id => setDetail({ completedWorkout: id })} />
       <SessionNoteEditor workout={workout} update={update} />
       <SessionFeedbackDisplay value={workout.sessionFeedback} />
       <WorkoutSessionLog
@@ -8518,6 +8611,7 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
       )}
       {optionsOpen && createPortal(<ModalLayer close={dismissOptions} backgroundRef={detailRef} returnFocusRef={optionsTriggerRef} lockDocument={false}>{requestClose=><main className="screen detail-screen completed-workout-options-sheet" role="dialog" aria-modal="true" aria-label="Workout options">
         <SheetHeader title="Workout options" onBack={requestClose} backLabel="Back to workout details" onClose={requestClose}/>
+        {canAddConditioning && <button type="button" className="list-row" onClick={()=>chooseOption('conditioning',requestClose)}>Conditioning</button>}
         {setDetail && <button type="button" className="list-row" onClick={()=>chooseOption('save',requestClose)}>Save workout</button>}
         {setDetail && <button type="button" className="list-row" disabled={!canUseWorkoutToday(state,{workoutId})} onClick={()=>chooseOption('repeat',requestClose)}><span>Repeat today{!canUseWorkoutToday(state,{workoutId}) && <small>{proposeWorkoutToday(state,{workoutId}).error}</small>}</span></button>}
         <button type="button" className="list-row" onClick={()=>chooseOption('edit',requestClose)}>Edit history</button>
@@ -8637,7 +8731,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       </div>
       </>}
       {!endedEarly && <div className="completion-actions">
-        <Button onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
+        <Button variant="secondary" onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
       </div>}
       {!persistenceFailed && recognition && <p id="completion-recognition" className="completion-recognition">
         <strong>{recognition.label}</strong>
@@ -8652,7 +8746,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       />}
       {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
         <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save workout</button>}
-      <WorkoutPhotoMemory workout={session} update={update} onBusyChange={setPhotoBusy} />
+      <WorkoutPhotoMemory workout={session} workouts={state.workouts} update={update} onBusyChange={setPhotoBusy} onViewWorkout={id => setDetail({ completedWorkout: id })} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
       {endedEarly && <WorkoutSessionLog
@@ -8671,7 +8765,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       {continueError && <p className="complete-continue-error" role="alert">{continueError}</p>}
       <div className="complete-done-dock">
         <Button
-          variant={endedEarly ? "primary" : "secondary"}
+          variant="primary"
           className="complete-done"
           onClick={() => {
             if (workoutPerformedDate(session) !== isoDay())
@@ -11488,9 +11582,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <span>
             <strong>Appearance</strong>
             <small>
-              {personalThemes.personalTheme ? personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p)) : <>{titleCase(p.appearancePreference || "system")} · {titleCase(
-                p.stylePreference || "standard",
-              )}</>} · Illustrations{" "}
+              {personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations{" "}
               {p.showExerciseImages === false ? "off" : "on"}
             </small>
           </span>
@@ -17970,11 +18062,13 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
   const [mode, setMode] = useState(null);
   const [minutes, setMinutes] = useState(30);
   const [customMinutes, setCustomMinutes] = useState("");
-  const [equipment, setEquipment] = useState(() =>
-    state.profile.equipment?.length ? [...state.profile.equipment] : ["full gym"],
-  );
-  const [selectedGymId, setSelectedGymId] = useState(null);
-  const [customEquipment, setCustomEquipment] = useState(false);
+  const currentEquipmentContext = todayEquipmentContext(state);
+  const [equipmentSelection, setEquipmentSelection] = useState(() => initialTodayEquipmentSelection(currentEquipmentContext));
+  const customEquipment = equipmentSelection.custom;
+  const selectedGymId = customEquipment ? null : equipmentSelection.gymProfileId;
+  const selectedGym = (state.gymProfiles || []).find(gym => gym.id === selectedGymId);
+  const equipment = normalizeGymEquipment(customEquipment ? equipmentSelection.equipment : selectedGym?.equipment);
+  const meaningfulEquipmentChange = hasMeaningfulEquipmentChange(currentEquipmentContext.equipment, equipment);
   const [unavailableEntryIds, setUnavailableEntryIds] = useState([]);
   const [proposal, setProposal] = useState(existing ? clone(existing) : null);
   const [busy, setBusy] = useState(false);
@@ -17995,19 +18089,12 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
     setStep(next === ADJUST_TODAY_MODES.unavailable ? "unavailable" : next === ADJUST_TODAY_MODES.equipment ? "equipment" : next === ADJUST_TODAY_MODES.lessTime ? "time" : "energy");
   };
   const toggleEquipment = (value) => {
-    setEquipment((current) => {
-      if (["full gym", "bodyweight only"].includes(value))
-        return current.length === 1 && current[0] === value ? [] : [value];
-      const withoutExclusive = current.filter(
-        (item) => !["full gym", "bodyweight only"].includes(item),
-      );
-      return withoutExclusive.includes(value)
-        ? withoutExclusive.filter((item) => item !== value)
-        : [...withoutExclusive, value];
-    });
+    setEquipmentSelection(current => ({ ...current, equipment: toggleTodayEquipment(current.equipment, value) }));
   };
   const generate = async () => {
     if (busy) return;
+    if (mode === ADJUST_TODAY_MODES.equipment &&
+      ((!customEquipment && !selectedGym) || !meaningfulEquipmentChange)) return;
     setBusy(true);
     setPersistenceError(false);
     setError("");
@@ -18154,25 +18241,30 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           <Eyebrow>DIFFERENT EQUIPMENT</Eyebrow>
           <h1>Where are you training?</h1>
           <p>This choice is for today only. It does not change your default gym.</p>
-          <section className="adjust-gym-picker">
+          <section className="adjust-gym-picker" role="radiogroup" aria-label="Training location for this workout">
             <Eyebrow>USE SAVED GYM</Eyebrow>
-            <div className="adjust-saved-gyms" role="group" aria-label="Saved gyms">
+            <div className="adjust-saved-gyms">
               {(state.gymProfiles || []).map((gym) => {
                 const selected = !customEquipment && selectedGymId === gym.id;
-                return <button key={gym.id} aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => { setSelectedGymId(gym.id); setEquipment([...gym.equipment]); setCustomEquipment(false); }}><span><strong>{gym.name}</strong><small>{gymEquipmentSummary(gym.equipment)}</small></span><i aria-hidden="true">{selected ? "✓" : ""}</i></button>;
+                return <label key={gym.id} className={`adjust-equipment-mode${selected ? " is-selected" : ""}`}><input type="radio" name="today-training-location" checked={selected} aria-label={`${gym.name}, saved gym`} onChange={() => { setEquipmentSelection({ gymProfileId: gym.id, custom: false, equipment: normalizeGymEquipment(gym.equipment) }); setError(""); }} /><span><strong>{gym.name}</strong><small>{gymEquipmentSummary(gym.equipment)}</small></span><i aria-hidden="true" /></label>;
               })}
             </div>
             <Eyebrow>CUSTOM FOR TODAY</Eyebrow>
-            <button className={`adjust-custom-equipment${customEquipment ? " is-selected" : ""}`} aria-pressed={customEquipment} onClick={() => { setSelectedGymId(null); setCustomEquipment(true); }}>
-              <span><strong>Choose equipment</strong><small>Make a one-off selection for this workout.</small></span><i aria-hidden="true">{customEquipment ? "✓" : ""}</i>
-            </button>
+            <label className={`adjust-equipment-mode adjust-custom-equipment${customEquipment ? " is-selected" : ""}`}><input type="radio" name="today-training-location" checked={customEquipment} aria-label="Choose equipment, custom for today" onChange={() => { setEquipmentSelection({ gymProfileId: null, custom: true, equipment: [...equipment] }); setError(""); }} />
+              <span><strong>Choose equipment</strong><small>Make a one-off selection for this workout.</small></span><i aria-hidden="true" />
+            </label>
           </section>
           {customEquipment && (
-            <div className="adjust-check-list" role="group" aria-label="Equipment available today">
-              {TODAY_EQUIPMENT_OPTIONS.map(([value, label]) => <button key={value} aria-pressed={equipment.includes(value)} className={equipment.includes(value) ? "is-selected" : ""} onClick={() => toggleEquipment(value)}><span>{label}</span><i aria-hidden="true">{equipment.includes(value) ? "✓" : ""}</i></button>)}
+            <div className="adjust-check-list adjust-today-equipment-list" role="group" aria-label="Equipment available today">
+              {TODAY_EQUIPMENT_OPTIONS.map(([value, label]) => {
+                const included = equipment.includes("full gym") && !["full gym", "bodyweight only"].includes(value);
+                const selected = included || equipment.includes(value);
+                return <label key={value} className={`adjust-equipment-item${selected ? " is-selected" : ""}${included ? " is-preset-included" : ""}`}><input type="checkbox" checked={selected} disabled={included} aria-label={`${label}, available today${included ? ", included in Full gym" : ""}`} onChange={() => { toggleEquipment(value); setError(""); }} /><span>{label}{value === "full gym" && equipment.includes("full gym") && <small>Clear Full gym to choose individual equipment.</small>}</span><i aria-hidden="true">{selected ? "✓" : ""}</i></label>;
+              })}
             </div>
           )}
-          <Button aria-busy={busy || undefined} disabled={busy || (!customEquipment && !selectedGymId) || !equipment.length} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW CHANGES"}</Button>
+          {customEquipment && !equipment.length && <p className="adjust-equipment-hint" role="status">Choose at least one equipment option.</p>}
+          <Button aria-busy={busy || undefined} disabled={busy || (!customEquipment && !selectedGym) || !meaningfulEquipmentChange} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW CHANGES"}</Button>
         </>
       )}
       {step === "energy" && (
@@ -18201,14 +18293,14 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           <Eyebrow>TODAY ONLY · {adjustmentModeLabel(proposal.mode)}</Eyebrow>
           <h1>{proposal.workout.name}</h1>
           <p>{proposal.workout.exercises.length} exercises · Estimated ~{roundedEstimate(proposal.originalWorkout.estimatedMinutes || estimateSessionMinutes(proposal.originalWorkout.exercises))} min → ~{roundedEstimate(proposal.workout.estimatedMinutes)} min</p>
-          {proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
+          {proposal.mode === ADJUST_TODAY_MODES.equipment ? <dl className="adjust-equipment-delta"><div><dt>Current</dt><dd>{currentEquipmentContext.name ? `${currentEquipmentContext.name} · ` : ""}{gymEquipmentSummary(currentEquipmentContext.equipment)}</dd></div><div><dt>For this workout</dt><dd>{proposal.gymProfileName ? `${proposal.gymProfileName} · ` : ""}{gymEquipmentSummary(proposal.temporaryEquipment)}</dd></div></dl> : proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
           <section className="adjust-review-section">
             <Eyebrow>KEEPING</Eyebrow>
             {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small></div>)}
           </section>
           <section className="adjust-review-section">
             <Eyebrow>CHANGES</Eyebrow>
-            {proposal.changes.length ? proposal.changes.map((change, index) => <div className={`adjust-change-row is-${change.kind}`} key={`${change.entryId}-${change.kind}-${index}`}><strong>{change.kind === "replaced" ? `${change.label} → ${change.nextLabel}` : change.label}</strong><span>{change.kind === "sets" ? `${change.from} sets → ${change.to} sets` : change.kind === "removed" ? "Removed" : change.kind === "manual" ? "Prepared" : change.kind === "rir" ? `${change.from} RIR → ${change.to} RIR` : "Replaced"}</span><small>{change.reason}</small></div>) : <p className="adjust-calm-note">This workout is already conservative. No useful change was made.</p>}
+            {proposal.changes.length ? proposal.changes.map((change, index) => <div className={`adjust-change-row is-${change.kind}`} key={`${change.entryId}-${change.kind}-${index}`}><strong>{change.kind === "replaced" ? `${change.label} → ${change.nextLabel}` : change.label}</strong><span>{change.kind === "sets" ? `${change.from} sets → ${change.to} sets` : change.kind === "removed" ? "Removed" : change.kind === "manual" ? "Prepared" : change.kind === "rir" ? `${change.from} RIR → ${change.to} RIR` : "Replaced"}</span><small>{change.reason}</small></div>) : <p className="adjust-calm-note">{proposal.mode === ADJUST_TODAY_MODES.equipment ? "All exercises already fit this equipment. No workout changes are needed." : "This workout is already conservative. No useful change was made."}</p>}
             {proposal.unresolved.map((item) => <div className="adjust-unresolved" role="alert" key={item.entryId}><strong>{item.label} needs a replacement</strong><small>{item.reason}</small><button className="text-button" onClick={() => setManualEntryId(item.entryId)}>Choose replacement</button></div>)}
           </section>
           <p className="adjust-today-note">Future workouts remain based on your original plan.</p>
@@ -18971,8 +19063,9 @@ function Logging({ state, update, close }) {
 }
 function Appearance({ state, update, close }) {
   const personalThemes = usePersonalThemes();
+  const [appearanceError, setAppearanceError] = useState('');
   const showExerciseImages = state.profile.showExerciseImages !== false;
-  const appearancePreference = ["system", "light", "dark"].includes(
+  const appearancePreference = personalThemes.personalTheme?.appearance || (["system", "light", "dark"].includes(
     state.profile.appearancePreference,
   )
     ? state.profile.appearancePreference
@@ -18980,7 +19073,7 @@ function Appearance({ state, update, close }) {
       ? "system"
       : ["system", "light", "dark"].includes(state.profile.themePreference)
         ? state.profile.themePreference
-        : "light";
+        : "light");
   const stylePreference = ["standard", "premium"].includes(
     state.profile.stylePreference,
   )
@@ -19005,23 +19098,18 @@ function Appearance({ state, update, close }) {
         ? "Always use ROOK’s dark appearance."
         : "Always use ROOK’s light appearance.";
   const setAppearance = (value) => {
-    personalThemes.clearTheme();
+    setAppearanceError('');
+    if (value === appearancePreference) return;
+    if (personalThemes.personalTheme) {
+      try { personalThemes.setAppearance(value); }
+      catch { setAppearanceError('Couldn’t save this appearance. Please try again.'); }
+      return;
+    }
     update((current) => {
       current.profile.appearancePreference = value;
       current.profile.themePreference = legacyThemePreference(
         value,
         current.profile.stylePreference || stylePreference,
-      );
-      return current;
-    });
-  };
-  const setStyle = (value) => {
-    personalThemes.clearTheme();
-    update((current) => {
-      current.profile.stylePreference = value;
-      current.profile.themePreference = legacyThemePreference(
-        current.profile.appearancePreference || appearancePreference,
-        value,
       );
       return current;
     });
@@ -19033,38 +19121,15 @@ function Appearance({ state, update, close }) {
         onClose={close}
         closeLabel="Close Appearance"
       />
-      {!personalThemes.personalTheme && <section className="logging-group appearance-theme-group">
+      <section className="logging-group appearance-theme-group">
         <Eyebrow>THEME</Eyebrow>
         <SegmentedControl label="Theme" options={[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}]}
           value={appearancePreference} onChange={setAppearance}/>
         <small className="appearance-theme-help" aria-live="polite">
           {themeHelp}
         </small>
-      </section>}
-      {!personalThemes.personalTheme && <section className="logging-group appearance-style-group">
-        <Eyebrow>STYLE</Eyebrow>
-        <div className="appearance-style-choices">
-          {[
-            ["standard", "Standard", "ROOK green."],
-            ["premium", "Premium", "Warm gold accents on the same surfaces."],
-          ].map(([value, label, help]) => (
-            <button
-              type="button"
-              className="appearance-style-choice"
-              data-style-option={value}
-              key={value}
-              aria-pressed={stylePreference === value}
-              onClick={() => setStyle(value)}
-            >
-              <span>
-                <strong>{label}</strong>
-                <small>{help}</small>
-              </span>
-              <i aria-hidden="true">✓</i>
-            </button>
-          ))}
-        </div>
-      </section>}
+        {appearanceError && <p role="alert">{appearanceError}</p>}
+      </section>
       {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Personal themes</strong><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>

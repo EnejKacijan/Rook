@@ -1,6 +1,7 @@
 import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
 import { buildProgram } from './domain.js';
 import { aiAuthorizationHeaders } from './aiAuthorization.js';
+import { physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
 import {
@@ -1962,7 +1963,7 @@ export const AIService = {
     if (!prepared.length) throw new Error("Add at least one photo.");
     const status = await this.status();
     if (!status.available)
-      throw new Error("AI physique review is not configured.");
+      throw physiqueReviewUnavailableError(status);
     const data = await request(
       "physique-review",
       {
@@ -1975,7 +1976,7 @@ export const AIService = {
       !["success", "insufficient"].includes(data?.status) ||
       !Array.isArray(data?.suggestions)
     )
-      throw new Error("The review result was invalid.");
+      throw Object.assign(new Error("The review result was invalid."), { code: 'invalid-physique-review' });
     const suggestions = data.suggestions
       .slice(0, 4)
       .filter((item) => PHYSIQUE_PRIORITY_OPTIONS[item.priorityId])

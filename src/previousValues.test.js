@@ -2,6 +2,7 @@ import {it,expect} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startFreestyleWorkout,addFreestyleExercise,copyFreestylePrevious,freestylePreviousSets} from './freestyleWorkout.js';
 import {preparePreviousValues,canUndoPreviousValues,undoPreviousValues,previousValuesMatch} from './previousValues.js';
+import {previousWorkingSetValues} from './freestyleWorkout.js';
 
 function fixture(id='hack-squat'){
  let state=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),id);
@@ -49,4 +50,50 @@ it.each(['pull-up','assisted-pull-up','plank'])('%s preserves load/seconds repre
 it('per-side values are copied independently; historical side completion is never imported and Undo restores exact prior sides',()=>{
  const state=fixture(),exercise=state.activeWorkout.exercises[0],prior=state.workouts[0].exercises[0];exercise.loggingMode=prior.loggingMode='per_side';target(state).sides={left:{reps:3},right:{reps:null}};prior.sets[0].sides={left:{reps:7,weight:20,rir:2,completed:true,completedAt:123},right:{reps:9,completed:true}};
  const result=preparePreviousValues(state,identity(state));expect(target(result.state).sides).toEqual({left:{reps:7,weight:20,rir:2},right:{reps:9}});expect(target(result.state).completed).toBe(false);expect(undoPreviousValues(result.state,result.record)).toEqual(state);
+});
+
+it('a prescribed exercise uses the same canonical reuse without altering targets, history or other sets',()=>{
+ const s=fixture();s.activeWorkout.source='plan';delete s.activeWorkout.exercises[0].prescriptionSource;
+ Object.assign(s.activeWorkout.exercises[0],{repMin:6,repMax:9,targetRir:2});const before=structuredClone(s);
+ const result=preparePreviousValues(s,identity(s));expect(target(result.state)).toMatchObject({weight:90,reps:7,rir:null,completed:false});
+ expect(result.state.workouts).toEqual(before.workouts);expect(result.state.activeWorkout.exercises[0]).toMatchObject({repMin:6,repMax:9,targetRir:2});
+ expect(result.state.activeWorkout.exercises[0].sets[1]).toEqual(before.activeWorkout.exercises[0].sets[1]);
+ expect(preparePreviousValues(result.state,identity(s))).toEqual({state:result.state,record:null});
+});
+it('reps-only history preserves a meaningful current load and its provenance',()=>{
+ const s=fixture(),prior=s.workouts[0].exercises[0].sets[0];prior.weight=null;const before=structuredClone(target(s));
+ const result=preparePreviousValues(s,identity(s));expect(target(result.state)).toMatchObject({weight:55,reps:7,weightEntryMode:before.weightEntryMode,weightSourceSetId:before.weightSourceSetId,weightProvenance:before.weightProvenance});
+ expect(undoPreviousValues(result.state,result.record)).toEqual(s);
+});
+it('empty history fields do not invent reusable numbers or shift the subsequent set ordinal',()=>{
+ const s=fixture(),e=s.activeWorkout.exercises[0],prior=s.workouts[0].exercises[0];prior.sets=[{completed:true,weight:null,reps:null},{completed:true,weight:80,reps:8}];
+ expect(copyFreestylePrevious(s,e.id,e.sets[0].id,0)).toBe(s);
+ expect(copyFreestylePrevious(s,e.id,e.sets[1].id,1).activeWorkout.exercises[0].sets[1]).toMatchObject({weight:80,reps:8});
+ expect(copyFreestylePrevious(s,e.id,e.sets[1].id,2)).toBe(s);
+});
+it('bodyweight zero/null and added load retain their canonical meaning; an absent load stays partial',()=>{
+ const s=fixture('pull-up'),prior=s.workouts[0].exercises[0].sets[0];prior.weight=0;
+ expect(target(preparePreviousValues(s,identity(s)).state).weight).toBe(0);
+ prior.weight=20;expect(target(preparePreviousValues(s,identity(s)).state).weight).toBe(20);
+ prior.weight=null;expect(target(preparePreviousValues(s,identity(s)).state).weight).toBeNull();
+ delete prior.weight;expect(target(preparePreviousValues(s,identity(s)).state).weight).toBe(55);
+});
+it('canonical ID/profile/logging guards reject stale actions even when replacement retains instance and set IDs',()=>{
+ const s=fixture(),e=s.activeWorkout.exercises[0],id={...identity(s),catalogExerciseId:e.exerciseId,profileId:s.profile.id,loggingMode:'normal'};
+ const {state:next,record}=preparePreviousValues(s,id);next.activeWorkout.exercises[0].exerciseId='leg-press';
+ expect(preparePreviousValues(next,id)).toEqual({state:next,record:null});expect(undoPreviousValues(next,record)).toBe(next);
+ expect(preparePreviousValues({...s,profile:{...s.profile,id:'different'}},id).record).toBeNull();
+ e.loggingMode='per_side';expect(preparePreviousValues(s,id).record).toBeNull();
+});
+it('a partially completed side cannot be overwritten and no historical IDs/timestamps are imported',()=>{
+ const s=fixture(),e=s.activeWorkout.exercises[0],prior=s.workouts[0].exercises[0];e.loggingMode=prior.loggingMode='per_side';
+ prior.sets[0].sides={left:{reps:7,completed:true,completedAt:1,startedAt:2,id:'old-side',sessionId:'old-session'},right:{reps:9}};
+ target(s).sides={left:{reps:5,completed:true},right:{reps:null}};expect(preparePreviousValues(s,identity(s)).record).toBeNull();
+ target(s).sides.left.completed=false;const applied=preparePreviousValues(s,identity(s));
+ expect(target(applied.state).sides).toEqual({left:{reps:7,completed:false},right:{reps:9}});
+ expect(applied.state.workouts).toEqual(s.workouts);
+});
+it('unconfirmed imported load is not reused but supported reps can still be used',()=>{
+ const s=fixture(),e=s.activeWorkout.exercises[0],prior=s.workouts[0].exercises[0].sets[0];prior.importSetType='normal';prior.rawImport={version:2,loadKind:'unknown'};
+ expect(previousWorkingSetValues(e,prior)).toEqual({reps:7});expect(target(preparePreviousValues(s,identity(s)).state).weight).toBe(55);
 });

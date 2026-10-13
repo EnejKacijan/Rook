@@ -1,4 +1,5 @@
-import { exerciseCatalog, exerciseLoadRequirement, isoDay, uid, workoutSetSummary, previousExercise, isSessionAddedExercise } from './domain.js';
+import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, isoDay, uid, workoutSetSummary, previousExercise } from './domain.js';
+import {loggingModeOf,setTypeOf} from './advancedLogging.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { availableCustomExerciseItems, customExerciseSnapshot } from './customExercises.js';
 import { effectiveGymContext } from './gymProfiles.js';
@@ -120,29 +121,70 @@ export function removeFreestyleExercise(state, id) {
 // logging modes match. Advanced sets remain inspectable, never flattened.
 export function freestylePreviousSets(state, exercise) {
   const prior = previousExercise(state.workouts, exercise.exerciseId);
-  if (!prior || (prior.loggingMode || 'normal') !== (exercise.loggingMode || 'normal')) return [];
-  return prior.sets.filter(s => s.completed && !s.setType && !s.segments?.length);
+  if (!prior || loggingModeOf(prior) !== loggingModeOf(exercise) ||
+      exerciseMeasure(prior) !== exerciseMeasure(exercise) ||
+      exerciseLoadRequirement(prior) !== exerciseLoadRequirement(exercise)) return [];
+  return prior.sets.filter(s => s.completed && setTypeOf(s) === 'standard' && !s.segments?.length &&
+    (s.rawImport?.version !== 2 || ['normal','standard'].includes(String(s.importSetType || '').toLowerCase()) && !s.distance && !s.durationSeconds));
+}
+
+const positive = value => typeof value === 'number' && Number.isFinite(value) && value > 0;
+export const previousValuesSetEligible = set => Boolean(set && !set.completed &&
+  !Object.values(set.sides || {}).some(side => side.completed) &&
+  setTypeOf(set) === 'standard' && !set.segments?.length);
+
+// Reuse only factual supported fields. Missing historical loads are not a
+// command to clear today's load; partial data retains its working-set ordinal.
+export function previousWorkingSetValues(exercise, prior) {
+  if (!prior) return {};
+  const requirement = exerciseLoadRequirement(exercise);
+  const usableLoad = value => requirement !== 'none' && (positive(value) || requirement === 'optional' && value === 0);
+  const values = {};
+  const uncertainImportLoad = prior.rawImport?.version === 2 &&
+    !['external','added','normal'].includes(prior.rawImport.loadKind);
+  if (!uncertainImportLoad && usableLoad(prior.weight)) values.weight = prior.weight;
+  // Native optional-load sets explicitly store null for bodyweight, distinct
+  // from an absent/unknown imported load. Preserve that established contract.
+  if (requirement === 'optional' && prior.weight === null && prior.rawImport?.version !== 2) values.weight = null;
+  if (positive(prior.reps)) values.reps = prior.reps;
+  if (loggingModeOf(exercise) === 'per_side' && prior.sides) {
+    const sides = {};
+    for (const side of ['left', 'right']) {
+      const source = prior.sides[side], copy = {};
+      if (!source) continue;
+      if (positive(source.reps)) copy.reps = source.reps;
+      if (!uncertainImportLoad && usableLoad(source.weight)) copy.weight = source.weight;
+      // Preserve the existing explicit side-RIR rule, never side completion/IDs.
+      if (typeof source.rir === 'number' && Number.isFinite(source.rir) && source.rir >= 0 && source.rir <= 5) copy.rir = source.rir;
+      if (Object.keys(copy).some(key => key !== 'rir')) sides[side] = copy;
+    }
+    if (Object.keys(sides).length) values.sides = sides;
+  }
+  if (requirement === 'none' && (values.reps != null || values.sides)) values.weight = null;
+  return values;
 }
 
 export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
   const active = state.activeWorkout;
   if (!active) return state;
   const exercise = active.exercises.find(e => e.id === exerciseId);
-  if(active.source!=='freestyle'&&!isSessionAddedExercise(exercise))return state;
   const set = exercise?.sets.find(s => s.id === setId);
   const prior = exercise && freestylePreviousSets(state, exercise)[ordinal];
-  if (!set || set.completed || set.setType || set.segments?.length || !prior) return state;
+  const values = previousWorkingSetValues(exercise, prior);
+  if (!previousValuesSetEligible(set) || !Object.keys(values).length) return state;
   const next = structuredClone(state);
   const target = next.activeWorkout.exercises.find(e => e.id === exerciseId).sets.find(s => s.id === setId);
-  Object.assign(target, { weight: prior.weight ?? null, reps: prior.reps, rir: null, touched: true, weightEntryMode: 'manual', repsEntryMode: 'manual', weightProvenance: 'history' });
-  if (prior.sides) target.sides = Object.fromEntries(Object.entries(prior.sides).map(([side, values]) => {
-    const copied = structuredClone(values);
-    // Historical completion is evidence, never a completion action today.
-    delete copied.completed; delete copied.completedAt;
-    return [side, copied];
-  }));
-  delete target.weightSourceSetId;
-  delete target.repsSourceSetId;
+  Object.assign(target, { ...values, rir: null, touched: true });
+  if (values.sides) target.sides = Object.fromEntries(['left','right'].map(side =>
+    [side, { ...set.sides?.[side], ...values.sides[side] }]));
+  if (Object.hasOwn(values, 'weight')) {
+    Object.assign(target, {weightEntryMode:'manual', weightProvenance:'history'});
+    delete target.weightSourceSetId;
+  }
+  if (Object.hasOwn(values, 'reps')) {
+    target.repsEntryMode = 'manual';
+    delete target.repsSourceSetId;
+  }
   return next;
 }
 

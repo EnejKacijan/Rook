@@ -37,3 +37,20 @@ it('auth/token wait shares the send deadline and cannot make a late paid request
   await vi.advanceTimersByTimeAsync(60000); await assertion; resolve({ authorization: 'Bearer synthetic' }); await Promise.resolve();
   expect(fetch).not.toHaveBeenCalled();
 });
+it.each([
+  [200, { available: false }, 'config_missing'],
+  [502, {}, 'server_error'],
+  [429, { code: 'rate-limit' }, 'rate-limit'],
+])('photo-review preflight preserves the real failure (%s) and never sends images or requests auth', async (status, body, code) => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response(status, body)));
+  await expect(AIService.reviewPhysique({}, [{ angle: 'front', dataUrl: 'data:image/jpeg;base64,synthetic' }]))
+    .rejects.toMatchObject({ code });
+  expect(fetch).toHaveBeenCalledTimes(1); expect(fetch.mock.calls[0][0]).toBe('/api/ai/status');
+  expect(authorization.get).not.toHaveBeenCalled();
+});
+it('an invalid photo-review response is a technical failure, not insufficient photo quality', async () => {
+  vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response(200, { available: true }))
+    .mockResolvedValueOnce(response(200, { data: { status: 'broken', suggestions: [] } })));
+  await expect(AIService.reviewPhysique({}, [{ angle: 'front', dataUrl: 'data:image/jpeg;base64,synthetic' }]))
+    .rejects.toMatchObject({ code: 'invalid-physique-review' });
+});

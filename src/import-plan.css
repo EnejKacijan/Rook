@@ -55,8 +55,9 @@
 .plan-reorder-a11y button:disabled { color: var(--rook-disabled, #aaa7a2); }
 .exercise-reorder-a11y { top: 46px; right: 10px; }
 .workout-descriptor-field > input { font-size: 13px !important; font-weight: 580 !important; }
-.plan-editor-workout-title { display: grid; gap: 4px; }
-.plan-editor-workout-title > small { color: #8a8783; font-size: 11px; font-weight: 600; letter-spacing: 0; text-transform: none; }
+.import-day > .plan-editor-workout-title { display: grid; gap: 6px; }
+.import-day > .plan-editor-workout-title > :is(span, small) { min-width: 0; overflow-wrap: anywhere; }
+.import-day > .plan-editor-workout-title > small { color: #8a8783; font-size: 11px; font-weight: 600; letter-spacing: 0; text-align: left; text-transform: none; }
 .plan-conditioning-card { margin: 14px 0 2px; padding: 14px; border: 1px solid color-mix(in srgb, var(--rook-accent) 16%, transparent); border-radius: 15px; background: var(--rook-accent-soft); color: #1b1a19; }
 .plan-conditioning-card > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .plan-conditioning-card > div span { color: var(--rook-accent-text); font-size: 9px; font-weight: 750; letter-spacing: .1em; }

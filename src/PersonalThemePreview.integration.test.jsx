@@ -179,6 +179,18 @@ it('System follows a media change during preview without losing staged palette o
   expect(document.querySelector('.pro-theme-appearance button[aria-checked="true"]').textContent).toBe('System');
   await click('Cancel'); expect(document.documentElement.dataset.appearance).toBe('dark'); expect(review.personalTheme).toEqual(original);
 });
+it('Appearance brightness changes preserve the committed palette and all families across remount',async()=>{
+  const families=structuredClone(review.personalTheme.paletteCustomizations);
+  await act(async()=>review.setAppearance('dark'));
+  const next=normalizePersonalTheme({...original,appearance:'dark'}),applied=rootTheme();
+  expect(review.personalTheme).toEqual(next);expect(readPersonalThemePreference()).toEqual(next);
+  expect(document.documentElement.dataset.personalTheme).toBe('ocean-warm');expect(document.documentElement.dataset.appearance).toBe('dark');
+  expect(document.documentElement.style.getPropertyValue('--rook-accent-fill')).toBe(personalThemeModel(next).tokens['--rook-accent-fill']);
+  expect(review.personalTheme.paletteCustomizations).toEqual(families);
+  await act(async()=>root.unmount());host.remove();await mount();expect(rootTheme()).toEqual(applied);expect(review.personalTheme).toEqual(next);
+  await act(async()=>review.setAppearance('system'));await act(async()=>media.change(true));
+  expect(document.documentElement.dataset.appearance).toBe('dark');expect(readPersonalThemePreference()).toEqual(original);
+});
 it('a failed Apply stays open with the draft visible and the committed preference intact', async () => {
   await open(); await click('Slate'); vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('full'); });
   await click('Apply theme'); expect(document.querySelector('[role="alert"]').textContent).toContain('Couldn’t save');

@@ -11,6 +11,14 @@ it('Weekly Review, charts and progression markers always consume the progress ro
   for(const d of fills)expect(d.value).toBe('var(--rook-progress)');
  }
 });
+it('shared warm-up checks and completed summary follow the theme rather than semantic success',()=>{
+ const checks='.workout-screen button.warmup-check-row.completed > i';
+ for(const prop of ['color','border-color','background']){
+  const values=declarations(checks,prop);expect(values.length).toBeGreaterThan(0);
+  for(const d of values){expect(d.value).toContain('--rook-accent-');expect(d.value).not.toContain('success');}
+ }
+ for(const d of declarations('.warmup-summary-check','color'))expect(d.value).toBe('var(--rook-accent-text)');
+});
 it('audited interactive accent primitives have no standalone brand-green declarations',()=>{
  const selectors=['.primary','.text-button','.consistency-bars .filled','.chart i','.setting-switch input:checked','.toggle-row input','.disclosure-chevron','.building-spinner','.restriction-spinner','.progression-next','.week-navigation','.coach-send.is-sending','.adapt-review-list > button.selected','.exercise-note-button:focus-visible','.set-row.set-ready'];
  for(const selector of selectors)for(const {rule}of rules.filter(x=>x.rule.selector.includes(selector)))for(const d of rule.nodes.filter(n=>n.type==='decl'&&!n.prop.startsWith('--'))){

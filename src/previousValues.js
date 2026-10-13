@@ -1,13 +1,15 @@
-import {copyFreestylePrevious} from './freestyleWorkout.js';
-import {isSessionAddedExercise} from './domain.js';
+import {copyFreestylePrevious,previousWorkingSetValues} from './freestyleWorkout.js';
+import {loggingModeOf} from './advancedLogging.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const locate=(state,record)=>{
   const active=state.activeWorkout;
   if(!active||active.id!==record.sessionId)return null;
   const exercise=active.exercises[active.exerciseIndex];
-  if(active.source!=='freestyle'&&!isSessionAddedExercise(exercise))return null;
   if(exercise?.id!==record.exerciseId)return null;
+  if(record.profileId != null && state.profile.id !== record.profileId ||
+     record.catalogExerciseId != null && exercise.exerciseId !== record.catalogExerciseId ||
+     record.loggingMode != null && loggingModeOf(exercise) !== record.loggingMode)return null;
   return exercise.sets.find(s=>s.id===record.setId);
 };
 const sideValues=sides=>sides&&Object.fromEntries(Object.entries(sides).map(([side,values])=>{
@@ -16,7 +18,14 @@ const sideValues=sides=>sides&&Object.fromEntries(Object.entries(sides).map(([si
 
 // Value equality intentionally ignores the copy's bookkeeping. Matching values
 // must not fabricate an "applied" action merely to update provenance/touched.
-export function previousValuesMatch(set,prior) {
+export function previousValuesMatch(set,prior,exercise) {
+  if (exercise) {
+    const values = previousWorkingSetValues(exercise,prior);
+    return Boolean(set && Object.keys(values).length && (set.rir??null)===null &&
+      Object.entries(values).every(([key,value])=>key==='sides'
+        ? Object.entries(value).every(([side,fields])=>Object.entries(fields).every(([field,number])=>(set.sides?.[side]?.[field]??null)===number))
+        : (set[key]??null)===value));
+  }
   return Boolean(set&&prior&&(set.weight??null)===(prior.weight??null)&&
     (set.reps??null)===(prior.reps??null)&&(set.rir??null)===null&&
     (!prior.sides||equal(sideValues(set.sides),sideValues(prior.sides))));

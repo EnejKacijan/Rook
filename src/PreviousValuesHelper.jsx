@@ -3,20 +3,26 @@ import {flushSync} from 'react-dom';
 import {Disclosure} from './Disclosure.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {preparePreviousValues,canUndoPreviousValues,undoPreviousValues,previousValuesMatch} from './previousValues.js';
+import {loggingModeOf} from './advancedLogging.js';
+import {previousWorkingSetValues} from './freestyleWorkout.js';
 
 export function PreviousValuesHelper({state,update,exercise,set,prior,index,label,screenRef}) {
   const {commit,latest}=useDurableAction(state,update);
   const [record,setRecord]=useState(null),[undoable,setUndoable]=useState(false),[error,setError]=useState(''),[draftEdited,setDraftEdited]=useState(false);
   const liveRecord=useRef(null),pendingDrafts=useRef(null),animations=useRef([]),undoAllowed=useRef(false);
   const helper=useRef(null),focusAfterAction=useRef(false);
+  const supported = previousWorkingSetValues(exercise,prior);
+  const fields = [...['weight','reps'].filter(key=>Object.hasOwn(supported,key)),
+    ...Object.entries(supported.sides || {}).filter(([,values])=>Object.hasOwn(values,'reps')).map(([side])=>`sides.${side}`)];
+  const scope = JSON.stringify({sets:[set.id],fields});
   useLayoutEffect(()=>{if(focusAfterAction.current){helper.current?.querySelector(record?'.freestyle-copy-applied':'.freestyle-copy')?.focus({preventScroll:true});focusAfterAction.current=false;}},[record]);
   const row=()=>[...screenRef?.current?.querySelectorAll('[data-set-id]')||[]].find(node=>node.dataset.setId===set.id);
   const inputs=()=>[...row()?.querySelectorAll('[data-workout-draft]')||[]];
-  const snapshot=()=>inputs().map(input=>{
+  const snapshot=()=>inputs().filter(input=>fields.includes(input.closest('[data-workout-field]').dataset.workoutField)).map(input=>{
     const detail={};input.dispatchEvent(new CustomEvent('rook-snapshot-draft',{detail}));
     return {field:input.closest('[data-workout-field]').dataset.workoutField,snapshot:detail.snapshot};
   });
-  const restoreDrafts=drafts=>flushSync(()=>inputs().forEach(input=>{
+  const restoreDrafts=drafts=>flushSync(()=>inputs().filter(input=>fields.includes(input.closest('[data-workout-field]').dataset.workoutField)).forEach(input=>{
     const saved=drafts?.find(entry=>entry.field===input.closest('[data-workout-field]').dataset.workoutField);
     input.dispatchEvent(new CustomEvent('rook-restore-draft',{detail:{snapshot:saved?.snapshot}}));
   }));
@@ -57,16 +63,18 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,labe
     let prepared;
     try{
       const result=commit(current=>{
-        prepared=preparePreviousValues(current,{sessionId:state.activeWorkout.id,exerciseId:exercise.id,setId:set.id,ordinal:index});
+        prepared=preparePreviousValues(current,{sessionId:state.activeWorkout.id,exerciseId:exercise.id,catalogExerciseId:exercise.exerciseId,profileId:state.profile.id,loggingMode:loggingModeOf(exercise),setId:set.id,ordinal:index});
         return prepared.state;
       });
       setDraftEdited(false);
       // Canonical values may already match while a different raw edit is visible.
       // Resolve that UI-only draft without manufacturing a persistence write.
       if(!result.changed&&!drafts.some(entry=>entry.snapshot?.draft!=null))return;
-      const unchanged=result.state.activeWorkout.exercises.find(e=>e.id===exercise.id)?.sets.find(s=>s.id===set.id);
-      if(!prepared.record&&(!unchanged||unchanged.completed||!previousValuesMatch(unchanged,prior)))return;
-      const operation=prepared.record?{...prepared.record,drafts}:{sessionId:state.activeWorkout.id,exerciseId:exercise.id,setId:set.id,ordinal:index,units:state.profile.units,patch:[],after:structuredClone(unchanged),draftOnly:true,drafts};
+      const liveExercise=result.state.activeWorkout?.exercises.find(e=>e.id===exercise.id);
+      if(result.state.profile.id!==state.profile.id || liveExercise?.exerciseId!==exercise.exerciseId)return;
+      const unchanged=liveExercise.sets.find(s=>s.id===set.id);
+      if(!prepared.record&&(!unchanged||unchanged.completed||!previousValuesMatch(unchanged,prior,exercise)))return;
+      const operation=prepared.record?{...prepared.record,drafts}:{sessionId:state.activeWorkout.id,exerciseId:exercise.id,catalogExerciseId:exercise.exerciseId,profileId:state.profile.id,loggingMode:loggingModeOf(exercise),setId:set.id,ordinal:index,units:state.profile.units,patch:[],after:structuredClone(unchanged),draftOnly:true,drafts};
       liveRecord.current=operation;undoAllowed.current=true;
       restoreDrafts(null);
       focusAfterAction.current=true;setRecord(operation);setUndoable(true);acknowledge(operation);
@@ -84,10 +92,10 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,labe
       restoreDrafts(operation.drafts);setDraftEdited(operation.drafts.some(entry=>entry.snapshot?.draft!=null));focusAfterAction.current=true;setRecord(null);setUndoable(false);setError('');acknowledge(operation);
     }catch(e){setError(e.message);}
   };
-  const matches=!draftEdited&&previousValuesMatch(set,prior);
+  const matches=!draftEdited&&previousValuesMatch(set,prior,exercise);
   return <div ref={helper} className="freestyle-copy-helper">
-    <Disclosure open={!record} collapsed={<div className="freestyle-copy-applied" role="status" tabIndex={-1}><span><span aria-hidden="true">✓ </span>Previous values applied</span>{undoable&&<button type="button" className="text-button" data-workout-replaces={JSON.stringify({sets:[set.id]})} onClick={undo}>Undo</button>}</div>}>
-      <button type="button" className="freestyle-copy" data-workout-replaces={JSON.stringify({sets:[set.id]})} disabled={matches} onPointerDown={()=>{pendingDrafts.current={drafts:snapshot()};}} onPointerCancel={()=>{pendingDrafts.current=null;}} onKeyDown={()=>{pendingDrafts.current=null;}} onClick={apply}>
+    <Disclosure open={!record} collapsed={<div className="freestyle-copy-applied" role="status" tabIndex={-1}><span><span aria-hidden="true">✓ </span>Previous values applied</span>{undoable&&<button type="button" className="text-button" data-workout-replaces={scope} onClick={undo}>Undo</button>}</div>}>
+      <button type="button" className="freestyle-copy" data-workout-replaces={scope} disabled={matches} onPointerDown={()=>{pendingDrafts.current={drafts:snapshot()};}} onPointerCancel={()=>{pendingDrafts.current=null;}} onKeyDown={()=>{pendingDrafts.current=null;}} onClick={apply}>
         <span>Previous workout · set {index+1}<strong>{label}</strong></span><span>{matches?'VALUES MATCH':'USE VALUES'}</span>
       </button>
     </Disclosure>

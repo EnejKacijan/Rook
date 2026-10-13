@@ -24,7 +24,7 @@ const draw=()=>act(()=>root.render(<TodayActionsSheet state={state} date={state.
 
 it.each([0,1,2,3,4])('keeps %i completed workouts at zero or one Repeat/Delete actions, with no history index',count=>{
   state=dayOverflowFixture({count});draw();
-  expect(rows().map(row=>row.textContent)).toEqual(count?['Repeat a workout','Adjust week','Rest-day activities','Start freestyle workout',count===1?'Delete workout':'Delete a workout']:['Adjust week','Rest-day activities']);
+  expect(rows().map(row=>row.textContent)).toEqual(count?['Conditioning','Repeat a workout','Adjust week','Rest-day activities','Start freestyle workout',count===1?'Delete workout':'Delete a workout']:['Adjust week','Rest-day activities']);
   expect(document.querySelector('.today-workout-chooser')).toBeNull();
   expect(document.body.textContent).not.toContain('View history');expect(document.body.textContent).not.toContain('UPPER B');
 });
@@ -47,7 +47,7 @@ it.each(['repeat','delete'])('%s shares the compact ID chooser and preserves row
 it('chooser back restores the concise actions and their keyboard focus',async()=>{
   draw();click(button('Repeat a workout'));click(document.querySelector('[aria-label="Back"]'));
   await act(async()=>vi.advanceTimersToNextFrame());
-  expect(rows()).toHaveLength(5);expect(document.activeElement).toBe(button('Repeat a workout'));
+  expect(rows()).toHaveLength(6);expect(document.activeElement).toBe(button('Repeat a workout'));
   click(button('Delete a workout'));click(document.querySelector('[aria-label="Close Delete a workout"]'));expect(close).toHaveBeenCalledOnce();
 });
 it.each(['activeWorkout','activeOptionalSession'])('hides conflicting actions with %s and keeps scheduling available',key=>{
@@ -72,7 +72,7 @@ it.each(['mixed','planned','freestyle'])('%s completed records retain detail acc
   for(const record of state.workouts){const row=document.querySelector(`.today-completed-workouts [data-workout-id="${record.id}"]`) || button('VIEW WORKOUT DETAILS');expect(row).toBeTruthy();click(row);expect(setDetail).toHaveBeenLastCalledWith({completedWorkout:record.id});}
 });
 it('historical repeat routes to today and canonical apply/start preserve old facts through reload',()=>{
-  state=dayOverflowFixture({count:2,date:'2026-09-18',sameName:true});draw();expect(button('Start freestyle workout')).toBeUndefined();click(button('Repeat today'));
+  state=dayOverflowFixture({count:2,date:'2026-09-18',sameName:true});draw();expect(button('Conditioning')).toBeUndefined();expect(button('Start freestyle workout')).toBeUndefined();click(button('Repeat today'));
   const source=state.workouts[0],before=serializeState(state);click(document.querySelector(`[data-workout-id="${source.id}"]`));
   const request=setDetail.mock.calls[0][0].useWorkoutToday;expect(request).toEqual({workoutId:source.id});expect(canUseWorkoutToday(state,request)).toBe(true);
   const proposal=proposeWorkoutToday(state,request);

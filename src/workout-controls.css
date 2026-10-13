@@ -67,7 +67,7 @@
 .workout-screen .workout-warmup-toggle { min-height: 52px; min-width: 0; }
 .workout-screen .workout-warmup-toggle > span { min-width: 0; overflow-wrap: anywhere; }
 .workout-screen .workout-warmup-content { min-height: 0; }
-.workout-screen .warmup-summary-check { margin-right: 7px; color: var(--rook-success); font-style: normal; }
+.workout-screen .warmup-summary-check { margin-right: 7px; color: var(--rook-accent-text); font-style: normal; }
 .workout-screen .warmup-skip { min-width: 44px; min-height: 44px; flex: 0 0 auto; }
 .workout-screen .warmup-error { font-size: 12px; }
 .workout-screen .warmup-details { padding: 0 0 12px; }
@@ -152,9 +152,10 @@
   color: var(--rook-secondary, #6f6c68);
 }
 .workout-screen button.warmup-check-row.completed > i {
-  border-color: var(--rook-success-line, rgba(31, 107, 76, .2));
-  background: var(--rook-success-soft, #eaf2ee);
-  color: var(--rook-success, #1f6b4c);
+  /* Warm-up checks track session progress, like the working-set controls. */
+  border-color: var(--rook-accent-text);
+  background: var(--rook-accent-soft);
+  color: var(--rook-accent-text);
 }
 .workout-screen .warmup-count-note {
   display: block;

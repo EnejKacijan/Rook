@@ -15,6 +15,19 @@ const click = async element => { await act(async () => element.click()); };
 afterEach(() => { if (root) act(() => root.unmount()); host?.remove(); root = null; host = null; });
 
 describe('account status copy', () => {
+  it('groups identity, status, timestamp and the local-only photo explanation above the neutral sign-out row', () => {
+    render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: true, email: 'long.account@example.com', lastSuccessAt: '2026-10-11T12:00:00Z' }}/>);
+    const summary = document.querySelector('.account-sync-summary');
+    expect(summary.querySelector('.account-sync-identity').textContent).toBe('long.account@example.com');
+    expect(summary.querySelector('[role="status"]').textContent).toBe('Synced');
+    expect(summary.textContent).toContain('Last synced');
+    expect(summary.textContent).toContain('Your ROOK training data is backed up');
+    expect(summary.textContent).toContain('Workout photos stay on this device; cloud sync does not include them.');
+    const signOut = document.querySelector('.account-sync-sign-out');
+    expect(signOut.parentElement).toBe(summary.parentElement);
+    expect(signOut.querySelector('.rook-navigation-chevron')).toBeTruthy();
+    expect(signOut.textContent).toContain('Your local data stays on this device');
+  });
   it('only says Synced when the acknowledged queue is empty', () => {
     expect(accountSyncStatus({ state: 'synced', pendingCount: 0 })).toBe('Synced');
     expect(accountSyncStatus({ state: 'synced', pendingCount: 2 })).toBe('Syncing…');

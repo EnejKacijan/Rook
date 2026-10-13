@@ -106,3 +106,10 @@ it('keeps Conditioning as a quiet optional action opening the existing setup wit
   expect(route).toBeNull();expect(document.querySelector('.today-screen')).toBe(today);
   expect(domain.serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();expect(persist).not.toHaveBeenCalled();
 });
+it('completed Today overflow also reaches the same Conditioning setup without changing history',()=>{
+ mount();const before=domain.serializeState(state),today=document.querySelector('.today-screen');
+ click(today.querySelector('[aria-label="Today options"]'));settle();expect(document.querySelector('.today-actions-sheet')).toBeTruthy();
+ click(button('Conditioning'));settle();expect(route).toEqual({conditioning:state.selectedDate});expect(button('START SESSION').disabled).toBe(false);
+ click(document.querySelector('.conditioning-sheet .detail-header-close'));settle();expect(route).toBeNull();
+ expect(document.querySelector('.today-screen')).toBe(today);expect(domain.serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();expect(persist).not.toHaveBeenCalled();
+});

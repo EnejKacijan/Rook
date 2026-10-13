@@ -20,7 +20,7 @@ selection and informational emphasis; spinner fills; import/editor selection;
 progression guidance; week navigation; notes controls. Selection in Coach's
 adaptation review is a choice, not an already-successful outcome.
 
-SEMANTIC SUCCESS: legacy completed-set/warmup paint, completion confirmation marks,
+SEMANTIC SUCCESS: legacy completed-set paint, completion confirmation marks,
 Coach applied-action acknowledgments, already-logged Today update checks,
 completed import-matching acknowledgments, ready photo uploads and the armed
 add-swipe acknowledgment. These use success roles and intentionally remain
@@ -28,6 +28,15 @@ green in Personal Themes. The current compact logger check faces already use
 the theme accent in `activeLoggerTouch.css`; that accepted presentation is
 retained. Its legacy outer button paint is overridden and is not a green leak.
 Existing classic Gold semantic treatment is retained.
+Warm-up checklist checks and the completed summary now follow the theme accent,
+matching the compact working-set controls. The 2026-10-09 iPhone review exposed
+these current controls still consuming success green (`#61c18d`) under Ocean
+(`--rook-accent-text: #83bcee`). Their shared checklist glyph/border uses
+`--rook-accent-text`, its wash uses `--rook-accent-soft`, and the summary glyph
+uses `--rook-accent-text`. This is session-progress feedback, not an independent
+success confirmation. General, preparation and ramp-up rows share this rule;
+staged previews and Fine-tune shades inherit the same root tokens. Unused legacy
+warm-up markup and genuine success/error roles remain unchanged.
 Warning, error and destructive rules are unchanged. Their personal-theme roles
 remain amber/red independently of the selected palette.
 The plan-restored notice referenced the undefined legacy `--rook-success-surface`;

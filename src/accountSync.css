@@ -1,8 +1,12 @@
 .profile-screen .account-sync-panel { margin-top: 30px; }
 .account-sync-panel .account-sync-identity { margin: 14px 0 3px; font-weight: 650; overflow-wrap: anywhere; }
 .account-sync-panel .account-sync-status { margin: 0; color: var(--rook-muted); }
-.account-sync-panel > small { display: block; margin-top: 4px; color: var(--rook-muted); }
+.account-sync-summary > small { display: block; margin-top: 4px; color: var(--rook-muted); font-size: 12px; line-height: 1.45; }
+.account-sync-summary .account-sync-status + small { margin-top: 2px; }
+.account-sync-summary small + small { margin-top: 6px; }
 .account-sync-panel .list-row { width: 100%; margin-top: 12px; }
+.profile-screen .account-sync-panel > .list-row { border-bottom: 0; border-top: 1px solid var(--rook-border); margin-top: 16px; padding-top: 14px; }
+.account-sync-panel .list-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
 .account-sync-panel .account-sync-error { color: var(--rook-danger, #a54840); overflow-wrap: anywhere; }
 .account-sync-collision { margin-top: 16px; }
 .account-sync-collision p { margin: 0 0 12px; color: var(--rook-muted); overflow-wrap: anywhere; }

@@ -1,5 +1,5 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
-import { blankState, buildProgram, isoDay, startOptionalSession, optionalSessionTiming, pauseOptionalSession, resumeOptionalSession, finishOptionalSession, cancelOptionalSession, nextScheduledWorkout, coachContext, saveState, loadState, deserializeState } from './domain.js';
+import { blankState, buildProgram, isoDay, canStartOptionalSession, startOptionalSession, optionalSessionTiming, pauseOptionalSession, resumeOptionalSession, finishOptionalSession, cancelOptionalSession, nextScheduledWorkout, coachContext, saveState, loadState, deserializeState } from './domain.js';
 import { editCompletedOptionalActivity, deleteCompletedOptionalActivity, optionalActivitySummary } from './optionalActivity.js';
 import { ACCOUNT_SYNC_SCHEMA, syncEntities, applySyncDownloads, planSyncReconciliation } from './accountSyncModel.js';
 import { ensureAccountSyncLedger, updateAccountSyncLedger, recordAccountSyncDeleteIntent, captureAccountSyncMutations, readAccountSyncLedger } from './accountSyncOutbox.js';
@@ -67,6 +67,18 @@ it('L: active strength and optional sessions block start; canceled sessions prod
   expect(startOptionalSession(activeStrength, config)).toBe(activeStrength);
   const started = startOptionalSession(before, config); expect(startOptionalSession(started, intervals)).toBe(started);
   expect(cancelOptionalSession(started)).toEqual(before);
+});
+it('shared optional-session availability matches existing canonical date, active-session and adjustment guards',()=>{
+ const state=fixture(),before=structuredClone(state);
+ expect(canStartOptionalSession(state)).toBe(true);expect(state).toEqual(before);
+ for(const blocked of [{...state,activeWorkout:{id:'strength'}},{...state,activeOptionalSession:{id:'optional'}},...['repeat','combine'].map(mode=>({...state,todayAdaptation:{schemaVersion:1,mode}}))]) {
+   expect(canStartOptionalSession(blocked)).toBe(false);expect(startOptionalSession(blocked,config)).toBe(blocked);
+ }
+ expect(canStartOptionalSession(state,'2026-10-03')).toBe(false);
+ expect(startOptionalSession(state,{...config,date:'2026-10-03'})).toBe(state);
+ const tomorrow=new Date('2026-10-05T00:01:00').getTime();
+ expect(canStartOptionalSession(state,'2026-10-04',tomorrow)).toBe(false);
+ expect(startOptionalSession(state,{...config,date:'2026-10-04'},tomorrow)).toBe(state);
 });
 it('M: current Coach context does not consume optional cardio; Hard conditioning causes no hidden recovery/proposal change', () => {
   const before = fixture(), after = finishOptionalSession(startOptionalSession(before, intervals, Date.now() - 660000));

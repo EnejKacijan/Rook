@@ -54,6 +54,8 @@ it.each([['planned',false],['planned',true],['freestyle',false],['freestyle',tru
   const initial=fixture(kind,partial),active=structuredClone(initial.activeWorkout);
   mount(initial);finish(partial);expect(current.workouts).toHaveLength(1);
   expect(button('CONTINUE WORKOUT')).toBeDefined();
+  expect(button('DONE').classList.contains('primary')).toBe(true);
+  expect(button('CONTINUE WORKOUT').classList.contains('quiet')).toBe(true);
   const target=button('CONTINUE WORKOUT');act(()=>{target.click();target.click();});
   expect(current.workouts).toHaveLength(0);expect(current.activeWorkout).toEqual(active);
   expect(document.activeElement).toBe(host.querySelector('.exercise-heading h1'));

@@ -9,7 +9,7 @@ import './personalThemeApp.css';
 // impersonate a subscription entitlement and never contacts a billing service.
 const ThemeContext = createContext(null);
 const inactive = Object.freeze({ personalTheme: null, renderedPersonalTheme: null,
-  openThemes: () => {}, clearTheme: () => {} });
+  openThemes: () => {}, clearTheme: () => {}, setAppearance: () => {} });
 export const usePersonalThemes = () => useContext(ThemeContext) || inactive;
 
 export function PersonalThemesProvider({ children, Modal, Header }) {
@@ -57,9 +57,18 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
     setPersonalTheme(null);
     endPreview();
   };
+  const setAppearance = useCallback(appearance => {
+    if (!committed.current || !['system', 'light', 'dark'].includes(appearance)) return;
+    if (committed.current.appearance === appearance) return;
+    // Brightness is independent of the palette and all its saved Fine-tune choices.
+    const next = normalizePersonalTheme({ ...committed.current, appearance });
+    savePersonalThemePreference(next);
+    committed.current = next;
+    setPersonalTheme(next);
+  }, []);
   const dismiss = () => { endPreview(); setSurface(null); };
   return <ThemeContext.Provider value={{ personalTheme,
-    renderedPersonalTheme: previewTheme || personalTheme, openThemes, clearTheme }}>
+    renderedPersonalTheme: previewTheme || personalTheme, openThemes, clearTheme, setAppearance }}>
     {children}
     {surface && createPortal(<Modal key={surface.id} close={dismiss} onCloseStart={endPreview}
       backgroundRef={background} returnFocusRef={focus} lockDocument={!background.current?.matches('.modal-layer')}>

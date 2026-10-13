@@ -20,6 +20,9 @@
 .profile-screen.profile-management-screen > .logout-button { margin-top: 28px; min-height: 44px; }
 .profile-manage .list-row > span:first-child { min-width: 0; }
 .profile-manage .list-row small { line-height: 1.45; }
+.profile-manage .list-row { border-color: var(--rook-border); }
+.profile-manage .list-row:last-child { border-bottom: 0; }
+.profile-program-entry > .rook-navigation-chevron { color: var(--rook-secondary); }
 .profile-screen :is(.profile-program-entry,.profile-management-back):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; }
 .profile-screen .profile-troubleshooting { margin-top: 24px; }
 .profile-screen .storage-local-copy-warning,

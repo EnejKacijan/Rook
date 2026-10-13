@@ -1,0 +1,56 @@
+/* Scoped to Different equipment: native radio sources and checkbox values. */
+.adjust-gym-picker .adjust-equipment-mode,
+.adjust-today-equipment-list .adjust-equipment-item {
+  position: relative;
+  width: 100%; min-height: 58px;
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  margin: 0; padding: 11px 2px;
+  border: 0; border-bottom: 1px solid var(--rook-border);
+  background: transparent; color: var(--rook-text); text-align: left; cursor: pointer;
+  -webkit-tap-highlight-color: transparent; -webkit-user-select: none; user-select: none;
+}
+.adjust-gym-picker .adjust-custom-equipment { margin-top: 8px; }
+.adjust-equipment-mode > input,
+.adjust-equipment-item > input {
+  position: absolute; inset: 0; width: 100%; height: 100%; margin: 0;
+  opacity: 0; cursor: inherit;
+}
+/* The global dark disabled-field rule restores opacity. These native inputs
+   retain accessibility/label activation while the adjacent indicator owns paint. */
+:root[data-appearance] .adjust-today-sheet .adjust-equipment-item > input:disabled { opacity: 0; }
+.adjust-gym-picker .adjust-equipment-mode > span,
+.adjust-today-equipment-list .adjust-equipment-item > span {
+  min-width: 0; display: flex; flex-direction: column; gap: 4px; overflow-wrap: anywhere;
+}
+.adjust-equipment-mode strong { font-size: 16px; line-height: 1.35; }
+.adjust-equipment-mode small,
+.adjust-equipment-item small {
+  color: var(--rook-secondary); font-size: 11px; line-height: 1.4; overflow-wrap: anywhere;
+}
+.adjust-gym-picker .adjust-equipment-mode > i,
+.adjust-today-equipment-list .adjust-equipment-item > i {
+  width: 24px; height: 24px; flex: 0 0 24px; display: grid; place-items: center;
+  border: 1px solid var(--rook-control-border, var(--rook-border-strong, var(--rook-secondary))); font-style: normal;
+}
+.adjust-gym-picker .adjust-equipment-mode > i { border-radius: 50%; }
+.adjust-gym-picker .adjust-equipment-mode.is-selected > i,
+.adjust-today-equipment-list .adjust-equipment-item.is-selected > i {
+  background: var(--rook-accent); border-color: var(--rook-accent); color: var(--rook-on-accent);
+}
+.adjust-equipment-mode.is-selected > i::after {
+  content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--rook-on-accent);
+}
+.adjust-today-sheet .adjust-today-equipment-list {
+  /* The Custom mode row owns the single boundary above this list. */
+  border-top: 0; margin-top: 0; padding-left: 10px;
+}
+.adjust-today-equipment-list .adjust-equipment-item > i { border-radius: 8px; }
+.adjust-today-equipment-list .adjust-equipment-item:last-child { border-bottom: 0; }
+.adjust-equipment-item.is-preset-included { cursor: default; }
+.adjust-equipment-mode:has(input:focus-visible),
+.adjust-equipment-item:has(input:focus-visible) { outline: 2px solid var(--rook-accent); outline-offset: 2px; border-radius: 6px; }
+.adjust-today-sheet .adjust-equipment-hint { margin: 8px 0 0; color: var(--rook-secondary); font-size: 12px; }
+.adjust-equipment-delta { margin: 16px 0 0; padding: 12px 0; border-block: 1px solid var(--rook-border); }
+.adjust-equipment-delta > div + div { margin-top: 10px; }
+.adjust-equipment-delta dt { font-size: 11px; color: var(--rook-secondary); }
+.adjust-equipment-delta dd { margin: 3px 0 0; font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }

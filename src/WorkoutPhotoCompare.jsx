@@ -3,6 +3,7 @@ import { getWorkoutPhoto } from './workoutPhotos.js';
 import { createObjectUrlLease, groupWorkoutPhotoTimeline } from './workoutPhotoTimeline.js';
 import { canComparePhotos, chronologicalPhotoPair, toggleComparePhoto } from './workoutPhotoCompare.js';
 import { PhotoComparisonViewer } from './PhotoComparisonViewer.jsx';
+import { WorkoutPhotoPager } from './WorkoutPhotoPager.jsx';
 import './workoutPhotoCompare.css';
 
 export function WorkoutPhotoCompare({ entries, availability, onAvailability, onBack, onClose, onDeletePhoto, onViewWorkout, busy, status, Header, Thumbnail, Viewer }) {
@@ -10,7 +11,6 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
   const [comparing, setComparing] = useState(false);
   const [images, setImages] = useState({});
   const [inspecting, setInspecting] = useState(null);
-  const [deleteError, setDeleteError] = useState('');
   const [refresh, setRefresh] = useState(0);
   const root = useRef(null);
   const photoTrigger = useRef(null);
@@ -67,7 +67,6 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
   };
   const loaded = id => setImages(value => ({ ...value, [id]: { ...value[id], ready: true } }));
   const failed = id => {setImages(value => ({ ...value, [id]: { unavailable: true } }));onAvailability(id,false);};
-  const inspected = pair.find(entry => entry.id === inspecting);
   return <main ref={root} className="screen detail-screen workout-photo-compare-screen">
     <Header title={title} onBack={onBack} onClose={onClose} closeLabel="Close photo comparison" />
     <p className="eyebrow">PRIVATE PHOTOS</p>
@@ -82,7 +81,8 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
       </div>
       <footer className="photo-compare-selection-footer"><p role="status">{selection.length} of 2 selected</p><button className="button primary" disabled={!ready} onClick={() => setComparing(true)}>COMPARE PHOTOS</button><button className="button quiet" onClick={onBack}>CANCEL</button></footer>
     </>}
-    {comparing && <PhotoComparisonViewer pair={pair} images={images} onLoad={loaded} onError={failed} onChooseAnother={chooseAnother} onBack={()=>setComparing(false)} onClose={onClose} Header={Header} onInspect={(id,trigger)=>{photoTrigger.current=trigger;setDeleteError('');setInspecting(id);}} />}
-    {inspected && images[inspected.id]?.ready && <Viewer returnFocusRef={photoTrigger} photoUrl={images[inspected.id].url} workout={inspected.workout} busy={busy} error={deleteError} onClose={() => setInspecting(null)} onViewWorkout={() => onViewWorkout(inspected.workoutId)} onDelete={async () => { setDeleteError('');if (await onDeletePhoto(inspected)) setInspecting(null);else setDeleteError('Photo couldn’t be deleted. Try again.'); }} />}
+    {comparing && <PhotoComparisonViewer pair={pair} images={images} onLoad={loaded} onError={failed} onChooseAnother={chooseAnother} onBack={()=>setComparing(false)} onClose={onClose} Header={Header} onInspect={(id,trigger)=>{photoTrigger.current=trigger;setInspecting(id);}} />}
+    {inspecting && <WorkoutPhotoPager entries={entries} initialId={inspecting} Viewer={Viewer} returnFocusRef={photoTrigger}
+      busy={busy} onClose={() => setInspecting(null)} onViewWorkout={onViewWorkout} onDelete={onDeletePhoto}/>}
   </main>;
 }

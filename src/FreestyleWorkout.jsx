@@ -1,7 +1,7 @@
 import {NavigationChevron} from './NavigationChevron.jsx';
 import React, { useMemo, useState } from 'react';
 import { exerciseMeasure, displayWeight, isoDay } from './domain.js';
-import { startFreestyleWorkout, freestylePreviousSets, freestyleEffortLimit } from './freestyleWorkout.js';
+import { startFreestyleWorkout, freestylePreviousSets, freestyleEffortLimit, previousValuesSetEligible, previousWorkingSetValues } from './freestyleWorkout.js';
 import {PreviousValuesHelper} from './PreviousValuesHelper.jsx';
 import './freestyleWorkout.css';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
@@ -41,17 +41,19 @@ export function FreestyleActions({ setDetail, hideAdd = false }) {
 }
 export function FreestylePrevious({ state, exercise, update, setDetail, screenRef }) {
   const limit = useMemo(() => freestyleEffortLimit(state, exercise.exerciseId), [state.profile, exercise.exerciseId]);
-  const previous = useMemo(()=>freestylePreviousSets(state, exercise),[state.workouts,exercise.exerciseId,exercise.loggingMode]);
+  const previous = freestylePreviousSets(state, exercise);
   const index = exercise.sets.findIndex(s => !s.completed);
   const set = exercise.sets[index];
   const prior = previous[index];
-  const canCopy = prior && set && !set.setType && !set.segments?.length;
-  const label = s => `${s.weight != null ? `${displayWeight(s.weight, state.profile.units)} ${state.profile.units} × ` : ''}${s.sides ? `${s.sides.left?.reps} / ${s.sides.right?.reps} per side` : `${s.reps} ${exerciseMeasure(exercise) === 'seconds' ? 'sec' : 'reps'}`}`;
+  const values = previousWorkingSetValues(exercise,prior);
+  const canCopy = previousValuesSetEligible(set) && Object.keys(values).length > 0;
+  const label = s => [s.weight != null ? `${displayWeight(s.weight, state.profile.units)} ${state.profile.units}` : null,
+    s.sides ? `${s.sides.left?.reps ?? '—'} / ${s.sides.right?.reps ?? '—'} per side` : s.reps != null ? `${s.reps} ${exerciseMeasure(exercise) === 'seconds' ? 'sec' : 'reps'}` : null].filter(Boolean).join(' × ');
   return <div className="freestyle-previous">
     {limit != null && <p className="training-limit-note">Your training limit: keep at least {limit} RIR.</p>}
     <div className={canCopy ? 'freestyle-history-aid' : ''}>
     <button className="text-button" onClick={() => setDetail({ exercise })}>View exercise history</button>
-    {canCopy && <PreviousValuesHelper key={`${state.activeWorkout.id}:${exercise.id}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} label={label(prior)} screenRef={screenRef}/>}
+    {canCopy && <PreviousValuesHelper key={`${state.profile.id}:${state.activeWorkout.id}:${exercise.id}:${exercise.exerciseId}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} label={label(values)} screenRef={screenRef}/>}
     </div>
   </div>;
 }
