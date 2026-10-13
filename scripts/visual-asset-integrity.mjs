@@ -10,3 +10,11 @@ export function visualAssetMatches(bytes, record) {
   return visualAssetHash(bytes) === record.sha256 ||
     /\.svg$/i.test(record.path) && Boolean(record.canonicalSha256) && canonicalSvgHash(bytes) === record.canonicalSha256;
 }
+
+export function inlineVisualInventoryMatches(actual, expected) {
+  const key=asset=>`${asset.path}:${asset.codeSha256}`;
+  const expectedKeys=expected.map(key).sort();
+  const actualKeys=actual.map(asset=>expectedKeys.includes(key(asset))
+    ? key(asset) : `${asset.path}:${asset.lfCodeSha256}`).sort();
+  return JSON.stringify(actualKeys)===JSON.stringify(expectedKeys);
+}

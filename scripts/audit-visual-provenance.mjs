@@ -5,7 +5,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import ts from 'typescript';
 import {fileURLToPath} from 'node:url';
-import {visualAssetMatches} from './visual-asset-integrity.mjs';
+import {visualAssetMatches,inlineVisualInventoryMatches} from './visual-asset-integrity.mjs';
 
 const root = fileURLToPath(new URL('../', import.meta.url));
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -27,13 +27,16 @@ for(const file of walk('src').filter(file=>file.endsWith('.jsx')&&!file.includes
   const source=fs.readFileSync(path.join(root,file),'utf8');
   const ast=ts.createSourceFile(file,source,ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
   const visit=node=>{
-    if(ts.isJsxElement(node)&&node.openingElement.tagName.getText(ast)==='svg')inline.push({path:file,codeSha256:hash(source.slice(node.getStart(ast),node.end))});
-    if(ts.isJsxSelfClosingElement(node)&&node.tagName.getText(ast)==='svg')inline.push({path:file,codeSha256:hash(source.slice(node.getStart(ast),node.end))});
+    if((ts.isJsxElement(node)&&node.openingElement.tagName.getText(ast)==='svg') || (ts.isJsxSelfClosingElement(node)&&node.tagName.getText(ast)==='svg')) {
+      const code=source.slice(node.getStart(ast),node.end);
+      inline.push({path:file,codeSha256:hash(code),lfCodeSha256:hash(code.replace(/\r\n/g,'\n'))});
+    }
     ts.forEachChild(node,visit);
   };
   visit(ast);
 }
-const key=asset=>`${asset.path}:${asset.codeSha256}`;
-if(JSON.stringify(inline.map(key).sort())!==JSON.stringify(manifest.assets.filter(asset=>asset.codeSha256).map(key).sort()))throw new Error('Inline SVG inventory changed; review the renderer source.');
+// Git may translate JSX line endings on Windows. Retain the original evidence
+// digest and allow only exact content or CRLF-to-LF translation, never geometry edits.
+if(!inlineVisualInventoryMatches(inline,manifest.assets.filter(asset=>asset.codeSha256)))throw new Error('Inline SVG inventory changed; review the renderer source.');
 for(const [type,count] of Object.entries(manifest.counts))if(manifest.assets.filter(asset=>asset.provenanceType===type).length!==count)throw new Error(`Stale count: ${type}`);
 console.log(`Verified ${physicalFiles.length} visual files and ${inline.length} inline SVG renderer blocks (${manifest.assets.length} records). No visual content changed; SVG checkout line endings are allowed.`);
