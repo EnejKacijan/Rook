@@ -13,8 +13,22 @@ export function Snackbar({ message, onUndo, onDismiss, onPause, onResume, classN
   const suppressClick = useRef(false);
   const dismissing = useRef(false);
   const listeners = useRef(null);
-  const callbacks = useRef({ onDismiss, onResume });
-  callbacks.current = { onDismiss, onResume };
+  const pauseOwners = useRef(new Set());
+  const callbacks = useRef({ onDismiss, onPause, onResume });
+  callbacks.current = { onDismiss, onPause, onResume };
+
+  // Pointer tracking and keyboard focus may overlap. Capture the remaining
+  // lifetime once; neither owner may restart it while the other is still active.
+  const hold = useCallback(owner => {
+    if (pauseOwners.current.has(owner)) return;
+    const first = pauseOwners.current.size === 0;
+    pauseOwners.current.add(owner);
+    if (first) callbacks.current.onPause();
+  }, []);
+  const unhold = useCallback(owner => {
+    if (!pauseOwners.current.delete(owner)) return;
+    if (pauseOwners.current.size === 0 && !dismissing.current) callbacks.current.onResume();
+  }, []);
 
   const reset = useCallback((animate = true) => {
     const node = root.current;
@@ -37,9 +51,9 @@ export function Snackbar({ message, onUndo, onDismiss, onPause, onResume, classN
     gesture.current = null;
     release();
     reset();
-    callbacks.current.onResume();
+    unhold('pointer');
     setTimeout(() => { suppressClick.current = false; }, 0);
-  }, [release, reset]);
+  }, [release, reset, unhold]);
   const move = useCallback(event => {
     const active = gesture.current;
     if (!active || event.pointerId !== active.id) return;
@@ -63,13 +77,13 @@ export function Snackbar({ message, onUndo, onDismiss, onPause, onResume, classN
     if (!active || event.pointerId !== active.id) return;
     gesture.current = null;
     release();
-    if (!active.horizontal) { callbacks.current.onResume(); return; }
+    if (!active.horizontal) { unhold('pointer'); return; }
     const node = root.current;
     const elapsed = Math.max(1, event.timeStamp - active.at);
     const velocity = Math.abs(active.dx) / elapsed;
     const threshold = Math.min(112, Math.max(72, (node?.offsetWidth || 300) * .28));
     if (Math.abs(active.dx) < threshold && !(Math.abs(active.dx) >= 32 && velocity >= VELOCITY_PX_MS)) {
-      reset(); callbacks.current.onResume();
+      reset(); unhold('pointer');
       setTimeout(() => { suppressClick.current = false; }, 0);
       return;
     }
@@ -80,12 +94,12 @@ export function Snackbar({ message, onUndo, onDismiss, onPause, onResume, classN
     node.style.transform = `translate3d(${direction * (node.offsetWidth + 24)}px, 0, 0)`;
     node.style.opacity = '0';
     finishTimer.current = setTimeout(() => callbacks.current.onDismiss(), SETTLE_MS);
-  }, [release, reset]);
+  }, [release, reset, unhold]);
   const begin = event => {
     if (dismissing.current || gesture.current || !event.isPrimary) return;
     clearTimeout(finishTimer.current);
     gesture.current = { id: event.pointerId, x: event.clientX, y: event.clientY, at: event.timeStamp, dx: 0, horizontal: false };
-    onPause();
+    hold('pointer');
     window.addEventListener('pointermove', move, { passive: false });
     window.addEventListener('pointerup', end);
     window.addEventListener('pointercancel', cancel);
@@ -98,6 +112,8 @@ export function Snackbar({ message, onUndo, onDismiss, onPause, onResume, classN
   }, [cancel, release]);
   return <aside ref={root} className={`today-undo rook-snackbar${className ? ` ${className}` : ''}`}
     role="status" aria-live="polite" onPointerDown={begin}
+    onFocusCapture={() => hold('focus')}
+    onBlurCapture={event => { if (!event.currentTarget.contains(event.relatedTarget)) unhold('focus'); }}
     onClickCapture={event => { if (suppressClick.current) { suppressClick.current = false; event.preventDefault(); event.stopPropagation(); } }}>
     <span>{message}</span>
     {onUndo && <button type="button" onClick={onUndo}>Undo</button>}
