@@ -1,5 +1,5 @@
 import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, isoDay, uid, workoutSetSummary, previousExercise } from './domain.js';
-import {loggingModeOf,setTypeOf} from './advancedLogging.js';
+import {loggingModeOf,setTypeOf,unilateralSetReps} from './advancedLogging.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { availableCustomExerciseItems, customExerciseSnapshot } from './customExercises.js';
 import { effectiveGymContext } from './gymProfiles.js';
@@ -158,7 +158,12 @@ export function previousWorkingSetValues(exercise, prior) {
       if (typeof source.rir === 'number' && Number.isFinite(source.rir) && source.rir >= 0 && source.rir <= 5) copy.rir = source.rir;
       if (Object.keys(copy).some(key => key !== 'rir')) sides[side] = copy;
     }
-    if (Object.keys(sides).length) values.sides = sides;
+    if (Object.keys(sides).length) {
+      values.sides = sides;
+      // The representative count is derived from today's merged sides. A
+      // partial historical side cannot replace the untouched opposite side.
+      delete values.reps;
+    }
   }
   if (requirement === 'none' && (values.reps != null || values.sides)) values.weight = null;
   return values;
@@ -175,8 +180,14 @@ export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
   const next = structuredClone(state);
   const target = next.activeWorkout.exercises.find(e => e.id === exerciseId).sets.find(s => s.id === setId);
   Object.assign(target, { ...values, rir: null, touched: true });
-  if (values.sides) target.sides = Object.fromEntries(['left','right'].map(side =>
-    [side, { ...set.sides?.[side], ...values.sides[side] }]));
+  if (values.sides) {
+    target.sides = Object.fromEntries(['left','right'].map(side =>
+      [side, { ...set.sides?.[side], ...values.sides[side] }]));
+    target.reps = unilateralSetReps(target);
+    for (const [side, fields] of Object.entries(values.sides))
+      if (Object.hasOwn(fields, 'reps'))
+        target.sideRepsEntryMode = { ...target.sideRepsEntryMode, [side]: 'manual' };
+  }
   if (Object.hasOwn(values, 'weight')) {
     Object.assign(target, {weightEntryMode:'manual', weightProvenance:'history'});
     delete target.weightSourceSetId;

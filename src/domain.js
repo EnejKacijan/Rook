@@ -2691,10 +2691,15 @@ export function firstScheduledDate(program, fromDate = new Date()) {
   }
   return null;
 }
+function validRotationStartDate(program) {
+  const value = String(program?.rotationStartDate || "");
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    isoDay(new Date(`${value}T12:00:00`)) === value ? value : null;
+}
 function rotatingWorkoutForDate(program, scheduledDate) {
-  const startDate = String(program?.rotationStartDate || "");
+  const startDate = validRotationStartDate(program);
   const targetDate = isoDay(scheduledDate);
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate) || targetDate < startDate)
+  if (!startDate || targetDate < startDate)
     return null;
   const sequence = [...(program?.days || [])].sort(
     (a, b) => WEEKDAYS.indexOf(a.weekday) - WEEKDAYS.indexOf(b.weekday),
@@ -2717,10 +2722,14 @@ export function currentWeekSchedule(state, date = new Date()) {
 export function baseWeekSchedule(state, date = new Date()) {
   if (!state?.program) return [];
   const key = weekKey(date);
+  const rotationStart = validRotationStartDate(state.program);
   const overrides = state.weekScheduleOverrides?.[key] || {};
   return state.program.days
     .map((slot) => {
       const originalDate = isoDay(weekDate(slot.weekday, date));
+      // An explicit accepted sequence starts at its first available slot.
+      // Legacy weekday fallback must not recreate occurrences before it.
+      if (rotationStart && originalDate < rotationStart) return null;
       const sourceWorkout =
         rotatingWorkoutForDate(state.program, originalDate) || slot;
       const scheduledDate = overrides[sourceWorkout.id] || originalDate;
@@ -7199,7 +7208,7 @@ export function validateProgram(program, profile = null, options = {}) {
   if (trainingSafety && !trainingSafetyBlocks(trainingSafety.status))
     for (const day of program.days || [])
       for (const exercise of day.exercises || []) {
-        const item = exerciseCatalog[exercise.exerciseId];
+        const item = exerciseCatalog[exercise.exerciseId] || exercise.importedExercise;
         if (item && !exerciseAllowedByTrainingSafety(item, trainingSafety))
           errors.push(`${item.name} conflicts with the current training restrictions.`);
         const minimumRir =
@@ -8628,7 +8637,7 @@ export function startWorkout(state, template) {
     );
   }
   const prohibited = (template.exercises || []).find((exercise) => {
-    const item = exerciseCatalog[exercise.exerciseId];
+    const item = exerciseCatalog[exercise.exerciseId] || exercise.importedExercise;
     return item && !exerciseAllowedByTrainingSafety(item, trainingSafety);
   });
   if (prohibited)
@@ -8686,8 +8695,12 @@ export function startWorkout(state, template) {
         !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
         ? base.nextBlockStartingLoad.weight : null;
       const previous = previousExercise(state.workouts, base.exerciseId);
+      const compatiblePrevious = previous &&
+        loggingModeOf(previous) === loggingModeOf(base) &&
+        exerciseMeasure(previous) === exerciseMeasure(base) &&
+        exerciseLoadRequirement(previous) === loadRequirement ? previous : null;
       const completedPreviousSets =
-        previous?.sets.filter((set) => set.completed) || [];
+        compatiblePrevious?.sets.filter((set) => set.completed) || [];
       return {
         ...definition,
         templatePrescription:reusableExerciseDefinition(base,{prescribed:true}),
@@ -8761,10 +8774,14 @@ export function restartActiveWorkout(state, restartedAt = Date.now()) {
 }
 
 export function completedWorkoutCanResume(state, workoutId) {
-  if (state?.activeWorkout || !workoutId) return false;
+  if (state?.activeWorkout || state?.activeOptionalSession ||
+      isRepeatAdjustment(state?.todayAdaptation) || combinedAdjustment(state) || !workoutId) return false;
   const workout = (state.workouts || []).find((item) => item.id === workoutId);
   if (
     !workout ||
+    // The photo blob belongs to this completed ID in a separate store. Resume
+    // must not remove its owner and attach it to a newly completed session.
+    workout.photoId ||
     !Array.isArray(workout.exercises) ||
     workoutSetSummary(workout).completed !== 0
   )

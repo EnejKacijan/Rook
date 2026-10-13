@@ -1,5 +1,5 @@
 import {copyFreestylePrevious,previousWorkingSetValues} from './freestyleWorkout.js';
-import {loggingModeOf} from './advancedLogging.js';
+import {loggingModeOf,unilateralSetReps} from './advancedLogging.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const locate=(state,record)=>{
@@ -22,6 +22,7 @@ export function previousValuesMatch(set,prior,exercise) {
   if (exercise) {
     const values = previousWorkingSetValues(exercise,prior);
     return Boolean(set && Object.keys(values).length && (set.rir??null)===null &&
+      (!values.sides || (set.reps??null)===unilateralSetReps(set)) &&
       Object.entries(values).every(([key,value])=>key==='sides'
         ? Object.entries(value).every(([side,fields])=>Object.entries(fields).every(([field,number])=>(set.sides?.[side]?.[field]??null)===number))
         : (set[key]??null)===value));

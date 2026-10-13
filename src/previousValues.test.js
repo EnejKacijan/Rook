@@ -3,6 +3,7 @@ import {createReturningUserFixture} from './demoFixture.js';
 import {startFreestyleWorkout,addFreestyleExercise,copyFreestylePrevious,freestylePreviousSets} from './freestyleWorkout.js';
 import {preparePreviousValues,canUndoPreviousValues,undoPreviousValues,previousValuesMatch} from './previousValues.js';
 import {previousWorkingSetValues} from './freestyleWorkout.js';
+import {effectiveSetReps,carryPerSideSet} from './advancedLogging.js';
 
 function fixture(id='hack-squat'){
  let state=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),id);
@@ -96,4 +97,32 @@ it('a partially completed side cannot be overwritten and no historical IDs/times
 it('unconfirmed imported load is not reused but supported reps can still be used',()=>{
  const s=fixture(),e=s.activeWorkout.exercises[0],prior=s.workouts[0].exercises[0].sets[0];prior.importSetType='normal';prior.rawImport={version:2,loadKind:'unknown'};
  expect(previousWorkingSetValues(e,prior)).toEqual({reps:7});expect(target(preparePreviousValues(s,identity(s)).state).weight).toBe(55);
+});
+it.each([null,10])('partial historical sides keep the opposite current side and derive representative reps (old representative %s)',representative=>{
+ const state=fixture('one-arm-dumbbell-row'),exercise=state.activeWorkout.exercises[0],prior=state.workouts[0].exercises[0];
+ exercise.loggingMode=prior.loggingMode='per_side';Object.assign(target(state),{reps:9,sides:{left:{reps:4},right:{reps:6}}});
+ Object.assign(prior.sets[0],{reps:representative,sides:{left:{reps:10},right:{reps:null}}});
+ const before=structuredClone(state),id=identity(state),result=preparePreviousValues(state,id),copied=target(result.state);
+ expect(copied.sides).toEqual({left:{reps:10},right:{reps:6}});expect(copied.reps).toBe(6);
+ expect(copied.reps).toBe(effectiveSetReps(exercise,copied));expect(copied.completed).toBe(false);
+ expect(previousValuesMatch(copied,prior.sets[0],exercise)).toBe(true);expect(preparePreviousValues(result.state,id)).toEqual({state:result.state,record:null});
+ expect(result.state.workouts).toEqual(before.workouts);expect(result.state.activeWorkout.exercises[0].sets[1]).toEqual(before.activeWorkout.exercises[0].sets[1]);
+ expect(undoPreviousValues(result.state,result.record)).toEqual(before);
+});
+it('partial-side reuse keeps absent opposite-side values honest and clears an obsolete representative count',()=>{
+ const state=fixture('one-arm-dumbbell-row'),exercise=state.activeWorkout.exercises[0],prior=state.workouts[0].exercises[0];exercise.loggingMode=prior.loggingMode='per_side';
+ Object.assign(target(state),{reps:9,sides:{left:{reps:4},right:{reps:null}}});Object.assign(prior.sets[0],{reps:10,sides:{left:{reps:10},right:{reps:null}}});
+ const result=preparePreviousValues(state,identity(state));expect(target(result.state).reps).toBeNull();expect(target(result.state).sides.right.reps).toBeNull();
+ expect(previousValuesMatch(target(result.state),prior.sets[0],exercise)).toBe(true);expect(undoPreviousValues(result.state,result.record)).toEqual(state);
+});
+it('explicitly reused side reps survive later carry suggestions while opposite-side intent and Undo remain exact',()=>{
+ const state=fixture('one-arm-dumbbell-row'),exercise=state.activeWorkout.exercises[0],prior=state.workouts[0].exercises[0];exercise.loggingMode=prior.loggingMode='per_side';
+ exercise.sets[0]={...exercise.sets[0],completed:true,reps:6,sides:{left:{reps:8},right:{reps:6}}};
+ exercise.sets[1]={...exercise.sets[1],reps:5,sides:{left:{reps:5},right:{reps:7}},sideRepsEntryMode:{left:'auto',right:'manual'}};
+ prior.sets=[prior.sets[0],{weight:30,reps:10,completed:true,sides:{left:{reps:10},right:{reps:null}}}];
+ const before=structuredClone(state),id={...identity(state),setId:exercise.sets[1].id,ordinal:1},result=preparePreviousValues(state,id);
+ const next=result.state.activeWorkout.exercises[0],set=next.sets[1];
+ expect(set.sideRepsEntryMode).toEqual({left:'manual',right:'manual'});expect(set.sides).toEqual({left:{reps:10},right:{reps:7}});
+ expect(undoPreviousValues(result.state,result.record)).toEqual(before);
+ carryPerSideSet(next,0);expect(set.sides).toEqual({left:{reps:10},right:{reps:7}});expect(set.reps).toBe(7);
 });
