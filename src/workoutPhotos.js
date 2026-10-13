@@ -72,6 +72,8 @@ function openPhotoDatabase() {
     return Promise.reject(new Error("Photo storage is unavailable on this device."));
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let failed = false;
+    const rejectOpen = error => { failed = true; reject(error); };
     request.onupgradeneeded = () => {
       const database = request.result;
       const store = database.objectStoreNames.contains(PHOTO_STORE)
@@ -86,9 +88,14 @@ function openPhotoDatabase() {
       if (!database.objectStoreNames.contains(RESTORE_SNAPSHOT_STORE))
         database.createObjectStore(RESTORE_SNAPSHOT_STORE, { keyPath: "id" });
     };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("Photo storage could not be opened."));
-    request.onblocked = () => reject(new Error("Photo storage is busy. Close other ROOK tabs and try again."));
+    request.onsuccess = () => {
+      // A blocked open can later succeed after another tab releases its DB.
+      // Its promise already failed, so no store-operation owner can close it.
+      if (failed) { request.result.close(); return; }
+      resolve(request.result);
+    };
+    request.onerror = () => rejectOpen(request.error || new Error("Photo storage could not be opened."));
+    request.onblocked = () => rejectOpen(new Error("Photo storage is busy. Close other ROOK tabs and try again."));
   });
 }
 

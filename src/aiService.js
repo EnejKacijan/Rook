@@ -77,6 +77,9 @@ async function request(
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const abortFromCaller = () => controller.abort();
   signal?.addEventListener("abort", abortFromCaller, { once: true });
+  // A caller can cancel while its preflight/status check is awaiting. Adding
+  // a listener after that event does not replay it; inherit its current state.
+  if (signal?.aborted) controller.abort();
   try {
     // Auth restoration/token refresh may outlive fetch's signal. Bound that
     // wait as well, and never issue a late request after the deadline.
@@ -84,8 +87,12 @@ async function request(
       const aborted = () => reject(new DOMException('Aborted', 'AbortError'));
       if (controller.signal.aborted) return aborted();
       controller.signal.addEventListener('abort', aborted, { once: true });
-      Promise.resolve().then(aiAuthorizationHeaders).then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', aborted));
+      Promise.resolve().then(() => {
+        if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+        return aiAuthorizationHeaders();
+      }).then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', aborted));
     });
+    if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
     const response = await fetch("/api/ai", {
       method: "POST",
       headers: { "content-type": "application/json", ...authorization },
@@ -118,31 +125,34 @@ export async function preparePhysiquePhoto(file) {
   let image;
   let objectUrl;
   try {
-    if (typeof createImageBitmap === "function")
-      image = await createImageBitmap(file);
-  } catch {
-    image = null;
+    try {
+      if (typeof createImageBitmap === "function")
+        image = await createImageBitmap(file);
+    } catch {
+      image = null;
+    }
+    if (!image) {
+      objectUrl = URL.createObjectURL(file);
+      image = await new Promise((resolve, reject) => {
+        const element = new Image();
+        element.onload = () => resolve(element);
+        element.onerror = () =>
+          reject(new Error("That image format could not be read."));
+        element.src = objectUrl;
+      });
+    }
+    const scale = Math.min(1, 1280 / Math.max(image.width, image.height));
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.max(1, Math.round(image.width * scale));
+    canvas.height = Math.max(1, Math.round(image.height * scale));
+    canvas
+      .getContext("2d", { alpha: false })
+      .drawImage(image, 0, 0, canvas.width, canvas.height);
+    return canvas.toDataURL("image/jpeg", 0.78);
+  } finally {
+    image?.close?.();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
   }
-  if (!image) {
-    objectUrl = URL.createObjectURL(file);
-    image = await new Promise((resolve, reject) => {
-      const element = new Image();
-      element.onload = () => resolve(element);
-      element.onerror = () =>
-        reject(new Error("That image format could not be read."));
-      element.src = objectUrl;
-    });
-  }
-  const scale = Math.min(1, 1280 / Math.max(image.width, image.height));
-  const canvas = document.createElement("canvas");
-  canvas.width = Math.max(1, Math.round(image.width * scale));
-  canvas.height = Math.max(1, Math.round(image.height * scale));
-  canvas
-    .getContext("2d", { alpha: false })
-    .drawImage(image, 0, 0, canvas.width, canvas.height);
-  image.close?.();
-  if (objectUrl) URL.revokeObjectURL(objectUrl);
-  return canvas.toDataURL("image/jpeg", 0.78);
 }
 
 function planGenerationKey(profile) {
