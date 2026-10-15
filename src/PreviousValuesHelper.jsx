@@ -36,10 +36,16 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,labe
     return()=>target?.removeEventListener('input',edited);
   },[set.id]);
   useEffect(()=>{
-    if(!record)return;
-    const timer=setTimeout(expire,5000);
-    return()=>clearTimeout(timer);
-  },[record]);
+    if(!record||!undoable)return;
+    const node=helper.current;
+    let timer=null,remaining=5000,startedAt;
+    const pause=()=>{if(timer!==null){clearTimeout(timer);timer=null;remaining=Math.max(0,remaining-(Date.now()-startedAt));}};
+    const resume=()=>{if(timer!==null)return;startedAt=Date.now();timer=setTimeout(()=>{timer=null;expire();},remaining);};
+    const blur=event=>{if(!node.contains(event.relatedTarget))resume();};
+    node.addEventListener('focusin',pause);node.addEventListener('focusout',blur);
+    if(!node.contains(node.ownerDocument.activeElement))resume();
+    return()=>{clearTimeout(timer);node.removeEventListener('focusin',pause);node.removeEventListener('focusout',blur);};
+  },[record,undoable]);
   useEffect(()=>{if(record&&undoAllowed.current&&!canUndoPreviousValues(state,record))expire();},[state,record]);
   useEffect(()=>()=>animations.current.forEach(a=>a.cancel()),[]);
   const acknowledge=operation=>{

@@ -47,3 +47,25 @@ case; all 31 backup tests then passed in the serial release configuration.
 Production build and staged diff checks passed; production dependency audit
 reported zero vulnerabilities. All 309 captured original-worktree file hashes
 and its HEAD stayed identical.
+
+## Final UX follow-up — 2026-10-15
+
+The current quality worktree is the release source. This follow-up includes the
+approved logger/history, photo pager, equipment, completion, Profile, appearance
+and schedule-recovery fixes recorded in the quality audit, plus the subsequent
+physical-review corrections. Profile has one Settings group with the same four
+destinations. Superset rest guidance respects the rest-timer preference. Closed
+past schedule changes remain inspectable without blocking the current week.
+
+The final rendered pass also reproduced previous-values Undo expiring while its
+button held keyboard focus. Its existing five-second window now pauses while
+focus remains in the confirmation/Undo control, then resumes with the remaining
+time when focus leaves. Editing or logging the target, changing the exercise or
+leaving the session still invalidates Undo through the existing domain guards.
+No workout values, history, progression or persistence rules were changed.
+
+The Profile browser-check contract follows the current Settings/Display routes.
+The release still contains no paywall, purchase adapter, subscription gate,
+trial configuration or simulated checkout. AI authentication, quotas, provider
+budget and Account Sync rollout/security controls remain unchanged. Browser
+checks use isolated synthetic data; physical iPhone verification is not claimed.

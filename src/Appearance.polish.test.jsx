@@ -94,6 +94,8 @@ it('retains saved colors and brightness on storage failure and allows retry',asy
 it('keeps all six palettes in the existing editor and leaves the legacy profile intact when preview is canceled',async()=>{
   const state=blankState();Object.assign(state.profile,{stylePreference:'premium',appearancePreference:'dark',themePreference:'premium'});
   const Modal=({children,close})=><div>{children(close)}</div>;await mount(state,{Modal});const before=structuredClone(current);
+  expect(host.querySelector('.appearance-palettes-group .eyebrow').textContent).toBe('PERSONAL THEMES');
+  expect(host.querySelector('.appearance-palettes-group strong').textContent).toBe('Choose a theme');
   await act(async()=>host.querySelector('.appearance-palettes-group button').click());
   const editor=document.querySelector('.pro-theme-studio');expect([...editor.querySelectorAll('.pro-theme-presets button')].map(button=>button.getAttribute('aria-label'))).toEqual(['ROOK Green','ROOK Gold','Ocean','Slate','Plum','Terracotta']);
   expect(editor.querySelector('.pro-theme-presets [aria-pressed="true"]').getAttribute('aria-label')).toBe('ROOK Gold');

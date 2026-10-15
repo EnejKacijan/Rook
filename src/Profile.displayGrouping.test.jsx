@@ -4,9 +4,9 @@ import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {BottomNav, Detail, ModalLayer, Profile, SheetHeader} from './App.jsx';
 import {PersonalThemesProvider} from './PersonalThemesContext.jsx';
 import {createReturningUserFixture} from './demoFixture.js';
-import {startWorkout} from './domain.js';
-import {PERSONAL_THEME_PREFERENCE, readPersonalThemePreference, savePersonalThemePreference} from './personalThemePreference.js';
-import {PAGE_ZOOM_PREFERENCE} from './standalonePageZoom.js';
+import {deserializeState, startWorkout, STORAGE_KEY} from './domain.js';
+import {useDurableAction} from './useDurableAction.js';
+import {readPersonalThemePreference, savePersonalThemePreference} from './personalThemePreference.js';
 import {useAnimationClock} from './testAnimationClock.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -26,25 +26,27 @@ beforeEach(() => {
   vi.spyOn(HTMLElement.prototype, 'getClientRects').mockReturnValue([{}]);
   Object.defineProperty(HTMLElement.prototype, 'scrollTo', {configurable: true, value: vi.fn(function(options) {this.scrollTop = options.top;})});
   Object.defineProperty(HTMLElement.prototype, 'scrollIntoView', {configurable: true, value: vi.fn()});
-  localStorage.removeItem(PERSONAL_THEME_PREFERENCE); localStorage.removeItem(PAGE_ZOOM_PREFERENCE);
+  localStorage.clear();
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(async () => {
   await act(async () => root.unmount()); await tick(32); host.remove();
-  localStorage.removeItem(PERSONAL_THEME_PREFERENCE); localStorage.removeItem(PAGE_ZOOM_PREFERENCE);
+  localStorage.clear();
   delete HTMLElement.prototype.scrollTo; delete HTMLElement.prototype.scrollIntoView;
   vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers();
 });
 
-async function mount(initial = createReturningUserFixture(0)) {
+async function mount(initial = createReturningUserFixture(0), {sync = {state: 'not-configured', category: 'rollout-off'}, persist = false} = {}) {
   function Harness() {
     const [state, setState] = useState(initial), [detail, setDetail] = useState(null), background = useRef(null);
     current = state;
-    const update = fn => setState(previous => {const next = fn(structuredClone(previous)); writes(next); return next;});
+    const durable = useDurableAction(state, fn => setState(previous => {const next = fn(previous); writes(next); return next;}));
+    const update = fn => persist ? durable.commit(previous => fn(structuredClone(previous)))
+      : setState(previous => {const next = fn(structuredClone(previous)); writes(next); return next;});
     const requestDetail = next => {details(next); setDetail(next);};
     return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><div className="app-shell">
       <div ref={background} className="app-content">
-        <Profile state={state} update={update} setDetail={requestDetail} setPage={navigate} accountSync={{state: 'not-configured', category: 'rollout-off'}}/>
+        <Profile state={state} update={update} setDetail={requestDetail} setPage={navigate} accountSync={sync}/>
         {!detail && <BottomNav page="profile" setPage={navigate}/>}
       </div>
       {detail && <ModalLayer backgroundRef={background} close={() => setDetail(null)}>
@@ -55,17 +57,87 @@ async function mount(initial = createReturningUserFixture(0)) {
   await act(async () => root.render(<Harness/>)); await tick();
 }
 
-it('groups the existing destinations as Training, Display and Data without duplicate appearance actions', async () => {
+it('consolidates four unchanged destinations under Settings while keeping contextual sections separate', async () => {
   await mount();
   const groups = [...host.querySelectorAll('.profile-manage')];
-  expect(groups.map(group => group.getAttribute('aria-label'))).toEqual(['Training', 'Display', 'Data']);
+  expect(groups.map(group => group.getAttribute('aria-label'))).toEqual(['Settings']);
+  expect(groups[0].querySelector('.eyebrow').textContent).toBe('SETTINGS');
+  expect(host.querySelector('.profile-program-entry .eyebrow').textContent).toBe('CURRENT TRAINING');
   expect(groups.map(group => [...group.querySelectorAll('[data-profile-area]')].map(button => button.dataset.profileArea)))
-    .toEqual([['training', 'preferences'], ['display'], ['data']]);
+    .toEqual([['training', 'preferences', 'display', 'data']]);
+  expect(groups[0].querySelectorAll('.rook-navigation-chevron')).toHaveLength(4);
   expect(groups[0].textContent).toContain('Workout preferences');
   expect(host.querySelectorAll('[data-profile-area="display"]')).toHaveLength(1);
   expect(host.querySelectorAll('.profile-current-program[data-profile-area="program"]')).toHaveLength(1);
   expect(host.querySelector('.account-sync-panel')).not.toBeNull();
+  expect(groups[0].querySelector('.account-sync-panel')).toBeNull();
   expect(writes).not.toHaveBeenCalled(); expect(details).not.toHaveBeenCalled();
+});
+
+it.each(['no-plan','freestyle','saved-first','imported','manual','generated'])('keeps the %s training summary and canonical row navigation', async kind => {
+  const state=createReturningUserFixture(0);
+  if(['no-plan','freestyle','saved-first'].includes(kind)) {
+    state.program=null;state.profile.preferredTrainingStyle=kind==='saved-first'?'own-workouts':'freestyle';
+  } else if(kind==='imported')state.program.source='imported';
+  else if(kind==='manual')state.program.source='manual';
+  const before=structuredClone(state);await mount(state);
+  expect([...host.querySelectorAll('.profile-manage [data-profile-area]')].map(button => button.dataset.profileArea))
+    .toEqual(['training', 'preferences', 'display', 'data']);
+  const program=host.querySelector('.profile-program-entry');
+  expect(program.querySelector('.eyebrow').textContent).toBe('CURRENT TRAINING');
+  expect(program.querySelector('p').textContent).toBeTruthy();
+  if(!state.program)expect(program.querySelector('h2').textContent).toBe('No fixed plan');
+  await open('program');expect(title()).toBe('Program');expect(current).toEqual(before);expect(writes).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['training', 'Training setup'], ['preferences', 'Workout preferences'],
+  ['display', 'Display'], ['data', 'Data & backup'],
+])('Settings row %s opens and returns through its existing destination without domain writes', async (area, heading) => {
+  await mount(); const before = structuredClone(current);
+  await open(area); expect(title()).toBe(heading);
+  await click(host.querySelector('[aria-label="Back to Profile"]'));
+  expect(host.querySelector('.profile-manage').getAttribute('aria-label')).toBe('Settings');
+  expect(host.querySelectorAll('.profile-manage [data-profile-area]')).toHaveLength(4);
+  expect(current).toEqual(before); expect(writes).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();
+});
+
+it.each([true, false].flatMap(complete => [
+  ['local', {state: 'offline', linked: false, canSecure: false}],
+  ['synced', {state: 'synced', linked: true, pendingCount: 0, email: 'long.training.profile.account@example.test', lastSuccessAt: '2026-10-14T10:00:00Z'}],
+  ['unavailable', {state: 'auth-unavailable', linked: false, canSecure: false}],
+  ['disabled', {state: 'not-configured', category: 'rollout-off'}],
+].map(([name, sync]) => [complete, name, sync])))('profile complete=%s, account=%s keeps optional content and Settings independent', async (complete, name, sync) => {
+  const initial = createReturningUserFixture(0); initial.profile.ageRange = complete ? '25–34' : '';
+  await mount(initial, {sync});
+  expect(host.querySelectorAll('.complete-profile')).toHaveLength(complete ? 0 : 1);
+  expect(host.querySelectorAll('.profile-manage')).toHaveLength(1);
+  expect(host.querySelector('.profile-manage').querySelectorAll('[data-profile-area]')).toHaveLength(4);
+  const account = host.querySelector('.account-sync-panel');
+  expect(account.textContent).toContain('ACCOUNT & SYNC');
+  if (name === 'synced') {
+    expect(account.textContent).toContain(sync.email); expect(account.textContent).toContain('Synced');
+    expect(account.textContent).toContain('Workout photos stay on this device; cloud sync does not include them.');
+  }
+  expect(current).toEqual(initial); expect(writes).not.toHaveBeenCalled();
+});
+
+it('a setting changed through the existing Display route survives back navigation and canonical storage reload', async () => {
+  const initial = deserializeState(JSON.stringify(createReturningUserFixture(0)), {strict: true}); initial.profile.showExerciseImages = true;
+  await mount(initial, {persist: true}); const before = structuredClone(current);
+  await open('display'); await click(row('Appearance'));
+  await click(host.querySelector('[role="switch"][aria-label="Exercise illustrations"]'));
+  await click(host.querySelector('[aria-label="Close Appearance"]'));
+  await click(host.querySelector('[aria-label="Back to Profile"]'));
+  expect(host.querySelector('[data-profile-area="display"] small').textContent).toContain('Illustrations off');
+  const restored = deserializeState(localStorage.getItem(STORAGE_KEY), {strict: true});
+  expect(restored.profile.showExerciseImages).toBe(false);
+  expect(restored.program).toEqual(before.program); expect(restored.workouts).toEqual(before.workouts);
+  await act(async () => root.unmount()); root = createRoot(host);
+  await mount(restored, {persist: true});
+  expect(host.querySelector('[data-profile-area="display"] small').textContent).toContain('Illustrations off');
+  await open('display'); await click(row('Appearance'));
+  expect(host.querySelector('[role="switch"][aria-label="Exercise illustrations"]').checked).toBe(false);
 });
 
 it('Workout preferences retains training and logging callbacks while Display owns visual/device controls', async () => {

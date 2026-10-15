@@ -113,7 +113,19 @@ it('raw edits expire Undo immediately even if the canonical value has not change
  mount();click(use());const old=button('Undo');type(input('weight'),'090');expect(button('Undo')).toBeUndefined();click(old);expect(set().weight).toBe(90);expect(host.textContent).toContain('Previous values applied');
 });
 it('expiry follows the existing five-second transient convention without replaying motion',()=>{
- mount();click(use());settle();const count=animations.length;act(()=>vi.advanceTimersByTime(5000));expect(button('Undo')).toBeUndefined();expect(host.textContent).toContain('Previous values applied');expect(animations).toHaveLength(count);
+ mount();click(use());settle();act(()=>button('View exercise history').focus());const count=animations.length;act(()=>vi.advanceTimersByTime(5000));expect(button('Undo')).toBeUndefined();expect(host.textContent).toContain('Previous values applied');expect(animations).toHaveLength(count);
+});
+it.each([false,true])('keeps a focused previous-values Undo available and restores only its operation (reduced motion=%s)',motion=>{
+ reduced=motion;mount();const before=structuredClone(current);click(use());settle();const undo=button('Undo');act(()=>undo.focus());
+ act(()=>vi.advanceTimersByTime(15000));expect(button('Undo')).toBe(undo);expect(document.activeElement).toBe(undo);
+ click(undo);expect(current).toEqual(before);expect(button('Undo')).toBeUndefined();
+});
+it('pauses the remaining Undo lifetime across internal focus moves and resumes only after leaving the helper',()=>{
+ mount();click(use());settle();act(()=>button('View exercise history').focus());act(()=>vi.advanceTimersByTime(2000));
+ const undo=button('Undo');act(()=>undo.focus());act(()=>vi.advanceTimersByTime(8000));
+ act(()=>host.querySelector('.freestyle-copy-applied').focus());act(()=>vi.advanceTimersByTime(8000));expect(button('Undo')).toBe(undo);
+ act(()=>button('View exercise history').focus());act(()=>vi.advanceTimersByTime(2999));expect(button('Undo')).toBe(undo);
+ act(()=>vi.advanceTimersByTime(1));expect(button('Undo')).toBeUndefined();expect(set().weight).toBe(90);
 });
 it('persistence failure leaves prior values/helper truthful; failed Undo keeps applied state and allows retry',()=>{
  mount();const before=structuredClone(current),save=vi.spyOn(domain,'saveState').mockReturnValue(false);click(use());expect(current).toEqual(before);expect(button('Undo')).toBeUndefined();expect(host.textContent).not.toContain('Previous values applied');expect(host.querySelector('.freestyle-copy-error').textContent).toContain('Could not save');expect(animations).toHaveLength(0);

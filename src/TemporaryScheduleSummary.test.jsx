@@ -46,7 +46,7 @@ it('reload-like initial hidden state renders no summary, and a changed revision 
 it('a hidden valid summary becoming unresolved reveals actionable copy with no Hide',()=>{
   render(hideTemporaryScheduleSummary(temporaryScheduleSummaryState()));
   change(s=>{const next=structuredClone(s);Object.values(next.flexibleWeek.sessions)[0].planFingerprint='stale';return next;});
-  expect(summary().textContent).toContain('SCHEDULE NEEDS ATTENTION');expect(summary().textContent).toContain('1 workout still needs a date');
+  expect(summary().textContent).toContain('SCHEDULE NEEDS ATTENTION');expect(summary().textContent).toContain('1 workout needs review');
   expect(summary().textContent).toContain('REVIEW SCHEDULE');expect(summary().querySelector('[aria-label="Hide temporary schedule summary"]')).toBeNull();
 });
 it('reduced motion hides immediately without animations',()=>{

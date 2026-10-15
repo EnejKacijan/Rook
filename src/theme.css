@@ -527,6 +527,8 @@
 /* Match the existing 12px control rhythm and 28px section rhythm. Appearance
    now uses the shared segmented primitive, not legacy .appearance-segmented. */
 .appearance-screen > section.appearance-theme-group { display: grid; gap: 12px; }
+:root .appearance-theme-group .rook-segmented-control .rook-segmented-indicator { border-color: var(--rook-accent); }
+:root .appearance-theme-group .rook-segmented-control > button:focus-visible { outline: 2px solid var(--rook-accent-text); outline-offset: -4px; }
 .appearance-screen > .appearance-theme-group > .appearance-theme-help { margin: 0 2px; }
 .appearance-screen > .appearance-theme-group + section.logging-group { padding-top: 28px; }
 .appearance-theme-group + .appearance-style-group,

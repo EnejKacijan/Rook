@@ -31,8 +31,10 @@ export function flexibleReviewFingerprint(state) {
   return JSON.stringify([flexiblePlanFingerprint(state), state.flexibleWeek, state.weekScheduleOverrides, state.workoutOccurrenceOverrides,
     state.activeWorkout, state.activeOptionalSession, state.workouts, state.todayAdaptation, state.program?.trainingBlock?.currentWeek]);
 }
-export function flexibleWeekConflict(state) {
-  return records(state).some(record => !['completed', 'active'].includes(flexibleSessionStatus(state, record)) && record.planFingerprint !== flexiblePlanFingerprint(state));
+export function flexibleWeekConflict(state, today = isoDay()) {
+  return records(state).some(record => !historicalTemporarySession(state, record, today) &&
+    !['completed', 'active', 'combined', 'reserved'].includes(flexibleSessionStatus(state, record, today)) &&
+    record.planFingerprint !== flexiblePlanFingerprint(state));
 }
 export function flexibleSessionStatus(state, item, today = isoDay()) {
   return flexibleSessionLifecycle(state,item,today).status;
@@ -79,16 +81,29 @@ function materialize(state, record) {
   return { ...record, logicalSessionId: record.id, moved: record.scheduledDate !== record.originalDate,
     workout: { ...prescribed, logicalSessionId: record.id, originalScheduledDate: record.originalDate, flexibleWeekMoved: record.scheduledDate !== record.originalDate } };
 }
-// Review the saved occurrence links, not the mere presence of flexibleWeek.
-// A stale link stays visible as unresolved instead of being presented as a
-// successful move to a destination where materialize() cannot show it.
-export function temporaryScheduleReview(state) {
+// Missed-workout recovery expires at the end of its destination week. Only
+// archive a move when BOTH endpoints belong to closed weeks: a carried-in
+// destination or still-active owner can affect the current schedule.
+function historicalTemporarySession(state, record, today, lifecycle = flexibleSessionLifecycle(state, record, today)) {
+  const start = weekKey(today);
+  return validDate(record.originalDate) && validDate(record.scheduledDate) &&
+    record.originalDate < start && record.scheduledDate < start &&
+    !['active', 'reserved'].includes(lifecycle.status) &&
+    state.activeOptionalSession?.date !== record.originalDate &&
+    state.activeOptionalSession?.date !== record.scheduledDate;
+}
+// Review saved links with the same closed-week boundary used by scheduling
+// permission. Historical changes remain inspectable facts, never a successful
+// restoration, a completed workout, or an actionable missing destination.
+export function temporaryScheduleReview(state, today = isoDay()) {
   const items = records(state).map(record => {
-    const lifecycle = flexibleSessionLifecycle(state, record);
-    const finished = ['active', 'completed', 'combined'].includes(lifecycle.status);
+    const lifecycle = flexibleSessionLifecycle(state, record, today);
+    const finished = ['active', 'completed', 'combined', 'reserved'].includes(lifecycle.status);
+    const historical = historicalTemporarySession(state, record, today, lifecycle);
     const destination = !record.skipped && materialize(state, record);
+    const stale = record.planFingerprint !== flexiblePlanFingerprint(state) || !record.skipped && !destination;
     let issue = null;
-    if (!finished && !record.skipped && !destination) {
+    if (!finished && !historical && !record.skipped && !destination) {
       issue = state.program?.days.some(day => day.id === record.workoutId)
         ? 'The plan changed. Choose how to restore this workout to the current schedule.'
         : 'The original workout is no longer in this plan. Clear its old temporary move.';
@@ -96,18 +111,19 @@ export function temporaryScheduleReview(state) {
     return {
       id: record.id, name: record.name || destination?.workout?.name || 'Workout',
       originalDate: record.originalDate, scheduledDate: record.scheduledDate,
-      skipped: Boolean(record.skipped), finished, issue,
+      skipped: Boolean(record.skipped), finished, issue, historical, stale, status: lifecycle.status,
     };
   }).sort((a,b) => a.originalDate.localeCompare(b.originalDate) || a.id.localeCompare(b.id));
-  const currentWeek=weekKey(isoDay());
-  const activeItems=items.filter(item=>(item.issue || item.skipped || item.originalDate!==item.scheduledDate) &&
+  const currentWeek=weekKey(today);
+  const activeItems=items.filter(item=>!item.historical && (item.issue || item.skipped || item.originalDate!==item.scheduledDate) &&
     (item.issue || !item.finished && (item.originalDate>=currentWeek || item.scheduledDate>=currentWeek)));
   const savedIds=new Set(activeItems.map(item=>item.id));
-  const unchanged=effectiveWeekSchedule(state,isoDay()).filter(item=>!savedIds.has(item.logicalSessionId))
+  const unchanged=effectiveWeekSchedule(state,today).filter(item=>!savedIds.has(item.logicalSessionId))
     .map(item=>({id:item.logicalSessionId,name:item.workout.name,originalDate:item.originalDate,
       scheduledDate:item.scheduledDate,skipped:false,finished:false,issue:null,unchanged:true}));
   return {
     items:activeItems,
+    historical:items.filter(item=>item.historical && (item.stale || item.skipped || item.originalDate!==item.scheduledDate)),
     resultingItems:[...activeItems,...unchanged].sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)||a.id.localeCompare(b.id)),
     unresolved: activeItems.filter(item => item.issue),
     moved: activeItems.filter(item => !item.issue && !item.skipped && item.originalDate !== item.scheduledDate),
@@ -195,7 +211,7 @@ function scheduleChangeError(state, mode, today) {
   if (state.todayAdaptation?.mode === 'repeat') return 'Finish or cancel the repeated workout before changing the schedule.';
   if (combinedAdjustment(state)) return 'Finish or cancel the combined workout before changing its source schedule.';
   if (!validDate(today) || !state.program) return 'No current plan is available.';
-  if (flexibleWeekConflict(state) && mode !== 'restore') return 'Your plan changed. Review and clear the old temporary schedule first.';
+  if (flexibleWeekConflict(state,today) && mode !== 'restore') return 'Your plan changed. Review and clear the old temporary schedule first.';
   return null;
 }
 function moveSourceError(state, item, today) {
@@ -231,7 +247,8 @@ export function hasMoveWorkoutDestination(state, sessionId, today = isoDay()) {
 // The Adjust week entry opens the existing mode surface. Offer it only when
 // that surface has an eligible operation or a saved change to inspect/resolve.
 export function hasTemporaryScheduleAction(state,today=isoDay()) {
-  if(temporaryScheduleReview(state).items.length || combinedAdjustment(state))return true;
+  const review=temporaryScheduleReview(state,today);
+  if(review.items.length || review.historical.length || combinedAdjustment(state))return true;
   if(proposeFlexibleWeek(state,{mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'},today).remainingSessions)return true;
   if(missedFlexibleSessions(state,today).some(item=>proposeFlexibleWeek(state,{mode:'skip',sessionId:item.logicalSessionId},today).status==='ready'))return true;
   return moveWorkoutCandidates(state,today).length>0;

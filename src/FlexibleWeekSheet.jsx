@@ -122,15 +122,19 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const candidates = useMemo(()=>['mode','pick'].includes(step) ? moveWorkoutCandidates(state,today) : [],[state,today,step]);
   const canMove = useMemo(()=>item && ['recovery','more'].includes(step) && hasMoveWorkoutDestination(state,sessionId,today),[state,item,sessionId,today,step]);
   const canTrainToday = useMemo(()=>item && canUseWorkoutToday(state,{sessionId},today),[state,item,sessionId,today]);
-  const existingReview = useMemo(()=>temporaryScheduleReview(state),[state,today]);
+  const existingReview = useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
   const eligibleMissed=useMemo(()=>missed.filter(item=>proposeFlexibleWeek(state,{mode:'skip',sessionId:item.logicalSessionId},today).status==='ready'),[state,today,missed]);
   const hasMissed = eligibleMissed.length > 0;
   const canAdjustWeek=useMemo(()=>Boolean(proposeFlexibleWeek(state,{mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'},today).remainingSessions),[state,today]);
   const remainingMoves=useMemo(()=>step==='available'&&!canAdjustWeek?moveWorkoutCandidates(state,today):[],[state,today,step,canAdjustWeek]);
   const restoreScope=useMemo(()=>temporaryScheduleRestoreScope(state,today),[state,today]);
+  const restorePreview=useMemo(()=>restoreScope.removable.length ? proposeFlexibleWeek(state,{mode:'restore'},today) : null,[state,today,restoreScope]);
+  const canRestore=restorePreview?.status==='ready';
+  const canEditSchedule=useMemo(()=>hasMissed||canAdjustWeek||moveWorkoutCandidates(state,today).length>0,[state,today,hasMissed,canAdjustWeek]);
   const rejoinDate=useMemo(()=>temporaryScheduleRejoinDate(state,today),[state,today]);
   const combinedSchedule=combinedAdjustment(state);
   const existingChangeCount=existingReview.items.length+(combinedSchedule?1:0);
+  const historicalChangeCount=existingReview.historical.length;
   const skippedLabel=date=>weekKey(date)===weekKey(today)?'Skipped this week':'Skipped this occurrence';
   const openRestore=()=>{const next=proposeFlexibleWeek(state,{mode:'restore'},today);if(next.status!=='ready'){setError(next.error);return;}setProposal(next);setError('');setStep('restore-confirm');};
   const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? sessions.filter(s=>proposeFlexibleWeek(state,{mode:'swap',sessionId,otherSessionId:s.logicalSessionId},today).status==='ready') : [],[state,today,item,step,sessions,sessionId]);
@@ -230,33 +234,43 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       <p>Make temporary changes. Keep your plan.</p>
       {flexibleWeekConflict(state) && <p role="status">Your plan changed. Clear the old temporary schedule before adjusting again. Completed and active workouts stay fixed.</p>}
       <div className="adjust-option-list">
-        {existingChangeCount>0 && <button className="choice-row" onClick={()=>setStep('existing')}><strong>{existingReview.unresolved.length ? 'Review temporary schedule' : 'View current schedule'}</strong><small>{existingReview.unresolved.length ? `${existingReview.unresolved.length} need attention` : `${existingChangeCount} ${existingChangeCount===1?'change':'changes'}`}</small></button>}
+        {(existingChangeCount>0||historicalChangeCount>0) && <button className="choice-row" onClick={()=>setStep('existing')}><strong>{existingReview.unresolved.length ? 'Review temporary schedule' : existingChangeCount ? 'View current schedule' : 'View past schedule changes'}</strong><small>{existingReview.unresolved.length ? `${existingReview.unresolved.length} need attention` : existingChangeCount ? `${existingChangeCount} ${existingChangeCount===1?'change':'changes'}` : `${historicalChangeCount} past ${historicalChangeCount===1?'change':'changes'}`}</small></button>}
         {hasMissed&&<button className="choice-row" onClick={() => { if(eligibleMissed.length===1)selectSession(eligibleMissed[0]);else setStep('missed'); }}><strong>I missed a workout</strong><small>Move or skip an unstarted session.</small></button>}
         {canAdjustWeek&&<button className="choice-row" onClick={() => setStep('available')}><strong>My available days changed</strong><small>Rearrange workouts through this Sunday.</small></button>}
         {candidates.length>0 && <button className="choice-row" onClick={() => setStep('pick')}><strong>Move a workout</strong><small>Choose one session and another date.</small></button>}
       </div>
-      {!hasMissed&&!canAdjustWeek&&!candidates.length&&!existingChangeCount&&<p role="status">Your schedule is already set. No unstarted workouts can be changed right now.</p>}
+      {!hasMissed&&!canAdjustWeek&&!candidates.length&&!existingChangeCount&&!historicalChangeCount&&<p role="status">Your schedule is already set. No unstarted workouts can be changed right now.</p>}
     </>}
     {step === 'existing' && <>
       <h1>Temporary schedule</h1>
-      <p>{existingChangeCount} {existingChangeCount===1?'change':'changes'}</p>
+      <p>{existingChangeCount ? `${existingChangeCount} ${existingChangeCount===1?'change':'changes'}` : historicalChangeCount ? `${historicalChangeCount} past ${historicalChangeCount===1?'change':'changes'}` : 'No temporary changes'}</p>
       {existingReview.unresolved.length>0&&<p role="status">{existingReview.unresolved.length} {existingReview.unresolved.length===1?'workout needs':'workouts need'} attention.</p>}
-      <div className="flexible-week-review flexible-schedule-changes">{existingReview.items.map(entry=><article key={entry.id} data-session-id={entry.id} tabIndex={-1}>
+      {existingChangeCount>0&&<div className="flexible-week-review flexible-schedule-changes">{existingReview.items.map(entry=><article key={entry.id} data-session-id={entry.id} tabIndex={-1}>
         <small className="eyebrow">{entry.issue?'NEEDS ATTENTION':entry.skipped?'SKIPPED':'MOVED'}</small>
         <strong>{entry.name}</strong>
         <span>{entry.skipped?dateLabel(entry.originalDate):<>{dateLabel(entry.originalDate)} <span aria-label="to">→</span> {dateLabel(entry.scheduledDate)}</>}</span>
         {entry.skipped&&entry.scheduledDate!==entry.originalDate&&<small>Last scheduled {dateLabel(entry.scheduledDate)}</small>}
         {entry.issue && <small>{entry.issue}</small>}
+        {entry.issue && !canRestore && <small>{entry.originalDate<today||entry.scheduledDate<today ? 'This move cannot be restored to a past date. Past dates and workout history stay protected.' : restorePreview?.error || 'No safe schedule change is available for this occurrence.'}</small>}
       </article>)}{combinedSchedule&&<article>
         <small className="eyebrow">COMBINED</small><strong>{combinedSchedule.workout.name}</strong>
         {combinedSchedule.sourceSessions.map(source=><span key={source.logicalSessionId}>{source.name} · {dateLabel(source.originalDate)} → {dateLabel(combinedSchedule.date)}</span>)}
         <small>Source workouts stay reserved until the combined workout ends or is canceled.</small>
-      </article>}</div>
-      <p className="sheet-footnote">All other workouts keep their dates.{rejoinDate&&` Normal schedule resumes ${dateLabel(rejoinDate)}.`}</p>
+      </article>}</div>}
+      {historicalChangeCount>0&&<section aria-label="Past schedule changes">
+        <p className="eyebrow">PREVIOUS WEEKS</p>
+        <div className="flexible-week-review flexible-schedule-changes flexible-schedule-history">{existingReview.historical.map(entry=><article key={entry.id} data-session-id={entry.id}>
+          <small className="eyebrow">PAST {entry.skipped?'SKIP':'MOVE'} · {entry.status==='completed'?'COMPLETED':entry.status==='combined'?'COMBINED':entry.skipped?'SKIPPED':entry.status==='optional'?'OPTIONAL':'MISSED'}</small>
+          <strong>{entry.name}</strong><span>{dateLabel(entry.originalDate)} <span aria-label="to">→</span> {dateLabel(entry.scheduledDate)}</span>
+          <small>This change belongs to a previous plan week.{entry.stale?' The plan changed afterward.':''} Past dates and workout history stay unchanged.</small>
+        </article>)}</div>
+      </section>}
+      <p className="sheet-footnote">{existingChangeCount ? <>All other workouts keep their dates.{rejoinDate&&` Normal schedule resumes ${dateLabel(rejoinDate)}.`}</> : historicalChangeCount ? 'Your current week follows the plan. These past changes do not need a new date.' : 'Your current schedule has no pending temporary changes.'}</p>
+      {existingReview.unresolved.length>0&&!canEditSchedule&&canRestore&&<p className="sheet-footnote">Restore the eligible temporary changes before editing the current schedule.</p>}
       <SheetActionFooter className="flexible-week-footer">
-        <button className="button secondary" disabled={!hasMissed&&!canAdjustWeek&&!moveWorkoutCandidates(state,today).length} onClick={()=>setSteps(['mode'])}>EDIT SCHEDULE</button>
-        <button className="text-button flexible-restore-action" disabled={!restoreScope.removable.length} onClick={openRestore}>Restore original schedule</button>
-        {!restoreScope.removable.length&&<p className="sheet-footnote">Past, completed and active changes stay unchanged.</p>}
+        {existingChangeCount>0||canEditSchedule ? <button className="button secondary" disabled={!canEditSchedule} onClick={()=>setSteps(['mode'])}>EDIT SCHEDULE</button> : <button className="button secondary" onClick={close}>DONE</button>}
+        {existingChangeCount>0&&<button className="text-button flexible-restore-action" disabled={!canRestore} onClick={openRestore}>Restore original schedule</button>}
+        {existingChangeCount>0&&!canRestore&&<p className="sheet-footnote">{restorePreview?.error || 'Past, completed and active changes stay unchanged.'}</p>}
       </SheetActionFooter>
     </>}
     {step==='restore-confirm'&&<>

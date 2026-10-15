@@ -5,7 +5,7 @@ import {createReturningUserFixture} from '../src/demoFixture.js';
 import {startWorkout} from '../src/domain.js';
 const out='artifacts/profile-hub';await mkdir(out,{recursive:true});
 const browser=await chromium.launch({channel: 'chrome',headless:true});
-const groups={program:[/Training block/,/Edit plan/,/Plan history/,/Export workout plan/,/Replace plan/],training:[/Personal details/,/Availability/,/Gym profiles/,/Training restrictions/,/Training priorities/,/Custom exercises/],preferences:[/Logging & increments/,/Appearance/],data:[/Import workout history/,/Export workout history/,/Back up ROOK/,/Restore backup/,/Delete local data/]};
+const groups={program:[/Training block/,/Edit plan/,/Plan history/,/Export workout plan/,/Replace plan/],training:[/Personal details/,/Availability/,/Gym profiles/,/Training restrictions/,/Training priorities/,/Custom exercises/],preferences:[/Logging & increments/],display:[/Appearance/],data:[/Import workout history/,/Export workout history/,/Back up ROOK/,/Restore backup/,/Delete local data/]};
 try{for(const [width,appearance,style,active,complete] of [[390,'light','standard',false,false],[320,'dark','standard',false,false],[390,'light','premium',false,true],[390,'dark','premium',false,true],[320,'dark','premium',false,true],[390,'light','standard',true,true]]){
  const state=createReturningUserFixture(2);state.activeWorkout=active?startWorkout(state,state.program.days[0]):null;state.profile.ageRange=complete?'25–34':null;
  if(complete)Object.assign(state.profile,{name:'Alex',ageRange:'18–29',sex:'Male'});
@@ -14,7 +14,8 @@ try{for(const [width,appearance,style,active,complete] of [[390,'light','standar
  const page=await context.newPage(),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));await page.goto(process.env.ROOK_QA_URL||'http://127.0.0.1:4175');await page.getByRole('button',{name:'PROFILE',exact:true}).click();
  const root=page.locator('.profile-screen');await root.waitFor();const prefix=`${out}/${width}-${style}-${appearance}${active?'-active':''}`;
  const saved=()=>page.evaluate(()=>{const s=JSON.parse(localStorage.getItem('lift-v2-state'));return {program:s.program,workouts:s.workouts,active:s.activeWorkout,profile:s.profile};});const before=await saved();
- assert.equal(await root.locator('[data-profile-area]').count(),4);assert.equal(await root.getByText('COMPLETE YOUR PROFILE',{exact:true}).count(),complete?0:1);assert.equal(await root.getByText('Ask Coach to adjust',{exact:true}).count(),0);
+ assert.equal(await root.locator('[data-profile-area]').count(),5);assert.equal(await root.getByText('COMPLETE YOUR PROFILE',{exact:true}).count(),complete?0:1);assert.equal(await root.getByText('Ask Coach to adjust',{exact:true}).count(),0);
+ assert.equal(await root.getByRole('region',{name:'Settings',exact:true}).locator('[data-profile-area]').count(),4);
  const shot=async name=>{await page.waitForTimeout(150);await page.screenshot({path:`${prefix}-${name}.png`});assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);};await shot('main');
  for(const [area,labels] of Object.entries(groups)){
   await root.locator(`[data-profile-area="${area}"]`).click();await root.locator('.profile-subpage-header').waitFor();assert.equal(await root.locator('h1').count(),0);assert.equal(await page.getByRole('button',{name:'PROFILE',exact:true}).getAttribute('aria-current'),'page');await shot(area);
@@ -39,7 +40,7 @@ try{for(const [width,appearance,style,active,complete] of [[390,'light','standar
  if(width===320){
   await page.setViewportSize({width,height:480});await page.evaluate(()=>window.scrollTo(0,document.documentElement.scrollHeight));await page.waitForTimeout(200);const position=await page.evaluate(()=>scrollY);
   await root.locator('[data-profile-area="data"]').click();await page.getByRole('button',{name:'Back to Profile',exact:true}).click();assert.equal(await page.evaluate(()=>scrollY),position,'hub scroll restored');
-  await root.locator('[data-profile-area="preferences"]').click();await page.keyboard.press('Escape');assert.equal(await root.locator('[data-profile-area]').count(),4);
+  await root.locator('[data-profile-area="preferences"]').click();await page.keyboard.press('Escape');assert.equal(await root.locator('[data-profile-area]').count(),5);
  }
  assert.deepEqual(await saved(),before,'navigation does not alter training or preferences');assert.deepEqual(errors,[]);console.log(`PASS ${prefix}: all destinations, back focus, conditional completion, active guard, no mutation`);await context.close();
 }}finally{await browser.close();}

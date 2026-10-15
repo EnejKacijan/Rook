@@ -6367,12 +6367,18 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         ),
       )
     : null;
+  const fixedSupersetRestSeconds = Number(state.profile.restTimerSeconds);
+  const supersetRestSeconds = fixedSupersetRestSeconds > 0
+    ? fixedSupersetRestSeconds
+    : superset?.restSeconds;
   const supersetNextLabel = superset
     ? superset.role === "A1" &&
       superset.partner.exercise.sets[supersetRoundIndex] &&
       !superset.partner.exercise.sets[supersetRoundIndex].completed
       ? `Next: ${exerciseName(superset.partner.exercise)}`
-      : `Rest after both · ${formatDuration(superset.restSeconds)}`
+      : state.profile.restTimerEnabled && supersetRestSeconds > 0
+        ? `Rest after both · ${formatDuration(supersetRestSeconds)}`
+        : null
     : null;
   const mutate = (fn) =>
     update((current) => {
@@ -7184,7 +7190,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 <span>Your note</span> · {exercisePersonalNote(exercise)}
               </small>
             )}
-            {superset && (
+            {supersetNextLabel && (
               <small className="superset-next-step">{supersetNextLabel}</small>
             )}
           </div>
@@ -11436,7 +11442,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <h1>Training profile</h1>
         </>}
         {!area ? <ExerciseNavigationButton data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`${state.program?'Current program':'Training setup'}: ${programTitle}, ${programSummary}`}>
-          <span><Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><NavigationChevron/>
+          <span><Eyebrow>CURRENT TRAINING</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><NavigationChevron/>
         </ExerciseNavigationButton> : area === 'program' &&
         <div className="profile-current-program">
           <Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow>
@@ -11467,13 +11473,14 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           </ExerciseNavigationButton>
         </section>
       )}
-      {!area && [
-        ['Training', [['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Workout preferences','Training style, logging and increments']]],
-        ['Display', [['display','Display',`${personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations ${p.showExerciseImages === false ? 'off' : 'on'}`]]],
-        ['Data', [['data','Data & backup','Import, export, backup, restore and local data']]],
-      ].map(([group,rows])=><section className="profile-manage" aria-label={group} key={group}><Eyebrow>{group.toUpperCase()}</Eyebrow>
-        {rows.map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
-      </section>)}
+      {!area && <section className="profile-manage" aria-label="Settings"><Eyebrow>SETTINGS</Eyebrow>
+        {[
+          ['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],
+          ['preferences','Workout preferences','Training style, logging and increments'],
+          ['display','Display',`${personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations ${p.showExerciseImages === false ? 'off' : 'on'}`],
+          ['data','Data & backup','Import, export, backup, restore and local data'],
+        ].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
+      </section>}
       {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
         <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><NavigationChevron/></ExerciseNavigationButton>
@@ -19169,7 +19176,7 @@ function Appearance({ state, update, close }) {
         </small>
         {appearanceError && <p role="alert">{appearanceError}</p>}
       </section>
-      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Personal themes</strong><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
+      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Choose a theme</strong><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>
         <SettingSwitch

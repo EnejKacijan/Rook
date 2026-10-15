@@ -2,12 +2,15 @@ import {useState} from 'react';
 import {Disclosure} from './Disclosure.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {hideTemporaryScheduleSummary,temporaryScheduleSummaryHidden} from './temporarySchedulePresentation.js';
+import {isoDay,weekKey} from './domain.js';
 
 export function TemporaryScheduleSummary({state,review,update,onView}) {
   const {commit}=useDurableAction(state,update);
   const [error,setError]=useState('');
   if(!review.items.length)return null;
   const unresolved=review.unresolved.length,skipped=review.items.filter(item=>item.skipped).length;
+  const selectedWeek=weekKey(state.selectedDate || isoDay());
+  const otherWeek=review.unresolved.some(item=>weekKey(item.originalDate)!==selectedWeek);
   const hide=()=>{
     setError('');
     try{commit(hideTemporaryScheduleSummary);}
@@ -17,7 +20,8 @@ export function TemporaryScheduleSummary({state,review,update,onView}) {
     <aside className={`flexible-week-missed temporary-schedule-summary${unresolved?' needs-attention':' is-informational'}`} aria-label={unresolved?'Schedule needs attention':'Temporary schedule summary'}>
       {unresolved ? <>
         <span className="eyebrow temporary-schedule-label">SCHEDULE NEEDS ATTENTION</span>
-        <strong>{unresolved} {unresolved===1?'workout still needs':'workouts still need'} a date</strong>
+        <strong>{unresolved} {unresolved===1?'workout needs':'workouts need'} review</strong>
+        {otherWeek&&<small>Includes a change from another plan week.</small>}
         <button type="button" className="text-button" onClick={onView}>REVIEW SCHEDULE</button>
       </> : <>
         <span className="eyebrow temporary-schedule-label">TEMPORARY SCHEDULE</span>
