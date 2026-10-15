@@ -69,3 +69,9 @@ The release still contains no paywall, purchase adapter, subscription gate,
 trial configuration or simulated checkout. AI authentication, quotas, provider
 budget and Account Sync rollout/security controls remain unchanged. Browser
 checks use isolated synthetic data; physical iPhone verification is not claimed.
+
+The Linux release check exposed four inline SVG evidence hashes captured with
+Windows newlines. Integrity matching now checks the exact LF and CRLF variants
+in both checkout directions and consumes one evidence record per renderer.
+Geometry, colors, other whitespace, paths and renderer counts remain strict.
+The original manifest, artwork and runtime SVG source are unchanged.

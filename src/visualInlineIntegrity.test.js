@@ -3,10 +3,16 @@ import {it,expect} from 'vitest';
 import {visualAssetHash,inlineVisualInventoryMatches} from '../scripts/visual-asset-integrity.mjs';
 const code='<svg>\n<path d="M0 0L10 10" stroke="currentColor" />\n</svg>';
 const record={path:'src/Icon.jsx',codeSha256:visualAssetHash(code)};
-const actual=source=>({path:record.path,codeSha256:visualAssetHash(source),lfCodeSha256:visualAssetHash(source.replaceAll('\r\n','\n'))});
-it('accepts only the exact inline evidence or Git CRLF checkout translation',()=>{
- expect(inlineVisualInventoryMatches([actual(code)],[record])).toBe(true);
- expect(inlineVisualInventoryMatches([actual(code.replaceAll('\n','\r\n'))],[record])).toBe(true);
+const actual=source=>({path:record.path,codeSha256:visualAssetHash(source),lfCodeSha256:visualAssetHash(source.replaceAll('\r\n','\n')),crlfCodeSha256:visualAssetHash(source.replaceAll('\r\n','\n').replaceAll('\n','\r\n'))});
+it.each([['LF','LF'],['LF','CRLF'],['CRLF','LF'],['CRLF','CRLF']])('accepts only newline translation from %s evidence to %s checkout', (evidence,checkout)=>{
+ const original=evidence==='LF'?code:code.replaceAll('\n','\r\n');
+ const checkedOut=checkout==='LF'?code:code.replaceAll('\n','\r\n');
+ expect(inlineVisualInventoryMatches([actual(checkedOut)],[{...record,codeSha256:visualAssetHash(original)}])).toBe(true);
+});
+it('matches a multiset of identical renderers with different evidenced newline forms without reusing one record',()=>{
+ const crlfRecord={...record,codeSha256:visualAssetHash(code.replaceAll('\n','\r\n'))};
+ expect(inlineVisualInventoryMatches([actual(code),actual(code)],[record,crlfRecord])).toBe(true);
+ expect(inlineVisualInventoryMatches([actual(code),actual(code)],[record,{...crlfRecord,path:'src/Other.jsx'}])).toBe(false);
 });
 it.each([code.replace('L10 10','L20 20'),code.replace('currentColor','red'),code.replace('<path','<path ')])('changed geometry/color/other whitespace still needs evidence review',changed=>{
  expect(inlineVisualInventoryMatches([actual(changed)],[record])).toBe(false);

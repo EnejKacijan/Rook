@@ -29,7 +29,8 @@ for(const file of walk('src').filter(file=>file.endsWith('.jsx')&&!file.includes
   const visit=node=>{
     if((ts.isJsxElement(node)&&node.openingElement.tagName.getText(ast)==='svg') || (ts.isJsxSelfClosingElement(node)&&node.tagName.getText(ast)==='svg')) {
       const code=source.slice(node.getStart(ast),node.end);
-      inline.push({path:file,codeSha256:hash(code),lfCodeSha256:hash(code.replace(/\r\n/g,'\n'))});
+      const lfCode=code.replace(/\r\n/g,'\n');
+      inline.push({path:file,codeSha256:hash(code),lfCodeSha256:hash(lfCode),crlfCodeSha256:hash(lfCode.replace(/\n/g,'\r\n'))});
     }
     ts.forEachChild(node,visit);
   };

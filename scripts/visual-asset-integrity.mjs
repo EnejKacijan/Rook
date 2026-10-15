@@ -12,9 +12,16 @@ export function visualAssetMatches(bytes, record) {
 }
 
 export function inlineVisualInventoryMatches(actual, expected) {
-  const key=asset=>`${asset.path}:${asset.codeSha256}`;
-  const expectedKeys=expected.map(key).sort();
-  const actualKeys=actual.map(asset=>expectedKeys.includes(key(asset))
-    ? key(asset) : `${asset.path}:${asset.lfCodeSha256}`).sort();
-  return JSON.stringify(actualKeys)===JSON.stringify(expectedKeys);
+  if(actual.length!==expected.length)return false;
+  // Evidence may have been captured on either platform. Match only exact
+  // newline variants, consuming one record per renderer to retain multiplicity.
+  const remaining=new Map();
+  for(const asset of expected){const key=`${asset.path}:${asset.codeSha256}`;remaining.set(key,(remaining.get(key)||0)+1);}
+  for(const asset of actual){
+    const key=[...new Set([asset.codeSha256,asset.lfCodeSha256,asset.crlfCodeSha256].filter(Boolean))]
+      .map(hash=>`${asset.path}:${hash}`).find(key=>remaining.get(key)>0);
+    if(!key)return false;
+    remaining.set(key,remaining.get(key)-1);
+  }
+  return true;
 }
