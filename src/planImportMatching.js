@@ -13,6 +13,15 @@ export function keepPlanImportOriginal(exercise){
     importedExercise:{id,name:source.name,source:'imported',pattern:null,muscles:null,equipment:null,measure:source.measure},
     measure:source.measure,loadRequirement:source.loadRequirement,importMappingDecision:'original'});
 }
+// Link identity only. This is not an exercise replacement: source targets,
+// loads, logging mode, set identities and history must remain untouched.
+export function applyPlanImportIdentityMatch(exercise,item,status='confirmed-match'){
+  if(exerciseMeasure(exercise)!==(item.measure||'reps'))throw Error('This match would change how the exercise is measured. Review it manually.');
+  capturePlanImportIdentity(exercise);
+  Object.assign(exercise,{exerciseId:item.id,exerciseSource:item.custom?'custom':'catalog',matchStatus:status,importedName:item.name,originalImportedName:item.name});
+  if(status==='confirmed-match')exercise.importMappingDecision='match';
+  if(item.custom)exercise.importedExercise=item;else delete exercise.importedExercise;
+}
 export function applySavedPlanImportMatch(exercise,state){
   capturePlanImportIdentity(exercise);
   if(exercise.hybridSource?.choice||exercise.hybridSource?.unresolved||exercise.matchStatus==='needs-name-review')return;
@@ -24,8 +33,7 @@ export function applySavedPlanImportMatch(exercise,state){
   if(!item)return;
   // A name mapping cannot reinterpret seconds as reps (or vice versa).
   if(exerciseMeasure(exercise)!==(item.measure||'reps'))return;
-  Object.assign(exercise,{exerciseId:item.id,exerciseSource:item.custom?'custom':'catalog',matchStatus:'remembered-alias',importedName:item.name,originalImportedName:item.name});
-  if(item.custom)exercise.importedExercise=item;else delete exercise.importedExercise;
+  applyPlanImportIdentityMatch(exercise,item,'remembered-alias');
 }
 export function persistPlanImportMatches(state,program,now=new Date().toISOString()){
   state.exerciseAliases ||= [];

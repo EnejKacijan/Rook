@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import './transientSnackbar.css';
 
 const DURATION_MS = 5000;
@@ -16,6 +16,30 @@ export function Snackbar({ message, onUndo, onDismiss, onPause, onResume, classN
   const pauseOwners = useRef(new Set());
   const callbacks = useRef({ onDismiss, onPause, onResume });
   callbacks.current = { onDismiss, onPause, onResume };
+
+  // A logger has no bottom navigation. Only lift Undo when an actual rest
+  // timer occupies the bottom edge; its measured bounds include the safe area.
+  useLayoutEffect(() => {
+    const node = root.current, screen = node.closest('.workout-screen');
+    if (!screen) return;
+    let timer;
+    const measure = () => {
+      const bounds = timer?.getBoundingClientRect();
+      const inset = bounds?.height > 0 ? Math.max(0, window.innerHeight - bounds.top) + 8 : 0;
+      node.style.setProperty('--snackbar-rest-inset', `${inset}px`);
+    };
+    const resize = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    const refresh = () => {
+      const next = screen.querySelector('.rest-timer');
+      if (next !== timer) { resize?.disconnect(); timer = next; if (timer) resize?.observe(timer); }
+      measure();
+    };
+    refresh();
+    const mutations = new MutationObserver(refresh);
+    mutations.observe(screen, { childList: true, subtree: true });
+    window.addEventListener('resize', measure);
+    return () => { mutations.disconnect(); resize?.disconnect(); window.removeEventListener('resize', measure); };
+  }, []);
 
   // Pointer tracking and keyboard focus may overlap. Capture the remaining
   // lifetime once; neither owner may restart it while the other is still active.
@@ -163,7 +187,7 @@ export function useTransientSnackbar({ className = '', beforeUndo, afterUndo } =
     if (active.undo() !== false) { clear(active.id); afterUndo?.(); }
   };
   return { show, clear, surface: notice && <Snackbar key={notice.id} message={notice.message}
-    className={className} onUndo={notice.undo ? undo : null}
+    className={[className, notice.className].filter(Boolean).join(' ')} onUndo={notice.undo ? undo : null}
     onPause={() => pause(notice.id)} onResume={() => resume(notice.id)}
     onDismiss={() => clear(notice.id)} /> };
 }

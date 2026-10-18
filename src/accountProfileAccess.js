@@ -4,6 +4,7 @@ import {readLocalSyncSnapshot,isLocalSyncSnapshotCurrent,withStorageTransaction}
 import {accountProfileSlot,accountSlotWithAuthNamespace,cloudAccountProfileSlot,newAccountProfileSlot,switchProfileSlot} from './accountProfileSlots.js';
 import {ACTIVE_PROFILE_SLOT_KEY,PROFILE_SWITCHING_KEY,PROFILE_SWITCH_JOURNAL_KEY,activeProfileSlot} from './profileSlotKeys.js';
 import {ACCOUNT_CLOUD_READ_TIMEOUT_MS} from './accountSyncTiming.js';
+import {createAccountProvider} from './accountProviders.js';
 
 const signedOutKey = 'rook-account-signed-out-v1';
 export function protectedProfileAccess(storage, profileId, isCurrent = () => true) {
@@ -22,16 +23,14 @@ export function protectedProfileAccess(storage, profileId, isCurrent = () => tru
 // The UI selects owner recovery or another-account intent. Neither route merges
 // training data; only the existing journaled namespace switch can change roots.
 export async function openProtectedAccount({storage,client,profileId,readCloud,allowAnother = false,
-  isCurrent = () => true,timeoutMs = ACCOUNT_CLOUD_READ_TIMEOUT_MS}) {
+  isCurrent = () => true,timeoutMs = ACCOUNT_CLOUD_READ_TIMEOUT_MS,providerId = 'google.com',authenticate}) {
   if (!client) throw new Error('Account sign-in is not available. Your saved profile remains protected.');
   const access = protectedProfileAccess(storage,profileId,isCurrent);
-  const provider = new client.authApi.GoogleAuthProvider();
-  provider.setCustomParameters?.({prompt:'select_account'});
   let selectedUid;
   const current = () => access.current() && client.auth.currentUser?.uid === selectedUid;
   const assertCurrent = () => { if (!current()) throw new Error('Account or profile changed during verification. Your saved data was not opened.'); };
   try {
-    const result = await client.authApi.signInWithPopup(client.auth,provider);
+    const result = await (authenticate?authenticate(client,access.current):client.authApi.signInWithPopup(client.auth,createAccountProvider(client.authApi,providerId)));
     selectedUid = result.user?.uid;
     if (!selectedUid || result.user.isAnonymous) throw new Error('Choose a supported account to continue.');
     assertCurrent();

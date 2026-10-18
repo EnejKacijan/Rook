@@ -31,24 +31,27 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
   padding-bottom: 12px;
 }
 .coach-transcript { display: flow-root; }
-/* A small layout-owned dock keeps the control above the actual composer and
-   outside message text, including while the keyboard/composer changes height. */
+/* A zero-height anchor follows the actual composer boundary without reserving
+   a row or changing transcript geometry when the latest control appears. */
 .coach-latest-dock {
-  flex: 0 0 auto;
+  position: relative;
+  z-index: 3;
+  flex: 0 0 0;
+  height: 0;
   width: 100%;
-  display: flex;
-  justify-content: flex-end;
-  padding: 0 0 8px;
+  padding: 0;
   background: transparent;
   border: 0;
   box-shadow: none;
   backdrop-filter: none;
   pointer-events: none;
 }
+.coach-latest-dock:has(+ .coach-input) { --coach-latest-gap: 8px; }
 .coach-latest-dock > .coach-latest { pointer-events: auto; }
-.coach-latest { width: 44px; height: 44px; padding: 0; border: 1px solid var(--rook-border); border-radius: 50%; display: grid; place-items: center; background: var(--rook-surface); color: var(--rook-accent-text); box-shadow: 0 2px 8px var(--rook-shadow, rgba(0,0,0,.08)); transform-origin: center; animation: coach-latest-enter 160ms ease-out backwards; }
+.coach-latest { position: absolute; inset-inline-start: calc(50% - 22px); bottom: var(--coach-latest-gap, 12px); width: 44px; height: 44px; padding: 0; border: 0; border-radius: 50%; display: grid; place-items: center; background: transparent; color: var(--rook-accent-text); box-shadow: none; transform-origin: center; animation: coach-latest-enter 160ms ease-out backwards; }
+.coach-latest::before { content: ""; position: absolute; inset: 4px; border: 1px solid var(--rook-border); border-radius: 50%; background: var(--rook-surface); box-shadow: 0 2px 8px var(--rook-shadow, rgba(0,0,0,.08)); pointer-events: none; }
 .coach-latest.is-exiting { pointer-events: none; animation: coach-latest-exit 150ms ease-in forwards; }
-.coach-latest svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.coach-latest svg { position: relative; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 /* Press opacity comes from the shared controller; keep the resting circle. */
 .coach-latest:focus-visible { outline: 2px solid var(--rook-accent-text); outline-offset: 2px; }
 @keyframes coach-latest-enter { from { opacity: 0; transform: translateY(4px) scale(.93); } to { opacity: 1; transform: translateY(0) scale(1); } }
@@ -167,7 +170,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-screen .today-update-copy > .action-undo { grid-column: 2; width: fit-content; min-height: 32px; margin: 3px 0 -5px auto; padding: 0; color: #6f6c68; font-size: 12px; text-align: right; }
 .coach-screen .action-card-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; padding: 0; border: 0; }
 .coach-screen .action-card-buttons .button { min-width: 0; margin: 0; padding-inline: 10px; font-size: 10px; }
-.coach-screen .action-card-reviewing .action-card-buttons { position: sticky; z-index: 2; bottom: 0; margin: 10px -18px -8px; padding: 10px 18px 8px; border-top: 1px solid rgba(27, 26, 25, .07); background: #fff; }
+.coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons { position: sticky; z-index: 2; bottom: 0; margin: 10px -18px -8px; padding: 10px 18px 8px; border-top: 1px solid rgba(27, 26, 25, .07); background: #fff; }
 .coach-screen .adapt-skip-summary { margin: 12px 0 0; color: #6f6c68; }
 .coach-screen .adapt-duration-contract { margin: -4px 0 14px; color: var(--rook-accent-text); font-size: 12px; font-weight: 700; }
 .coach-screen .adapt-suggestion-list { margin-top: 8px; border-top: 1px solid rgba(27, 26, 25, .07); }

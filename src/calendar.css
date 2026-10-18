@@ -136,14 +136,16 @@
   .rest-day-state > .today-missed-disclosure + .rest-up-next { transition: none; }
 }
 .today-missed-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-.today-missed-label { margin: 0; color: var(--rook-secondary); }
+.today-missed-label { margin: 0; }
+:root[data-appearance] .today-missed-row .eyebrow.today-missed-label { color: var(--rook-accent-text); }
+.today-missed-row > .today-missed-description { margin: 0; color: var(--rook-secondary); font-size: 12px; line-height: 1.45; }
 .today-missed-header > .missed-reminder-hide { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0; color: var(--rook-accent-text); font-size: 13px; }
 .today-missed-open { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--rook-text); text-align: left; }
 .today-missed-open > span:first-child { min-width: 0; }
 .today-missed-open strong { font-size: 13px; overflow-wrap: anywhere; }
 .today-missed-open time { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
 .today-missed-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 22px; }
-:root .missed-workout-feedback .today-undo { bottom: calc(var(--bottom-nav-total-height, 90px) + 12px); }
+:root .missed-workout-feedback .missed-feedback-error { bottom: calc(var(--bottom-nav-total-height, 90px) + 12px); }
 .missed-workout-feedback .today-undo > span { min-width: 0; overflow-wrap: anywhere; }
 .missed-workout-feedback .today-undo > button { flex-shrink: 0; min-height: 44px; }
 /* The shared snackbar stays dark in Light; its action needs inverse text. */
@@ -166,7 +168,10 @@
 /* All spacing belongs inside the measured Disclosure so Hide leaves no gap. */
 .temporary-schedule-summary .temporary-schedule-label { margin: 0; }
 .temporary-schedule-summary.is-informational { padding: 8px 0; }
-.temporary-schedule-summary.is-informational .temporary-schedule-label { color: var(--rook-secondary); }
+.temporary-schedule-summary.is-informational .temporary-schedule-label { color: var(--rook-secondary); display: inline-flex; align-items: center; gap: 8px; }
+.temporary-schedule-label svg { flex: 0 0 16px; width: 16px; height: 16px; }
+.temporary-schedule-summary.is-informational .temporary-schedule-count { color: var(--rook-text); font-size: 13px; font-weight: 600; }
+.temporary-schedule-summary.is-informational .temporary-schedule-explanation { font-size: 12px; line-height: 1.45; }
 .temporary-schedule-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 20px; }
 .temporary-schedule-actions .text-button { min-width: 44px; min-height: 44px; padding: 8px 0; font-size: 13px; }
 .temporary-schedule-actions .text-button:last-child { color: var(--rook-secondary); }

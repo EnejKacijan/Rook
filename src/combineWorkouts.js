@@ -1,4 +1,4 @@
-import {exerciseCatalog,exerciseName,isExerciseAllowed,isExerciseAutoGeneratable,isoDay,weekday,uid,validateProgram,priorityStimulusMusclesForProfile,makeProgramExercise,candidateScore} from './domain.js';
+import {exerciseCatalog,exerciseName,isExerciseAllowed,isExerciseAutoGeneratable,isoDay,weekday,uid,validateProgram,priorityStimulusMusclesForProfile,makeProgramExercise,candidateScore,estimateWorkoutMinutes} from './domain.js';
 import {flexibleSessions,flexibleWeekConflict,actionableMissedSession} from './flexibleWeek.js';
 import {effectiveGymContext} from './gymProfiles.js';
 import {generatedSessionTiming} from './durationPlanning.js';
@@ -6,6 +6,9 @@ import {compileProfileTrainingSafety,trainingSafetyBlocks} from './trainingSafet
 import {validateSupersetExercises} from './supersets.js';
 import {combinedAdjustment,combinedPlanIdentity,combinedStateToken,persistCombinedState} from './combinedWorkoutLifecycle.js';
 import {accumulateStimulus,stimulusProfileForItem} from './trainingVolume.js';
+import {combinedExerciseDefinition as definition,combinedExerciseIssues,suggestedCombinedExerciseMatch} from './combineExerciseReview.js';
+import {applyPlanImportIdentityMatch} from './planImportMatching.js';
+import {addPlanVersion} from './planHistory.js';
 
 const clone=value=>structuredClone(value);
 export const combineFingerprint=state=>combinedStateToken([state.program,state.profile,state.gymProfiles,state.defaultGymProfileId,
@@ -22,8 +25,8 @@ const purpose=item=>{
   if(['hinge','hip-extension','knee-flexion'].includes(p))return 'posterior';
   return p||null;
 };
-const keyFor=e=>purpose(exerciseCatalog[e.exerciseId])||`${exerciseCatalog[e.exerciseId]?.pattern}:${exerciseCatalog[e.exerciseId]?.muscles?.[0]}`;
-const primary=e=>e.requiredRole||e.programmingRole==='main'||exerciseCatalog[e.exerciseId]?.kind==='compound'||exerciseCatalog[e.exerciseId]?.kind==='power';
+const keyFor=e=>purpose(definition(e))||`${definition(e)?.pattern}:${definition(e)?.muscles?.[0]}`;
+const primary=e=>e.requiredRole||e.programmingRole==='main'||definition(e)?.kind==='compound'||definition(e)?.kind==='power';
 export function combinedMinutes(exercises,profile){return generatedSessionTiming(exercises,profile,exerciseCatalog).minutes;}
 function groups(exercises){
   const seen=new Set();return exercises.flatMap(e=>{
@@ -31,7 +34,7 @@ function groups(exercises){
     return [[e]];
   });
 }
-function coverage(exercises){return new Set(exercises.filter(primary).map(e=>purpose(exerciseCatalog[e.exerciseId])).filter(Boolean));}
+function coverage(exercises){return new Set(exercises.filter(primary).map(e=>purpose(definition(e))).filter(Boolean));}
 function useful(exercises,required,sources){
   const actual=coverage(exercises),origin=new Set(exercises.flatMap(e=>e.combinedSourceIds));
   return [...required].every(p=>actual.has(p))&&sources.every(id=>origin.has(id));
@@ -61,16 +64,24 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
   const excluded=new Set(edits.excludedExerciseIds),locked=new Set(Object.keys(edits.overrides));
   const all=sourceExercises.filter(e=>!excluded.has(e.exerciseId)).map(e=>clone(edits.overrides[e.id]||e));
   for(const e of Object.values(edits.overrides))if(!all.some(row=>row.id===e.id)&&!excluded.has(e.exerciseId))all.push(clone(e));
-  const blocked=all.filter(e=>!exerciseCatalog[e.exerciseId]||!isExerciseAllowed(exerciseCatalog[e.exerciseId],profile)||e.partialPrescription||
-    Number.isFinite(safety.constraints.minRirByExerciseId?.[e.exerciseId]) && (e.targetRir==null||e.targetRir<safety.constraints.minRirByExerciseId[e.exerciseId]));
-  if(blocked.length)return fail(`Review ${[...new Set(blocked.map(exerciseName))].join(', ')} against your current equipment, restrictions or unresolved prescription first. No workout was changed.`);
+  const blocked=combinedExerciseIssues(all,profile,safety);
+  if(blocked.length){
+    const issues=blocked.map(issue=>{
+      const source=sources.flatMap(s=>s.workout.exercises.map(e=>({workoutId:s.workoutId,exerciseEntryId:e.id,combinedId:`${s.logicalSessionId}:${e.id}`}))).find(e=>e.combinedId===issue.exerciseEntryId);
+      const exercise=all.find(e=>e.id===issue.exerciseEntryId);
+      const suggestedMatch=issue.reason==='definition'?suggestedCombinedExerciseMatch(exercise,profile,safety):null;
+      return {...issue,exerciseEntryId:source?.exerciseEntryId||null,workoutId:source?.workoutId||null,...(suggestedMatch?{suggestedMatch}:{})};
+    });
+    return {...fail(`I need a specific detail for ${[...new Set(issues.map(e=>e.name))].join(', ')} before combining. Open the exercise below; your workouts are unchanged.`),
+      combineReviewRequired:{profileId:state.profile.id,planId:state.program.id,sourceIds,minutes,fingerprint:combineFingerprint(state),issues}};
+  }
   if(sources.some(s=>s.workout.warmupPlan?.mode==='custom') || validateSupersetExercises(all).length)
     return fail('This source has a custom warm-up or unsupported group structure. Review it individually before combining; it will not be silently flattened.');
   const emphasis=new Set(priorityStimulusMusclesForProfile(profile));
   const score=e=> (primary(e)?100:0)+(e.programmingRole==='main'?30:0)+
-    (Object.keys(stimulusProfileForItem(exerciseCatalog[e.exerciseId])).some(m=>emphasis.has(m))?45:0)+
-    (profile.goal==='Get stronger'&&exerciseCatalog[e.exerciseId].equipment?.includes('barbell')?15:0)+
-    (profile.goal==='Athletic performance'&&exerciseCatalog[e.exerciseId].kind==='power'?20:0);
+    (Object.keys(stimulusProfileForItem(definition(e))).some(m=>emphasis.has(m))?45:0)+
+    (profile.goal==='Get stronger'&&definition(e).equipment?.includes('barbell')?15:0)+
+    (profile.goal==='Athletic performance'&&definition(e).kind==='power'?20:0);
   const ranked=groups(all).map((rows,index)=>({rows,index,value:Math.max(...rows.map(score))})).sort((a,b)=>b.value-a.value||a.index-b.index);
   const used=new Set(),buckets=new Set(),chosen=[];
   for(const group of ranked){
@@ -86,7 +97,7 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
   let exercises=chosen;
   // The same eight-stimulus-set session ceiling used by safe programme additions.
   const tooMuch=(rows=exercises)=>combinedMinutes(rows,profile)>target||rows.length>8||rows.reduce((n,e)=>n+e.sets.length,0)>24||
-    Object.values(accumulateStimulus(rows,id=>exerciseCatalog[id])).some(value=>value>8);
+    Object.values(accumulateStimulus(rows,id=>definition(rows.find(e=>e.exerciseId===id)))).some(value=>value>8);
   while(tooMuch()){
     const candidates=groups(exercises).sort((a,b)=>Math.max(...a.map(score))-Math.max(...b.map(score)));
     let changed=false;
@@ -105,9 +116,9 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
   // fatigue debt: at most one missing, explicitly prioritized accessory is added.
   // Its prescription comes from the same domain factory as normal Coach adds.
   if(base && (minutes===null||minutes>base.timeLimit||base.workout.exercises.some(e=>e.combinedOrigin==='coach-added'))) {
-    const sourceMuscles=new Set(Object.keys(accumulateStimulus(sourceExercises,id=>exerciseCatalog[id])));
-    const direct=new Set(exercises.filter(e=>exerciseCatalog[e.exerciseId]?.kind==='isolation').flatMap(e=>Object.keys(stimulusProfileForItem(exerciseCatalog[e.exerciseId]))));
-    const patterns=new Set(exercises.map(e=>exerciseCatalog[e.exerciseId]?.pattern));
+    const sourceMuscles=new Set(Object.keys(accumulateStimulus(sourceExercises,id=>definition(sourceExercises.find(e=>e.exerciseId===id)))));
+    const direct=new Set(exercises.filter(e=>definition(e)?.kind==='isolation').flatMap(e=>Object.keys(stimulusProfileForItem(definition(e)))));
+    const patterns=new Set(exercises.map(e=>definition(e)?.pattern));
     const pool=Object.values(exerciseCatalog).filter(item=>item.kind==='isolation'&&isExerciseAutoGeneratable(item,profile)&&
       !excluded.has(item.id)&&!exercises.some(e=>e.exerciseId===item.id)&&!patterns.has(item.pattern)&&
       Object.keys(stimulusProfileForItem(item)).some(m=>emphasis.has(m)&&sourceMuscles.has(m)&&!direct.has(m)))
@@ -135,6 +146,25 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
     timeLimit:target,estimatedMinutes,planIdentity:combinedPlanIdentity(state),fingerprint:combineFingerprint(state),
     requiredCoverage:[...required],originalSetCount:sourceExercises.reduce((n,e)=>n+e.sets.length,0),
     explanation:'Main movement coverage is retained. Overlapping exercises and lower-priority sets are reduced; missed volume is not added as a debt.'}};
+}
+export function prepareCombinedExerciseMatch(state,request,target){
+  if(state.profile.id!==request.profileId||state.program?.id!==request.planId)throw Error('The source plan changed. Review the current suggestion.');
+  if(state.activeWorkout||state.activeOptionalSession||state.todayAdaptation)throw Error('Finish or cancel the current workout or adjustment before linking a source exercise.');
+  const day=state.program.days.find(d=>d.id===target.workoutId),exercise=day?.exercises.find(e=>e.id===target.exerciseEntryId);
+  if(!exercise)throw Error('This source exercise no longer exists. Review the current suggestion.');
+  // A queued repeat click after successful confirmation is a no-op.
+  if(exercise.exerciseId===target.matchExerciseId&&exercise.matchStatus==='confirmed-match')return state;
+  if(target.fingerprint!==combineFingerprint(state))throw Error('The plan or training setup changed. Check the updated suggestion and confirm again.');
+  const result=buildCombinedProposal(state,{sourceIds:request.sourceIds,minutes:request.minutes});
+  const issue=result.combineReviewRequired?.issues.find(i=>i.workoutId===target.workoutId&&i.exerciseEntryId===target.exerciseEntryId&&i.exerciseId===target.exerciseId);
+  if(!issue?.suggestedMatch||issue.suggestedMatch.exerciseId!==target.matchExerciseId)throw Error('This match is no longer compatible. Review the exercise details.');
+  const next=clone(state),nextDay=next.program.days.find(d=>d.id===day.id),nextExercise=nextDay.exercises.find(e=>e.id===exercise.id);
+  applyPlanImportIdentityMatch(nextExercise,exerciseCatalog[target.matchExerciseId]);
+  nextDay.estimatedMinutes=estimateWorkoutMinutes(nextDay,effectiveGymContext(next,{}).profile,next.program);
+  next.program.version=Number(next.program.version||1)+1;
+  next.program.updatedAt=Date.now();next.program.userEdited=true;
+  addPlanVersion(next,{previousProgram:state.program,source:'Exercise match confirmed',summary:`Linked ${exerciseName(exercise)} to ${issue.suggestedMatch.name}`});
+  return next;
 }
 export function reviewCombinedSelection(proposal,ids,profile){
   const selected=new Set(ids),exercises=proposal.workout.exercises.filter(e=>selected.has(e.id));

@@ -21,11 +21,11 @@ it('has one dominant CTA after the hero, three secondary routes, and top Restore
   expect([...content.children].map(n=>n.className||n.tagName)).toEqual(['H1','P','entry-primary-action']);
   expect(content.children[1].textContent).toBe('Tell ROOK your goal, schedule and equipment. It builds the plan around them.');
   expect(host.querySelectorAll('.button.primary')).toHaveLength(1);
-  expect([...host.querySelectorAll('.entry-secondary-routes strong')].map(n=>n.textContent)).toEqual(['Bring my plan','Create a workout','Freestyle']);
+  expect([...host.querySelectorAll('.entry-secondary-routes strong')].map(n=>n.textContent)).toEqual(['Bring my plan','Create workout','Freestyle']);
   expect(button('Restore').parentElement.className).toBe('entry-top');
   expect(host.textContent).not.toMatch(/EXAMPLE WEEK|SEE HOW ROOK ADAPTS|Build my own program|My workouts/);
 });
-it.each([['BUILD MY PLAN','personalize'],['Bring my plan','bringPlan'],['Create a workout','ownWorkouts'],['Freestyle','trainFreestyle'],['Restore','restoreBackup']])('%s invokes only its canonical entry callback', (name,key)=>{
+it.each([['BUILD MY PLAN','personalize'],['Bring my plan','bringPlan'],['Create workout','ownWorkouts'],['Freestyle','trainFreestyle'],['Restore','restoreBackup']])('%s invokes only its canonical entry callback', (name,key)=>{
   click(name);expect(actions[key]).toHaveBeenCalledOnce();
   expect(actions[key].mock.calls[0][0]?.previewDays).toBeUndefined();
   Object.entries(actions).filter(([k])=>k!==key).forEach(([,fn])=>expect(fn).not.toHaveBeenCalled());
@@ -49,7 +49,7 @@ it('passes no demo state into the canonical builder and writes no state on entry
   expect(persist).not.toHaveBeenCalled();
 });
 it.each(['ownWorkouts','trainFreestyle'])('%s opens its child without trying to persist a choice',key=>{
-  const persist=vi.spyOn(Storage.prototype,'setItem');click(key==='ownWorkouts'?'Create a workout':'Freestyle');
+  const persist=vi.spyOn(Storage.prototype,'setItem');click(key==='ownWorkouts'?'Create workout':'Freestyle');
   expect(actions[key]).toHaveBeenCalledOnce();expect(persist).not.toHaveBeenCalled();
 });
 it('retains the separate-profile return path and its failure message',async()=>{
@@ -66,7 +66,7 @@ it('Bring my plan keeps manual weekly creation distinct from reusable workouts',
   click('Import a plan');expect(importPlan).toHaveBeenCalledOnce();
   click('Enter it myself');expect(startFromScratch).toHaveBeenCalledOnce();
   act(()=>host.querySelector('[aria-label="Back to start"]').click());expect(back).toHaveBeenCalledOnce();
-  expect(host.textContent).toContain('weekly program day by day');expect(host.textContent).not.toContain('Create a workout');
+  expect(host.textContent).toContain('weekly program day by day');expect(host.textContent).not.toContain('Create workout');
 });
 it('offers one quiet sign-in and account-creation entry only when the account gate supplies the route', () => {
   const signIn=vi.fn();

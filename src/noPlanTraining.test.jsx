@@ -65,7 +65,7 @@ it('migrates older saved-only data without onboarding and infers an own-workout 
 });
 it('presents saved workouts first without a schedule shell and opens the existing template preview',()=>{
   const detail=vi.fn();show(withTemplate(),detail);
-  expect(host.textContent).toContain('MY WORKOUTS');
+  expect(host.textContent).toContain('SAVED WORKOUTS');
   expect(host.textContent).toContain('Full Body');
   expect(host.textContent).toContain('Start freestyle workout');
   expect(host.textContent).not.toMatch(/Adjust week|missed workouts|UP NEXT/);

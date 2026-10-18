@@ -1,2 +1,25 @@
-.rook-snackbar { touch-action: pan-y; will-change: transform, opacity; }
-.rook-snackbar > span { min-width: 0; overflow-wrap: anywhere; }
+/* One compact Undo surface. Screen chrome owns its inset; the navigation
+   footprint is not present in the active logger or a modal editor. */
+:root .rook-snackbar {
+  bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+  min-height: 52px;
+  padding: 3px 8px 3px 12px;
+  border-radius: 12px;
+  gap: 8px;
+  touch-action: pan-y;
+  will-change: transform, opacity;
+}
+:root .rook-snackbar > button { flex-shrink: 0; min-height: 44px; }
+.rook-snackbar > span { min-width: 0; overflow-wrap: anywhere; line-height: 1.4; }
+:root .today-screen .rook-snackbar,
+:root .missed-workout-feedback .rook-snackbar {
+  bottom: calc(var(--bottom-nav-total-height, 56px) + 8px);
+}
+/* The footer already measures its safe-area-inclusive footprint. Search's
+   contained viewport/keyboard rules continue to own its local positioning. */
+:root :is(.detail-screen, .sheet) .rook-snackbar {
+  bottom: calc(var(--sheet-action-height, env(safe-area-inset-bottom, 0px)) + 8px);
+}
+:root .workout-screen .rook-snackbar {
+  bottom: max(calc(env(safe-area-inset-bottom, 0px) + 8px), var(--snackbar-rest-inset, 0px));
+}

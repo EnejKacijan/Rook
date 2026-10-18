@@ -15,13 +15,20 @@
 .profile-management-screen .list-row > span:last-child { flex-shrink: 0; }
 .profile-delete-action .danger-text { -webkit-text-fill-color: currentColor; }
 .profile-screen .profile-separated-action { margin-top: 20px; border-top: 1px solid var(--rook-border); }
-/* Replace plan owns the group boundary; Export keeps its normal row footprint. */
+/* Replace owns the single divider; its shared account-action spacing must not
+   enlarge the apparent Export row in this continuous program list. */
+.profile-screen .program-actions > .profile-separated-action { margin-top: 0; }
 .profile-screen .program-actions > .program-group-last-row { border-bottom: 0; }
 .profile-screen.profile-management-screen > .logout-button { margin-top: 28px; min-height: 44px; }
 .profile-manage .list-row > span:first-child { min-width: 0; }
 .profile-manage .list-row small { line-height: 1.45; }
 .profile-manage .list-row { border-color: var(--rook-border); }
 .profile-manage .list-row:last-child { border-bottom: 0; }
+/* Flat groups own separators between rows. Headings/section spacing and the
+   bottom navigation already provide the boundary after the final row. */
+.profile-screen .profile-settings-list > .list-row:last-of-type,
+.profile-screen .profile-group-end,
+.profile-training-style > .list-row:last-of-type { border-bottom: 0; }
 .profile-program-entry > .rook-navigation-chevron { color: var(--rook-secondary); }
 .profile-screen :is(.profile-program-entry,.profile-management-back):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; }
 .profile-screen .profile-troubleshooting { margin-top: 24px; }
@@ -31,6 +38,7 @@
 .profile-screen .storage-local-copy-warning { margin: 12px 0 0; }
 .storage-status-summary { margin: 8px 0 20px; }
 .storage-status-summary > div { padding: 14px 0; border-bottom: 1px solid var(--rook-border); }
+.storage-status-summary > div:last-child { border-bottom: 0; }
 .storage-status-summary dt { margin: 0 0 6px; }
 .storage-status-summary dd { margin: 0; color: var(--rook-text); font-size: 16px; line-height: 1.4; font-weight: 600; }
 .storage-diagnostics-screen > .button { width: 100%; min-height: 48px; }

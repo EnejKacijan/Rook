@@ -1,4 +1,7 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { combineExample } from './combineWorkouts.fixture.js';
+import { applyCombinedProposal, buildCombinedProposal, combineSources } from './combineWorkouts.js';
+import { adaptedTemplateForToday, completeWorkout, currentWeekSchedule, serializeState, startWorkout } from './domain.js';
 import {
   buildWeeklyPlanExport,
   buildWorkoutExport,
@@ -20,6 +23,7 @@ const exercise = (overrides = {}) => ({
 });
 
 describe("workout text export", () => {
+  afterEach(() => vi.useRealTimers());
   it("never invents zero load for missing or zero required values", () => {
     expect(exportLoadLabel(exercise(), null, "kg")).toBe("Load not logged");
     expect(exportLoadLabel(exercise(), 0, "lb")).toBe("Load not logged");
@@ -110,5 +114,31 @@ describe("workout text export", () => {
     expect(exportFilename("Upper / Body!", "2026-09-02")).toBe(
       "rook-upper-body-2026-09-02.txt",
     );
+  });
+
+  it.each(['pending', 'active', 'completed'])('keeps source plan prescriptions in export when a combined workout is %s', phase => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-09-12T12:00:00'));
+    const original = combineExample();
+    const request = {sourceIds: combineSources(original).filter(source => source.status === 'missed').map(source => source.logicalSessionId), minutes: 60};
+    const result = buildCombinedProposal(original, request);
+    expect(result.status, result.error).toBe('ready');
+    let state = applyCombinedProposal(original, result.proposal, () => true);
+    if (phase !== 'pending') state.activeWorkout = startWorkout(state, adaptedTemplateForToday(state));
+    if (phase === 'completed') {
+      state.activeWorkout.exercises.forEach(row => row.sets.forEach(set => { set.completed = true; }));
+      state = completeWorkout(state);
+      expect(state.workouts[0].combinedSourcesResolved).toBe(true);
+    }
+    // The training UI correctly hides reserved/resolved source sessions. A plan
+    // export must still contain their prescriptions, rather than calling them rest.
+    expect(currentWeekSchedule(state, '2026-09-07')).toHaveLength(0);
+    const before = serializeState(state);
+    const exported = buildWeeklyPlanExport({state, date: '2026-09-12'});
+    expect(exported.text).toContain('MON - Push');
+    expect(exported.text).toContain('WED - Pull');
+    expect(exported.text).not.toContain('Combined workout');
+    expect(exported.text).toBe(buildWeeklyPlanExport({state: original, date: '2026-09-12'}).text);
+    expect(serializeState(state)).toBe(before);
   });
 });

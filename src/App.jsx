@@ -58,8 +58,12 @@ import { retapActiveTab, useActiveTabRetap, scrollTabRootToTop, tabNavigationBlo
 import { useBottomNavFeedback } from './useBottomNavFeedback.js';
 import { focusNavigationTarget } from './navigationFocus.js';
 import { combinedAdjustment, isCombinedAdjustment, combinedTransition, reconcileCombinedTermination, persistCombinedState } from './combinedWorkoutLifecycle.js';
-import { CoachCombineCard, CoachCombineChoices, CombinedWorkoutNotice, CombinedProvenance } from './CoachCombine.jsx';
-import { applyCombinedProposal } from './combineWorkouts.js';
+import { CoachCombineCard, CoachCombineChoices, CoachCombineRecovery, CombinedWorkoutNotice, CombinedProvenance, CombineWorkoutHint } from './CoachCombine.jsx';
+import {combineWorkoutDiscovery,COMBINE_WORKOUTS_PROMPT} from './combineWorkoutDiscovery.js';
+import {combinedWorkoutNoticeHidden,setCombinedWorkoutNoticeHidden} from './combinedWorkoutPresentation.js';
+import { combinedPrescriptionReview } from './combineExerciseReview.js';
+import { combineRecoveryForEntry } from './coachCombine.js';
+import { applyCombinedProposal, prepareCombinedExerciseMatch } from './combineWorkouts.js';
 import { WeightUnitChoice } from './WeightUnitChoice.jsx';
 import { applySourceUnitDecision } from './importSourceUnits.js';
 import { CalendarIcon, MonthCalendar } from './MonthCalendar.jsx';
@@ -86,6 +90,7 @@ import { coachAvailabilityCopy } from './coachAvailability.js';
 import { resolveAccountStartup } from './accountStartup.js';
 import { clearAllProfileSlotArchives, recoverInterruptedProfileSwitch } from './accountProfileSlots.js';
 import { AccountSyncLock, AccountSyncPanel } from './AccountSyncPanel.jsx';
+import { AccountAccessOptions } from './AccountAccessOptions.jsx';
 import { ACCOUNT_SYNC_LEDGER_KEY, recordAccountSyncDeleteIntent } from './accountSyncOutbox.js';
 import { getFirebaseSyncClient } from './firebaseSyncClient.js';
 import { hasEstablishedData, assertStateContinuity, assertHydrationCurrent, isPersistedReplacement, deleteLocalState, localRecoverySummary, recordStartupOutcome, invalidateStartupSession, withStorageTransaction } from './localStateStorage.js';
@@ -117,7 +122,7 @@ import { revealPlanConflict } from './revealPlanConflict.js';
 import { useAvailableImage } from './useAvailableImage.js';
 import { workoutPhotoFile, exportWorkoutPhoto } from './exportWorkoutPhoto.js';
 import { PlanReviewIllustration } from './PlanReviewIllustration.jsx';
-import { PlanImportIssues } from './PlanImportIssues.jsx';
+import { PlanImportIssues, OriginalPlanNotes, ImportIssue } from './PlanImportIssues.jsx';
 import { ImportResolution } from './ImportResolution.jsx';
 import { useImportNotesPaste } from './useImportNotesPaste.js';
 import { StepProgress } from './StepProgress.jsx';
@@ -137,6 +142,8 @@ import { Disclosure } from './Disclosure.jsx';
 import { groupPlanVersions } from './planHistoryGroups.js';
 import { SessionFeedbackPrompt, SessionFeedbackDisplay } from './SessionFeedback.jsx';
 import { nextWorkoutAdvice } from './nextWorkoutAdvice.js';
+import {ProgressionTipsPreference} from './ProgressionTipsPreference.jsx';
+import {progressionTipsEnabled, setProgressionTipsEnabled} from './progressionTipsPreference.js';
 import { completedProgressWorkouts, selectProgressionRows, progressionSummary } from './progressionOverview.js';
 import { WorkoutHistoryExport } from './WorkoutHistoryExport.jsx';
 import { HistoryCorrectionEditor } from './HistoryCorrectionEditor.jsx';
@@ -1537,7 +1544,7 @@ function FirstRunSheetHeader(props) {
 }
 function MyWorkoutsLink({ onClick }) {
   return <ExerciseNavigationButton className="text-button today-my-workouts" onClick={onClick}>
-    <span>My workouts</span><NavigationChevron className="inline-navigation-chevron" />
+    <span>Saved workouts</span><NavigationChevron className="inline-navigation-chevron" />
   </ExerciseNavigationButton>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
@@ -2716,8 +2723,8 @@ export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPl
     <nav className="entry-secondary-routes" aria-labelledby="entry-other-title">
       <h2 className="entry-micro-label" id="entry-other-title">OTHER WAYS TO START</h2>
       <EntryActionRow title="Bring my plan" description="Import it, or enter it yourself." onClick={bringPlan}/>
-      <EntryActionRow title="Create a workout" description="Save a session to repeat anytime." onClick={ownWorkouts}/>
-      <EntryActionRow title="Freestyle" description="Start empty. Add exercises as you go." onClick={trainFreestyle}/>
+      <EntryActionRow title="Create workout" description="Build a workout to repeat anytime." onClick={ownWorkouts}/>
+      <EntryActionRow title="Freestyle" description="Start now and add exercises as you go." onClick={trainFreestyle}/>
     </nav>
     {returnToSavedProfile && <div className="entry-account-actions">
         {returnToSavedProfile && <button className="restore-backup-action" disabled={recoveryBusy} onClick={async () => {
@@ -2733,40 +2740,44 @@ export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPl
   </main>;
 }
 
-export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signedIn = false, email = null, providerReady = false, accountStatus = 'connecting', onSignedIn }) {
+export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signInWithProvider, signInWithEmail, resetPasswordWithEmail, providers = ['google.com'], providerName = 'Google', signedIn = false, email = null, providerReady = false, accountStatus = 'connecting', onSignedIn }) {
   const [busy, setBusy] = useState(false);
+  const [emailOpen,setEmailOpen]=useState(false);
   const [error, setError] = useState('');
-  const begin = async () => {
-    if (busy || !providerReady || signedIn) return;
-    setBusy(true); setError('');
+  const pending = useRef(false);
+  const begin = async (providerId = 'google.com',details) => {
+    if (pending.current || !providerReady || signedIn) return;
+    pending.current = true; setBusy(true); setError('');
     try {
-      const result = await signInWithGoogle();
+      const result = await (providerId==='password'?signInWithEmail(details):signInWithProvider ? signInWithProvider(providerId) : signInWithGoogle());
       onSignedIn(result);
     } catch (failure) {
+      if(providerId==='password')throw failure;
       if (failure?.code !== 'auth/popup-closed-by-user')
         setError(failure?.code === 'auth/operation-not-allowed'
-          ? 'Google sign-in is not enabled for ROOK yet.'
+          ? 'This sign-in method is not enabled for ROOK yet.'
           : failure?.message || 'Could not check this account. No local data was replaced.');
-    } finally { setBusy(false); }
+    } finally { pending.current = false; setBusy(false); }
   };
   return <main className="onboarding entry-v2 entry-sign-in">
-    <header className="entry-top"><FirstRunBackButton onClick={back} label="Back to start" /></header>
-    <section className="entry-content">
+    <header className="entry-top"><FirstRunBackButton disabled={busy} onClick={emailOpen?()=>setEmailOpen(false):back} label={emailOpen?'Back to sign-in methods':'Back to start'} /></header>
+    {!emailOpen&&<section className="entry-content">
       <p className="entry-micro-label">ROOK ACCOUNT</p>
       <h1>Sign in or create account</h1>
       <p>{signedIn ? `Signed in${email ? ` as ${email}` : ''}. Continue with ROOK or restore a backup.`
-        : 'Continue with Google. ROOK opens your existing profile, or creates an account if you are new.'}</p>
-    </section>
+        : providers.includes('password')?'Sign in to restore your ROOK profile, or create an account if you’re new.'
+        : `${providers.some(id=>id!=='google.com') ? 'Choose a sign-in method.' : 'Continue with Google.'} ROOK opens your existing profile, or creates an account if you are new.`}</p>
+    </section>}
     <div className="entry-sign-in-providers">
-      <Button disabled={busy || !providerReady || signedIn} onClick={begin}>
-        {signedIn ? 'SIGNED IN WITH GOOGLE' : busy ? 'CHECKING ACCOUNT…' : 'CONTINUE WITH GOOGLE'}
-      </Button>
+      {signedIn ? <Button disabled>SIGNED IN WITH {providerName.toUpperCase()}</Button>
+        : <AccountAccessOptions providers={providers} busy={busy} disabled={!providerReady} onChoose={begin} onEmail={signInWithEmail?details=>begin('password',details):undefined} onReset={resetPasswordWithEmail}
+            emailOpen={emailOpen} onEmailOpenChange={setEmailOpen} emailHeadingLevel={1} showEmailBack={false}/>}
       {!providerReady && !signedIn && <p role={accountStatus === 'connecting' ? 'status' : 'alert'}>
         {accountStatus === 'connecting' ? 'Checking account availability…' : 'Account sign-in is unavailable right now. No local data was changed.'}
       </p>}
       {error && <p role="alert">{error}</p>}
     </div>
-    <button type="button" className="entry-sign-in-restore" onClick={restoreBackup}>Restore from backup <NavigationChevron /></button>
+    <button type="button" className="entry-sign-in-restore" disabled={busy} onClick={restoreBackup}>Restore from backup <NavigationChevron /></button>
   </main>;
 }
 
@@ -4758,7 +4769,7 @@ export function NoPlanToday({state,update,setPage,setDetail}) {
     {optional&&<ActiveOptionalSessionNotice session={optional} now={now} onResume={resume}/>}
     {today&&!active&&!optional&&<>
       {style==='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} primary noPlan hideHistory/>}
-      {templates.length>0&&<section className="no-plan-my-workouts" aria-label="My workouts"><Eyebrow>MY WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><NavigationChevron/></button>)}</div></section>}
+      {templates.length>0&&<section className="no-plan-my-workouts" aria-label="Saved workouts"><Eyebrow>SAVED WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><NavigationChevron/></button>)}</div></section>}
       <button type="button" className={style==='own-workouts'&&!templates.length?'button primary no-plan-create-action':'text-button no-plan-create-action'} onClick={()=>setDetail({createSavedWorkout:true})}>+ CREATE WORKOUT</button>
       {style!=='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} noPlan hideHistory/>}
       {state.program ? <button type="button" className="text-button no-plan-plan-action" onClick={()=>update(current=>{current.profile.preferredTrainingStyle='plan';return current;})}>Return to your saved plan</button>
@@ -4776,6 +4787,7 @@ export function Today({
   setDetail,
   planReady,
   dismissPlanReady,
+  onCombineWorkouts,
 }) {
   const active = state.activeWorkout;
   const activeOptional = state.activeOptionalSession;
@@ -4866,6 +4878,9 @@ export function Today({
     state[key] !== scheduleState.current[key])) scheduleState.current = state;
   const scheduleReader = useMemo(()=>createTodayScheduleReader(state),[scheduleState.current,todayKey]);
   const viewingToday = selectedIso === isoDay();
+  const combineDiscovery=useMemo(()=>combineWorkoutDiscovery(state),[scheduleState.current,todayKey]);
+  const combineHint=viewingToday&&!todayEditMode&&onCombineWorkouts&&combineDiscovery.available&&combineDiscovery.hasMissed
+    ? <CombineWorkoutHint onStart={onCombineWorkouts}/> : null;
   useEffect(() => {
     todayReorderGesture.current?.cleanup?.();
     setTodayEditMode(false);
@@ -5155,6 +5170,7 @@ export function Today({
             <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
           </section>}
         </section>
+        {combineHint}
         {undoBanner}
       </main>
     );
@@ -5723,6 +5739,7 @@ export function Today({
         )}
         <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly representedWorkoutId={completed?.id} />
       </section>
+      {combineHint}
       {!fullyCompleted && <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
         <div className="today-exercise-edit-header">
           <div className="today-exercise-list-heading">
@@ -6087,6 +6104,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const upNextUndo = useExerciseRemoveUndo();
   const queueAction = useDurableAction(state,update);
   const [queueError,setQueueError]=useState('');
+  const [tipsOptions, setTipsOptions] = useState(null);
+  const [tipsPreferenceError, setTipsPreferenceError] = useState('');
   const removalStateRef = useRef(state);
   removalStateRef.current = state;
   const commitWorkoutDrafts = (exceptStepper = null, replacementScope = null, completingRow = null) => {
@@ -6108,7 +6127,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   };
   const commitBeforeAction = event => {
     const button = event.target.closest('button,select');
-    if (!button || button.closest('[role="dialog"]') || button.hasAttribute('data-workout-options') || button.hasAttribute('data-workout-scroll')) return;
+    if (!button || button.closest('[role="dialog"], .progression-tips-undo') || button.hasAttribute('data-workout-options') || button.hasAttribute('data-workout-scroll')) return;
     draftResolverRef.current = button;
     try {
       const completingRow = button.hasAttribute('data-workout-complete') ? button.closest('.set-row') : null;
@@ -6152,6 +6171,33 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     setDetail({workoutOptions: true, onRestart, onCancelWorkout: cancelWorkout,
       hasPendingDrafts: hasPendingWorkoutDrafts,
       draftGuard: preserveWorkoutDraftsRef});
+  };
+  const hideProgressionTips = () => {
+    setTipsPreferenceError('');
+    let previous;
+    try {
+      const result = queueAction.commit(current => {
+        if (current.profile.id !== tipsOptions.profileId || current.activeWorkout?.id !== tipsOptions.sessionId)
+          throw new Error('This workout has changed. Close this menu and try again.');
+        previous = current.profile.showProgressionTips;
+        return setProgressionTipsEnabled(current, false);
+      });
+      if (!result.changed) return true;
+      const owner = result.state.profile.id;
+      const valid = () => queueAction.latest.current.profile.id === owner && !progressionTipsEnabled(queueAction.latest.current.profile);
+      upNextUndo.show({message: 'Progression tips hidden', className: 'progression-tips-undo', valid, undo: () => {
+        if (!valid()) return false;
+        try {
+          queueAction.commit(current => {
+            const next = setProgressionTipsEnabled(current, previous);
+            if (previous === undefined) delete next.profile.showProgressionTips;
+            return next;
+          });
+          return true;
+        } catch {setQueueError('Couldn’t save Undo. Try again.'); return false;}
+      }});
+      return true;
+    } catch (error) {setTipsPreferenceError(error.message); return false;}
   };
   const upNextQueueRef=useRef(null);
   useSwipeActionList(upNextQueueRef);
@@ -6931,13 +6977,21 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         draftResolverRef.current=null;
         // Preserve the resolver's raw snapshot through native blur. The click
         // remains the mutation boundary, including browsers with null relatedTarget.
-        if(preserveWorkoutDraftsRef.current || event.relatedTarget?.closest?.('[data-workout-options],[data-workout-scroll]') || screenRef.current?.contains(action) && (ownsWorkoutDraft(event.target,workoutDraftScope(action)) || action.hasAttribute('data-workout-complete') && action.closest('.set-row')===event.target.closest('.set-row')))event.stopPropagation();
+        if(preserveWorkoutDraftsRef.current || event.relatedTarget?.closest?.('[data-workout-options],[data-workout-scroll],.progression-tips-undo') || screenRef.current?.contains(action) && (ownsWorkoutDraft(event.target,workoutDraftScope(action)) || action.hasAttribute('data-workout-complete') && action.closest('.set-row')===event.target.closest('.set-row')))event.stopPropagation();
         // Do not remove feedback on button focus before pointerup: that would
         // move the tapped control underneath the finger. Its click settles it.
         else if(inputValidation && event.relatedTarget?.matches?.('input,textarea'))setInputValidation(null);
       }}
       className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}${active.source === 'freestyle' ? ' freestyle-workout' : ''}`}
     >
+      {tipsOptions && createPortal(<ModalLayer backgroundRef={screenRef} close={() => {setTipsOptions(null); preserveWorkoutDraftsRef.current = false;}}>
+        {requestClose => <WorkoutOptionsSheet className="progression-tips-options-sheet" titleId="progression-tips-options-title" close={requestClose}>
+          <h2 id="progression-tips-options-title">Progression tips</h2>
+          <p>Hide these tips during all workouts. Turn them back on in Profile → Workout preferences. Your logs and Progress stay unchanged.</p>
+          <button type="button" className="text-button progression-tips-hide" onClick={() => {if (hideProgressionTips()) requestClose();}}>Hide progression tips</button>
+          {tipsPreferenceError && <p role="alert">{tipsPreferenceError}</p>}
+        </WorkoutOptionsSheet>}
+      </ModalLayer>, document.body)}
       {rirSet !== null && createPortal(<ModalLayer close={() => setRirSet(null)} backgroundRef={screenRef}>{requestClose => <section className="screen detail-screen rir-sheet" role="dialog" aria-modal="true" aria-label={`RIR for set ${rirSet + 1}`}><SheetHeader title="Reps in reserve" onClose={requestClose} closeLabel="Close RIR"/><div className="rir-options">{[null,0,1,2,3,4].map(value => <button type="button" key={value ?? "unset"} aria-label={value == null ? "Not set" : `${value} RIR`} aria-pressed={(exercise.sets[rirSet]?.rir ?? null) === value} onClick={() => { updateSet(rirSet,"rir",value); requestClose(); }}><span>{value == null ? "Not set" : `${value} RIR`}</span><span className="rir-option-check" aria-hidden="true">{(exercise.sets[rirSet]?.rir ?? null) === value ? "✓" : ""}</span></button>)}</div></section>}</ModalLayer>, document.body)}
       {!confirmation && combinedSaveError && <p role="alert">{combinedSaveError}</p>}
       <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
@@ -7125,7 +7179,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               onClick={() => setDetail({ options: exercise, onMoveCurrent: moveCurrentExercise, onRemoveCurrent: removeActiveExercise })}
             >
               <OverflowIcon/>
-              {exercisePersonalNote(exercise) && <i className="exercise-note-present" aria-hidden="true" />}
             </button>
           </div>
         </div>
@@ -7186,9 +7239,19 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
             )}
             {exercisePersonalNote(exercise) && (
-              <small className="exercise-personal-note">
+              <ExerciseNavigationButton
+                className="exercise-personal-note exercise-personal-note-action"
+                aria-label={`Edit note: ${exercisePersonalNote(exercise)}`}
+                aria-haspopup="dialog"
+                data-workout-options
+                onPointerDown={event => { if (event.button === 0) event.preventDefault(); }}
+                onClick={event => {
+                  focusNavigationTarget(event.currentTarget);
+                  setDetail({ exerciseNote: exercise });
+                }}
+              >
                 <span>Your note</span> · {exercisePersonalNote(exercise)}
-              </small>
+              </ExerciseNavigationButton>
             )}
             {supersetNextLabel && (
               <small className="superset-next-step">{supersetNextLabel}</small>
@@ -7197,17 +7260,28 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         </div>
       </section>
       {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} screenRef={screenRef} />}
-      {recommendation && (
+      {progressionTipsEnabled(state.profile) && recommendation && (
         <section
           className={`recommendation ${recommendation.type} ${recommendationApplied ? "applied" : ""}`}
           role={recommendationApplied ? "status" : undefined}
         >
-          <div>
+          <div className="progression-tip-copy">
+            <div className="progression-tip-heading">
             <strong>
               {recommendationApplied
                 ? "Applied to this workout"
                 : recommendation.title}
             </strong>
+            <button type="button" className="progression-tip-options" data-workout-options
+              aria-label="Progression tip options" aria-haspopup="dialog"
+              onMouseDown={event => event.preventDefault()}
+              onClick={event => {
+                preserveWorkoutDraftsRef.current = true;
+                focusNavigationTarget(event.currentTarget);
+                setTipsPreferenceError('');
+                setTipsOptions({profileId: state.profile.id, sessionId: active.id});
+              }}><OverflowIcon/></button>
+            </div>
             <p>
               {recommendation.weight
                 ? recommendationApplied
@@ -8420,8 +8494,14 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
         </ModalLayer>, document.body,
       );
 }
-export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout}) {
+export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,onCombineWorkouts}) {
   const today=useCalendarDay();
+  const {commit}=useDurableAction(state,update);
+  const [noticeError,setNoticeError]=useState('');
+  const showCombinedNotice=()=>{
+    try{commit(current=>setCombinedWorkoutNoticeHidden(current,false));close();}
+    catch{setNoticeError('Couldn’t save this preference. Try again.');}
+  };
   const records=completedWorkoutsForDate(state.workouts,date);
   const missed=missedFlexibleSessions(state,today);
   const occurrences=flexibleOccurrencesForDate(state,date);
@@ -8458,6 +8538,8 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout}
       <CompletedWorkoutChooser records={choices} date={date} action={choosing} onSelect={(id,element)=>selectRecord(choosing,id,element)}/>
     </> : <>
     <SheetHeader title="More options" onClose={close}/>
+    {date===today&&combinedWorkoutNoticeHidden(state)&&<button type="button" className="list-row" onClick={showCombinedNotice}>Show combined workout info<NavigationChevron/></button>}
+    {noticeError&&<p role="alert">{noticeError}</p>}
     {records.length>0 && canStartOptionalSession(state,date) && <button type="button" className="list-row" onClick={()=>{if(canStartOptionalSession(state,date))setDetail({conditioning:date});}}>Conditioning</button>}
     {repeatRecords.length>0 && <button className="list-row" data-day-action="repeat" onClick={event=>chooseRecord('repeat',event)}>{repeatLabel}</button>}
     {occurrence && <>
@@ -8466,6 +8548,7 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout}
       {flexibleSessions(state).some(other=>proposeFlexibleWeek(state,{mode:'swap',sessionId:occurrence.logicalSessionId,otherSessionId:other.logicalSessionId}).status==='ready') && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}>Swap with another workout</button>}
     </>}
     {missed.length>0 && <button className="list-row" onClick={()=>setDetail({flexibleWeek:missed.length===1?{sessionId:missed[0].logicalSessionId}:{missed:true}})}>Missed workouts</button>}
+    {onCombineWorkouts&&combineWorkoutDiscovery(state,today).available&&<button type="button" className="list-row" onClick={onCombineWorkouts}><span>Combine two workouts<small>Review a combined workout for today in Coach</small></span><NavigationChevron/></button>}
     {hasTemporaryScheduleAction(state,today) && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}>Adjust week</button>}
     {hasWorkout && state.program && <button className="list-row" disabled={blocked} onClick={()=>setDetail('edit-plan')}><span>Edit in plan<small>Changes the recurring plan</small></span></button>}
     {date===isoDay() && !hasWorkout && !occurrences.length && !blocked && <button className="list-row" onClick={()=>setDetail({restTraining:date})}>Rest-day activities</button>}
@@ -8637,7 +8720,7 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
       {optionsOpen && createPortal(<ModalLayer close={dismissOptions} backgroundRef={detailRef} returnFocusRef={optionsTriggerRef} lockDocument={false}>{requestClose=><main className="screen detail-screen completed-workout-options-sheet" role="dialog" aria-modal="true" aria-label="Workout options">
         <SheetHeader title="Workout options" onBack={requestClose} backLabel="Back to workout details" onClose={requestClose}/>
         {canAddConditioning && <button type="button" className="list-row" onClick={()=>chooseOption('conditioning',requestClose)}>Conditioning</button>}
-        {setDetail && <button type="button" className="list-row" onClick={()=>chooseOption('save',requestClose)}>Save workout</button>}
+        {setDetail && <button type="button" className="list-row" onClick={()=>chooseOption('save',requestClose)}>Save for reuse</button>}
         {setDetail && <button type="button" className="list-row" disabled={!canUseWorkoutToday(state,{workoutId})} onClick={()=>chooseOption('repeat',requestClose)}><span>Repeat today{!canUseWorkoutToday(state,{workoutId}) && <small>{proposeWorkoutToday(state,{workoutId}).error}</small>}</span></button>}
         <button type="button" className="list-row" onClick={()=>chooseOption('edit',requestClose)}>Edit history</button>
         <button type="button" className="list-row danger-text" disabled={Boolean(completedWorkoutDeletionGuard(state,workoutId))} onClick={()=>chooseOption('delete',requestClose)}><span>Delete workout{completedWorkoutDeletionGuard(state,workoutId) && <small>{completedWorkoutDeletionGuard(state,workoutId)}</small>}</span></button>
@@ -8770,7 +8853,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
         label="WORKOUT DETAILS"
       />}
       {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
-        <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save workout</button>}
+        <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save for reuse</button>}
       <WorkoutPhotoMemory workout={session} workouts={state.workouts} update={update} onBusyChange={setPhotoBusy} onViewWorkout={id => setDetail({ completedWorkout: id })} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
@@ -9485,12 +9568,14 @@ export function contextualCoachPrompts(state, now = Date.now()) {
     : flexibleWeekConflict(state) ? [move, shorten, progress]
     : canShorten ? [shorten, move, hasHistory ? progress : explain]
     : [move, explain, progress];
-  return [...new Set([...preferred, explain, "Explain my program", "How my plan fits my goals"])]
+  const prompts=[...new Set([...preferred, explain, "Explain my program", "How my plan fits my goals"])]
     .filter(prompt => prompt !== shorten || canShorten)
     .filter(prompt => prompt !== move || canMove)
     .filter(prompt => prompt !== progress || hasHistory).slice(0, 3);
+  if(combineWorkoutDiscovery(state,key).available)prompts.splice(prompts.indexOf(shorten)+1,0,COMBINE_WORKOUTS_PROMPT);
+  return prompts;
 }
-export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' } }) {
+export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' }, entryIntent, onEntryHandled }) {
   const personalThemes = usePersonalThemes();
   const [message, setMessage] = useState(state.coachDraft || "");
   const [sendingId, setSendingId] = useState(null);
@@ -9509,7 +9594,9 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const copyMountedRef = useRef(true);
   const displayedConversationRef = useRef(null);
   const liveState = useRef(state);
+  const handledEntry=useRef(null);
   liveState.current = state;
+  const sourceMatchAction = useDurableAction(state,update);
   const enterConversation = (options = {}) => {
     try {
       const previous = liveState.current;
@@ -9627,6 +9714,12 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     (entry) => (entry.conversationId || "legacy") === displayedId,
   );
   const latestMessage = currentMessages.at(-1);
+  const combineRecovery = combineRecoveryForEntry(state,currentMessages);
+  const confirmSourceMatch = (entry,target) => sourceMatchAction.commit(current=>{
+    const stored=current.conversations.find(e=>e.id===entry.id);
+    if(!stored||current.activeCoachConversationId!==(entry.conversationId||'legacy')||current.conversations.filter(e=>(e.conversationId||'legacy')===current.activeCoachConversationId).at(-1)?.id!==entry.id||stored.coachWorkflowStatus==='cancelled'||stored.combineReviewCancelled||stored.coachReviewCancelled)throw Error('This Coach review is no longer current. Open your current conversation.');
+    return prepareCombinedExerciseMatch(current,combineRecovery,target);
+  });
   const threads = useMemo(() => {
     const grouped = new Map();
     for (const entry of state.conversations) {
@@ -9757,7 +9850,9 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     touchCoachConversation(next, conversationId);
     if (!saveState(next)) {setConversationError('Couldn’t save your message. Try again.');return;}
     liveState.current = next;
-    update(() => next, {planVersion:false,persistedState:next});
+    // Publish the pending entry before even an immediate local reply can merge
+    // into it. A navigation handoff may still have parent updates queued.
+    flushSync(() => update(() => next, {planVersion:false,persistedState:next}));
     sendingRef.current = {entryId,conversationId,requestId};
     setSendingId(conversationId);
     setConversationError('');
@@ -9788,6 +9883,32 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       }
     }
   };
+  const beginCombine=()=>{
+    const discovery=combineWorkoutDiscovery(liveState.current);
+    if(!discovery.available){
+      setConversationError(discovery.reason==='coach-workflow'
+        ? 'Finish or cancel your current Coach review before combining workouts.'
+        : 'The available workouts changed. Combine two workouts is not available right now.');
+      return;
+    }
+    void send(COMBINE_WORKOUTS_PROMPT,{preserveDraft:true,combineSelection:{step:'sources'}});
+  };
+  useEffect(()=>{
+    if(!entryIntent||handledEntry.current===entryIntent.id||!coachAvailable||menuOpen||conversationFromHistory)return;
+    // Start after the destination mounts. Consume the transient intent before
+    // sending, and cancel the frame if navigation or availability changes.
+    const frame=requestAnimationFrame(()=>{
+      handledEntry.current=entryIntent.id;
+      flushSync(()=>onEntryHandled?.(entryIntent.id));
+      const current=liveState.current;
+      if(entryIntent.profileId!==current.profile.id||entryIntent.planId!==current.program?.id||entryIntent.date!==isoDay()){
+        setConversationError('Your plan or date changed. Choose Combine two workouts again from Today.');
+        return;
+      }
+      beginCombine();
+    });
+    return ()=>cancelAnimationFrame(frame);
+  },[entryIntent,coachAvailable,menuOpen,conversationFromHistory]);
   const applyEntryAction = (entry, reviewedAction) => {
     if (reviewedAction?.type === 'combine-workouts') {
       if (state.conversations.find(e=>e.id===entry.id)?.actionResult?.status==='applied') return;
@@ -9996,6 +10117,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const prompts = contextualCoachPrompts(state);
   const contextSummary = coachContextSummary(state);
   const choosePrompt = (prompt) => {
+    if(prompt===COMBINE_WORKOUTS_PROMPT){beginCombine();return;}
     send(prompt, { preserveDraft: true });
   };
   const startNewConversation = (cancelPending = false) => {
@@ -10088,6 +10210,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
                 <>
                   {!conversationFromHistory && entry===latestMessage && entry.reply.missedChoices?.map(choice=><button className="list-row" key={choice.id} data-coach-anchor={`${entry.id}:missed:${choice.id}`} onClick={()=>setDetail({flexibleWeek:{sessionId:choice.id}})}>{choice.label}</button>)}
                   {!conversationFromHistory && pendingIds.has(entry.id) && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} busy={sending||!coachAvailable} selection={entry.combineSelection || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return current;},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
+                  {!conversationFromHistory && entry===latestMessage && entry.coachWorkflowStatus !== 'cancelled' && !entry.combineReviewCancelled && combineRecovery && <CoachCombineRecovery request={combineRecovery} state={state} busy={sending} canRetry={coachAvailable} onReview={target=>setDetail({editPlan:{reviewExerciseIds:[target.exerciseEntryId]}})} onConfirmMatch={target=>confirmSourceMatch(entry,target)} onRetry={selection=>send('Prepare the combined workout again.',{preserveDraft:true,combineSelection:selection})} />}
                   {conversationFromHistory && entry.reply.action && <p className="coach-history-action">{entry.reply.action.type === 'combine-workouts' ? 'Combined workout' : 'Coach adjustment'} · {entry.actionResult?.status || (entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled ? 'Cancelled' : 'Not applied')}</p>}
                   {!conversationFromHistory && entry.reply.action && entry.coachWorkflowStatus !== 'cancelled' && (
                     <ActionCard
@@ -10795,7 +10918,10 @@ function ProgressionOverview({state,setDetail,close,initial={}}) {
     <SheetHeader title="Exercise progression" onBack={close} backLabel="Back to Progress" onClose={close}/>
     <p className="progression-all-count">{progressionSummary(rows).label}</p>
     <div className="progression-all-list">
-      {rows.map(row=><ProgressionRow key={row.exercise.exerciseId} row={row} units={state.profile.units} onClick={()=>setDetail({exercise:row.exercise,returnToProgression:{scroll:ref.current?.scrollTop||0,focusExerciseId:row.exercise.exerciseId}})}/>)}
+      {rows.map(row=><ProgressionRow key={row.exercise.exerciseId} row={row} units={state.profile.units} onClick={()=>{
+        const returnTo={...initial,scroll:ref.current?.scrollTop||0,focusExerciseId:row.exercise.exerciseId};
+        setDetail({exercise:row.exercise,returnToProgression:returnTo});
+      }}/>)}
     </div>
     {!rows.length&&<p className="progression-empty">More comparable sessions are needed before ROOK can suggest a progression.</p>}
   </main>;
@@ -11459,7 +11585,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         </section>
       )}
       {!area && personalIncomplete && (
-        <section className="complete-profile">
+        <section className="complete-profile profile-settings-list">
           <Eyebrow>COMPLETE YOUR PROFILE</Eyebrow>
           <ExerciseNavigationButton
             className="list-row"
@@ -11483,8 +11609,8 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
       </section>}
       {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
-        <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><NavigationChevron/></ExerciseNavigationButton>
-        <section className="planning-setup">
+        <ExerciseNavigationButton className="list-row profile-group-end" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><NavigationChevron/></ExerciseNavigationButton>
+        <section className="planning-setup profile-settings-list">
           <Eyebrow>TRAINING</Eyebrow>
           <p className="planning-setup-copy">
             {state.program?'Used by Coach and future plan changes. Your current program is edited separately.':'Used by Coach and any plan you choose to create later.'}
@@ -11534,7 +11660,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <ConditioningCard conditioning={state.program.conditioning} />
         </section>
       )}
-      {area === 'training' && <section>
+      {area === 'training' && <section className="profile-settings-list">
         <Eyebrow>
           {preferencesOnly ? "COACHING PREFERENCES" : "TRAINING PRIORITIES"}
         </Eyebrow>
@@ -11556,8 +11682,8 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <span><strong>Custom exercises</strong><small>{pluralize((state.customExercises || []).filter(item=>!item.deletedAt).length,"exercise")} · {pluralize((state.exerciseAliases || []).filter(item=>!item.deletedAt).length,"alias","aliases")}</small></span><NavigationChevron/>
         </ExerciseNavigationButton>
       </section>}
-      {area === 'program' && !state.program && <section className="program-actions"><Eyebrow>YOUR TRAINING</Eyebrow><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>My workouts</strong><small>Create or use reusable workouts</small></span><NavigationChevron/></ExerciseNavigationButton><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('change-plan')}><span><strong>Create or import a plan</strong><small>Optional structured training</small></span><NavigationChevron/></ExerciseNavigationButton></section>}
-      {area === 'program' && state.program && <section className="program-actions">
+      {area === 'program' && !state.program && <section className="program-actions profile-settings-list"><Eyebrow>YOUR TRAINING</Eyebrow><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Create workouts to repeat anytime</small></span><NavigationChevron/></ExerciseNavigationButton><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('change-plan')}><span><strong>Create or import a plan</strong><small>Optional structured training</small></span><NavigationChevron/></ExerciseNavigationButton></section>}
+      {area === 'program' && state.program && <section className="program-actions profile-settings-list">
         <Eyebrow>PROGRAM</Eyebrow>
         {<button className="list-row" onClick={() => setDetail('temporary-plan')}><span><strong>Temporary plan</strong><small>{temporaryPeriod?.status === 'active' || temporaryPeriod?.status === 'upcoming' ? `${temporaryPeriod.startDate} – ${temporaryPeriod.endDate}` : 'Different days or equipment for 2–4 weeks · Review first'}</small></span><NavigationChevron/></button>}
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("training-block")}>
@@ -11603,9 +11729,10 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         </ExerciseNavigationButton>
         <ExerciseNavigationButton className="list-row" disabled={Boolean(state.activeWorkout||state.activeOptionalSession)} onClick={()=>setDetail('stop-plan')}><span><strong>Stop following this plan</strong><small>Keep workout history and saved workouts</small></span><NavigationChevron/></ExerciseNavigationButton>
       </section>}
-      {area === 'preferences' && <section>
+      {area === 'preferences' && <section className="profile-settings-list">
         <Eyebrow>SETTINGS</Eyebrow>
-        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','My own workouts'],['freestyle','Freestyle']].map(([style,label])=><ExerciseNavigationButton key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></ExerciseNavigationButton>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
+        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','Use saved workouts'],['freestyle','Freestyle']].map(([style,label])=><ExerciseNavigationButton key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></ExerciseNavigationButton>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
+        <ProgressionTipsPreference state={state} update={update}/>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("logging")}>
           <span>
             <strong>Logging & increments</strong>
@@ -11622,7 +11749,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <NavigationChevron/>
         </ExerciseNavigationButton>
       </section>}
-      {area === 'display' && <section>
+      {area === 'display' && <section className="profile-settings-list">
         <Eyebrow>APPEARANCE</Eyebrow>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("appearance")}>
           <span>
@@ -11636,7 +11763,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         </ExerciseNavigationButton>
       </section>}
       {area === 'display' && <StandalonePageZoomPreference Switch={SettingSwitch} />}
-      {area === 'data' && <><section className="profile-data-actions">
+      {area === 'data' && <><section className="profile-data-actions profile-settings-list">
         <Eyebrow>DATA</Eyebrow>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("import-workout-history")}>
           <span>
@@ -11664,14 +11791,14 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <NavigationChevron/>
         </ExerciseNavigationButton>
       </section>
-      <section className="profile-troubleshooting">
+      <section className="profile-troubleshooting profile-settings-list">
         <Eyebrow>TROUBLESHOOTING</Eyebrow>
         <ExerciseNavigationButton type="button" data-profile-area="diagnostics" className="list-row" onClick={event => openArea('diagnostics', event)}>
           <span><strong>Storage diagnostics</strong><small>Technical information for troubleshooting</small></span><NavigationChevron/>
         </ExerciseNavigationButton>
         <p className="storage-local-copy-warning">Local copies can be lost with device or browser data. Keep a ROOK backup file somewhere safe.</p>
       </section>
-      <button className="list-row profile-separated-action profile-delete-action" onClick={onLogout}>
+      <button className="list-row profile-separated-action profile-delete-action profile-group-end" onClick={onLogout}>
         <span><strong className="danger-text">Delete local data</strong><small>Erase ROOK data from this device</small></span><NavigationChevron/>
       </button>
       </>}
@@ -12744,7 +12871,10 @@ export function PlanEditor({
   const excludedImportExercises=useRef(new Map());
   const [importReviewRequest, setImportReviewRequest] = useState(0);
   const importReviewRef = useRef(null);
-  const pendingSourceReviews = pendingImportIssues(sourceReview, resolvedImportIssues).length;
+  const activeSourceReview = mode==='edit'&&reviewExerciseIds.length&&sourceReview
+    ? {...sourceReview,issues:sourceReview.issues.filter(issue=>program.days.some(day=>day.exercises.some(exercise=>exercise.id===issue.exerciseId)))}
+    : sourceReview;
+  const pendingSourceReviews = pendingImportIssues(activeSourceReview, resolvedImportIssues).length;
   const sourceDecisionSummary = importDecisionSummary(sourceReview, resolvedImportIssues);
   const advancedReviewOriginals = useRef(new Map());
   const revealImportReview = () => {
@@ -12776,6 +12906,7 @@ export function PlanEditor({
       return;
     }
     const restoredOptional=issue.field==='optional'&&value.value==='include'?excludedImportExercises.current.get(issue.exerciseId):null;
+    setDirty(true);
     setProgram(current => {
       const next = clone(current);
       const day = next.days.find(item => item.id === issue.dayId);
@@ -12860,7 +12991,8 @@ export function PlanEditor({
   const reviewConflicts = useMemo(() => reviewExerciseIds.length
     ? plannedExerciseSafetyConflicts(program, trainingSafetyFor(profile)).filter(item => reviewExerciseIds.includes(item.exerciseEntryId))
     : [], [program, profile, reviewExerciseIds.join("|")]);
-  const reviewTargetId = reviewConflicts[0]?.exerciseEntryId;
+  const reviewTargetId = reviewConflicts[0]?.exerciseEntryId || reviewExerciseIds.find(id=>program.days.some(day=>day.exercises.some(exercise=>exercise.id===id)));
+  const focusedSourceReview = mode==='edit'&&reviewExerciseIds.length>0&&sourceReview;
   const [dirty, setDirty] = useState(false);
   useEffect(()=>{onDirtyChange?.(dirty);},[dirty,onDirtyChange]);
   const firstUnresolvedExercise = (value) =>
@@ -13977,7 +14109,7 @@ export function PlanEditor({
           {scratch ? 'Ramp-up sets are controlled separately.' : 'Short warm-ups matched to each workout. Ramp-up sets are controlled separately.'}
         </small>
       </div>}
-      {(mode === 'import'||program.importMetadata?.sourceNotes?.length>0) && <div ref={importReviewRef}><PlanImportIssues review={sourceReview} resolved={resolvedImportIssues} program={program} onResolve={resolveImportIssue} reviewRequest={importReviewRequest} summaryOnly={importReview} decisionGroups={importReview?importExerciseReviewGroups(sourceReview,importReviewSource.current,resolutionMatches):[]} onChange={id=>{setResolutionRevisit(id);setResolutionOpen(true);}} /></div>}
+      {!focusedSourceReview&&(sourceReview||mode === 'import') && <div ref={importReviewRef}><PlanImportIssues review={sourceReview} resolved={resolvedImportIssues} program={program} onResolve={resolveImportIssue} reviewRequest={importReviewRequest} summaryOnly={importReview} decisionGroups={importReview?importExerciseReviewGroups(sourceReview,importReviewSource.current,resolutionMatches):[]} onChange={id=>{setResolutionRevisit(id);setResolutionOpen(true);}} /></div>}
       {importReview&&(program.importMetadata?.removedExercises||[]).map(record=><div key={record.exercise.id} className="missed-skip-feedback" role="status">{record.exercise.originalImportedName||record.exercise.importedName} removed from plan <button className="text-button" onClick={()=>undoImportRemoval(record.exercise.id)}>Undo</button></div>)}
       {importReview&&<section className="plan-import-matching-summary" aria-label="Exercise library links"><p>{totalExercises-originalImportCount-unresolved} linked · {originalImportCount} original names{unresolved?` · ${unresolved} source choices to resolve`:''}</p>{originalImportCount>0&&<><p>Some exercises keep their original names. Linking them to the ROOK library is optional.</p><button className="button secondary" onClick={()=>setOptionalMatchesOpen(true)}>Review exercise matches · Optional</button></>}</section>}
       {importApplySafetyIssues.length>0&&<section className="plan-import-issues" role="alert"><span className="eyebrow">COMPATIBILITY TO RESOLVE</span>{importApplySafetyIssues.map(message=><p key={message}>{message}</p>)}<p>Edit the affected exercise below, or go back to clarify your setup. Source values have not been changed.</p></section>}
@@ -14354,6 +14486,7 @@ export function PlanEditor({
                 }}>UNDO</button></div>;
                 const exerciseIndex=day.exercises.findIndex(item=>item.id===exercise.id);
                 const expanded = expandedExerciseId === exercise.id;
+                const focusedPrescriptionIssue = expanded&&focusedSourceReview&&sourceReview.issues.find(issue=>issue.exerciseId===exercise.id);
                 const safetyConflict = reviewConflicts.find(item => item.exerciseEntryId === exercise.id);
                 const safetyReviewRequired = Boolean(safetyConflict);
                 const needsReview = ["unresolved", "needs-name-review"].includes(
@@ -14540,6 +14673,7 @@ export function PlanEditor({
                         Needs review
                       </span>
                     )}
+                    {focusedPrescriptionIssue&&<ImportIssue key={focusedPrescriptionIssue.id} issue={focusedPrescriptionIssue} program={program} resolved={resolvedImportIssues[focusedPrescriptionIssue.id]} onResolve={value=>resolveImportIssue(focusedPrescriptionIssue,value)} focused/>}
                     {allowReorder && !reorderBlock?.locked && (
                       <div className="plan-reorder-a11y exercise-reorder-a11y" data-no-reorder>
                         <button
@@ -14821,7 +14955,7 @@ export function PlanEditor({
                             </button>
                           </div>
                         )}
-                        {(!importReview ||
+                        {!focusedPrescriptionIssue&&(!importReview ||
                           prescriptionEditorId === exercise.id) && (
                         <div className="plan-editor-prescription">
                           <label>
@@ -15170,6 +15304,7 @@ export function PlanEditor({
           )}
         </section>
       )}
+      {!workoutOnly&&!focusedSourceReview&&<OriginalPlanNotes program={program} />}
       <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'} hideWhileSearching={Boolean(addingToDayId)}>
       {saveError && <p className="offline-banner" role="alert">{saveError}</p>}
       {scratchReadiness && <p className="scratch-readiness" role="status">{scratchReadiness}</p>}
@@ -15181,7 +15316,7 @@ export function PlanEditor({
             ? "import-ready-sticky-action"
             : ""
         }
-        disabled={saving || (!reorderMode && (importApplySafetyIssues.length>0 || Boolean(openDurationReview) || unresolved > 0 || !namesValid || pendingImportIssues(sourceReview,resolvedImportIssues).length > 0 || (sourceReview && (program.days.some(day=>!WEEKDAYS.includes(day.weekday)) || new Set(program.days.map(day=>day.weekday)).size!==program.days.length))))}
+        disabled={saving || (!reorderMode && (importApplySafetyIssues.length>0 || Boolean(openDurationReview) || unresolved > 0 || !namesValid || pendingSourceReviews > 0 || (sourceReview && (program.days.some(day=>!WEEKDAYS.includes(day.weekday)) || new Set(program.days.map(day=>day.weekday)).size!==program.days.length))))}
         onClick={reorderMode ? finishPreviewReorder : saveProgram}
       >
         {saving ? "SAVING…" : reorderMode ? 'Done reordering' : copy.action}
@@ -15743,7 +15878,7 @@ export function RestDayActionSheet({ date, kind, state, update, close, setPage, 
   const childHeader = props => <SheetHeader {...props} onBack={props.onBack || back} backLabel={props.onBack ? props.backLabel : `Back to ${kind === 'optional' ? 'optional activity' : 'Train anyway'}`} />;
   if (view === 'cardio' || view === 'mobility') return <RestTrainingSheet date={date} state={state} update={update} close={close} setPage={setPage} setDetail={setDetail} initialMode={view} onBack={back} />;
   if (view === 'conditioning') return <ConditioningSheet date={date} state={state} update={update} close={close} setPage={setPage} Header={childHeader} />;
-  if (view === 'saved') return <SavedWorkouts state={state} update={update} close={close} dialogLabel="My workouts" Header={childHeader} Editor={PlanEditor} Modal={ModalLayer} onStarted={() => { close(); setPage('workout'); }} />;
+  if (view === 'saved') return <SavedWorkouts state={state} update={update} close={close} dialogLabel="Saved workouts" Header={childHeader} Editor={PlanEditor} Modal={ModalLayer} onStarted={() => { close(); setPage('workout'); }} />;
   if (view === 'freestyle') return <main className="sheet today-actions-sheet" role="dialog" aria-modal="true" aria-label="Freestyle workout">
     <SheetHeader title="Freestyle workout" onClose={close} onBack={back} backLabel="Back to Train anyway" />
     <FreestyleEntry state={state} update={update} setPage={page => { close(); setPage(page); }} setDetail={setDetail} date={date} hideHistory />
@@ -15766,7 +15901,7 @@ export function RestDayActionSheet({ date, kind, state, update, close, setPage, 
         </section>
       </> : <>
         {option('Start freestyle workout', unavailable ? date !== isoDay() ? 'Workouts can only be started for today.' : 'Resume or finish your active session first.' : 'Start empty. Add exercises as you go.', 'freestyle', Boolean(unavailable))}
-        {option('My workouts', 'Start one of your reusable or plan workouts.', 'saved')}
+        {option('Saved workouts', 'Start one of your saved workouts.', 'saved')}
       </>}
     </div>
   </main>;
@@ -16234,6 +16369,7 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
 }
 function EditPlan({ state, update, close, reviewExerciseIds = [], fullscreen = false, onExpand }) {
   const screenRef = useRef(null);
+  const sourceReview = useMemo(()=>combinedPrescriptionReview(state.program,reviewExerciseIds),[state.program,reviewExerciseIds.join('|')]);
   const dirtyRef = useRef(false);
   const reportDirty = useCallback(value=>{dirtyRef.current=value;},[]);
   const canLeave = () => {
@@ -16302,6 +16438,7 @@ function EditPlan({ state, update, close, reviewExerciseIds = [], fullscreen = f
           onRegisterCustomExercise={(record) => update((current) => { registerCustomExerciseRecord(current, record); return current; })}
           onRememberExerciseAlias={(alias, exerciseId) => update((current) => { rememberExerciseAlias(current, alias, exerciseId, { builtInCatalog: exerciseCatalog }); return current; })}
           reviewExerciseIds={reviewExerciseIds}
+          sourceReview={sourceReview}
           onSave={save}
           onCancel={back}
         />
@@ -17628,7 +17765,7 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
   );
 }
 
-function CustomExercisesScreen({ state, update, close, createOnly = false, initialName = "", onCreated, createLabel = 'CREATE EXERCISE' }) {
+function CustomExercisesScreen({ state, update, close, createOnly = false, initialName = "", onCreated, createLabel = 'CREATE EXERCISE', creationDescription }) {
   const creationSubmitted = useRef(false);
   const activeExercises = (state.customExercises || []).filter((item) => !item.deletedAt);
   const [editingId, setEditingId] = useState(null);
@@ -17780,7 +17917,7 @@ function CustomExercisesScreen({ state, update, close, createOnly = false, initi
       <Eyebrow>{editing ? "CUSTOM EXERCISE" : "ADD TO YOUR LIBRARY"}</Eyebrow>
       <h1>{editing ? editing.name : "Make it recognizable."}</h1>
       <p>Only the name, equipment and main target are needed. Add movement details only when you know them.</p>
-      {createOnly && <p>Saved to your exercise library, even if you later cancel plan changes. {createLabel === 'CREATE & ADD' ? 'Added to this workout’s draft; save plan changes when you’re ready.' : 'Return to the chooser to add it to your draft.'} Saved training restrictions still apply.</p>}
+      {createOnly && <p>{creationDescription || <>Saved to your exercise library, even if you later cancel plan changes. {createLabel === 'CREATE & ADD' ? 'Added to this workout’s draft; save plan changes when you’re ready.' : 'Return to the chooser to add it to your draft.'} Saved training restrictions still apply.</>}</p>}
       <div className="custom-exercise-form">
         <label>
           <span>EXERCISE NAME</span>
@@ -18371,6 +18508,7 @@ export function Detail({
   onPlanAccepted,
   onPlanImported,
   onLogout,
+  onCombineWorkouts,
 }) {
   const panelRef = useRef(null);
   const detailArtwork = useAvailableImage(state.profile.showExerciseImages !== false ? exerciseArt(detail?.exercise) : null);
@@ -18546,7 +18684,7 @@ export function Detail({
         request={detail.adjustToday}
       />
     );
-  if (detail?.todayActions) return <TodayActionsSheet state={state} update={update} close={close} setDetail={setDetail} {...detail.todayActions}/>;
+  if (detail?.todayActions) return <TodayActionsSheet state={state} update={update} close={close} setDetail={setDetail} onCombineWorkouts={onCombineWorkouts} {...detail.todayActions}/>;
   if (detail?.todayFreestyle) return <main className="sheet today-actions-sheet">
     <SheetHeader title="Freestyle workout" onClose={close}/>
     <FreestyleEntry state={state} update={update} setPage={page=>{close();setPage(page);}} setDetail={setDetail} date={detail.todayFreestyle.date} hideHistory/>
@@ -18981,6 +19119,7 @@ function Logging({ state, update, close }) {
         <Eyebrow>EFFORT</Eyebrow>
         <SettingSwitch
           label="Track reps in reserve (RIR)"
+          className="logging-group-end"
           accessory={
             <HelpPopover
               id="logging-rir-help"
@@ -19004,6 +19143,7 @@ function Logging({ state, update, close }) {
         />
         <SettingSwitch
           label="Ramp-up sets"
+          className="logging-group-end"
           checked={p.rampUpSetsEnabled !== false}
           onChange={(value) => setFlag("rampUpSetsEnabled", value)}
         />
@@ -19053,6 +19193,7 @@ function Logging({ state, update, close }) {
         <div>
         <SettingSwitch
           label="Rest timer notifications"
+          className="logging-group-end"
           checked={
             p.restTimerNotificationsEnabled === true &&
             notificationCapability.permission === "granted"
@@ -19181,6 +19322,7 @@ function Appearance({ state, update, close }) {
         <Eyebrow>EXERCISES</Eyebrow>
         <SettingSwitch
           label="Exercise illustrations"
+          className="logging-group-end"
           checked={showExerciseImages}
           onChange={(value) =>
             update((current) => {
@@ -19627,6 +19769,8 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
     (item) => item.id === exercise.id,
   );
   const current = active?.exercises[exerciseIndex] || exercise;
+  const personalNote = exercisePersonalNote(current);
+  const notePreviewId = `exercise-options-note-${current.id}`;
   const pair =
     active && exerciseIndex >= 0
       ? supersetMeta(active.exercises, exerciseIndex)
@@ -19673,8 +19817,19 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       )}
       {moveable&&<button type="button" className="list-row" onClick={()=>apply(()=>onMoveCurrent?.(current.id))}>Move to Up Next</button>}
       {removable&&<button type="button" className="list-row danger-text" onClick={()=>apply(()=>onRemoveCurrent?.(current.id))}>Remove from this workout</button>}
-      <button className="list-row active-exercise-note-action" onClick={() => setDetail({ exerciseNote: current })}>
-        <span>{!exercisePersonalNote(current) && <span aria-hidden="true">+ </span>}{exercisePersonalNote(current) ? "Edit note" : "Add note"}</span>
+      <button type="button" className="list-row active-exercise-note-action"
+        aria-label={personalNote ? "Edit note" : "Add note"}
+        aria-describedby={personalNote ? notePreviewId : undefined}
+        onClick={() => setDetail({ exerciseNote: current })}>
+        <span className="exercise-note-action-copy">
+          <span className="exercise-note-action-label">
+            {personalNote && <i className="exercise-note-present" aria-hidden="true" />}
+            {!personalNote && <span aria-hidden="true">+</span>}
+            {personalNote ? "Edit note" : "Add note"}
+          </span>
+          {personalNote && <small id={notePreviewId} className="exercise-note-action-preview">{personalNote}</small>}
+        </span>
+        <NavigationChevron/>
       </button>
       {active?.source === 'freestyle' && isCurrent && current && !removable && !hasMeaningfulExerciseProgress(active,current.id) && !current.supersetId && (
         <button className="choice-row" onClick={() => {
@@ -19880,7 +20035,11 @@ function Replace({ exercise, state, update, close }) {
   const sheetRef = useRef(null);
   const [suggestionsReady, setSuggestionsReady] = useState(false);
   const [picker, setPicker] = useState(false);
-  useExerciseSearchSheet(sheetRef, picker, { focusedSearch: true });
+  const [customCreation, setCustomCreation] = useState(null);
+  const [createdCustomId, setCreatedCustomId] = useState(null);
+  const customTriggerRef = useRef(null);
+  const {commit: commitCustomExercise} = useDurableAction(state, update);
+  useExerciseSearchSheet(sheetRef, picker && !customCreation, { focusedSearch: true });
   useEffect(() => {
     let cancelled = false;
     afterVisibleFrame().then(() => {
@@ -19894,7 +20053,7 @@ function Replace({ exercise, state, update, close }) {
   const preferenceKey = (state.substitutionPreferences || [])
     .map((item) => `${item.sourceExerciseId}:${item.replacementExerciseId}:${item.gymProfileId || "*"}:${item.updatedAt}`)
     .join("|");
-  const programIds = state.program.days.flatMap((day) =>
+  const programIds = (state.program?.days || []).flatMap((day) =>
     day.exercises.map((item) => item.exerciseId),
   );
   const activeIds = (state.activeWorkout?.exercises || [])
@@ -19959,10 +20118,14 @@ function Replace({ exercise, state, update, close }) {
     setChoices(compatible.slice(0, 3));
     setLoadingMore(false);
     setNoMore(compatible.length <= 3);
+  }, [exercise.id, compatibleKey]);
+  useEffect(() => {
+    // A library addition refreshes candidates without discarding the search
+    // or returning from All available exercises to the recommended view.
     setPicker(false);
     setQuery("");
     setRememberPreference(false);
-  }, [exercise.id, compatibleKey]);
+  }, [exercise.id, state.activeWorkout?.id]);
   const more = async () => {
     if (loadingMore || noMore) return;
     setLoadingMore(true);
@@ -20096,6 +20259,24 @@ function Replace({ exercise, state, update, close }) {
     </button>
   );
   return (
+    <>
+      {customCreation && createPortal(<ModalLayer close={() => setCustomCreation(null)} backgroundRef={sheetRef} returnFocusRef={customTriggerRef}>
+        <CustomExercisesScreen state={state} createOnly initialName={customCreation.name}
+          creationDescription="Save it to your exercise library, then select it in the results to use it for this workout. Your plan stays unchanged; equipment and restrictions still apply."
+          close={() => setCustomCreation(null)}
+          update={operation => commitCustomExercise(current => {
+            if (current.profile.id !== customCreation.profileId || current.activeWorkout?.id !== customCreation.workoutId)
+              throw new Error('This profile or workout has changed.');
+            return operation(clone(current));
+          })}
+          onCreated={record => {
+            setCustomCreation(null);
+            setPicker(true);
+            setQuery(record.name);
+            setCreatedCustomId(record.id);
+          }}
+        />
+      </ModalLayer>, document.body)}
     <main
       ref={sheetRef}
       className="sheet replace-sheet"
@@ -20123,13 +20304,13 @@ function Replace({ exercise, state, update, close }) {
               ‹ Compatible options
             </button>
             <h2 id="replace-title">All available exercises</h2>
-            <SearchInput onClear={() => setQuery("")}
+            <SearchInput onClear={() => {setQuery(""); setCreatedCustomId(null);}}
               className="exercise-search"
               type="search"
               aria-label="Search all available exercises"
               placeholder="Search exercises"
               value={query}
-              onChange={(event) => setQuery(event.target.value)}
+              onChange={(event) => {setQuery(event.target.value); setCreatedCustomId(null);}}
             />
             <div data-exercise-search-scroll>
             <Eyebrow>CHOOSE ANOTHER EXERCISE</Eyebrow>
@@ -20137,6 +20318,13 @@ function Replace({ exercise, state, update, close }) {
               Choose any exercise available with your equipment. Training
               restrictions still apply.
             </p>
+            <CustomExerciseFallback onCreate={() => {
+              customTriggerRef.current = sheetRef.current.querySelector('[aria-label="Create custom exercise"]');
+              setCustomCreation({name: query.trim().slice(0, 100), profileId: state.profile.id, workoutId: state.activeWorkout?.id});
+            }} />
+            {createdCustomId && <p className="muted" role="status">{allAllowed.some(item => item.id === createdCustomId)
+              ? 'Exercise saved. Select it below to use it for this workout.'
+              : 'Exercise saved to your library, but it isn’t available for this workout with the current equipment and training restrictions.'}</p>}
             {pickerChoices.length ? (
               <div className="picker-results">
                 {pickerChoices.map((choice,index) => choiceButton(choice, true, index<6))}
@@ -20199,6 +20387,7 @@ function Replace({ exercise, state, update, close }) {
         )}
       </div>
     </main>
+    </>
   );
 }
 
@@ -20219,17 +20408,25 @@ function HydratedApp({startup}) {
     personalThemes.renderedPersonalTheme,
   );
   const [page, setPageState] = useState("today");
+  const [coachEntry,setCoachEntry]=useState(null);
+  const consumeCoachEntry=useCallback(id=>setCoachEntry(current=>current?.id===id?null:current),[]);
   const coachAvailability = useCoachAvailability({ profileId: state.profile.id, enabled: !accountSync.locked, visiting: page === 'coach' });
   const backgroundRef = useRef(null);
   const coachScrollMemory = useRef(new Map());
   const prepareTabTransition = useMainTabTransition(page, backgroundRef);
   const setPage = useCallback(next => {
+    if(next!=='coach')setCoachEntry(null);
     prepareTabTransition(next);
     if (next !== 'complete') liveCompletion.current = null;
     if(next==='workout')rememberSwipeParent(document.querySelector('.today-screen'),'workout');
     setPageState(next);
   },[prepareTabTransition]);
   const [detail, setDetail] = useState(null);
+  const openCombineWorkouts=()=>{
+    setCoachEntry({id:uid('combine-entry'),profileId:state.profile.id,planId:state.program?.id,date:isoDay()});
+    setDetail(null);
+    setPage('coach');
+  };
   const [detailClosing, setDetailClosing] = useState(false);
   useEffect(() => { setDetailClosing(false); }, [detail]);
   const [entryMode, setEntryMode] = useState(startup.firstRunVerified && startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
@@ -20319,6 +20516,8 @@ function HydratedApp({startup}) {
       <FirstRunNavigation mode={mode} parents={firstRunParents}>{route => {
         if (route === 'sign-in') return <FirstRunSignIn back={() => back('sign-in')} restoreBackup={() => open('restore', 'sign-in')}
           signInWithGoogle={accountSync.signInFirstRunWithGoogle} providerReady={['recovery-available', 'signed-in-new-account'].includes(accountSync.state)}
+          signInWithProvider={accountSync.signInFirstRunWithProvider} providers={accountSync.providers} providerName={accountSync.providerName}
+          signInWithEmail={accountSync.signInFirstRunWithEmail} resetPasswordWithEmail={accountSync.resetPasswordWithEmail}
           signedIn={accountSync.state === 'signed-in-new-account'} email={accountSync.email} accountStatus={accountSync.state}
           onSignedIn={result => { if (result?.status === 'new-account') setEntryMode(null); else if (result?.status === 'restored') { setEntryMode(null); setPage('today'); } }}/>
         if (route === 'bring') return <BringPlanLanding back={() => back('bring')} importPlan={() => open('import', 'bring')} startFromScratch={() => open('scratch', 'bring')}/>;
@@ -20345,6 +20544,7 @@ function HydratedApp({startup}) {
         setDetail={setDetail}
         planReady={planReadyNotice}
         dismissPlanReady={() => setPlanReadyNotice(null)}
+        onCombineWorkouts={openCombineWorkouts}
       /> : <NoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail}/>)
     ) : page === "optional-session" ? (
       <ActiveOptionalSession state={state} update={update} setPage={setPage} />
@@ -20366,7 +20566,7 @@ function HydratedApp({startup}) {
         persistenceFailed={persistenceFailed}
       />
     ) : page === "coach" ? (
-      <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} />
+      <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} entryIntent={coachEntry} onEntryHandled={consumeCoachEntry} />
     ) : page === "progress" ? (
       <Progress state={state} update={update} setDetail={setDetail} setPage={setPage} />
     ) : (
@@ -20412,6 +20612,7 @@ function HydratedApp({startup}) {
             setDetail={setDetail}
             onPlanAccepted={showGeneratedPlan}
             onPlanImported={showToday}
+            onCombineWorkouts={openCombineWorkouts}
             onLogout={async () => {
               // Only reached after the existing destructive confirmation.
               try {

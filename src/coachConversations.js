@@ -14,7 +14,7 @@ export function pendingCoachWorkflows(state, id = state.activeCoachConversationI
   for (const entry of coachEntries(state, id)) {
     const reply = entry.reply;
     const cancelled = entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled;
-    if (reply?.combineRequest || reply?.action?.type === 'combine-workouts') {
+    if (reply?.combineRequest || reply?.combineReviewRequired || reply?.action?.type === 'combine-workouts') {
       if (clarification) pending.delete(clarification);
       clarification = null;
     }
@@ -24,8 +24,8 @@ export function pendingCoachWorkflows(state, id = state.activeCoachConversationI
       proposals.set(proposalId, entry.id);
     }
     if (cancelled || terminal.has(entry.actionResult?.status)) continue;
-    if (!reply || reply.combineRequest || reply.action) pending.set(entry.id, entry);
-    if (reply?.combineRequest) clarification = entry.id;
+    if (!reply || reply.combineRequest || reply.combineReviewRequired || reply.action) pending.set(entry.id, entry);
+    if (reply?.combineRequest || reply?.combineReviewRequired) clarification = entry.id;
   }
   return [...pending.values()];
 }
@@ -55,10 +55,10 @@ export function cancelCoachWorkflows(state, id = state.activeCoachConversationId
   // Include superseded unaccepted candidates too: abandoning a revision must
   // not reveal an earlier proposal as newly pending after manual New chat.
   const ids = new Set(coachEntries(next, id).filter(entry => !terminal.has(entry.actionResult?.status) &&
-    (!entry.reply || entry.reply.action || entry.reply.combineRequest)).map(entry => entry.id));
+    (!entry.reply || entry.reply.action || entry.reply.combineRequest || entry.reply.combineReviewRequired)).map(entry => entry.id));
   for (const entry of next.conversations || []) if (ids.has(entry.id)) {
     entry.coachWorkflowStatus = 'cancelled';
-    if (entry.reply?.combineRequest || entry.reply?.action?.type === 'combine-workouts') entry.combineReviewCancelled = true;
+    if (entry.reply?.combineRequest || entry.reply?.combineReviewRequired || entry.reply?.action?.type === 'combine-workouts') entry.combineReviewCancelled = true;
   }
   return next;
 }

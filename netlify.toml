@@ -3,6 +3,9 @@
   publish = "dist"
   functions = "netlify/functions"
 
+[build.environment]
+  VITE_ROOK_EMAIL_PASSWORD_ROLLOUT = "true"
+
 [[redirects]]
   from = "/api/*"
   to = "/.netlify/functions/api/:splat"

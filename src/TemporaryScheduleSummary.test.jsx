@@ -29,7 +29,9 @@ const geometry=()=>animations.filter(a=>'height' in a.frames[0]).at(-1);
 it('real Today shows two moved workouts with View/Hide, not Review; View preserves schedule and opens existing details',()=>{
   const view=vi.fn(),before=render(undefined,true,view);
   expect(summary().textContent).toContain('2 workouts moved');expect(summary().textContent).not.toContain('REVIEW');
-  act(()=>[...summary().querySelectorAll('button')].find(b=>b.textContent==='View schedule').click());
+  expect(summary().textContent).toContain('SCHEDULE CHANGES');expect(summary().textContent).toContain('Already applied to your schedule.');
+  expect(host.querySelector('.today-missed-row').textContent).toContain('Not completed. Choose what to do next.');
+  act(()=>[...summary().querySelectorAll('button')].find(b=>b.textContent==='View changes').click());
   expect(view).toHaveBeenCalledWith({flexibleWeek:{reviewExisting:true}});expect(current).toEqual(before);
 });
 it('Hide uses the same measured 200ms Disclosure and retains content until it finishes',()=>{
@@ -41,7 +43,7 @@ it('Hide uses the same measured 200ms Disclosure and retains content until it fi
 });
 it('reload-like initial hidden state renders no summary, and a changed revision reveals it',()=>{
   render(hideTemporaryScheduleSummary(temporaryScheduleSummaryState()));expect(summary()).toBeNull();
-  change(s=>({...s,flexibleWeek:{...s.flexibleWeek,revision:s.flexibleWeek.revision+1}}));expect(summary().textContent).toContain('View schedule');
+  change(s=>({...s,flexibleWeek:{...s.flexibleWeek,revision:s.flexibleWeek.revision+1}}));expect(summary().textContent).toContain('View changes');
 });
 it('a hidden valid summary becoming unresolved reveals actionable copy with no Hide',()=>{
   render(hideTemporaryScheduleSummary(temporaryScheduleSummaryState()));

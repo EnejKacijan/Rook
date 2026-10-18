@@ -75,3 +75,30 @@ Windows newlines. Integrity matching now checks the exact LF and CRLF variants
 in both checkout directions and consumes one evidence record per renderer.
 Geometry, colors, other whitespace, paths and renderer counts remain strict.
 The original manifest, artwork and runtime SVG source are unchanged.
+
+## Usable web follow-up — 2026-10-18
+
+This follow-up includes the approved Coach combination recovery and suggested
+exercise confirmation, discovery entry points, inline review actions, original
+plan-note disclosure, clearer schedule notices, compact Undo, custom exercise
+creation from replacement, direct exercise-note editing, Profile separators,
+saved-workout wording and plan-export corrections.
+
+Progression guidance offers free Off and Basic modes, including the existing
+Hide and Undo behavior. Detailed progression, its Pro access boundary, paywall
+and purchase placeholders are deliberately absent. Apple sign-in, the unsigned
+iOS project and native authentication/transport preparation remain local. The
+separate ChatGPT MCP foundation is not part of this web follow-up.
+
+The web account flow retains the existing Google Firebase application namespace
+and sessions. Email/password registration, sign-in, verification and password
+reset use the same guarded profile ownership paths. The public Netlify email
+rollout flag is enabled after the earlier real registration, inbox delivery,
+verification and reset checks. Password accounts must verify their email before
+using AI. Server authentication, quotas, spend limits, cloud data ownership and
+photo-locality behavior are unchanged.
+
+Old-production migration assertions include the new neutral presentation default
+for progression tips. Original fixtures, prescriptions, workout IDs, set values,
+history and recovery bytes remain unchanged. Browser checks use isolated
+synthetic profiles; physical iPhone verification is not claimed.

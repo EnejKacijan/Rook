@@ -52,11 +52,11 @@ it('template editor preserves unset timed/per-set targets on no-op review, and C
  let initial=addFreestyleExercise(addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank'),'push-up');initial=saveWorkoutTemplate(initial,{...templateDraft(initial.activeWorkout,initial),name:'Untimed hold'},{id:'saved'});
  const original=structuredClone(initial.savedWorkoutTemplates[0]);
  mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
- click(host.querySelector('.saved-workout-list .list-row'));templateOption('Edit exercises');
+ click(host.querySelector('.saved-workout-list .list-row'));templateOption('Edit workout');
  expect(host.querySelector('.plan-warmup-preference')).toBeNull();expect(host.querySelector('.plan-workout-overflow')).toBeNull();expect(host.querySelector('.workout-name-field')).toBeNull();
  click(host.querySelector('[data-swipe-fallback]'));expect(host.querySelectorAll('.plan-editor-exercise')).toHaveLength(1);
  click(button('Cancel'));expect(current.savedWorkoutTemplates[0]).toEqual(original);
- templateOption('Edit exercises');click(button('REVIEW WORKOUT'));click(button('SAVE CHANGES'));
+ templateOption('Edit workout');click(button('REVIEW WORKOUT'));click(button('SAVE CHANGES'));
  expect(current.savedWorkoutTemplates[0].revision).toBe(2);expect(current.savedWorkoutTemplates[0].exercises).toEqual(original.exercises);expect(current.activeWorkout).toEqual(initial.activeWorkout);
 });
 it('embedded saved browse, preview and editor keep the shared picker identity and draft boundaries',()=>{
@@ -64,7 +64,7 @@ it('embedded saved browse, preview and editor keep the shared picker identity an
  mount(initial,(state,update)=><Detail detail={{freestylePicker:true}} state={state} update={update} setDetail={()=>{}} close={closed}/>);
  const header=host.querySelector('.detail-header'),search=host.querySelector('input[type=search]');
  click(button('Saved workouts'));expect(host.querySelectorAll('.detail-header')).toHaveLength(1);expect(header.querySelector('strong').textContent).toBe('Add exercise');
- click(host.querySelector('.saved-workout-list .list-row'));templateOption('Edit exercises');
+ click(host.querySelector('.saved-workout-list .list-row'));templateOption('Edit workout');
  expect(host.querySelector('.detail-header')).toBe(header);expect(host.querySelector('.plan-editor')).not.toBeNull();
  click(button('Cancel'));expect(current.savedWorkoutTemplates).toEqual(initial.savedWorkoutTemplates);expect(current.activeWorkout).toEqual(initial.activeWorkout);
  click(host.querySelector('.detail-header-back'));expect(host.querySelector('input[type=search]')).toBe(search);expect(button('Saved workouts')).toBeDefined();
@@ -81,14 +81,14 @@ it('uses workout, not template, in saved-workout browse, preview, actions and ed
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
  click(host.querySelector('.saved-workout-list .list-row'));
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
- templateOption('Edit exercises');
+ templateOption('Edit workout');
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
  click(button('Cancel'));
  templateOption('Delete saved workout');
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
 });
 it.each(['close','back','backdrop','escape'])('saved options %s dismissal preserves data and returns focus to the trigger',method=>{
- const initial=savedFixture();mountSaved(initial);expect(button('Rename')).toBeUndefined();expect(button('Edit exercises')).toBeUndefined();expect(button('Delete saved workout')).toBeUndefined();
+ const initial=savedFixture();mountSaved(initial);expect(button('Rename')).toBeUndefined();expect(button('Edit workout')).toBeUndefined();expect(button('Delete saved workout')).toBeUndefined();
  const trigger=host.querySelector('[aria-label="Saved workout options"]');trigger.focus();click(trigger);act(()=>vi.advanceTimersByTime(20));
  const panel=document.querySelector('.saved-template-options');expect(panel).not.toBeNull();expect(host.querySelector('.saved-workouts').inert).toBe(true);expect(panel.querySelector('.danger-text').textContent).toBe('Delete saved workout');
  if(method==='close')click(panel.querySelector('.detail-header-close'));if(method==='back')click(panel.querySelector('.detail-header-back'));if(method==='backdrop')click(panel.parentElement);if(method==='escape')act(()=>window.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape'})));
@@ -109,7 +109,7 @@ it('delete cancel/failure/retry requires confirmation, deletes once and preserve
 it('new-template visible Edit cancels draft edits and Review saves only the intended reusable definition',()=>{
  const initial=addFreestyleExercise(savedFixture(),'push-up'),source=initial.activeWorkout;
  mount(initial,(state,update)=><SavedWorkouts source={source} state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
- expect(host.querySelector('[aria-label="Saved workout options"]')).toBeNull();expect(host.querySelector('.saved-template-save-actions .text-button').textContent).toBe('Edit exercises');
- type(host.querySelector('.saved-template-name input'),'New routine');click(button('Edit exercises'));click(host.querySelector('[data-swipe-fallback]'));click(button('Cancel'));expect(host.querySelector('.saved-template-name input').value).toBe('New routine');expect(host.querySelectorAll('.saved-template-exercises li')).toHaveLength(2);expect(current).toEqual(initial);
- click(button('Edit exercises'));click(button('REVIEW WORKOUT'));click(button('SAVE WORKOUT'));expect(current.savedWorkoutTemplates).toHaveLength(2);expect(current.savedWorkoutTemplates[1]).toMatchObject({name:'New routine',revision:1});expect(current.activeWorkout).toEqual(source);expect(closed).toHaveBeenCalledOnce();
+ expect(host.querySelector('[aria-label="Saved workout options"]')).toBeNull();expect(host.querySelector('.saved-template-save-actions .text-button').textContent).toBe('Edit workout');
+ type(host.querySelector('.saved-template-name input'),'New routine');click(button('Edit workout'));click(host.querySelector('[data-swipe-fallback]'));click(button('Cancel'));expect(host.querySelector('.saved-template-name input').value).toBe('New routine');expect(host.querySelectorAll('.saved-template-exercises li')).toHaveLength(2);expect(current).toEqual(initial);
+ click(button('Edit workout'));click(button('REVIEW WORKOUT'));click(button('SAVE WORKOUT'));expect(current.savedWorkoutTemplates).toHaveLength(2);expect(current.savedWorkoutTemplates[1]).toMatchObject({name:'New routine',revision:1});expect(current.activeWorkout).toEqual(source);expect(closed).toHaveBeenCalledOnce();
 });

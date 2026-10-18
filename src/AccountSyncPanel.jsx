@@ -3,6 +3,21 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { focusNavigationTarget } from './navigationFocus.js';
 import './accountSync.css';
+import { AccountAccessOptions } from './AccountAccessOptions.jsx';
+import {emailAccountError} from './emailAccountAuth.js';
+
+function EmailVerification({sync}){
+  const [busy,setBusy]=useState(false),[message,setMessage]=useState('');const pending=useRef(false);
+  const run=async check=>{if(pending.current)return;pending.current=true;setBusy(true);setMessage('');try{
+    if(check){const result=await sync.refreshEmailVerification();setMessage(result.verified?'Email verified.':'Email is not verified yet. Open the link in your inbox, then check again.');}
+    else{await sync.verifyEmail();setMessage('Verification email sent. Check your inbox and spam folder.');}
+  }catch(error){setMessage(emailAccountError(error));}finally{pending.current=false;setBusy(false);}};
+  if(!sync.linked||sync.providerName!=='Email'||sync.emailVerified)return null;
+  return <div className="account-email-verification"><p>Verify your email to use Coach and photo review. Your local training is available.</p>
+    <button type="button" className="button quiet" disabled={busy} onClick={()=>run(false)}>SEND VERIFICATION EMAIL</button>
+    <button type="button" className="button quiet" disabled={busy} onClick={()=>run(true)}>I’VE VERIFIED MY EMAIL</button>
+    {message&&<p role="status">{message}</p>}</div>;
+}
 
 function AccountConfirmation({ Modal, title, description, cancelLabel, confirmLabel, busy, close, confirm, returnFocusRef, backgroundRef }) {
   return createPortal(<Modal close={close} returnFocusRef={returnFocusRef} backgroundRef={backgroundRef}>{requestClose =>
@@ -37,20 +52,22 @@ export function AccountSyncPanel({ sync, Modal, backgroundRef }) {
   const confirmTrigger = useRef(null);
   const savedTrigger = useRef(null);
   const panelRef = useRef(null);
-  const act = async action => {
-    if (busy) return;
-    setBusy(true); setError(''); setCollision(false);
+  const pending = useRef(false);
+  const act = async (action,propagate=false) => {
+    if (pending.current) return;
+    pending.current = true; setBusy(true); setError(''); setCollision(false);
     try {
       const result = await action();
       if (result?.status === 'existing-account-conflict') setCollision(true);
       else setConfirmation(null);
     } catch (failure) {
+      if(propagate)throw failure;
       setError(failure?.code === 'auth/operation-not-allowed'
-        ? 'Google sign-in needs to be enabled for ROOK before this can work.'
+        ? 'This sign-in method needs to be enabled for ROOK before this can work.'
         : failure?.code === 'auth/popup-closed-by-user'
           ? ''
           : failure?.message || 'Account action could not be completed. Your local data is unchanged.');
-    } finally { setBusy(false); }
+    } finally { pending.current = false; setBusy(false); }
   };
   return <section ref={panelRef} className="account-sync-panel" aria-label="Account and sync">
     <p className="eyebrow">ACCOUNT &amp; SYNC</p>
@@ -60,24 +77,31 @@ export function AccountSyncPanel({ sync, Modal, backgroundRef }) {
     {sync?.state === 'synced' && sync.lastSuccessAt && <small>Last synced {new Date(sync.lastSuccessAt).toLocaleString()}</small>}
     {sync?.state === 'not-configured' && <small>{sync.category === 'rollout-off' ? 'Cloud backup is not enabled in this build. Keep a ROOK backup file.' : 'Keep a ROOK backup file until cloud setup is complete.'}</small>}
     {sync?.state === 'needs-attention' && <small>Your saved data on this device is unchanged. Keep a ROOK backup file while this is reviewed.</small>}
-    {sync?.linked && sync?.state === 'synced' && sync.pendingCount === 0 && <small>Google account connected. Your ROOK training data is backed up.</small>}
-    {sync?.linked && sync?.state !== 'synced' && <small>Google account connected. Cloud backup still needs to finish; your data stays on this device.</small>}
+    {sync?.linked && sync?.state === 'synced' && sync.pendingCount === 0 && <small>{sync.providerName || 'Google'} account connected. Your ROOK training data is backed up.</small>}
+    {sync?.linked && sync?.state !== 'synced' && <small>{sync.providerName || 'Google'} account connected. Cloud backup still needs to finish; your data stays on this device.</small>}
     {sync?.state === 'synced' && <small>Workout photos stay on this device; cloud sync does not include them.</small>}
     </div>
-    {sync?.state !== 'not-configured' && !sync?.linked && !collision && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span><NavigationChevron/></button>}
+    <EmailVerification sync={sync||{}}/>
+    {sync?.state !== 'not-configured' && !sync?.linked && !collision && !sync?.providers?.some(id=>id!=='google.com') && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span><NavigationChevron/></button>}
+    {sync?.state !== 'not-configured' && !sync?.linked && !collision && sync?.providers?.some(id=>id!=='google.com') && <>
+      <AccountAccessOptions providers={sync.providers} busy={busy} disabled={!sync?.canSecure} registrationOnly
+        onEmail={sync.registerWithEmail?details=>act(()=>sync.registerWithEmail(details),true):undefined}
+        onChoose={id=>act(id==='google.com'?sync.secureWithGoogle:()=>sync.secureWithProvider(id))}/>
+      <small>Link this profile to an account so you can restore it on another device. Your training data stays here.</small>
+    </>}
     {collision && <div className="account-sync-collision" role="status">
-      <p>This Google account already has a ROOK profile. Your current training data is unchanged; ROOK will not merge the profiles automatically.</p>
+      <p>This account already has a ROOK profile. Your current training data is unchanged; ROOK will not merge the profiles automatically.</p>
       <button type="button" className="button secondary" disabled={busy} onClick={() => { setCollision(false); setError(''); }}>KEEP THIS PROFILE</button>
       <button type="button" className="button quiet" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}>TRY A DIFFERENT GOOGLE ACCOUNT</button>
     </div>}
     {sync?.linked && !sync?.locked && <button type="button" className="list-row account-sync-sign-out" ref={confirmTrigger} disabled={busy} onClick={() => setConfirmation('sign-out')}><span><strong>Sign out</strong><small>Your local data stays on this device</small></span><NavigationChevron/></button>}
-    {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with its Google account to reopen it</small></span><NavigationChevron/></button>}
+    {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with the account that owns it</small></span><NavigationChevron/></button>}
     {error && <p className="account-sync-error" role="alert">{error}</p>}
     {confirmation && <AccountConfirmation Modal={Modal}
       title={confirmation === 'sign-out' ? 'Sign out?' : 'Return to saved profile?'}
       description={confirmation === 'sign-out'
         ? 'Your ROOK data will stay on this device. This profile will remain protected until you sign back in.'
-        : 'This separate profile will stay saved. The original profile will remain protected until you sign in with its Google account.'}
+        : 'This separate profile will stay saved. The original profile will remain protected until you sign in with the account that owns it.'}
       cancelLabel="CANCEL" confirmLabel={confirmation === 'sign-out' ? 'SIGN OUT' : 'CONTINUE'} busy={busy}
       close={() => setConfirmation(null)} confirm={() => act(confirmation === 'sign-out' ? sync.signOutAccount : sync.switchToSavedProfile)} returnFocusRef={confirmation === 'sign-out' ? confirmTrigger : savedTrigger} backgroundRef={backgroundRef || panelRef}/>}
   </section>;
@@ -96,11 +120,11 @@ export function AccountSyncLock({ sync, Modal }) {
     dialog?.addEventListener('rook:before-sheet-close', guard);
     return () => dialog?.removeEventListener('rook:before-sheet-close', guard);
   }, [step]);
-  const act = async action => {
+  const act = async (action,propagate=false) => {
     if (pending.current) return;
     pending.current = true; setBusy(true); setError('');
     try { await action(); }
-    catch (failure) { setError(failure?.code === 'auth/popup-closed-by-user' ? '' : failure?.message || 'Could not open this profile. Your saved data is unchanged.'); }
+    catch (failure) { if(propagate)throw failure;setError(failure?.code === 'auth/popup-closed-by-user' ? '' : failure?.message || 'Could not open this profile. Your saved data is unchanged.'); }
     finally { pending.current = false; setBusy(false); }
   };
   const closeChoice = () => { if (!pending.current) { setStep(null); setError(''); } };
@@ -108,8 +132,10 @@ export function AccountSyncLock({ sync, Modal }) {
   return <main ref={lockRef} className="screen account-sync-lock">
     <p className="eyebrow">ROOK ACCOUNT</p>
     <h1>This device has saved training data</h1>
-    <p>Sign in with the Google account that owns this ROOK profile. Your data is still here.</p>
-    <button type="button" className="button primary" disabled={busy} onClick={() => act(sync.signInToThisDevice)}>{busy && !step ? 'VERIFYING…' : 'CONTINUE WITH GOOGLE'}</button>
+    <p>Sign in with the account that owns this ROOK profile. Your data is still here.</p>
+    <AccountAccessOptions providers={sync?.providers || ['google.com']} busy={busy} allowRegistration={false}
+      onEmail={sync?.signInToThisDeviceWithEmail?details=>act(()=>sync.signInToThisDeviceWithEmail(details),true):undefined} onReset={sync?.resetPasswordWithEmail}
+      onChoose={id=>act(()=>sync.signInToThisDevice(id))}/>
     <button type="button" className="account-sync-secondary" ref={separateTrigger} disabled={busy} onClick={() => { setError(''); setStep('choice'); }}>Use another ROOK profile</button>
     {error && !step && <p role="alert">{error}</p>}
     {step && createPortal(<Modal close={closeChoice} returnFocusRef={separateTrigger} backgroundRef={lockRef}>{requestClose =>
@@ -126,7 +152,11 @@ export function AccountSyncLock({ sync, Modal }) {
             <button type="button" className="button primary" disabled={busy} onClick={() => act(sync.useSeparateProfile)}>{busy ? 'PLEASE WAIT…' : 'CONTINUE'}</button>
           </div>
         </> : <div className="account-profile-options">
-          <button type="button" className="button primary" data-sheet-initial-focus disabled={busy} onClick={() => act(sync.signInWithAnotherAccount)}>{busy ? 'VERIFYING…' : 'SIGN IN WITH ANOTHER ACCOUNT'}</button>
+          {sync?.providers?.some(id=>id!=='google.com')
+            ? <AccountAccessOptions providers={sync.providers} busy={busy} initialFocus allowRegistration={false}
+                onEmail={sync.signInWithAnotherEmail?details=>act(()=>sync.signInWithAnotherEmail(details),true):undefined} onReset={sync.resetPasswordWithEmail}
+                onChoose={id=>act(()=>sync.signInWithAnotherAccount(id))}/>
+            : <button type="button" className="button primary" data-sheet-initial-focus disabled={busy} onClick={() => act(sync.signInWithAnotherAccount)}>{busy ? 'VERIFYING…' : 'SIGN IN WITH ANOTHER ACCOUNT'}</button>}
           <button type="button" className="button secondary" disabled={busy} onClick={() => { setError(''); setStep('local'); }}>START WITHOUT AN ACCOUNT</button>
           <button type="button" className="button quiet" disabled={busy} onClick={requestClose}>CANCEL</button>
         </div>}

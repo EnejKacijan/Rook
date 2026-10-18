@@ -20,10 +20,11 @@ export function MissedWorkoutSummary({state,onSelect,update}) {
    <span className="eyebrow today-missed-label">{single?'MISSED WORKOUT':'MISSED WORKOUTS'}</span>
    {feedback&&<button type="button" className="text-button missed-reminder-hide" aria-label={single?'Hide missed workout reminder':'Hide missed workouts reminder'} onClick={feedback.hide}>Hide</button>}
   </div>
+  <p className="today-missed-description">Not completed. Choose what to do next.</p>
   <ExerciseNavigationButton type="button" className="today-missed-open"
    aria-label={single?`Recover ${first.workout.name}, missed ${dateLabel(first.scheduledDate,true).replaceAll(',','')}`:`View ${missed.length} missed workouts`}
    onClick={()=>onSelect(single?{sessionId:first.logicalSessionId}:{missed:true})}>
-   <span><strong>{single?first.workout.name:`${missed.length} missed workouts`}</strong>
+   <span><strong>{single?first.workout.name:`Review ${missed.length} missed workouts`}</strong>
     {single&&<time dateTime={first.scheduledDate}>Missed · {dateLabel(first.scheduledDate)}</time>}</span>
    <NavigationChevron className="today-missed-chevron"/>
   </ExerciseNavigationButton>

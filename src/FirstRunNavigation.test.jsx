@@ -78,7 +78,7 @@ it('Sign in and Restore use the same two-level Back and interactive edge hierarc
   expect(page().textContent).toContain('A plan that fits your week.');
 });
 
-for (const [name, route, back] of [['BUILD MY PLAN', 'personalize', 'Back to plan options'], ['Bring my plan', 'bring', 'Back to start'], ['Import a plan', 'import', 'Back to start'], ['Enter it myself', 'scratch', 'Back to start'], ['Restore', 'restore', 'Back to start'], ['Create a workout', 'create-workout', 'Back to start'], ['Freestyle', 'freestyle-confirm', 'Back to start']]) {
+for (const [name, route, back] of [['BUILD MY PLAN', 'personalize', 'Back to plan options'], ['Bring my plan', 'bring', 'Back to start'], ['Import a plan', 'import', 'Back to start'], ['Enter it myself', 'scratch', 'Back to start'], ['Restore', 'restore', 'Back to start'], ['Create workout', 'create-workout', 'Back to start'], ['Freestyle', 'freestyle-confirm', 'Back to start']]) {
   it(`${route}: enters immediately, uses an opaque inaccessible page stack, restores exact Landing scroll and focus`, () => {
     prepare(name); const parent = ['import','scratch'].includes(route) ? 'bring' : 'landing';
     const trigger = button(name); trigger.focus(); document.documentElement.scrollTop = 173;

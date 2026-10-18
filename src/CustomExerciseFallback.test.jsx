@@ -11,6 +11,8 @@ it('keeps the explanatory text separate from one accessible creation action', as
   const action=host.querySelector('button');
   expect(action.getAttribute('aria-label')).toBe('Create custom exercise');
   expect(action.type).toBe('button');
+  const down=new MouseEvent('mousedown',{bubbles:true,cancelable:true,button:0});
+  await act(async()=>action.dispatchEvent(down));expect(down.defaultPrevented).toBe(true);
   await act(async()=>action.click());expect(onCreate).toHaveBeenCalledTimes(1);
   await act(async()=>root.unmount());
 });

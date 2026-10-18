@@ -5,18 +5,20 @@ import { ensureAccountSyncLedger } from './accountSyncOutbox.js';
 import { materializeCloudProfile } from './accountSyncModel.js';
 import { readFirstRunAccountClaim, writeFirstRunAccountClaim } from './firstRunAccountClaim.js';
 import { ACCOUNT_CLOUD_READ_TIMEOUT_MS } from './accountSyncTiming.js';
+import { createAccountProvider } from './accountProviders.js';
 
 // Provider-specific UI enters here; all profile existence/ownership decisions
 // remain on a verified cloud read and an unchanged local first-run boundary.
 export async function signInFirstRunAccount({ client, storage, getState, isCurrent = () => true,
   readLocal = readLocalState, readCloud = uid => createFirebaseSyncAdapter(client).read(uid),
   save = saveState, materialize = materializeCloudProfile, bind = ensureAccountSyncLedger,
-  timeoutMs = ACCOUNT_CLOUD_READ_TIMEOUT_MS }) {
+  timeoutMs = ACCOUNT_CLOUD_READ_TIMEOUT_MS, providerId = 'google.com', authenticate }) {
   if (!client || getState().profile.onboardingComplete) throw new Error('Sign-in is available only during first-run setup.');
   if (readLocal(storage, hydrateStoredState).status !== 'empty') throw new Error('Local data already exists. Back it up before changing accounts.');
   if (readFirstRunAccountClaim(storage)) throw new Error('This setup is already associated with an account.');
   const original = serializeState(getState());
-  const result = await client.authApi.signInWithPopup(client.auth, new client.authApi.GoogleAuthProvider());
+  const authenticationCurrent=()=>isCurrent()&&serializeState(getState())===original&&readLocal(storage,hydrateStoredState).status==='empty'&&!readFirstRunAccountClaim(storage);
+  const result = await (authenticate?authenticate(client,authenticationCurrent):client.authApi.signInWithPopup(client.auth, createAccountProvider(client.authApi, providerId)));
   const uid = result.user.uid;
   let timer;
   const remote = await Promise.race([readCloud(uid), new Promise((_, reject) => {

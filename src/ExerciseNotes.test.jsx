@@ -39,7 +39,7 @@ beforeEach(() => {
 afterEach(() => {act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers();});
 function mount(payload = initial.activeWorkout.exercises[0]) {
   function Harness() {
-    const [state, setState] = useState(initial), [detail, setDetail] = useState({exerciseNote: payload}), background = useRef(null);
+    const [state, setState] = useState(initial), [detail, setDetail] = useState(payload === null ? null : {exerciseNote: payload}), background = useRef(null);
     current = state;
     const update = fn => {updates(); setState(before => fn(structuredClone(before)));};
     return <><div ref={background}><ActiveWorkout state={state} update={update} setDetail={setDetail} setPage={() => {}}/></div>
@@ -54,6 +54,110 @@ function type(value) {
     field().dispatchEvent(new Event('input', {bubbles: true}));
   });
 }
+
+function openOptions() {
+  click(document.querySelector('button[aria-label="Exercise options"]')); advance(300);
+  return document.querySelector('.active-exercise-note-action');
+}
+
+it('opens the canonical editor directly from the personal reminder and saves in its existing scope', () => {
+  mount(null); const trigger = document.querySelector('.exercise-personal-note-action');
+  expect(trigger.tagName).toBe('BUTTON'); expect(trigger.type).toBe('button');
+  expect(trigger.getAttribute('aria-label')).toBe('Edit note: Use the same box height');
+  expect(trigger.getAttribute('aria-haspopup')).toBe('dialog');
+  expect(document.querySelector('.exercise-program-note').closest('button')).toBeNull();
+  click(trigger); advance(300); expect(field().value).toBe('Use the same box height');
+  expect(document.querySelector('.active-exercise-options-sheet')).toBeNull();
+  expect(current).toEqual(initial); expect(updates).not.toHaveBeenCalled();
+  type('Use box 3'); click(button('SAVE')); advance(300);
+  expect(document.querySelector('.exercise-personal-note-action').textContent).toContain('Use box 3');
+  expect(domain.exercisePersonalNote(current.program.days[0].exercises[0])).toBe('Use box 3');
+  expect(document.querySelector('.exercise-program-note').textContent).toBe('pocasi dol, hitro gor');
+  advance(32); // The shared modal restores focus on the frame after unmount.
+  expect(document.activeElement).toBe(trigger);
+  expect(updates).toHaveBeenCalledOnce();
+});
+
+it('removing a note reached directly removes the shortcut while Add note remains available in the menu', () => {
+  mount(null); click(document.querySelector('.exercise-personal-note-action')); advance(300);
+  click(button('Remove note')); advance(300);
+  expect(document.querySelector('.exercise-personal-note-action')).toBeNull();
+  expect(openOptions().getAttribute('aria-label')).toBe('Add note');
+  expect(document.querySelector('.exercise-program-note').textContent).toBe('pocasi dol, hitro gor');
+});
+
+it('opening, dismissing and saving the direct note preserves raw logger drafts and all set values', () => {
+  initial.activeWorkout.exercises[0].exerciseId = 'barbell-bench-press';
+  initial.activeWorkout.exercises[0].sets[0].weight = 35;
+  mount(null); const input = document.querySelector('[data-workout-field="weight"] input');
+  act(() => {
+    input.focus(); Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(input, '082,50');
+    input.dispatchEvent(new Event('input', {bubbles: true}));
+  });
+  const before = structuredClone(current);
+  const trigger = document.querySelector('.exercise-personal-note-action');
+  act(() => trigger.dispatchEvent(new MouseEvent('pointerdown', {bubbles: true, cancelable: true, button: 0})));
+  click(trigger); advance(300);
+  expect(input.value).toBe('082,50'); expect(current).toEqual(before);
+  type('Unsaved'); click(document.querySelector('.exercise-note-sheet [aria-label="Close"]')); advance(300);
+  expect(input.value).toBe('082,50'); expect(current).toEqual(before);
+  act(() => input.focus()); click(trigger); advance(300);
+  type('Use box 4'); click(button('SAVE')); advance(300);
+  expect(input.value).toBe('082,50');
+  expect(current.activeWorkout.exercises.map(row => row.sets)).toEqual(before.activeWorkout.exercises.map(row => row.sets));
+  expect(current.workouts).toEqual(before.workouts); expect(updates).toHaveBeenCalledOnce();
+});
+
+it('puts the personal-note indicator and preview on Edit note, not above the overflow button', () => {
+  mount(null); const overflow = document.querySelector('button[aria-label="Exercise options"]');
+  expect(overflow.querySelector('.exercise-note-present')).toBeNull();
+  expect(overflow.getAttribute('aria-description')).toContain('Note added');
+  const action = openOptions();
+  expect(action.getAttribute('aria-label')).toBe('Edit note');
+  expect(action.querySelector('.exercise-note-present').getAttribute('aria-hidden')).toBe('true');
+  expect(action.querySelector('small').textContent).toBe('Use the same box height');
+  expect(action.getAttribute('aria-describedby')).toBe(action.querySelector('small').id);
+  expect(action.querySelector('svg')).not.toBeNull();
+  expect(current).toEqual(initial); expect(updates).not.toHaveBeenCalled();
+  click(action); advance(300);
+  expect(field().value).toBe('Use the same box height');
+  expect(document.querySelector('.exercise-plan-note p').textContent).toBe('pocasi dol, hitro gor');
+});
+
+it('Add note has no existing-note indicator or preview, even when a plan cue exists', () => {
+  initial.activeWorkout.exercises[0].personalNote = '';
+  mount(null); const action = openOptions();
+  expect(action.getAttribute('aria-label')).toBe('Add note');
+  expect(action.querySelector('.exercise-note-present,small')).toBeNull();
+  expect(action.hasAttribute('aria-describedby')).toBe(false);
+  click(action); advance(300); expect(field().value).toBe('');
+  expect(document.querySelector('.exercise-plan-note p').textContent).toBe('pocasi dol, hitro gor');
+  expect(updates).not.toHaveBeenCalled();
+});
+
+it('saving and removing through the same editor updates the menu and preserves instructions/history', () => {
+  const history = structuredClone(initial.workouts);
+  mount(null); click(openOptions()); advance(300); type('Seat 4, controlled pace');
+  click(button('SAVE')); advance(300);
+  let action = openOptions(); expect(action.querySelector('small').textContent).toBe('Seat 4, controlled pace');
+  click(action); advance(300); click(button('Remove note')); advance(300);
+  action = openOptions(); expect(action.getAttribute('aria-label')).toBe('Add note');
+  expect(action.querySelector('.exercise-note-present,small')).toBeNull();
+  expect(domain.exercisePersonalNote(current.program.days[0].exercises[0])).toBeNull();
+  expect(current.activeWorkout.exercises[0].notes).toBe('pocasi dol, hitro gor');
+  expect(current.workouts).toEqual(history); expect(updates).toHaveBeenCalledTimes(2);
+});
+
+it('dismissal leaves existing personal notes intact and the menu shows the full multiline note', () => {
+  const note = 'Use the same setup.\n' + 'Keep a controlled pace. '.repeat(4);
+  initial.activeWorkout.exercises[0].personalNote = note;
+  mount(null); const action = openOptions();
+  expect(action.querySelector('small').textContent).toBe(note.trim());
+  click(action); advance(300); type('Unsaved');
+  click(document.querySelector('.exercise-note-sheet [aria-label="Close"]')); advance(300);
+  expect(openOptions().querySelector('small').textContent).toBe(note.trim());
+  expect(current).toEqual(initial); expect(updates).not.toHaveBeenCalled();
+});
 
 it('A/B/C: displays the canonical logger cue read-only, independently from the editable reminder', () => {
   mount(); const plan = document.querySelector('.exercise-plan-note');

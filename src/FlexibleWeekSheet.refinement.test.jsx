@@ -20,7 +20,7 @@ function draw(initial=base(),request={}){function Harness(){const[state,setState
 function applySkip(){click('Move a workoutChoose one session and another date.');const row=[...document.querySelectorAll('[data-session-id]')].find(n=>n.textContent.includes('NOGE A')&&n.textContent.includes('Sep 29'));act(()=>row.click());click('Skip this session');click('USE THIS SCHEDULE');}
 const notice=()=>document.querySelector('.rook-snackbar');
 it('Apply shows one surviving canonical Schedule updated / Undo notice and closes the sheet',()=>{
- draw();applySkip();expect(document.querySelector('.flexible-week-sheet')).toBeNull();expect(notice().textContent).toBe('Schedule updatedUndo');expect(document.querySelectorAll('.rook-snackbar')).toHaveLength(1);expect(button('View schedule')).toBeDefined();
+ draw();applySkip();expect(document.querySelector('.flexible-week-sheet')).toBeNull();expect(notice().textContent).toBe('Schedule updatedUndo');expect(document.querySelectorAll('.rook-snackbar')).toHaveLength(1);expect(button('View changes')).toBeDefined();
  const undo=notice().querySelector('button');act(()=>{undo.click();undo.click();});expect(current.flexibleWeek.sessions).toEqual({});expect(notice()).toBeNull();expect(current.flexibleWeek.revision).toBe(2);
 });
 it('timeout dismissal keeps the applied revision, which survives reload',()=>{draw();applySkip();const applied=structuredClone(current.flexibleWeek);act(()=>vi.advanceTimersByTime(5001));expect(notice()).toBeNull();expect(current.flexibleWeek).toEqual(applied);expect(deserializeState(localStorage.getItem(STORAGE_KEY)).flexibleWeek).toEqual(applied);});

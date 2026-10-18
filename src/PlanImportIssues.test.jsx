@@ -1,7 +1,7 @@
 import { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
-import { PlanImportIssues } from './PlanImportIssues.jsx';
+import { PlanImportIssues, OriginalPlanNotes } from './PlanImportIssues.jsx';
 import { importDecisionSummary } from './planImportReview.js';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let host,root;
@@ -101,4 +101,28 @@ it('distinguishes passive notes and active choices throughout the four-action fl
   expect(importDecisionSummary(review,{source:true,instruction:true})).toBe('2 decisions remaining');
   expect(importDecisionSummary(review,{source:true,instruction:true,day:true})).toBe('1 decision remaining');
   expect(importDecisionSummary(review,{source:true,instruction:true,day:true,rir:true})).toBe('Ready to use');
+});
+it('does not render an Import review panel just because original notes exist',()=>{
+ const source={...program,importMetadata:{sourceNotes:[{title:'LOWER B',text:'Lateral skater hops 2 × 10'}]}};
+ host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ act(()=>root.render(<PlanImportIssues program={source} resolved={{}} onResolve={vi.fn()}/>));
+ expect(host.querySelector('[aria-label="Import review"]')).toBeNull();
+});
+it('opens the verbatim original as an accessible reference without changing it',()=>{
+ const source={...program,importMetadata:{sourceNotes:[{title:'LOWER B',text:'Lateral skater hops 2 × 10\nKeep this original wording.'}]}};
+ const before=structuredClone(source);
+ host=document.createElement('div');document.body.append(host);root=createRoot(host);
+ act(()=>root.render(<OriginalPlanNotes program={source}/>));
+ const toggle=host.querySelector('button');
+ expect(toggle.getAttribute('aria-expanded')).toBe('false');
+ expect(host.querySelector('blockquote')).toBeNull();
+ expect(host.textContent).not.toMatch(/scoped source blocks|confirmation required|SOURCE DETAILS PRESERVED/);
+ act(()=>toggle.click());
+ expect(toggle.getAttribute('aria-expanded')).toBe('true');
+ expect(document.getElementById(toggle.getAttribute('aria-controls')).getAttribute('aria-hidden')).toBe('false');
+ expect(host.querySelector('blockquote').textContent).toBe(source.importMetadata.sourceNotes[0].text);
+ expect(host.textContent).toContain('They may differ from your current plan');
+ act(()=>toggle.click());
+ expect(toggle.getAttribute('aria-expanded')).toBe('false');
+ expect(source).toEqual(before);
 });

@@ -2,6 +2,7 @@ import { sha256 } from '@noble/hashes/sha2.js';
 import { ACCOUNT_SYNC_SCHEMA } from './accountSyncModel.js';
 import { activeProfileSlot } from './profileSlotKeys.js';
 import { rookPlatform } from './platform.js';
+import { createAccountProvider } from './accountProviders.js';
 
 export function firebaseConfigurationStatus() {
   if (rookPlatform.isNative) return 'rollout-off';
@@ -144,12 +145,11 @@ export async function linkExistingAnonymousUser(client, credential) {
 // Popup is initiated directly by a user gesture. On ROOK's Netlify domain the
 // default Firebase redirect helper would require additional same-origin proxy
 // configuration in browsers that block third-party storage.
-export async function linkGoogleAnonymousAccount(client) {
+export async function linkProviderAnonymousAccount(client, providerId = 'google.com') {
   const before = client.auth.currentUser;
   if (!before?.isAnonymous) throw new Error('No anonymous ROOK account to link.');
   try {
-    const provider = new client.authApi.GoogleAuthProvider();
-    provider.setCustomParameters?.({ prompt: 'select_account' });
+    const provider = createAccountProvider(client.authApi, providerId);
     const result = await client.authApi.linkWithPopup(before, provider);
     if (result.user.uid !== before.uid || client.auth.currentUser?.uid !== before.uid) throw new Error('Account identity changed during linking.');
     return { status: 'linked', uid: before.uid, user: result.user };
@@ -159,3 +159,5 @@ export async function linkGoogleAnonymousAccount(client) {
     throw error;
   }
 }
+
+export const linkGoogleAnonymousAccount = client => linkProviderAnonymousAccount(client, 'google.com');

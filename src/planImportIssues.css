@@ -13,6 +13,16 @@
 .import-review-remaining { font-size: 13px; }
 .plan-import-choice + .plan-import-choice { border-top: 1px solid var(--rook-border); padding-top: 16px; margin-top: 20px; }
 .plan-import-choice { scroll-margin-top: 88px; }
-.import-preserved-source { border-top: 1px solid var(--rook-border); margin-top: 16px; padding-top: 16px; }
-.import-preserved-source strong { font-size: 12px; }
+.original-plan-notes { margin: 24px 0; border-top: 1px solid var(--rook-border); min-width: 0; }
+.original-plan-notes-toggle { width: 100%; min-height: 56px; padding: 16px 0; border: 0; background: transparent; color: var(--rook-text); display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
+.original-plan-notes-toggle > span { display: grid; gap: 4px; min-width: 0; overflow-wrap: anywhere; }
+.original-plan-notes-toggle strong { font-size: 14px; font-weight: 600; }
+.original-plan-notes-toggle small { font-size: 13px; line-height: 1.4; color: var(--rook-secondary); }
+.original-plan-notes-toggle .rook-navigation-chevron { transform: rotate(90deg); }
+.original-plan-notes-toggle[aria-expanded="true"] .rook-navigation-chevron { transform: rotate(-90deg); }
+.original-plan-notes-body { padding-bottom: 12px; font-size: 13px; line-height: 1.45; overflow-wrap: anywhere; }
+.original-plan-notes-body > p { margin: 0 0 14px; color: var(--rook-secondary); }
+.original-plan-note + .original-plan-note { border-top: 1px solid var(--rook-border); margin-top: 12px; padding-top: 12px; }
+.original-plan-note > small { color: var(--rook-secondary); font-size: 12px; }
+.original-plan-note blockquote { margin: 8px 0 0; padding: 4px 12px; border-left: 2px solid var(--rook-border); white-space: pre-wrap; }
 .plan-import-issues .choice-row { white-space: normal; overflow-wrap: anywhere; text-align: left; }

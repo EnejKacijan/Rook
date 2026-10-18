@@ -20,6 +20,7 @@ vi.mock('./firebaseSyncClient.js',()=>({
   createFirebaseSyncAdapter:()=>firebase.cloud,
   resolveFirebaseIdentity:async client=>({user:client.auth.currentUser,created:false}),
   linkGoogleAnonymousAccount:(...args)=>firebase.link(...args),
+  linkProviderAnonymousAccount:(...args)=>firebase.link(...args),
 }));
 
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
@@ -180,6 +181,26 @@ async function openLocalAccount(link){
   await waitForState(()=>current,'offline');
   return {sync:()=>current,raw,state};
 }
+
+it('registers email in place, verifies it and refreshes the Firebase token without changing training data',async()=>{
+  const {sync,raw,state}=await openLocalAccount(async()=>{}),client=firebase.client;
+  client.authApi.EmailAuthProvider={credential:(email,password)=>({email,password,providerId:'password'})};
+  client.authApi.linkWithCredential=vi.fn(async before=>({user:client.auth.currentUser={...before,isAnonymous:false,email:'synthetic@example.test',emailVerified:false,providerData:[{providerId:'password'}],getIdToken:vi.fn(async()=> 'refreshed-token')}}));
+  client.authApi.sendEmailVerification=vi.fn(async()=>{});client.authApi.reload=vi.fn(async user=>{user.emailVerified=true;});
+  await act(async()=>expect(await sync().registerWithEmail({email:'synthetic@example.test',password:'synthetic-password-8'})).toMatchObject({status:'linked',uid:'anonymous-uid'}));
+  expect(sync().providerName).toBe('Email');expect(sync().emailVerified).toBe(false);
+  await act(async()=>sync().verifyEmail());expect(client.authApi.sendEmailVerification).toHaveBeenCalledWith(client.auth.currentUser);
+  await act(async()=>expect(await sync().refreshEmailVerification()).toEqual({verified:true}));
+  expect(sync().emailVerified).toBe(true);expect(client.auth.currentUser.getIdToken).toHaveBeenCalledWith(true);
+  expect(localStorage.getItem(PRIMARY_KEY)).toBe(raw);expect(localStorage.getItem(PRIMARY_KEY)).not.toContain('synthetic-password-8');
+  expect(readAccountSyncLedger(localStorage,state.profile.id).accountUid).toBe('anonymous-uid');expect(firebase.link).not.toHaveBeenCalled();
+});
+it('keeps email registration collisions separate from the existing local anonymous profile',async()=>{
+  const {sync,raw}=await openLocalAccount(async()=>{}),client=firebase.client;
+  client.authApi.EmailAuthProvider={credential:()=>({providerId:'password'})};client.authApi.linkWithCredential=vi.fn(async()=>{throw {code:'auth/email-already-in-use'};});
+  await act(async()=>expect(await sync().registerWithEmail({email:'synthetic@example.test',password:'synthetic-password-8'})).toMatchObject({status:'existing-account-conflict'}));
+  expect(client.auth.currentUser).toMatchObject({uid:'anonymous-uid',isAnonymous:true});expect(localStorage.getItem(PRIMARY_KEY)).toBe(raw);expect(sync().linked).toBe(false);
+});
 
 it('keeps the same local account after popup cancellation or provider failure',async()=>{
   const {sync,raw,state}=await openLocalAccount(async()=>{throw Object.assign(new Error('Canceled'),{code:'auth/popup-closed-by-user'});});

@@ -3,6 +3,25 @@ import { hydrateStoredState } from './domain.js';
 import { restoreLocalCheckpoint, deleteLocalState, storageDiagnostics, inspectStorageProtection } from './localStateStorage.js';
 import { clearAllWorkoutMedia } from './workoutPhotos.js';
 import './startupRecovery.css';
+import { AccountAccessOptions } from './AccountAccessOptions.jsx';
+
+function StartupProviderRestore({startup,busy,setBusy,setError,onRetry}) {
+  const pending=useRef(false);
+  if(!startup.restoreWithGoogle && !startup.restoreWithProvider)return null;
+  return <AccountAccessOptions providers={startup.accountProviders || ['google.com']} treatment="secondary" prefix="RESTORE WITH" busy={busy} allowRegistration={false}
+    onReset={startup.resetPasswordWithEmail}
+    onEmail={startup.restoreWithEmail?async details=>{
+      if(pending.current)return;pending.current=true;setBusy(true);setError('');
+      try{await startup.restoreWithEmail(details);onRetry();}finally{pending.current=false;setBusy(false);}
+    }:undefined}
+    onChoose={async id=>{
+      if(pending.current)return;
+      pending.current=true;setBusy(true);setError('');
+      try { await (startup.restoreWithProvider ? startup.restoreWithProvider(id) : startup.restoreWithGoogle());onRetry(); }
+      catch(failure){if(failure?.code!=='auth/popup-closed-by-user')setError(failure?.message||'Could not open your account. No local data was replaced.');}
+      finally{pending.current=false;setBusy(false);}
+    }}/>;
+}
 
 export function StorageDiagnosticView() {
   const [value,setValue]=useState(()=>storageDiagnostics());
@@ -41,12 +60,7 @@ export function StartupRecovery({loading=false,onRetry,restoreError=false,startu
         <button disabled={busy} className="button quiet" onClick={()=>setAction(null)}>CANCEL</button>
       </section>:<div className="startup-recovery-actions">
         <button className="button primary" onClick={onRetry}>TRY AGAIN</button>
-        {startup.restoreWithGoogle&&<button className="button secondary" disabled={busy} onClick={async()=>{
-          setBusy(true);setError('');
-          try { await startup.restoreWithGoogle(); onRetry(); }
-          catch(failure) { if(failure?.code!=='auth/popup-closed-by-user')setError(failure?.message||'Could not open your account. Local data was not replaced.'); }
-          finally { setBusy(false); }
-        }}>RESTORE WITH GOOGLE</button>}
+        <StartupProviderRestore {...{startup,busy,setBusy,setError,onRetry}}/>
         {startup.recovery&&<button className="button secondary" onClick={()=>setAction('restore')}>RESTORE LOCAL BACKUP</button>}
         {renderImport&&<button className="button secondary" onClick={()=>setAction('import')}>IMPORT BACKUP</button>}
         <button className="button quiet" onClick={()=>setAction('delete')}>START OVER</button>
@@ -74,12 +88,7 @@ export function StartupAccountRecovery({startup={},onRetry,onStartFresh,renderIm
         catch(failure) { setError(failure?.message||'Could not safely restore account data. No local data was replaced.'); }
         finally { setBusy(false); }
       }}>{busy?'RESTORING…':'RESTORE DATA'}</button>}
-      {startup.restoreWithGoogle&&<button type="button" className="button secondary" disabled={busy} onClick={async()=>{
-        setBusy(true);setError('');
-        try { await startup.restoreWithGoogle(); onRetry(); }
-        catch(failure) { if(failure?.code!=='auth/popup-closed-by-user')setError(failure?.message||'Could not open your account. No local data was replaced.'); }
-        finally { setBusy(false); }
-      }}>{busy?'CHECKING ACCOUNT…':'RESTORE WITH GOOGLE'}</button>}
+      <StartupProviderRestore {...{startup,busy,setBusy,setError,onRetry}}/>
       {startup.allowStartFresh&&<button type="button" className="button secondary" onClick={onStartFresh}>{startup.setupAlreadyStarted?'CONTINUE SETUP':'START NEW SETUP'}</button>}
       {renderImport&&<button type="button" className="button secondary" onClick={()=>setImporting(true)}>IMPORT BACKUP</button>}
     </div>

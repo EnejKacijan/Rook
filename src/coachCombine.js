@@ -14,6 +14,19 @@ export function combineTime(text){
   const hours=value.match(/\b(\d+(?:[.,]\d+)?)\s*(?:hours?|ur[aoie]?)\b/);
   return hours?Number(hours[1].replace(',','.'))*60:undefined;
 }
+export function combineRecoveryForEntry(state,messages){
+  const entry=messages.at(-1);
+  if(entry?.reply?.combineReviewRequired)return entry.reply.combineReviewRequired;
+  // Existing saved conversations predate structured blockers. Recover only
+  // this exact old domain error, with proven live source IDs and explicit time.
+  if(!/^Review .+ against your current equipment, restrictions or unresolved prescription first\. No workout was changed\.$/.test(entry?.reply?.text||''))return null;
+  const previousEntry=messages.slice(0,-1).findLast(e=>e.reply?.combineRequest);
+  if(previousEntry?.coachWorkflowStatus==='cancelled'||previousEntry?.combineReviewCancelled)return null;
+  const previous=previousEntry?.reply.combineRequest;
+  const sourceIds=previous?.sourceIds,minutes=combineTime(entry.user);
+  if(!Array.isArray(sourceIds)||sourceIds.length!==2||new Set(sourceIds).size!==2||minutes===undefined||!sourceIds.every(id=>combineSources(state).some(s=>s.logicalSessionId===id)))return null;
+  return {profileId:state.profile.id,planId:state.program.id,sourceIds,minutes};
+}
 const sourceLabel=s=>`${s.workout.name} · ${s.scheduledDate}`;
 const conversation=state=>(state.conversations||[]).filter(e=>e.conversationId===state.activeCoachConversationId);
 export function combineRevisionTargets(state){
@@ -49,7 +62,8 @@ function revisionTime(message,base,interpreted){
   return undefined;
 }
 export async function coachCombineReply(state,message,{selection,interpret,interpretedMinutes,revisionIntent,language}={}){
-  const previous=pendingCoachWorkflows(state).filter(entry=>entry.reply?.combineRequest).at(-1)?.reply.combineRequest;
+  const pendingReply=pendingCoachWorkflows(state).filter(entry=>entry.reply?.combineRequest||entry.reply?.combineReviewRequired).at(-1)?.reply;
+  const previous=pendingReply?.combineRequest||pendingReply?.combineReviewRequired;
   const enteredTime=combineTime(message),text=normalize(message);
   const sl=language==='Slovenian'||previous?.language==='Slovenian'||/\b(zdruz\w*|podaljs\w*|skrajs\w*|imam|zdaj|cas\w*)\b/.test(text);
   const say=(text,extra={})=>({text,action:null,source:'combine-domain',final:true,...extra});
@@ -75,7 +89,7 @@ export async function coachCombineReply(state,message,{selection,interpret,inter
     if(minutes===undefined&&selection?.targetId&&Object.hasOwn(previous||{},'minutes'))minutes=previous.minutes;
     if(minutes===undefined)return say(sl?'Koliko časa imaš danes za celoten trening?':'How much time do you have today for the whole workout?',{combineRequest:{kind:'revision',step:'time',targetId:base.id,baseToken:combinedStateToken(base),language:sl?'Slovenian':'English'}});
     const result=buildCombinedRevision(state,{base,minutes});
-    if(result.status!=='ready')return say(result.error);
+    if(result.status!=='ready')return say(result.error,{combineReviewRequired:result.combineReviewRequired});
     const p=result.proposal,d=p.revisionSummary,changed=d.added.length||d.removed.length||d.sets.length;
     const reply=changed?(sl?`Pripravil sem posodobljen predlog: ocena je približno ${Math.round(p.estimatedMinutes)} minut. Preglej spremembe pred uporabo; trenutni trening še ni spremenjen.`:`An updated proposal is ready, estimated at about ${Math.round(p.estimatedMinutes)} minutes. Review it before applying; the current workout is unchanged.`):
       (sl?`Časovni cilj lahko spremenim, vendar dodatno delo v trenutnih omejitvah ni smiselno. Vsebina ostaja enaka, ocena približno ${Math.round(p.estimatedMinutes)} minut. Preglej pred uporabo.`:`The time target can change, but no additional work is useful within the current limits. The content stays the same, estimated at about ${Math.round(p.estimatedMinutes)} minutes. Review before applying.`);
@@ -87,10 +101,12 @@ export async function coachCombineReply(state,message,{selection,interpret,inter
   if(state.todayAdaptation)return say('Finish or cancel your current adjustment before combining another pair.');
   const eligible=combineSources(state),all=flexibleSessions(state),today=isoDay();
   let sourceIds=selection?.sourceIds || (followup?previous.sourceIds:null),minutes=enteredTime;
+  if(minutes===undefined&&Object.hasOwn(selection||{},'minutes'))minutes=selection.minutes;
   if(minutes===undefined&&Number.isFinite(interpretedMinutes))minutes=interpretedMinutes;
   if(followup&&minutes===undefined)minutes=/^\s*\d+\s*$/.test(text)?Number(text):previous.minutes;
   const choices=()=>say('Which two workouts should I combine for today?',{combineRequest:{step:'sources',sourceIds:[],...(minutes!==undefined?{minutes}:{}),choices:eligible.map(s=>({id:s.logicalSessionId,label:sourceLabel(s)}))}});
   if(eligible.length<2)return say('There aren’t two available planned sessions to combine. Completed workouts will not be repeated.');
+  if(selection?.step==='sources')return choices();
   if(!sourceIds?.length){
     if(/\b(three|four|3|4|tri|stiri)\b.*\b(workouts?|sessions?|trening\w*)/.test(text))return choices();
     if(/(?:last two|zadnj\w* dva|zadnj\w* dve)/.test(text)&&/missed|zamujen|izpust/.test(text)){
@@ -124,6 +140,6 @@ export async function coachCombineReply(state,message,{selection,interpret,inter
   if(/(?:^|\s)[+-]\s*\d+/.test(text)&&!followup)minutes=undefined;
   if(minutes===undefined)return say(sl?'Koliko časa imaš danes za celoten trening?':'How much time do you have today for the whole workout?',{combineRequest:{step:'time',sourceIds,language:sl?'Slovenian':'English'}});
   const result=buildCombinedProposal(state,{sourceIds,minutes});
-  if(result.status!=='ready')return say(result.error);
+  if(result.status!=='ready')return say(result.error,{combineReviewRequired:result.combineReviewRequired});
   return say(`I prepared a combined workout of about ${Math.round(result.proposal.estimatedMinutes)} minutes. Main movement coverage is retained and overlapping work reduced. Review it before applying; your weekly plan stays unchanged.`,{action:{type:'combine-workouts',proposal:result.proposal}});
 }

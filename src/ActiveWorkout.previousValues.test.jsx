@@ -39,7 +39,7 @@ function recommendedFixture(){
  state.workouts.push({...structuredClone(state.workouts[0]),id:'previous-2'});
  expect(domain.progressionFor(exercise,state.workouts,state.profile)?.weight).toBe(90);return state;
 }
-const recommend=()=>host.querySelector('.recommendation button');
+const recommend=()=>host.querySelector('.recommendation button[data-workout-replaces]');
 const pointerRecommend=()=>{const apply=recommend();act(()=>apply.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true})));act(()=>document.activeElement.blur());click(apply);};
 it('shows whole-session feedback as next-workout guidance without applying a load',()=>{
  const state=recommendedFixture(),before=structuredClone(state.activeWorkout);

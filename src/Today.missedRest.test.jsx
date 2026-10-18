@@ -1,4 +1,4 @@
-import React,{act} from 'react';
+import React,{act,useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {Today,TodayActionsSheet,RestTrainingSheet} from './App.jsx';
@@ -24,9 +24,33 @@ it.each([0,1,2,3])('rest hierarchy and routing with %i missed occurrences',count
  expect(rest).not.toBeNull();expect(rest.textContent).toContain('This is a planned recovery day.');
  expect(document.body.textContent).not.toMatch(/View all|Oldest:|Train today instead|Choose exercises as you go/);
  expect(Boolean(summary)).toBe(count>0);
+ expect(document.querySelectorAll('.today-missed-row')).toHaveLength(count>0?1:0);
+ expect(document.querySelectorAll('.missed-reminder-hide')).toHaveLength(count>0?1:0);
  if(count){expect(rest.contains(summary)).toBe(true);expect(rest.querySelector('p').compareDocumentPosition(summary)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(summary.compareDocumentPosition(rest.querySelector('.rest-up-next'))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true}});}
  expect(rest.querySelector('.rest-up-next-row').tagName).toBe('BUTTON');expect(rest.querySelector('.rest-freestyle-action')).toBeNull();expect(rest.querySelector('.rest-day-actions').textContent).toBe('+ Add optional activityTrain anyway');
  expect(serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();
+});
+it.each(['2026-09-18','2026-09-19'])('one Hide dismisses the only reminder and survives reload on %s',date=>{
+ vi.setSystemTime(new Date(`${date}T12:00:00`));
+ const initial=todayMissedRestFixture({count:2}),before=structuredClone(initial);
+ let current;
+ function Harness({initialState}) {
+  const [state,setState]=useState(initialState);current=state;
+  return <Today state={state} update={operation=>setState(previous=>operation(structuredClone(previous)))} setPage={()=>{}} setDetail={detail}/>;
+ }
+ act(()=>root.render(<Harness initialState={initial}/>));
+ expect(document.querySelectorAll('.today-missed-row')).toHaveLength(1);
+ expect(document.querySelectorAll('.missed-reminder-hide')).toHaveLength(1);
+ click(document.querySelector('.missed-reminder-hide'));
+ expect(document.querySelectorAll('.today-missed-row')).toHaveLength(0);
+ expect(document.querySelectorAll('.missed-reminder-hide')).toHaveLength(0);
+ expect(current.workouts).toEqual(before.workouts);expect(current.flexibleWeek).toEqual(before.flexibleWeek);
+ expect(missedFlexibleSessions(current)).toHaveLength(2);
+ const reloaded=deserializeState(localStorage.getItem('lift-v2-state'));
+ act(()=>root.render(<Harness key="reload" initialState={reloaded}/>));
+ expect(document.querySelectorAll('.today-missed-row')).toHaveLength(0);
+ expect(document.querySelectorAll('.missed-reminder-hide')).toHaveLength(0);
+ expect(missedFlexibleSessions(current)).toHaveLength(2);
 });
 it.each([1,2,3])('dismissed %i occurrences remain accessible through overflow after reload',count=>{
  const before=todayMissedRestFixture({count}),state=deserializeState(serializeState(dismissMissedReminder(before,{persist:()=>true})));
@@ -53,7 +77,7 @@ it.each(['move','skip','complete'])('resolved missed occurrence leaves reminder 
  const remaining=missedFlexibleSessions(state);expect(remaining).toHaveLength(1);expect(remaining[0].logicalSessionId).not.toBe(target.logicalSessionId);draw(deserializeState(serializeState(state)));click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:{sessionId:remaining[0].logicalSessionId}});
 });
 it('planned Today retains its hero and active Today suppresses the reminder while preserving overflow access',()=>{
- vi.setSystemTime(new Date('2026-09-18T12:00:00'));let state=todayMissedRestFixture({count:2});draw(state);expect(document.querySelector('.rest-day-state')).toBeNull();expect(document.querySelector('.today-missed-row')).not.toBeNull();expect(button('START WORKOUT')).toBeDefined();
+ vi.setSystemTime(new Date('2026-09-18T12:00:00'));let state=todayMissedRestFixture({count:2});draw(state);expect(document.querySelector('.rest-day-state')).toBeNull();expect(document.querySelectorAll('.today-missed-row')).toHaveLength(1);expect(button('START WORKOUT')).toBeDefined();
  state=todayMissedRestFixture({count:2,active:true});draw(state);expect(button('RESUME WORKOUT')).toBeDefined();expect(document.querySelector('.today-missed-row')).toBeNull();overflow(state);expect(button('Rest-day activities')).toBeUndefined();click(button('Missed workouts'));sheet(state,{sessionId:missedFlexibleSessions(state)[0].logicalSessionId});expect(button('Use this workout today')).toBeUndefined();expect(canUseWorkoutToday(state,{sessionId:missedFlexibleSessions(state)[0].logicalSessionId})).toBe(false);
 });
 it('rest overflow preserves the full optional-activity menu without an ambiguous standalone CTA',()=>{

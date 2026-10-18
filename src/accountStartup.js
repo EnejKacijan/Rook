@@ -7,6 +7,16 @@ import { readProfileSlot } from './accountProfileSlots.js';
 import { activeProfileSlot } from './profileSlotKeys.js';
 import { clearFirstRunAccountClaim, readFirstRunAccountClaim } from './firstRunAccountClaim.js';
 import { ACCOUNT_CLOUD_READ_TIMEOUT_MS } from './accountSyncTiming.js';
+import { availableAccountProviders, createAccountProvider } from './accountProviders.js';
+import {authenticateEmailAccount,resetEmailAccountPassword} from './emailAccountAuth.js';
+
+export function accountRestoreActions(client) {
+  const restoreWithGoogle = () => client.authApi.signInWithPopup(client.auth, createAccountProvider(client.authApi));
+  const providers = availableAccountProviders();
+  return providers.some(id=>id!=='google.com') ? { restoreWithGoogle, accountProviders: providers,
+    restoreWithProvider: providerId => client.authApi.signInWithPopup(client.auth, createAccountProvider(client.authApi, providerId)),
+    ...(providers.includes('password')?{restoreWithEmail:details=>authenticateEmailAccount(client,{...details,intent:'sign-in'}),resetPasswordWithEmail:email=>resetEmailAccountPassword(client,email)}:{}) } : { restoreWithGoogle };
+}
 
 // Established local profiles still open without waiting for cloud.
 const STARTUP_TIMEOUT_MS = ACCOUNT_CLOUD_READ_TIMEOUT_MS;
@@ -38,15 +48,15 @@ async function findMissingPrimaryRecovery(startup, { storage, configured, getCli
     client = await withTimeout(getClient(), timeoutMs);
   } catch { return startup; }
   if (!client) return startup;
-  const restoreWithGoogle = () => client.authApi.signInWithPopup(client.auth, new client.authApi.GoogleAuthProvider());
+  const restore = accountRestoreActions(client);
   try {
     identity = await withTimeout(resolveIdentity(client, { allowAnonymous: false }), timeoutMs);
-    if (!identity?.user?.uid) return { ...startup, restoreWithGoogle };
+    if (!identity?.user?.uid) return { ...startup, ...restore };
     remote = await withTimeout(getAdapter(client).read(identity.user.uid), timeoutMs);
-  } catch { return { ...startup, restoreWithGoogle }; }
+  } catch { return { ...startup, ...restore }; }
   const uid = identity.user.uid;
   if (client.auth.currentUser?.uid !== uid) return startup;
-  if (!remote?.profileId) return { ...startup, restoreWithGoogle };
+  if (!remote?.profileId) return { ...startup, ...restore };
   if (remote.accountSchemaVersion !== ACCOUNT_SYNC_SCHEMA || !(remote.entities instanceof Map)) return startup;
   if ([...remote.entities.values()].some(record => record?.syncSchemaVersion !== ACCOUNT_SYNC_SCHEMA)) return startup;
   try {
@@ -201,7 +211,7 @@ export async function resolveAccountStartup(startup, {
     // The user can explicitly start fresh after seeing the recovery surface.
     if (!identity.created && identity.user.isAnonymous && !allowStartFresh) return recovery('unverified-anonymous-first-run', {
       allowStartFresh: true, verifiedEmpty: true, setupAlreadyStarted: startup.status === 'ready',
-      restoreWithGoogle: () => client.authApi.signInWithPopup(client.auth, new client.authApi.GoogleAuthProvider()),
+      ...accountRestoreActions(client),
     });
     return { ...startup, firstRunVerified: true, accountCheck: firstRunClaim ? 'verified-new-account' : 'cloud-empty',
       accountUid: uid, ...(firstRunClaim && { firstRunProfileId: firstRunClaim.profileId }) };

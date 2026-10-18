@@ -3,6 +3,7 @@ import {Disclosure} from './Disclosure.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {hideTemporaryScheduleSummary,temporaryScheduleSummaryHidden} from './temporarySchedulePresentation.js';
 import {isoDay,weekKey} from './domain.js';
+import {CalendarIcon} from './MonthCalendar.jsx';
 
 export function TemporaryScheduleSummary({state,review,update,onView}) {
   const {commit}=useDurableAction(state,update);
@@ -17,17 +18,18 @@ export function TemporaryScheduleSummary({state,review,update,onView}) {
     catch{setError('Couldn’t save this preference. The summary is still visible. Try again.');}
   };
   return <Disclosure className="temporary-schedule-disclosure" open={!temporaryScheduleSummaryHidden(state,review)}>
-    <aside className={`flexible-week-missed temporary-schedule-summary${unresolved?' needs-attention':' is-informational'}`} aria-label={unresolved?'Schedule needs attention':'Temporary schedule summary'}>
+    <aside className={`flexible-week-missed temporary-schedule-summary${unresolved?' needs-attention':' is-informational'}`} aria-label={unresolved?'Schedule needs attention':'Applied schedule changes'}>
       {unresolved ? <>
         <span className="eyebrow temporary-schedule-label">SCHEDULE NEEDS ATTENTION</span>
         <strong>{unresolved} {unresolved===1?'workout needs':'workouts need'} review</strong>
         {otherWeek&&<small>Includes a change from another plan week.</small>}
         <button type="button" className="text-button" onClick={onView}>REVIEW SCHEDULE</button>
       </> : <>
-        <span className="eyebrow temporary-schedule-label">TEMPORARY SCHEDULE</span>
-        <small>{[review.moved.length && `${review.moved.length} ${review.moved.length===1?'workout':'workouts'} moved`,skipped && `${skipped} skipped`].filter(Boolean).join(' · ') || 'Schedule adjusted'}</small>
+        <span className="eyebrow temporary-schedule-label"><CalendarIcon/>SCHEDULE CHANGES</span>
+        <strong className="temporary-schedule-count">{[review.moved.length && `${review.moved.length} ${review.moved.length===1?'workout':'workouts'} moved`,skipped && `${skipped} skipped`].filter(Boolean).join(' · ') || 'Schedule adjusted'}</strong>
+        <small className="temporary-schedule-explanation">Already applied to your schedule.</small>
         <div className="temporary-schedule-actions">
-          <button type="button" className="text-button" onClick={onView}>View schedule</button>
+          <button type="button" className="text-button" onClick={onView}>View changes</button>
           <button type="button" className="text-button" aria-label="Hide temporary schedule summary" onClick={hide}>Hide</button>
         </div>
         {error && <small role="alert">{error}</small>}

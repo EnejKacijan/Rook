@@ -12,11 +12,11 @@ function memory(fixture) {
   return {values,getItem:key=>values.get(key)??null,setItem:vi.fn((key,value)=>values.set(key,String(value))),removeItem:vi.fn(key=>values.delete(key))};
 }
 // Keep prior writer output immutable and compare every stored domain field.
-// Only neutral defaults and the approved derived duration estimate differ:
+// Only neutral presentation defaults and the approved derived duration estimate differ:
 // the current automatic warm-up estimate is two minutes longer.
-const currentExpected=expected=>({...expected,dismissedTemporarySchedule:null,
+const currentExpected=expected=>({...expected,dismissedTemporarySchedule:null,dismissedCombinedWorkoutNoticeKey:null,
   ...(expected.program ? {program:{...expected.program,days:expected.program.days.map(day=>({...day,estimatedMinutes:day.estimatedMinutes+2}))}} : {}),
-  profile:{preferredTrainingStyle:null,noPlanReceipt:null,...expected.profile}});
+  profile:{preferredTrainingStyle:null,noPlanReceipt:null,showProgressionTips:true,...expected.profile}});
 const allFixtures=[fixtures,olderFixtures].flatMap(collection=>collection.fixtures.map(fixture=>({
   ...fixture,name:`${collection.commit.slice(0,7)}/${fixture.name}`,
   // Prescriptions, sessions, elapsed durations, history and IDs stay identical.

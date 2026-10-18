@@ -13,6 +13,7 @@ export {workoutPerformedDate} from './workoutDates.js';
 import { effectiveWeekSchedule,flexibleSessionStatus,missedFlexibleSessions } from './flexibleWeek.js';
 import { matchImportCatalogName } from './importExerciseMatching.js';
 import { normalizePartialTargets } from './importPartialPrescription.js';
+import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { combinedAdjustment, combinedTemplate, isCombinedAdjustment, validateCombinedState, cancelCombinedWorkout } from './combinedWorkoutLifecycle.js';
 import { customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns } from './customTrainingStructure.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
@@ -2093,6 +2094,7 @@ export function defaultProfile() {
     followUpAnswers: [],
     units: "kg",
     rirEnabled: false,
+    showProgressionTips: true,
     recommendedWarmupsEnabled: true,
     rampUpSetsEnabled: true,
     showExerciseImages: true,
@@ -2130,6 +2132,7 @@ export function blankState() {
     flexibleWeek: null,
     workoutOccurrenceOverrides: {},
     dismissedMissedReminderKey: null,
+    dismissedCombinedWorkoutNoticeKey: null,
     dismissedTemporarySchedule: null,
     optionalSessions: [],
     workouts: [],
@@ -2541,6 +2544,7 @@ export function deserializeState(input, { strict = false } = {}) {
       ...base,
       ...stored,
       dismissedMissedReminderKey: typeof stored.dismissedMissedReminderKey === 'string' ? stored.dismissedMissedReminderKey : null,
+      dismissedCombinedWorkoutNoticeKey: typeof stored.dismissedCombinedWorkoutNoticeKey === 'string' ? stored.dismissedCombinedWorkoutNoticeKey : null,
       dismissedTemporarySchedule: normalizeTemporaryScheduleDismissal(stored.dismissedTemporarySchedule),
       profile,
       program,
@@ -8609,7 +8613,7 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
 export function startWorkout(state, template) {
   if(isRepeatAdjustment(state.todayAdaptation) && template?.todayOnlyAdjustment?.id!==state.todayAdaptation.id)throw Error('Finish or cancel the pending repeated workout first.');
   const combined=combinedAdjustment(state);
-  if(combined&&template?.todayOnlyAdjustment?.id===combined.id&&template.exercises.some(e=>!isExerciseAllowed(exerciseCatalog[e.exerciseId],effectiveGymContext(state,{}).profile)))
+  if(combined&&template?.todayOnlyAdjustment?.id===combined.id&&template.exercises.some(e=>!planEditorExerciseAllowed(exerciseCatalog[e.exerciseId]||(e.importedExercise?.id===e.exerciseId?e.importedExercise:null),effectiveGymContext(state,{}).profile)))
     throw new Error('Your equipment or restrictions changed. Cancel and review the combined workout again before starting.');
   if(state.activeOptionalSession || combined && template?.todayOnlyAdjustment?.id!==combined.id)
     throw new Error('Finish or cancel the temporary workout before starting another session.');
@@ -8869,7 +8873,7 @@ export function resumeCompletedWorkout(
 }
 // Missing legacy prescription metadata is not fabricated. Known differences
 // start a new evidence context; exercise IDs remain the variation authority.
-function progressionContextMatches(left, right) {
+export function progressionContextMatches(left, right) {
   if (left.exerciseId !== right.exerciseId ||
       exerciseMeasure(left) !== exerciseMeasure(right) ||
       exerciseLoadRequirement(left) !== exerciseLoadRequirement(right) ||
@@ -8885,7 +8889,9 @@ function progressionContextMatches(left, right) {
 const progressionRir = set => set.rir == null || set.rir === '' ||
   !Number.isFinite(Number(set.rir)) ? null : Number(set.rir);
 
-export function progressionFor(exercise, history, profile = null) {
+// Shared factual observations for the existing next-step rules and the
+// on-demand progression review. Building evidence never changes saved records.
+export function collectProgressionEvidence(exercise, history) {
   const min = exercise.repMin ?? exercise.repRange?.[0];
   const max = exercise.repMax ?? exercise.repRange?.[1];
   if (!(min > 0) || !(max >= min)) return null;
@@ -8978,6 +8984,13 @@ export function progressionFor(exercise, history, profile = null) {
       };
     })
     .filter((entry) => entry.completed.length);
+  return {min, max, timed, catalogItem, loadRequirement, appearances, observations};
+}
+
+export function progressionFor(exercise, history, profile = null) {
+  const evidence = collectProgressionEvidence(exercise, history);
+  if (!evidence) return null;
+  const {min, max, timed, catalogItem, loadRequirement, appearances, observations} = evidence;
   if (!observations.length) return null;
   const latest = observations.at(-1);
   if (!latest.complete || latest.index !== appearances.at(-1)?.index ||

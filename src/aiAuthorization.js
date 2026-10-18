@@ -7,6 +7,8 @@ export async function aiAuthorizationHeaders() {
   await client.auth.authStateReady();
   const user = client.auth.currentUser;
   if (!user || user.isAnonymous) throw signInRequired();
+  if(user.providerData?.some(provider=>provider.providerId==='password')&&user.emailVerified!==true)
+    throw Object.assign(new Error('Verify your email in Profile before using Coach or photo review. Your local training is available.'),{code:'email-verification-required'});
   const token = await user.getIdToken();
   // Identity may change while refreshing the token. Do not send old-profile
   // context with an identity belonging to a different active profile/account.

@@ -2,11 +2,20 @@ import React,{useLayoutEffect,useRef,useState} from 'react';
 import {exerciseName,saveState} from './domain.js';
 import {formatExportSet} from './workoutExport.js';
 import {effectiveGymContext} from './gymProfiles.js';
-import {reviewCombinedSelection} from './combineWorkouts.js';
+import {reviewCombinedSelection,buildCombinedProposal} from './combineWorkouts.js';
 import {combinedAdjustment,cancelCombinedWorkout,persistCombinedState,isCombinedAdjustment} from './combinedWorkoutLifecycle.js';
 import './coachCombine.css';
+import {NavigationChevron} from './NavigationChevron.jsx';
+import {Disclosure} from './Disclosure.jsx';
+import {useDurableAction} from './useDurableAction.js';
+import {combinedWorkoutNoticeKey,combinedWorkoutNoticeHidden,setCombinedWorkoutNoticeHidden} from './combinedWorkoutPresentation.js';
 
 const dateLabel=date=>new Intl.DateTimeFormat('en',{month:'short',day:'numeric'}).format(new Date(`${date}T12:00:00`));
+export function CombineWorkoutHint({onStart}){
+ return <button type="button" className="list-row combine-discovery-hint" onClick={onStart}>
+   <span><strong>Combine two workouts for today</strong><small>Choose two available sessions and review one workout.</small></span><NavigationChevron />
+ </button>;
+}
 // Same mouse-focus ownership as Coach Send: keep the keyboard through the click.
 // Do not cancel pointerdown: WebKit also suppresses the touch-generated click.
 const keepComposerFocus=event=>{
@@ -18,16 +27,20 @@ export function CombinedProvenance({adjustment}){
 }
 export function CombinedWorkoutNotice({state,update}){
  const [error,setError]=useState(''),lock=useRef(false),a=combinedAdjustment(state);
+ const {commit}=useDurableAction(state,update);
  if(!a)return null;
  const logged=state.activeWorkout?.adjustment?.id===a.id&&state.activeWorkout.exercises.some(e=>e.sets.some(s=>s.completed));
  const cancel=()=>{if(lock.current)return;lock.current=true;try{
    const next=persistCombinedState(state,cancelCombinedWorkout(state),saveState);
    update(()=>next,{planVersion:false,persistedState:next});
  }catch(e){setError(e.message);}finally{lock.current=false;}};
- return <aside className="combined-notice"><strong>Combined workout · Today only</strong>
+ const hide=()=>{setError('');try{commit(current=>setCombinedWorkoutNoticeHidden(current,true));}catch{setError('Couldn’t save this preference. The notice is still visible. Try again.');}};
+ return <Disclosure key={combinedWorkoutNoticeKey(state)} open={!combinedWorkoutNoticeHidden(state)}>
+ <aside className="combined-notice" aria-label="Combined workout notice"><div className="combined-notice-header"><strong>Combined workout · Today only</strong>
+   <button type="button" className="text-button" aria-label="Hide combined workout notice" onClick={hide}>Hide</button></div>
    <small>{logged?'Finish early to keep logged sets and release both source sessions.':'Both source sessions are reserved, not completed. Cancelling releases both.'}</small>
    {!logged&&<button type="button" className="text-button" onClick={cancel}>Cancel combined workout</button>}
-   {error&&<p role="alert">{error}</p>}</aside>;
+   {error&&<p role="alert">{error}</p>}</aside></Disclosure>;
 }
 export function CoachCombineChoices({request,onSend,busy,selection,onSelectionChange}){
  const [localSelection,setLocalSelection]=useState([]);
@@ -37,6 +50,36 @@ export function CoachCombineChoices({request,onSend,busy,selection,onSelectionCh
  if(request.step==='target')return <div className="coach-quick-questions combine-choices" onMouseDownCapture={keepComposerFocus}>{request.choices.map(s=><button type="button" key={s.id} disabled={busy} onClick={()=>onSend(s.label,{targetId:s.id})}>{s.label}</button>)}</div>;
  return <fieldset className="combine-choices" onMouseDownCapture={keepComposerFocus}><legend>Choose two planned sessions</legend>{request.choices.map(s=><label key={s.id}><input type="checkbox" checked={selected.includes(s.id)} disabled={busy||selected.length===2&&!selected.includes(s.id)} onChange={()=>setSelected(current=>current.includes(s.id)?current.filter(id=>id!==s.id):[...current,s.id])}/><span>{s.label}</span></label>)}
  <button type="button" className="button secondary" disabled={busy||selected.length!==2} onClick={()=>onSend(`Combine ${request.choices.filter(s=>selected.includes(s.id)).map(s=>s.label).join(' and ')}.`,{sourceIds:selected})}>CONTINUE</button></fieldset>;
+}
+export function CoachCombineRecovery({request,state,onReview,onConfirmMatch,onRetry,busy,canRetry=true}){
+ const [error,setError]=useState(''),confirming=useRef(false),focusNext=useRef(false),surface=useRef(null);
+ const owner=request.profileId===state.profile.id&&request.planId===state.program?.id;
+ // Resolve current canonical state on every render; saved chat links never
+ // resurrect an obsolete exercise, restriction or occurrence after a plan edit.
+ const result=owner?buildCombinedProposal(state,{sourceIds:request.sourceIds,minutes:request.minutes}):null;
+ const issues=result?.combineReviewRequired?.issues||[];
+ useLayoutEffect(()=>{
+   if(focusNext.current){focusNext.current=false;surface.current?.querySelector('button:not(:disabled)')?.focus({preventScroll:true});}
+ },[state.program]);
+ if(!owner)return <p className="coach-history-action">The source plan changed. Ask Coach to combine your current workouts.</p>;
+ const confirm=issue=>{
+   if(confirming.current)return;confirming.current=true;setError('');focusNext.current=true;
+   try{onConfirmMatch({workoutId:issue.workoutId,exerciseEntryId:issue.exerciseEntryId,exerciseId:issue.exerciseId,matchExerciseId:issue.suggestedMatch.exerciseId,fingerprint:result.combineReviewRequired.fingerprint});}
+   catch(e){focusNext.current=false;setError(e.message);}finally{confirming.current=false;}
+ };
+ return <section ref={surface} className="combine-recovery" aria-label="Combined workout next step">
+   {issues.map((issue,index)=>{
+     const exercise=state.program.days.find(d=>d.id===issue.workoutId)?.exercises.find(e=>e.id===issue.exerciseEntryId&&e.exerciseId===issue.exerciseId);
+     const suggested=issue.suggestedMatch&&onConfirmMatch;
+     return <div key={`${issue.workoutId}:${issue.exerciseEntryId}:${index}`}><strong>{issue.name}</strong>
+       {suggested?<><p>Matches <strong>{issue.suggestedMatch.name}</strong> in the ROOK library. Confirm this link in your plan; your targets and entered values stay the same.</p><button type="button" className="button primary" disabled={busy} onClick={()=>confirm(issue)}>Confirm {issue.suggestedMatch.name}</button>
+         <button type="button" className="text-button combine-match-alternative" disabled={busy} onClick={()=>onReview({workoutId:issue.workoutId,exerciseEntryId:issue.exerciseEntryId,exerciseId:issue.exerciseId})}>Choose another exercise</button></>:<><p>{issue.message}</p>
+       {exercise&&<button type="button" className="button secondary" disabled={busy} onClick={()=>onReview({workoutId:issue.workoutId,exerciseEntryId:issue.exerciseEntryId,exerciseId:issue.exerciseId})}>Review {issue.name}</button>}</>}
+     </div>;
+   })}
+   {error&&<p role="alert">{error}</p>}
+   {result.status==='ready'?<><p role="status">{canRetry?'The source details are ready. Prepare a fresh combined proposal to review before applying.':'The source details are ready. Reconnect to Coach to prepare the combined proposal.'}</p><button type="button" className="button secondary" disabled={busy||!canRetry} onClick={()=>onRetry({sourceIds:request.sourceIds,minutes:request.minutes})}>PREPARE COMBINED WORKOUT</button></>:!issues.length&&<p role="status">{result.error}</p>}
+ </section>;
 }
 export function CoachCombineCard({action,result,state,onAccept,onViewToday,reviewDraft,onReviewChange,onReviewCancelled,initialReviewing=false,draftSchedule=false}){
  const [reviewing,setReviewing]=useState(initialReviewing),[error,setError]=useState(''),[proposal,setProposal]=useState(reviewDraft||action.proposal),lock=useRef(false);

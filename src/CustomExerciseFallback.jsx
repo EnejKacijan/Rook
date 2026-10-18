@@ -6,7 +6,10 @@ import './customExerciseFallback.css';
 export function CustomExerciseFallback({ onCreate }) {
   return <aside className="custom-exercise-fallback">
     <span>Can’t find it?</span>
-    <button type="button" aria-label="Create custom exercise" onClick={onCreate}>
+    <button type="button" aria-label="Create custom exercise"
+      // Keep search chrome still until click opens the editor. Blurring a
+      // focused search on mousedown can move this action before pointerup.
+      onMouseDown={event => event.preventDefault()} onClick={onCreate}>
       <span aria-hidden="true">+</span> Create custom exercise
     </button>
   </aside>;

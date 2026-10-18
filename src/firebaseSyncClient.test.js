@@ -14,6 +14,8 @@ const client = (user = null) => ({
 
 describe('Firebase identity boundary', () => {
   it('distinguishes a deliberate rollout hold from missing or invalid build config', () => {
+    // A developer's configured local Firebase app must not fill this fixture.
+    for (const key of ['API_KEY','AUTH_DOMAIN','PROJECT_ID','APP_ID'])vi.stubEnv(`VITE_ROOK_FIREBASE_${key}`,'');
     vi.stubEnv('VITE_ROOK_ACCOUNT_SYNC_ROLLOUT', 'false');
     expect(firebaseConfigurationStatus()).toBe('rollout-off');
     vi.stubEnv('VITE_ROOK_ACCOUNT_SYNC_ROLLOUT', 'true');

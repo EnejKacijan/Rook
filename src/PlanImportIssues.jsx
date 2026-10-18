@@ -6,12 +6,12 @@ import { partialPrescriptionSourceFields } from './importPartialPrescription.js'
 import { exerciseMeasure } from './domain.js';
 import {hasUnspecifiedRepTarget,loggingUnit} from './advancedLogging.js';
 import {SegmentedControl} from './SegmentedControl.jsx';
+import { NavigationChevron } from './NavigationChevron.jsx';
 const days=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
 export function PlanImportIssues({ review, resolved, program, onResolve, reviewRequest = 0, summaryOnly = false, onChange, decisionGroups=[] }) {
-  const [detailsOpen,setDetailsOpen]=useState(false);
   const pending=pendingImportIssues(review,resolved);
   const exerciseCount=program.days.reduce((n,d)=>n+d.exercises.length,0);
-  if(!review&&!program.importMetadata?.sourceNotes?.length)return null;
+  if(!review)return null;
   const notes=pending.filter(isImportAcknowledgement);
   const allChoices=(review?.issues||[]).filter(issue=>issue.category!=='preserved'&&!isImportAcknowledgement(issue));
   const matchesPending=program.days.some(day=>day.exercises.some(exercise=>['unresolved','needs-name-review'].includes(exercise.matchStatus)));
@@ -42,12 +42,28 @@ export function PlanImportIssues({ review, resolved, program, onResolve, reviewR
       </>}
     </>
     </>}
-    {program.importMetadata?.sourceNotes?.length>0&&<div className="import-preserved-source">
-      <strong>SOURCE DETAILS PRESERVED</strong>
-      <p>{program.importMetadata?.sourceNotes.length} scoped source blocks preserved verbatim. Informational only — no confirmation required.</p>
-      <button type="button" className="button quiet" aria-expanded={detailsOpen} onClick={()=>setDetailsOpen(value=>!value)}>{detailsOpen?'HIDE DETAILS':'VIEW DETAILS'}</button>
-      <Disclosure open={detailsOpen}>{program.importMetadata?.sourceNotes.map((note,index)=><div className="plan-import-issue" key={index}><small>{note.scope==='workout'?'Workout source':'Plan / day source'} · {note.title}</small><blockquote>{note.text}</blockquote></div>)}</Disclosure>
-    </div>}
+  </section>;
+}
+export function OriginalPlanNotes({ program }) {
+  const [open,setOpen]=useState(false);
+  const detailsId=useId();
+  const summaryId=useId();
+  const notes=program.importMetadata?.sourceNotes;
+  if(!notes?.length)return null;
+  return <section className="original-plan-notes" aria-label="Original plan notes">
+    <button type="button" className="original-plan-notes-toggle" aria-label="Original plan notes" aria-describedby={summaryId} aria-expanded={open} aria-controls={detailsId} onClick={()=>setOpen(value=>!value)}>
+      <span><strong>Original plan notes</strong><small id={summaryId}>Imported text kept for reference</small></span>
+      <NavigationChevron />
+    </button>
+    <Disclosure id={detailsId} open={open} revealOnOpen>
+      <div className="original-plan-notes-body">
+        <p>These notes preserve the original imported wording. They may differ from your current plan after edits or exercise matching.</p>
+        {notes.map((note,index)=><div className="original-plan-note" key={index}>
+          <small>{note.title||'Imported plan'} · Original text</small>
+          <blockquote>{note.text}</blockquote>
+        </div>)}
+      </div>
+    </Disclosure>
   </section>;
 }
 export function ImportIssue({issue,program,resolved,onResolve,focused=false,grouped=false,fallbackExercise}){

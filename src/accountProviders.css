@@ -1,0 +1,4 @@
+.account-provider-buttons { display: flex; flex-direction: column; gap: 12px; width: 100%; }
+.account-provider-buttons .button { width: 100%; min-height: 48px; margin-top: 0; white-space: normal; }
+.account-sync-panel > .account-provider-buttons { margin-top: 12px; }
+.account-sync-lock > .account-provider-buttons { margin-top: 20px; }

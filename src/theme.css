@@ -695,7 +695,7 @@
   background: var(--rook-coach-badge-bg);
   color: var(--rook-coach-badge-text);
 }
-:root[data-appearance="dark"] :is(.list-row, .info-row, .toggle-row, .increment-row, .workout-header, .workout-warmup, .warmup-layer, .warmup-ramp, .up-next, .up-next button, .week-row, .coach-history-header, .coach-history-group button, .coach-screen .adapt-review-list > button, .coach-screen .action-card-reviewing .action-card-buttons, .plan-editor-summary, .appearance-credits, .scratch-plan-action, .rest-training-option, .move-workout-row) { border-color: var(--rook-border); }
+:root[data-appearance="dark"] :is(.list-row, .info-row, .toggle-row, .increment-row, .workout-header, .workout-warmup, .warmup-layer, .warmup-ramp, .up-next, .up-next button, .week-row, .coach-history-header, .coach-history-group button, .coach-screen .adapt-review-list > button, .coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons, .plan-editor-summary, .appearance-credits, .scratch-plan-action, .rest-training-option, .move-workout-row) { border-color: var(--rook-border); }
 :root[data-appearance="dark"] :is(.list-row, .workout-warmup-toggle, .up-next button, .plan-editor-summary, .scratch-plan-action, .rest-training-option, .move-workout-row, .coach-history-group button, .coach-screen .adapt-review-list > button) { color: var(--rook-text); }
 :root[data-appearance="dark"] .profile-screen button.info-row { color: var(--rook-text); border-color: var(--rook-border); }
 :root[data-appearance="dark"] .profile-screen .info-row-end i { color: var(--rook-muted); }
@@ -711,7 +711,7 @@
 }
 :root[data-appearance="dark"] .personalization-summary dt { color: var(--rook-secondary); }
 :root[data-appearance="dark"] .personalization-summary dd { color: var(--rook-text); }
-:root[data-appearance="dark"] .coach-screen .action-card-reviewing .action-card-buttons { background: var(--rook-surface); }
+:root[data-appearance="dark"] .coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons { background: var(--rook-surface); }
 :root[data-appearance="dark"] .coach-history-group button.active strong { color: var(--rook-accent-text); }
 :root[data-appearance="dark"] .physique-review-entry small { color: var(--rook-accent-text); }
 :root[data-appearance="dark"] :is(.recommendation strong, .recommendation p, .active-workout-notice strong, .plan-ready-notice strong) { color: var(--rook-accent-text); }

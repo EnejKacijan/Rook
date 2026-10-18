@@ -1,6 +1,9 @@
 .combined-provenance,.combined-notice{display:grid;gap:4px;margin-block:12px;color:var(--rook-secondary);font-size:13px;overflow-wrap:anywhere}
 .combined-notice{padding-block:12px;border-block:1px solid var(--rook-border)}
 .combined-notice button{justify-self:start;min-height:44px}
+.combined-notice-header{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}
+.combined-notice-header>strong{min-width:0}
+.combined-notice-header>button{flex:none;min-width:44px;padding:8px 0;font-size:13px;color:var(--rook-accent-text)}
 .combine-card{min-width:0;overflow-wrap:anywhere}
 .combine-card>button{min-height:44px}
 .coach-screen .combine-card .combined-provenance{padding:0;border:0;margin-block:10px}
@@ -15,3 +18,11 @@
 .combine-choices button{min-height:44px}
 .combine-choices>small{flex-basis:100%;color:var(--rook-secondary)}
 .combine-revision-summary{display:grid;gap:8px;padding-block:12px;font-size:14px;color:var(--rook-secondary)}
+.combine-recovery{display:grid;gap:16px;margin-block:12px;min-width:0;overflow-wrap:anywhere}
+.combine-recovery p{margin-block:6px 12px;color:var(--rook-secondary)}
+.combine-recovery .button{white-space:normal;min-height:44px}
+.combine-match-alternative{display:block;margin-top:8px;min-height:44px}
+.combine-discovery-hint{margin-block:12px 24px;gap:12px}
+.combine-discovery-hint>span{min-width:0;display:grid;gap:4px;overflow-wrap:anywhere}
+.combine-discovery-hint strong{font-size:14px;font-weight:600;color:var(--rook-accent-text)}
+.combine-discovery-hint small{font-size:13px;line-height:1.4;color:var(--rook-secondary)}

@@ -84,3 +84,35 @@ it('uses immediate reduced-motion settlement', () => {
   reduced = true; show(); drag(10, -100); pointer(window, 'pointerup', -100);
   expect(snackbar()).toBeNull(); expect(rollback).not.toHaveBeenCalled();
 });
+it.each([-1, 1])('a swipe starting on Undo in direction %s cannot activate rollback', direction => {
+  show(); const undo = snackbar().querySelector('button');
+  pointer(undo, 'pointerdown', 150);
+  pointer(window, 'pointermove', 150 + direction * 130);
+  pointer(window, 'pointerup', 150 + direction * 130);
+  act(() => undo.click());
+  expect(rollback).not.toHaveBeenCalled();
+  act(() => vi.advanceTimersByTime(170)); expect(snackbar()).toBeNull();
+});
+it('a slow sub-threshold drag settles and leaves Undo usable', () => {
+  show(); const node = snackbar();
+  pointer(node, 'pointerdown', 100, 100, 100);
+  pointer(window, 'pointermove', 145, 100, 900);
+  pointer(window, 'pointerup', 145, 100, 1000);
+  expect(snackbar()).toBe(node); expect(node.style.transform).toBe('');
+  act(() => vi.advanceTimersByTime(180));
+  act(() => node.querySelector('button').click());
+  expect(rollback).toHaveBeenCalledOnce(); expect(snackbar()).toBeNull();
+});
+it('an old swipe settlement cannot dismiss a newer Undo notice', () => {
+  show(); drag(150, 20); pointer(window, 'pointerup', 20);
+  act(() => open({message: 'New exercise removed', undo: rollback}));
+  act(() => vi.advanceTimersByTime(180));
+  expect(snackbar().textContent).toContain('New exercise removed');
+  act(() => snackbar().querySelector('button').click());
+  expect(rollback).toHaveBeenCalledOnce();
+});
+it('scopes a presentation-only notice class to its own lifetime', () => {
+  act(() => open({message: 'Tips hidden', className: 'progression-tips-undo', undo: rollback}));
+  expect(snackbar().classList.contains('progression-tips-undo')).toBe(true);
+  show(); expect(snackbar().classList.contains('progression-tips-undo')).toBe(false);
+});

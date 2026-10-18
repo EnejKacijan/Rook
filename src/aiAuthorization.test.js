@@ -25,3 +25,9 @@ it('sends the Firebase ID token and rejects identity changes during refresh', as
   user.getIdToken.mockImplementation(async () => { mock.client.auth.currentUser = { uid: 'other' }; return 'old-token'; });
   await expect(aiAuthorizationHeaders()).rejects.toThrow(/account changed/);
 });
+it('requires password accounts to verify their email before requesting any AI token',async()=>{
+ const user={uid:'email-user',isAnonymous:false,emailVerified:false,providerData:[{providerId:'password'}],getIdToken:vi.fn(async()=> 'verified-email-token')};
+ mock.client={auth:{authStateReady:async()=>{},currentUser:user}};
+ await expect(aiAuthorizationHeaders()).rejects.toMatchObject({code:'email-verification-required'});expect(user.getIdToken).not.toHaveBeenCalled();
+ user.emailVerified=true;expect(await aiAuthorizationHeaders()).toEqual({authorization:'Bearer verified-email-token'});
+});

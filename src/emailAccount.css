@@ -1,0 +1,22 @@
+.email-account { width: 100%; min-width: 0; margin-top: 20px; }
+.email-account h2 { margin: 12px 0 16px; font-size: 22px; line-height: 1.2; }
+.email-account h1 { margin: 0 0 24px; font-size: 32px; line-height: 1.1; }
+.entry-v2.entry-sign-in .email-account { margin-top: 0; }
+.email-account p { overflow-wrap: anywhere; }
+.email-account label { display: block; font-weight: 600; margin: 16px 0 8px; }
+.email-account input { box-sizing: border-box; width: 100%; min-width: 0; min-height: 48px; font: inherit; font-size: 16px; padding: 12px; border: 1px solid var(--rook-border); border-radius: 12px; background: var(--rook-surface); color: var(--rook-text); }
+.email-account input:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; }
+.email-account small { display: block; margin-top: 6px; color: var(--rook-muted); }
+.email-account-password-label { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.email-account-password-label label { margin-bottom: 0; }
+.email-account-password-label button,.email-account-back,.email-account-link { font: inherit; font-size: 14px; color: var(--rook-accent-text); border: 0; background: transparent; min-height: 44px; padding: 8px 0; cursor: pointer; text-align: left; }
+.email-account-password-label button { margin-top: 8px; flex-shrink: 0; }
+.email-account-back { margin: 0; }
+.email-account-link { display: block; width: 100%; margin-top: 4px; }
+.email-account form > .button { display: block; width: 100%; min-height: 48px; margin-top: 20px; white-space: normal; }
+.email-account .email-account-error { color: var(--rook-error-text, var(--rook-text)); margin-block: 12px; }
+.email-account button:disabled { cursor: default; }
+.account-sync-panel > .email-account { margin-top: 16px; }
+.account-email-verification { margin-top: 12px; }
+.account-email-verification p { margin: 0 0 8px; color: var(--rook-muted); }
+.account-email-verification button { min-height: 44px; margin-right: 12px; }

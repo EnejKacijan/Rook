@@ -114,13 +114,13 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     {!embedded&&<Header title={source?'Save workout':editing&&!selected?'Create workout':editing?'Edit saved workout':review?'Saved workout':'Saved workouts'} onBack={firstRun||review?back:undefined} backLabel={firstRun?'Back to start':'Back'} onClose={firstRun?undefined:close}/>}
     {!review&&scopeBar}
     {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
-      copyOverride={{eyebrow:'SAVED WORKOUT',title:selected?'Edit exercises':'Build your workout',body:'Changes affect this saved workout only. Sessions already started keep their own values.',action:'REVIEW WORKOUT'}}
+      copyOverride={{eyebrow:selected?'SAVED WORKOUT':'CREATE WORKOUT',title:selected?'Edit workout':'Build your workout',body:'Choose exercises and set targets for your workout.',action:'REVIEW WORKOUT'}}
       onSave={program=>{editorDirty.current=true;setDraft({name:review.name,exercises:program.days[0].exercises});setEditing(false);setRenaming(true);}} onCancel={firstRun?leaveFirstRun:()=>setEditing(false)} onDirtyChange={firstRun?value=>{editorDirty.current=value;}:undefined}/>:review?<>
       <div className="saved-workout-preview" data-exercise-search-scroll>
       {(source||renaming||draft)?<label className="saved-template-name">Workout name<input maxLength={100} value={review.name} onChange={e=>setDraft({...review,name:e.target.value})}/></label>:<div className="saved-template-title"><h1>{review.name}</h1><button ref={optionsTrigger} className="saved-template-options-trigger" type="button" aria-label="Saved workout options" aria-haspopup="dialog" aria-expanded={optionsOpen} onClick={()=>{optionsBackground.current=screen.current.closest('.screen')||screen.current;optionsAction.current=null;setOptionsOpen(true);}}><OverflowIcon/></button></div>}
-      <p>{pluralize(review.exercises.length,'exercise')} · reusable targets only</p>
+      <p>{pluralize(review.exercises.length,'exercise')} · Reuse these exercises and targets anytime.</p>
       <ol className="saved-template-exercises">{review.exercises.map((e,index)=><li key={e.id||index}><ExercisePickerIdentity item={e.importedExercise||exerciseCatalog[e.exerciseId]||{id:e.exerciseId,name:exerciseName(e)}} enabled={state.profile.showExerciseImages!==false}><strong>{exerciseName(e)}</strong><small>{pluralize(e.sets.length,'set')} · {e.repMin==null?'Target not set':`${e.repMin}${e.repMax!==e.repMin?`–${e.repMax}`:''} ${exerciseMeasure(e)==='seconds'?'sec':'reps'}`}{e.loggingMode==='per_side'?' · per side':''}</small></ExercisePickerIdentity></li>)}</ol>
-      {(source||draft||renaming)?<><p className="saved-template-copy-note">Logged results stay in history. This saves the exercises and targets for reuse.</p><div className="saved-template-save-actions"><button className="text-button" type="button" onClick={edit}>Edit exercises</button><button className="button primary" type="button" disabled={!review.name.trim()||!review.exercises.length} onClick={()=>save(review)}>{selected ? 'SAVE CHANGES' : 'SAVE WORKOUT'}</button></div></>:<>
+      {(source||draft||renaming)?<>{source&&<p className="saved-template-copy-note">Saves the exercises and targets, not your logged results.</p>}<div className="saved-template-save-actions"><button className="text-button" type="button" onClick={edit}>Edit workout</button><button className="button primary" type="button" disabled={!review.name.trim()||!review.exercises.length} onClick={()=>save(review)}>{selected ? 'SAVE CHANGES' : 'SAVE WORKOUT'}</button></div></>:<>
         {issues.length>0&&<div role="status"><p>Review before using</p><ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></div>}
         {!applied&&overlaps.length>0&&<div className="saved-template-overlaps">
           <div id={overlapDescriptionId} className="saved-template-overlap-context">
@@ -139,7 +139,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
       {!embedded&&<SearchInput className="exercise-search" aria-label="Search saved workouts" placeholder="Search saved workouts" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/>}
       <div className="saved-workout-list" data-exercise-search-scroll>
       {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><NavigationChevron/></button>)}
-      {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Create a reusable workout here, or save a completed session for reuse.</p></div>}
+      {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Create a workout to reuse anytime, or save a completed workout for later.</p></div>}
       {state.savedWorkoutTemplates?.length>0&&!(state.savedWorkoutTemplates||[]).some(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()))&&<p>No saved workouts match your search.</p>}
       </div>
     </>}
@@ -149,7 +149,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     {optionsOpen&&createPortal(<Modal close={dismissOptions} backgroundRef={optionsBackground} returnFocusRef={optionsTrigger} lockDocument={false}>{requestClose=><main className="screen detail-screen saved-template-options" role="dialog" aria-modal="true" aria-label="Saved workout options">
       <Header title="Saved workout options" onBack={requestClose} backLabel="Back to saved workout" onClose={requestClose}/>
       <button className="list-row" type="button" onClick={()=>chooseOption('rename',requestClose)}>Rename</button>
-      <button className="list-row" type="button" onClick={()=>chooseOption('edit',requestClose)}>Edit exercises</button>
+      <button className="list-row" type="button" onClick={()=>chooseOption('edit',requestClose)}>Edit workout</button>
       <button className="list-row danger-text" type="button" onClick={()=>chooseOption('delete',requestClose)}>Delete saved workout</button>
     </main>}</Modal>,document.body)}
     {deleteConfirmation&&<DestructiveConfirmationSheet Modal={Modal} Header={Header}

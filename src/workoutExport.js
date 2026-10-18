@@ -1,6 +1,5 @@
 import {
   WEEKDAYS,
-  currentWeekSchedule,
   displayDate,
   displayWeight,
   exerciseCatalog,
@@ -16,6 +15,7 @@ import {
 import { historySetDescriptor, loggingModeOf, setTypeLabel, hasOpenRepTarget, openRepTargetLabel, hasUnspecifiedRepTarget, loggingUnit } from "./advancedLogging.js";
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import { supersetMeta } from './supersets.js';
+import { effectiveWeekSchedule } from './flexibleWeek.js';
 const customWarmupLines = workout => workout?.warmupPlan?.mode === 'custom' && workout.warmupPlan.items?.length
   ? ['Warm-up', ...workout.warmupPlan.items.map(item => `${item.label}${warmupPrescriptionLabel(item) ? ` · ${warmupPrescriptionLabel(item)}` : ''}`), 'Workout'] : [];
 
@@ -181,7 +181,10 @@ export function buildWeeklyPlanExport({
   if (state.program.importMetadata?.unresolvedRoundGroups?.length)
     throw new Error('Resolve the imported circuit structure before exporting this plan.');
   const byDate = new Map(
-    currentWeekSchedule(state, monday).map((entry) => [entry.scheduledDate, entry.workout]),
+    // Export the plan's prescriptions, including sources reserved/resolved by a
+    // one-off combined workout. The actionable schedule hides those sources;
+    // treating their absence as rest would silently erase the exported plan.
+    effectiveWeekSchedule(state, monday, {includeCombined: true}).map((entry) => [entry.scheduledDate, entry.workout]),
   );
   const lines = [
     `ROOK - ${state.program.name || "Weekly plan"}`,

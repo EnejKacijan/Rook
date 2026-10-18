@@ -1,0 +1,15 @@
+.profile-progression-tips { margin: 0 0 20px; }
+.profile-progression-tips > .eyebrow { margin-bottom: 8px; }
+.profile-progression-tips .setting-switch { border-bottom: 0; }
+.profile-progression-tips .progression-guidance-help { font-size:12px; line-height:1.5; margin:10px 0 0; color:var(--rook-secondary); }
+.workout-screen .recommendation > .progression-tip-copy { min-width: 0; flex: 1; }
+.progression-tip-heading { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.progression-tip-heading > strong { min-width: 0; overflow-wrap: anywhere; }
+.workout-screen .progression-tip-options {
+  flex: 0 0 44px; width: 44px; min-height: 44px;
+  display: grid; place-items: center; padding: 0;
+  border: 0; border-radius: 8px; background: transparent; color: inherit;
+}
+.progression-tip-options svg { width: 20px; height: 20px; }
+.progression-tip-options:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: -2px; }
+.progression-tips-options-sheet .progression-tips-hide { width: 100%; min-height: 48px; text-align: left; }

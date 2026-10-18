@@ -857,6 +857,11 @@
 .increments-group .eyebrow { display: block; margin-bottom: 2px; }
 .logging-screen .increment-row { min-height: 52px; padding: 8px 0; }
 .logging-screen .increment-row input { width: 96px; height: 38px; }
+/* Keep helper copy with its final control; the next heading owns section
+   spacing, rather than an extra line through the end of every group. */
+.logging-screen .logging-group-end,
+.logging-screen .unit-dependent-values > .increment-row:last-child,
+.appearance-palettes-group > .list-row:last-child { border-bottom: 0; }
 
 @media (prefers-reduced-motion: reduce) {
   .logging-screen .unit-segmented::before,
@@ -876,6 +881,7 @@
 .change-plan-sheet .plan-choice i { color: var(--rook-accent-text); font-size: 20px; font-style: normal; }
 .change-plan-sheet > .button { margin-top: 18px; }
 .change-plan-sheet > .button + .button { margin-top: 3px; }
+.change-plan-sheet > .plan-choice:last-child { border-bottom: 0; }
 
 .rest-timer.rest-ready > div { background: transparent; }
 .rest-timer { bottom: calc(14px + env(safe-area-inset-bottom)); }
@@ -1387,6 +1393,7 @@
 .gym-profiles-screen > .button { margin-top: 22px; }
 .gym-profile-list { margin-top: 22px !important; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .gym-profile-row { width: 100%; min-height: 64px; padding: 12px 0; border: 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); background: transparent; color: var(--rook-text, #1b1a19); display: flex; align-items: center; justify-content: space-between; gap: 16px; text-align: left; }
+.gym-profile-list > .gym-profile-row:last-child { border-bottom: 0; }
 .gym-profile-row > span:first-child { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
 .gym-profile-row strong { overflow-wrap: anywhere; }
 .gym-profile-row small { color: var(--rook-secondary, #6f6c68); font-size: 11px; line-height: 1.35; overflow-wrap: anywhere; }
@@ -1397,7 +1404,9 @@
 .gym-name-field input { width: 100%; height: 50px; padding: 0 14px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 13px; background: var(--rook-surface, #fff); color: var(--rook-text, #1b1a19); font-size: 15px; font-weight: 650; }
 .gym-equipment-picker { margin-top: 25px !important; }
 .gym-equipment-picker .adjust-check-list { margin-top: 8px; }
+.gym-equipment-picker .adjust-check-list > button:last-child { border-bottom: 0; }
 .gym-default-choice { margin-top: 20px; padding-inline: 2px; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
+.gym-profile-editor > .gym-default-choice { border-bottom: 0; }
 .gym-default-state { margin-top: 20px !important; padding: 12px 14px; border: 1px solid var(--rook-accent-hairline, rgba(31,107,76,.2)); border-radius: 13px; background: var(--rook-accent-soft, #eaf2ee); color: var(--rook-accent-text, #1f6b4c) !important; font-size: 12px !important; font-weight: 700; }
 .gym-plan-warning { padding: 12px 14px; border-radius: 13px; background: var(--rook-warning-surface, #f7f2e6); color: var(--rook-warning-text, #7a5d18) !important; font-size: 12px !important; }
 .gym-profile-editor > .button { margin-top: 18px; }
@@ -1441,7 +1450,7 @@
 .plate-nearest i { color: var(--rook-secondary, #6f6c68); font-size: 20px; font-style: normal; }
 .plate-target-preserved { margin-top: 14px !important; color: var(--rook-secondary, #6f6c68); font-size: 11px !important; }
 .plate-config-entry { min-height: 42px; margin: 16px 0 -6px -4px; }
-.gym-plate-setup-entry { width: 100%; min-height: 62px; margin-top: 18px; padding: 10px 2px; border: 0; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); background: transparent; color: var(--rook-text, #1b1a19); display: flex; align-items: center; justify-content: space-between; gap: 16px; text-align: left; }
+.gym-plate-setup-entry { width: 100%; min-height: 62px; margin-top: 18px; padding: 10px 2px; border: 0; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); background: transparent; color: var(--rook-text, #1b1a19); display: flex; align-items: center; justify-content: space-between; gap: 16px; text-align: left; }
 .gym-plate-setup-entry > span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .gym-plate-setup-entry small { color: var(--rook-secondary, #6f6c68); font-size: 11px; }
 .gym-plate-setup-entry i { color: var(--rook-secondary, #6f6c68); font-size: 20px; font-style: normal; }
@@ -1480,6 +1489,7 @@
 .plan-history-screen > p { max-width: 42ch; }
 .plan-history-list { margin-top: 24px; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .plan-history-list .plan-history-version { width: 100%; min-height: 76px; padding: 13px 0; border: 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); background: transparent; color: var(--rook-text, #1b1a19); display: grid; grid-template-columns: 58px minmax(0, 1fr) 18px; gap: 12px; align-items: center; text-align: left; }
+.plan-history-list > .plan-history-version:last-child { border-bottom: 0; }
 .plan-history-list time { color: var(--rook-secondary, #6f6c68); font-size: 12px; font-weight: 650; display: flex; flex-direction: column; gap: 3px; }
 .plan-history-list time small { color: inherit; font-size: 9px; font-weight: 550; white-space: nowrap; }
 .plan-history-list .plan-history-version > span { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
@@ -1538,7 +1548,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .training-block-length { display: grid; grid-template-columns: repeat(2,1fr); gap: 9px; margin-top: 10px; }
 .training-block-length button { min-height: 50px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 13px; background: var(--rook-surface); color: var(--rook-text); font-weight: 700; }
 .training-block-length button.is-selected { border-color: var(--rook-accent); background: var(--rook-accent-soft); color: var(--rook-accent-text); }
-.training-block-deload { width: 100%; min-height: 70px; margin-top: 18px; padding: 12px 2px; border: 0; border-top: 1px solid var(--rook-border, rgba(27,26,25,.09)); border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.09)); background: transparent; color: var(--rook-text, #1b1a19); display: flex; align-items: center; justify-content: space-between; gap: 14px; text-align: left; }
+/* The action footer owns the lower boundary after this final setting. */
+.training-block-deload { width: 100%; min-height: 70px; margin-top: 18px; padding: 12px 2px; border: 0; border-top: 1px solid var(--rook-border, rgba(27,26,25,.09)); background: transparent; color: var(--rook-text, #1b1a19); display: flex; align-items: center; justify-content: space-between; gap: 14px; text-align: left; }
 .training-block-deload > span { display: flex; flex-direction: column; gap: 4px; }
 .training-block-deload small { color: var(--rook-secondary, #6f6c68); font-size: 10px; line-height: 1.35; }
 .training-block-deload i { width: 25px; height: 25px; flex: 0 0 25px; border: 1px solid var(--rook-control-border, rgba(27,26,25,.14)); border-radius: 8px; display: grid; place-items: center; color: transparent; font-size: 13px; font-style: normal; }

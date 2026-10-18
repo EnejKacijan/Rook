@@ -35,7 +35,7 @@ function mount() {
 function open(label) { act(() => button(label).focus()); click(button(label)); advance(400); }
 function unchanged() { expect(current).toEqual(initial); expect(updates).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled(); }
 
-it('root exposes two semantic actions, with no individual activity/freestyle/My workouts launchers', () => {
+it('root exposes two semantic actions, with no individual activity/freestyle/Saved workouts launchers', () => {
   mount(); const actions = host.querySelector('.rest-day-actions');
   expect([...actions.querySelectorAll('button')].map(node => node.textContent)).toEqual(['+ Add optional activity', 'Train anyway']);
   expect(host.querySelector('.today-my-workouts')).toBeNull(); expect(host.querySelector('.rest-freestyle-action')).toBeNull();
@@ -82,8 +82,8 @@ it('Train anyway does not start a workout; Freestyle retains its existing explic
   expect(current.program).toEqual(initial.program); expect(current.profile).toEqual(initial.profile);
   expect(updates).toHaveBeenCalledOnce(); expect(navigate).toHaveBeenCalledWith('workout');
 });
-it('My workouts reuses canonical browse/review and Back, and opening it is read-only', () => {
-  mount(); open('Train anyway'); click(button('My workoutsStart one of your reusable or plan workouts.')); advance(400);
+it('Saved workouts reuses canonical browse/review and Back, and opening it is read-only', () => {
+  mount(); open('Train anyway'); click(button('Saved workoutsStart one of your saved workouts.')); advance(400);
   expect(dialog().querySelector('.saved-workout-list')).not.toBeNull(); unchanged();
   const row = dialog().querySelector('.saved-workout-list button'); click(row); advance(400);
   expect(dialog().querySelector('.saved-workout-preview')).not.toBeNull(); unchanged();

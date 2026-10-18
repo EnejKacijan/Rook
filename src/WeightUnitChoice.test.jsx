@@ -20,6 +20,6 @@ it('compact onboarding defaults to kg without requiring interaction',()=>{
  act(()=>root.render(<WeightUnitChoice compact onChange={change}/>));
  expect(host.querySelector('.weight-unit-label').textContent).toBe('Weight units');
  expect(host.querySelector('.eyebrow')).toBeNull();expect(host.querySelector('button').getAttribute('aria-checked')).toBe('true');
- expect(host.textContent).toContain('Used for weights. Change anytime in Profile → Logging.');expect(change).not.toHaveBeenCalled();
+ expect(host.textContent).toContain('Used for weights. Change anytime in Profile → Workout preferences.');expect(change).not.toHaveBeenCalled();
  act(()=>root.unmount());
 });

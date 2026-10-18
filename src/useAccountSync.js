@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { hydrateStoredState, saveState, serializeState } from './domain.js';
 import { checkpointCurrentLocalState, isLocalSyncSnapshotCurrent, readLocalSyncSnapshot, subscribeLocalStateSaved } from './localStateStorage.js';
-import { createFirebaseSyncAdapter, firebaseConfigurationStatus, firebaseConfigured, getFirebaseSyncClient, linkGoogleAnonymousAccount, resolveFirebaseIdentity } from './firebaseSyncClient.js';
+import { createFirebaseSyncAdapter, firebaseConfigurationStatus, firebaseConfigured, getFirebaseSyncClient, linkGoogleAnonymousAccount, linkProviderAnonymousAccount, resolveFirebaseIdentity } from './firebaseSyncClient.js';
+import { availableAccountProviders, accountProviderName } from './accountProviders.js';
 import { syncAccountOnce } from './accountSyncCoordinator.js';
 import { ensureAccountSyncLedger, readAccountSyncLedger, updateAccountSyncLedger } from './accountSyncOutbox.js';
 import { newSeparateProfileSlot, readProfileSlot,
@@ -11,6 +12,7 @@ import { openProtectedAccount, protectedProfileAccess } from './accountProfileAc
 import { clearFirstRunAccountClaim, readFirstRunAccountClaim } from './firstRunAccountClaim.js';
 import { signInFirstRunAccount } from './firstRunAccountSignIn.js';
 import { ACCOUNT_SYNC_SCHEMA } from './accountSyncModel.js';
+import {authenticateEmailAccount,linkEmailAnonymousAccount,resetEmailAccountPassword} from './emailAccountAuth.js';
 
 export const ACCOUNT_SIGNED_OUT_KEY = 'rook-account-signed-out-v1';
 const INITIAL_DEBOUNCE_MS = 15000;
@@ -40,7 +42,7 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     try { return await operation(current); }
     finally { if (accountActions.current.epoch === epoch) accountActions.current.busy = false; }
   }, []);
-  const secureWithGoogle = useCallback(() => accountAction(async current => {
+  const secureWithProvider = useCallback((providerId = 'google.com',link) => accountAction(async current => {
     const storage = globalThis.localStorage, client = clientRef.current, user = client?.auth.currentUser;
     const profileId = latest.current.state.profile.id;
     const ledger = readAccountSyncLedger(storage, profileId);
@@ -49,8 +51,8 @@ export function useAccountSync({ state, update, persistenceFailed }) {
       || latest.current.persistenceFailed || ledger?.accountUid !== user.uid
       || snapshot.state.profile.id !== profileId || serializeState(latest.current.state) !== snapshot.raw
       || storage.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true' || storage.getItem(PROFILE_SWITCHING_KEY) === 'true')
-      throw new Error('Save this profile and finish account setup before connecting Google.');
-    const result = await linkGoogleAnonymousAccount(client);
+      throw new Error('Save this profile and finish account setup before connecting an account.');
+    const result = await (link?link(client,current):providerId === 'google.com' ? linkGoogleAnonymousAccount(client) : linkProviderAnonymousAccount(client, providerId));
     if (!current() || client.auth.currentUser?.uid !== user.uid
       || readAccountSyncLedger(storage, profileId)?.accountUid !== user.uid
       || readLocalSyncSnapshot(storage, hydrateStoredState).state.profile.id !== profileId)
@@ -61,6 +63,8 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     }
     return result;
   }), [accountAction]);
+  const secureWithGoogle = useCallback(() => secureWithProvider('google.com'), [secureWithProvider]);
+  const registerWithEmail=useCallback(details=>secureWithProvider('password',(client,isCurrent)=>linkEmailAnonymousAccount(client,details,{isCurrent})),[secureWithProvider]);
   const signOutAccount = useCallback(() => accountAction(async () => {
     const client = clientRef.current, user = client?.auth.currentUser;
     const ledger = readAccountSyncLedger(globalThis.localStorage, latest.current.state.profile.id);
@@ -74,10 +78,10 @@ export function useAccountSync({ state, update, persistenceFailed }) {
       throw error;
     }
   }), [accountAction]);
-  const signIn = useCallback(allowAnother => accountAction(async current => {
+  const signIn = useCallback((allowAnother, providerId = 'google.com',authenticate) => accountAction(async current => {
     const client = clientRef.current;
     const result = await openProtectedAccount({ storage: globalThis.localStorage, client,
-      profileId: latest.current.state.profile.id, allowAnother, isCurrent: current,
+      profileId: latest.current.state.profile.id, allowAnother, isCurrent: current, providerId,authenticate,
       readCloud: uid => createFirebaseSyncAdapter(client).read(uid) });
     if (!current()) return result;
     if (result.status === 'switched-account') {
@@ -88,8 +92,10 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     scheduleRef.current?.(0);
     return result;
   }), [accountAction]);
-  const signInToThisDevice = useCallback(() => signIn(false), [signIn]);
-  const signInWithAnotherAccount = useCallback(() => signIn(true), [signIn]);
+  const signInToThisDevice = useCallback((providerId = 'google.com') => signIn(false, providerId), [signIn]);
+  const signInWithAnotherAccount = useCallback((providerId = 'google.com') => signIn(true, providerId), [signIn]);
+  const signInToThisDeviceWithEmail=useCallback(details=>signIn(false,'password',(client,isCurrent)=>authenticateEmailAccount(client,{...details,intent:'sign-in'},{isCurrent})),[signIn]);
+  const signInWithAnotherEmail=useCallback(details=>signIn(true,'password',(client,isCurrent)=>authenticateEmailAccount(client,{...details,intent:'sign-in'},{isCurrent})),[signIn]);
   const useSeparateProfile = useCallback(() => accountAction(async current => {
     const storage = globalThis.localStorage, protectedProfileId = latest.current.state.profile.id;
     const access = protectedProfileAccess(storage, protectedProfileId, current);
@@ -116,15 +122,33 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     globalThis.location.reload();
     return { status: 'saved-profile-locked' };
   }), [accountAction]);
-  const signInFirstRunWithGoogle = useCallback(() => accountAction(async current => {
+  const signInFirstRunWithProvider = useCallback((providerId = 'google.com',authenticate) => accountAction(async current => {
     const result = await signInFirstRunAccount({ client: clientRef.current, storage: globalThis.localStorage,
-      getState: () => latest.current.state, isCurrent: current });
+      getState: () => latest.current.state, isCurrent: current, providerId,authenticate });
     if (result.status === 'new-account')
       setSync(previous => ({ ...previous, state: 'signed-in-new-account', linked: true, email: result.email }));
     else if (result.status === 'restored')
       update(() => result.restored, { persistedState: result.restored, planVersion: false });
     return result;
   }), [accountAction, update]);
+  const signInFirstRunWithGoogle = useCallback(() => signInFirstRunWithProvider('google.com'), [signInFirstRunWithProvider]);
+  const signInFirstRunWithEmail=useCallback(details=>signInFirstRunWithProvider('password',(client,isCurrent)=>authenticateEmailAccount(client,details,{isCurrent})),[signInFirstRunWithProvider]);
+  const resetPasswordWithEmail=useCallback(email=>accountAction(()=>resetEmailAccountPassword(clientRef.current,email)),[accountAction]);
+  const verifyEmail=useCallback(()=>accountAction(async current=>{
+    const client=clientRef.current,user=client?.auth.currentUser;
+    if(!user||user.isAnonymous||!user.providerData?.some(p=>p.providerId==='password'))throw new Error('Sign in with your email account first.');
+    await client.authApi.sendEmailVerification(user);
+    if(!current()||client.auth.currentUser?.uid!==user.uid)throw new Error('Your account changed.');
+  }),[accountAction]);
+  const refreshEmailVerification=useCallback(()=>accountAction(async current=>{
+    const client=clientRef.current,user=client?.auth.currentUser;
+    if(!user||user.isAnonymous)throw new Error('Sign in first.');
+    await client.authApi.reload(user);
+    if(!current()||client.auth.currentUser?.uid!==user.uid)throw new Error('Your account changed.');
+    await user.getIdToken(true);
+    if(!current()||client.auth.currentUser?.uid!==user.uid)throw new Error('Your account changed.');
+    setSync(value=>({...value}));return {verified:user.emailVerified===true};
+  }),[accountAction]);
   const detachFirstRunAccountAfterBackup = useCallback(() => {
     const claim = readFirstRunAccountClaim(globalThis.localStorage);
     if (claim?.profileId === latest.current.state.profile.id)
@@ -287,6 +311,9 @@ export function useAccountSync({ state, update, persistenceFailed }) {
       && globalThis.localStorage.getItem(ACCOUNT_SIGNED_OUT_KEY) !== 'true'
       && globalThis.localStorage.getItem(PROFILE_SWITCHING_KEY) !== 'true');
   } catch { /* Unreadable local account metadata cannot authorize linking. */ }
-  return { ...sync, enabled: safelyConfigured(), separate, canSecure, secureWithGoogle, signOutAccount, signInToThisDevice, signInWithAnotherAccount,
-    useSeparateProfile, switchToSavedProfile, signInFirstRunWithGoogle, detachFirstRunAccountAfterBackup };
+  const linkedProvider = clientRef.current?.auth.currentUser?.providerData?.[0]?.providerId || 'google.com';
+  return { ...sync, providerName: accountProviderName(linkedProvider), emailVerified:clientRef.current?.auth.currentUser?.emailVerified===true, providers: availableAccountProviders(),
+    enabled: safelyConfigured(), separate, canSecure, secureWithGoogle, secureWithProvider, signOutAccount, signInToThisDevice, signInWithAnotherAccount,
+    useSeparateProfile, switchToSavedProfile, signInFirstRunWithGoogle, signInFirstRunWithProvider, detachFirstRunAccountAfterBackup,
+    registerWithEmail,signInFirstRunWithEmail,signInToThisDeviceWithEmail,signInWithAnotherEmail,resetPasswordWithEmail,verifyEmail,refreshEmailVerification };
 }
