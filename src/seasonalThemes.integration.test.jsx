@@ -110,10 +110,9 @@ describe('Seasonal group in the picker', () => {
     expect(host.querySelector('summary').textContent).toBe('Fine-tune Fixture');
     expect([...host.querySelectorAll('.pro-theme-accents button')].map(button => button.getAttribute('aria-label'))).toEqual(['Lantern', 'Two', 'Three', 'Four', 'Five']);
   });
-  it('keeps a saved season listed, marked as ended, after its window', async () => {
+  it('does not offer a saved season outside its window', async () => {
     await render({ basePalette: 'ended', appearance: 'dark' });
     const tile = host.querySelector('.pro-theme-seasonal [aria-label="Ended"]');
-    expect(tile.getAttribute('aria-pressed')).toBe('true');
-    expect(tile.querySelector('.pro-theme-season-window').textContent).toBe('Season ended');
+    expect(tile).toBeNull();
   });
 });
