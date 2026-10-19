@@ -10,12 +10,12 @@ it('registers Summer after the year-round palettes with its proposed window', ()
   expect(personalThemeModel({ basePalette: 'summer' }).accentName).toBe('Lagoon');
 });
 
-it('offers Summer only inside its window unless already chosen', () => {
+it('offers Summer only inside its window even when previously chosen', () => {
   const [month, day] = '06-21'.split('-').map(Number);
   const inside = new Date(2026, month - 1, day, 12), before = new Date(2026, month - 1, day - 1, 12);
   expect(availableSeasonalThemes('forest', inside, undefined, false).map(item => item.id)).toContain('summer');
   expect(availableSeasonalThemes('forest', before, undefined, false).map(item => item.id)).not.toContain('summer');
-  expect(availableSeasonalThemes('summer', before, undefined, false).map(item => item.id)).toContain('summer');
+  expect(availableSeasonalThemes('summer', before, undefined, false).map(item => item.id)).not.toContain('summer');
 });
 
 it('stages its decoration band through the root season attribute only', () => {
