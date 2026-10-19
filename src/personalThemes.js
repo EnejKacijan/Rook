@@ -85,14 +85,15 @@ export function normalizePersonalTheme(value) {
   // Seasonal Fine-tune choices are kept apart so a season can come and go
   // without touching the year-round families.
   const hasSeasons = isRecord(value?.seasonalCustomizations), seasonal = hasSeasons ? value.seasonalCustomizations : {};
-  const seasonalCustomizations = Object.fromEntries(SEASONAL_PRESETS.map(preset => [preset.id,
+  const seasonalCustomizations = { ...Object.fromEntries(Object.entries(seasonal).filter(([id, config]) => !SEASONAL_PRESETS.some(preset => preset.id === id) && isRecord(config))), ...Object.fromEntries(SEASONAL_PRESETS.map(preset => [preset.id,
     familyConfiguration(preset, hasSeasons ? (Object.hasOwn(seasonal, preset.id) ? seasonal[preset.id] : null)
-      : preset.id === basePalette ? legacy : null)]));
+      : preset.id === basePalette ? legacy : null)])) };
   const active = paletteCustomizations[basePalette] || seasonalCustomizations[basePalette];
   return { schemaVersion: 2, basePalette,
     appearance: ['system', 'light', 'dark'].includes(value?.appearance) ? value.appearance : 'system',
     paletteCustomizations, seasonalCustomizations,
-    fallbackPalette: yearRound(basePalette) ? basePalette : fallbackPalette || 'forest', ...active };
+    fallbackPalette: yearRound(basePalette) ? basePalette : fallbackPalette || 'forest', ...active,
+    ...(!yearRound(basePalette) && typeof value?.seasonalValidUntil === 'string' ? {seasonalValidUntil:value.seasonalValidUntil} : {}) };
 }
 export const DEFAULT_PERSONAL_THEME = Object.freeze(normalizePersonalTheme(null));
 export function selectPersonalThemePalette(value, palette) {

@@ -23,15 +23,24 @@ adds new files, any combination of seasons merges without conflicts, in any orde
 
 - **Registry and windows** (`src/seasonalThemes.js`): validation, calendar ordering,
   inclusive windows that may wrap the year (`12-28` to `01-07`).
-- **Picker**: a separate "Seasonal" group under the six curated palettes. A season is
-  offered during its window. A season someone already uses stays listed and keeps
-  working after its window ("Season ended") until they choose another palette; it is
-  never switched away silently. Fine-tune (shades and background tone), preview, Apply,
-  Cancel and Reset work exactly as for the year-round palettes.
+- **Picker**: a separate "Seasonal" group under the six curated palettes. Production
+  offers a season only during its window. At expiry, the provider restores the last
+  year-round palette, its Fine-tune choices and the same appearance. Active or paused
+  sessions, editors, focused inputs and theme previews defer this automatic transition.
+  A quiet, one-time snackbar announces the actual return, without a modal.
 - **Persistence**: seasonal Fine-tune is stored apart from the year-round families, with
-  the last year-round palette as `fallbackPalette`. Year-round payloads keep their
-  original shape. If a saved season is not in a build, the fallback palette, its
-  customizations and the appearance are restored instead of resetting everything.
+  the last year-round palette as `fallbackPalette`. Seasonal storage uses schema v3
+  and an inclusive, year-specific `seasonalValidUntil` local date. Plain year-round
+  payloads retain their v2 shape. Legacy seasonal choices without a provable year
+  return conservatively to the fallback (ROOK Green if missing). Unknown seasonal
+  customizations remain opaque metadata when their definition is absent, so later
+  releases can restore them. No season activates automatically next year.
+- **Lifecycle**: check after hydration establishes workout/editor safety, next local
+  midnight, focus, pageshow, visibility and native foreground. Apply checks availability
+  again and keeps a late expired draft open with an inline explanation. Automatic
+  expiry renders the fallback even if its save fails; the last durable value stays
+  distinct and the write retries on a later safe event. It never loops on save failure
+  or replaces a newer manual Apply. Reading preferences never writes.
 - **Decoration contract**: the root gets `data-season="<id>"` (staged with the preview,
   released on Cancel). A static 360×24 band from `--rook-season-decor` sits in the empty
   top padding of Today, Coach, Progress and Profile, just below the safe area and above
@@ -75,11 +84,12 @@ year-round palette.
 
 ## Reviewing locally
 
-`VITE_ROOK_ALL_SEASONS=true` lists every merged season regardless of date. On any season
-branch (or `claude/seasonal-preview`):
+`VITE_ROOK_ALL_SEASONS=true` lists every merged season regardless of date and bypasses
+expiry for review. Use a separate local origin (port 4398 below), so review choices
+never modify a production origin's preferences. On any season branch (or preview):
 
 ```sh
 npm install
 VITE_ROOK_ALL_SEASONS=true npm run build   # PowerShell: $env:VITE_ROOK_ALL_SEASONS='true'; npm.cmd run build
-npm run preview                            # http://127.0.0.1:4173 → Profile → Display → Appearance → Choose a theme
+npm run preview -- --port 4398             # http://127.0.0.1:4398 → Profile → Display → Appearance → Choose a theme
 ```

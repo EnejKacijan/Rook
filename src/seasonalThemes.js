@@ -56,9 +56,8 @@ export function seasonalThemeInWindow(season, date = new Date()) {
   return start <= end ? today >= start && today <= end : today >= start || today <= end;
 }
 
-// The picker offers a season during its window. A season the person already
-// uses stays listed (and keeps working) after its window ends until they
-// choose another palette; it is never switched away silently.
+// Definitions stay registered for a deferred transition, but production offers
+// new selections only within the current local calendar window.
 // Current seasons first, then the next to start.
 export function availableSeasonalThemes(currentPalette, date = new Date(), seasons = SEASONAL_THEMES, showAll = SHOW_ALL_SEASONS) {
   const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
@@ -68,7 +67,7 @@ export function availableSeasonalThemes(currentPalette, date = new Date(), seaso
     if (start < today) start.setFullYear(start.getFullYear() + 1);
     return Math.round((start - today) / 864e5);
   };
-  return seasons.filter(season => showAll || season.id === currentPalette || seasonalThemeInWindow(season, date))
+  return seasons.filter(season => showAll || seasonalThemeInWindow(season, date))
     .map(season => [untilStart(season), season]).sort((a, b) => a[0] - b[0]).map(([, season]) => season);
 }
 
