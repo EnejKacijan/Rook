@@ -44,7 +44,9 @@ export const SEASONAL_THEMES = createSeasonalRegistry(Object.values(modules).map
 
 // Review builds can list every merged season regardless of date:
 //   VITE_ROOK_ALL_SEASONS=true npm run build
-export const SHOW_ALL_SEASONS = import.meta.env?.VITE_ROOK_ALL_SEASONS === 'true';
+// REVIEW BRANCH ONLY (claude/seasonal-preview): every season is listed regardless of
+// date. Never merge this branch; release seasons from their own branches.
+export const SHOW_ALL_SEASONS = import.meta.env?.MODE !== 'test' && import.meta.env?.VITE_ROOK_ALL_SEASONS !== 'false';
 
 const pad = value => String(value).padStart(2, '0');
 // Windows are inclusive local dates and may wrap the year (Dec 28 – Jan 7).
