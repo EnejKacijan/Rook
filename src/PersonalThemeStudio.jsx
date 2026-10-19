@@ -1,11 +1,23 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { ThemeNewBadge } from './ThemeNewBadge.jsx';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { availableSeasonalThemes, seasonalWindowLabel } from './seasonalThemes.js';
 import { SEASONAL_PRESETS, THEME_BASES, THEME_PRESETS, normalizePersonalTheme, personalThemeModel, personalThemeSummary, personalThemeShades, personalThemeSurfaces, selectPersonalThemePalette, updatePersonalTheme, resetPersonalThemePalette } from './personalThemes.js';
 import './personalThemeStudio.css';
 import {SegmentedControl} from './SegmentedControl.jsx';
 
-export function PersonalThemeStudio({ initial, systemDark = false, Header, close, apply, preview }) {
+export function PersonalThemeStudio({ initial, systemDark = false, Header, close, apply, preview, newReleases = [], onDiscoverySeen }) {
+  const badgeId = useId();
+  const [discoveries] = useState(newReleases);
+  const onSeen = useRef(onDiscoverySeen); onSeen.current = onDiscoverySeen;
+  useEffect(() => {
+    const acknowledge = () => {
+      if (document.visibilityState !== 'hidden') onSeen.current?.(discoveries.map(item => item.id));
+    };
+    acknowledge();
+    document.addEventListener('visibilitychange', acknowledge);
+    return () => document.removeEventListener('visibilitychange', acknowledge);
+  }, [discoveries]);
   const [baseline] = useState(() => normalizePersonalTheme(initial));
   const [draft, setDraft] = useState(baseline);
   const [error, setError] = useState('');
@@ -31,10 +43,12 @@ export function PersonalThemeStudio({ initial, systemDark = false, Header, close
   // Keep this open draft stable across midnight. Apply rechecks availability.
   const [seasons] = useState(() => availableSeasonalThemes(baseline.basePalette, new Date(), SEASONAL_PRESETS));
   const tile = (item, when) => {
+    const release = discoveries.find(release => release.paletteIds.includes(item.id));
+    const isNew = Boolean(release);
     const choice = personalThemeModel(selectPersonalThemePalette(draft, item.id), systemDark);
-    return <button type="button" key={item.id} aria-label={item.name} aria-pressed={selectedPreset.id === item.id} onClick={() => stage(selectPersonalThemePalette(draftRef.current, item.id))}>
+    return <button type="button" key={item.id} aria-label={item.name} aria-describedby={isNew ? `${badgeId}-${item.id}` : undefined} aria-pressed={selectedPreset.id === item.id} onClick={() => stage(selectPersonalThemePalette(draftRef.current, item.id))}>
       <span className="pro-theme-preview" data-season={item.seasonal ? item.id : undefined} style={choice.tokens} aria-hidden="true"><i className="pro-theme-preview-card"><b /><b /></i><i className="pro-theme-preview-cta" /></span>
-      <span className="pro-theme-preset-name">{item.name}</span><span className="pro-theme-choice-check" aria-hidden="true">{selectedPreset?.id === item.id ? '✓' : ''}</span>
+      <span className="pro-theme-preset-name">{item.name}{isNew && <ThemeNewBadge id={`${badgeId}-${item.id}`} returning={release.returning}/>}</span><span className="pro-theme-choice-check" aria-hidden="true">{selectedPreset?.id === item.id ? '✓' : ''}</span>
       {item.description && <small className="pro-theme-preset-note" aria-hidden="true">{item.description}</small>}
       {when && <small className="pro-theme-preset-note pro-theme-season-window">{when}</small>}
     </button>;
@@ -45,6 +59,7 @@ export function PersonalThemeStudio({ initial, systemDark = false, Header, close
     <fieldset className="pro-theme-appearance"><legend>Appearance</legend><SegmentedControl label="Appearance" options={[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}]} value={draft.appearance} onChange={value=>update('appearance',value)}/></fieldset>
     <fieldset className="pro-theme-presets"><legend>Curated palettes</legend>{THEME_PRESETS.map(item => tile(item))}</fieldset>
     {seasons.length > 0 && <fieldset className="pro-theme-seasonal"><legend>Seasonal</legend>{seasons.map(item => tile(item, seasonalWindowLabel(item)))}</fieldset>}
+    {selectedPreset.seasonal && <p className="pro-theme-season-return">After this season, your saved {THEME_PRESETS.find(item=>item.id===draft.fallbackPalette)?.name || 'ROOK Green'} palette returns.</p>}
     <details className="pro-theme-custom"><summary>{`Fine-tune ${selectedPreset.name}`}</summary>
       <fieldset className="pro-theme-accents"><legend>Accent shade <span>{model.accentName}</span></legend>{personalThemeShades(selectedPreset.id).map(item => <button type="button" key={item.id} aria-label={item.name} title={item.name} aria-pressed={draft.accent === item.id} onClick={() => update('accent', item.id)}><i aria-hidden="true" style={{ background: item[model.appearance], color: personalThemeModel(updatePersonalTheme(draft, { accent: item.id }), systemDark).tokens['--rook-on-accent-fill'] }}>{draft.accent === item.id ? '✓' : ''}</i></button>)}</fieldset>
       <fieldset className="pro-theme-bases"><legend>Background tone</legend>{THEME_BASES.map(item => <button type="button" key={item.id} aria-pressed={draft.base === item.id} onClick={() => update('base', item.id)}><span className="pro-theme-base-swatches" aria-hidden="true">{personalThemeSurfaces(selectedPreset.id, item.id, model.appearance).map((color, i) => <i key={i} style={{ background: color }} />)}</span><span>{item.name}</span><span className="pro-theme-base-check" aria-hidden="true">{draft.base === item.id ? '✓' : ''}</span></button>)}</fieldset>

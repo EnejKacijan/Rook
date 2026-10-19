@@ -8,6 +8,8 @@ import {deserializeState, startWorkout, STORAGE_KEY} from './domain.js';
 import {useDurableAction} from './useDurableAction.js';
 import {readPersonalThemePreference, savePersonalThemePreference} from './personalThemePreference.js';
 import {useAnimationClock} from './testAnimationClock.js';
+import {THEME_DISCOVERY_KEY, readSeenThemeReleases} from './themeDiscovery.js';
+import {PERSONAL_THEME_PREFERENCE} from './personalThemePreference.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let host, root, current, writes, details, navigate, standalone;
@@ -72,6 +74,49 @@ it('consolidates four unchanged destinations under Settings while keeping contex
   expect(host.querySelector('.account-sync-panel')).not.toBeNull();
   expect(groups[0].querySelector('.account-sync-panel')).toBeNull();
   expect(writes).not.toHaveBeenCalled(); expect(details).not.toHaveBeenCalled();
+});
+
+it('guides new-theme discovery through the real navigation path and acknowledges only the visible picker', async () => {
+  vi.setSystemTime(new Date('2026-10-19T12:00:00'));
+  savePersonalThemePreference({basePalette:'ocean',appearance:'dark'});
+  const stored=localStorage.getItem(PERSONAL_THEME_PREFERENCE);
+  await mount();
+  expect(host.querySelector('[aria-label="PROFILE"][aria-describedby] .theme-new-dot')).not.toBeNull();
+  expect(host.querySelector('[data-profile-area="display"] .theme-new-badge')).not.toBeNull();
+  await open('display');expect(row('Appearance').querySelector('.theme-new-badge')).not.toBeNull();
+  expect(readSeenThemeReleases().size).toBe(0);
+  await click(row('Appearance'));
+  const choose=[...host.querySelectorAll('button')].find(node=>node.querySelector('strong')?.textContent==='Choose a theme');
+  expect(choose.querySelector('.theme-new-badge')).not.toBeNull();
+  expect(readSeenThemeReleases().size).toBe(0);
+  await click(choose);
+  const studio=document.querySelector('.pro-theme-studio');
+  expect(studio.querySelector('[aria-label="Halloween"] .theme-new-badge')).not.toBeNull();
+  expect(studio.querySelector('[aria-label="Christmas"]')).toBeNull();
+  expect(readSeenThemeReleases().size).toBe(7);expect(readSeenThemeReleases().has('season:halloween:v1:2026')).toBe(true);
+  expect(localStorage.getItem(PERSONAL_THEME_PREFERENCE)).toBe(stored);expect(writes).not.toHaveBeenCalled();
+  await click([...studio.querySelectorAll('button')].find(node=>node.textContent==='Cancel'));
+  expect(host.querySelector('.theme-new-dot')).toBeNull();
+  expect(localStorage.getItem(PERSONAL_THEME_PREFERENCE)).toBe(stored);
+  await act(async()=>root.unmount());root=createRoot(host);await mount();
+  expect(host.querySelector('.theme-new-badge')).toBeNull();expect(host.querySelector('.theme-new-dot')).toBeNull();
+});
+
+it('refreshes new-season discovery after midnight, foreground and next year without re-announcing seen occurrences', async () => {
+  vi.setSystemTime(new Date('2026-09-30T23:59:59'));await mount();
+  expect(host.querySelector('.theme-new-dot')).toBeNull();
+  await tick(1100);expect(host.querySelector('.theme-new-dot')).not.toBeNull();
+  localStorage.setItem(THEME_DISCOVERY_KEY,JSON.stringify(['season:halloween:v1:2026']));
+  await act(async()=>window.dispatchEvent(new StorageEvent('storage',{key:THEME_DISCOVERY_KEY})));
+  expect(host.querySelector('.theme-new-dot')).toBeNull();
+  localStorage.setItem(THEME_DISCOVERY_KEY,JSON.stringify(['season:halloween:v1:2026',...['forest','champagne','ocean','slate','plum','terracotta'].map(id=>`palette:${id}:v1`)]));
+  vi.setSystemTime(new Date('2027-10-01T12:00:00'));
+  await act(async()=>window.dispatchEvent(new Event('pageshow')));
+  expect(host.querySelector('.theme-new-dot')).not.toBeNull();
+  expect(host.querySelector('[data-profile-area="display"] .theme-new-badge').textContent).toContain('Back');
+  vi.setSystemTime(new Date('2027-11-03T12:00:00'));
+  await act(async()=>document.dispatchEvent(new Event('visibilitychange')));
+  expect(host.querySelector('.theme-new-dot')).toBeNull();expect(writes).not.toHaveBeenCalled();
 });
 
 it.each(['no-plan','freestyle','saved-first','imported','manual','generated'])('keeps the %s training summary and canonical row navigation', async kind => {
@@ -215,7 +260,7 @@ it.each(['Back', 'Escape', 'active Profile tab'])('%s returns Display directly t
   await mount(initial); const before = structuredClone(current); await open('display');
   if (action === 'Back') await click(host.querySelector('[aria-label="Back to Profile"]'));
   else if (action === 'Escape') {await act(async () => screen().dispatchEvent(new KeyboardEvent('keydown', {key: 'Escape', bubbles: true, cancelable: true}))); await tick();}
-  else await click(host.querySelector('.bottom-nav [aria-label="PROFILE"]'));
+  else await click(host.querySelector('.bottom-nav [aria-label^="PROFILE"]'));
   expect(host.querySelector('.profile-hub h1').textContent).toBe('Training profile');
   expect(host.querySelector('.profile-management-screen')).toBeNull(); expect(host.querySelectorAll('[data-profile-area="display"]')).toHaveLength(1);
   expect(current).toEqual(before); expect(writes).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();

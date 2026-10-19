@@ -7,6 +7,7 @@ import { createReturningUserFixture } from './demoFixture.js';
 import { startWorkout } from './domain.js';
 import { useResolvedTheme } from './useResolvedTheme.js';
 import { PERSONAL_THEME_PREFERENCE, readPersonalThemePreference } from './personalThemePreference.js';
+import { THEME_DISCOVERY_KEY } from './themeDiscovery.js';
 import { normalizePersonalTheme, selectPersonalThemePalette, updatePersonalTheme, personalThemeModel } from './personalThemes.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -71,7 +72,7 @@ it('previews every real root control, retains mounted state and never writes the
   expect(document.querySelector('.pro-theme-studio')).toBe(panel); expect(panel.scrollTop).toBe(144);
   expect(panel.querySelector('details').open).toBe(true); expect(host.querySelector('input')).toBe(input); expect(input.value).toBe('72.5');
   expect(mounts).toBe(1); expect(host.textContent).toContain('Coach');
-  expect(review.personalTheme).toEqual(original); expect(readPersonalThemePreference()).toEqual(original); expect(write).not.toHaveBeenCalled();
+  expect(review.personalTheme).toEqual(original); expect(readPersonalThemePreference()).toEqual(original); expect(write.mock.calls.filter(([key])=>key!==THEME_DISCOVERY_KEY)).toEqual([]);
   await click('Cancel'); expect(rootTheme()).toEqual(before); await tick();
 });
 it.each(['Cancel', 'Close personal themes', 'Escape', 'drag', 'Back', 'backdrop'])('%s restores all original root tokens and preference before the close animation finishes', async action => {
@@ -124,7 +125,7 @@ it('stages the mounted Weekly Review progress role live and restores it on Cance
     expect(host.querySelector('.weekly-review-card')).toBe(progress);
     expect(review.personalTheme).toEqual(original);
   }
-  expect(write).not.toHaveBeenCalled();
+  expect(write.mock.calls.filter(([key])=>key!==THEME_DISCOVERY_KEY)).toEqual([]);
   await click('Cancel'); expect(color()).toBe(originalColor); expect(rootTheme()).toEqual(before); await tick();
 });
 it('foreground, focus and pageshow retain applied colors and never rewrite preferences or subscription state', async () => {

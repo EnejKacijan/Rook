@@ -7,6 +7,14 @@ season merged it changes nothing a person can see: the picker shows no seasonal 
 
 A season is three new files and nothing else:
 
+Set `releaseYear` on its data definition to the first published season's start
+year. Discovery uses a stable versioned ID per palette and local season start
+year. Unseen palettes show New until the picker is viewed; subsequent seasonal
+occurrences show Back only in their window. The same notice guides Profile,
+Display and Appearance. First setup acknowledges only its own initial choices;
+restoring an existing profile does not dismiss notices. This local discovery
+metadata is separate from theme Apply/Cancel and never changes a palette.
+
 | File | Purpose |
 |---|---|
 | `src/seasons/<id>.js` | Plain data, default export: name, character, release window, signature surfaces, five accent shades. No imports. |

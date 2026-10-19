@@ -3,6 +3,7 @@
 export default {
   id: 'halloween',
   name: 'Halloween',
+  releaseYear: 2026,
   description: 'Ember · night',
   window: { start: '10-01', end: '11-02' },
   base: 'neutral',

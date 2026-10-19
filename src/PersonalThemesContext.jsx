@@ -6,16 +6,22 @@ import { PERSONAL_THEME_PREFERENCE, readPersonalThemePreference, savePersonalThe
 import { nextThemeMidnightDelay, prepareSeasonalThemeSelection, resolveSeasonalTheme } from './seasonalThemeLifecycle.js';
 import { subscribeNativeForeground } from './nativeLifecycle.js';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
+import { useThemeDiscovery } from './useThemeDiscovery.js';
 import './personalThemeApp.css';
 
 // Appearance is available to everyone in this release. It does not create or
 // impersonate a subscription entitlement and never contacts a billing service.
 const ThemeContext = createContext(null);
 const inactive = Object.freeze({ personalTheme: null, renderedPersonalTheme: null,
+  hasNewThemes: false,
+  themeNoticeReturning: false,
+  acknowledgeInitialThemes: () => {},
   openThemes: () => {}, clearTheme: () => {}, setAppearance: () => {}, setSeasonalTransitionBlocked: () => {} });
 export const usePersonalThemes = () => useContext(ThemeContext) || inactive;
 
 export function PersonalThemesProvider({ children, Modal, Header }) {
+  const discovery = useThemeDiscovery();
+  const discoveryRef = useRef(discovery); discoveryRef.current = discovery;
   const [personalTheme, setPersonalTheme] = useState(readPersonalThemePreference);
   const [renderedTheme, setRenderedTheme] = useState(personalTheme);
   const [previewTheme, setPreviewTheme] = useState(null);
@@ -105,7 +111,7 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
     const theme = normalizePersonalTheme(rendered.current || initial || DEFAULT_PERSONAL_THEME);
     session.current = { closed: false };
     setPreviewTheme(theme);
-    setSurface({ initial: theme, id: ++id.current });
+    setSurface({ initial: theme, id: ++id.current, newReleases:discoveryRef.current.openDiscovery() });
   }, []);
   const endPreview = () => {
     if (session.current) session.current.closed = true;
@@ -142,12 +148,16 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
   }, []);
   const dismiss = () => { endPreview(); setSurface(null); };
   return <ThemeContext.Provider value={{ personalTheme:renderedTheme,
+    hasNewThemes:discovery.hasNewThemes,
+    themeNoticeReturning:discovery.hasNewThemes && discovery.releases.every(item=>item.returning),
+    acknowledgeInitialThemes:discovery.acknowledgeInitialThemes,
     renderedPersonalTheme: previewTheme || renderedTheme, openThemes, clearTheme, setAppearance, setSeasonalTransitionBlocked }}>
     {children}
     {!blocked.current && !surface && notice.surface}
     {surface && createPortal(<Modal key={surface.id} close={dismiss} onCloseStart={endPreview}
       backgroundRef={background} returnFocusRef={focus} lockDocument={!background.current?.matches('.modal-layer')}>
       {close => <PersonalThemeStudio Header={Header} initial={surface.initial} systemDark={systemDark}
+        newReleases={surface.newReleases} onDiscoverySeen={discovery.markSeen}
         close={close} preview={preview} apply={apply} />}
     </Modal>, document.body)}
   </ThemeContext.Provider>;

@@ -119,7 +119,7 @@ it('defers during focused input, then resolves on blur and native/foreground eve
   await act(async()=>vi.advanceTimersByTimeAsync(1100));expect(review.personalTheme.basePalette).toBe('autumn');
   await act(async()=>host.querySelector('input').blur());await act(async()=>vi.advanceTimersByTimeAsync(1));
   expect(review.personalTheme.basePalette).toBe('ocean');
-  expect(subscribeNativeForeground).toHaveBeenCalledTimes(1);
+  expect(subscribeNativeForeground).toHaveBeenCalledTimes(2);
 });
 it.each(['visibility','native','pageshow'])('rechecks a suspended app on %s without changing a hidden app',async event=>{
   savePersonalThemePreference(seasonal());await mount();
@@ -128,7 +128,7 @@ it.each(['visibility','native','pageshow'])('rechecks a suspended app on %s with
   expect(review.personalTheme.basePalette).toBe('autumn');
   visibility.mockReturnValue('visible');
   await act(async()=>{
-    if(event==='native')subscribeNativeForeground.mock.calls[0][0]();
+    if(event==='native')subscribeNativeForeground.mock.calls.forEach(([resume])=>resume());
     else if(event==='visibility')document.dispatchEvent(new Event('visibilitychange'));
     else window.dispatchEvent(new Event('pageshow'));
   });

@@ -11,6 +11,8 @@ import { subscribeNativeForeground } from './nativeLifecycle.js';
 import { presentNativeFile } from './platformFileActions.js';
 import { handleExternalLinkClick } from './externalLink.js';
 import { PersonalThemesProvider, usePersonalThemes } from './PersonalThemesContext.jsx';
+import { ThemeNewBadge } from './ThemeNewBadge.jsx';
+import { useInitialThemeDiscovery } from './useThemeDiscovery.js';
 import { personalThemeFromProfile, personalThemeSummary } from './personalThemes.js';
 import { TemporaryPlanSheet } from './TemporaryPlanSheet.jsx';
 import { temporaryPlanScheduleUntouched, temporaryPlanStatus } from './temporaryPlan.js';
@@ -1611,6 +1613,8 @@ function ProgressNavGlyph({filled=false}) {
   </g>;
 }
 export function BottomNav({ page, setPage, onActiveTabRetap }) {
+  const { hasNewThemes } = usePersonalThemes();
+  const discoveryDescription = useId();
   const navRef = useRef(null);
   const cancelNavFeedback = useBottomNavFeedback(page,navRef);
   useLayoutEffect(() => {
@@ -1634,6 +1638,7 @@ export function BottomNav({ page, setPage, onActiveTabRetap }) {
         <button
           key={id}
           aria-label={label}
+          aria-describedby={id === 'profile' && hasNewThemes ? discoveryDescription : undefined}
           aria-current={page === id ? "page" : undefined}
           className={page === id ? "nav-active" : ""}
           onClick={() => id === page
@@ -1655,8 +1660,10 @@ export function BottomNav({ page, setPage, onActiveTabRetap }) {
                 {id === 'profile' && <ProfileNavGlyph filled/>}
               </g>
             </svg>
+            {id === 'profile' && hasNewThemes && <span className="theme-new-dot"/>}
           </span>
           <span className="nav-label">{label}</span>
+          {id === 'profile' && hasNewThemes && <span id={discoveryDescription} className="visually-hidden">Unseen themes available</span>}
         </button>
       ))}
     </nav>
@@ -11627,7 +11634,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           ['preferences','Workout preferences','Training style, logging and increments'],
           ['display','Display',`${personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations ${p.showExerciseImages === false ? 'off' : 'on'}`],
           ['data','Data & backup','Import, export, backup, restore and local data'],
-        ].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
+        ].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong>{id === 'display' && personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}<small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
       </section>}
       {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
@@ -11776,6 +11783,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("appearance")}>
           <span>
             <strong>Appearance</strong>
+            {personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}
             <small>
               {personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations{" "}
               {p.showExerciseImages === false ? "off" : "on"}
@@ -19392,7 +19400,7 @@ function Appearance({ state, update, close }) {
         </small>
         {appearanceError && <p role="alert">{appearanceError}</p>}
       </section>
-      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Choose a theme</strong><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
+      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Choose a theme</strong>{personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}<small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>
         <SettingSwitch
@@ -20475,6 +20483,8 @@ function HydratedApp({startup}) {
   const [state, update, persistenceFailed] = useLiftState(startup);
   const personalThemes = usePersonalThemes();
   const accountSync = useAccountSync({ state, update, persistenceFailed });
+  useInitialThemeDiscovery({newProfile:startup.firstRunVerified && !state.profile.onboardingComplete,
+    profileId:state.profile.id, complete:state.profile.onboardingComplete, acknowledge:personalThemes.acknowledgeInitialThemes});
   const liveCompletion = useRef(null);
   const recordLiveFinish = useCallback(event => { liveCompletion.current = event; }, []);
   useResolvedTheme(
