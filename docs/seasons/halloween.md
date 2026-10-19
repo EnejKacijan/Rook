@@ -19,8 +19,11 @@ unchanged. `src/seasonalContract.test.js` checks contrast, scoping and color dis
 
 **Oct 1 – Nov 2** (`10-01` to `11-02` in `src/seasons/halloween.js`). Halloween is Oct 31. A month-long window gives the theme time to be found, and it ends after All Saints' Day (Nov 1), a public holiday in Slovenia.
 
-The theme appears in the picker only inside the window. Anyone who picked it keeps it
-after the window until they choose another palette.
+The theme is offered only inside its local date window. After the inclusive last day,
+ROOK restores the last year-round palette, its Fine-tune choices and the same appearance
+at the next safe moment. Active or paused sessions and open editors/previews defer
+this automatic transition. A quiet notice explains the return. Seasonal settings
+remain saved, but the theme must be selected again in a future year.
 
 ## Files
 
@@ -35,7 +38,7 @@ after the window until they choose another palette.
    `claude/seasonal-core` are not merged yet, they come with it.
 2. Nothing else to configure: the season registers itself from its files.
 
-To withdraw it later, delete the three files above. People who used it return to their
+To withdraw it later, remove this season's files. People who used it return to their
 saved year-round palette with their appearance and Fine-tune choices.
 
 ## Previewing
@@ -44,5 +47,5 @@ saved year-round palette with their appearance and Fine-tune choices.
 git checkout claude/seasonal-halloween
 npm install
 VITE_ROOK_ALL_SEASONS=true npm run build   # lists the season outside its window
-npm run preview                            # Profile → Display → Appearance → Choose a theme
+npm run preview -- --port 4398             # Profile → Display → Appearance → Choose a theme
 ```
