@@ -10,12 +10,12 @@ it('registers Christmas after the year-round palettes with its proposed window',
   expect(personalThemeModel({ basePalette: 'christmas' }).accentName).toBe('Evergreen');
 });
 
-it('offers Christmas only inside its window unless already chosen', () => {
+it('offers Christmas only inside its window even when previously chosen', () => {
   const [month, day] = '12-01'.split('-').map(Number);
   const inside = new Date(2026, month - 1, day, 12), before = new Date(2026, month - 1, day - 1, 12);
   expect(availableSeasonalThemes('forest', inside, undefined, false).map(item => item.id)).toContain('christmas');
   expect(availableSeasonalThemes('forest', before, undefined, false).map(item => item.id)).not.toContain('christmas');
-  expect(availableSeasonalThemes('christmas', before, undefined, false).map(item => item.id)).toContain('christmas');
+  expect(availableSeasonalThemes('christmas', before, undefined, false).map(item => item.id)).not.toContain('christmas');
 });
 
 it('stages its decoration band through the root season attribute only', () => {
