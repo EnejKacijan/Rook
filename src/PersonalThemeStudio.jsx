@@ -34,13 +34,14 @@ export function PersonalThemeStudio({ initial, systemDark = false, Header, close
     <fieldset className="pro-theme-presets"><legend>Curated palettes</legend>{THEME_PRESETS.map(item => {
       const choice = personalThemeModel(selectPersonalThemePalette(draft, item.id), systemDark);
       return <button type="button" key={item.id} aria-label={item.name} aria-pressed={selectedPreset.id === item.id} onClick={() => stage(selectPersonalThemePalette(draftRef.current, item.id))}>
-        <span className="pro-theme-swatches pro-theme-sample-colors" style={choice.tokens} aria-hidden="true"><i /><i /><i /></span>
-        <span>{item.name}</span><span className="pro-theme-choice-check" aria-hidden="true">{selectedPreset?.id === item.id ? '✓' : ''}</span>
+        <span className="pro-theme-preview" style={choice.tokens} aria-hidden="true"><i className="pro-theme-preview-card"><b /><b /></i><i className="pro-theme-preview-cta" /></span>
+        <span className="pro-theme-preset-name">{item.name}</span><span className="pro-theme-choice-check" aria-hidden="true">{selectedPreset?.id === item.id ? '✓' : ''}</span>
+        {item.description && <small className="pro-theme-preset-note" aria-hidden="true">{item.description}</small>}
       </button>;
     })}</fieldset>
     <details className="pro-theme-custom"><summary>{`Fine-tune ${selectedPreset.name}`}</summary>
       <fieldset className="pro-theme-accents"><legend>Accent shade <span>{model.accentName}</span></legend>{personalThemeShades(selectedPreset.id).map(item => <button type="button" key={item.id} aria-label={item.name} title={item.name} aria-pressed={draft.accent === item.id} onClick={() => update('accent', item.id)}><i aria-hidden="true" style={{ background: item[model.appearance], color: personalThemeModel(updatePersonalTheme(draft, { accent: item.id }), systemDark).tokens['--rook-on-accent-fill'] }}>{draft.accent === item.id ? '✓' : ''}</i></button>)}</fieldset>
-      <fieldset className="pro-theme-bases"><legend>Background tone</legend>{THEME_BASES.map(item => <button type="button" key={item.id} aria-pressed={draft.base === item.id} onClick={() => update('base', item.id)}><span className="pro-theme-base-swatches" aria-hidden="true">{personalThemeSurfaces(selectedPreset.id, item.id, model.appearance).slice(0, 2).map((color, i) => <i key={i} style={{ background: color }} />)}</span><span>{item.name}</span><span className="pro-theme-base-check" aria-hidden="true">{draft.base === item.id ? '✓' : ''}</span></button>)}</fieldset>
+      <fieldset className="pro-theme-bases"><legend>Background tone</legend>{THEME_BASES.map(item => <button type="button" key={item.id} aria-pressed={draft.base === item.id} onClick={() => update('base', item.id)}><span className="pro-theme-base-swatches" aria-hidden="true">{personalThemeSurfaces(selectedPreset.id, item.id, model.appearance).map((color, i) => <i key={i} style={{ background: color }} />)}</span><span>{item.name}</span><span className="pro-theme-base-check" aria-hidden="true">{draft.base === item.id ? '✓' : ''}</span></button>)}</fieldset>
       <div className="pro-theme-reset-row"><p role="status" aria-live="polite">{personalThemeSummary(draft)}{draft.appearance === 'system' ? ` · ${model.appearance === 'dark' ? 'Dark' : 'Light'} now` : ''}</p><button type="button" disabled={!colorsChanged} onClick={() => stage(resetPersonalThemePalette(draftRef.current))}>{`Reset ${selectedPreset.name}`}</button></div>
     </details>
     {error && <p role="alert">{error}</p>}

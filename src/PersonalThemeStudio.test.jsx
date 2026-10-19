@@ -2,7 +2,7 @@ import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, expect, it, vi } from 'vitest';
 import { PersonalThemeStudio } from './PersonalThemeStudio.jsx';
-import { THEME_PRESETS, normalizePersonalTheme, personalThemeShades, updatePersonalTheme } from './personalThemes.js';
+import { THEME_PRESETS, normalizePersonalTheme, personalThemeModel, personalThemeShades, updatePersonalTheme } from './personalThemes.js';
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let host,root;
 afterEach(async()=>{if(root)await act(async()=>root.unmount());host?.remove();root=null;});
@@ -46,4 +46,15 @@ it('legacy Ocean + Gold opens safely as Ocean with its default Ocean shade',asyn
 });
 it('failed Apply retains the draft for retry',async()=>{
   const apply=vi.fn().mockImplementationOnce(()=>{throw Error('full');});await render({apply});await click('Ocean',host.querySelector('.pro-theme-presets'));await click('Apply theme');expect(host.querySelector('[role="alert"]').textContent).toContain('Couldn’t save');await click('Apply theme');expect(apply).toHaveBeenCalledTimes(2);
+});
+it('each palette tile previews its own resolved colors and character in the current appearance',async()=>{
+  await render({initial:{basePalette:'forest',appearance:'light'}});
+  for(const preset of THEME_PRESETS){
+    const tile=host.querySelector(`.pro-theme-presets [aria-label="${preset.name}"]`);
+    const tokens=personalThemeModel({basePalette:preset.id,appearance:'light'}).tokens;
+    const preview=tile.querySelector('.pro-theme-preview');
+    expect(preview.getAttribute('aria-hidden')).toBe('true');
+    for(const role of ['--rook-bg','--rook-surface','--rook-accent-fill'])expect(preview.style.getPropertyValue(role)).toBe(tokens[role]);
+    expect(tile.querySelector('.pro-theme-preset-note').textContent).toBe(preset.description);
+  }
 });

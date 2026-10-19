@@ -77,6 +77,10 @@
   --rook-accent-strong: #17553c;
   --rook-set-wash: rgba(31, 107, 76, .075);
   --rook-stepper-divider: rgba(27, 26, 25, .065);
+  --rook-motion-feedback: 150ms;
+  /* Depth: a soft family-tinted lift for primary actions and raised cards. */
+  --rook-accent-shadow: rgba(31, 107, 76, .26);
+  --rook-shadow-soft: rgba(27, 26, 25, .06);
   --rook-motion-press-in: 80ms;
   --rook-motion-press-out: 120ms;
   --rook-motion-state: 200ms;
@@ -108,6 +112,13 @@
 @keyframes rook-view-transition-in {
   from { opacity: 0; }
 }
+
+/* One soft, accent-tinted lift on enabled primary actions. Pressed and
+   disabled states stay flat so a state change reads at once. */
+.button.primary:not(:disabled) {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .1), 0 10px 22px -14px var(--rook-accent-shadow);
+}
+.button.primary:not(:disabled):active { box-shadow: none; }
 
 /* ── Dark — "Graphite" ──────────────────────────────────────────────────
    Neutral, green-undertone surfaces carry depth while ROOK green remains the
@@ -200,6 +211,8 @@
 
   --rook-scrim: rgba(4, 7, 6, .72);
   --rook-shadow: rgba(0, 0, 0, .5);
+  --rook-accent-shadow: rgba(0, 0, 0, .34);
+  --rook-shadow-soft: rgba(0, 0, 0, .3);
   --rook-timer: #1e2522;
 }
 
@@ -400,6 +413,7 @@
   --rook-week-completed-marker: var(--rook-premium-accent-muted);
   --rook-scrim: rgba(29, 27, 24, .46);
   --rook-shadow: rgba(29, 27, 24, .16);
+  --rook-accent-shadow: rgba(184, 137, 30, .26);
   --rook-timer: #1d1b18;
   --rook-timer-text: #f4f1e8;
   --rook-timer-secondary: #aaa49a;
@@ -841,8 +855,9 @@
 :root[data-appearance="dark"] :is(input, select, textarea)[aria-invalid="true"] { border-color: var(--rook-error-text); background: var(--rook-error-surface); }
 :root[data-appearance="dark"] :is(button, a, input, select, textarea):focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
 
-:root[data-appearance="dark"] :is(.modal-layer, .workout-confirm-layer, .building-overlay) { background: var(--rook-scrim); }
-:root[data-appearance="dark"] :is(.modal-layer > .screen, .sheet, .workout-confirm, .building-card) { box-shadow: 0 -12px 40px var(--rook-shadow); }
+/* Scrims and sheet shadows are theme roles in Light as well as Dark. */
+:root[data-appearance] :is(.modal-layer, .workout-confirm-layer, .building-overlay) { background: var(--rook-scrim); }
+:root[data-appearance] :is(.modal-layer > .screen, .sheet, .workout-confirm, .building-card) { box-shadow: 0 -12px 40px var(--rook-shadow); }
 :root[data-appearance="dark"] :is(.modal-drag-handle i, .sheet-grab-zone i) { background: var(--rook-muted); }
 
 :root[data-appearance="dark"] .rest-timer { background: var(--rook-timer); color: var(--rook-timer-text, var(--rook-text)); border: 1px solid var(--rook-timer-border, var(--rook-border)); box-shadow: 0 8px 24px var(--rook-shadow); }

@@ -55,6 +55,15 @@
             }
           }
         } catch {}
+        // A saved Personal Theme owns brightness. Read only its validated
+        // appearance here so reopening never flashes the opposite mode.
+        try {
+          const personal = JSON.parse(
+            localStorage.getItem("rook.local-review.personal-theme.v1"),
+          );
+          if (["system", "light", "dark"].includes(personal?.appearance))
+            appearancePreference = personal.appearance;
+        } catch {}
         const appearance =
           appearancePreference === "system"
             ? matchMedia("(prefers-color-scheme: dark)").matches

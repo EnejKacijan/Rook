@@ -11,4 +11,4 @@
 .adjust-keep-row .text-button { min-height:44px; justify-self:start; }
 .adjust-keep-row .adjustment-target-editor { grid-column:1/-1; width:100%; }
 .adjust-time-context { font-weight:600; }
-.adjust-time-validation { color:var(--rook-text-secondary,#6f6c68); font-size:14px; line-height:1.5; }
+.adjust-time-validation { color:var(--rook-secondary); font-size:14px; line-height:1.5; }

@@ -161,7 +161,7 @@ it('reopens an applied customized Plum with its base selected, previews new defa
   const write = vi.spyOn(Storage.prototype, 'setItem');
   await click('Terracotta');
   expect(selected()).toBe('Terracotta'); expect(document.documentElement.dataset.personalTheme).toBe('terracotta-warm');
-  expect(document.documentElement.style.getPropertyValue('--rook-accent-fill')).toBe('#efa084');
+  expect(document.documentElement.style.getPropertyValue('--rook-accent-fill')).toBe('#eea083');
   expect(panel.querySelector('summary').textContent).toBe('Fine-tune Terracotta');
   expect(panel.querySelector('[role="status"]').textContent).toBe('Terracotta · Dark');
   await click('Cool'); await click('Reset Terracotta');

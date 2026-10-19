@@ -167,7 +167,7 @@
 .onboarding-group-heading .select-all-check > i { width: 16px; height: 16px; flex-basis: 16px; border-radius: 5px; font-size: 10px; }
 .schedule-frequency .option-list,
 .schedule-duration .option-list { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; margin-top: 7px; }
-.schedule-duration-note { display: block; margin-top: 8px; color: var(--rook-text-muted, #6f6c68); font-size: 11px; line-height: 1.4; }
+.schedule-duration-note { display: block; margin-top: 8px; color: var(--rook-secondary); font-size: 11px; line-height: 1.4; }
 .schedule-frequency .onboarding-option,
 .schedule-duration .onboarding-option { min-height: 50px; padding: 4px 2px; justify-content: center; border-radius: 12px; }
 .schedule-frequency .option-card-copy,

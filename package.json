@@ -50,6 +50,8 @@
     "qa:dark-mode": "node scripts/dark-mode-qa.mjs",
     "qa:premium-theme": "node scripts/premium-theme-qa.mjs",
     "qa:appearance": "node scripts/appearance-qa.mjs",
+    "qa:theme-gallery": "node scripts/theme-gallery-qa.mjs",
+    "qa:theme-contrast": "node scripts/theme-contrast-report.mjs",
     "qa:motion-themes": "node scripts/motion-theme-qa.mjs",
     "qa:mobile-input-zoom": "node scripts/mobile-input-zoom-qa.mjs",
     "qa:persistence-failure": "node scripts/persistence-failure-qa.mjs",

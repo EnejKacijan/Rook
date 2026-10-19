@@ -7,7 +7,7 @@
 .account-sync-panel .list-row { width: 100%; margin-top: 12px; }
 .profile-screen .account-sync-panel > .list-row { border-bottom: 0; border-top: 1px solid var(--rook-border); margin-top: 16px; padding-top: 14px; }
 .account-sync-panel .list-row > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.account-sync-panel .account-sync-error { color: var(--rook-danger, #a54840); overflow-wrap: anywhere; }
+.account-sync-panel .account-sync-error { color: var(--rook-error-text); overflow-wrap: anywhere; }
 .account-sync-collision { margin-top: 16px; }
 .account-sync-collision p { margin: 0 0 12px; color: var(--rook-muted); overflow-wrap: anywhere; }
 .account-sync-collision .button { display: block; width: 100%; min-height: 44px; margin-top: 8px; white-space: normal; }

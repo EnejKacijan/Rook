@@ -52,7 +52,7 @@
 .plan-reorder-a11y:focus-within { width: min(250px, calc(100vw - 52px)); height: auto; padding: 4px; overflow: visible; opacity: 1; pointer-events: auto; }
 .plan-reorder-a11y button { min-height: 38px; padding: 0 8px; border: 0; border-radius: 7px; background: transparent; color: var(--rook-text, #1b1a19); font: inherit; font-size: 8.5px; font-weight: 800; letter-spacing: .06em; }
 .plan-reorder-a11y button:focus-visible { outline: 2px solid var(--rook-accent, #1f6b4c); outline-offset: -2px; }
-.plan-reorder-a11y button:disabled { color: var(--rook-disabled, #aaa7a2); }
+.plan-reorder-a11y button:disabled { color: var(--rook-disabled-text); }
 .exercise-reorder-a11y { top: 46px; right: 10px; }
 .workout-descriptor-field > input { font-size: 13px !important; font-weight: 580 !important; }
 .import-day > .plan-editor-workout-title { display: grid; gap: 6px; }

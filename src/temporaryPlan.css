@@ -14,5 +14,5 @@
 .temporary-plan-changes article p { margin: 5px 0; }
 .temporary-plan-changes summary { color: var(--rook-accent-text); font-size: 13px; padding: 8px 0; cursor: pointer; }
 .temporary-plan-changes li { font-size: 13px; line-height: 1.5; margin: 6px 0; }
-.temporary-plan-sheet .temporary-plan-error { color: var(--rook-danger-text,var(--rook-text)); }
+.temporary-plan-sheet .temporary-plan-error { color: var(--rook-error-text); }
 .temporary-plan-notice { margin: 12px 0; font-size: 13px; }

@@ -35,5 +35,5 @@
 .freestyle-copy-applied > span { min-width:0;overflow-wrap:anywhere; }
 .freestyle-copy-applied:focus { outline:none; }
 .freestyle-copy-applied .text-button { min-width:44px;min-height:44px;margin:0;flex-shrink:0;padding-inline:0; }
-.freestyle-copy-error { margin:8px 0 0;font-size:12px;color:var(--rook-danger); }
+.freestyle-copy-error { margin:8px 0 0;font-size:12px;color:var(--rook-error-text); }
 .freestyle-workout .workout-options-trigger.unavailable { display: none; }
