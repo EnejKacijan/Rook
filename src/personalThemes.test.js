@@ -24,7 +24,7 @@ describe('Curated personal theme contrast and isolation', () => {
     const value = Object.freeze({ accent: 'url(https://invalid.example)', base: '__proto__', appearance: 'unset', unrelated: 'ignored' });
     expect(normalizePersonalTheme(value)).toEqual(DEFAULT_PERSONAL_THEME);
     expect(normalizePersonalTheme(null)).toEqual(DEFAULT_PERSONAL_THEME);
-    expect(Object.keys(normalizePersonalTheme(value))).toEqual(['schemaVersion','basePalette','appearance','paletteCustomizations','accent','base']);
+    expect(Object.keys(normalizePersonalTheme(value))).toEqual(['schemaVersion','basePalette','appearance','paletteCustomizations','seasonalCustomizations','fallbackPalette','accent','base']);
   });
   it('resolves System appearance deterministically without replacing the user choice', () => {
     const value = Object.freeze({ accent: 'ocean', base: 'warm', appearance: 'system' });

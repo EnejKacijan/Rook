@@ -16,9 +16,9 @@
 :root[data-personal-theme] .pro-theme-studio button:disabled { opacity:1;color:var(--rook-disabled-text); }
 :root[data-personal-theme] .pro-theme-studio .pro-theme-actions button.button.primary:disabled { opacity:1;background:var(--rook-disabled-surface);color:var(--rook-disabled-text); }
 .pro-theme-bases { display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px; }
-.pro-theme-presets { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
-.pro-theme-studio .pro-theme-presets button { display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:2px 6px;align-items:center;text-align:left;min-height:68px;padding:8px 10px 10px; }
-.pro-theme-studio .pro-theme-presets button[aria-pressed="true"] { box-shadow:0 0 0 1px var(--rook-accent-text); }
+.pro-theme-presets, .pro-theme-seasonal { display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px; }
+.pro-theme-studio :is(.pro-theme-presets, .pro-theme-seasonal) button { display:grid;grid-template-columns:minmax(0,1fr) 14px;gap:2px 6px;align-items:center;text-align:left;min-height:68px;padding:8px 10px 10px; }
+.pro-theme-studio :is(.pro-theme-presets, .pro-theme-seasonal) button[aria-pressed="true"] { box-shadow:0 0 0 1px var(--rook-accent-text); }
 /* Each tile is a miniature of the palette in the current appearance: page,
    card with text lines, and its primary action. Colors come from that
    palette's own resolved tokens on the preview element. */
@@ -29,6 +29,7 @@
 .pro-theme-preview-cta { display:block;width:30%;height:14px;border-radius:5px;background:var(--rook-accent-fill); }
 .pro-theme-preset-name { min-width:0;font-weight:650;overflow-wrap:anywhere; }
 .pro-theme-preset-note { grid-column:1 / -1;font-size:11px;line-height:1.3;color:var(--rook-secondary); }
+.pro-theme-season-window { font-variant-numeric:tabular-nums; }
 .pro-theme-choice-check { color:var(--rook-accent-text); }
 .pro-theme-custom { border-top:1px solid var(--rook-border);margin-top:16px;padding-top:4px; }
 .pro-theme-custom > summary { min-height:44px;align-content:center;font-size:13px;color:var(--rook-accent-text);cursor:pointer; }

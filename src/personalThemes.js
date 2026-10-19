@@ -1,4 +1,5 @@
 // Bounded design registry. No profile/storage/billing imports or arbitrary CSS input.
+import { SEASONAL_THEMES } from './seasonalThemes.js';
 export const THEME_ACCENTS = Object.freeze([
   { id: 'forest', name: 'Green', light: '#206b4c', dark: '#4fbf87' },
   { id: 'champagne', name: 'Gold', light: '#b8891e', dark: '#d7b15a' },
@@ -53,10 +54,17 @@ export const THEME_SHADE_FAMILIES = Object.freeze({
   terracotta: Object.freeze([shade('terracotta-brick', 'Brick', '#8e4436', '#dc9283'),
     shade('terracotta-rust', 'Rust', '#94532a', '#e0a379'), original('terracotta'),
     shade('terracotta-clay', 'Clay', '#9a6653', '#dcb2a0'), shade('terracotta-coral', 'Coral', '#a8434f', '#f1aaa3')].map(Object.freeze)),
+  // Seasonal families are registered by their own season modules.
+  ...Object.fromEntries(SEASONAL_THEMES.map(season => [season.id, season.shades])),
 });
+// Year-round palettes first, then whichever seasons are merged.
+export const SEASONAL_PRESETS = SEASONAL_THEMES;
+export const ALL_THEME_PRESETS = Object.freeze([...THEME_PRESETS, ...SEASONAL_PRESETS]);
 export const personalThemeShades = palette => THEME_SHADE_FAMILIES[palette] || THEME_SHADE_FAMILIES.forest;
 const isRecord = value => Boolean(value && typeof value === 'object' && !Array.isArray(value));
-const presetFor = id => THEME_PRESETS.find(item => item.id === id);
+const presetFor = id => ALL_THEME_PRESETS.find(item => item.id === id);
+const yearRound = id => THEME_PRESETS.some(item => item.id === id);
+const defaultShade = preset => personalThemeShades(preset.id).find(item => item.id === preset.accent);
 const validBase = id => THEME_BASES.some(item => item.id === id);
 function familyConfiguration(preset, value) {
   return { accent: personalThemeShades(preset.id).some(item => item.id === value?.accent) ? value.accent : preset.accent,
@@ -66,16 +74,24 @@ export function normalizePersonalTheme(value) {
   const legacy = isRecord(value?.overrides) ? { ...value, ...value.overrides } : value;
   // Explicit base identity wins. For old identity-less pairs the registered
   // accent is the evidence of family; never infer it from a background tone.
-  const basePalette = presetFor(value?.basePalette)?.id
+  // A retired season (no longer registered) returns to its year-round fallback.
+  const fallbackPalette = yearRound(value?.fallbackPalette) ? value.fallbackPalette : null;
+  const basePalette = presetFor(value?.basePalette)?.id || fallbackPalette
     || THEME_PRESETS.find(item => personalThemeShades(item.id).some(s => s.id === legacy?.accent))?.id || 'forest';
   const hasFamilies = isRecord(value?.paletteCustomizations);
   const paletteCustomizations = Object.fromEntries(THEME_PRESETS.map(preset => [preset.id,
     familyConfiguration(preset, hasFamilies ? (Object.hasOwn(value.paletteCustomizations, preset.id) ? value.paletteCustomizations[preset.id] : null)
       : preset.id === basePalette ? legacy : null)]));
-  const active = paletteCustomizations[basePalette];
+  // Seasonal Fine-tune choices are kept apart so a season can come and go
+  // without touching the year-round families.
+  const seasonal = isRecord(value?.seasonalCustomizations) ? value.seasonalCustomizations : {};
+  const seasonalCustomizations = Object.fromEntries(SEASONAL_PRESETS.map(preset => [preset.id,
+    familyConfiguration(preset, Object.hasOwn(seasonal, preset.id) ? seasonal[preset.id] : null)]));
+  const active = paletteCustomizations[basePalette] || seasonalCustomizations[basePalette];
   return { schemaVersion: 2, basePalette,
     appearance: ['system', 'light', 'dark'].includes(value?.appearance) ? value.appearance : 'system',
-    paletteCustomizations, ...active };
+    paletteCustomizations, seasonalCustomizations,
+    fallbackPalette: yearRound(basePalette) ? basePalette : fallbackPalette || 'forest', ...active };
 }
 export const DEFAULT_PERSONAL_THEME = Object.freeze(normalizePersonalTheme(null));
 export function selectPersonalThemePalette(value, palette) {
@@ -84,9 +100,10 @@ export function selectPersonalThemePalette(value, palette) {
 }
 export function updatePersonalTheme(value, changes) {
   const theme = normalizePersonalTheme(value), preset = presetFor(theme.basePalette);
-  const family = familyConfiguration(preset, { ...theme.paletteCustomizations[preset.id], ...changes });
+  const group = preset.seasonal ? 'seasonalCustomizations' : 'paletteCustomizations';
+  const family = familyConfiguration(preset, { ...theme[group][preset.id], ...changes });
   return normalizePersonalTheme({ ...theme, appearance: changes.appearance ?? theme.appearance,
-    paletteCustomizations: { ...theme.paletteCustomizations, [preset.id]: family } });
+    [group]: { ...theme[group], [preset.id]: family } });
 }
 export function resetPersonalThemePalette(value) {
   const theme = normalizePersonalTheme(value), preset = presetFor(theme.basePalette);
@@ -145,7 +162,7 @@ export function personalThemeSurfaces(palette, tone, appearance) {
   const preset = presetFor(palette) || THEME_PRESETS[0];
   const base = THEME_BASES.find(item => item.id === tone) || THEME_BASES[0];
   if (tone === preset.base && preset.surfaces) return [...preset.surfaces[appearance]];
-  return base[appearance].map(color => mixThemeColor(color, original(preset.accent)[appearance], appearance === 'dark' ? .06 : .03));
+  return base[appearance].map(color => mixThemeColor(color, defaultShade(preset)[appearance], appearance === 'dark' ? .06 : .03));
 }
 
 export function personalThemeModel(input, systemDark = false) {
@@ -228,17 +245,18 @@ export function personalThemeModel(input, systemDark = false) {
     'inverse-accent': readableColor(fill, isDark ? ['#1b1a19', mutedSurface] : ['#1b1a19']),
   };
   const tokens = Object.fromEntries(Object.entries(role).map(([key, value]) => [`--rook-${key}`, value]));
-  const basePalette = THEME_PRESETS.find(item => item.id === config.basePalette) || null;
+  const basePalette = presetFor(config.basePalette) || null;
   const customized = Boolean(basePalette && (config.accent !== basePalette.accent || config.base !== basePalette.base));
   const canonicalStyle = !customized ? basePalette.canonicalStyle || null : null;
   const background = bg;
-  return { config, appearance, tokens, background, canonicalStyle, basePalette, customized, name: basePalette?.name || 'Custom', accentName: accent.name, baseName: base.name };
+  const season = basePalette?.seasonal ? basePalette.id : null;
+  return { config, appearance, tokens, background, canonicalStyle, basePalette, season, customized, name: basePalette?.name || 'Custom', accentName: accent.name, baseName: base.name };
 }
 
 // Exactly one root owner, with cleanup, for committed and staged themes.
 // Restores pre-existing attributes/styles and leaves unrelated root values untouched.
 export function applyPreviewTheme(root, { style = 'standard', appearance = 'dark', personal = null }, systemDark = false) {
-  const attributes = ['data-style', 'data-appearance', 'data-personal-theme', 'data-theme', 'data-premium-scheme'];
+  const attributes = ['data-style', 'data-appearance', 'data-personal-theme', 'data-theme', 'data-premium-scheme', 'data-season'];
   const previousAttributes = attributes.map(key => [key, root.getAttribute(key)]);
   const model = personal ? personalThemeModel(personal, systemDark) : null;
   // Every personal variant uses the tested semantic roles, including defaults.
@@ -252,6 +270,9 @@ export function applyPreviewTheme(root, { style = 'standard', appearance = 'dark
   else root.removeAttribute('data-premium-scheme');
   if (model) root.dataset.personalTheme = `${model.config.accent}-${model.config.base}`;
   else root.removeAttribute('data-personal-theme');
+  // Seasonal decoration hangs off one root attribute, staged with the preview.
+  if (model?.season) root.dataset.season = model.season;
+  else root.removeAttribute('data-season');
   for (const [key, value] of Object.entries(values)) root.style.setProperty(key, value);
   return () => {
     for (const [key, value] of previousAttributes) value === null ? root.removeAttribute(key) : root.setAttribute(key, value);

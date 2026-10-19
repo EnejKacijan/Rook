@@ -1,8 +1,8 @@
 import { expect, it } from 'vitest';
 import { mkdirSync, writeFileSync } from 'node:fs';
-import { THEME_PRESETS, THEME_BASES, personalThemeModel, personalThemeShades, themeContrast } from './personalThemes.js';
+import { ALL_THEME_PRESETS, THEME_BASES, personalThemeModel, personalThemeShades, themeContrast } from './personalThemes.js';
 
-// Worst-case contrast for every family,
+// Worst-case contrast for every registered family (year-round and seasonal),
 // all shades × all tones, Light and Dark. Written to the ignored
 // artifacts/theme-contrast.md for review: npm run qa:theme-contrast
 const surfaces = ['bg', 'surface', 'surface-elevated', 'surface-muted', 'accent-soft', 'selected'];
@@ -18,10 +18,10 @@ const pairs = [
   ['Disabled', ['disabled-text'], ['disabled-surface'], 4.5],
 ];
 
-it('meets the contrast budget for every family, shade, tone and mode', () => {
+it('meets the contrast budget for every registered family, shade, tone and mode', () => {
   const rows = [], failures = [];
   let checks = 0;
-  for (const preset of THEME_PRESETS) for (const appearance of ['light', 'dark']) {
+  for (const preset of ALL_THEME_PRESETS) for (const appearance of ['light', 'dark']) {
     const worst = pairs.map(() => Infinity);
     for (const shade of personalThemeShades(preset.id)) for (const base of THEME_BASES) {
       const t = personalThemeModel({ basePalette: preset.id, accent: shade.id, base: base.id, appearance }).tokens;
@@ -38,7 +38,7 @@ it('meets the contrast budget for every family, shade, tone and mode', () => {
   }
   const report = [`| Family | Mode | ${pairs.map(([label, , , minimum]) => `${label} (≥${minimum})`).join(' | ')} |`,
     `|---|---|${pairs.map(() => '---').join('|')}|`, ...rows, '',
-    `${checks} contrast checks across ${THEME_PRESETS.length} families, 5 shades, ${THEME_BASES.length} tones, Light and Dark: ${failures.length} below target.`].join('\n');
+    `${checks} contrast checks across ${ALL_THEME_PRESETS.length} families, 5 shades, ${THEME_BASES.length} tones, Light and Dark: ${failures.length} below target.`].join('\n');
   mkdirSync('artifacts', { recursive: true });
   writeFileSync('artifacts/theme-contrast.md', `${report}\n`);
   expect(failures).toEqual([]);

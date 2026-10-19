@@ -22,8 +22,10 @@ function definedTokens() {
 it('every referenced --rook token is defined by CSS, the Personal Theme model or runtime code', () => {
   const defined = definedTokens();
   const missing = [];
-  for (const [file, body] of Object.entries(text)) for (const [, name] of body.matchAll(/var\((--rook-[\w-]+)/g))
-    if (!defined.has(name)) missing.push(`${file}: ${name}`);
+  // Seasonal hooks are optional by design: a merged season defines them, and
+  // every reference must carry a fallback for builds without that season.
+  for (const [file, body] of Object.entries(text)) for (const [, name, fallback] of body.matchAll(/var\((--rook-[\w-]+)\s*(,)?/g))
+    if (!defined.has(name) && !(name.startsWith('--rook-season-') && fallback)) missing.push(`${file}: ${name}`);
   expect([...new Set(missing)]).toEqual([]);
 });
 
