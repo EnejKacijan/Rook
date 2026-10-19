@@ -3,6 +3,8 @@ import {
   adaptedTemplateForToday,
   compatibleReplacementCandidates,
   estimateSessionMinutes,
+  createWorkoutDurationEstimator,
+  roundedEstimate,
   exerciseCatalog,
   exerciseLoadRequirement,
   exerciseName,
@@ -19,6 +21,7 @@ import { flexibleOccurrenceForDate } from './flexibleWeek.js';
 import { availableCustomExerciseItems } from './customExercises.js';
 import {effectiveGymContext} from './gymProfiles.js';
 import {planEditorExerciseAllowed} from './exerciseEligibility.js';
+import {applyAdjustmentPrescription, validAdjustmentPrescription, cleanAdjustmentSupersets} from './adjustmentPrescription.js';
 
 export const TODAY_ADJUSTMENT_VERSION = 1;
 
@@ -320,16 +323,19 @@ export function buildTodayAdjustment(
     return { status: "unavailable", reason: "Adjust Today is available for the current day only." };
   if (state.activeWorkout || state.activeOptionalSession)
     return { status: "unavailable", reason: "Finish the active session before adjusting today’s workout." };
-  const original = plannedWorkoutForDate(state, date);
-  if (!original)
+  const planned = plannedWorkoutForDate(state, date);
+  if (!planned)
     return { status: "unavailable", reason: "Today does not have a planned workout to adjust." };
+  const original = clone(planned);
 
   let adjusted = clone(original);
   let unresolved = [];
   let temporaryEquipment = null;
   if (mode === ADJUST_TODAY_MODES.lessTime) {
-    const target = Math.max(15, Math.min(180, Math.round(Number(minutes) || 0)));
-    if (!target || target >= estimateSessionMinutes(original.exercises))
+    const target = Number(minutes);
+    if (!Number.isInteger(target) || target < 15 || target > 180)
+      return { status: 'invalid', reason: 'Enter a whole number from 15 to 180 minutes.' };
+    if (target >= roundedEstimate(createWorkoutDurationEstimator(state, original).estimate()))
       return { status: "unchanged", reason: "This workout already fits within that time." };
     adjusted = adaptForLessTime(state, original, target, date);
   } else if (mode === ADJUST_TODAY_MODES.lowEnergy) {
@@ -367,7 +373,11 @@ export function buildTodayAdjustment(
     return { status: "invalid", reason: "Choose what changed today." };
   }
 
-  adjusted.estimatedMinutes = estimateSessionMinutes(adjusted.exercises);
+  const timing = createWorkoutDurationEstimator(state, original);
+  original.estimatedMinutes = timing.estimate();
+  original.durationCalibration = {scale:timing.scale,sampleCount:timing.sampleCount};
+  adjusted.durationCalibration = original.durationCalibration;
+  adjusted.estimatedMinutes = timing.estimate(adjusted);
   const changes = describeChanges(original, adjusted, mode);
   return {
     status: "ready",
@@ -427,6 +437,18 @@ export function manualReplacementChoices(
     .slice(0, 80), query);
 }
 
+export function editTodayAdjustmentTargets(proposal, entryId, target, state) {
+  if (!validAdjustmentPrescription(target)) return proposal;
+  const next = clone(proposal);
+  next.workout.exercises = cleanAdjustmentSupersets(next.workout.exercises.map(exercise => exercise.id === entryId
+    ? applyAdjustmentPrescription(exercise, target) : exercise));
+  next.workout.estimatedMinutes = createWorkoutDurationEstimator(state, next.originalWorkout).estimate(next.workout);
+  next.changes = describeChanges(next.originalWorkout, next.workout, next.mode);
+  next.changes.push({kind:'manual',entryId,label:exerciseName(next.workout.exercises.find(exercise => exercise.id === entryId)),reason:'Targets edited before applying.'});
+  next.meaningful = todayWorkoutFingerprint(next.originalWorkout) !== todayWorkoutFingerprint(next.workout);
+  return next;
+}
+
 export function resolveTodayAdjustment(
   proposal,
   entryId,
@@ -456,7 +478,7 @@ export function resolveTodayAdjustment(
   next.workout.exercises[index] = replacementExercise(original, replacement);
   sanitizeWarmups(next.workout, new Set([entryId]));
   sanitizeSupersets(next.workout.exercises);
-  next.workout.estimatedMinutes = estimateSessionMinutes(next.workout.exercises);
+  next.workout.estimatedMinutes = createWorkoutDurationEstimator({profile, workouts:[]}, next.originalWorkout).estimate(next.workout);
   next.unresolved = next.unresolved.filter((item) => item.entryId !== entryId);
   next.changes = describeChanges(next.originalWorkout, next.workout, next.mode);
   next.meaningful = next.changes.length > 0;

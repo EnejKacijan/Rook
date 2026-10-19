@@ -25,6 +25,8 @@ import {
 } from "./splitPreferences.js";
 import { generateWarmup } from "./warmups.js";
 import { DURATION_PLANNING_VERSION, generatedSessionTiming, durationTargetBand, durationFidelityResult, validateDurationFidelity } from './durationPlanning.js';
+import { personalDurationCalibration } from './personalWorkoutDuration.js';
+import { applyAdjustmentPrescription, validAdjustmentPrescription, cleanAdjustmentSupersets } from './adjustmentPrescription.js';
 import {
   compileProfileTrainingSafety,
   exerciseAllowedByTrainingSafety,
@@ -2766,8 +2768,8 @@ export function baseWeekSchedule(state, date = new Date()) {
         ? { ...sourceWorkout, exercises: occurrenceExercises }
         : sourceWorkout;
       if (!workout.exercises.length) return null;
-      const prescribedWorkout = temporaryOccurrenceWorkout(state, occurrence, prescribeTrainingBlockWorkout(state, workout), scheduledDate);
-      prescribedWorkout.estimatedMinutes = estimateWorkoutMinutes(prescribedWorkout, state.profile, state.program);
+      const prescribedWorkout = {...temporaryOccurrenceWorkout(state, occurrence, prescribeTrainingBlockWorkout(state, workout), scheduledDate)};
+      prescribedWorkout.estimatedMinutes = estimatePersonalWorkoutMinutes(state, prescribedWorkout);
       return {
         workout: prescribedWorkout,
         workoutId: sourceWorkout.id,
@@ -4832,6 +4834,28 @@ export function roundedEstimate(minutes, step = 5) {
   const increment = Math.max(1, Number(step) || 5);
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.max(increment, Math.round(value / increment) * increment);
+}
+export function createWorkoutDurationEstimator(state, source) {
+  // All runtime surfaces use the same event-based timing, including imported
+  // workouts. Legacy plan validation can still read its original estimator.
+  const estimate = workout => estimateWorkoutMinutes({...workout, durationPlanningVersion:DURATION_PLANNING_VERSION}, state.profile, state.program);
+  const fixed = (workout, base) => {
+    const timing = generatedSessionTiming(workout.exercises || [], state.profile, exerciseCatalog);
+    const warmup = warmupForWorkout(workout, state.profile, state.program);
+    return Math.min(base * 0.65, timing.setupSeconds / 60 + (warmup?.estimatedMinutes || 0));
+  };
+  const saved = source?.durationCalibration;
+  const calibration = saved && Number.isFinite(saved.scale) && saved.scale >= 0.55 && saved.scale <= 1.6 && Number.isInteger(saved.sampleCount) && saved.sampleCount >= 0 && saved.sampleCount <= 8
+    ? saved : personalDurationCalibration(source, state.workouts, estimate, fixed);
+  return { ...calibration, estimate: (workout = source) => {
+    const base = estimate(workout);
+    if (!calibration.sampleCount || !base) return base;
+    const overhead = fixed(workout, base);
+    return Math.ceil(overhead + (base - overhead) * calibration.scale);
+  } };
+}
+export function estimatePersonalWorkoutMinutes(state, workout) {
+  return createWorkoutDurationEstimator(state, workout).estimate();
 }
 function minimumWorkingSets(profile, exercise) {
   return Math.min(
@@ -8390,7 +8414,7 @@ export function adaptedTemplateForToday(state, date = new Date(), plannedTemplat
           0,
           Math.max(1, Math.min(base.sets.length, requestedSets)),
         );
-      return base;
+      return applyAdjustmentPrescription(base, adaptation.prescriptionTargets?.find(item => item.exerciseId === exerciseId));
     })
     .filter(Boolean);
   return exercises.length
@@ -8399,8 +8423,9 @@ export function adaptedTemplateForToday(state, date = new Date(), plannedTemplat
         adapted: true,
         estimatedMinutes:
           Number(adaptation.estimatedMinutes) ||
-          estimateSessionMinutes(exercises),
-        exercises,
+          estimatePersonalWorkoutMinutes(state, { ...template, exercises }),
+        exercises: cleanAdjustmentSupersets(exercises),
+        durationCalibration: adaptation.durationCalibration,
       }
     : template;
 }
@@ -9815,141 +9840,45 @@ function withSetCount(exercise, count) {
   );
   return copy;
 }
-function coverageAwareAdaptation(
-  source,
-  minutes,
-  profile,
-  lockedIds = new Set(),
-) {
+function coverageAwareAdaptation(source, minutes, profile, lockedIds = new Set(), estimate = exercises => estimateSessionMinutes(exercises)) {
   const limit = Math.max(10, Number(minutes));
-  const rows = source.exercises.map((exercise, index) => ({
-    exercise,
-    index,
-    group: adaptationCoverageGroup(exercise),
-    value: adaptationValue(
-      exercise,
-      profile,
-      lockedIds.has(exercise.exerciseId),
-    ),
-  }));
-  const selected = new Map();
-  const minimumSets = (exercise) =>
-    Math.min(
-      exercise.sets.length,
-      exerciseCatalog[exercise.exerciseId]?.kind === "compound" ? 2 : 1,
-    );
-  const materialized = () =>
-    [...selected.values()]
-      .sort((a, b) => a.index - b.index)
-      .map((row) => withSetCount(row.exercise, row.sets));
-  const fits = (row, sets) =>
-    estimateSessionMinutes([
-      ...materialized(),
-      withSetCount(row.exercise, sets),
-    ]) <=
-    limit + 5;
-  for (const row of rows.filter((row) =>
-    lockedIds.has(row.exercise.exerciseId),
-  ))
-    selected.set(row.exercise.exerciseId, {
-      ...row,
-      sets: Math.max(
-        minimumSets(row.exercise),
-        row.exercise.sets.filter((set) => set.completed).length,
-      ),
-    });
-  const groups = [...new Set(rows.map((row) => row.group).filter(Boolean))];
-  const groupValue = (group) =>
-    Math.max(
-      ...rows.filter((row) => row.group === group).map((row) => row.value),
-    );
-  const upper = ["push", "pull"].filter((group) => groups.includes(group));
-  const lower = ["knee-dominant", "posterior-chain"].filter((group) =>
-    groups.includes(group),
-  );
-  const preferredGroups =
-    upper.length && lower.length
-      ? [
-          [...upper].sort((a, b) => groupValue(b) - groupValue(a))[0],
-          [...lower].sort((a, b) => groupValue(b) - groupValue(a))[0],
-        ]
-      : upper.length
-        ? upper
-        : lower;
-  const orderedGroups = [...new Set([...preferredGroups, ...groups])];
-  for (const group of orderedGroups) {
-    if ([...selected.values()].some((row) => row.group === group)) continue;
-    const candidates = rows
-      .filter(
-        (row) => row.group === group && !selected.has(row.exercise.exerciseId),
-      )
-      .sort((a, b) => b.value - a.value || a.index - b.index);
-    const candidate = candidates.find((row) =>
-      fits(row, minimumSets(row.exercise)),
-    );
-    if (candidate)
-      selected.set(candidate.exercise.exerciseId, {
-        ...candidate,
-        sets: minimumSets(candidate.exercise),
-      });
-  }
-  if (!selected.size && rows.length) {
-    const best = [...rows].sort(
-      (a, b) => b.value - a.value || a.index - b.index,
-    )[0];
-    selected.set(best.exercise.exerciseId, {
-      ...best,
-      sets: minimumSets(best.exercise),
-    });
-  }
-  for (const row of [...rows].sort(
-    (a, b) => b.value - a.value || a.index - b.index,
-  )) {
-    if (selected.has(row.exercise.exerciseId)) continue;
-    const sets = minimumSets(row.exercise);
-    if (fits(row, sets))
-      selected.set(row.exercise.exerciseId, { ...row, sets });
-  }
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const row of [...selected.values()].sort(
-      (a, b) => b.value - a.value || a.index - b.index,
-    )) {
-      if (row.sets >= row.exercise.sets.length) continue;
-      row.sets += 1;
-      if (estimateSessionMinutes(materialized()) <= limit + 5) changed = true;
-      else row.sets -= 1;
+  const moderate = limit >= estimate(source.exercises) * 0.75;
+  const originalSets = source.exercises.reduce((sum,row) => sum + row.sets.length, 0);
+  const maxRemoved = moderate ? Math.max(1, Math.floor(originalSets * 0.25)) : Infinity;
+  let removedSets = 0;
+  const rows = source.exercises.map((exercise, index) => ({ exercise, index,
+    group: adaptationCoverageGroup(exercise), value: adaptationValue(exercise, profile, lockedIds.has(exercise.exerciseId)),
+    sets: exercise.sets.length }));
+  const selected = new Map(rows.map(row => [row.exercise.id || row.index, row]));
+  const materialized = () => [...selected.values()].sort((a,b) => a.index-b.index)
+    .map(row => withSetCount(row.exercise, row.sets));
+  const units = () => {
+    const groups = new Map();
+    for (const row of selected.values()) {
+      const key = row.exercise.supersetId || row.exercise.id || row.index;
+      groups.set(key, [...(groups.get(key) || []), row]);
     }
+    return [...groups.values()].sort((a,b) => Math.max(...a.map(row=>row.value))-Math.max(...b.map(row=>row.value)) || b[0].index-a[0].index);
+  };
+  const floor = row => Math.min(row.exercise.sets.length, Math.max(1,
+    (exerciseCatalog[row.exercise.exerciseId]?.kind === 'compound' ? 2 : 1) + (Number(row.exercise.protectedPrioritySets) || 0)));
+  // Start with the full workout and remove lower-priority sets one at a time.
+  while (estimate(materialized()) > limit) {
+    const reducible = units().find(unit => removedSets + unit.length <= maxRemoved && unit.every(row => !lockedIds.has(row.exercise.exerciseId) &&
+      !(moderate && row.exercise.programmingRole === 'main') && row.sets > floor(row)));
+    if (reducible) { reducible.forEach(row => row.sets--); removedSets += reducible.length; continue; }
+    if (moderate) break;
+    const removable = units().find(unit => {
+      if (selected.size <= unit.length || unit.some(row => lockedIds.has(row.exercise.exerciseId) || row.exercise.programmingRole === 'main' || row.exercise.protectedPrioritySets)) return false;
+      return unit.every(row => row.exercise.requiredRole === false || !['push','pull','knee-dominant','posterior-chain'].includes(row.group) ||
+        [...selected.values()].some(other => !unit.includes(other) && other.group === row.group));
+    });
+    if (removable) { removable.forEach(row => selected.delete(row.exercise.id || row.index)); continue; }
+    // Preserve coverage and logged/current work if the time is infeasible.
+    break;
   }
-  while (selected.size) {
-    const currentMinutes = estimateSessionMinutes(materialized());
-    const currentDistance = Math.abs(currentMinutes - limit);
-    const candidates = [...selected.values()]
-      .filter(
-        (row) =>
-          row.sets >
-          Math.max(1, row.exercise.sets.filter((set) => set.completed).length),
-      )
-      .map((row) => {
-        row.sets -= 1;
-        const estimate = estimateSessionMinutes(materialized());
-        row.sets += 1;
-        return { row, estimate, distance: Math.abs(estimate - limit) };
-      })
-      .filter((candidate) => candidate.distance < currentDistance)
-      .sort(
-        (a, b) =>
-          a.distance - b.distance ||
-          a.row.value - b.row.value ||
-          b.row.index - a.row.index,
-      );
-    if (!candidates.length) break;
-    candidates[0].row.sets -= 1;
-  }
-  return [...selected.values()]
-    .sort((a, b) => a.index - b.index)
-    .map((row) => ({ exerciseId: row.exercise.exerciseId, sets: row.sets }));
+  return [...selected.values()].sort((a,b) => a.index-b.index)
+    .map(row => ({ exerciseId: row.exercise.exerciseId, sets: row.sets }));
 }
 export function adaptTodayProposal(state, minutes, date = new Date()) {
   const targetDate = isoDay(date);
@@ -9967,21 +9896,16 @@ export function adaptTodayProposal(state, minutes, date = new Date()) {
           .map((exercise) => exercise.exerciseId)
       : [],
   );
-  const setTargets = coverageAwareAdaptation(
-    source,
-    minutes,
-    state.profile,
-    locked,
-  );
+  const timing = createWorkoutDurationEstimator(state, source);
+  const setTargets = coverageAwareAdaptation(source, minutes, state.profile, locked,
+    exercises => timing.estimate({ ...source, exercises }));
   const keep = setTargets.map((item) => item.exerciseId);
   const targets = new Map(
     setTargets.map((item) => [item.exerciseId, item.sets]),
   );
-  const estimatedMinutes = estimateSessionMinutes(
-    source.exercises
-      .filter((item) => keep.includes(item.exerciseId))
-      .map((item) => withSetCount(item, targets.get(item.exerciseId))),
-  );
+  const estimatedMinutes = timing.estimate({ ...source, exercises: source.exercises
+    .filter(item => keep.includes(item.exerciseId))
+    .map(item => withSetCount(item, targets.get(item.exerciseId))) });
   const dayLabel =
     targetDate === isoDay()
       ? "TODAY"
@@ -10000,6 +9924,9 @@ export function adaptTodayProposal(state, minutes, date = new Date()) {
     requestedMinutes: Number(minutes),
     estimatedMinutes,
     workoutId: active?.id || null,
+    durationCalibration: {scale:timing.scale,sampleCount:timing.sampleCount},
+    baseProgramVersion: Number(state.program?.version || 1),
+    baseAdaptationId: state.todayAdaptation?.id || null,
     baseWorkoutUpdatedAt: active?.updatedAt || null,
     programDayId: source.programDayId || source.id,
     targetDate,
@@ -10392,6 +10319,10 @@ export function deterministicCoach(state, message) {
 }
 export function coachActionConflict(state, action) {
   if(combinedAdjustment(state) && action?.type!=='combine-workouts')return 'combined-workout-pending';
+  if (action?.type === 'adapt-today') {
+    if (action.baseProgramVersion != null && Number(action.baseProgramVersion) !== Number(state.program?.version || 1)) return 'program-changed';
+    if (Object.hasOwn(action,'baseAdaptationId') && action.baseAdaptationId !== (state.todayAdaptation?.id || null)) return 'workout-changed';
+  }
   if (action?.type === "resume-empty-completed-workout") {
     const target = state.workouts.find(
       (workout) => workout.id === action.targetCompletedWorkoutId,
@@ -10485,6 +10416,7 @@ export function applyCoachAction(state, action) {
     state.selectedDate = date;
   }
   if (action.type === "adapt-today") {
+    if (action.prescriptionTargets?.some(item => !validAdjustmentPrescription(item))) return state;
     const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(
       String(action.targetDate || ""),
     )
@@ -10506,7 +10438,7 @@ export function applyCoachAction(state, action) {
       const originalIds = new Set(
         state.activeWorkout.exercises.map((item) => item.exerciseId),
       );
-      const exercises = state.activeWorkout.exercises
+      let exercises = state.activeWorkout.exercises
         .filter(
           (item, index) =>
             requested.has(item.exerciseId) ||
@@ -10514,7 +10446,7 @@ export function applyCoachAction(state, action) {
             item.sets.some((set) => set.completed),
         )
         .map((item) => {
-          const completed = item.sets.filter((set) => set.completed).length;
+          const completed = item.sets.reduce((last, set, index) => set.completed ? index + 1 : last, 0);
           const requestedSets = setTargets.get(item.exerciseId);
           if (Number.isFinite(requestedSets))
             item.sets = item.sets.slice(
@@ -10546,7 +10478,11 @@ export function applyCoachAction(state, action) {
         exercises.push(added);
       }
       if (!exercises.length) return state;
+      const timing = createWorkoutDurationEstimator(state, state.activeWorkout);
+      exercises = cleanAdjustmentSupersets(exercises.map(item => applyAdjustmentPrescription(item,
+        action.prescriptionTargets?.find(target => target.exerciseId === item.exerciseId))));
       state.activeWorkout.exercises = exercises;
+      state.activeWorkout.durationCalibration = {scale:timing.scale,sampleCount:timing.sampleCount};
       const restoredIndex = exercises.findIndex(
         (item) => item.id === currentExerciseId,
       );
@@ -10555,7 +10491,7 @@ export function applyCoachAction(state, action) {
       state.activeWorkout.adapted = true;
       state.activeWorkout.adaptation = {
         requestedMinutes: Number(action.requestedMinutes || action.minutes),
-        estimatedMinutes: estimateSessionMinutes(exercises),
+        estimatedMinutes: timing.estimate({ ...state.activeWorkout, exercises }),
         appliedAt: Date.now(),
       };
       refreshWorkoutWarmup(state.activeWorkout, state.profile, state.program);
@@ -10605,15 +10541,19 @@ export function applyCoachAction(state, action) {
               role:
                 exerciseCatalog[id].kind === "compound" ? "main" : "accessory",
             });
-        return withSetCount(base, targets.get(id) || base.sets.length);
+        return applyAdjustmentPrescription(withSetCount(base, targets.get(id) || base.sets.length),
+          action.prescriptionTargets?.find(item => item.exerciseId === id));
       });
-      const estimatedMinutes = estimateSessionMinutes(selectedExercises);
+      const timing = createWorkoutDurationEstimator(state, template);
+      const estimatedMinutes = timing.estimate({ ...template, exercises: cleanAdjustmentSupersets(selectedExercises) });
       state.todayAdaptation = {
         id: uid("adaptation"),
         date: targetDate,
         programDayId: template.id,
         exerciseIds,
         setTargets,
+        prescriptionTargets: action.prescriptionTargets ? structuredClone(action.prescriptionTargets) : undefined,
+        durationCalibration: {scale:timing.scale,sampleCount:timing.sampleCount},
         minutes: Number(action.requestedMinutes || action.minutes),
         requestedMinutes: Number(action.requestedMinutes || action.minutes),
         estimatedMinutes,

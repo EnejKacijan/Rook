@@ -18,7 +18,7 @@ export function WorkoutPreparation({state,update,close,back,Header,Editor,date})
   };
   return <main ref={screen} className="screen detail-screen edit-plan-screen workout-preparation">
     <Header title="Edit today's exercises" onClose={close} onBack={back}/>
-    {draft.error?<p role="alert">{draft.error}</p>:<Editor mode="edit" workoutOnly
+    {draft.error?<p role="alert">{draft.error}</p>:<Editor mode="edit" workoutOnly todayPreparation
       copyOverride={{eyebrow:'TODAY ONLY',title:'Prepare your workout',body:'Add, replace or reorder exercises and adjust targets. Your timer starts only when you start the workout.',action:'APPLY'}}
       source={{...state.program,importMetadata:undefined,name:draft.proposal.workout.name,days:[draft.proposal.workout]}}
       profile={effectiveGymContext(state,{adjustment:draft.proposal}).profile} exerciseState={state} onSave={save} onCancel={back||close} saveError={error}

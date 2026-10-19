@@ -110,10 +110,34 @@ it('partial source selection survives tab remount and interrupted reply retries 
 });
 it('Adjust Today review selections survive remount, and Cancel resolves the review until it is reopened',()=>{
   const state=fixture(),day=state.program.days[0];state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:30,label:'USE WORKOUT'}};
-  mount(state);click('REVIEW CHANGES');const controls=[...document.querySelectorAll('.adapt-review-list button:not([disabled])')];act(()=>controls.at(-1).click());const chosen=current.conversations[1].actionReview.exerciseIds;
+  mount(state);click('REVIEW CHANGES');const controls=[...document.querySelectorAll('.adapt-review-list button[aria-pressed]:not([disabled])')];act(()=>controls.at(-1).click());const chosen=current.conversations[1].actionReview.exerciseIds;
   act(()=>page(false));click('Coach');click('REVIEW CHANGES');expect([...document.querySelectorAll('.adapt-review-list button[aria-pressed="true"]')]).toHaveLength(chosen.length);
   click('CANCEL');expect(pendingCoachWorkflows(current)).toEqual([]);expect(current.conversations[1].coachReviewCancelled).toBe(true);
   expect(current.activeCoachConversationId).toBe('current');
   click('REVIEW CHANGES');expect(pendingCoachWorkflows(current)).toHaveLength(1);
   click('CANCEL');act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe('current');
+});
+it('edits targets in the Coach draft, retains them across remount, and applies only to today',()=>{
+  const state=fixture(),day=state.program.days[0];day.weekday='Fri';const original=structuredClone(state.program),exercise=day.exercises[0];
+  state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:40,label:'USE WORKOUT'}};
+  mount(state);click('REVIEW CHANGES');click(`Edit targets for ${document.querySelector('.adapt-review-toggle strong').textContent}`);
+  const input=document.querySelector('.adjustment-target-editor input');
+  act(()=>{input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'4');input.dispatchEvent(new Event('input',{bubbles:true}));});
+  act(()=>input.blur());
+  expect(current.program).toEqual(original);expect(current.todayAdaptation).toBeNull();
+  expect(current.conversations[1].actionReview.prescriptionTargets[0].sets).toBe(4);
+  act(()=>page(false));click('Coach');click('REVIEW CHANGES');click(`Edit targets for ${document.querySelector('.adapt-review-toggle strong').textContent}`);
+  const pending=document.querySelector('.adjustment-target-editor input');
+  act(()=>{pending.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(pending,'5');pending.dispatchEvent(new Event('input',{bubbles:true}));});
+  click('APPLY CHANGES');
+  expect(current.todayAdaptation.prescriptionTargets.find(target=>target.exerciseId===exercise.exerciseId).sets).toBe(5);
+  expect(current.program).toEqual(original);
+});
+it('direct Apply uses the same restored draft shown in the Coach summary',()=>{
+  const state=fixture(),day=state.program.days[0];day.weekday='Fri';const row=day.exercises[0];
+  state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:40,label:'USE WORKOUT'}};
+  state.conversations[1].actionReview={exerciseIds:[row.exerciseId],prescriptionTargets:[{exerciseId:row.exerciseId,sets:4,repMin:7,repMax:9,restSeconds:60,targetRir:2}]};
+  mount(state);expect(document.querySelector('.action-card > p').textContent).toBe('1 exercises · 4 sets');click('USE WORKOUT');
+  expect(current.todayAdaptation.exerciseIds).toEqual([row.exerciseId]);
+  expect(current.todayAdaptation.prescriptionTargets[0].sets).toBe(4);
 });

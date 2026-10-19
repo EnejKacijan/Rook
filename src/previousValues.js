@@ -1,4 +1,6 @@
-import {copyFreestylePrevious,previousWorkingSetValues} from './freestyleWorkout.js';
+import {exerciseLoadRequirement,previousExercise} from './domain.js';
+import {preparedExercise} from './workoutSessionStart.js';
+import {copyFreestylePrevious,freestylePreviousSets,previousWorkingSetValues,previousValuesSetEligible} from './freestyleWorkout.js';
 import {loggingModeOf,unilateralSetReps} from './advancedLogging.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
@@ -60,4 +62,37 @@ export function undoPreviousValues(state,record) {
     return restored;
   })});
   return {...state,activeWorkout:{...active,exercises}};
+}
+
+export function prefillReplacementValues(state,exercise) {
+  const previous=freestylePreviousSets(state,exercise),load=exerciseLoadRequirement(exercise);
+  return {...exercise,sets:exercise.sets.map((set,index)=>{
+    const values=previousValuesSetEligible(set)?previousWorkingSetValues(exercise,previous[index]):{};
+    const next = {...set,...(values||{}),weight:load==='none'?null:values?.weight??null,
+      weightProvenance:values?.weight!=null?'history':null};
+    if (values?.sides) next.reps = unilateralSetReps(next);
+    return next;
+  })};
+}
+
+// Today's preparation is a session draft. Resolve new and replaced exercises now, using
+// the same ordinal history projection as a replacement in the active logger.
+export function prepareTodayReplacementValues(state, exercise, item) {
+  const next = {...preparedExercise(exercise), exerciseId:item.id,
+    measure:item.measure || 'reps', loggingMode:item.loggingMode || 'normal',
+    loadRequirement:exerciseLoadRequirement(item)};
+  const timed = item.measure === 'seconds';
+  const compound = item.kind === 'compound' || item.kind === 'power';
+  const fallback = timed ? [item.durationRange?.[0] || 20,item.durationRange?.[1] || 40]
+    : compound ? [6,10] : [10,15];
+  const previous = previousExercise(state.workouts || [],item.id);
+  const compatible = freestylePreviousSets(state,next).some(set => Object.keys(previousWorkingSetValues(next,set)).length);
+  const historicalRange = compatible && Number.isInteger(previous?.repMin) && previous.repMin > 0 &&
+    Number.isInteger(previous?.repMax) && previous.repMax >= previous.repMin;
+  [next.repMin,next.repMax] = historicalRange ? [previous.repMin,previous.repMax] : fallback;
+  for (const key of ['failureTarget','repTarget','partialPrescription','nextBlockStartingLoad']) delete next[key];
+  next.sets = next.sets.map(set => ({...set,weight:null,weightProvenance:null,reps:next.repMin,rir:null,
+    sides:next.loggingMode === 'per_side' ? {left:{reps:null},right:{reps:null}} : undefined,
+    ...(set.segments ? {segments:set.segments.map(segment=>({...segment,weight:null,reps:null,rir:null}))} : {})}));
+  return prefillReplacementValues(state,next);
 }

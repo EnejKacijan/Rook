@@ -170,7 +170,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-screen .today-update-copy > .action-undo { grid-column: 2; width: fit-content; min-height: 32px; margin: 3px 0 -5px auto; padding: 0; color: #6f6c68; font-size: 12px; text-align: right; }
 .coach-screen .action-card-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; padding: 0; border: 0; }
 .coach-screen .action-card-buttons .button { min-width: 0; margin: 0; padding-inline: 10px; font-size: 10px; }
-.coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons { position: sticky; z-index: 2; bottom: 0; margin: 10px -18px -8px; padding: 10px 18px 8px; border-top: 1px solid rgba(27, 26, 25, .07); background: #fff; }
+.coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons { position: static; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(27, 26, 25, .07); }
 .coach-screen .adapt-skip-summary { margin: 12px 0 0; color: #6f6c68; }
 .coach-screen .adapt-duration-contract { margin: -4px 0 14px; color: var(--rook-accent-text); font-size: 12px; font-weight: 700; }
 .coach-screen .adapt-suggestion-list { margin-top: 8px; border-top: 1px solid rgba(27, 26, 25, .07); }

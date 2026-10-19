@@ -32,7 +32,7 @@ import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './Swi
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
 import { canRemoveUpNext, hasMeaningfulExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
-import {persistCoachEntry,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
+import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
 import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -79,6 +79,7 @@ import { startFreestyleWorkout } from './freestyleWorkout.js';
 import { startFirstRunFreestyle } from './firstRunNoPlan.js';
 import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancellation.js';
 import { removeFreestyleExercise } from './freestyleWorkout.js';
+import {prepareTodayReplacementValues} from './previousValues.js';
 import { adjustedMovedLabel } from './progressPresentation.js';
 import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
 import { importedSetComparable,importedSessionTimeLabel } from './historicalSetSemantics.js';
@@ -100,6 +101,9 @@ import { moveReorderPreview } from './reorderPresentation.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import './loggedExercises.css';
 import { PlanNumberInput } from './PlanNumberInput.jsx';
+import { AdjustmentTargetsEditor } from './AdjustmentTargetsEditor.jsx';
+import { applyAdjustmentPrescription, cleanAdjustmentSupersets } from './adjustmentPrescription.js';
+import { createWorkoutDurationEstimator, estimatePersonalWorkoutMinutes, makeProgramExercise } from './domain.js';
 import { nextImportReview } from './nextImportReview.js';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { bindSheetVisibleViewport } from './sheetVisibleViewport.js';
@@ -379,6 +383,7 @@ import {
   applyTodayAdjustment,
   buildTodayAdjustment,
   manualReplacementChoices,
+  editTodayAdjustmentTargets,
   resolveTodayAdjustment,
   restoreOriginalTodayWorkout,
 } from "./adjustToday.js";
@@ -5598,7 +5603,7 @@ export function Today({
   };
   const duration = completed
     ? completed.durationSeconds ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min elapsed` : 'Duration not recorded'
-    : `~${roundedEstimate(template.estimatedMinutes)} min`;
+    : `~${roundedEstimate(estimatePersonalWorkoutMinutes(state, template))} min`;
   return (
     <main className={`screen today-screen${trackedActive ? " viewing-other-workout" : ""}`}>
       {calendar()}
@@ -9082,6 +9087,7 @@ function AdaptActionCard({
   const source =
     action.type === "adapt-today"
       ? (isToday && state.activeWorkout) ||
+        adaptedTemplateForToday(state, target) ||
         state.program?.days.find((day) => day.id === action.programDayId) ||
         plannedWorkoutForDate(state, target)
       : null;
@@ -9110,9 +9116,15 @@ function AdaptActionCard({
   const initialIds = [...new Set([...(reviewDraft?.exerciseIds || validSuggestedIds), ...lockedIds])];
   const [reviewing, setReviewing] = useState(false);
   const [selectedIds, setSelectedIds] = useState(initialIds);
+  const [prescriptionTargets, setPrescriptionTargets] = useState(reviewDraft?.prescriptionTargets || []);
+  const [editingId, setEditingId] = useState(null);
+  const targetCommits = useRef(new Set());
+  const reviewedActionRef = useRef(null);
   const actionsRef = useRef(null);
   useEffect(() => {
     setSelectedIds(initialIds);
+    setPrescriptionTargets(reviewDraft?.prescriptionTargets || []);
+    setEditingId(null);
     setReviewing(false);
   }, [
     action.targetDate,
@@ -9131,6 +9143,9 @@ function AdaptActionCard({
     const sourceExercise = sourceExercises.find(
       (item) => item.exerciseId === id,
     );
+    if (lockedIds.has(id)) return sourceExercise?.sets.length || 1;
+    const edited = prescriptionTargets.find(item => item.exerciseId === id);
+    if (edited) return edited.sets;
     return Math.max(
       1,
       Math.min(
@@ -9141,25 +9156,28 @@ function AdaptActionCard({
   };
   const materialize = (id) => {
     const existing = sourceExercises.find((item) => item.exerciseId === id);
-    return existing
+    const base = existing
       ? { ...existing, sets: existing.sets.slice(0, setCountFor(id)) }
       : {
+          ...makeProgramExercise(exerciseCatalog[id], state.profile, {role:exerciseCatalog[id]?.kind === 'compound' ? 'main' : 'accessory'}),
+          id: `review-${id}`,
           exerciseId: id,
-          sets: Array.from({ length: setCountFor(id) }, () => ({})),
+          sets: Array.from({ length: setCountFor(id) }, (_, index) => ({id:`review-${id}-${index}`})),
           restSeconds: exerciseCatalog[id]?.restSeconds || 90,
         };
+    return applyAdjustmentPrescription(base, prescriptionTargets.find(item => item.exerciseId === id));
   };
+  const timing = createWorkoutDurationEstimator(state, source || { exercises: [] });
   const selected = new Set(selectedIds);
   const selectedExercises = displayIds
     .filter((id) => selected.has(id))
     .map(materialize);
-  const selectedMinutes = estimateSessionMinutes(selectedExercises);
+  const selectedMinutes = timing.estimate({ ...source, exercises: cleanAdjustmentSupersets(selectedExercises) });
   const selectedSetCount = selectedExercises.reduce(
     (sum, exercise) => sum + exercise.sets.length,
     0,
   );
-  const suggestedExercises = validSuggestedIds.map(materialize);
-  const suggestedMinutes = estimateSessionMinutes(suggestedExercises);
+  const suggestedMinutes = selectedMinutes;
   const requestedMinutes = Number(action.requestedMinutes || action.minutes);
   const toggleExercise = (id) => {
     if (lockedIds.has(id)) return;
@@ -9167,7 +9185,12 @@ function AdaptActionCard({
       ? selectedIds.length > 1 ? selectedIds.filter(value => value !== id) : selectedIds
       : [...selectedIds, id];
     setSelectedIds(next);
-    onReviewChange?.({exerciseIds:next});
+    onReviewChange?.({exerciseIds:next,prescriptionTargets});
+  };
+  const editTargets = target => {
+    const next = [...prescriptionTargets.filter(item => item.exerciseId !== target.exerciseId), target];
+    setPrescriptionTargets(next);
+    onReviewChange?.({exerciseIds:selectedIds,prescriptionTargets:next});
   };
   const reviewedIds = displayIds.filter((id) => selected.has(id));
   const reviewedAction = {
@@ -9182,7 +9205,9 @@ function AdaptActionCard({
     requestedMinutes,
     estimatedMinutes: selectedMinutes,
     minutes: requestedMinutes,
+    prescriptionTargets: prescriptionTargets.filter(item => selected.has(item.exerciseId)),
   };
+  reviewedActionRef.current = reviewedAction;
   const nameFor = (id) => {
     const exercise =
       sourceExercises.find((item) => item.exerciseId === id) ||
@@ -9193,9 +9218,7 @@ function AdaptActionCard({
       ? exerciseName(exercise)
       : exerciseCatalog[id]?.name || "Exercise";
   };
-  const skippedIds = (action.skippedExerciseIds || []).length
-    ? action.skippedExerciseIds
-    : sourceIds.filter((id) => !validSuggestedIds.includes(id));
+  const skippedIds = sourceIds.filter(id => !selected.has(id));
   const skippedNames = skippedIds.map(nameFor);
   const suggestionRow = (id) => {
     const original = sourceExercises.find((item) => item.exerciseId === id)
@@ -9314,9 +9337,7 @@ function AdaptActionCard({
         {reviewing ? "Review the shorter workout" : "Shorten today’s workout"}
       </h3>
       <p>
-        {reviewing
-          ? `${selectedExercises.length} exercises · ${selectedSetCount} sets`
-          : `${validSuggestedIds.length} exercises · ${validSuggestedIds.reduce((sum, id) => sum + setCountFor(id), 0)} sets`}
+        {`${selectedExercises.length} exercises · ${selectedSetCount} sets`}
       </p>
       <p className="adapt-duration-contract">
         {adaptationDurationLabel(
@@ -9324,6 +9345,7 @@ function AdaptActionCard({
           reviewing ? selectedMinutes : suggestedMinutes,
         )}
       </p>
+      {reviewing && <p>Main work is kept first. Edit targets below; your changes can exceed the time goal.</p>}
       {reviewing ? (
         <div className="adapt-review-list">
           {displayIds.map((id) => {
@@ -9335,10 +9357,10 @@ function AdaptActionCard({
             const original = exercise?.sets.length;
             const sets = setCountFor(id);
             return (
+              <div className="adapt-review-row" key={exercise?.id || id}>
               <button
                 type="button"
-                key={exercise?.id || id}
-                className={checked ? "selected" : ""}
+                className={`adapt-review-toggle${checked ? ' selected' : ''}`}
                 aria-pressed={checked}
                 disabled={locked}
                 onClick={() => toggleExercise(id)}
@@ -9363,6 +9385,9 @@ function AdaptActionCard({
                   </small>
                 </span>
               </button>
+              {checked && !locked && <button className="text-button" aria-label={`Edit targets for ${nameFor(id)}`} aria-expanded={editingId === id} onClick={() => setEditingId(editingId === id ? null : id)}>{editingId === id ? 'Done' : 'Edit'}</button>}
+              {checked && !locked && editingId === id && <AdjustmentTargetsEditor exercise={materialize(id)} name={nameFor(id)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={editTargets}/>}
+              </div>
             );
           })}
         </div>
@@ -9370,7 +9395,7 @@ function AdaptActionCard({
         <>
           <Eyebrow>COACH SUGGESTS</Eyebrow>
           <div className="adapt-suggestion-list">
-            {validSuggestedIds.map(suggestionRow)}
+            {reviewedIds.map(suggestionRow)}
           </div>
           {skippedNames.length > 0 && (
             <p className="adapt-skip-summary">
@@ -9386,13 +9411,14 @@ function AdaptActionCard({
               variant="secondary"
               onClick={() => {
                 setSelectedIds(initialIds);
+                setEditingId(null);
                 setReviewing(false);
                 onReviewCancelled?.(true);
               }}
             >
               CANCEL
             </Button>
-            <Button onClick={() => onAccept(reviewedAction)}>
+            <Button onClick={() => {flushSync(() => [...targetCommits.current].forEach(commit => commit()));onAccept(reviewedActionRef.current);}}>
               APPLY CHANGES
             </Button>
           </>
@@ -9403,11 +9429,7 @@ function AdaptActionCard({
             </Button>
             <Button
               onClick={() =>
-                onAccept({
-                  ...action,
-                  requestedMinutes,
-                  estimatedMinutes: suggestedMinutes,
-                })
+                onAccept(reviewedAction)
               }
             >
               {action.label}
@@ -11294,9 +11316,9 @@ export function adaptationDurationLabel(requestedMinutes, estimatedMinutes) {
   const requested = Number(requestedMinutes);
   const estimate = roundedEstimate(estimatedMinutes);
   if (!Number.isFinite(requested) || requested <= 0) return `~${estimate} min`;
-  return Math.abs(estimate - requested) <= 5
-    ? `~${estimate} min · fits ${requested} min goal`
-    : `Closest valid option · ~${estimate} min (${requested} min goal)`;
+  return Number(estimatedMinutes) <= requested
+    ? `~${estimate} min · ${requested} min goal`
+    : `Estimated ~${estimate} min · ${requested} min goal`;
 }
 export function profileTrainingRows(profile) {
   const equipment = (profile?.equipment || [])
@@ -12842,6 +12864,7 @@ export function PlanEditor({
   active = true,
   scratchSessionRef,
   workoutOnly = false,
+  todayPreparation = false,
   copyOverride = null,
 }) {
   const withWarmupPreference = (value) => {
@@ -13497,7 +13520,7 @@ export function PlanEditor({
         (!workoutOnly && day.exercises.length >= 8)
       )
         return current;
-      day.exercises.push({
+      const addedExercise = {
         id: exerciseId,
         exerciseId: item.id,
         exerciseSource: item.custom ? "custom" : "catalog",
@@ -13525,17 +13548,23 @@ export function PlanEditor({
         targetRir: null,
         restSeconds: item.restSeconds,
         defaultIncrement: item.increment,
-      });
+      };
+      day.exercises.push(todayPreparation && exerciseState
+        ? prepareTodayReplacementValues(exerciseState,addedExercise,item) : addedExercise);
       day.estimatedMinutes = estimateWorkoutMinutes(day, profile, next);
       return next;
     });
     setAddingToDayId(null);
     setExerciseQuery("");
+    if (todayPreparation) setExpandedExerciseId(exerciseId);
     return true;
   };
   const replaceExercise = (dayId, exerciseId, catalogId) => {
     if (!editorCatalog[catalogId] || !planEditorExerciseAllowed(editorCatalog[catalogId], profile)) return;
     const sourceExercise = programRef.current?.days.find((item) => item.id === dayId)?.exercises.find((item) => item.id === exerciseId);
+    if (todayPreparation && sourceExercise?.exerciseId === catalogId) {
+      setExercisePickerId(null);setExerciseQuery('');return;
+    }
     const sourceAlias = sourceExercise?.importedSourceName || sourceExercise?.originalImportedName || sourceExercise?.importedName || sourceExercise?.importedExercise?.name;
     if(importReview&&sourceExercise){
       const item=editorCatalog[catalogId],mapped={...sourceExercise,exerciseId:item.id,...(item.custom?{measure:item.measure,loadRequirement:item.loadRequirement}:{})};
@@ -13572,6 +13601,12 @@ export function PlanEditor({
         exercise.sets.forEach((set) => {
           set.weight = null;
         });
+      if (todayPreparation && exerciseState) {
+        const prepared = prepareTodayReplacementValues(exerciseState,
+          {...exercise,replacementOfExerciseId:sourceExercise.exerciseId},item);
+        for (const key of Object.keys(exercise)) if (!Object.hasOwn(prepared,key)) delete exercise[key];
+        Object.assign(exercise,prepared);
+      }
     });
     if (importReview && rememberMatchIds.includes(exerciseId) && sourceAlias)
       onRememberExerciseAlias?.(sourceAlias, catalogId);
@@ -14014,6 +14049,7 @@ export function PlanEditor({
         (!scratch && !workoutOnly || day.exercises.length >= 1),
     );
   const saveProgram = (event) => {
+    if (catalogNeeded) return;
     if (reorderMode) { finishPreviewReorder(); return; }
     if(importApplySafetyIssues.length)return;
     if(importReview&&(Date.now()<matchHandoffUntil.current||event?.detail>1))return;
@@ -14498,6 +14534,9 @@ export function PlanEditor({
                     exercise.originalImportedName || exercise.importedName,
                   );
                 const pickerOpen = exercisePickerId === exercise.id;
+                const lastPreparedExercise = todayPreparation
+                  ? previousExercise(exerciseState?.workouts || [],exercise.exerciseId) : null;
+                const lastPreparedSets = lastPreparedExercise?.sets.filter(set => set.completed) || [];
                 const timed = exerciseMeasure(exercise) === "seconds";
                 const loadRequirement = exerciseLoadRequirement(exercise);
                 const acceptsStartingWeight =
@@ -14933,6 +14972,14 @@ export function PlanEditor({
                             </Disclosure>
                           </div>
                         )}
+                        {todayPreparation && <section className="plan-editor-last-session" aria-label={`Last workout for ${exerciseName(exercise)}`}>
+                          <span>LAST WORKOUT</span>
+                          {lastPreparedSets.length ? lastPreparedSets.map((set,index) => <div key={set.id || index}>
+                            <small>Set {index + 1}</small>
+                            <strong>{exerciseHistoryWeightLabel({timed,bodyweight:exerciseCatalog[exercise.exerciseId]?.bodyweight,
+                              loadRequirement,weight:set.weight,units:profile.units})} · {exerciseHistoryPerformanceLabel(lastPreparedExercise,[set])}</strong>
+                          </div>) : <small>No previous logged sets for this exercise.</small>}
+                        </section>}
                         {importReview && (
                           <div className="import-review-compact-editor">
                             <span>
@@ -15048,7 +15095,7 @@ export function PlanEditor({
                         )}
                         {imported && !importReview && (
                           <div className="plan-editor-weights">
-                            <span>Imported weight · kg</span>
+                            <span>{todayPreparation ? 'Prepared weight · kg' : 'Imported weight · kg'}</span>
                             <div>
                               {exercise.sets.map((set, index) => (
                                 <label key={set.id}>
@@ -15305,7 +15352,7 @@ export function PlanEditor({
         </section>
       )}
       {!workoutOnly&&!focusedSourceReview&&<OriginalPlanNotes program={program} />}
-      <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'} hideWhileSearching={Boolean(addingToDayId)}>
+      <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'} hidden={catalogNeeded}>
       {saveError && <p className="offline-banner" role="alert">{saveError}</p>}
       {scratchReadiness && <p className="scratch-readiness" role="status">{scratchReadiness}</p>}
       {openDurationReview && <p role="status">Set the duration for {exerciseName(openDurationReview)} in Edit prescription, or choose a rep-based exercise.</p>}
@@ -18235,7 +18282,7 @@ function adjustmentModeLabel(mode) {
   return ADJUST_TODAY_OPTIONS.find(([value]) => value === mode)?.[1] || "TODAY ONLY";
 }
 
-export function AdjustTodaySheet({ state, update, close, request = {} }) {
+export function AdjustTodaySheet({ state, update, close, setPage, request = {} }) {
   const screenRef = useRef(null);
   const original = plannedWorkoutForDate(state, new Date());
   const existing = state.todayAdaptation?.date === isoDay() ? state.todayAdaptation : null;
@@ -18260,15 +18307,28 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
   const [persistenceError, setPersistenceError] = useState(false);
   const [manualEntryId, setManualEntryId] = useState(null);
   const [query, setQuery] = useState("");
+  const [editingTargetsId, setEditingTargetsId] = useState(null);
+  const targetCommits = useRef(new Set());
+  const proposalRef = useRef(proposal);proposalRef.current = proposal;
   useExerciseSearchSheet(screenRef, Boolean(manualEntryId && proposal), { focusedSearch: true });
-  const estimatedOriginal = estimateSessionMinutes(original?.exercises || []);
-  const timePresets = [30, 45, 60].filter((value) => value < estimatedOriginal);
+  const timing = createWorkoutDurationEstimator(state, original || { exercises: [] });
+  const estimatedOriginal = timing.estimate();
+  const maximumShorterMinutes = Math.min(180, roundedEstimate(estimatedOriginal) - 1);
+  const timePresets = [...new Set([0.9,0.8,0.7].map(ratio => Math.round(estimatedOriginal * ratio / 5) * 5))]
+    .filter(value => value >= 15 && value <= maximumShorterMinutes);
   const chosenMinutes = minutes === "custom" ? Number(customMinutes) : Number(minutes);
+  const timeError = estimatedOriginal <= 15 ? 'This workout is already about 15 minutes or less. Use Edit today’s exercises or talk to Coach for another adjustment.' : !Number.isInteger(chosenMinutes) || chosenMinutes < 15 || chosenMinutes > 180
+    ? 'Enter a whole number from 15 to 180 minutes.' : chosenMinutes > maximumShorterMinutes
+      ? `This workout already takes about ${roundedEstimate(estimatedOriginal)} min. Choose fewer than ${roundedEstimate(estimatedOriginal)} minutes to shorten it.` : '';
   const title = step === "mode" ? "Adjust today" : step === "review" ? "Review adjustment" : "Adjust today";
 
   const chooseMode = (next) => {
     setMode(next);
     setError("");
+    if (next === ADJUST_TODAY_MODES.lessTime && !timePresets.includes(minutes)) {
+      if (timePresets.length) setMinutes(timePresets[Math.min(1,timePresets.length - 1)]);
+      else { setMinutes('custom'); setCustomMinutes(String(Math.max(15, estimatedOriginal - 5))); }
+    }
     setStep(next === ADJUST_TODAY_MODES.unavailable ? "unavailable" : next === ADJUST_TODAY_MODES.equipment ? "equipment" : next === ADJUST_TODAY_MODES.lessTime ? "time" : "energy");
   };
   const toggleEquipment = (value) => {
@@ -18308,9 +18368,10 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
     }
   };
   const apply = () => {
+    flushSync(() => [...targetCommits.current].forEach(commit => commit()));
     setError("");
     setPersistenceError(false);
-    const result = applyTodayAdjustment(state, proposal);
+    const result = applyTodayAdjustment(state, proposalRef.current);
     if (result.status === "conflict") {
       setError("Today’s workout changed. Close this review and create the adjustment again.");
       return;
@@ -18403,6 +18464,15 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
               </button>
             ))}
           </div>
+          <button className="choice-row adjust-coach-entry" onClick={() => {
+            try {
+              const next = enterCoachConversation(state);
+              next.coachDraft = state.coachDraft || `I need a different adjustment for today's ${original?.name || 'workout'}: `;
+              if (!saveState(next)) throw Error('save');
+              update(() => next, {planVersion:false,persistedState:next});
+              close(); setPage?.('coach');
+            } catch { setError('Couldn’t open Coach. Your workout is unchanged. Try again.'); }
+          }}><strong>Something else? Talk to Coach</strong><small>Describe what you need and review a suggestion before applying it.</small></button>
           <p className="adjust-today-note">Any change applies only to today’s workout. Your training plan stays intact.</p>
         </>
       )}
@@ -18411,12 +18481,14 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           <Eyebrow>LESS TIME</Eyebrow>
           <h1>Time available</h1>
           <p>The target is an estimate. ROOK keeps the most important work first.</p>
+          <p className="adjust-time-context">Current workout: ~{roundedEstimate(estimatedOriginal)} min{timing.sampleCount ? ` · Based on ${timing.sampleCount} similar completed ${timing.sampleCount === 1 ? 'workout' : 'workouts'}` : ' · Estimated from exercises and rest'}</p>
           <div className="adjust-chip-grid" role="group" aria-label="Time available">
             {timePresets.map((value) => <button key={value} aria-pressed={minutes === value} className={minutes === value ? "is-selected" : ""} onClick={() => setMinutes(value)}>{value} min</button>)}
             <button aria-pressed={minutes === "custom"} className={minutes === "custom" ? "is-selected" : ""} onClick={() => setMinutes("custom")}>Custom</button>
           </div>
-          {minutes === "custom" && <label className="adjust-custom-time"><span>Minutes</span><input type="number" min="15" max="180" inputMode="numeric" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /></label>}
-          <Button aria-busy={busy || undefined} disabled={busy || !chosenMinutes || chosenMinutes < 15 || chosenMinutes >= estimatedOriginal} onClick={generate}>{busy ? "ADJUSTING…" : `REVIEW ${chosenMinutes || ""}-MINUTE WORKOUT`}</Button>
+          {minutes === "custom" && <label className="adjust-custom-time"><span>Minutes</span><input aria-label="Available minutes" aria-describedby="adjust-time-validation" aria-invalid={Boolean(customMinutes && timeError)} type="number" min="15" max={Math.max(15,maximumShorterMinutes)} step="1" inputMode="numeric" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /></label>}
+          <p id="adjust-time-validation" className="adjust-time-validation" aria-live="polite">{timeError || `Choose 15–${maximumShorterMinutes} minutes.`}</p>
+          <Button aria-busy={busy || undefined} disabled={busy || Boolean(timeError)} onClick={generate}>{busy ? "ADJUSTING…" : `REVIEW ${chosenMinutes || ""}-MINUTE WORKOUT`}</Button>
         </>
       )}
       {step === "equipment" && (
@@ -18479,7 +18551,9 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           {proposal.mode === ADJUST_TODAY_MODES.equipment ? <dl className="adjust-equipment-delta"><div><dt>Current</dt><dd>{currentEquipmentContext.name ? `${currentEquipmentContext.name} · ` : ""}{gymEquipmentSummary(currentEquipmentContext.equipment)}</dd></div><div><dt>For this workout</dt><dd>{proposal.gymProfileName ? `${proposal.gymProfileName} · ` : ""}{gymEquipmentSummary(proposal.temporaryEquipment)}</dd></div></dl> : proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
           <section className="adjust-review-section">
             <Eyebrow>WORKOUT PREVIEW</Eyebrow>
-            {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small></div>)}
+            {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small>
+              {!existing && <button className="text-button" aria-label={`Edit targets for ${exerciseName(exercise)}`} aria-expanded={editingTargetsId === exercise.id} onClick={() => setEditingTargetsId(editingTargetsId === exercise.id ? null : exercise.id)}>{editingTargetsId === exercise.id ? 'Done' : 'Edit targets'}</button>}
+              {!existing && editingTargetsId === exercise.id && <AdjustmentTargetsEditor exercise={exercise} name={exerciseName(exercise)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={target => setProposal(current => editTodayAdjustmentTargets(current, exercise.id, target, state))}/>}</div>)}
           </section>
           <section className="adjust-review-section">
             <Eyebrow>CHANGES</Eyebrow>
@@ -18681,6 +18755,7 @@ export function Detail({
         state={state}
         update={update}
         close={close}
+        setPage={setPage}
         request={detail.adjustToday}
       />
     );

@@ -3,14 +3,14 @@ import { bindSheetVisibleViewport, observeVisibleViewport } from './sheetVisible
 import './sheetActionFooter.css';
 
 /** Shared commit area. Retains the established sheet scroll owner and swipe handling. */
-export function SheetActionFooter({ children, className = '', enabled = true, separate = false, gutter = 0, pageScroll = false, containViewport = false, importViewport = false, anchorPlanViewport = false, hideWhileSearching = false }) {
+export function SheetActionFooter({ children, className = '', enabled = true, separate = false, gutter = 0, pageScroll = false, containViewport = false, importViewport = false, anchorPlanViewport = false, hideWhileSearching = false, hidden = false }) {
   const ref = useRef(null);
   useLayoutEffect(() => {
     if (!enabled) return;
     const footer = ref.current;
     const screen = footer?.closest('.detail-screen, .sheet');
     // PlanEditor is also reused by full-page onboarding, which is not a sheet.
-    if (!screen) { footer.style.display = 'contents'; return; }
+    if (!screen) { footer.style.display = hidden ? 'none' : 'contents'; return; }
     const layer = screen.parentElement?.classList.contains('modal-layer') ? screen.parentElement : null;
     const reveal = () => {
       // Search chrome is outside the results scroller and already positioned by
@@ -32,7 +32,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
       else if (bounds.top < top) scroller.scrollTop -= top - bounds.top;
     };
     const measure = () => {
-      footer.hidden=hideWhileSearching&&screen.hasAttribute('data-sheet-keyboard-open');
+      footer.hidden=hidden || hideWhileSearching&&screen.hasAttribute('data-sheet-keyboard-open');
       screen.classList.toggle('has-sheet-action-footer',!footer.hidden);
       screen.style.setProperty('--sheet-action-height', `${footer.getBoundingClientRect().height}px`);
       footer.style.setProperty('--sheet-action-gutter', getComputedStyle(screen).paddingLeft);
@@ -55,7 +55,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
       screen.removeEventListener('focusin', reveal);
       releaseViewport();
     };
-  }, [enabled, pageScroll, containViewport, importViewport, anchorPlanViewport, hideWhileSearching]);
+  }, [enabled, pageScroll, containViewport, importViewport, anchorPlanViewport, hideWhileSearching, hidden]);
   if (!enabled) return children;
-  return <footer ref={ref} data-separate={separate || undefined} style={{'--sheet-action-inner-gutter': typeof gutter === 'number' ? `${gutter}px` : gutter}} className={`sheet-action-footer ${className}`}>{children}</footer>;
+  return <footer ref={ref} hidden={hidden} data-separate={separate || undefined} style={{'--sheet-action-inner-gutter': typeof gutter === 'number' ? `${gutter}px` : gutter}} className={`sheet-action-footer ${className}`}>{children}</footer>;
 }
