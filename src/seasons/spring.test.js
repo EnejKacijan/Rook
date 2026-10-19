@@ -10,12 +10,12 @@ it('registers Spring after the year-round palettes with its proposed window', ()
   expect(personalThemeModel({ basePalette: 'spring' }).accentName).toBe('Blossom');
 });
 
-it('offers Spring only inside its window unless already chosen', () => {
+it('offers Spring only inside its window even when previously chosen', () => {
   const [month, day] = '03-20'.split('-').map(Number);
   const inside = new Date(2026, month - 1, day, 12), before = new Date(2026, month - 1, day - 1, 12);
   expect(availableSeasonalThemes('forest', inside, undefined, false).map(item => item.id)).toContain('spring');
   expect(availableSeasonalThemes('forest', before, undefined, false).map(item => item.id)).not.toContain('spring');
-  expect(availableSeasonalThemes('spring', before, undefined, false).map(item => item.id)).toContain('spring');
+  expect(availableSeasonalThemes('spring', before, undefined, false).map(item => item.id)).not.toContain('spring');
 });
 
 it('stages its decoration band through the root season attribute only', () => {
