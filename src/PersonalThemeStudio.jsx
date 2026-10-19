@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
-import { availableSeasonalThemes, seasonalThemeInWindow, seasonalWindowLabel } from './seasonalThemes.js';
+import { SHOW_ALL_SEASONS, availableSeasonalThemes, seasonalThemeInWindow, seasonalWindowLabel } from './seasonalThemes.js';
 import { SEASONAL_PRESETS, THEME_BASES, THEME_PRESETS, normalizePersonalTheme, personalThemeModel, personalThemeSummary, personalThemeShades, personalThemeSurfaces, selectPersonalThemePalette, updatePersonalTheme, resetPersonalThemePalette } from './personalThemes.js';
 import './personalThemeStudio.css';
 import {SegmentedControl} from './SegmentedControl.jsx';
@@ -45,7 +45,7 @@ export function PersonalThemeStudio({ initial, systemDark = false, Header, close
     <fieldset className="pro-theme-appearance"><legend>Appearance</legend><SegmentedControl label="Appearance" options={[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}]} value={draft.appearance} onChange={value=>update('appearance',value)}/></fieldset>
     <fieldset className="pro-theme-presets"><legend>Curated palettes</legend>{THEME_PRESETS.map(item => tile(item))}</fieldset>
     {seasons.length > 0 && <fieldset className="pro-theme-seasonal"><legend>Seasonal</legend>{seasons.map(item => tile(item,
-      item.id === baseline.basePalette && !seasonalThemeInWindow(item) ? 'Season ended' : seasonalWindowLabel(item)))}</fieldset>}
+      !SHOW_ALL_SEASONS && item.id === baseline.basePalette && !seasonalThemeInWindow(item) ? 'Season ended' : seasonalWindowLabel(item)))}</fieldset>}
     <details className="pro-theme-custom"><summary>{`Fine-tune ${selectedPreset.name}`}</summary>
       <fieldset className="pro-theme-accents"><legend>Accent shade <span>{model.accentName}</span></legend>{personalThemeShades(selectedPreset.id).map(item => <button type="button" key={item.id} aria-label={item.name} title={item.name} aria-pressed={draft.accent === item.id} onClick={() => update('accent', item.id)}><i aria-hidden="true" style={{ background: item[model.appearance], color: personalThemeModel(updatePersonalTheme(draft, { accent: item.id }), systemDark).tokens['--rook-on-accent-fill'] }}>{draft.accent === item.id ? '✓' : ''}</i></button>)}</fieldset>
       <fieldset className="pro-theme-bases"><legend>Background tone</legend>{THEME_BASES.map(item => <button type="button" key={item.id} aria-pressed={draft.base === item.id} onClick={() => update('base', item.id)}><span className="pro-theme-base-swatches" aria-hidden="true">{personalThemeSurfaces(selectedPreset.id, item.id, model.appearance).map((color, i) => <i key={i} style={{ background: color }} />)}</span><span>{item.name}</span><span className="pro-theme-base-check" aria-hidden="true">{draft.base === item.id ? '✓' : ''}</span></button>)}</fieldset>
