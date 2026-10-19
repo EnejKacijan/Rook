@@ -41,6 +41,10 @@ describe('Seasonal families in the theme engine', () => {
     expect(resetPersonalThemePalette(theme)).toMatchObject({ accent: 'fixture', base: 'cool' });
     expect(personalThemeSummary(theme)).toBe('Fixture · Customized · Warm · Dark');
   });
+  it('resolves a direct seasonal configuration like a year-round one', () => {
+    expect(normalizePersonalTheme({ basePalette: 'fixture', accent: 'fixture-four', base: 'warm' })).toMatchObject({ accent: 'fixture-four', base: 'warm' });
+    expect(personalThemeModel({ basePalette: 'fixture', accent: 'fixture-four', appearance: 'light' }).tokens['--rook-accent-fill']).toBe('#1f4f78');
+  });
   it('rejects another family\'s shade for a season', () => {
     expect(updatePersonalTheme(selectPersonalThemePalette({}, 'fixture'), { accent: 'ocean-teal' }).accent).toBe('fixture');
   });

@@ -84,9 +84,10 @@ export function normalizePersonalTheme(value) {
       : preset.id === basePalette ? legacy : null)]));
   // Seasonal Fine-tune choices are kept apart so a season can come and go
   // without touching the year-round families.
-  const seasonal = isRecord(value?.seasonalCustomizations) ? value.seasonalCustomizations : {};
+  const hasSeasons = isRecord(value?.seasonalCustomizations), seasonal = hasSeasons ? value.seasonalCustomizations : {};
   const seasonalCustomizations = Object.fromEntries(SEASONAL_PRESETS.map(preset => [preset.id,
-    familyConfiguration(preset, Object.hasOwn(seasonal, preset.id) ? seasonal[preset.id] : null)]));
+    familyConfiguration(preset, hasSeasons ? (Object.hasOwn(seasonal, preset.id) ? seasonal[preset.id] : null)
+      : preset.id === basePalette ? legacy : null)]));
   const active = paletteCustomizations[basePalette] || seasonalCustomizations[basePalette];
   return { schemaVersion: 2, basePalette,
     appearance: ['system', 'light', 'dark'].includes(value?.appearance) ? value.appearance : 'system',

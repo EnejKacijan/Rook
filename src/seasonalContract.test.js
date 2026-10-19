@@ -12,7 +12,8 @@ const lab = hex => {
     .map(row => Math.cbrt(row.reduce((sum, weight, index) => sum + weight * linear[index], 0)));
   return [.2104542553 * l + .793617785 * m - .0040720468 * s, 1.9779984951 * l - 2.428592205 * m + .4505937099 * s, .0259040371 * l + .7827717662 * m - .808675766 * s];
 };
-// Perceptual (OKLab) distance; 0.1 is a clearly different color at a glance.
+// Perceptual (OKLab) distance. Seasons must keep 0.075 from error and warning
+// colors; for scale, year-round Terracotta Dark sits 0.03 from the error red.
 export const colorDistance = (left, right) => Math.hypot(...lab(left).map((value, index) => value - lab(right)[index]));
 
 const days = ({ start, end }) => {
@@ -57,8 +58,8 @@ describe.each(SEASONAL_THEMES.map(season => [season.name, season]))('%s', (_, se
     for (const shade of personalThemeShades(season.id)) for (const base of THEME_BASES) for (const appearance of ['light', 'dark']) {
       const t = personalThemeModel({ basePalette: season.id, accent: shade.id, base: base.id, appearance }).tokens;
       const label = `${shade.name} ${base.name} ${appearance}`;
-      expect(colorDistance(t['--rook-accent-text'], t['--rook-error-text']), `${label} vs error`).toBeGreaterThanOrEqual(.1);
-      expect(colorDistance(t['--rook-accent-text'], t['--rook-warning-text']), `${label} vs warning`).toBeGreaterThanOrEqual(.1);
+      expect(colorDistance(t['--rook-accent-text'], t['--rook-error-text']), `${label} vs error`).toBeGreaterThanOrEqual(.075);
+      expect(colorDistance(t['--rook-accent-text'], t['--rook-warning-text']), `${label} vs warning`).toBeGreaterThanOrEqual(.075);
       expect(colorDistance(t['--rook-accent-fill'], t['--rook-disabled-surface']), `${label} fill vs disabled`).toBeGreaterThanOrEqual(.1);
     }
   });

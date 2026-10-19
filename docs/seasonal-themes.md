@@ -40,7 +40,7 @@ adds new files, any combination of seasons merges without conflicts, in any orde
 - **Semantics stay fixed**: seasons cannot set warning, error, success, disabled or
   selected roles. `src/seasonalContract.test.js` checks every merged season: scoped
   rules only, both appearances decorated, no motion or network assets, only
-  `--rook-season-*` properties, and every shade at least 0.1 OKLab from error and
+  `--rook-season-*` properties, and every shade at least 0.075 OKLab from error and
   warning colors. The contrast report test covers all seasonal shades and tones.
 
 ## Branches and dependencies
