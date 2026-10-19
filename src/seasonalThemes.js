@@ -57,8 +57,17 @@ export function seasonalThemeInWindow(season, date = new Date()) {
 // The picker offers a season during its window. A season the person already
 // uses stays listed (and keeps working) after its window ends until they
 // choose another palette; it is never switched away silently.
+// Current seasons first, then the next to start.
 export function availableSeasonalThemes(currentPalette, date = new Date(), seasons = SEASONAL_THEMES, showAll = SHOW_ALL_SEASONS) {
-  return seasons.filter(season => showAll || season.id === currentPalette || seasonalThemeInWindow(season, date));
+  const today = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  const untilStart = season => {
+    if (seasonalThemeInWindow(season, date)) return 0;
+    const start = new Date(today.getFullYear(), Number(season.window.start.slice(0, 2)) - 1, Number(season.window.start.slice(3)));
+    if (start < today) start.setFullYear(start.getFullYear() + 1);
+    return Math.round((start - today) / 864e5);
+  };
+  return seasons.filter(season => showAll || season.id === currentPalette || seasonalThemeInWindow(season, date))
+    .map(season => [untilStart(season), season]).sort((a, b) => a[0] - b[0]).map(([, season]) => season);
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

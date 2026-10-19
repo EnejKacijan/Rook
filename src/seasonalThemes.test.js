@@ -40,6 +40,8 @@ describe('Seasonal registry', () => {
     expect(availableSeasonalThemes('forest', november, registry, false)).toEqual([]);
     expect(availableSeasonalThemes('autumn', november, registry, false).map(item => item.id)).toEqual(['autumn']);
     expect(availableSeasonalThemes('forest', november, registry, true).map(item => item.id)).toEqual(['spring', 'autumn']);
+    // Review mode orders by what is current, then what starts next.
+    expect(availableSeasonalThemes('forest', new Date(2026, 9, 19), registry, true).map(item => item.id)).toEqual(['autumn', 'spring']);
   });
   it('labels windows in short English month form', () => {
     expect(seasonalWindowLabel(season('turn', '12-28', '01-07'))).toBe('Dec 28 – Jan 7');

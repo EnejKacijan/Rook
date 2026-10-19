@@ -23,6 +23,8 @@
    card with text lines, and its primary action. Colors come from that
    palette's own resolved tokens on the preview element. */
 .pro-theme-preview { grid-column:1 / -1;display:flex;align-items:flex-end;gap:6px;height:46px;margin-bottom:6px;padding:6px;border-radius:7px;background:var(--rook-bg);border:1px solid var(--rook-border); }
+/* A seasonal tile shows a slice of its own decoration band (see seasons/*.css). */
+.pro-theme-preview[data-season] { background-image:var(--rook-season-decor, none);background-repeat:no-repeat;background-position:right 2px top 1px;background-size:180px 12px; }
 .pro-theme-preview-card { flex:1;align-self:stretch;display:flex;flex-direction:column;justify-content:center;gap:4px;padding:0 7px;border-radius:5px;background:var(--rook-surface);box-shadow:0 1px 2px var(--rook-shadow-soft,transparent); }
 .pro-theme-preview-card b { display:block;height:4px;width:78%;border-radius:2px;background:var(--rook-text); }
 .pro-theme-preview-card b + b { width:52%;background:var(--rook-secondary);opacity:.7; }
