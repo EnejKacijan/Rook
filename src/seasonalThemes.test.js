@@ -50,6 +50,7 @@ it('limits seasonal decoration to the four main tabs and hides it in forced colo
   const { readFileSync } = await import('node:fs');
   const css = readFileSync('src/personalThemeApp.css', 'utf8');
   expect(css).toContain(':root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) {\n  background-image: var(--rook-season-decor, none);');
+  expect(css).toContain('background-position: right 0 top env(safe-area-inset-top, 0px);');
   const { default: postcss } = await import('postcss');
   postcss.parse(css).walkRules(rule => { if (rule.selector.includes('data-season')) expect(rule.selector).not.toMatch(/workout|sheet|modal/); });
   expect(css).toMatch(/@media \(forced-colors: active\) \{\s*:root\[data-season\][^{]*\{ background-image: none; \}/);

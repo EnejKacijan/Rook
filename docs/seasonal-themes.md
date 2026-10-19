@@ -10,7 +10,7 @@ A season is three new files and nothing else:
 | File | Purpose |
 |---|---|
 | `src/seasons/<id>.js` | Plain data, default export: name, character, release window, signature surfaces, five accent shades. No imports. |
-| `src/seasons/<id>.css` | Decoration only: sets `--rook-season-decor` (and optionally `--rook-season-decor-size`) under `:root[data-season="<id>"]` for Light and Dark. |
+| `src/seasons/<id>.css` | Decoration only: sets `--rook-season-decor` (a 360×24 SVG band) under `:root[data-season="<id>"]` for Light and Dark. |
 | `docs/seasons/<id>.md` | What it looks like, release window, merge steps. |
 
 Optionally `src/seasons/<id>.test.js` for season-specific checks.
@@ -33,10 +33,11 @@ adds new files, any combination of seasons merges without conflicts, in any orde
   original shape. If a saved season is not in a build, the fallback palette, its
   customizations and the appearance are restored instead of resetting everything.
 - **Decoration contract**: the root gets `data-season="<id>"` (staged with the preview,
-  released on Cancel). A static image from `--rook-season-decor` sits behind content on
-  Today, Coach, Progress and Profile only: never in an active workout, a sheet or a form,
-  and hidden in forced-colors mode. There is no motion, so reduced motion needs no
-  special case.
+  released on Cancel). A static 360×24 band from `--rook-season-decor` sits in the empty
+  top padding of Today, Coach, Progress and Profile, just below the safe area and above
+  the first row of controls, so it never covers text or a control. Never in an active
+  workout, a sheet or a form, and hidden in forced-colors mode. There is no motion, so
+  reduced motion needs no special case.
 - **Semantics stay fixed**: seasons cannot set warning, error, success, disabled or
   selected roles. `src/seasonalContract.test.js` checks every merged season: scoped
   rules only, both appearances decorated, no motion or network assets, only

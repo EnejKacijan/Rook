@@ -3,14 +3,15 @@ html[data-personal-theme] .button.primary:not(:disabled):active { background:var
 html[data-personal-theme] .button.secondary { background:var(--rook-surface);color:var(--rook-text);border-color:var(--rook-control-border); }
 html[data-personal-theme] .brand { color:var(--rook-accent-text); }
 /* Seasonal decoration contract. A merged season sets --rook-season-decor (an
-   image, per appearance) for its own data-season and nothing else. It sits
-   behind content on the four main tabs only: never in a workout, sheet or
-   form. It is static, so there is no motion to reduce. */
+   image, per appearance) for its own data-season and nothing else. It is a
+   band in the empty top padding of the four main tabs, just below the safe
+   area and above the first row of controls, so it never covers text or a
+   control. Never in a workout, sheet or form. Static: no motion to reduce. */
 :root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) {
   background-image: var(--rook-season-decor, none);
   background-repeat: no-repeat;
-  background-position: right top;
-  background-size: var(--rook-season-decor-size, 240px auto);
+  background-position: right 0 top env(safe-area-inset-top, 0px);
+  background-size: var(--rook-season-decor-size, 360px 24px);
 }
 @media (forced-colors: active) {
   :root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) { background-image: none; }
