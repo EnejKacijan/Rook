@@ -53,7 +53,7 @@ unchanged. No preference format change.
 ## Verification
 
 - `npm test`: see the handoff message for the exact run.
-- `node scripts/theme-contrast-report.mjs`: worst case per family and mode across all
+- `npm run qa:theme-contrast` (writes `artifacts/theme-contrast.md`): worst case per family and mode across all
   shades and tones. 7,560 checks, 0 below target (4.5:1 text, 3:1 controls).
 - `node scripts/theme-gallery-qa.mjs` against `npm run preview` captures Today,
   calendar, Adjust Today, Edit today's exercises, exercise search, active workout,
