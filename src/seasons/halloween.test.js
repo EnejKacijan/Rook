@@ -10,12 +10,12 @@ it('registers Halloween after the year-round palettes with its proposed window',
   expect(personalThemeModel({ basePalette: 'halloween' }).accentName).toBe('Pumpkin');
 });
 
-it('offers Halloween only inside its window unless already chosen', () => {
+it('offers Halloween only inside its window even when previously chosen', () => {
   const [month, day] = '10-01'.split('-').map(Number);
   const inside = new Date(2026, month - 1, day, 12), before = new Date(2026, month - 1, day - 1, 12);
   expect(availableSeasonalThemes('forest', inside, undefined, false).map(item => item.id)).toContain('halloween');
   expect(availableSeasonalThemes('forest', before, undefined, false).map(item => item.id)).not.toContain('halloween');
-  expect(availableSeasonalThemes('halloween', before, undefined, false).map(item => item.id)).toContain('halloween');
+  expect(availableSeasonalThemes('halloween', before, undefined, false).map(item => item.id)).not.toContain('halloween');
 });
 
 it('stages its decoration band through the root season attribute only', () => {
