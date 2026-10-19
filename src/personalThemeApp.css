@@ -2,6 +2,7 @@ html[data-personal-theme] .button.primary:not(:disabled) { background:var(--rook
 html[data-personal-theme] .button.primary:not(:disabled):active { background:var(--rook-accent-fill-strong);border-color:var(--rook-accent-fill-strong); }
 html[data-personal-theme] .button.secondary { background:var(--rook-surface);color:var(--rook-text);border-color:var(--rook-control-border); }
 html[data-personal-theme] .brand { color:var(--rook-accent-text); }
+:root .seasonal-theme-notice { bottom:calc(var(--bottom-nav-total-height, 56px) + 8px); }
 /* Seasonal decoration contract. A merged season sets --rook-season-decor (an
    image, per appearance) for its own data-season and nothing else. It is a
    band in the empty top padding of the four main tabs, just below the safe

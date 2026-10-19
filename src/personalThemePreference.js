@@ -1,7 +1,9 @@
 import { ALL_THEME_PRESETS, SEASONAL_PRESETS, THEME_BASES, THEME_PRESETS, THEME_SHADE_FAMILIES, normalizePersonalTheme } from './personalThemes.js';
+import { validSeasonalLastDay } from './seasonalThemeLifecycle.js';
 
 // Appearance preference only. Existing key is retained for deterministic v1
-// migration; the payload is now schemaVersion 2. Never sync staged previews.
+// migration. Plain year-round payloads remain v2; seasonal selections use v3
+// with a year-specific validity date. Never sync staged previews.
 export const PERSONAL_THEME_PREFERENCE = 'rook.local-review.personal-theme.v1';
 const record = value => Boolean(value && typeof value === 'object' && !Array.isArray(value));
 const accents = Object.values(THEME_SHADE_FAMILIES).flat().map(item => item.id);
@@ -18,20 +20,21 @@ export function readPersonalThemePreference(storage) {
     if (!['system', 'light', 'dark'].includes(value.appearance)) return null;
     // A season that is no longer part of this build is not damage: its saved
     // year-round fallback proves the payload, and that palette is restored.
-    const retiredSeason = value.schemaVersion === 2 && typeof value.basePalette === 'string'
-      && THEME_PRESETS.some(item => item.id === value.fallbackPalette);
+    const retiredSeason = [2, 3].includes(value.schemaVersion) && typeof value.basePalette === 'string'
+      && (THEME_PRESETS.some(item => item.id === value.fallbackPalette) || record(value.seasonalCustomizations) && Object.hasOwn(value.seasonalCustomizations, value.basePalette));
     const preset = ALL_THEME_PRESETS.find(item => item.id === value.basePalette)
-      || (retiredSeason ? THEME_PRESETS.find(item => item.id === value.fallbackPalette) : null);
+      || (retiredSeason ? THEME_PRESETS.find(item => item.id === value.fallbackPalette) || THEME_PRESETS[0] : null);
     if (Object.hasOwn(value, 'basePalette') && value.basePalette !== null && !preset) return null;
-    if (Object.hasOwn(value, 'schemaVersion') && value.schemaVersion !== 2) return null;
-    if (value.schemaVersion === 2) {
+    if (Object.hasOwn(value, 'schemaVersion') && ![2, 3].includes(value.schemaVersion)) return null;
+    if ([2, 3].includes(value.schemaVersion)) {
       if (!preset || !record(value.paletteCustomizations)) return null;
       if (Object.entries(value.paletteCustomizations).some(([id, config]) => !THEME_PRESETS.some(item => item.id === id) || !validConfiguration(config))) return null;
       if (Object.hasOwn(value, 'seasonalCustomizations')) {
         if (!record(value.seasonalCustomizations)) return null;
-        // Retired seasons are dropped; registered ones are validated strictly.
-        if (Object.entries(value.seasonalCustomizations).some(([id, config]) => SEASONAL_PRESETS.some(item => item.id === id) && !validConfiguration(config))) return null;
+        // Unknown families remain opaque, non-rendered metadata for later builds.
+        if (Object.entries(value.seasonalCustomizations).some(([id, config]) => !record(config) || SEASONAL_PRESETS.some(item => item.id === id) && !validConfiguration(config))) return null;
       }
+      if (Object.hasOwn(value, 'seasonalValidUntil') && !validSeasonalLastDay(value.seasonalValidUntil)) return null;
       return normalizePersonalTheme(value);
     }
     if (Object.hasOwn(value, 'overrides')) {
@@ -53,13 +56,14 @@ export function savePersonalThemePreference(value, storage = globalThis.localSto
     const theme = normalizePersonalTheme(value);
     // Year-round payloads keep their original shape. Seasonal families are
     // stored only while active or customized, with the year-round fallback.
-    const seasonal = Object.fromEntries(SEASONAL_PRESETS.filter(preset => preset.id === theme.basePalette
+    const seasonal = { ...Object.fromEntries(Object.entries(theme.seasonalCustomizations).filter(([id]) => !SEASONAL_PRESETS.some(preset => preset.id === id))), ...Object.fromEntries(SEASONAL_PRESETS.filter(preset => preset.id === theme.basePalette
       || theme.seasonalCustomizations[preset.id].accent !== preset.accent || theme.seasonalCustomizations[preset.id].base !== preset.base)
-      .map(preset => [preset.id, theme.seasonalCustomizations[preset.id]]));
+      .map(preset => [preset.id, theme.seasonalCustomizations[preset.id]])) };
     const seasonalActive = SEASONAL_PRESETS.some(preset => preset.id === theme.basePalette);
-    storage.setItem(PERSONAL_THEME_PREFERENCE, JSON.stringify({ schemaVersion: 2, basePalette: theme.basePalette,
+    storage.setItem(PERSONAL_THEME_PREFERENCE, JSON.stringify({ schemaVersion: seasonalActive || Object.keys(seasonal).length ? 3 : 2, basePalette: theme.basePalette,
       appearance: theme.appearance, paletteCustomizations: theme.paletteCustomizations,
       ...(Object.keys(seasonal).length ? { seasonalCustomizations: seasonal } : {}),
-      ...(seasonalActive ? { fallbackPalette: theme.fallbackPalette } : {}) }));
+      ...(seasonalActive ? { fallbackPalette: theme.fallbackPalette,
+        ...(validSeasonalLastDay(theme.seasonalValidUntil) ? {seasonalValidUntil:theme.seasonalValidUntil} : {}) } : {}) }));
   }
 }

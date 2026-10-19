@@ -33,12 +33,12 @@ describe('Seasonal registry', () => {
     expect([at(9, 30), at(10, 1), at(11, 2), at(11, 3)].map(date => seasonalThemeInWindow(autumn, date))).toEqual([false, true, true, false]);
     expect([at(12, 27), at(12, 28), at(1, 1), at(1, 7), at(1, 8)].map(date => seasonalThemeInWindow(turn, date))).toEqual([false, true, true, true, false]);
   });
-  it('offers seasons in their window and keeps the saved one listed after it ends', () => {
+  it('offers production seasons only in their window, including when the saved one expired', () => {
     const registry = createSeasonalRegistry([season('autumn', '10-01', '11-02'), season('spring', '03-20', '05-31')]);
     const november = new Date(2026, 10, 20);
     expect(availableSeasonalThemes('forest', new Date(2026, 9, 19), registry, false).map(item => item.id)).toEqual(['autumn']);
     expect(availableSeasonalThemes('forest', november, registry, false)).toEqual([]);
-    expect(availableSeasonalThemes('autumn', november, registry, false).map(item => item.id)).toEqual(['autumn']);
+    expect(availableSeasonalThemes('autumn', november, registry, false)).toEqual([]);
     expect(availableSeasonalThemes('forest', november, registry, true).map(item => item.id)).toEqual(['spring', 'autumn']);
     // Review mode orders by what is current, then what starts next.
     expect(availableSeasonalThemes('forest', new Date(2026, 9, 19), registry, true).map(item => item.id)).toEqual(['autumn', 'spring']);
