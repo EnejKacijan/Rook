@@ -20507,6 +20507,13 @@ function HydratedApp({startup}) {
   const [entryMode, setEntryMode] = useState(startup.firstRunVerified && startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
   const [repairPreview, setRepairPreview] = useState(null);
   const [planReadyNotice, setPlanReadyNotice] = useState(null);
+  const seasonalTransitionBlocked = Boolean(accountSync.locked || state.activeWorkout || state.activeOptionalSession || detail ||
+    !state.profile.onboardingComplete || entryMode || repairPreview ||
+    !['today', 'coach', 'progress', 'profile'].includes(page));
+  useLayoutEffect(() => {
+    personalThemes.setSeasonalTransitionBlocked(seasonalTransitionBlocked);
+    return () => personalThemes.setSeasonalTransitionBlocked(true);
+  }, [personalThemes.setSeasonalTransitionBlocked, seasonalTransitionBlocked]);
   useEffect(() => {
     trackFunnelEventOnce(
       "app_open",
