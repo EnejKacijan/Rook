@@ -51,9 +51,24 @@ describe('Seasonal registry', () => {
 it('limits seasonal decoration to the four main tabs and hides it in forced colors', async () => {
   const { readFileSync } = await import('node:fs');
   const css = readFileSync('src/personalThemeApp.css', 'utf8');
-  expect(css).toContain(':root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) {\n  background-image: var(--rook-season-decor, none);');
-  expect(css).toContain('background-position: right 0 top env(safe-area-inset-top, 0px);');
   const { default: postcss } = await import('postcss');
-  postcss.parse(css).walkRules(rule => { if (rule.selector.includes('data-season')) expect(rule.selector).not.toMatch(/workout|sheet|modal/); });
-  expect(css).toMatch(/@media \(forced-colors: active\) \{\s*:root\[data-season\][^{]*\{ background-image: none; \}/);
+  const selector = ':root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen)';
+  for (const source of [css.replace(/\r\n/g, '\n'), css.replace(/\r?\n/g, '\r\n')]) {
+    const ast = postcss.parse(source);
+    const decorations = [];
+    ast.walkRules(rule => {
+      if (rule.selector.includes('data-season')) expect(rule.selector).not.toMatch(/workout|sheet|modal/);
+      if (rule.selector === selector) decorations.push(rule);
+    });
+    const normal = decorations.find(rule => rule.parent.type === 'root');
+    expect(normal).toBeDefined();
+    const declarations = Object.fromEntries(normal.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+    expect(declarations).toMatchObject({
+      'background-image': 'var(--rook-season-decor, none)',
+      'background-position': 'right 0 top env(safe-area-inset-top, 0px)',
+    });
+    const forced = decorations.find(rule => rule.parent.type === 'atrule' && rule.parent.name === 'media' && rule.parent.params === '(forced-colors: active)');
+    expect(forced).toBeDefined();
+    expect(forced.nodes.some(node => node.type === 'decl' && node.prop === 'background-image' && node.value === 'none')).toBe(true);
+  }
 });
