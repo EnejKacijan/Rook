@@ -195,7 +195,7 @@ async function captureDetail(name, state, viewport = { width: 390, height: 844 }
 
 const activeRun = await open(activePrFixture());
 await activeRun.page.getByRole("button", { name: /RESUME WORKOUT/i }).click();
-assert.equal(await activeRun.page.getByText("e1RM PR", { exact: false }).count(), 1);
+assert.equal(await activeRun.page.getByText("Est. 1RM PR", { exact: false }).count(), 1);
 await assertClean(activeRun, "390-active-pr");
 await activeRun.page.screenshot({ path: output("390-active-pr.png"), fullPage: false });
 await activeRun.context.close();

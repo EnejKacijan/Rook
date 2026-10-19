@@ -1,4 +1,4 @@
-import React,{StrictMode,act} from 'react';
+import React,{StrictMode,act,useRef} from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach,beforeEach,expect,it,vi} from 'vitest';
 import {useExerciseRemoveUndo} from './SwipeActionRow.jsx';
@@ -60,4 +60,28 @@ it('an explicitly failed Undo remains retryable without restarting its lifetime'
  act(()=>undo.show({message:'Workout moved',undo:restore}));advance(4000);
  act(()=>surface().querySelector('button').click());expect(surface()).not.toBeNull();expect(vi.getTimerCount()).toBe(1);
  advance(999);act(()=>surface().querySelector('button').click());expect(surface()).toBeNull();expect(restore).toHaveBeenCalledTimes(2);expect(vi.getTimerCount()).toBe(0);
+});
+it.each([90,-90])('a horizontal swipe of %ipx dismisses feedback without invoking Undo',distance=>{
+ const restore=vi.fn();act(()=>undo.show({message:'Previous values applied',undo:restore}));const node=surface();
+ act(()=>{node.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,clientX:150,clientY:400}));node.dispatchEvent(new MouseEvent('pointerup',{bubbles:true,clientX:150+distance,clientY:401}));});
+ expect(surface()).toBeNull();expect(restore).not.toHaveBeenCalled();expect(vi.getTimerCount()).toBe(0);
+});
+it.each(['short','vertical','cancelled','button'])('%s gesture preserves the shared notice and Undo',kind=>{
+ const restore=vi.fn();act(()=>undo.show({message:'Previous values applied',undo:restore}));const node=kind==='button'?surface().querySelector('button'):surface();
+ act(()=>{node.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true,clientX:150,clientY:400}));if(kind==='cancelled')node.dispatchEvent(new Event('pointercancel',{bubbles:true}));node.dispatchEvent(new MouseEvent('pointerup',{bubbles:true,clientX:kind==='short'?160:250,clientY:kind==='vertical'?600:401}));});
+ expect(surface()).not.toBeNull();expect(restore).not.toHaveBeenCalled();act(()=>surface().querySelector('button').click());expect(restore).toHaveBeenCalledOnce();expect(surface()).toBeNull();
+});
+it.each(['normal','long','no room'])('logger feedback avoids primary controls in the %s layout without taking space',kind=>{
+ const rect=(top,height)=>({top,bottom:top+height,height,left:0,right:320,width:320});
+ const measure=vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(){
+  if(this.classList.contains('today-undo'))return rect(690,64);
+  return kind==='normal'?rect(250,200):kind==='long'?rect(256,460):rect(0,844);
+ });
+ const height=vi.spyOn(window,'innerHeight','get').mockReturnValue(844);
+ function SafeHarness(){const screen=useRef(null);undo=useExerciseRemoveUndo({avoidRef:screen});return <main ref={screen}><div className="workout-primary-action"/>{undo.surface}</main>;}
+ act(()=>root.render(<SafeHarness/>));act(()=>undo.show({message:'Previous values applied',undo:vi.fn()}));
+ if(kind==='normal')expect(surface().style.top).toBe('');
+ if(kind==='long'){expect(surface().style.top).toBe('724px');expect(surface().style.bottom).toBe('auto');}
+ if(kind==='no room')expect(surface().style.visibility).toBe('hidden');
+ expect(surface().style.position).toBe('');expect(vi.getTimerCount()).toBe(1);measure.mockRestore();height.mockRestore();
 });

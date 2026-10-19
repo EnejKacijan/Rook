@@ -4,6 +4,7 @@ import { availableCustomExerciseItems, customExerciseSnapshot } from './customEx
 import { effectiveGymContext } from './gymProfiles.js';
 import { compileProfileTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
 import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
+import {loggingModeOf, effectiveSetReps} from './advancedLogging.js';
 
 export function freestyleCatalog(state) {
   const profile = effectiveGymContext(state, state.activeWorkout || {}).profile;
@@ -120,8 +121,19 @@ export function removeFreestyleExercise(state, id) {
 // logging modes match. Advanced sets remain inspectable, never flattened.
 export function freestylePreviousSets(state, exercise) {
   const prior = previousExercise(state.workouts, exercise.exerciseId);
-  if (!prior || (prior.loggingMode || 'normal') !== (exercise.loggingMode || 'normal')) return [];
+  if (!prior || loggingModeOf(prior) !== loggingModeOf(exercise)) return [];
   return prior.sets.filter(s => s.completed && !s.setType && !s.segments?.length);
+}
+
+// Shared value projection; execution metadata and historical IDs stay in history.
+export function previousWorkingSetValues(exercise, prior) {
+  if (!prior || effectiveSetReps(exercise,prior)==null ||
+    prior.bodyweightMode && exercise.bodyweightMode && prior.bodyweightMode!==exercise.bodyweightMode) return null;
+  const load=exerciseLoadRequirement(exercise);
+  if (load==='required' && !(Number(prior.weight)>0) || prior.weight!=null && (!Number.isFinite(prior.weight)||prior.weight<0)) return null;
+  return {weight:load==='none'?null:prior.weight??null,reps:prior.reps??effectiveSetReps(exercise,prior),rir:null,
+    ...(loggingModeOf(exercise)==='per_side'?{sides:Object.fromEntries(['left','right'].map(side=>[side,
+      Object.fromEntries(['reps','weight','rir'].filter(key=>Object.hasOwn(prior.sides?.[side]||{},key)).map(key=>[key,prior.sides[side][key]]))]))}:{})};
 }
 
 export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
@@ -132,15 +144,11 @@ export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
   const set = exercise?.sets.find(s => s.id === setId);
   const prior = exercise && freestylePreviousSets(state, exercise)[ordinal];
   if (!set || set.completed || set.setType || set.segments?.length || !prior) return state;
+  const values=previousWorkingSetValues(exercise,prior);
+  if(!values)return state;
   const next = structuredClone(state);
   const target = next.activeWorkout.exercises.find(e => e.id === exerciseId).sets.find(s => s.id === setId);
-  Object.assign(target, { weight: prior.weight ?? null, reps: prior.reps, rir: null, touched: true, weightEntryMode: 'manual', repsEntryMode: 'manual', weightProvenance: 'history' });
-  if (prior.sides) target.sides = Object.fromEntries(Object.entries(prior.sides).map(([side, values]) => {
-    const copied = structuredClone(values);
-    // Historical completion is evidence, never a completion action today.
-    delete copied.completed; delete copied.completedAt;
-    return [side, copied];
-  }));
+  Object.assign(target, values, { touched: true, weightEntryMode: 'manual', repsEntryMode: 'manual', weightProvenance: 'history' });
   delete target.weightSourceSetId;
   delete target.repsSourceSetId;
   return next;

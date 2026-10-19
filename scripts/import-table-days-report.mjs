@@ -1,0 +1,11 @@
+import {readFile,writeFile} from 'node:fs/promises';
+import assert from 'node:assert/strict';
+const dir='artifacts/ROOK-IMPORT-CONSISTENCY-AUDIT';
+const ledger=JSON.parse(await readFile(`${dir}/LEDGER.json`,'utf8'));
+const six=JSON.parse(await readFile(`${dir}/06-result.json`,'utf8'));
+const seven=JSON.parse(await readFile(`${dir}/07-result.json`,'utf8'));
+assert.deepEqual(six.firstResult.program.days.map(d=>d.weekday),['Mon','Thu']);
+assert.equal(seven.firstResult.program.days.length,1);
+Object.assign(ledger.find(c=>c.id==='06'),{status:'NORMALIZED — Day column fixed; two scheduled workouts preserved',preserved:['Monday Bench Press 3x8 at 60 kg','Thursday Squat 4x6–8 at 132.5 kg','Source workout order'],normalized:['Weekday names and tabular prescription cells'],blockerCreated:[],dropped:[],invented:[]});
+Object.assign(ledger.find(c=>c.id==='07'),{status:'DROPPED / INVENTED / BLOCKER — STOP: paragraph boundaries misparsed',preserved:['Verbatim source notes','Cable Row 3x10','Leg Curl 3x12'],normalized:['Cable Row alias'],blockerCreated:['Two misleading alternative decisions requiring source edit; no valid choices'],dropped:['Bench Press 3x8 at 60 kg as executable exercise','Squat 4x6 as executable exercise','Thursday workout group'],invented:['Leg Curl assigned to Monday instead of Thursday in draft; blocked from apply']});
+await writeFile(`${dir}/LEDGER.json`,JSON.stringify(ledger,null,2));

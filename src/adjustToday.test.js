@@ -13,6 +13,7 @@ import {
   completeWorkout,
   deserializeState,
   estimateSessionMinutes,
+  estimatePersonalWorkoutMinutes,
   exerciseCatalog,
   isoDay,
   isExerciseAllowed,
@@ -396,7 +397,7 @@ describe("Adjust Today domain", () => {
     expect(restored.status).toBe("restored");
     expect(restored.state.todayAdaptation).toBeNull();
     expect(adaptedTemplateForToday(restored.state)).toEqual(
-      restored.state.program.days[0],
+      {...restored.state.program.days[0],estimatedMinutes:estimatePersonalWorkoutMinutes(restored.state,restored.state.program.days[0])},
     );
   });
 
@@ -442,7 +443,8 @@ describe("Adjust Today domain", () => {
     expect(history.adapted).toBe(true);
     expect(history.adjustment.mode).toBe(ADJUST_TODAY_MODES.lessTime);
     expect(history.exercises).toHaveLength(template.exercises.length);
-    expect(history.exercises).not.toHaveLength(6);
+    expect(history.exercises.reduce((sum,row)=>sum+row.sets.length,0)).toBeLessThan(
+      state.program.days[0].exercises.reduce((sum,row)=>sum+row.sets.length,0));
     const advice = progressionFor(history.exercises[0], completed.workouts, completed.profile);
     expect(advice).toMatchObject({ type: 'hold', title: 'Repeat to confirm' });
     expect(advice).not.toHaveProperty('weight');

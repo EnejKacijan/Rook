@@ -111,7 +111,7 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
         </button></div>;
       })}</div>)}
     </div>
-    <div className="month-calendar-legend" aria-label="Calendar legend"><span><CalendarStatusMark status="planned"/>Planned</span><span><CalendarStatusMark status="completed"/>Completed</span><span><CalendarStatusMark status="active"/>In progress</span></div>
+    <div className="month-calendar-legend" aria-label="Calendar legend">{state.program&&<span><CalendarStatusMark status="planned"/>Planned</span>}<span><CalendarStatusMark status="completed"/>Completed</span><span><CalendarStatusMark status="active"/>In progress</span></div>
     {selectedDate !== today && <button type="button" className="month-calendar-today" onClick={()=>choose(today)}>TODAY</button>}
   </main>;
 }

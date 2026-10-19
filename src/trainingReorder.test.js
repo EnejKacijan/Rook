@@ -2,6 +2,7 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {bindTrainingReorder} from './trainingReorder.js';
 import {bindSwipeRowActions,registerSwipeRemoval} from './swipeRowAction.js';
+import {createInteractionFeedback,createVibrationAdapter} from './interactionFeedback.js';
 let root,release,swipeRelease,view,commit,gesture,preview,feedback;
 beforeEach(()=>{
  vi.useFakeTimers();vi.stubGlobal('matchMedia',()=>({matches:false}));vi.stubGlobal('requestAnimationFrame',fn=>setTimeout(()=>fn(performance.now()),16));vi.stubGlobal('cancelAnimationFrame',clearTimeout);
@@ -86,6 +87,20 @@ it('feedback follows locked mode and canonical slots, including hysteresis and b
   touch('touchmove',handle(3),y);expect(feedback.selection).toHaveBeenCalledTimes(count);
  }
  expect(gesture.current.targetIndex).toBe(2);touch('touchend',handle(3),180);expect(feedback.drop).toHaveBeenCalledOnce();expect(feedback.pickup).toHaveBeenCalledOnce();
+});
+it('one short pickup request follows each real hold, never pointerdown or later drag moves',()=>{
+ const vibrate=vi.fn(()=>true);
+ const haptics=createInteractionFeedback({adapter:createVibrationAdapter({navigator:()=>({vibrate}),document:()=>({visibilityState:'visible'})}),reducedMotion:()=>false,now:()=>performance.now()});
+ feedback.pickup=haptics.pickup;
+ pointer('pointerdown',handle(0),125);expect(vibrate).not.toHaveBeenCalled();pointer('pointerup',handle(0),125);
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(100);touch('touchend',handle(0),125);expect(vibrate).not.toHaveBeenCalled();
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(299);expect(vibrate).not.toHaveBeenCalled();
+ touch('touchcancel',handle(0),125);vi.advanceTimersByTime(300);expect(vibrate).not.toHaveBeenCalled();
+ touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);expect(vibrate).toHaveBeenCalledExactlyOnceWith(9);
+ for(const y of [140,195,235,130,245])touch('touchmove',handle(0),y);
+ expect(vibrate).toHaveBeenCalledTimes(1);touch('touchcancel',handle(0),245);
+ vi.advanceTimersByTime(100);touch('touchstart',handle(0),125);vi.advanceTimersByTime(300);
+ expect(vibrate).toHaveBeenCalledTimes(2);touch('touchend',handle(0),125);
 });
 it.each(['horizontal','original','cancel','failed'])('%s does not emit a successful reorder drop',reason=>{
  if(reason==='failed')commit.mockReturnValue(false);

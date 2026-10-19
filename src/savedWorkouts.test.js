@@ -63,3 +63,20 @@ it('superset groups and advanced prescriptions instantiate freshly on each appen
  expect(a.sets[0].segments[0]).toMatchObject({weight:20,reps:6,rir:2,completed:false});expect(a.sets[0].segments[0].id).not.toBe(c.sets[0].segments[0].id);
  const again=saveWorkoutTemplate(state,{...templateDraft(state.activeWorkout,state),name:'All groups'},{id:'all-groups'});expect(again.savedWorkoutTemplates.at(-1).exercises).toHaveLength(6);
 });
+it('four Free reusable templates are allowed; fifth creation is gated without touching plans, sessions or existing templates',()=>{
+ let state=seed(),draft={...templateDraft(state.activeWorkout,state),name:'Reusable'};
+ const free={status:'free',entitlement:null},pro={status:'active',entitlement:'rook_pro'};
+ for(let n=0;n<4;n++)state=saveWorkoutTemplate(state,draft,{id:`saved-${n}`,access:free,rollout:true});
+ const before=structuredClone(state);
+ expect(()=>saveWorkoutTemplate(state,draft,{id:'saved-4',access:free,rollout:true})).toThrow('ROOK Pro');
+ expect(state).toEqual(before);
+ const edited=saveWorkoutTemplate(state,{...state.savedWorkoutTemplates[0],name:'Edited'},
+  {id:'saved-0',revision:1,access:free,rollout:true});
+ expect(edited.savedWorkoutTemplates).toHaveLength(4);
+ const fifth=saveWorkoutTemplate(state,draft,{id:'saved-4',access:pro,rollout:true});
+ expect(fifth.savedWorkoutTemplates).toHaveLength(5);
+ expect(()=>saveWorkoutTemplate(fifth,draft,{id:'saved-5',access:free,rollout:true})).toThrow('ROOK Pro');
+ expect(saveWorkoutTemplate(fifth,draft,{id:'saved-4',access:free,rollout:true})).toBe(fifth);
+ expect(fifth.program).toEqual(before.program);
+ expect(fifth.workouts).toEqual(before.workouts);
+});

@@ -710,9 +710,9 @@ describe("workout input and duration contracts", () => {
   });
 
   it("states whether the reviewed duration fits or is the closest valid option", () => {
-    expect(adaptationDurationLabel(35, 39)).toBe("~40 min · fits 35 min goal");
+    expect(adaptationDurationLabel(35, 39)).toBe("Estimated ~40 min · 35 min goal");
     expect(adaptationDurationLabel(35, 44)).toBe(
-      "Closest valid option · ~45 min (35 min goal)",
+      "Estimated ~45 min · 35 min goal",
     );
   });
 });

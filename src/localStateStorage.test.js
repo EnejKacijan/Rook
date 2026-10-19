@@ -1,7 +1,7 @@
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
 import { blankState, serializeState, hydrateStoredState, readStartupState, saveState } from './domain.js';
 import { dataReliabilityFixture } from './dataReliability.fixture.js';
-import { PRIMARY_KEY as P, INSTALL_META_KEY as M, RECOVERY_KEY as B, JOURNAL_KEY as J, MAX_RECOVERY_CHARS, persistLocalState, readLocalState, readRecovery, restoreLocalCheckpoint, deleteLocalState, storageDiagnostics, inspectStorageProtection, forgetStorageSession, withStorageTransaction } from './localStateStorage.js';
+import { PRIMARY_KEY as P, INSTALL_META_KEY as M, RECOVERY_KEY as B, JOURNAL_KEY as J, MAX_RECOVERY_CHARS, persistLocalState, readLocalState, readRecovery, restoreLocalCheckpoint, checkpointCurrentLocalState, deleteLocalState, storageDiagnostics, inspectStorageProtection, forgetStorageSession, withStorageTransaction } from './localStateStorage.js';
 import { commitPreparedRestore } from './backup.js';
 import { beginRestoreTransaction, recoverInterruptedRestore } from './restoreTransaction.js';
 
@@ -17,6 +17,18 @@ afterEach(()=>{vi.useRealTimers();vi.restoreAllMocks();});
 const writes=storage=>storage.ops.filter(([op])=>op!=='get');
 const save=(storage,state=fixture,options={})=>persistLocalState(serializeState(state),{storage,hydrate:hydrateStoredState,...options});
 function seeded() {const storage=new MemoryStorage([[P,raw]]);expect(readStartupState(storage).status).toBe('ready');const next=structuredClone(fixture);next.activeWorkout.exercises[0].sets[1].reps=10;expect(save(storage,next)).toBe(true);return storage;}
+
+it('verifies a current last-known-good checkpoint before cloud reconciliation without changing primary',()=>{
+  const storage=seeded(),primary=storage.getItem(P),generation=JSON.parse(storage.getItem(M)).generation;
+  expect(checkpointCurrentLocalState(storage,hydrateStoredState)).toEqual({generation,profileId:fixture.profile.id});
+  expect(storage.getItem(P)).toBe(primary);
+  expect(readRecovery(storage,hydrateStoredState)).toMatchObject({raw:primary,generation});
+});
+it('cannot checkpoint a missing primary or corrupt data as cloud bootstrap authority',()=>{
+  const storage=seeded();storage.removeItem(P);const prior=storage.getItem(B);
+  expect(()=>checkpointCurrentLocalState(storage,hydrateStoredState)).toThrow('checkpoint-source-unavailable');
+  expect(storage.getItem(B)).toBe(prior);
+});
 
 it('recovers the complete prior valid state, with bounded compressed metadata and safe ordering',()=>{
   const storage=seeded();expect(writes(storage).map(([,key])=>key)).toEqual([M,B,P,M]);

@@ -1,0 +1,11 @@
+import {chromium} from 'playwright-core';import {writeFile} from 'node:fs/promises';
+const browser=await chromium.launch({channel:'chrome',headless:true}),page=await browser.newPage({viewport:{width:390,height:844},hasTouch:true,isMobile:true,serviceWorkers:'block'});
+await page.route('**/api/**',r=>r.fulfill({json:{available:false}}));
+await page.goto('http://127.0.0.1:4198/scripts/today-sheet-motion-review.html?completed=1');
+await page.getByRole('button',{name:'Today options',exact:true}).waitFor();await page.waitForTimeout(500);
+const cdp=await page.context().newCDPSession(page);await cdp.send('Profiler.enable');await cdp.send('Profiler.setSamplingInterval',{interval:200});await cdp.send('Profiler.start');
+await page.getByRole('button',{name:'Today options',exact:true}).tap();await page.waitForTimeout(300);const {profile}=await cdp.send('Profiler.stop');
+await writeFile(`artifacts/today-sheet-motion/${process.argv.includes('--before')?'before':'after'}.cpuprofile`,JSON.stringify(profile));
+const nodes=new Map(profile.nodes.map(n=>[n.id,n])),time=new Map();profile.samples.forEach((id,i)=>time.set(id,(time.get(id)||0)+profile.timeDeltas[i]));
+console.log([...time].sort((a,b)=>b[1]-a[1]).slice(0,30).map(([id,us])=>({ms:us/1000,name:nodes.get(id).callFrame.functionName,url:nodes.get(id).callFrame.url,line:nodes.get(id).callFrame.lineNumber})));
+await browser.close();

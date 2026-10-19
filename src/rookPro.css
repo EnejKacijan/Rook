@@ -1,0 +1,40 @@
+:root .modal-layer > .screen.rook-pro-paywall { display: flex; flex-direction: column; height: min(96dvh, calc(100dvh - max(12px, env(safe-area-inset-top)))); max-height: calc(100dvh - max(12px, env(safe-area-inset-top))); padding-bottom: 0; overflow: hidden; }
+.rook-pro-paywall > .detail-header { flex: none; margin-bottom: 12px; }
+.rook-pro-content { flex: 1; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding-bottom: 20px; scrollbar-width: none; }
+.rook-pro-content > .eyebrow { display: block; margin-top: 12px; color: var(--rook-secondary); }
+.rook-pro-paywall h1 { margin-top: 12px; max-width: 13em; font-size: 2rem; }
+.rook-pro-paywall .rook-pro-intro { color: var(--rook-secondary); margin: 14px 0 0; max-width: 36rem; }
+.rook-pro-benefits { list-style: none; padding: 0; margin: 24px 0 28px; display: grid; gap: 12px; font-size: .875rem; line-height: 1.4; }
+.rook-pro-benefits li { display: flex; gap: 12px; }
+.rook-pro-benefits li > span { color: var(--rook-accent); font-weight: 700; }
+.rook-pro-options { display: grid; gap: 12px; }
+.rook-pro-options .rook-pro-plan { width: 100%; padding: 18px; text-align: left; display: grid; gap: 8px; color: var(--rook-text); background: var(--rook-surface); border: 1px solid var(--rook-border); border-radius: 18px; box-shadow: none; }
+.rook-pro-options .rook-pro-plan[aria-pressed="true"] { border-color: var(--rook-accent); box-shadow: inset 0 0 0 1px var(--rook-accent); background: color-mix(in srgb, var(--rook-accent) 5%, var(--rook-surface)); }
+.rook-pro-options .rook-pro-annual[aria-pressed="true"] { background: color-mix(in srgb, var(--rook-accent) 8%, var(--rook-surface)); }
+.rook-pro-plan-heading { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.rook-pro-plan-heading > strong { font-size: .6875rem; letter-spacing: .08em; }
+.rook-pro-saving { border-radius: 999px; padding: 5px 8px; color: var(--rook-accent); background: color-mix(in srgb, var(--rook-accent) 11%, var(--rook-surface)); font-size: .625rem; font-weight: 700; white-space: nowrap; }
+.rook-pro-plan-radio { margin-left: auto; flex: none; display: grid; place-items: center; width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--rook-border); color: var(--rook-accent); font-size: 12px; }
+[aria-pressed="true"] .rook-pro-plan-radio { border-color: var(--rook-accent); }
+.rook-pro-price { display: flex; align-items: baseline; gap: 4px; white-space: nowrap; margin: 4px 0; }
+.rook-pro-price > strong { font-size: 1.75rem; letter-spacing: -.03em; line-height: 1.2; }
+.rook-pro-price > span { font-size: .875rem; color: var(--rook-secondary); }
+.rook-pro-disclosure { font-size: .8125rem; line-height: 1.4; overflow-wrap: break-word; }
+.rook-pro-renewal { font-size: .75rem; color: var(--rook-secondary); line-height: 1.4; }
+.rook-pro-secondary, .rook-pro-legal { display: flex; flex-wrap: wrap; gap: 8px 24px; margin-top: 18px; }
+.rook-pro-secondary button, .rook-pro-secondary a, .rook-pro-legal a { min-height: 44px; display: inline-flex; align-items: center; color: var(--rook-accent); }
+.rook-pro-secondary button { width: auto; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.rook-pro-secondary button:focus-visible, .rook-pro-secondary a:focus-visible, .rook-pro-legal a:focus-visible { outline: 2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset: 3px; }
+.rook-pro-secondary button, .rook-pro-secondary a { font-size: .8125rem; }
+.rook-pro-paywall .rook-pro-legal { margin-top: 6px; font-size: .75rem; }
+.rook-pro-paywall .rook-pro-message { color: var(--rook-secondary); }
+.rook-pro-footer { flex: none; margin-inline: -24px; padding: 14px 24px max(18px, env(safe-area-inset-bottom)); border-top: 1px solid var(--rook-border); background: var(--rook-bg); }
+.rook-pro-paywall .rook-pro-summary { margin: 0 0 10px; text-align: center; color: var(--rook-text); font-size: .8125rem; line-height: 1.4; }
+.rook-pro-footer .rook-pro-cta { min-height: 54px; height: auto; padding: 16px 12px; font-size: .75rem; letter-spacing: .045em; line-height: 1.4; }
+.rook-pro-plan:focus-visible, .rook-pro-cta:focus-visible { outline: 2px solid var(--rook-focus-ring, var(--rook-accent)); outline-offset: 3px; }
+@media (max-width: 350px) { .rook-pro-options .rook-pro-plan { padding: 16px 14px; } .rook-pro-plan-heading { gap: 8px; } }
+.coach-free-remaining { display: block; margin-top: 2px; color: var(--rook-muted); font-size: 11px; font-weight: 500; }
+.appearance-pro-lock { display: inline; font-size: 11px; font-weight: 600; color: var(--rook-accent); }
+.generated-plan-pro-note { display: block; margin: 0 0 8px; color: var(--rook-secondary); }
+.saved-workout-count { display: block; margin: 8px 0 2px; color: var(--rook-muted); }
+.saved-workout-limit-note { margin: 8px 0 12px; color: var(--rook-secondary); font-size: 13px; }

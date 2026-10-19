@@ -65,14 +65,17 @@ export function bindSwipeRowActions(list,{mode='remove',onAdd,feedback=interacti
     candidate(target,p){
       const row=target.closest('[data-swipe-row]'),handle=target.closest('[data-reorder-kind]'),control=target.closest(interactive);
       if(!enabled(row)||!list.contains(row)||control&&!control.hasAttribute('data-swipe-body')&&(!handle||adding||control!==handle))return null;
-      return {row,handle,x:p.clientX,width:row.getBoundingClientRect().width,state:'idle'};
+      return {row,handle,x:p.clientX,width:row.getBoundingClientRect().width,state:'idle',thresholdHapticked:false};
     },
     accepts:dx=>adding?dx>0:dx<0,
     move(g,p){
       if(!enabled(g.row))return false;
       const raw=distance(g,p);
       const next=trackDirectSwipe(g.state,raw,g.width,{thresholds:adding?ADD_SWIPE:DIRECT_SWIPE});
-      if(next==='tracking-armed'&&g.state!==next)feedback.threshold();
+      if(next==='tracking-armed'&&g.state!==next&&!g.thresholdHapticked){
+        g.thresholdHapticked=true;
+        feedback.threshold();
+      }
       g.state=next;
       paint(g,adding?addSwipeTranslation(raw,g.width):Math.min(raw,g.width));
     },

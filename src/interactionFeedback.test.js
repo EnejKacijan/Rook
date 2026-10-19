@@ -13,7 +13,7 @@ it('accepted short pulses mean requested, not a verified motor; hidden and inact
  const adapter=createVibrationAdapter({navigator:()=>device,document:()=>page});
  expect(adapter.request('pickup')).toBe('suppressed');device.userActivation.hasBeenActive=true;page.visibilityState='hidden';expect(adapter.request('pickup')).toBe('suppressed');
  page.visibilityState='visible';for(const event of ['selection','threshold','pickup','drop'])expect(adapter.request(event)).toBe('requested');
- expect(vibrate.mock.calls.map(([ms])=>ms)).toEqual([6,6,9,10]);expect(adapter.capabilities()).toMatchObject({transport:'vibration-api',hardware:'unverified'});
+ expect(vibrate.mock.calls.map(([ms])=>ms)).toEqual([6,9,9,10]);expect(adapter.capabilities()).toMatchObject({transport:'vibration-api',hardware:'unverified'});
 });
 it('injected feedback respects preference/reduced motion, prevents storms and immediate duplicate drop',()=>{
  let time=0,enabled=true,reduced=false;const adapter={request:vi.fn(()=> 'requested')};

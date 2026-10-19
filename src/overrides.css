@@ -1057,6 +1057,7 @@
 .complete-done-dock .complete-done { margin: 0; }
 .complete-screen.can-continue { padding-bottom: calc(168px + env(safe-area-inset-bottom)); }
 .complete-done-dock .complete-continue { margin: 8px 0 0; min-height: 44px; }
+.complete-save-workout { display: inline-flex; align-items: center; min-height: 44px; margin-top: 18px; }
 .complete-continue-error { font-size: 13px; margin: 8px 0 0; color: var(--rook-text); }
 .complete-screen:has(.session-note-editor textarea:focus) .complete-done-dock {
   visibility: hidden;

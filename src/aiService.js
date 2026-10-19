@@ -1,4 +1,5 @@
 import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
+import { coachBillingTicket } from './devPaywallPreview.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
 import {
@@ -12,6 +13,7 @@ import {
   completedWorkoutCanResume,
   compatibleReplacementCandidates,
   deterministicCoach,
+  createWorkoutDurationEstimator,
   estimateSessionMinutes,
   exerciseCatalog,
   isExerciseAllowed,
@@ -68,8 +70,9 @@ function pendingAdaptationText(action, responseLanguage) {
 async function request(
   operation,
   payload,
-  { timeoutMs = AI_REQUEST_TIMEOUT_MS, signal = null } = {},
+  { timeoutMs = AI_REQUEST_TIMEOUT_MS, signal = null, coachRequest = null } = {},
 ) {
+  coachRequest = coachBillingTicket(coachRequest);
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const abortFromCaller = () => controller.abort();
@@ -77,8 +80,8 @@ async function request(
   try {
     const response = await fetch("/api/ai", {
       method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operation, payload }),
+      headers: { "content-type": "application/json", ...(coachRequest ? { Authorization: `Bearer ${coachRequest.token}` } : {}) },
+      body: JSON.stringify({ operation, payload, ...(coachRequest ? { coachRequestId: coachRequest.requestId } : {}) }),
       signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
@@ -2051,11 +2054,12 @@ export const AIService = {
     return finalizeImportedPlan(profile, existingPlanText, data);
   },
   async coach(state, message, combineOptions = {}) {
+    const coachRequest = combineOptions.coachRequest || null;
     const responseLanguage = preferredCoachLanguage(
       message,
       state.conversations.filter(entry => (entry.conversationId || 'legacy') === state.activeCoachConversationId),
     );
-    const combined=await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload)});
+    const combined=await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload,{coachRequest})});
     if(combined)return combined;
     const missed=coachMissedReply(state,message);
     if(missed)return missed;
@@ -2071,12 +2075,19 @@ export const AIService = {
         deterministicAnalysis:
           deterministic.source === "offline" ? null : deterministic,
       };
-      let data = await request("coach", payload);
-      if (!replyMatchesLanguage(data.text, responseLanguage))
-        data = await request("coach", {
-          ...payload,
-          previousLanguageMismatch: `The previous reply was not in ${responseLanguage}. Rewrite the answer and any explanation entirely in ${responseLanguage}.`,
-        });
+      let data = await request("coach", payload, {coachRequest});
+      if (!data?.text?.trim()) throw new Error('Coach did not return a usable answer.');
+      if (!replyMatchesLanguage(data.text, responseLanguage)) {
+        // The first answer is usable and already counted server-side. A failed
+        // language rewrite must not turn that answer into a lost response.
+        try {
+          const rewritten = await request("coach", {
+            ...payload,
+            previousLanguageMismatch: `The previous reply was not in ${responseLanguage}. Rewrite the answer and any explanation entirely in ${responseLanguage}.`,
+          }, {coachRequest});
+          if (rewritten?.text?.trim()) data = rewritten;
+        } catch { /* Keep the usable first answer. */ }
+      }
       data.text = normalizeCoachText(data.text);
       if(data.action?.type==='combine-workouts')return coachCombineReply(state,message,{
         selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,
@@ -2095,7 +2106,13 @@ export const AIService = {
           action: null,
           source: "validated-fallback",
         };
-      const action = aiAction || fallbackAction;
+      // Time-only requests are fitted by the same local model shown in Today.
+      // Keep AI additions and other explicit exercise edits when requested.
+      const timeOnly = /(?:adapt|shorten|less time|have.{0,12}min|skraj|manj časa|imam.{0,12}min)/iu.test(message) &&
+        !/(?:remove|skip|replace|add|without|odstran|zamenj|dodaj|izpust|brez)\p{L}*/iu.test(message);
+      const action = timeOnly && fallbackAction?.type === 'adapt-today' && aiAction?.type === 'adapt-today' &&
+        aiAction.exerciseIds.length >= (state.activeWorkout || adaptedTemplateForToday(state))?.exercises.length * 0.8 && !aiAction.addedExerciseIds?.length
+        ? fallbackAction : aiAction || fallbackAction;
       // A proposal is not a mutation. Keep the conversational copy aligned with
       // the explicit Apply control even if a provider phrases a draft as complete.
       const text =
@@ -2370,6 +2387,8 @@ function validateAIAction(action, state) {
     )
       return null;
     const fittedTargets = setTargets.map((item) => ({ ...item }));
+    const timing = createWorkoutDurationEstimator(state, source);
+    const estimate = exercises => timing.estimate({ ...source, exercises });
     const materialized = () =>
       ids.map((id) => {
         const existing = sourceById.get(id);
@@ -2384,7 +2403,8 @@ function validateAIAction(action, state) {
             };
       });
     while (fittedTargets.length) {
-      const currentEstimate = estimateSessionMinutes(materialized());
+      const currentEstimate = estimate(materialized());
+      if (currentEstimate <= minutes) break;
       const currentDistance = Math.abs(currentEstimate - minutes);
       const candidates = fittedTargets
         .map((item) => {
@@ -2393,9 +2413,9 @@ function validateAIAction(action, state) {
             existing?.sets.filter((set) => set.completed).length || 0;
           if (item.sets <= Math.max(1, completed)) return null;
           item.sets -= 1;
-          const estimate = estimateSessionMinutes(materialized());
+          const candidateMinutes = estimate(materialized());
           item.sets += 1;
-          return { item, estimate, distance: Math.abs(estimate - minutes) };
+          return { item, estimate: candidateMinutes, distance: Math.abs(candidateMinutes - minutes) };
         })
         .filter(
           (candidate) => candidate && candidate.distance < currentDistance,
@@ -2404,7 +2424,7 @@ function validateAIAction(action, state) {
       if (!candidates.length) break;
       candidates[0].item.sets -= 1;
     }
-    const estimatedMinutes = estimateSessionMinutes(materialized());
+    const estimatedMinutes = estimate(materialized());
     const dayLabel =
       targetDate === today
         ? "TODAY"
@@ -2421,6 +2441,9 @@ function validateAIAction(action, state) {
       minutes,
       requestedMinutes: minutes,
       estimatedMinutes,
+      durationCalibration: {scale:timing.scale,sampleCount:timing.sampleCount},
+      baseProgramVersion: Number(state.program?.version || 1),
+      baseAdaptationId: state.todayAdaptation?.id || null,
       workoutId: active?.id || null,
       baseWorkoutUpdatedAt: active?.updatedAt || null,
       programDayId: source.programDayId || source.id,

@@ -9,6 +9,7 @@ import {
   STORAGE_KEY,
   WEEKDAYS,
   adaptTodayProposal,
+  estimatePersonalWorkoutMinutes,
   adaptedTemplateForToday,
   activeWorkoutCanRestart,
   applyCoachAction,
@@ -2766,7 +2767,7 @@ ogrevalni set 12kg
     expect(proposal.requestedMinutes).toBe(35);
     expect(roundedEstimate(proposal.estimatedMinutes)).toBe(35);
     expect(proposal.estimatedMinutes).toBe(
-      estimateSessionMinutes(
+      estimatePersonalWorkoutMinutes(state,
         adaptedTemplateForToday({
           ...state,
           todayAdaptation: {
@@ -2776,13 +2777,13 @@ ogrevalni set 12kg
             setTargets: proposal.setTargets,
             estimatedMinutes: proposal.estimatedMinutes,
           },
-        }).exercises,
+        }),
       ),
     );
     applyCoachAction(state, proposal);
     expect(state.todayAdaptation.requestedMinutes).toBe(35);
     expect(state.todayAdaptation.estimatedMinutes).toBe(
-      estimateSessionMinutes(adaptedTemplateForToday(state).exercises),
+      estimatePersonalWorkoutMinutes(state, adaptedTemplateForToday(state)),
     );
   });
   it("shortens by movement coverage and set count instead of taking a list prefix", () => {

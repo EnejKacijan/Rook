@@ -19,22 +19,9 @@
 .freestyle-empty { margin-top: 48px; }
 .freestyle-empty h1 { font-size: 28px; }
 .freestyle-empty p { color: var(--rook-secondary); line-height: 1.5; }
-/* The set section already supplies its own top spacing. */
-.freestyle-previous { margin: 16px 0 0; }
-.freestyle-previous .text-button { font-size: 13px; min-height: 44px; }
-.freestyle-history-aid { border: 1px solid var(--rook-border); border-radius: 12px; padding: 0 12px 8px; }
-.freestyle-history-aid .freestyle-copy { border: 0; padding: 0; min-height: 56px; font-size: 12px; color: var(--rook-secondary); }
-.freestyle-history-aid .freestyle-copy strong { font-size: 14px; color: var(--rook-text); }
 .freestyle-actions .freestyle-cancel { margin-top: 8px; border-top: 1px solid var(--rook-border); padding-top: 12px; color: var(--rook-secondary); -webkit-text-fill-color: currentColor; }
-.freestyle-copy { display: flex; width: 100%; align-items: center; justify-content: space-between; text-align: left; gap: 12px; padding: 12px; background: transparent; border: 1px solid var(--rook-border); border-radius: 12px; color: var(--rook-text); min-height: 56px; }
-.freestyle-copy strong { display: block; margin-top: 4px; }
-.freestyle-copy > span:last-child { font-size: 11px; font-weight: 700; color: var(--rook-accent); }
-.freestyle-copy:not(:disabled):active { opacity:.7; }
-.freestyle-copy:disabled { opacity:1;cursor:default; }
-.freestyle-copy:disabled > span:last-child { color:var(--rook-muted);font-weight:400; }
-.freestyle-copy-applied { display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;color:var(--rook-secondary);font-size:12px; }
-.freestyle-copy-applied > span { min-width:0;overflow-wrap:anywhere; }
-.freestyle-copy-applied:focus { outline:none; }
-.freestyle-copy-applied .text-button { min-width:44px;min-height:44px;margin:0;flex-shrink:0;padding-inline:0; }
-.freestyle-copy-error { margin:8px 0 0;font-size:12px;color:var(--rook-danger); }
+.workout-screen .previous-values-action { display:block;width:fit-content;min-height:44px;margin:0;padding:0;font-size:13px;text-align:left; }
+.previous-values-error { margin:4px 0 0;font-size:12px;color:var(--rook-danger); }
+/* Keep logger feedback below canonical sheets and their modal backdrop. */
+:root .today-undo.previous-values-snackbar { z-index:12;touch-action:pan-y; }
 .freestyle-workout .workout-options-trigger.unavailable { display: none; }

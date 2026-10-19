@@ -8,7 +8,7 @@ export function calendarRange(state,today=isoDay()) {
   const recorded=(state.workouts||[]).filter(w=>w.completedAt&&workoutPerformedDate(w)).map(workoutPerformedDate).sort();
   const earliest=recorded[0]||isoDay(state.program?.createdAt||today);
   const latest=Object.values(state.flexibleWeek?.sessions||{}).reduce((last,item)=>item.scheduledDate>last?item.scheduledDate:last,today);
-  return {min:isoDay(weekDate('Mon',earliest)),max:isoDay(weekDate('Sun',latest))};
+  return {min:isoDay(weekDate('Mon',earliest)),max:state.program?isoDay(weekDate('Sun',latest)):today};
 }
 export function shiftMonth(value,direction) {
   const date=calendarLocalDate(value),day=date.getDate();
@@ -31,7 +31,7 @@ export function calendarDayStates(state,dates) {
     if(!weeks.has(week))weeks.set(week,new Map(currentWeekSchedule(state,calendarLocalDate(key)).map(item=>[item.scheduledDate,item.workout])));
     const scheduled=weeks.get(week).get(key);
     const complete=(state.workouts||[]).some(w=>w.completedAt&&workoutPerformedDate(w)===key);
-    const planned=Boolean(scheduled||optionalStrengthForDate(state,calendarLocalDate(key)) || state.todayAdaptation?.mode==='repeat' && state.todayAdaptation.date===key);
+    const planned=Boolean(state.program && (scheduled||optionalStrengthForDate(state,calendarLocalDate(key)) || state.todayAdaptation?.mode==='repeat' && state.todayAdaptation.date===key));
     const active=Boolean(state.activeWorkout&&workoutPerformedDate(state.activeWorkout)===key);
     return [key,{complete,planned,active}];
   }));
@@ -46,7 +46,7 @@ export function calendarDayPresentation(state,dates) {
     // Count executions once from history, not again for each linked occurrence
     // (one combined workout can fulfil several source occurrences).
     const counts={active:Number(day.active),completed:(state.workouts||[]).filter(w=>w.completedAt&&workoutPerformedDate(w)===date).length,planned:0,missed:0};
-    for(const occurrence of flexibleOccurrencesForDate(state,date)){
+    for(const occurrence of state.program ? flexibleOccurrencesForDate(state,date) : []){
       // The occurrence can be browsed on its scheduled/source date while its
       // execution is already happening elsewhere. Calendar activity is a fact
       // of the execution date, never provenance of the source occurrence.
@@ -60,7 +60,7 @@ export function calendarDayPresentation(state,dates) {
     }
     // Optional strength and repeat/combined preparations own independent IDs.
     // Starting one replaces its own ring, never a different planned occurrence.
-    for(const optional of state.optionalSessions||[]){
+    for(const optional of state.program ? state.optionalSessions||[] : []){
       if(optional.kind!=='Strength'||optional.date!==date||!optional.workout?.exercises)continue;
       if(optional.id&&state.workouts?.some(w=>w.completedAt&&w.optionalSessionId===optional.id)) {
         if(!state.workouts.some(w=>w.completedAt&&w.optionalSessionId===optional.id&&workoutPerformedDate(w)===date))provenance.push('workout performed elsewhere');
@@ -71,7 +71,7 @@ export function calendarDayPresentation(state,dates) {
       else if(optional.status==='planned')counts.planned++;
     }
     const adjustment=state.todayAdaptation;
-    if(adjustment?.date===date && (isRepeatAdjustment(adjustment)||isCombinedAdjustment(adjustment))){
+    if(state.program && adjustment?.date===date && (isRepeatAdjustment(adjustment)||isCombinedAdjustment(adjustment))){
       if(adjustment.id&&state.workouts?.some(w=>w.completedAt&&w.adjustment?.id===adjustment.id)) {
         if(!state.workouts.some(w=>w.completedAt&&w.adjustment?.id===adjustment.id&&workoutPerformedDate(w)===date))provenance.push('workout performed elsewhere');
       }

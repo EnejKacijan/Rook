@@ -5,6 +5,7 @@ import {compileProfileTrainingSafety,trainingSafetyBlocks} from './trainingSafet
 import {planEditorExerciseAllowed} from './exerciseEligibility.js';
 import {customExerciseSnapshot} from './customExercises.js';
 import {assertWorkoutTemplates,reusableWorkoutStructure,reusableExerciseDefinition} from './workoutTemplateSchema.js';
+import {canCreateSavedWorkout,ROOK_PRO_ROLLOUT} from './proPolicy.js';
 
 export {reusableWorkoutStructure} from './workoutTemplateSchema.js';
 export function templateDraft(workout,state) {
@@ -14,10 +15,11 @@ export function templateDraft(workout,state) {
     return {...e,...(!e.importedExercise&&custom?{importedExercise:customExerciseSnapshot(custom),exerciseSource:'custom'}:{})};
   });return draft;
 }
-export function saveWorkoutTemplate(state,draft,{id=uid('workout-template'),revision=null}={}) {
+export function saveWorkoutTemplate(state,draft,{id=uid('workout-template'),revision=null,access=null,rollout=ROOK_PRO_ROLLOUT}={}) {
   const templates=state.savedWorkoutTemplates||[],existing=templates.find(t=>t.id===id);
   if(revision===null&&existing)return state; // same create request delivered twice
   if(revision!==null&&(!existing||existing.revision!==revision))throw Error('This saved workout changed. Reopen it before saving.');
+  if(!existing&&!canCreateSavedWorkout(state,access,rollout))throw Object.assign(Error('ROOK Pro is needed to save more than four workouts.'),{code:'pro-required'});
   const now=new Date().toISOString();
   const template={schemaVersion:1,id,name:String(draft.name||'').trim(),revision:(existing?.revision||0)+1,createdAt:existing?.createdAt||now,updatedAt:now,
     exercises:draft.exercises.map((e,index)=>({...reusableExerciseDefinition(e,{prescribed:true}),id:e.id||`definition-${index}`}))};

@@ -7,7 +7,7 @@ import {interactionFeedback} from './interactionFeedback.js';
 export function bindTrainingReorder(root, {
   reorderGestureRef, reorderFrameRef, reorderPreviewRef, cancelReorderRef,
   suppressReorderClickUntil, commitReorderRef, setReorderView,
-  getCandidate, beforeStart, getScroller, getViewport, feedback=interactionFeedback,
+  getCandidate, beforeStart, getScroller, getViewport, feedback=interactionFeedback, selectionFeedback=true,
 }) {
   let settles=[];
   const clearSettles=()=>{settles.forEach(animation=>animation?.cancel());settles=[];};
@@ -172,7 +172,7 @@ export function bindTrainingReorder(root, {
   };
   const publish = (gesture) => {
     const targetIndex = targetForPosition(gesture, gesture.clientY);
-    if (gesture.lastFeedbackIndex !== targetIndex) feedback.selection();
+    if (selectionFeedback && gesture.lastFeedbackIndex !== targetIndex) feedback.selection();
     gesture.lastFeedbackIndex = targetIndex;
     gesture.lastTargetIndex = targetIndex;
     gesture.targetIndex = targetIndex;
@@ -259,6 +259,11 @@ export function bindTrainingReorder(root, {
     gesture.units = measured.units;
     gesture.sourceUnit = measured.sourceUnit;
     gesture.sourceSpan = measured.sourceSpan;
+    // A long press may leave transient row feedback armed while the touch is
+    // held still. The lifted preview now owns the visual; clear source paint.
+    gesture.sourceUnit.elements.forEach(element =>
+      element.querySelectorAll('[data-row-pressed]').forEach(node => node.removeAttribute('data-row-pressed')),
+    );
     gesture.sourceUnit.left = Math.min(
       ...gesture.sourceUnit.elements.map(
         (element) => element.getBoundingClientRect().left,

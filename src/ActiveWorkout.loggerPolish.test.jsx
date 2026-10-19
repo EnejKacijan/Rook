@@ -19,6 +19,7 @@ beforeEach(() => {
     addEventListener() {},
     removeEventListener() {},
   }));
+  vi.spyOn(window,"scrollTo").mockImplementation(()=>{});
   HTMLElement.prototype.scrollTo = () => {};
   host = document.createElement("div");
   document.body.append(host);
@@ -114,4 +115,19 @@ it("keeps the shared header treatment for timed rows without creating a RIR colu
   expect(firstRow().querySelector('[aria-label="Seconds for set 1"]')).not.toBeNull();
   expect(firstRow().querySelector(".check")).not.toBeNull();
   expect(current.activeWorkout.exercises[0].sets[0].reps).toBe(30);
+});
+
+it.each(['weighted','timed','per-side'])('last %s exercise shows neutral Finish until every live set is logged',kind=>{
+  mount({kind});
+  const finish=()=>[...host.querySelectorAll('.workout-primary-action button')].find(button=>button.textContent.trim()==='FINISH WORKOUT');
+  expect(finish().classList.contains('secondary')).toBe(true);
+  act(()=>finish().click());expect(document.querySelector('#workout-confirm-title')?.textContent).toBe('Finish workout early?');
+  act(()=>[...document.querySelectorAll('.workout-confirm-actions button')].find(button=>button.textContent.trim()==='KEEP TRAINING').click());
+  act(()=>vi.advanceTimersByTime(500));
+  act(()=>host.querySelector('[aria-label="Log set 2"]').click());
+  expect(current.activeWorkout.exercises[0].sets.every(set=>set.completed)).toBe(true);
+  expect(finish().classList.contains('primary')).toBe(true);
+  act(()=>[...host.querySelectorAll('.sets button')].find(button=>button.textContent.includes('+ ADD SET')).click());
+  expect(current.activeWorkout.exercises[0].sets.at(-1).completed).toBe(false);
+  expect(finish().classList.contains('secondary')).toBe(true);
 });

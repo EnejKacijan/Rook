@@ -20,6 +20,7 @@ import {
   completeWorkout,
   exerciseCatalog,
   exerciseName,
+  estimatePersonalWorkoutMinutes,
   isExerciseAllowed,
   startWorkout,
   weekday,
@@ -351,6 +352,22 @@ Use double progression.`;
     expect(bodies).toHaveLength(2);
     expect(bodies[0].payload.responseLanguage).toBe("Slovenian");
     expect(bodies[1].payload.previousLanguageMismatch).toMatch(/Slovenian/);
+  });
+  it('keeps the usable first Coach answer if its optional language rewrite fails', async () => {
+    const state = stateWithPlan();
+    let answers = 0;
+    vi.stubGlobal('fetch', vi.fn(async url => {
+      if (url === '/api/ai/status') return {ok:true,json:async()=>({available:true})};
+      answers++;
+      return answers === 1
+        ? {ok:true,json:async()=>({data:{text:'I can explain your workout today.',action:null}})}
+        : {ok:false,json:async()=>({error:'Rewrite unavailable.'})};
+    }));
+    const reply = await AIService.coach(state, 'jaz bi rad spremenil današnji trening');
+    expect(answers).toBe(2);
+    expect(reply.text).toBe('I can explain your workout today.');
+    expect(reply.source).toBe('ai');
+    expect(reply.degraded).not.toBe(true);
   });
   it("validates physique suggestions and normalizes labels through the local allowlist", async () => {
     const calls = [];
@@ -1483,6 +1500,13 @@ Use double progression.`;
       label: "APPLY TO TODAY",
     });
     expect(reply.action.exerciseIds.length).toBeGreaterThan(0);
+  });
+  it('uses the shared conservative fitter for time-only AI requests instead of accepting every set cut', async()=>{
+    const state=stateWithTodayPlan(),day=adaptedTemplateForToday(state),base=estimatePersonalWorkoutMinutes(state,day),minutes=Math.floor(base*0.82);
+    vi.stubGlobal('fetch',vi.fn(async url=>url==='/api/ai/status'?{ok:true,json:async()=>({available:true})}:{ok:true,json:async()=>({data:{text:'Review the shorter workout.',action:{type:'adapt-today',minutes,exerciseIds:day.exercises.map(row=>row.exerciseId),setTargets:day.exercises.map(row=>({exerciseId:row.exerciseId,sets:1}))}}})}));
+    const reply=await AIService.coach(state,`Adapt today's workout to ${minutes} minutes.`);
+    expect(reply.action.exerciseIds).toHaveLength(day.exercises.length);
+    expect(reply.action.setTargets.reduce((sum,row)=>sum+row.sets,0)).toBeGreaterThanOrEqual(Math.ceil(day.exercises.reduce((sum,row)=>sum+row.sets.length,0)*0.75));
   });
   it("never presents a pending Adapt Today proposal as already applied", async () => {
     const state = stateWithTodayPlan();

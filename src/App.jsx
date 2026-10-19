@@ -7,9 +7,11 @@ import {UpNextReorderPreview} from './UpNextReorderPreview.jsx';
 import {upNextReorderGroups,reorderUpNext,upNextMoveRequest} from './upNextReorder.js';
 import {useDurableAction} from './useDurableAction.js';
 import {SavedWorkouts} from './SavedWorkouts.jsx';
+import {trainingStyleFor} from './trainingStyle.js';
+import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
 import { canRemoveUpNext, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval } from './upNextRemoval.js';
-import {persistCoachEntry,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
+import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
 export {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -30,7 +32,7 @@ import { CoachCombineCard, CoachCombineChoices, CombinedWorkoutNotice, CombinedP
 import { applyCombinedProposal } from './combineWorkouts.js';
 import { WeightUnitChoice } from './WeightUnitChoice.jsx';
 import { applySourceUnitDecision } from './importSourceUnits.js';
-import { MonthCalendar } from './MonthCalendar.jsx';
+import { CalendarIcon, MonthCalendar } from './MonthCalendar.jsx';
 import { WeekPager } from './WeekPager.jsx';
 export { weekLabel } from './WeekPager.jsx';
 import './profileHub.css';
@@ -41,18 +43,32 @@ import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
 import { FreestyleEntry, FreestyleActions, FreestyleExercisePicker, FreestylePrevious } from './FreestyleWorkout.jsx';
 import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancellation.js';
 import { removeFreestyleExercise } from './freestyleWorkout.js';
+import {prefillReplacementValues,prepareTodayReplacementValues} from './previousValues.js';
+import {preparedExercise} from './workoutSessionStart.js';
 import { adjustedMovedLabel } from './progressPresentation.js';
 import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
 import { importedSetComparable,importedSessionTimeLabel } from './historicalSetSemantics.js';
 import { StartupBoundary } from './StartupBoundary.jsx';
 import { StorageDiagnostics } from './StorageDiagnostics.jsx';
-import { hasEstablishedData, assertStateContinuity, assertHydrationCurrent, isPersistedReplacement, deleteLocalState, localRecoverySummary, recordStartupOutcome } from './localStateStorage.js';
+import { ACCOUNT_SIGNED_OUT_KEY, useAccountSync } from './useAccountSync.js';
+import { resolveAccountStartup } from './accountStartup.js';
+import { clearAllProfileSlotArchives, recoverInterruptedProfileSwitch } from './accountProfileSlots.js';
+import { AccountSyncLock, AccountSyncPanel } from './AccountSyncPanel.jsx';
+import { ACCOUNT_SYNC_LEDGER_KEY, recordAccountSyncDeleteIntent } from './accountSyncOutbox.js';
+import { getFirebaseSyncClient } from './firebaseSyncClient.js';
+import { ProAccessProvider, useProAccess } from './ProAccessContext.jsx';
+import { canActivateGeneratedPlan, coachResponsesLeft, hasProAccess, shouldUsePremiumStyle } from './proPolicy.js';
+import { beginCoachResponse, finishCoachResponse } from './coachTrialClient.js';
+import { hasEstablishedData, assertStateContinuity, assertHydrationCurrent, isPersistedReplacement, deleteLocalState, localRecoverySummary, recordStartupOutcome, withStorageTransaction } from './localStateStorage.js';
 import { recoverInterruptedRestore } from './restoreTransaction.js';
 import { hasStoredWorkoutMedia, clearAllWorkoutMedia } from './workoutPhotos.js';
 import { moveReorderPreview } from './reorderPresentation.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import './loggedExercises.css';
 import { PlanNumberInput } from './PlanNumberInput.jsx';
+import { AdjustmentTargetsEditor } from './AdjustmentTargetsEditor.jsx';
+import { applyAdjustmentPrescription, cleanAdjustmentSupersets } from './adjustmentPrescription.js';
+import { createWorkoutDurationEstimator, estimatePersonalWorkoutMinutes, makeProgramExercise } from './domain.js';
 import { nextImportReview } from './nextImportReview.js';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { bindSheetVisibleViewport } from './sheetVisibleViewport.js';
@@ -319,6 +335,7 @@ import {
   applyTodayAdjustment,
   buildTodayAdjustment,
   manualReplacementChoices,
+  editTodayAdjustmentTargets,
   resolveTodayAdjustment,
   restoreOriginalTodayWorkout,
 } from "./adjustToday.js";
@@ -371,6 +388,7 @@ import {
   openRepTargetLabel,
   loggingModeOf,
   segmentKindForSet,
+  setTypeOf,
   setTypeLabel,
 } from "./advancedLogging.js";
 import {
@@ -447,21 +465,25 @@ async function generatePersonalizedProgram(
   await finishPlanProcessing(startedAt, onStage);
   return { program, source: "personalized-template" };
 }
-export async function loadInitialLiftState() {
+export async function loadInitialLiftState({ allowStartFresh = false } = {}) {
+  try { await withStorageTransaction(() => recoverInterruptedProfileSwitch()); }
+  catch(error) {recordStartupOutcome('profile-switch-recovery-failed');return {status:'error',code:'profile-switch-recovery-failed',error};}
   try { await recoverInterruptedRestore(); }
   catch(error) {const code=error.name==='SecurityError'?'storage-unavailable':'restore-error';recordStartupOutcome(code);return {status:'error',code,error};}
   const result = readStartupState();
   if (result.status === 'empty' && await hasStoredWorkoutMedia()) {recordStartupOutcome('primary-missing');return { status: 'error', code: 'primary-missing' };}
+  if (result.status === 'empty' || result.status === 'error') return resolveAccountStartup(result, { allowStartFresh });
   if (result.status !== 'ready') return result;
   // Any additional startup normalization must also fail closed, before autosave.
   try {
     const initial = normalizePlanHistoryState(normalizeCustomExercisesState(normalizeTrainingBlocksState(result.state)));
     if (!initial.profile.onboardingComplete && hasEstablishedData(initial)) {recordStartupOutcome('inconsistent-profile');return { status: 'error', code: 'inconsistent-profile', recovery: localRecoverySummary(globalThis.localStorage,hydrateStoredState) };}
-    return { ...result, state: initial };
+    return resolveAccountStartup({ ...result, state: initial }, { allowStartFresh });
   } catch (error) { return { status: 'error', error }; }
 }
 export function useLiftState(startup) {
   const alreadyPersistedState = useRef(null);
+  const pendingSyncDeletes = useRef([]);
   const initialWrite = useRef(true);
   const [state, setState] = useState(() => {
     assertHydrationCurrent(startup);
@@ -476,9 +498,24 @@ export function useLiftState(startup) {
     return initial;
   });
   const [persistenceFailed, setPersistenceFailed] = useState(false);
+  const registerSavedDeletes = savedState => {
+    if (!pendingSyncDeletes.current.length) return;
+    const intents = pendingSyncDeletes.current;
+    pendingSyncDeletes.current = [];
+    for (const { domain, entityId } of intents) {
+      const identityField = domain === 'weightCheckins' ? 'localDate' : 'id';
+      if ((savedState[domain] || []).some(item => item?.[identityField] === entityId)) continue;
+      try { recordAccountSyncDeleteIntent(globalThis.localStorage, savedState.profile.id, domain, entityId); }
+      catch { /* The missing intent blocks cloud deletion; the local save remains valid. */ }
+    }
+  };
   useLayoutEffect(() => {
+    // A signed-out profile is readable only for verification/switching. Do not
+    // turn mount-time normalization or background status into a protected write.
+    if (globalThis.localStorage?.getItem(ACCOUNT_SIGNED_OUT_KEY) === 'true') return;
     if (alreadyPersistedState.current === state) {
       alreadyPersistedState.current = null;
+      registerSavedDeletes(state);
       setPersistenceFailed(false);
       return;
     }
@@ -502,6 +539,7 @@ export function useLiftState(startup) {
     const reason = initialWrite.current ? (startup.status==='empty'?'first-run:user-change':'startup-hydration') : state.activeWorkout ? 'active-workout' : 'app-autosave';
     const saved = saveState(state, { reason, ...(initialWrite.current && startup.generation !== undefined && {expectedGeneration:startup.generation}) });
     initialWrite.current = false;
+    if (saved) registerSavedDeletes(state);
     setPersistenceFailed(!saved);
   }, [state]);
   const update = useCallback((fn, options = {}) =>
@@ -523,6 +561,7 @@ export function useLiftState(startup) {
           return previous;
         }
         if (programMeaningfullyChanged(previousProgram, next.program)) {
+          if (!previousProgram && next.program) next.profile.noPlanReceipt = null;
           const requested = options.planVersion;
           if (requested !== false) {
             const initial = !previousProgram;
@@ -544,6 +583,7 @@ export function useLiftState(startup) {
           alreadyPersistedState.current=next;
         }
         // An atomic importer can publish the exact state it has just saved.
+        if (options.syncDeletes?.length) pendingSyncDeletes.current.push(...options.syncDeletes);
         // Only skip the automatic write if normalization changed nothing.
         if (options.persistedState && JSON.stringify(next) === JSON.stringify(options.persistedState)) alreadyPersistedState.current = next;
         return next;
@@ -2528,12 +2568,17 @@ function PhysiqueReview({ profile, onUse, onClose }) {
     </>,
   );
 }
-export function EntryLanding({ personalize, importPlan, startFromScratch, restoreBackup }) {
+export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, importPlan, startFromScratch, restoreBackup, recoverAccount, returnToSavedProfile }) {
+  const pro = useProAccess();
+  const [entryError,setEntryError]=useState('');
+  const choose=action=>{try {if(action?.()===false)setEntryError('ROOK could not save your training setup. Please try again.');else setEntryError('');}catch(failure){setEntryError(failure?.message||'ROOK could not save your training setup.');}};
   const [previewDays, setPreviewDays] = useState(4);
   const [previewChanged, setPreviewChanged] = useState(false);
   const [previewEquipment, setPreviewEquipment] = useState("Full gym");
   const [previewEquipmentChanged, setPreviewEquipmentChanged] = useState(false);
   const [previewAnnouncement, setPreviewAnnouncement] = useState("");
+  const [recoveryBusy, setRecoveryBusy] = useState(false);
+  const [recoveryError, setRecoveryError] = useState('');
   const weekPatterns = {
     3: [
       ["MON", "Full body"],
@@ -2574,17 +2619,15 @@ export function EntryLanding({ personalize, importPlan, startFromScratch, restor
         <span className="entry-eyebrow">Training, built around you</span>
       </header>
       <div className="entry-content">
-        <h1>A plan that fits. And keeps up.</h1>
-        <p>
-          Tell Rook your schedule, equipment, and experience. It builds your
-          week — then adapts as you train.
-        </p>
-        <div className="entry-primary-action">
-          <Button onClick={personalize}>BUILD MY PLAN</Button>
-          <p className="entry-primary-note">
-            About 2 minutes · No account needed
-          </p>
-        </div>
+        <h1>Train your way.</h1>
+        <p>Follow a plan, use workouts you save, or build each session as you go.</p>
+        <fieldset className="entry-training-style">
+          <legend>How do you want to train?</legend>
+          <button type="button" aria-label="BUILD MY PLAN" onClick={personalize}><strong>BUILD MY PLAN</strong><small>Follow a structured training schedule.</small></button>
+          <button type="button" onClick={()=>choose(ownWorkouts)}><strong>Use my own workouts</strong><small>Save reusable workouts and choose one whenever you train.</small></button>
+          <button type="button" onClick={()=>choose(trainFreestyle)}><strong>Train freestyle</strong><small>Start blank and choose exercises as you go.</small></button>
+        </fieldset>
+        {entryError&&<p role="alert">{entryError}</p>}
         <section className="entry-demo" aria-labelledby="entry-demo-title">
           <div className="entry-demo-header">
             <span id="entry-demo-title">SEE HOW ROOK ADAPTS</span>
@@ -2693,11 +2736,30 @@ export function EntryLanding({ personalize, importPlan, startFromScratch, restor
         <button className="restore-backup-action" onClick={restoreBackup}>
           Restore from backup
         </button>
+        {returnToSavedProfile && <button className="restore-backup-action" disabled={recoveryBusy} onClick={async () => {
+          if (recoveryBusy) return;
+          setRecoveryBusy(true); setRecoveryError('');
+          try { await returnToSavedProfile(); }
+          catch (failure) { setRecoveryError(failure?.message || 'Could not reopen the saved profile. This profile is unchanged.'); }
+          finally { setRecoveryBusy(false); }
+        }}>Return to saved profile</button>}
+        {recoverAccount && <button className="restore-backup-action" disabled={recoveryBusy} onClick={async () => {
+          if (recoveryBusy) return;
+          setRecoveryBusy(true); setRecoveryError('');
+          try { await recoverAccount(); }
+          catch (failure) { if (failure?.code !== 'auth/popup-closed-by-user') setRecoveryError(failure?.code === 'auth/operation-not-allowed' ? 'Google sign-in is not enabled for ROOK yet.' : failure?.message || 'Could not restore this account. Local data was not replaced.'); }
+          finally { setRecoveryBusy(false); }
+        }}>{recoveryBusy ? 'RESTORING ACCOUNT…' : 'Restore from ROOK account'}</button>}
+        {recoveryError && <p role="alert">{recoveryError}</p>}
       </div>
     </main>
   );
 }
-export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }) {
+export function Onboarding({ state, update, exit, onPlanAccepted, initialUnits = 'kg' }) {
+  const pro = useProAccess();
+  const currentStateRef = useRef(state);
+  currentStateRef.current = state;
+  const acceptedGeneratedRef = useRef(false);
   const [step, setStep] = useState(0);
   const onboardingRootRef = useRef(null);
   const selectionAcknowledgement = useSelectionAcknowledgement(step);
@@ -2733,6 +2795,8 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
   const generatedPreviewNavigationRef = useRef(null);
   const generatedPreviewHeadingRef = useRef(null);
   const [generatedPreview, setGeneratedPreview] = useState(null);
+  const generatedPreviewRef = useRef(null);
+  generatedPreviewRef.current = generatedPreview;
   const [equipmentSetupExpanded, setEquipmentSetupExpanded] = useState(false);
   const [answers, setAnswers] = useState(() => ({...blankState().profile, units: initialUnits}));
   const [anyDayWorks, setAnyDayWorks] = useState(false);
@@ -3251,27 +3315,60 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
     setNotice("Generation cancelled. Your answers are still here.");
   };
   const acceptGenerated = async (program) => {
+    if (acceptedGeneratedRef.current || !generatedPreview) return;
+    const origin = {
+      preview: generatedPreview,
+      profileId: currentStateRef.current.profile.id,
+      programId: currentStateRef.current.program?.id || null,
+      uid: pro.identityUid,
+    };
+    const commit = async verifiedIdentity => {
+      const contextChanged = () => acceptedGeneratedRef.current || generatedPreviewRef.current !== origin.preview
+        || currentStateRef.current.profile.id !== origin.profileId
+        || (currentStateRef.current.program?.id || null) !== origin.programId
+        || currentStateRef.current.activeWorkout || currentStateRef.current.activeOptionalSession
+        || (origin.uid && verifiedIdentity?.uid && origin.uid !== verifiedIdentity.uid);
+      if (contextChanged()) {
+        setNotice('Your training context changed. Review this plan before using it.');
+        return;
+      }
+      acceptedGeneratedRef.current = true;
     setBusy(true);
     setGenerationStage("saving");
     await afterVisibleFrame();
+    acceptedGeneratedRef.current = false;
+    if (contextChanged()) {
+      setBusy(false);
+      setNotice('Your training context changed. Review this plan before using it.');
+      return;
+    }
+    acceptedGeneratedRef.current = true;
+    const next = clone(currentStateRef.current);
+    next.profile = { ...origin.preview.profile, onboardingComplete: true, preferredTrainingStyle: 'plan' };
+    next.program = { ...program, rotationStartDate: firstScheduledDate(program) };
+    next.selectedDay = weekday();
+    next.selectedDate = isoDay();
+    next.ai = { ...next.ai, lastPlanSource: origin.preview.source };
+    if (!validateProgram(next.program, next.profile).valid) {
+      acceptedGeneratedRef.current = false;
+      setBusy(false);
+      setNotice('This plan needs review before it can be used.');
+      return;
+    }
     trackFunnelEvent("onboarding_completed", {
       path: "personalized",
-      source: generatedPreview.source,
+      source: origin.preview.source,
       totalSteps: stages.length,
       daysPerWeek: program.days.length,
     });
-    update((state) => {
-      state.profile = { ...generatedPreview.profile, onboardingComplete: true };
-      state.program = {
-        ...program,
-        rotationStartDate: firstScheduledDate(program),
-      };
-      state.selectedDay = weekday();
-      state.selectedDate = isoDay();
-      state.ai = { ...state.ai, lastPlanSource: generatedPreview.source };
-      return state;
-    }, { planVersion: { source: "Initial plan", reason: "Personalized plan created" } });
+    update(() => next, { planVersion: { source: "Initial plan", reason: "Personalized plan created" } });
     onPlanAccepted?.();
+    };
+    if (!canActivateGeneratedPlan(pro, pro.rollout, currentStateRef.current)) {
+      if (!pro.openPaywall('generated_plan_apply', commit)) setNotice('ROOK Pro access is unavailable right now. Your plan preview is still here.');
+      return;
+    }
+    await commit();
   };
   const structuredDone = async () => {
     trackFunnelEvent("onboarding_step_completed", {
@@ -3448,6 +3545,7 @@ export function Onboarding({ update, exit, onPlanAccepted, initialUnits = 'kg' }
         <PlanEditor
           source={generatedPreview.program}
           generatedAcceptance
+          proRequired={pro.rollout && !canActivateGeneratedPlan(pro, pro.rollout, currentStateRef.current)}
           previewNavigationRef={generatedPreviewNavigationRef}
           profile={generatedPreview.profile}
           onSave={acceptGenerated}
@@ -4576,6 +4674,43 @@ function ActiveOptionalSession({ state, update, setPage }) {
     </main>
   );
 }
+export function NoPlanToday({state,update,setPage,setDetail}) {
+  const [calendarOpen,setCalendarOpen]=useState(false);
+  const calendarBackground=useRef(null);
+  const [now,setNow]=useState(Date.now());
+  const selectedIso=state.selectedDate || isoDay();
+  const selectedDate=localDate(selectedIso);
+  const today=selectedIso===isoDay();
+  const active=state.activeWorkout,optional=state.activeOptionalSession;
+  const activeDate=active && (workoutPerformedDate(active) || active.workoutDateKey || isoDay(active.startedAt || new Date()));
+  const templates=state.savedWorkoutTemplates || [];
+  const style=trainingStyleFor(state);
+  useEffect(()=>{
+    if (!active && !optional) return;
+    const timer=setInterval(()=>setNow(Date.now()),1000);
+    return ()=>clearInterval(timer);
+  },[active?.id,optional?.id]);
+  const resume=()=>{
+    if (active && selectedIso!==activeDate) flushSync(()=>update(current=>{current.selectedDate=activeDate;current.selectedDay=weekday(activeDate);return current;}));
+    setPage(active?'workout':'optional-session');
+  };
+  return <main className="screen today-screen no-plan-today">
+    {calendarOpen&&createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso} header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>} onSelect={key=>{update(current=>{current.selectedDate=key;current.selectedDay=weekday(key);return current;});requestClose();}}/>}</ModalLayer>,document.body)}
+    <div className="no-plan-today-heading"><div><Eyebrow>{displayDate(selectedDate)}</Eyebrow><h1>{today?'Today': 'Workouts logged'}</h1></div><button type="button" className="no-plan-calendar-action" aria-label="Browse workout dates" onClick={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}><CalendarIcon/><span>Calendar</span></button></div>
+    {active&&<ActiveWorkoutNotice workout={active} dateKey={activeDate} now={now} onResume={resume}/>}
+    {optional&&<ActiveOptionalSessionNotice session={optional} now={now} onResume={resume}/>}
+    {today&&!active&&!optional&&<>
+      {style==='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} primary noPlan hideHistory/>}
+      {templates.length>0&&<section className="no-plan-my-workouts" aria-label="My workouts"><Eyebrow>MY WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><span aria-hidden="true">›</span></button>)}</div></section>}
+      <button type="button" className={style==='own-workouts'&&!templates.length?'button primary no-plan-create-action':'text-button no-plan-create-action'} onClick={()=>setDetail({createSavedWorkout:true})}>+ CREATE WORKOUT</button>
+      {style!=='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} noPlan hideHistory/>}
+      {state.program ? <button type="button" className="text-button no-plan-plan-action" onClick={()=>update(current=>{current.profile.preferredTrainingStyle='plan';return current;})}>Return to your saved plan</button>
+        : <button type="button" className="text-button no-plan-plan-action" onClick={()=>setDetail('change-plan')}>Want a structured plan? Create or import one</button>}
+    </>}
+    <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly/>
+    {!today&&!state.workouts.some(workout=>workout.completedAt&&workoutPerformedDate(workout)===selectedIso)&&<p className="no-plan-no-history">No workouts logged on this date.</p>}
+  </main>;
+}
 export function Today({
   state,
   update,
@@ -4963,6 +5098,7 @@ export function Today({
             </div>
           )}
         </section>
+        <button type="button" className="text-button today-my-workouts" onClick={() => setDetail('saved-workouts')}>My workouts <span aria-hidden="true">›</span></button>
         {undoBanner}
       </main>
     );
@@ -5389,7 +5525,7 @@ export function Today({
   };
   const duration = completed
     ? completed.durationSeconds ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min elapsed` : 'Duration not recorded'
-    : `~${roundedEstimate(template.estimatedMinutes)} min`;
+    : `~${roundedEstimate(estimatePersonalWorkoutMinutes(state, template))} min`;
   return (
     <main className={`screen today-screen${trackedActive ? " viewing-other-workout" : ""}`}>
       {calendar()}
@@ -5608,6 +5744,7 @@ export function Today({
           </div>
         )}
       </section>
+      <button type="button" className="text-button today-my-workouts" onClick={() => setDetail('saved-workouts')}>My workouts <span aria-hidden="true">›</span></button>
       {undoBanner}
     </main>
   );
@@ -5660,6 +5797,7 @@ export function Stepper({
   emptyLabel,
   idleLabel,
   idleDescription,
+  idleLabelKind,
   integer = false,
   alignToStep = false,
   allowIncrementFromEmpty = false,
@@ -5762,7 +5900,13 @@ export function Stepper({
           if (event.key === "Enter") event.currentTarget.blur();
         }}
       />
-      {draft === null && (presentedLabel || empty && emptyLabel) && <span className={`stepper-empty-label${presentedLabel ? ' stepper-display-label' : ''}`} aria-hidden="true">{presentedLabel || emptyLabel}</span>}
+      {draft === null && (presentedLabel || empty && emptyLabel) && <span className={`stepper-empty-label${presentedLabel ? ' stepper-display-label' : ''}${presentedLabel && idleLabelKind === 'bodyweight-load' ? ' bodyweight-load-value' : ''}`} aria-hidden="true">{presentedLabel && idleLabelKind === 'bodyweight-load'
+        ? presentedLabel === 'BW'
+          ? <span className="bodyweight-load-token">BW</span>
+          : presentedLabel.startsWith('+')
+            ? <><span className="bodyweight-load-prefix">+</span><span>{presentedLabel.slice(1)}</span></>
+            : presentedLabel
+        : presentedLabel || emptyLabel}</span>}
       {idleDescription && <span id={descriptionId} className="visually-hidden">{idleDescription}</span>}
       <button
         type="button"
@@ -5904,6 +6048,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const queueGroups=upNextReorderGroups(active);
   const queueReorder=useTrainingReorder(upNextQueueRef,{
     identity:active?.id+':'+active?.exercises?.[active.exerciseIndex]?.id,
+    selectionFeedback:false,
     enabled:Boolean(active)&&!exerciseTransitioning&&!confirmation&&!rirSet,
     getScroller:()=>upNextQueueRef.current,
     getViewport:scroller=>{const box=scroller.getBoundingClientRect(),vv=window.visualViewport;return {top:Math.max(box.top,(vv?.offsetTop||0)+64),bottom:Math.min(box.bottom,(vv?.offsetTop||0)+(vv?.height||window.innerHeight)-80)};},
@@ -6077,6 +6222,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const unit = weightUnit(state.profile.units);
   const summary = workoutSetSummary(active);
   const totalSets = summary.total;
+  const completionReady = summary.completed === totalSets;
   const activeSetIndex = superset
     ? canonicalSupersetStep?.exerciseIndex === active.exerciseIndex
       ? canonicalSupersetStep.setIndex
@@ -6118,7 +6264,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     : null;
   const mutate = (fn) =>
     update((current) => {
-      fn(current.activeWorkout);
+      fn(current.activeWorkout,current);
       current.activeWorkout.updatedAt = Date.now();
       return current;
     });
@@ -6130,7 +6276,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       set.touched = true;
     });
   const updateWeight = (index, value) =>
-    mutate((workout) => {
+    mutate((workout,currentState) => {
+      const exercise=workout.exercises[workout.exerciseIndex];
+      const history=previousExercise(currentState.workouts,exercise.exerciseId);
+      const historicalSets=history&&loggingModeOf(history)===loggingModeOf(exercise)
+        ? history.sets.filter(set=>set.completed) : [];
       const sets = workout.exercises[workout.exerciseIndex].sets;
       const target = sets[index];
       if (!target) return;
@@ -6158,7 +6308,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           !set.weightEntryMode &&
           !set.weightSourceSetId &&
           same(oldWeight, previousOldWeight);
-        if (!set.completed && (loggingModeOf(workout.exercises[workout.exerciseIndex]) !== 'per_side' || set.weightEntryMode !== 'manual') && (empty(oldWeight) || linked || legacyLinked)) {
+        // Equal loads do not imply a link: a historical set owns its own
+        // previous result, including bodyweight with no additional load.
+        const historicalSet=historicalSets[setIndex];
+        const hasHistory=historicalSet&&setTypeOf(historicalSet)===setTypeOf(set);
+        if (!hasHistory && !set.completed && set.weightEntryMode !== 'manual' && (empty(oldWeight) || linked || legacyLinked)) {
           set.weight = previous.weight;
           set.weightEntryMode = "auto";
           set.weightSourceSetId = previous.id;
@@ -6825,16 +6979,17 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           <p className="exercise-meta">
             {exercise.prescriptionSource==='saved-template'?<>Saved workout · {targetLabel(exercise,state.profile.rirEnabled)}</>:sessionExercise ? `${active.source==='freestyle'?'Freestyle · ':''}Choose your sets and reps` : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
           </p>
-          {(!sessionExercise || !prior) && <small className="exercise-history-meta">
+          <small className="exercise-history-meta">
             {prior
               ? `Last ${prior.sets
                 .filter((set) => set.completed)
                 .map((set) => exerciseValueLabel(exercise, set.reps))
                 .join(" / ")}`
               : "First session"}
-          </small>}
+          </small>
+          {sessionExercise && <FreestylePrevious state={state} exercise={exercise} update={update} screenRef={screenRef} />}
           {performancePr && (
-            <small className="active-performance-pr" role="status" aria-live="polite">
+            <small className="active-performance-pr" role="status" aria-live="polite" aria-label={performancePr.e1rmPr ? "Estimated one-rep max personal record" : undefined}>
               {performancePr.label}
             </small>
           )}
@@ -6851,7 +7006,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           )}
         </div>
       </section>
-      {sessionExercise && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} screenRef={screenRef} />}
       {recommendation && (
         <section
           className={`recommendation ${recommendation.type} ${recommendationApplied ? "applied" : ""}`}
@@ -7003,6 +7157,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   label={`${loadInputLabel} in ${unit} for ${entryUnit} ${index + 1}`}
                   idleLabel={addedBodyweightLoad ? Number(set.weight || 0) === 0 ? 'BW' : `${Number(set.weight) > 0 ? '+' : ''}${displayWeight(set.weight, state.profile.units)}` : undefined}
                   idleDescription={addedBodyweightLoad ? Number(set.weight || 0) === 0 ? 'Bodyweight, no added load' : `Bodyweight with ${displayWeight(set.weight, state.profile.units)} ${unit} added load` : undefined}
+                  idleLabelKind={addedBodyweightLoad ? 'bodyweight-load' : undefined}
                   value={displayWeight(set.weight, state.profile.units)}
                   step={displayWeight(increment, state.profile.units)}
                   alignToStep
@@ -7096,11 +7251,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <Button variant="secondary" onClick={() => setDetail({ freestylePicker: true })}>+ ADD EXERCISE</Button>
           ) : (
             <Button
-              variant={
-                nextExercise && incompleteCurrent > 0
-                  ? "secondary"
-                  : "primary"
-              }
+              variant={nextExercise
+                ? incompleteCurrent > 0 ? "secondary" : "primary"
+                : completionReady ? "primary" : "secondary"}
               className={
                 nextExercise
                   ? incompleteCurrent > 0
@@ -8026,6 +8179,10 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
                 deleteRef.current=true;setDeleteBusy(true);setDeleteError('');
                 try {
                   const next=await deleteCompletedWorkout(state,workoutId,{isCurrent:()=>liveDeleteState.current===state});
+                  try {
+                    recordAccountSyncDeleteIntent(globalThis.localStorage, next.profile.id, 'workouts', workoutId);
+                    if (workout.optionalSessionId) recordAccountSyncDeleteIntent(globalThis.localStorage, next.profile.id, 'optionalSessions', workout.optionalSessionId);
+                  } catch { /* Local deletion succeeded; sync will require review if its intent cannot be saved. */ }
                   update(()=>next,{planVersion:false,persistedState:next});close();
                 } catch(error) {
                   if(error.code==='rollback-failed') { location.reload(); return; }
@@ -8363,6 +8520,8 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
           ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
           : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
+      {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
+        <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save workout</button>}
       <WorkoutPhotoMemory workout={session} update={update} onBusyChange={setPhotoBusy} />
       <SessionNoteEditor workout={session} update={update} />
       <SessionFeedbackPrompt key={session.id} workout={session} state={state} update={update} />
@@ -8591,6 +8750,7 @@ function AdaptActionCard({
   const source =
     action.type === "adapt-today"
       ? (isToday && state.activeWorkout) ||
+        adaptedTemplateForToday(state, target) ||
         state.program?.days.find((day) => day.id === action.programDayId) ||
         plannedWorkoutForDate(state, target)
       : null;
@@ -8619,9 +8779,15 @@ function AdaptActionCard({
   const initialIds = [...new Set([...(reviewDraft?.exerciseIds || validSuggestedIds), ...lockedIds])];
   const [reviewing, setReviewing] = useState(false);
   const [selectedIds, setSelectedIds] = useState(initialIds);
+  const [prescriptionTargets, setPrescriptionTargets] = useState(reviewDraft?.prescriptionTargets || []);
+  const [editingId, setEditingId] = useState(null);
+  const targetCommits = useRef(new Set());
+  const reviewedActionRef = useRef(null);
   const actionsRef = useRef(null);
   useEffect(() => {
     setSelectedIds(initialIds);
+    setPrescriptionTargets(reviewDraft?.prescriptionTargets || []);
+    setEditingId(null);
     setReviewing(false);
   }, [
     action.targetDate,
@@ -8640,6 +8806,9 @@ function AdaptActionCard({
     const sourceExercise = sourceExercises.find(
       (item) => item.exerciseId === id,
     );
+    if (lockedIds.has(id)) return sourceExercise?.sets.length || 1;
+    const edited = prescriptionTargets.find(item => item.exerciseId === id);
+    if (edited) return edited.sets;
     return Math.max(
       1,
       Math.min(
@@ -8650,25 +8819,28 @@ function AdaptActionCard({
   };
   const materialize = (id) => {
     const existing = sourceExercises.find((item) => item.exerciseId === id);
-    return existing
+    const base = existing
       ? { ...existing, sets: existing.sets.slice(0, setCountFor(id)) }
       : {
+          ...makeProgramExercise(exerciseCatalog[id], state.profile, {role:exerciseCatalog[id]?.kind === 'compound' ? 'main' : 'accessory'}),
+          id: `review-${id}`,
           exerciseId: id,
-          sets: Array.from({ length: setCountFor(id) }, () => ({})),
+          sets: Array.from({ length: setCountFor(id) }, (_, index) => ({id:`review-${id}-${index}`})),
           restSeconds: exerciseCatalog[id]?.restSeconds || 90,
         };
+    return applyAdjustmentPrescription(base, prescriptionTargets.find(item => item.exerciseId === id));
   };
+  const timing = createWorkoutDurationEstimator(state, source || { exercises: [] });
   const selected = new Set(selectedIds);
   const selectedExercises = displayIds
     .filter((id) => selected.has(id))
     .map(materialize);
-  const selectedMinutes = estimateSessionMinutes(selectedExercises);
+  const selectedMinutes = timing.estimate({ ...source, exercises: cleanAdjustmentSupersets(selectedExercises) });
   const selectedSetCount = selectedExercises.reduce(
     (sum, exercise) => sum + exercise.sets.length,
     0,
   );
-  const suggestedExercises = validSuggestedIds.map(materialize);
-  const suggestedMinutes = estimateSessionMinutes(suggestedExercises);
+  const suggestedMinutes = selectedMinutes;
   const requestedMinutes = Number(action.requestedMinutes || action.minutes);
   const toggleExercise = (id) => {
     if (lockedIds.has(id)) return;
@@ -8676,7 +8848,12 @@ function AdaptActionCard({
       ? selectedIds.length > 1 ? selectedIds.filter(value => value !== id) : selectedIds
       : [...selectedIds, id];
     setSelectedIds(next);
-    onReviewChange?.({exerciseIds:next});
+    onReviewChange?.({exerciseIds:next,prescriptionTargets});
+  };
+  const editTargets = target => {
+    const next = [...prescriptionTargets.filter(item => item.exerciseId !== target.exerciseId), target];
+    setPrescriptionTargets(next);
+    onReviewChange?.({exerciseIds:selectedIds,prescriptionTargets:next});
   };
   const reviewedIds = displayIds.filter((id) => selected.has(id));
   const reviewedAction = {
@@ -8691,7 +8868,9 @@ function AdaptActionCard({
     requestedMinutes,
     estimatedMinutes: selectedMinutes,
     minutes: requestedMinutes,
+    prescriptionTargets: prescriptionTargets.filter(item => selected.has(item.exerciseId)),
   };
+  reviewedActionRef.current = reviewedAction;
   const nameFor = (id) => {
     const exercise =
       sourceExercises.find((item) => item.exerciseId === id) ||
@@ -8702,9 +8881,7 @@ function AdaptActionCard({
       ? exerciseName(exercise)
       : exerciseCatalog[id]?.name || "Exercise";
   };
-  const skippedIds = (action.skippedExerciseIds || []).length
-    ? action.skippedExerciseIds
-    : sourceIds.filter((id) => !validSuggestedIds.includes(id));
+  const skippedIds = sourceIds.filter(id => !selected.has(id));
   const skippedNames = skippedIds.map(nameFor);
   const suggestionRow = (id) => {
     const original = sourceExercises.find((item) => item.exerciseId === id)
@@ -8823,9 +9000,7 @@ function AdaptActionCard({
         {reviewing ? "Review the shorter workout" : "Shorten today’s workout"}
       </h3>
       <p>
-        {reviewing
-          ? `${selectedExercises.length} exercises · ${selectedSetCount} sets`
-          : `${validSuggestedIds.length} exercises · ${validSuggestedIds.reduce((sum, id) => sum + setCountFor(id), 0)} sets`}
+        {`${selectedExercises.length} exercises · ${selectedSetCount} sets`}
       </p>
       <p className="adapt-duration-contract">
         {adaptationDurationLabel(
@@ -8833,6 +9008,7 @@ function AdaptActionCard({
           reviewing ? selectedMinutes : suggestedMinutes,
         )}
       </p>
+      {reviewing && <p>Main work is kept first. Edit targets below; your changes can exceed the time goal.</p>}
       {reviewing ? (
         <div className="adapt-review-list">
           {displayIds.map((id) => {
@@ -8844,10 +9020,10 @@ function AdaptActionCard({
             const original = exercise?.sets.length;
             const sets = setCountFor(id);
             return (
+              <div className="adapt-review-row" key={exercise?.id || id}>
               <button
                 type="button"
-                key={exercise?.id || id}
-                className={checked ? "selected" : ""}
+                className={`adapt-review-toggle${checked ? ' selected' : ''}`}
                 aria-pressed={checked}
                 disabled={locked}
                 onClick={() => toggleExercise(id)}
@@ -8872,6 +9048,9 @@ function AdaptActionCard({
                   </small>
                 </span>
               </button>
+              {checked && !locked && <button className="text-button" aria-label={`Edit targets for ${nameFor(id)}`} aria-expanded={editingId === id} onClick={() => setEditingId(editingId === id ? null : id)}>{editingId === id ? 'Done' : 'Edit'}</button>}
+              {checked && !locked && editingId === id && <AdjustmentTargetsEditor exercise={materialize(id)} name={nameFor(id)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={editTargets}/>}
+              </div>
             );
           })}
         </div>
@@ -8879,7 +9058,7 @@ function AdaptActionCard({
         <>
           <Eyebrow>COACH SUGGESTS</Eyebrow>
           <div className="adapt-suggestion-list">
-            {validSuggestedIds.map(suggestionRow)}
+            {reviewedIds.map(suggestionRow)}
           </div>
           {skippedNames.length > 0 && (
             <p className="adapt-skip-summary">
@@ -8895,13 +9074,14 @@ function AdaptActionCard({
               variant="secondary"
               onClick={() => {
                 setSelectedIds(initialIds);
+                setEditingId(null);
                 setReviewing(false);
                 onReviewCancelled?.(true);
               }}
             >
               CANCEL
             </Button>
-            <Button onClick={() => onAccept(reviewedAction)}>
+            <Button onClick={() => {flushSync(() => [...targetCommits.current].forEach(commit => commit()));onAccept(reviewedActionRef.current);}}>
               APPLY CHANGES
             </Button>
           </>
@@ -8912,11 +9092,7 @@ function AdaptActionCard({
             </Button>
             <Button
               onClick={() =>
-                onAccept({
-                  ...action,
-                  requestedMinutes,
-                  estimatedMinutes: suggestedMinutes,
-                })
+                onAccept(reviewedAction)
               }
             >
               {action.label}
@@ -9083,6 +9259,8 @@ export function contextualCoachPrompts(state, now = Date.now()) {
     .filter(prompt => prompt !== progress || hasHistory).slice(0, 3);
 }
 export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
+  const pro = useProAccess();
+  const coachPreflight = useRef(false);
   const [message, setMessage] = useState(state.coachDraft || "");
   const [sendingId, setSendingId] = useState(null);
   const sending = Boolean(sendingId && sendingId === state.activeCoachConversationId);
@@ -9298,21 +9476,39 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
   }, [menuOpen, newChatConfirm]);
   const send = async (value, { preserveDraft = false, combineSelection, retryEntry } = {}) => {
     const text = value.trim();
-    if (!text || sendingRef.current?.conversationId === liveState.current.activeCoachConversationId || !coachAvailable || historyId) return;
+    if (!text || coachPreflight.current || sendingRef.current?.conversationId === liveState.current.activeCoachConversationId || !coachAvailable || historyId) return;
+    coachPreflight.current = true;
+    const entryId = retryEntry?.id || uid('msg');
+    let coachTicket = null;
+    try {
+      if (pro.rollout) {
+        coachTicket = await beginCoachResponse(entryId, text);
+        if (coachTicket.status === 'limit') {
+          const originConversation = liveState.current.activeCoachConversationId;
+          if (!pro.openPaywall('coach_limit', () => {
+            if (liveState.current.activeCoachConversationId !== originConversation || historyId) return;
+            return send(value, { preserveDraft, combineSelection, retryEntry });
+          })) setConversationError('Coach access cannot be checked right now. Your question is still here.');
+          return;
+        }
+        if (coachTicket.status === 'fair-use') { setConversationError('Coach is temporarily busy. Please try again shortly.'); return; }
+        if (coachTicket.status !== 'pending') { setConversationError('This Coach request was already handled. Your question is still here.'); return; }
+      }
+    } catch { setConversationError('Coach access cannot be checked right now. Your question is still here.'); return; }
+    finally { coachPreflight.current = false; }
     // Do not re-run the daily resolver on each send (including after midnight).
     const before = liveState.current.activeCoachConversationId ? liveState.current : enterConversation();
-    if (!before) return;
+    if (!before) { if (coachTicket) await finishCoachResponse(coachTicket, false).catch(() => {}); return; }
     const conversationId = before.activeCoachConversationId;
-    const entryId = retryEntry?.id || uid('msg');
     const next = structuredClone(before);
     if (!preserveDraft) next.coachDraft = '';
     if (retryEntry) {
       const entry = next.conversations.find(item => item.id === entryId);
-      if (!entry || entry.coachWorkflowStatus === 'cancelled') return;
+      if (!entry || entry.coachWorkflowStatus === 'cancelled') { if (coachTicket) await finishCoachResponse(coachTicket, false).catch(() => {}); return; }
       delete entry.requestError;
     } else next.conversations.push({id:entryId,conversationId,user:value,reply:null,createdAt:Date.now()});
     touchCoachConversation(next, conversationId);
-    if (!saveState(next)) {setConversationError('Couldn’t save your message. Try again.');return;}
+    if (!saveState(next)) {if (coachTicket) await finishCoachResponse(coachTicket, false).catch(() => {});setConversationError('Couldn’t save your message. Try again.');return;}
     liveState.current = next;
     update(() => next, {planVersion:false,persistedState:next});
     sendingRef.current = {entryId,conversationId};
@@ -9321,13 +9517,24 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
     if (!preserveDraft) setMessage('');
     transcriptScroll.latest();
     try {
-      const reply = await AIService.coach(before, text, {selection:combineSelection});
-      update(current => {
-        const entry = current.conversations.find(item => item.id === entryId);
-        if (entry) {entry.reply = reply;delete entry.requestError;}
-        return touchCoachConversation(current, conversationId);
-      });
+      const reply = await AIService.coach(before, text, {selection:combineSelection,coachRequest:coachTicket});
+      const answered = structuredClone(liveState.current);
+      const entry = answered.conversations.find(item => item.id === entryId);
+      if (!entry) throw new Error('Coach message is no longer available.');
+      entry.reply = reply;
+      delete entry.requestError;
+      touchCoachConversation(answered, conversationId);
+      if (!saveState(answered)) throw new Error('Coach answer could not be saved.');
+      liveState.current = answered;
+      update(() => answered, {planVersion:false,persistedState:answered});
+      if (coachTicket) {
+        // The reply is now durably available to the user; finalization is
+        // idempotent and cannot turn a saved answer into a failed message.
+        await finishCoachResponse(coachTicket, Boolean(reply?.text && reply.source !== 'offline' && !reply.degraded && !reply.error))
+          .then(() => pro.refresh()).catch(() => pro.refresh());
+      }
     } catch {
+      if (coachTicket) await finishCoachResponse(coachTicket, false).catch(() => {});
       update(current => {const entry=current.conversations.find(item=>item.id===entryId);if(entry)entry.requestError=true;return current;});
     } finally {
       if (sendingRef.current?.entryId === entryId) {sendingRef.current=null;setSendingId(null);}
@@ -9564,6 +9771,8 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory }) {
             <div>
             <Eyebrow>COACH</Eyebrow>
             {hasConversation && <strong>{conversationFromHistory ? "Chat history" : "Conversation"}</strong>}
+            {pro.rollout && pro.status === 'free' && !conversationFromHistory && Number.isInteger(pro.freeCoachResponsesUsed) &&
+              <small className="coach-free-remaining">{coachResponsesLeft(pro.freeCoachResponsesUsed)} free Coach {coachResponsesLeft(pro.freeCoachResponsesUsed) === 1 ? 'response' : 'responses'} left</small>}
             </div>
           </div>
           <button
@@ -10195,7 +10404,7 @@ function WeightEditor({ state, update, request, setDetail }) {
                     (item) => item.id !== entry.id,
                   );
                   return current;
-                });
+                }, { syncDeletes: [{ domain: 'weightCheckins', entityId: entry.localDate }] });
                 setDetail({ weightHistory: true });
               }}
             >
@@ -10350,7 +10559,7 @@ function Progress({ state, update, setDetail, setPage }) {
       }
   const earlyExercises = [];
   const plannedSeen = new Set();
-  for (const day of state.program.days || [])
+  for (const day of state.program?.days || [])
     for (const exercise of day.exercises || [])
       if (!plannedSeen.has(exercise.exerciseId)) {
         plannedSeen.add(exercise.exerciseId);
@@ -10547,14 +10756,14 @@ function Progress({ state, update, setDetail, setPage }) {
             {new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(weeklyReview.end))}
           </small>
         </div>
-        {weeklyReview.blockContext && (
+        {state.program&&weeklyReview.blockContext && (
           <p className="weekly-review-context">
             {weeklyReview.blockContext.plannedDeload ? "Planned deload · " : ""}
             {weeklyReview.blockContext.weeks?.length > 1 ? `Program weeks ${weeklyReview.blockContext.weeks.join(' / ')}` : `Week ${weeklyReview.blockContext.week} of ${weeklyReview.blockContext.totalWeeks}`}
           </p>
         )}
         <div className={`weekly-review-card${weeklyReview.empty ? " is-empty" : ""}`}>
-          {consistency.planned > 0 ? (
+          {!state.program ? <div className="consistency" aria-label={`${weeklyReview.completed + weeklyReview.freestyleCompleted} workouts completed this week`}><strong>{weeklyReview.completed + weeklyReview.freestyleCompleted}</strong><span>workouts completed this week</span></div> : consistency.planned > 0 ? (
             <>
               <div
                 className="consistency"
@@ -10581,7 +10790,7 @@ function Progress({ state, update, setDetail, setPage }) {
             <div><dt>Working sets</dt><dd>{weeklyReview.completedSets}</dd></div>
             <div><dt>Progressed</dt><dd>{weeklyReview.exercisesProgressed}</dd></div>
             <div><dt>PRs</dt><dd>{weeklyReview.prCount}</dd></div>
-            <div>
+            {state.program&&<div>
               <dt>Adjusted / moved</dt>
               <dd
                 className="weekly-review-adjustments"
@@ -10596,13 +10805,13 @@ function Progress({ state, update, setDetail, setPage }) {
                   <span>{weeklyReview.moved} moved</span>
                 </span>
               </dd>
-            </div>
-            {weeklyReview.skipped > 0 && (
+            </div>}
+            {state.program&&weeklyReview.skipped > 0 && (
               <div><dt>Skipped</dt><dd>{weeklyReview.skipped}</dd></div>
             )}
           </dl>
           <div className="weekly-review-summary">
-            {weeklyReview.summary.slice(0, 4).map((line) => <p key={line}>{line}</p>)}
+            {(state.program?weeklyReview.summary:[`${weeklyReview.completed+weeklyReview.freestyleCompleted} ${weeklyReview.completed+weeklyReview.freestyleCompleted===1?'workout':'workouts'} completed this week.`, ...weeklyReview.summary.filter(line=>!/planned|sessions completed|freestyle .*logged separately/i.test(line))]).slice(0,4).map((line) => <p key={line}>{line}</p>)}
           </div>
         </div>
       </section>
@@ -10752,9 +10961,9 @@ export function adaptationDurationLabel(requestedMinutes, estimatedMinutes) {
   const requested = Number(requestedMinutes);
   const estimate = roundedEstimate(estimatedMinutes);
   if (!Number.isFinite(requested) || requested <= 0) return `~${estimate} min`;
-  return Math.abs(estimate - requested) <= 5
-    ? `~${estimate} min · fits ${requested} min goal`
-    : `Closest valid option · ~${estimate} min (${requested} min goal)`;
+  return Number(estimatedMinutes) <= requested
+    ? `~${estimate} min · ${requested} min goal`
+    : `Estimated ~${estimate} min · ${requested} min goal`;
 }
 export function profileTrainingRows(profile) {
   const equipment = (profile?.equipment || [])
@@ -10905,7 +11114,7 @@ function PersonalizationSummary({ profile, program }) {
     </section>
   );
 }
-export function Profile({ state, update, setDetail, setPage, onLogout }) {
+export function Profile({ state, update, setDetail, setPage, onLogout, accountSync }) {
   const [area, setArea] = useState(null);
   const previousArea = useRef(null), navigationMotion = useRef(null);
   const hubPosition = useRef(0), returnControl = useRef(null), profileRef = useRef(null);
@@ -10945,14 +11154,15 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
     return () => navigationMotion.current?.cancel();
   }, [area]);
   const p = state.profile;
+  const preferredStyle = p.preferredTrainingStyle || trainingStyleFor(state);
   const profileSafety = trainingSafetyFor(p);
   const profileSafetyConflicts = plannedExerciseSafetyConflicts(
     state.program,
     profileSafety,
   );
-  const imported = ["ai-import", "imported"].includes(state.program.source);
+  const imported = ["ai-import", "imported"].includes(state.program?.source);
   const preferencesOnly = ["ai-import", "imported", "manual", "scratch"].includes(
-    state.program.source,
+    state.program?.source,
   );
   const personal = [
     ["Name", p.name],
@@ -10996,12 +11206,12 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
   const hasPriorities =
     manualPriorities.length > 0 || confirmedPriorities.length > 0;
   const goalContext = PROFILE_GOAL_LABELS[p.goal] || null;
-  const programTitle = imported
+  const programTitle = !state.program ? 'No fixed plan' : imported
     ? "Imported plan"
     : displayProgramName(state.program);
-  const frequency = `${pluralize(state.program.days.length, "day")}/week`;
-  const block = state.program.trainingBlock;
-  const programSummary = `${frequency}${block ? ` · ${block.completed ? "Block complete" : `Week ${block.currentWeek || 1} of ${block.totalWeeks || 1}`}` : !imported && goalContext ? ` · ${goalContext}` : ""}`;
+  const frequency = state.program ? `${pluralize(state.program.days.length, "day")}/week` : '';
+  const block = state.program?.trainingBlock;
+  const programSummary = state.program ? `${frequency}${block ? ` · ${block.completed ? "Block complete" : `Week ${block.currentWeek || 1} of ${block.totalWeeks || 1}`}` : !imported && goalContext ? ` · ${goalContext}` : ""}` : trainingStyleFor(state)==='own-workouts'?'Choose a saved workout whenever you train':'Train freestyle whenever you like';
   const areaTitle = {program:"Program",training:"Training setup",preferences:"Preferences",data:"Data & backup",diagnostics:"Storage diagnostics"}[area];
   return (
     <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape'){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}`}>
@@ -11012,11 +11222,11 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
         <Eyebrow>PROFILE</Eyebrow>
         <h1>Training profile</h1>
         </>}
-        {!area ? <button data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`Current program: ${programTitle}, ${programSummary}`}>
-          <span><Eyebrow>CURRENT PROGRAM</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><span aria-hidden="true">›</span>
+        {!area ? <button data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`${state.program?'Current program':'Training setup'}: ${programTitle}, ${programSummary}`}>
+          <span><Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><span aria-hidden="true">›</span>
         </button> : area === 'program' &&
         <div className="profile-current-program">
-          <Eyebrow>CURRENT PROGRAM</Eyebrow>
+          <Eyebrow>{state.program?'CURRENT PROGRAM':'TRAINING'}</Eyebrow>
           <h2>{programTitle}</h2>
           <p>
             {programSummary}
@@ -11047,13 +11257,13 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
       {!area && <section className="profile-manage"><Eyebrow>MANAGE</Eyebrow>
         {[['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],['preferences','Preferences','Logging, units, appearance and notifications'],['data','Data & backup','Import, export, backup, restore and local data']].map(([id,title,summary])=><button data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong><small>{summary}</small></span><span aria-hidden="true">›</span></button>)}
       </section>}
+      {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
         <button className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Personal reusable workout templates</small></span><span aria-hidden="true">›</span></button>
         <section className="planning-setup">
           <Eyebrow>TRAINING</Eyebrow>
           <p className="planning-setup-copy">
-            Used by Coach and future plan changes. Your current program is
-            edited separately.
+            {state.program?'Used by Coach and future plan changes. Your current program is edited separately.':'Used by Coach and any plan you choose to create later.'}
           </p>
           {training.map(([label, value]) => (
             <InfoRow
@@ -11094,7 +11304,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
           </button>
         </section>
       </>}
-      {area === 'program' && state.program.conditioning && (
+      {area === 'program' && state.program?.conditioning && (
         <section>
           <Eyebrow>CARDIO</Eyebrow>
           <ConditioningCard conditioning={state.program.conditioning} />
@@ -11122,7 +11332,8 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
           <span><strong>Custom exercises</strong><small>{pluralize((state.customExercises || []).filter(item=>!item.deletedAt).length,"exercise")} · {pluralize((state.exerciseAliases || []).filter(item=>!item.deletedAt).length,"alias","aliases")}</small></span><span aria-hidden="true">›</span>
         </button>
       </section>}
-      {area === 'program' && <section className="program-actions">
+      {area === 'program' && !state.program && <section className="program-actions"><Eyebrow>YOUR TRAINING</Eyebrow><button className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>My workouts</strong><small>Create or use reusable workouts</small></span><span aria-hidden="true">›</span></button><button className="list-row" onClick={()=>setDetail('change-plan')}><span><strong>Create or import a plan</strong><small>Optional structured training</small></span><span aria-hidden="true">›</span></button></section>}
+      {area === 'program' && state.program && <section className="program-actions">
         <Eyebrow>PROGRAM</Eyebrow>
         <button className="list-row" onClick={() => setDetail("training-block")}>
           <span>
@@ -11165,9 +11376,11 @@ export function Profile({ state, update, setDetail, setPage, onLogout }) {
           </span>
           <span>›</span>
         </button>
+        <button className="list-row" disabled={Boolean(state.activeWorkout||state.activeOptionalSession)} onClick={()=>setDetail('stop-plan')}><span><strong>Stop following this plan</strong><small>Keep workout history and saved workouts</small></span><span aria-hidden="true">›</span></button>
       </section>}
       {area === 'preferences' && <section>
         <Eyebrow>SETTINGS</Eyebrow>
+        <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','My own workouts'],['freestyle','Freestyle']].map(([style,label])=><button key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></button>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
         <button className="list-row" onClick={() => setDetail("logging")}> 
           <span>
             <strong>Logging & increments</strong>
@@ -11756,7 +11969,7 @@ export function displayImportedPlanName(name) {
 }
 function TrainingPriorities({ state, update, close, adjustPlan }) {
   const preferencesOnly = ["ai-import", "imported", "manual", "scratch"].includes(
-    state.program.source,
+    state.program?.source,
   );
   const [sources, setSources] = useState(() => {
     const initial = clone(
@@ -11826,7 +12039,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
       <p>
         {preferencesOnly
           ? "Choose up to two areas. These guide Coach recommendations and future Rook-generated programs. Your current plan won’t change automatically."
-          : "Choose up to two areas. These guide Coach and future program rebuilds. Your current plan won’t change unless you explicitly adjust or rebuild it."}
+          : state.program ? "Choose up to two areas. These guide Coach and future program rebuilds. Your current plan won’t change unless you explicitly adjust or rebuild it." : "Choose up to two areas. These guide Coach and any plan you choose to build later."}
       </p>
       <span id="priority-limit-reason" className="visually-hidden">
         Maximum of two priorities selected. Deselect one to choose another.
@@ -11871,7 +12084,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
           <strong>
             {preferencesOnly ? "Preferences saved." : "Priorities saved."}
           </strong>{" "}
-          Current plan unchanged.
+          {state.program?'Current plan unchanged.':'Your workouts are unchanged.'}
         </div>
       )}
       {confirmed.length > 0 && (
@@ -11918,7 +12131,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
       <Button onClick={save}>
         {preferencesOnly ? "SAVE PREFERENCES" : "SAVE PRIORITIES"}
       </Button>
-      {saved && (
+      {saved && state.program && (
         <Button variant="quiet" onClick={adjustPlan}>
           {preferencesOnly ? "ASK COACH TO ADJUST PLAN" : "ADJUST CURRENT PLAN"}
         </Button>
@@ -12267,6 +12480,7 @@ export function PlanEditor({
   profile,
   mode = "review",
   generatedAcceptance = false,
+  proRequired = false,
   previewNavigationRef,
   sourceReview = null,
   saveError = '',
@@ -12283,6 +12497,7 @@ export function PlanEditor({
   active = true,
   scratchSessionRef,
   workoutOnly = false,
+  todayPreparation = false,
   copyOverride = null,
 }) {
   const withWarmupPreference = (value) => {
@@ -12923,7 +13138,7 @@ export function PlanEditor({
         (!workoutOnly && day.exercises.length >= 8)
       )
         return current;
-      day.exercises.push({
+      const addedExercise = {
         id: exerciseId,
         exerciseId: item.id,
         exerciseSource: item.custom ? "custom" : "catalog",
@@ -12951,18 +13166,24 @@ export function PlanEditor({
         targetRir: null,
         restSeconds: item.restSeconds,
         defaultIncrement: item.increment,
-      });
+      };
+      day.exercises.push(todayPreparation && exerciseState
+        ? prepareTodayReplacementValues(exerciseState,addedExercise,item) : addedExercise);
       day.estimatedMinutes = estimateWorkoutMinutes(day, profile, next);
         return next;
       });
       setAddingToDayId(null);
       setExerciseQuery("");
+      if (todayPreparation) setExpandedExerciseId(exerciseId);
     });
     return true;
   };
   const replaceExercise = (dayId, exerciseId, catalogId) => {
     if (!editorCatalog[catalogId] || !planEditorExerciseAllowed(editorCatalog[catalogId], profile)) return;
     const sourceExercise = programRef.current?.days.find((item) => item.id === dayId)?.exercises.find((item) => item.id === exerciseId);
+    if (todayPreparation && sourceExercise?.exerciseId === catalogId) {
+      setExercisePickerId(null);setExerciseQuery('');return;
+    }
     const sourceAlias = sourceExercise?.importedSourceName || sourceExercise?.originalImportedName || sourceExercise?.importedName || sourceExercise?.importedExercise?.name;
     if(importReview&&sourceExercise){
       const item=editorCatalog[catalogId],mapped={...sourceExercise,exerciseId:item.id,...(item.custom?{measure:item.measure,loadRequirement:item.loadRequirement}:{})};
@@ -12999,6 +13220,12 @@ export function PlanEditor({
         exercise.sets.forEach((set) => {
           set.weight = null;
         });
+      if (todayPreparation && exerciseState) {
+        const prepared = prepareTodayReplacementValues(exerciseState,
+          {...exercise,replacementOfExerciseId:sourceExercise.exerciseId},item);
+        for (const key of Object.keys(exercise)) if (!Object.hasOwn(prepared,key)) delete exercise[key];
+        Object.assign(exercise,prepared);
+      }
     });
     if (importReview && rememberMatchIds.includes(exerciseId) && sourceAlias)
       onRememberExerciseAlias?.(sourceAlias, catalogId);
@@ -13438,9 +13665,10 @@ export function PlanEditor({
             ? day.workoutName
             : workoutDisplayParts(day, day.weekday).primary || "",
         ).trim() &&
-        (!scratch || day.exercises.length >= 1),
+        (!scratch && !workoutOnly || day.exercises.length >= 1),
     );
   const saveProgram = (event) => {
+    if (catalogNeeded) return;
     if (reorderMode) { finishPreviewReorder(); return; }
     if(importApplySafetyIssues.length)return;
     if(importReview&&(Date.now()<matchHandoffUntil.current||event?.detail>1))return;
@@ -13926,6 +14154,9 @@ export function PlanEditor({
                     exercise.originalImportedName || exercise.importedName,
                   );
                 const pickerOpen = exercisePickerId === exercise.id;
+                const lastPreparedExercise = todayPreparation
+                  ? previousExercise(exerciseState?.workouts || [],exercise.exerciseId) : null;
+                const lastPreparedSets = lastPreparedExercise?.sets.filter(set => set.completed) || [];
                 const timed = exerciseMeasure(exercise) === "seconds";
                 const loadRequirement = exerciseLoadRequirement(exercise);
                 const acceptsStartingWeight =
@@ -14360,6 +14591,14 @@ export function PlanEditor({
                             </Disclosure>
                           </div>
                         )}
+                        {todayPreparation && <section className="plan-editor-last-session" aria-label={`Last workout for ${exerciseName(exercise)}`}>
+                          <span>LAST WORKOUT</span>
+                          {lastPreparedSets.length ? lastPreparedSets.map((set,index) => <div key={set.id || index}>
+                            <small>Set {index + 1}</small>
+                            <strong>{exerciseHistoryWeightLabel({timed,bodyweight:exerciseCatalog[exercise.exerciseId]?.bodyweight,
+                              loadRequirement,weight:set.weight,units:profile.units})} · {exerciseHistoryPerformanceLabel(lastPreparedExercise,[set])}</strong>
+                          </div>) : <small>No previous logged sets for this exercise.</small>}
+                        </section>}
                         {importReview && (
                           <div className="import-review-compact-editor">
                             <span>
@@ -14475,7 +14714,7 @@ export function PlanEditor({
                         )}
                         {imported && !importReview && (
                           <div className="plan-editor-weights">
-                            <span>Imported weight · kg</span>
+                            <span>{todayPreparation ? 'Prepared weight · kg' : 'Imported weight · kg'}</span>
                             <div>
                               {exercise.sets.map((set, index) => (
                                 <label key={set.id}>
@@ -14770,11 +15009,12 @@ export function PlanEditor({
           )}
         </section>
       )}
-      <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'}>
+      {!catalogNeeded && <SheetActionFooter anchorPlanViewport={scratch || mode === 'edit'}>
       {saveError && <p className="offline-banner" role="alert">{saveError}</p>}
       {scratchReadiness && <p className="scratch-readiness" role="status">{scratchReadiness}</p>}
       {openDurationReview && <p role="status">Set the duration for {exerciseName(openDurationReview)} in Edit prescription, or choose a rep-based exercise.</p>}
       {importReview && pendingSourceReviews > 0 && <button type="button" className="button quiet import-review-remaining" onClick={revealImportReview}>{sourceDecisionSummary} · REVIEW</button>}
+      {generatedAcceptance && proRequired && <small className="generated-plan-pro-note">Preview is free. ROOK Pro is needed to use this plan.</small>}
       <Button
         className={
           importReview && unresolved === 0 && namesValid
@@ -14784,7 +15024,7 @@ export function PlanEditor({
         disabled={saving || (!reorderMode && (importApplySafetyIssues.length>0 || Boolean(openDurationReview) || unresolved > 0 || !namesValid || pendingImportIssues(sourceReview,resolvedImportIssues).length > 0 || (sourceReview && (program.days.some(day=>!WEEKDAYS.includes(day.weekday)) || new Set(program.days.map(day=>day.weekday)).size!==program.days.length))))}
         onClick={reorderMode ? finishPreviewReorder : saveProgram}
       >
-        {saving ? "SAVING…" : reorderMode ? 'Done reordering' : copy.action}
+        {saving ? "SAVING…" : reorderMode ? 'Done reordering' : generatedAcceptance && proRequired ? 'USE THIS PLAN · PRO' : copy.action}
       </Button>
       {showCancel && <Button
         variant="quiet"
@@ -14795,7 +15035,7 @@ export function PlanEditor({
       >
         {workoutOnly?'Cancel':mode === "import" ? "EDIT NOTES" : <BackLabel />}
       </Button>}
-      </SheetActionFooter>
+      </SheetActionFooter>}
       {pairingContext && pairingContext.candidates.length > 0 && (
         <div
           className="modal-layer superset-picker-layer"
@@ -16069,13 +16309,29 @@ function SheetDragHandle({
     </div>
   );
 }
+function StopFollowingPlanSheet({state,update,close}) {
+  const [error,setError]=useState('');
+  const stop=()=>{
+    try {
+      const next=stopFollowingPlan(state,saveState);
+      update(()=>next,{planVersion:false,persistedState:next});
+      close();
+    } catch(failure) {setError(failure.message);}
+  };
+  return <main className="screen detail-screen"><SheetHeader title="Stop following plan" onClose={close}/><Eyebrow>TRAINING STYLE</Eyebrow><h1>Train without a fixed plan?</h1><p>Your current plan will be saved in Plan history. Logged workouts, progress and saved workouts stay available.</p>{error&&<p role="alert">{error}</p>}<Button disabled={Boolean(state.activeWorkout||state.activeOptionalSession)} onClick={stop}>STOP FOLLOWING PLAN</Button><Button variant="quiet" onClick={close}>KEEP PLAN</Button></main>;
+}
 function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
-  const imported = state.program.source === "ai-import";
+  const pro = useProAccess();
+  const currentStateRef = useRef(state);
+  currentStateRef.current = state;
+  const imported = state.program?.source === "ai-import";
   const [mode, setMode] = useState("menu");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [generationStage, setGenerationStage] = useState("preparing");
   const [preview, setPreview] = useState(null);
+  const previewRef = useRef(null);
+  previewRef.current = preview;
   const requestRef = useRef(false);
   const requestRun = useRef(0);
   const sheetRef = useRef(null);
@@ -16101,7 +16357,7 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
       requestRef.current = false;
     } catch {
       if (run !== requestRun.current) return;
-      setError("We couldn't build your plan. Your current plan is unchanged.");
+      setError(state.program?"We couldn't build your plan. Your current plan is unchanged.":"We couldn't build your plan. Your workouts are unchanged.");
       setBusy(false);
       requestRef.current = false;
     }
@@ -16110,22 +16366,53 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
     requestRun.current++;
     requestRef.current = false;
     setBusy(false);
-    setError("Plan generation cancelled. Your current plan is unchanged.");
+    setError(state.program?"Plan generation cancelled. Your current plan is unchanged.":"Plan generation cancelled. Your workouts are unchanged.");
   };
   const accept = async (program) => {
+    if (requestRef.current || !preview) return;
+    const origin = {
+      preview,
+      profileId: state.profile.id,
+      programId: state.program?.id || null,
+      programVersion: state.program?.version || null,
+      uid: pro.identityUid,
+    };
+    const commit = async verifiedIdentity => {
+      const contextChanged = () => previewRef.current !== origin.preview
+        || currentStateRef.current.profile.id !== origin.profileId
+        || (currentStateRef.current.program?.id || null) !== origin.programId
+        || (currentStateRef.current.program?.version || null) !== origin.programVersion
+        || currentStateRef.current.activeWorkout || currentStateRef.current.activeOptionalSession
+        || (origin.uid && verifiedIdentity?.uid && origin.uid !== verifiedIdentity.uid);
+      if (contextChanged()) {
+        setError('Your training context changed. Review this plan before using it.');
+        return;
+      }
     if (requestRef.current) return;
     requestRef.current = true;
     setBusy(true);
     setGenerationStage("saving");
     await afterVisibleFrame();
+    if (contextChanged()) {
+      setBusy(false);
+      requestRef.current = false;
+      setError('Your training context changed. Review this plan before using it.');
+      return;
+    }
     try {
-      const next = persistProgramReplacement(state, program, {source:preview.source}, saveState);
+      const next = persistProgramReplacement(currentStateRef.current, program, {source:origin.preview.source}, saveState);
       update(() => next, {planVersion:false,persistedState:next});
     } catch (error) {
       setError(error.message);setBusy(false);requestRef.current=false;return;
     }
     close();
     onPlanAccepted?.();
+    };
+    if (!canActivateGeneratedPlan(pro, pro.rollout, currentStateRef.current)) {
+      if (!pro.openPaywall('generated_plan_apply', commit)) setError('ROOK Pro access is unavailable right now. Your plan preview is still here.');
+      return;
+    }
+    await commit();
   };
   if (mode === 'scratch') return <ScratchPlan state={state} update={update} close={() => setMode('menu')} onPlanAccepted={() => {close();onPlanAccepted?.();}} />;
   if (preview)
@@ -16155,6 +16442,7 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
           source={preview.program}
           profile={state.profile}
           generatedAcceptance
+          proRequired={pro.rollout && !canActivateGeneratedPlan(pro, pro.rollout, state)}
           exerciseState={state}
           onSave={accept}
           onCancel={() => setPreview(null)}
@@ -16180,10 +16468,9 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
       {mode === "menu" ? (
         <>
           <Eyebrow>PROGRAM</Eyebrow>
-          <h2 id="change-plan-title">Change plan</h2>
+          <h2 id="change-plan-title">{state.program?'Change plan':'Create a plan'}</h2>
           <p>
-            Your workout history stays saved when you replace the current
-            program.
+            {state.program?'Your workout history stays saved when you replace the current program.':'Add a structured program when you want one. Your workouts and history stay saved.'}
           </p>
           {blocked && (
             <p className="offline-banner">
@@ -16226,11 +16513,10 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
           >
             ‹ Back
           </button>
-          <Eyebrow>REPLACE PROGRAM</Eyebrow>
-          <h2 id="change-plan-title">Build a new personalized plan?</h2>
+          <Eyebrow>{state.program?'REPLACE PROGRAM':'NEW PROGRAM'}</Eyebrow>
+          <h2 id="change-plan-title">Build a personalized plan?</h2>
           <p>
-            This replaces your current program using the profile details already
-            saved. Workout history will remain.
+            {state.program?'This replaces your current program using the profile details already saved. Workout history will remain.':'This creates a plan using your saved profile details. Workout history will remain.'}
           </p>
           {error && <p className="offline-banner">{error}</p>}
           <Button disabled={busy} onClick={build}>
@@ -16720,7 +17006,7 @@ function LogoutConfirmSheet({ close, backUpFirst, logOut }) {
     setBusy(true);
     setError("");
     try {
-      await deleteLocalState({ clearPhotos: clearAllWorkoutMedia });
+      await deleteLocalState({ clearPhotos: clearAllWorkoutMedia, clearProfiles: clearAllProfileSlotArchives });
       logOut();
     } catch {
       setError("ROOK couldn’t finish deleting local data. Some data may already have been removed. Try again to finish.");
@@ -17911,7 +18197,7 @@ function GymProfilesSheet({ state, update, close }) {
     update((current) => {
       deleteGymProfile(current, editingId, replacementDefaultId);
       return current;
-    });
+    }, { syncDeletes: [{ domain: 'gymProfiles', entityId: editingId }] });
     back();
   };
 
@@ -18074,7 +18360,7 @@ function adjustmentModeLabel(mode) {
   return ADJUST_TODAY_OPTIONS.find(([value]) => value === mode)?.[1] || "TODAY ONLY";
 }
 
-export function AdjustTodaySheet({ state, update, close, request = {} }) {
+export function AdjustTodaySheet({ state, update, close, setPage, request = {} }) {
   const screenRef = useRef(null);
   const original = plannedWorkoutForDate(state, new Date());
   const existing = state.todayAdaptation?.date === isoDay() ? state.todayAdaptation : null;
@@ -18097,15 +18383,28 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
   const [persistenceError, setPersistenceError] = useState(false);
   const [manualEntryId, setManualEntryId] = useState(null);
   const [query, setQuery] = useState("");
+  const [editingTargetsId, setEditingTargetsId] = useState(null);
+  const targetCommits = useRef(new Set());
+  const proposalRef = useRef(proposal);proposalRef.current = proposal;
   useExerciseSearchSheet(screenRef, Boolean(manualEntryId && proposal), { focusedSearch: true });
-  const estimatedOriginal = estimateSessionMinutes(original?.exercises || []);
-  const timePresets = [30, 45, 60].filter((value) => value < estimatedOriginal);
+  const timing = createWorkoutDurationEstimator(state, original || { exercises: [] });
+  const estimatedOriginal = timing.estimate();
+  const maximumShorterMinutes = Math.min(180, roundedEstimate(estimatedOriginal) - 1);
+  const timePresets = [...new Set([0.9,0.8,0.7].map(ratio => Math.round(estimatedOriginal * ratio / 5) * 5))]
+    .filter(value => value >= 15 && value <= maximumShorterMinutes);
   const chosenMinutes = minutes === "custom" ? Number(customMinutes) : Number(minutes);
+  const timeError = estimatedOriginal <= 15 ? 'This workout is already about 15 minutes or less. Use Edit today’s exercises or talk to Coach for another adjustment.' : !Number.isInteger(chosenMinutes) || chosenMinutes < 15 || chosenMinutes > 180
+    ? 'Enter a whole number from 15 to 180 minutes.' : chosenMinutes > maximumShorterMinutes
+      ? `This workout already takes about ${roundedEstimate(estimatedOriginal)} min. Choose fewer than ${roundedEstimate(estimatedOriginal)} minutes to shorten it.` : '';
   const title = step === "mode" ? "Adjust today" : step === "review" ? "Review adjustment" : "Adjust today";
 
   const chooseMode = (next) => {
     setMode(next);
     setError("");
+    if (next === ADJUST_TODAY_MODES.lessTime && !timePresets.includes(minutes)) {
+      if (timePresets.length) setMinutes(timePresets[Math.min(1,timePresets.length - 1)]);
+      else { setMinutes('custom'); setCustomMinutes(String(Math.max(15, estimatedOriginal - 5))); }
+    }
     setStep(next === ADJUST_TODAY_MODES.unavailable ? "unavailable" : next === ADJUST_TODAY_MODES.equipment ? "equipment" : next === ADJUST_TODAY_MODES.lessTime ? "time" : "energy");
   };
   const toggleEquipment = (value) => {
@@ -18152,9 +18451,10 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
     }
   };
   const apply = () => {
+    flushSync(() => [...targetCommits.current].forEach(commit => commit()));
     setError("");
     setPersistenceError(false);
-    const result = applyTodayAdjustment(state, proposal);
+    const result = applyTodayAdjustment(state, proposalRef.current);
     if (result.status === "conflict") {
       setError("Today’s workout changed. Close this review and create the adjustment again.");
       return;
@@ -18247,6 +18547,15 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
               </button>
             ))}
           </div>
+          <button className="choice-row adjust-coach-entry" onClick={() => {
+            try {
+              const next = enterCoachConversation(state);
+              next.coachDraft = state.coachDraft || `I need a different adjustment for today's ${original?.name || 'workout'}: `;
+              if (!saveState(next)) throw Error('save');
+              update(() => next, {planVersion:false,persistedState:next});
+              close(); setPage?.('coach');
+            } catch { setError('Couldn’t open Coach. Your workout is unchanged. Try again.'); }
+          }}><strong>Something else? Talk to Coach</strong><small>Describe what you need and review a suggestion before applying it.</small></button>
           <p className="adjust-today-note">Any change applies only to today’s workout. Your training plan stays intact.</p>
         </>
       )}
@@ -18255,12 +18564,14 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           <Eyebrow>LESS TIME</Eyebrow>
           <h1>Time available</h1>
           <p>The target is an estimate. ROOK keeps the most important work first.</p>
+          <p className="adjust-time-context">Current workout: ~{roundedEstimate(estimatedOriginal)} min{timing.sampleCount ? ` · Based on ${timing.sampleCount} similar completed ${timing.sampleCount === 1 ? 'workout' : 'workouts'}` : ' · Estimated from exercises and rest'}</p>
           <div className="adjust-chip-grid" role="group" aria-label="Time available">
             {timePresets.map((value) => <button key={value} aria-pressed={minutes === value} className={minutes === value ? "is-selected" : ""} onClick={() => setMinutes(value)}>{value} min</button>)}
             <button aria-pressed={minutes === "custom"} className={minutes === "custom" ? "is-selected" : ""} onClick={() => setMinutes("custom")}>Custom</button>
           </div>
-          {minutes === "custom" && <label className="adjust-custom-time"><span>Minutes</span><input type="number" min="15" max="180" inputMode="numeric" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /></label>}
-          <Button aria-busy={busy || undefined} disabled={busy || !chosenMinutes || chosenMinutes < 15 || chosenMinutes >= estimatedOriginal} onClick={generate}>{busy ? "ADJUSTING…" : `REVIEW ${chosenMinutes || ""}-MINUTE WORKOUT`}</Button>
+          {minutes === "custom" && <label className="adjust-custom-time"><span>Minutes</span><input aria-label="Available minutes" aria-describedby="adjust-time-validation" aria-invalid={Boolean(customMinutes && timeError)} type="number" min="15" max={Math.max(15,maximumShorterMinutes)} step="1" inputMode="numeric" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /></label>}
+          <p id="adjust-time-validation" className="adjust-time-validation" aria-live="polite">{timeError || `Choose 15–${maximumShorterMinutes} minutes.`}</p>
+          <Button aria-busy={busy || undefined} disabled={busy || Boolean(timeError)} onClick={generate}>{busy ? "ADJUSTING…" : `REVIEW ${chosenMinutes || ""}-MINUTE WORKOUT`}</Button>
         </>
       )}
       {step === "equipment" && (
@@ -18318,7 +18629,9 @@ export function AdjustTodaySheet({ state, update, close, request = {} }) {
           {proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
           <section className="adjust-review-section">
             <Eyebrow>KEEPING</Eyebrow>
-            {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small></div>)}
+            {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small>
+              {!existing && <button className="text-button" aria-label={`Edit targets for ${exerciseName(exercise)}`} aria-expanded={editingTargetsId === exercise.id} onClick={() => setEditingTargetsId(editingTargetsId === exercise.id ? null : exercise.id)}>{editingTargetsId === exercise.id ? 'Done' : 'Edit targets'}</button>}
+              {!existing && editingTargetsId === exercise.id && <AdjustmentTargetsEditor exercise={exercise} name={exerciseName(exercise)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={target => setProposal(current => editTodayAdjustmentTargets(current, exercise.id, target, state))}/>}</div>)}
           </section>
           <section className="adjust-review-section">
             <Eyebrow>CHANGES</Eyebrow>
@@ -18354,9 +18667,9 @@ export function Detail({
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
   if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} Illustration={ExerciseDetailIllustration} />;
-  if(detail==='saved-workouts'||detail?.saveWorkoutTemplate){
+  if(detail==='saved-workouts'||detail?.saveWorkoutTemplate||detail?.savedWorkout||detail?.createSavedWorkout){
     const source=detail?.saveWorkoutTemplate?(detail.saveWorkoutTemplate.workoutId?state.workouts.find(w=>w.id===detail.saveWorkoutTemplate.workoutId):state.activeWorkout):null;
-    return <SavedWorkouts state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} source={source} onStarted={()=>{close();setPage('workout');}}/>;
+    return <SavedWorkouts state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} source={source} initialTemplateId={detail?.savedWorkout} createNew={Boolean(detail?.createSavedWorkout)} onStarted={()=>{close();setPage('workout');}}/>;
   }
   if (detail?.restTraining)
     return (
@@ -18481,6 +18794,7 @@ export function Detail({
         onPlanAccepted={onPlanAccepted}
       />
     );
+  if (detail === 'stop-plan') return <StopFollowingPlanSheet state={state} update={update} close={close}/>;
   if (detail === "logging")
     return <Logging state={state} update={update} close={close} />;
   if (detail === "appearance")
@@ -18513,6 +18827,7 @@ export function Detail({
         update={update}
         close={close}
         request={detail.adjustToday}
+        setPage={setPage}
       />
     );
   if (detail?.todayActions) return <TodayActionsSheet state={state} update={update} close={close} setDetail={setDetail} {...detail.todayActions}/>;
@@ -19080,6 +19395,8 @@ function Logging({ state, update, close }) {
   );
 }
 function Appearance({ state, update, close }) {
+  const pro = useProAccess();
+  const [proError, setProError] = useState('');
   const showExerciseImages = state.profile.showExerciseImages !== false;
   const appearancePreference = ["system", "light", "dark"].includes(
     state.profile.appearancePreference,
@@ -19177,17 +19494,25 @@ function Appearance({ state, update, close }) {
               className="appearance-style-choice"
               data-style-option={value}
               key={value}
-              aria-pressed={stylePreference === value}
-              onClick={() => setStyle(value)}
+              aria-pressed={stylePreference === value && (value !== 'premium' || shouldUsePremiumStyle(stylePreference, pro, pro.rollout))}
+              aria-label={value === 'premium' && pro.rollout && !hasProAccess(pro) ? 'Premium style, ROOK Pro required. Open subscription options.' : undefined}
+              onClick={() => {
+                setProError('');
+                if (value === 'premium' && pro.rollout && !hasProAccess(pro)) {
+                  if (!pro.openPaywall('premium_style', () => setStyle('premium')))
+                    setProError('ROOK Pro access cannot be checked right now. Your appearance is unchanged.');
+                } else setStyle(value);
+              }}
             >
               <span>
-                <strong>{label}</strong>
+                <strong>{label}{value === 'premium' && pro.rollout && !hasProAccess(pro) && <small className="appearance-pro-lock"> · Pro 🔒</small>}</strong>
                 <small>{help}</small>
               </span>
               <i aria-hidden="true">✓</i>
             </button>
           ))}
         </div>
+        {proError && <p role="alert">{proError}</p>}
       </section>
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>
@@ -19854,6 +20179,7 @@ function ActiveSuperset({ exercise, state, update, close }) {
 
 function Replace({ exercise, state, update, close }) {
   const sheetRef = useRef(null);
+  const origin=useRef({sessionId:state.activeWorkout?.id,profileId:state.profile.id,exerciseId:exercise.exerciseId}).current;
   const [suggestionsReady, setSuggestionsReady] = useState(false);
   const [picker, setPicker] = useState(false);
   useExerciseSearchSheet(sheetRef, picker, { focusedSearch: true });
@@ -19962,7 +20288,7 @@ function Replace({ exercise, state, update, close }) {
   const replace = (choice, allowAnyAllowed = false) => {
     update((current) => {
       const active = current.activeWorkout;
-      if (!active) return current;
+      if (!active||active.id!==origin.sessionId||current.profile.id!==origin.profileId) return current;
       const index = active.exercises.findIndex(
         (item) => item.id === exercise.id,
       );
@@ -19970,7 +20296,7 @@ function Replace({ exercise, state, update, close }) {
       const catalog = exerciseCatalog[choice.id] || customExerciseCatalogItem(customRecord);
       const currentCandidates = [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(current)];
       if (
-        index < 0 ||
+        index < 0 || active.exercises[index].exerciseId!==origin.exerciseId ||
         active.exercises[index].sets.some((set) => set.completed) ||
         !catalog ||
         active.exercises.some(
@@ -20008,9 +20334,12 @@ function Replace({ exercise, state, update, close }) {
       delete stored.originalImportedName;
       delete stored.importedExercise;
       delete stored.matchStatus;
-      active.exercises[index] = {
-        ...stored,
+      active.exercises[index] = prefillReplacementValues(current,{
+        ...preparedExercise(stored),
+        replacementOfExerciseId: stored.exerciseId,
         exerciseId: choice.id,
+        loggingMode: catalog.loggingMode || 'normal',
+        loadRequirement: exerciseLoadRequirement(catalog),
         exerciseSource: customRecord ? "custom" : "catalog",
         ...(customRecord
           ? {
@@ -20024,14 +20353,17 @@ function Replace({ exercise, state, update, close }) {
           : {}),
         restSeconds: catalog.restSeconds,
         defaultIncrement: catalog.increment,
-        sets: stored.sets.map((set) => ({
+        sets: preparedExercise(stored).sets.map((set) => ({
           ...set,
           weight: null,
+          reps: isSessionAddedExercise(stored) ? null : stored.repMin ?? null,
+          sides: catalog.loggingMode==='per_side'?{left:{reps:null},right:{reps:null}}:undefined,
+          ...(set.segments?{segments:set.segments.map(segment=>({...segment,weight:null,reps:null,rir:null}))}:{}),
           completed: false,
           rir: null,
           completedAt: undefined,
         })),
-      };
+      });
       active.rest = null;
       if (rememberPreference)
         recordSubstitutionPreference(current, {
@@ -20179,19 +20511,27 @@ function Replace({ exercise, state, update, close }) {
 }
 
 export default function App() {
-  return <StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup}/>}</StartupBoundary>;
+  return <StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><ProAccessProvider Modal={ModalLayer} Header={SheetHeader}><HydratedApp startup={startup}/></ProAccessProvider>}</StartupBoundary>;
 }
 const StableActiveWorkout = memo(ActiveWorkout);
 function HydratedApp({startup}) {
   useSemanticSwipeBack();
   const [state, update, persistenceFailed] = useLiftState(startup);
+  const accountSync = useAccountSync({ state, update, persistenceFailed });
+  const pro = useProAccess();
+  const [page, setPageState] = useState("today");
+  const [presentedStyle, setPresentedStyle] = useState(() => shouldUsePremiumStyle(state.profile.stylePreference, pro, pro.rollout) ? 'premium' : 'standard');
+  useEffect(() => {
+    const next = shouldUsePremiumStyle(state.profile.stylePreference, pro, pro.rollout) ? 'premium' : 'standard';
+    if (page === 'workout' && presentedStyle === 'premium' && next === 'standard') return;
+    setPresentedStyle(next);
+  }, [state.profile.stylePreference, pro.status, pro.lastVerifiedActive, pro.rollout, page, presentedStyle]);
   const liveCompletion = useRef(null);
   const recordLiveFinish = useCallback(event => { liveCompletion.current = event; }, []);
   useResolvedTheme(
     state.profile.appearancePreference,
-    state.profile.stylePreference,
+    presentedStyle,
   );
-  const [page, setPageState] = useState("today");
   const backgroundRef = useRef(null);
   const coachScrollMemory = useRef(new Map());
   const prepareTabTransition = useMainTabTransition(page, backgroundRef);
@@ -20204,7 +20544,7 @@ function HydratedApp({startup}) {
   const [detail, setDetail] = useState(null);
   const [detailClosing, setDetailClosing] = useState(false);
   useEffect(() => { setDetailClosing(false); }, [detail]);
-  const [entryMode, setEntryMode] = useState(startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
+  const [entryMode, setEntryMode] = useState(startup.firstRunVerified && startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
   const [repairStage, setRepairStage] = useState("preparing");
   const [repairPreview, setRepairPreview] = useState(null);
   const [planReadyNotice, setPlanReadyNotice] = useState(null);
@@ -20226,6 +20566,19 @@ function HydratedApp({startup}) {
     showToday();
     setPlanReadyNotice({ id: Date.now() });
   };
+  const chooseNoPlan = style => {
+    const next = clone(state);
+    next.profile.preferredTrainingStyle = style;
+    next.profile.onboardingComplete = true;
+    next.profile.noPlanReceipt = {kind:'first-run'};
+    next.selectedDate = isoDay();
+    next.selectedDay = weekday();
+    if (!saveState(next, {reason:'first-run:training-style'})) return false;
+    update(() => next, {persistedState:next});
+    setEntryMode(null);
+    setPage('today');
+    return true;
+  };
   const closeDetail = () => {
     const returnFocusId = detail?.visual ? detail.returnFocusId : null;
     setDetail((current) =>
@@ -20239,6 +20592,7 @@ function HydratedApp({startup}) {
       );
   };
   useEffect(() => {
+    if (accountSync.locked) return undefined;
     let active = true;
     (async () => {
       const status = await AIService.status();
@@ -20301,7 +20655,7 @@ function HydratedApp({startup}) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [accountSync.locked]);
   const acceptRepairPreview = async (program) => {
     setRepairStage("saving");
     update((current) => {
@@ -20335,7 +20689,9 @@ function HydratedApp({startup}) {
       return current;
     });
   };
+  if (accountSync.locked) return <AccountSyncLock sync={accountSync} Modal={ModalLayer} />;
   if (!state.profile.onboardingComplete) {
+    if (!startup.firstRunVerified) return <main className="fatal-error-screen startup-recovery" role="alert"><p className="eyebrow">ROOK</p><h1>We couldn’t safely open your training data.</h1><p>Your saved data has not been replaced. Reload ROOK to retry recovery.</p></main>;
     const mode = entryMode || 'landing';
     const back = expected => setEntryMode(current => current === expected ? null : current);
     const open = next => {
@@ -20345,24 +20701,24 @@ function HydratedApp({startup}) {
     };
     return <PersistenceHost failed={persistenceFailed}>
       <FirstRunNavigation mode={mode}>{route => {
-        if (route === 'personalize') return <Onboarding initialUnits={state.profile.units} update={update} exit={() => back('personalize')} onPlanAccepted={showGeneratedPlan}/>;
+        if (route === 'personalize') return <Onboarding state={state} initialUnits={state.profile.units} update={update} exit={() => back('personalize')} onPlanAccepted={showGeneratedPlan}/>;
         if (route === 'import') return <ImportPlan state={state} update={update} close={() => back('import')} onPlanAccepted={showToday} initial/>;
         if (route === 'scratch') return <ScratchPlan state={state} update={update} close={() => back('scratch')} onPlanAccepted={showGeneratedPlan} preserveDraftOnClose/>;
         if (route === 'restore') return <RestoreBackupSheet state={state} update={update} close={() => back('restore')} onRestored={() => { setEntryMode(null); setPage('today'); }}/>;
-        return <EntryLanding personalize={() => open('personalize')} importPlan={() => open('import')} startFromScratch={() => open('scratch')} restoreBackup={() => open('restore')}/>;
+        return <EntryLanding personalize={() => open('personalize')} ownWorkouts={() => chooseNoPlan('own-workouts')} trainFreestyle={() => chooseNoPlan('freestyle')} importPlan={() => open('import')} startFromScratch={() => open('scratch')} restoreBackup={() => open('restore')} recoverAccount={accountSync.state === 'recovery-available' ? accountSync.recoverWithGoogle : null} returnToSavedProfile={accountSync.separate ? accountSync.switchToSavedProfile : null}/>;
       }}</FirstRunNavigation>
     </PersistenceHost>;
   }
   const content =
     page === "today" ? (
-      <Today
+      (state.program && trainingStyleFor(state)==='plan' ? <Today
         state={state}
         update={update}
         setPage={setPage}
         setDetail={setDetail}
         planReady={planReadyNotice}
         dismissPlanReady={() => setPlanReadyNotice(null)}
-      />
+      /> : <NoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail}/>)
     ) : page === "optional-session" ? (
       <ActiveOptionalSession state={state} update={update} setPage={setPage} />
     ) : page === "workout" ? (
@@ -20392,6 +20748,7 @@ function HydratedApp({startup}) {
         update={update}
         setDetail={setDetail}
         setPage={setPage}
+        accountSync={accountSync}
         onLogout={() => setDetail("logout-confirm")}
       />
     );
@@ -20427,8 +20784,18 @@ function HydratedApp({startup}) {
             setDetail={setDetail}
             onPlanAccepted={showGeneratedPlan}
             onPlanImported={showToday}
-            onLogout={() => {
+            onLogout={async () => {
               // Only reached after the existing destructive confirmation.
+              try {
+                await Promise.race([
+                  getFirebaseSyncClient().then(client => client && client.authApi.signOut(client.auth)),
+                  new Promise(resolve => setTimeout(resolve, 1500)),
+                ]);
+              } catch { /* Local deletion already succeeded; cloud data is untouched. */ }
+              try {
+                globalThis.localStorage.removeItem(ACCOUNT_SYNC_LEDGER_KEY);
+                globalThis.localStorage.removeItem(ACCOUNT_SIGNED_OUT_KEY);
+              } catch { /* Local storage access may already be unavailable. */ }
               window.location.reload();
             }}
           />

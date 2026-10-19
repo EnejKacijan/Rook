@@ -20,6 +20,16 @@ describe('atomic imported plan acceptance', () => {
     expect(next.defaultGymProfileId).toBe(next.gymProfiles[0].id);
     expect(state).toEqual(before);
   });
+  it('allows an established no-plan user to import a plan and clears the no-plan receipt', async () => {
+    const {state,program,profile}=await fixture();
+    state.profile.onboardingComplete=true;
+    state.profile.preferredTrainingStyle='own-workouts';
+    state.profile.noPlanReceipt={kind:'first-run'};
+    const next=persistPlanImport(state,program,profile,options,()=>true);
+    expect(next.profile.noPlanReceipt).toBeNull();
+    expect(next.program.days).toHaveLength(1);
+    expect(next.planVersions.at(-1).program.id).toBe(program.id);
+  });
   it('builds one version and block without mutating source state', async () => {
     const { state, program, profile } = await fixture();
     const before = structuredClone(state);

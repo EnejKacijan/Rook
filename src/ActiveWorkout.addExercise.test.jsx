@@ -20,11 +20,12 @@ const advance=ms=>act(()=>vi.advanceTimersByTime(ms));
 const button=(text,scope=document)=>[...scope.querySelectorAll('button')].find(b=>b.textContent.trim()===text);
 const picker=()=>document.querySelector('.freestyle-queue-picker');
 const type=(input,value)=>act(()=>{input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
-function mount(index=0){
+function mount(index=0,{allCompleted=false}={}){
  let initial=createReturningUserFixture(0);Object.assign(initial.profile,{showExerciseImages:false,restTimerEnabled:false});
  initial.program.days[0].exercises=initial.program.days[0].exercises.slice(0,3);initial.selectedDate=domain.isoDay();initial.selectedDay='Mon';
  initial.activeWorkout=domain.startWorkout(initial,initial.program.days[0]);initial.activeWorkout.exerciseIndex=index;
  Object.assign(initial.activeWorkout.exercises[0].sets[0],{completed:true,weight:45,reps:8,rir:2});
+ if(allCompleted)initial.activeWorkout.exercises.forEach(exercise=>exercise.sets.forEach(set=>Object.assign(set,{completed:true,weight:45,reps:8})));
  createCustomExercise(initial,{name:'Owner one-arm exercise with a very long name',equipment:['dumbbells'],primaryMuscle:'chest',pattern:'horizontal-push',loggingType:'weight_reps',loggingMode:'per_side'});
  const draft=templateDraft(initial.activeWorkout,initial);draft.name='Saved extras';draft.exercises=draft.exercises.slice(0,2);initial=saveWorkoutTemplate(initial,draft,{id:'saved-extras'});
  function Harness(){
@@ -55,6 +56,15 @@ it('commits a raw logger draft before opening and appends without remounting sea
 it('the final prescribed exercise can still open Add and gain a normal next exercise',()=>{
  mount(2);expect(host.querySelector('.up-next')).toBeNull();expect(button('+ ADD EXERCISE')).toBeTruthy();open();addLateral();close();
  expect(current.activeWorkout.exerciseIndex).toBe(2);expect(button('NEXT EXERCISE →')).toBeTruthy();expect(host.querySelector('.up-next').textContent).toContain('Lateral Raise');
+});
+it('a session-added exercise makes a previously ready final Finish neutral again',()=>{
+ mount(2,{allCompleted:true});
+ expect(button('FINISH WORKOUT').classList.contains('primary')).toBe(true);
+ open();addLateral();close();
+ expect(button('NEXT EXERCISE →')).toBeTruthy();click(button('NEXT EXERCISE →'));advance(1000);
+ expect(current.activeWorkout.exercises[current.activeWorkout.exerciseIndex].exerciseId).toBe('lateral-raise');
+ expect(current.activeWorkout.exercises.at(-1).sets.some(set=>!set.completed)).toBe(true);
+ expect(button('FINISH WORKOUT').classList.contains('secondary')).toBe(true);
 });
 it('preview Add and deliberate Add again create exact separate instances with the existing five-second Undo',()=>{
  const initial=mount();open();search('Lateral Raise');click(picker().querySelector('[data-catalog-id="lateral-raise"] .queue-search-body'));

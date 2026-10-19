@@ -29,7 +29,7 @@
 .up-next .swipe-up-next-body.has-reorder-handle .up-next-prescription { align-self:center;max-width:120px;white-space:normal;overflow-wrap:anywhere; }
 .up-next-queue.is-reordering { user-select:none; }
 .up-next-queue.is-reordering [data-swipe-row] { transition:transform 180ms var(--rook-ease-standard); }
-.up-next-queue .reorder-live-source { visibility:hidden;pointer-events:none; }
+.up-next-queue .reorder-live-source { visibility:hidden;opacity:0;pointer-events:none; }
 :root .is-reordering .swipe-remove-background { visibility:hidden!important;pointer-events:none!important;transition:none!important; }
 .queue-order-option { padding:10px 0;border-bottom:1px solid var(--rook-border); }
 .queue-order-option > strong { display:block;font-size:14px;overflow-wrap:anywhere; }
