@@ -52,6 +52,11 @@ function selectType(value) {
   const select = document.querySelector('select');
   act(() => {select.value = value; select.dispatchEvent(new Event('change', {bubbles: true}));});
 }
+function enterNumber(label, value) {
+  const input = document.querySelector(`input[aria-label="${label}"]`);
+  act(() => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value); input.dispatchEvent(new Event('input',{bubbles:true})); });
+  return input;
+}
 function pointer(handle, type, y) {
   act(() => {
     const event = new Event(type, {bubbles: true, cancelable: true});
@@ -82,6 +87,42 @@ it('B/C: Steady submits the chosen native Type, duration and intensity without i
   expect(current.activeOptionalSession).toMatchObject({kind: 'Conditioning', intent: 'conditioning', activity: 'SkiErg', format: 'steady', duration: 25, intensity: 'Hard'});
   expect(current.activeOptionalSession).not.toHaveProperty('intervals');
   expect(navigate).toHaveBeenCalledExactlyOnceWith('optional-session');
+});
+it('tapping the duration selects a numeric edit and starts with the exact custom minutes', () => {
+  mount(); click(button('Edit duration, 20 min'));
+  const input=document.querySelector('input[aria-label="Duration in min"]');
+  expect(document.activeElement).toBe(input); expect([input.selectionStart,input.selectionEnd]).toEqual([0,2]);
+  expect(input.inputMode).toBe('numeric'); enterNumber('Duration in min','27');
+  expect(current).toEqual(initial); expect(save).not.toHaveBeenCalled();
+  act(()=>input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true,cancelable:true})));
+  expect(output('Activity duration')).toBe('27 min'); expect(document.activeElement).toBe(button('Edit duration, 27 min'));
+  click(start()); expect(current.activeOptionalSession.duration).toBe(27); expect(save).toHaveBeenCalledOnce();
+});
+it.each(['','0','181','2.5','not a number'])('a rejected custom duration (%s) cannot silently start with the previous value', raw => {
+  mount(); click(button('Edit duration, 20 min')); const input=enterNumber('Duration in min',raw);
+  expect(input.checkValidity()).toBe(false); expect(input.getAttribute('aria-invalid')).toBe('true');
+  act(()=>input.blur()); act(()=>document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  expect(document.querySelector('.stepper-row-error').textContent).toContain('1 to 180 min');
+  expect(current).toEqual(initial); expect(save).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();
+  enterNumber('Duration in min','33'); click(start()); expect(current.activeOptionalSession.duration).toBe(33);
+});
+it.each([1,180])('custom duration uses the canonical conditioning boundary of %s minutes', minutes => {
+  mount(); click(button('Edit duration, 20 min')); const input=enterNumber('Duration in min',String(minutes));
+  act(()=>input.blur()); expect(button(minutes===1?'Decrease duration':'Increase duration').disabled).toBe(true);
+  click(start()); expect(current.activeOptionalSession.duration).toBe(minutes);
+});
+it('plus and minus still work from a custom value and the draft survives format switching', () => {
+  mount(); click(button('Edit duration, 20 min')); enterNumber('Duration in min','27');
+  click(button('Increase duration')); expect(output('Activity duration')).toBe('32 min');
+  click(button('Decrease duration')); expect(output('Activity duration')).toBe('27 min');
+  click(radio('Intervals')); click(radio('Steady')); expect(output('Activity duration')).toBe('27 min');
+  expect(current).toEqual(initial); expect(save).not.toHaveBeenCalled();
+});
+it('manual interval parameters retain exact seconds instead of rounding to the step buttons', () => {
+  mount(); click(radio('Intervals')); click(button('Edit rounds, 8')); enterNumber('Rounds','7');
+  click(button('Edit work duration, 30 sec')); enterNumber('Work duration in sec','47');
+  click(button('Edit rest duration, 60 sec')); enterNumber('Rest duration in sec','12'); click(start());
+  expect(current.activeOptionalSession).toMatchObject({intervals:{rounds:7,workSeconds:47,restSeconds:12},duration:401/60});
 });
 it('D/F/G: format switching retains the in-sheet interval draft, Type and intensity without writing data', () => {
   mount(); selectType('Rower'); click(radio('Hard')); click(radio('Intervals'));

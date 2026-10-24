@@ -1,0 +1,35 @@
+ROOK Undo snackbar review, 2026-10-24
+
+Consultation: https://chatgpt.com/c/6adc134e-dfcc-83ed-bc66-fbe1ffb472cf
+Verified Chat mode; original Pro model preference restored after consultation.
+
+Decision: add downward dismissal alongside existing left/right swipes. Dismissal
+hides feedback only. Undo remains a normal tap or keyboard action.
+
+Shared implementation: direction locks after 10px at a 1.3 direction ratio.
+Horizontal thresholds retained; downward threshold is 48px, or at least 32px
+with recent downward velocity >= 0.65px/ms. Upward motion does not dismiss;
+short/ambiguous drags reset and cannot accidentally activate Undo. The remaining
+timeout stays paused during interaction and the 170ms return animation.
+Reduced motion skips settling/exit animations. Pointer capture keeps drag
+releases from reaching controls underneath. touch-action:none is restricted
+to the compact snackbar, leaving surrounding scroll regions unchanged.
+
+Validation: 106 tests across snackbar gestures/focus/placement, workout weight
+carry and previous-values integration passed. Production build and diff check
+passed (existing large-chunk advisory only). Mobile-size browser checks covered
+downward dismissal, downward drag beginning on Undo, short-drag return, and a
+subsequent normal Undo tap. Dismissal preserved all three set weights and did
+not navigate away. Actual iPhone touch input was not exercised by these checks.
+
+Screenshots: artifacts/plan-workout-review/undo-down-before.png and
+artifacts/plan-workout-review/undo-down-after.png.
+Local changes only; no commit, push or deployment.
+
+Entrance/expiry refinement, 2026-10-24:
+Consultation: https://chatgpt.com/c/6adc99dc-c3ac-83ed-bfbf-a625d05eaaa9
+Decision: retain left/right/down dismissal, add a 16px rise and fade over 190ms.
+Timeout uses a short 16px downward fade over 170ms. Undo is immediately enabled;
+pointer takeover preserves the actual painted entry pose. Entry runs once per
+feedback identity. Reduced motion uses instant appearance/expiry. Both the shared
+five-second notices and the eight-second previous-values notice use this motion.

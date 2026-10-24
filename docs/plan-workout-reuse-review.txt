@@ -1,0 +1,63 @@
+ROOK — Reuse workouts from the active plan, 23 October 2026
+
+Decision
+The existing SavedWorkouts owner now provides Choose a workout. From your plan
+is a live projection of accepted state.program.days; Saved workouts contains
+independent user-created snapshots. No automatic copies, migration or quota
+consumption occurs when a plan is built, changed or viewed.
+
+Entry points
+Today uses Choose a workout. More options offers it next to Start freestyle
+workout; rest-day Train anyway has the same two choices. Profile > Workouts
+opens the same picker. Add to Up Next continues showing saved workouts only.
+Search covers both groups. Create workout is a secondary 44px action beside
+the Saved workouts heading, including an empty saved library.
+
+Plan preview and commands
+A plan workout shows its exercises and targets. Start extra workout explicitly
+states that it will not mark a scheduled workout as complete. It uses the
+existing freestyle session and reusable-instance factories, including safety,
+equipment checks and the usual logger/history. The session is detached from
+scheduled occurrence IDs, and completing it does not advance the plan/block.
+The active logger retains Extra workout after reload/Resume and uses Plan
+targets for the prescriptions copied at the initial action. Actual saved
+workouts added afterwards retain their own Saved workout label.
+
+Save a copy uses the ordinary template draft/name/editor/writer flow. It focuses
+the name field and explains that the copy is saved separately. Copies remain
+independent after plan edits/replacement. The normal saved-workout access policy
+remains the owner of explicit saves; no new billing provider was connected.
+Only the accepted active plan is exposed, never generated or locked drafts.
+
+Correctness
+The reference binds profile ID, plan ID/version, day ID and a content signature.
+Start and final Save recheck inside the durable command. Changed or removed
+sources require a new review, without matching another workout by its name.
+Duplicate names are distinguished by weekday and, when needed, plan position.
+Starts and saves have intent IDs, and storage failure cannot publish a session.
+Fresh exercise/set/segment/superset IDs isolate actual execution from targets.
+The existing saved-template sanitization preserves supported custom, timed,
+per-side, superset and segment prescriptions without carrying completion data.
+
+Review and verification
+Consulted ChatGPT in Chat mode, then sent six real mobile screenshots and two
+updated screenshots. It recommended the live projection and explicit copy,
+then the smaller Create action and persistent Extra label. It confirmed the
+final scoped UX review with no remaining concrete visual defect.
+https://chatgpt.com/c/6adb6001-a420-83ed-9223-aa6f6a263318
+190 tests passed in 14 files. Production build passed; existing chunk advisory.
+Tests cover completion without schedule progress, strict serialization, stale
+sources/profiles, storage failure, duplicate starts/saves, complex prescriptions,
+free access, cancellation, overlap confirmation, backup and saved deletion.
+Browser: actual picker -> copy -> save -> extra start, reload/Resume with prior
+kg/reps still found. 393x852 dark, 320x568 light, and a long workout title on
+320x568 (four lines, no timer/action overlap or horizontal document overflow).
+No physical Safari check is claimed.
+Logs and screenshots: artifacts/plan-workout-review/
+
+Local preview
+/artifacts/plan-workout-preview/?review=ready&chrome=0
+Uses isolated synthetic data. Today > Train anyway > Choose a workout.
+Omit chrome=0 for the QA Reset demo toolbar. Use a new review token for a fresh
+isolated fixture; appearance=light and long=1 support the reviewed edge cases.
+No commit, push, merge or deployment.

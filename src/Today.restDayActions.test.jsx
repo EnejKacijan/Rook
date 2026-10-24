@@ -82,8 +82,8 @@ it('Train anyway does not start a workout; Freestyle retains its existing explic
   expect(current.program).toEqual(initial.program); expect(current.profile).toEqual(initial.profile);
   expect(updates).toHaveBeenCalledOnce(); expect(navigate).toHaveBeenCalledWith('workout');
 });
-it('Saved workouts reuses canonical browse/review and Back, and opening it is read-only', () => {
-  mount(); open('Train anyway'); click(button('Saved workoutsStart one of your saved workouts.')); advance(400);
+it('Choose a workout reuses canonical plan/saved browse, review and Back without writing', () => {
+  mount(); open('Train anyway'); click(button('Choose a workoutFrom your plan or saved workouts.')); advance(400);
   expect(dialog().querySelector('.saved-workout-list')).not.toBeNull(); unchanged();
   const row = dialog().querySelector('.saved-workout-list button'); click(row); advance(400);
   expect(dialog().querySelector('.saved-workout-preview')).not.toBeNull(); unchanged();

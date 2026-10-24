@@ -17,7 +17,7 @@ import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import { supersetMeta } from './supersets.js';
 import { effectiveWeekSchedule } from './flexibleWeek.js';
 const customWarmupLines = workout => workout?.warmupPlan?.mode === 'custom' && workout.warmupPlan.items?.length
-  ? ['Warm-up', ...workout.warmupPlan.items.map(item => `${item.label}${warmupPrescriptionLabel(item) ? ` · ${warmupPrescriptionLabel(item)}` : ''}`), 'Workout'] : [];
+  ? ['Warm-up', ...(workout.warmupPlan.instructions||[]), ...workout.warmupPlan.items.map(item => `${item.label}${warmupPrescriptionLabel(item) ? ` · ${warmupPrescriptionLabel(item)}` : ''}`), 'Workout'] : [];
 
 const isoDate = (value) => {
   if (typeof value === "string" && /^\d{4}-\d{2}-\d{2}$/.test(value)) {

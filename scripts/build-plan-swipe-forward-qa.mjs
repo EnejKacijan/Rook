@@ -93,8 +93,9 @@ try{for(const [index,t]of cases.entries()){
  assert.equal(await page.getByLabel('First name',{exact:true}).inputValue(),'Local draft');
  for(let n=1;n<8;n++)await drag();await step(8);
  await page.getByRole('button',{name:/I already have a preferred weekly structure/}).click();await b('Other').click();
- const raw='  Upper / Quantum / Lower  ';await page.getByLabel('Other preferred split').fill(raw);
- await drag({allowed:false});assert.equal(await page.getByLabel('Other preferred split').inputValue(),raw);
+ const {fillCustomWorkoutBlocks,readCustomWorkoutBlocks}=await import('./custom-weekly-structure-qa-helper.mjs');
+ await fillCustomWorkoutBlocks(page,['Chest','','Quads']);const raw=await readCustomWorkoutBlocks(page);
+ await drag({allowed:false});assert.deepEqual(await readCustomWorkoutBlocks(page),raw);
  assert.equal(await b('BUILD MY PLAN').isDisabled(),true);await page.locator('.onboarding h1').click();await drag({allowed:false});
  assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')||'null')?.program||null),null);
  assert.deepEqual(errors,[]);results.push({...t,passed:true,evidence,verticalScroll:true,answersRetained:true,buildRequiresTap:true});

@@ -1,5 +1,6 @@
 import { progressionFor } from './domain.js';
 import { sessionFeedbackLabel } from './sessionFeedback.js';
+import {progressionHistory} from './progressionHistory.js';
 
 // The rating describes the whole session, not an individual lift. It can
 // temper or contextualize a result-based suggestion, but never create a load
@@ -8,8 +9,8 @@ export function nextWorkoutAdvice(exercise, history, profile) {
   const advice = progressionFor(exercise, history, profile);
   if (!advice) return null;
 
-  const lastExposure = [...(history || [])].reverse().find(workout =>
-    workout.exercises?.some(item => item.exerciseId === exercise.exerciseId),
+  const lastExposure = progressionHistory(history).reverse().find(workout =>
+    workout.exercises?.some(item => (exercise.id&&item.id===exercise.id) || item.exerciseId === exercise.exerciseId),
   );
   if (!lastExposure?.completedAt || lastExposure.endedEarly ||
       lastExposure.adjustment || lastExposure.optionalSessionId ||

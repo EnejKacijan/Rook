@@ -18,13 +18,12 @@ it('orders B below D, E above C, C first, first to last by stable IDs while pres
  expect(s.program).toEqual(original.program);expect(s.workouts).toEqual(original.workouts);
  expect(deserializeState(serializeState(s),{strict:true}).activeWorkout.exercises).toEqual(s.activeWorkout.exercises);
 });
-it.each(['current','completed','touched','side','segment','superset','warmup'])('pins %s work and never allows an untouched exercise to cross it',kind=>{
+it.each(['current','completed','side','segment','superset','warmup'])('pins %s work and never allows an unlogged exercise to cross it',kind=>{
  const s=make(),e=s.activeWorkout.exercises[2];
  if(kind==='current')s.activeWorkout.exerciseIndex=2;
  if(kind==='completed')e.sets[0].completed=true;
- if(kind==='touched')e.sets[0].touched=true;
  if(kind==='side')e.sets[0].sides={left:{completed:true}};
- if(kind==='segment')e.sets[0].segments=[{touched:true}];
+ if(kind==='segment')e.sets[0].segments=[{completed:true}];
  if(kind==='superset')e.supersetId='pair';
  if(kind==='warmup')s.activeWorkout.warmup.stages=[{exerciseInstanceId:'C',completed:true}];
  expect(upNextReorderGroups(s.activeWorkout).some(g=>g.ids.includes('C'))).toBe(false);
@@ -70,13 +69,21 @@ it('moves the first untouched exercise behind the next without changing session 
 });
 it.each(['current-work','next-work','current-pair','next-pair','last'])('refuses current move across %s',kind=>{
  const s=make(),active=s.activeWorkout;
- if(kind==='current-work')active.exercises[0].sets[0].touched=true;
+ if(kind==='current-work')active.exercises[0].sets[0].completed=true;
  else if(kind==='next-work')active.exercises[1].sets[0].completed=true;
  else if(kind==='current-pair')active.exercises[0].supersetId='pair';
  else if(kind==='next-pair')active.exercises[1].supersetId='pair';
  else active.exercises=[active.exercises[0]];
  expect(canMoveCurrentToUpNext(active,'A')).toBe(false);
  expect(moveCurrentToUpNext(s,{sessionId:active.id,currentId:'A',nextId:'B'})).toBe(s);
+});
+it('moves entered but unlogged values intact, both from current and within Up Next',()=>{
+ let s=make();const active=s.activeWorkout;
+ for(const e of active.exercises.slice(0,3))Object.assign(e.sets[0],{weight:22.5,reps:8,touched:true,weightEntryMode:'manual'});
+ const before=structuredClone(active.exercises);
+ s=moveCurrentToUpNext(s,{sessionId:active.id,currentId:'A',nextId:'B'});expect(ids(s)).toBe('BACDE');
+ s=move(s,'A',null);expect(ids(s)).toBe('BCDEA');
+ for(const e of before)expect(s.activeWorkout.exercises.find(entry=>entry.id===e.id)).toEqual(e);
 });
 it('rejects stale current move requests without changing any exercise',()=>{
  const s=make(),request={sessionId:s.activeWorkout.id,currentId:'A',nextId:'C'};

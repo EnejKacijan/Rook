@@ -134,17 +134,17 @@ it('broken/disabled/missing artwork remains compact and does not block actions',
  click(host.querySelector('.detail-header-back'));preview('Owner exceptionally');expect(host.querySelector('.queue-preview-hero')).toBeNull();click(button('Add to Up Next'));expect(current.activeWorkout.exercises.at(-1).exerciseId).toBe('custom-preview');
 });
 it.each([false,true])('inner motion preserves shell/search and cleans up on rapid Back/close (reduced %s)',motionReduced=>{
- reduced=motionReduced;mount();preview();const incoming=animations.filter(a=>!a.node.classList.contains('queue-preview-paint'));
+ reduced=motionReduced;mount();preview();const incoming=animations.filter(a=>!a.node.classList.contains('queue-preview-paint')&&!a.node.closest('.rook-snackbar'));
  if(reduced){expect(incoming).toHaveLength(0);expect(host.querySelector('.queue-preview-paint')).toBeNull();}
  else {expect(incoming.length).toBeGreaterThan(0);expect(incoming.every(a=>a.timing.duration===160&&a.frames[0].transform==='translateX(5px)')).toBe(true);expect(host.querySelector('.queue-preview-paint').hasAttribute('inert')).toBe(true);}
  click(host.querySelector('.detail-header-back'));
- if(!reduced)expect(animations.filter(a=>!a.node.classList.contains('queue-preview-paint')).at(-1).frames[0].transform).toBe('translateX(-5px)');
+ if(!reduced)expect(animations.filter(a=>!a.node.classList.contains('queue-preview-paint')&&!a.node.closest('.rook-snackbar')).at(-1).frames[0].transform).toBe('translateX(-5px)');
  act(()=>host.querySelector('main').dispatchEvent(new CustomEvent('rook:before-sheet-close')));expect(host.querySelector('.queue-preview-paint')).toBeNull();act(()=>root.render(null));expect(document.querySelector('.queue-preview-paint')).toBeNull();expect(animations.every(a=>a.cancel.mock.calls.length>0)).toBe(true);
 });
 it.each([false,true])('successful Add reuses one-level Back motion and retained search (reduced %s)',motionReduced=>{
  reduced=motionReduced;mount();const input=host.querySelector('input[type=search]');preview();act(()=>vi.advanceTimersByTime(160));animations=[];
  click(button('Add to Up Next'));expect(host.querySelector('.queue-exercise-preview:not(.queue-preview-paint)')).toBeNull();expect(host.querySelector('input[type=search]')).toBe(input);expect(input.value).toBe('hack squat');expect(close).not.toHaveBeenCalled();
- const incoming=animations.filter(a=>!a.node.classList.contains('queue-preview-paint'));
+ const incoming=animations.filter(a=>!a.node.classList.contains('queue-preview-paint')&&!a.node.closest('.rook-snackbar'));
  if(reduced)expect(incoming).toHaveLength(0);
  else {expect(incoming.length).toBeGreaterThan(0);expect(incoming.every(a=>a.timing.duration===160&&a.frames[0].transform==='translateX(-5px)')).toBe(true);}
  act(()=>vi.advanceTimersByTime(160));expect(host.querySelector('.queue-preview-paint')).toBeNull();

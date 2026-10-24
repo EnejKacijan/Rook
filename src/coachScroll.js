@@ -6,7 +6,7 @@ const JUMP_MAX_DURATION = 280;
 
 // The only writer of transcript scrollTop. Viewport/composer/content changes
 // invalidate geometry; they never decide whether the reader wants to follow.
-export function bindCoachScroll(scroller, content, { memory, conversationId, onChange = () => {} } = {}) {
+export function bindCoachScroll(scroller, content, { memory, conversationId, empty = false, onChange = () => {} } = {}) {
   const saved = memory?.get(conversationId);
   let mode = saved?.mode || FOLLOWING_LATEST;
   let frame = 0, disposed = false, animation = null, dirty = false;
@@ -15,6 +15,9 @@ export function bindCoachScroll(scroller, content, { memory, conversationId, onC
   let anchor = null, snapshot = saved, published = '';
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)');
   const bottom = () => Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  // The empty introduction is read from the top, even when larger text makes
+  // it taller than the viewport. A conversation follows its latest message.
+  const followTarget = () => empty ? 0 : bottom();
   const distance = () => Math.max(0, bottom() - scroller.scrollTop);
   const anchors = () => [...content.querySelectorAll('[data-coach-anchor], .message-pair > .action-card, .message-pair > .combine-choices, .message-pair > .coach-interrupted, .message-pair > .coach-history-action')];
   const anchorKey = node => node.dataset.coachAnchor || `${node.closest('[data-coach-message]')?.dataset.coachMessage}:${node.matches('.action-card') ? 'action' : node.matches('.combine-choices') ? 'choices' : 'status'}`;
@@ -44,7 +47,7 @@ export function bindCoachScroll(scroller, content, { memory, conversationId, onC
     memory?.set(conversationId, snapshot);
   };
   const publish = () => {
-    const showLatest = distance() > 2 && (mode === READING_HISTORY || Boolean(animation));
+    const showLatest = !empty && distance() > 2 && (mode === READING_HISTORY || Boolean(animation));
     const signature = `${mode}:${showLatest}`;
     if (signature !== published) {
       published = signature;
@@ -65,9 +68,9 @@ export function bindCoachScroll(scroller, content, { memory, conversationId, onC
     if (mode === FOLLOWING_LATEST) {
       if (animation && !reduced.matches) {
         const progress = Math.min(1, Math.max(0, (now - animation.start) / animation.duration));
-        write(animation.from + (bottom() - animation.from) * (1 - (1 - progress) ** 3));
-        if (progress >= .98) { write(bottom()); animation = null; }
-      } else { animation = null; write(bottom()); }
+        write(animation.from + (followTarget() - animation.from) * (1 - (1 - progress) ** 3));
+        if (progress >= .98) { write(followTarget()); animation = null; }
+      } else { animation = null; write(followTarget()); }
     } else if (dirty) preserveAnchor();
     dirty = false;
     direction = 0;
@@ -103,7 +106,7 @@ export function bindCoachScroll(scroller, content, { memory, conversationId, onC
     const manualDirection = direction || (momentum ? Math.sign(top - lastTop) : 0);
     if (manualDirection) manualUntil = performance.now() + 500;
     if (!dirty || manualDirection) {
-      if (manualDirection < 0 || distance() > COACH_BOTTOM_THRESHOLD) mode = READING_HISTORY;
+      if ((empty && manualDirection) || manualDirection < 0 || distance() > COACH_BOTTOM_THRESHOLD) mode = READING_HISTORY;
       else if (manualDirection > 0 || top >= lastTop) mode = FOLLOWING_LATEST;
       if (mode === READING_HISTORY) captureAnchor();
       remember();
@@ -140,7 +143,7 @@ export function bindCoachScroll(scroller, content, { memory, conversationId, onC
   mutation.observe(content, { childList: true, characterData: true, subtree: true, attributes: true });
 
   // Restore before the first paint; cache belongs to the mounted app, not disk.
-  if (mode === FOLLOWING_LATEST) write(bottom());
+  if (mode === FOLLOWING_LATEST) write(followTarget());
   else {
     write(saved?.top || 0);
     anchor = saved?.anchor || null;
@@ -155,7 +158,7 @@ export function bindCoachScroll(scroller, content, { memory, conversationId, onC
       mode = FOLLOWING_LATEST;
       direction = 0;
       manualUntil = 0;
-      const travel = distance();
+      const travel = Math.abs(followTarget() - scroller.scrollTop);
       const duration = Math.min(JUMP_MAX_DURATION, Math.max(JUMP_MIN_DURATION, 220 + travel / 20));
       animation = !reduced.matches && travel > 2 ? { from: scroller.scrollTop, start: performance.now(), duration } : null;
       publish();

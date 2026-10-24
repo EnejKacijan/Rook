@@ -7,6 +7,8 @@ export default {
   description: 'Ember · night',
   window: { start: '10-01', end: '11-02' },
   base: 'neutral',
+  // A violet night glow from the top right, stronger in Dark.
+  atmosphere: { shape: 'glow-right', light: '#6d4aa8', dark: '#8a6ad8', strength: { light: .08, dark: .14 } },
   // [page, card, muted]: smoky lilac paper in Light, charcoal violet in Dark.
   surfaces: {
     light: ['#f6f3f7', '#fffdff', '#ebe6ef'],

@@ -71,13 +71,14 @@ it.each(['close','escape','backdrop','handle'])('%s returns to the same date, ro
   expect(detail.querySelector('textarea').value).toBe(target.sessionNote);
   expect(detail.textContent).toContain('WORKOUT PHOTO');expect(detail.textContent).toContain('SESSION LOG');
   expect(detail.querySelectorAll('.session-log-trigger')).toHaveLength(8);
-  expect(detail.querySelectorAll('.session-log-set')).toHaveLength(16);
+  expect(detail.querySelectorAll('.session-log-set')).toHaveLength(0);
   for(const item of detail.querySelectorAll('.session-log-item')) {
     click(item.querySelector('button'));expect(item.querySelector('button').getAttribute('aria-expanded')).toBe('true');
     expect(item.querySelector('.session-log-details').textContent).toContain('30');
     expect(item.querySelector('.session-log-details').textContent).toContain('8');
   }
-  if(method === 'escape')act(() => window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape'})));
+  expect(detail.querySelectorAll('.session-log-set')).toHaveLength(2);
+    if(method === 'escape')act(() => window.dispatchEvent(new KeyboardEvent('keydown', {key:'Escape'})));
   else if(method === 'backdrop')click(document.querySelector('.modal-layer'));
   else click(document.querySelector(method === 'close' ? '[aria-label="Close workout details"]' : '.modal-drag-handle'));
   settle();expect(route).toBeNull();expect(document.querySelector('.completed-workout-detail')).toBeNull();

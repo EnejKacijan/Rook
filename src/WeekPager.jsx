@@ -14,7 +14,7 @@ export function weekLabel(date) {
     : `${month(monday)} ${day(monday)}–${month(sunday)} ${day(sunday)}`;
 }
 
-function WeekStrip({page, selected, today, selectDate}) {
+export function WeekStrip({page, selected, today, selectDate, dayLabel=day=>day}) {
   return <div className="week-strip" aria-label={page.label}>
     {page.days.map(({day, date, key, status}) => {
       const isSelected = key === selected, isToday = key === today;
@@ -22,7 +22,7 @@ function WeekStrip({page, selected, today, selectDate}) {
         : status.planned || status.markers.length ? 'workout-planned' : 'workout-rest';
       return <button key={day} type="button"
         tabIndex={page.offset ? -1 : undefined}
-        aria-label={`${day} ${date.getDate()}${isToday ? ', today' : ''}, ${status.label}`}
+        aria-label={`${dayLabel(day,date)} ${date.getDate()}${isToday ? ', today' : ''}, ${status.label}`}
         aria-current={isToday ? 'date' : undefined} aria-pressed={isSelected}
         className={`${isSelected ? 'selected-day' : ''} ${isToday ? 'today-date' : ''} ${workoutState}`}
         onClick={() => { if (!page.offset && !isSelected) selectDate(day, date); }}>

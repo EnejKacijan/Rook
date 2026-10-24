@@ -22,7 +22,7 @@ export function buildPlanImportReview(parsed, program, catalog) {
     const pairs = new Map();
     for (const [index, raw] of rawDay.exercises.entries()) {
       const source = raw.sourceSpan?.text || lines.find(line => line.line === raw.sourceLine)?.text || '';
-      const marker = source.match(/^\s*(?:[•*-]\s*)?([A-Z])([12])\s*[.):\-]?\s+/i);
+      const marker = source.match(/^\s*(?:[•*-]\s*)?([A-Z])(\d+)\s*[.):\-]?\s+/i);
       if (marker || raw.sourceSpan?.supersetMarker) {
         const key = raw.sourceSpan?.supersetMarker?.key || marker[1].toUpperCase();
         pairs.set(key, [...(pairs.get(key) || []), { index, number: raw.sourceSpan?.supersetMarker?.number || Number(marker[2]), source }]);
@@ -33,7 +33,10 @@ export function buildPlanImportReview(parsed, program, catalog) {
           members[1].index === members[0].index + 1 &&
           day.exercises[members[0].index].sets.length === day.exercises[members[1].index].sets.length) {
         for (const member of members) day.exercises[member.index].supersetId = `${day.id}-superset-${key}`;
-      } else add('grouping', 'This superset grouping is incomplete or has unequal rounds. Keep these as separate exercises, or edit the pairing below.', members.map(m => m.source).join('\n'), day.id);
+      } else {
+        add('grouping', 'This superset group has more than two members, is incomplete, or has unequal rounds. Keep the whole group as separate exercises, or edit the source pairing.', members.map(m => m.source).join('\n'), day.id);
+        issues.at(-1).sourceFidelity=true;
+      }
     }
     const nextDayLine = parsed.days[dayIndex + 1]?.sourceLine || Infinity;
     const namedGroups = lines.filter(line => line.line > (rawDay.sourceLine || 0) && line.line < nextDayLine && /^\s*(?:superset|super set|ss)\s*:?\s*$/i.test(line.text));
@@ -62,7 +65,7 @@ export function buildPlanImportReview(parsed, program, catalog) {
         exercise.targetRir = null;
         add('rir', 'This RIR value is outside the supported range. Review it or leave it unspecified.', source, day.id, exercise.id);
       }
-      else if (/@\s*\d/.test(source) && !/@\s*\d\s*RIR\b|@\s*RIR\s*\d|@\s*\d+(?:[.,]\d+)?\s*(?:kg|lbs?)\b/i.test(source)) {
+      else if (/@\s*\d/.test(source) && !/@\s*\d\s*RIR\b|@\s*RIR\s*\d|@\s*\d+(?:[.,]\d+)?\s*(?:kg|lbs?)\b|@\s*\d+(?:[.,]\d+)?\s*%/i.test(source)) {
         exercise.targetRir = null;
         add('rir', 'The @ notation is unclear. Choose RIR or leave it unspecified.', source, day.id, exercise.id);
       }
@@ -74,7 +77,7 @@ export function buildPlanImportReview(parsed, program, catalog) {
         issues.at(-1).requiresReps=true;
         exercise.repMin=null;exercise.repMax=null;exercise.sets.forEach(set=>{set.reps=null;});
       }
-      if (/\d\s*\/\s*\d\s*\/\s*\d|(?:^|\n)\s*(?:Set\s*\d\s*:|\d+(?:[.,]\d+)?\s*(?:kg|lb)\s*[x×]\s*\d)/i.test(source)) add('prescription', 'This may be a past session log. Review the future prescription; use Import workout history for completed sets.', source, day.id, exercise.id);
+      if (/\d\s*\/\s*\d\s*\/\s*\d|(?:^|\n)\s*(?:Set\s*\d\s*:|\d+(?:[.,]\d+)?\s*(?:kg|lb)\s*[x×]\s*\d(?!\s*[x×]\s*\d))/i.test(source)) add('prescription', 'This may be a past session log. Review the future prescription; use Import workout history for completed sets.', source, day.id, exercise.id);
       const extraAmrap = source.match(/\+\s*(\d+)\s*AMRAP\b/i);
       const numberedAmrap = source.match(/\bSet\s+(\d+)\s+AMRAP\b/i);
       const lastAmrap = /\b(?:last|final) set\s+AMRAP\b/i.test(source);
@@ -91,11 +94,13 @@ export function buildPlanImportReview(parsed, program, catalog) {
         exercise.sets.at(-1).setType = 'amrap'; structuredAdvanced = true;
       } else if (/\d\s*[x×]\s*AMRAP\b/i.test(source)) {
         exercise.sets.forEach(set => { set.setType = 'amrap'; }); structuredAdvanced = true;
+      } else if (/\b(?:last|final) set\s+(?:is\s+)?(?:a\s+)?drop[ -]?set\b/i.test(source)) {
+        exercise.sets.at(-1).setType='drop';exercise.sets.at(-1).segments=[];exercise.importedLastSetMethod='drop';structuredAdvanced=true;
       }
       if (!structuredAdvanced && /\b(?:drop[ -]?set|rest[ -]?pause|final set|last set|zadnja serija)\b|\+\s*\d*\s*AMRAP/i.test(source)) add('advanced', 'Choose which existing set uses this method. Extra drop/rest-pause segments are not separate working sets.', source, day.id, exercise.id);
       if (/\/operirana noga/i.test(source)) {
         exercise.loggingMode='normal';exercise.notes=[exercise.notes,source].filter(Boolean).join('\n');
-      } else if (/\b(?:per side|each side|each leg|each arm)\b|\/stran|leva\/desna/i.test(source) && (source.match(/\d\s*[x×]\s*\d/g)||[]).length===1 && !/\b(?:left|right|leva|desna)\s*[:=]?\s*\d/i.test(source)) {
+      } else if (/\b(?:per side|each side|each leg|each arm)\b|\/\s*(?:stran|side)\b|leva\/desna/i.test(source) && (source.match(/\d\s*[x×]\s*\d/g)||[]).length===1 && !/\b(?:left|right|leva|desna)\s*[:=]?\s*\d/i.test(source)) {
         exercise.loggingMode='per_side';exercise.notes=[exercise.notes,source].filter(Boolean).join('\n');
       } else if (/\b(?:per side|each side|each leg|each arm|left\/right|L\/R)\b|\/stran|leva\/desna/i.test(source)) {
         add('loggingMode', 'The side-specific values need a logging choice. Choose how to record this exercise.', source, day.id, exercise.id);

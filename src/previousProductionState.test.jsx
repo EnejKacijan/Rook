@@ -12,10 +12,19 @@ function memory(fixture) {
   return {values,getItem:key=>values.get(key)??null,setItem:vi.fn((key,value)=>values.set(key,String(value))),removeItem:vi.fn(key=>values.delete(key))};
 }
 // Keep prior writer output immutable and compare every stored domain field.
-// Only neutral presentation defaults and the approved derived duration estimate differ:
-// the current automatic warm-up estimate is two minutes longer.
+// Only neutral presentation defaults, derived Coach activity metadata and the
+// approved duration estimate differ (warm-up, rep-aware work and both sides).
+// Both frozen writers contain the same four-day plan. Keep independent,
+// explicit clock expectations; never regenerate a plan or rewrite the fixture.
+const approvedEstimatedMinutes=[60,52,59,55];
 const currentExpected=expected=>({...expected,dismissedTemporarySchedule:null,dismissedCombinedWorkoutNoticeKey:null,
-  ...(expected.program ? {program:{...expected.program,days:expected.program.days.map(day=>({...day,estimatedMinutes:day.estimatedMinutes+2}))}} : {}),
+  // Each frozen conversation contains one user message at createdAt. Keep its
+  // original writer output intact and assert the exact migrated value here,
+  // independently of the production normalizer.
+  coachConversationMeta:Object.fromEntries(Object.entries(expected.coachConversationMeta||{}).map(([id,metadata])=>[
+    id,{...metadata,lastUserActivityAt:metadata.createdAt},
+  ])),
+  ...(expected.program ? {program:{...expected.program,days:expected.program.days.map((day,index)=>({...day,estimatedMinutes:approvedEstimatedMinutes[index]}))}} : {}),
   profile:{preferredTrainingStyle:null,noPlanReceipt:null,showProgressionTips:true,...expected.profile}});
 const allFixtures=[fixtures,olderFixtures].flatMap(collection=>collection.fixtures.map(fixture=>({
   ...fixture,name:`${collection.commit.slice(0,7)}/${fixture.name}`,

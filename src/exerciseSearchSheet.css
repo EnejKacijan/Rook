@@ -30,7 +30,7 @@
   min-height: 0;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   touch-action: pan-y pinch-zoom;
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(var(--rook-sheet-content-bottom, 20px) + var(--sheet-action-safe-bottom, env(safe-area-inset-bottom, 0px)));

@@ -7,7 +7,7 @@ export function StandalonePageZoomPreference({ Switch }) {
   if (mode === 'browser') return null;
   return <section className="standalone-zoom-preference">
     <div className="eyebrow">ACCESSIBILITY</div>
-    <Switch label="Allow app zoom" help="Pinch to enlarge text and the whole app. This setting applies on this device."
+    <Switch label="Allow app zoom" help="Pinch to enlarge this app on this device."
       checked={mode === 'allowed'} onChange={allowed => {
         try { setStandalonePageZoomAllowed(allowed); setError(''); }
         catch { setError('Couldn’t save this preference. Please try again.'); }

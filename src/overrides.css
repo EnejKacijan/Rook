@@ -1,5 +1,14 @@
 @import './scrollbarPresentation.css';
 
+/* Stop the document pulling beyond its content on iOS. Keep this on the
+   document boundary: app wrappers with overflow:auto must still pass gestures
+   to the document when their content determines their height. Native content,
+   focus/keyboard scrolling and zoom retain their existing ownership. */
+html,
+body {
+  overscroll-behavior-y: none;
+}
+
 :root {
   --rook-sheet-content-inline: 24px;
   --rook-sheet-content-bottom: 20px;
@@ -101,14 +110,16 @@
 
 /* One scroll contract for editor panels and secondary surfaces. Scratch's
    full-page panel must own scrolling too, not an expanding overflow ancestor
-   whose document scroll bypasses the shared footer/reorder scroll owner. */
+   whose document scroll bypasses the shared footer/reorder scroll owner.
+   Horizontal containment stays intact; vertical none also suppresses bounce
+   inside the panel, unlike contain alone. */
 .modal-layer > :is(.screen, .sheet:not(.replace-sheet)),
 .screen.scratch-editor-screen {
   min-height: 0;
   max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y pinch-zoom;
   scroll-padding-bottom: var(--rook-sheet-safe-bottom);
@@ -156,18 +167,18 @@
   max-height: calc(100dvh - max(12px, env(safe-area-inset-top)));
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   -webkit-overflow-scrolling: touch;
   touch-action: pan-y pinch-zoom;
 }
-.replace-sheet { min-height: 0; max-height: min(82dvh, 720px); padding: 0; overflow: clip; display: flex; flex-direction: column; overscroll-behavior: contain; will-change: transform; }
+.replace-sheet { min-height: 0; max-height: min(82dvh, 720px); padding: 0; overflow: clip; display: flex; flex-direction: column; overscroll-behavior: contain none; will-change: transform; }
 .sheet-header-chrome { position: sticky; z-index: 20; top: 0; flex: 0 0 48px; width: auto; min-height: 48px; margin: 0 calc(-1 * var(--rook-sheet-content-inline)) 2px; background: inherit; }
 .replace-sheet > .sheet-header-chrome { margin-inline: 0; }
 .sheet-header-chrome > .sheet-handle-slot { width: 100%; height: 100%; min-height: 48px; }
 .sheet-header-chrome > .sheet-close { z-index: 2; }
 .sheet-handle-slot { position: relative; flex: 0 0 48px; min-height: 48px; padding: 0; border: 0; background: transparent; color: inherit; display: grid; place-items: center; touch-action: none; cursor: default; }
 .replace-sheet .sheet-close { z-index: 2; top: 22px; width: 42px; height: 42px; display: grid; place-items: center; padding: 0; color: var(--rook-text, #1b1a19); }
-.sheet-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; padding: 7px 0 var(--rook-sheet-safe-bottom); }
+.sheet-scroll { width: 100%; max-width: 100%; min-height: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain none; -webkit-overflow-scrolling: touch; padding: 7px 0 var(--rook-sheet-safe-bottom); }
 .replace-sheet > .sheet-scroll { padding-inline: var(--rook-sheet-content-inline); }
 .replace-sheet h2 { margin-top: 12px; }
 .replace-sheet .choice-row { min-height: 58px; }
@@ -587,7 +598,7 @@
   flex: 1 1 auto;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   padding: 26px 0 var(--rook-sheet-content-bottom);
 }
 .profile-training-setting-screen .profile-setting-scroll > p { max-width: 420px; }
@@ -1031,21 +1042,9 @@
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
-.session-log-details {
-  display: grid;
-  grid-template-rows: 0fr;
-  opacity: 0;
-  transition:
-    grid-template-rows var(--rook-motion-layout, 190ms) var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1)),
-    opacity var(--rook-motion-feedback, 150ms) linear;
-}
 .session-log-details > div {
   min-height: 0;
   overflow: hidden;
-}
-.session-log-item.is-expanded .session-log-details {
-  grid-template-rows: 1fr;
-  opacity: 1;
 }
 .session-log-set {
   min-height: 36px;
@@ -1683,7 +1682,7 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .superset-partner-header h2 { padding-right: 0; }
 .superset-partner-header > h2 { max-width: 390px; margin: 2px 0 0; font-size: 25px; line-height: 1.12; }
 .superset-partner-header > p { max-width: 410px; margin: 11px 0 0; color: var(--rook-muted, #6f6c68); font-size: 14px; line-height: 1.5; }
-.superset-partner-options { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain; padding: 0 var(--rook-sheet-content-inline) 18px; -webkit-overflow-scrolling: touch; }
+.superset-partner-options { min-height: 0; flex: 1 1 auto; overflow-y: auto; overscroll-behavior: contain none; padding: 0 var(--rook-sheet-content-inline) 18px; -webkit-overflow-scrolling: touch; }
 .superset-partner-option { min-height: 72px !important; padding: 14px 16px; flex-direction: row; align-items: center; justify-content: space-between; gap: 14px; border: 1px solid var(--rook-border, rgba(27,26,25,.11)); transition: border-color 150ms ease, background-color 150ms ease, box-shadow 150ms ease; }
 .superset-partner-option > span { min-width: 0; display: grid; gap: 5px; text-align: left; }
 .superset-partner-option > span strong { overflow-wrap: anywhere; }

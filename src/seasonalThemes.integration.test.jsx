@@ -103,6 +103,10 @@ describe('Seasonal group in the picker', () => {
     expect(host.querySelectorAll('.pro-theme-presets button')).toHaveLength(6);
     const group = host.querySelector('.pro-theme-seasonal');
     expect(group.querySelector('legend').textContent).toBe('Seasonal');
+    // One shared, quiet note says seasons come back; no scarcity or extra badge per tile.
+    expect(group.querySelector('.pro-theme-group-note').textContent).toBe('Returns every year');
+    expect(group.getAttribute('aria-describedby')).toBe(group.querySelector('.pro-theme-group-note').id);
+    expect(group.textContent).not.toMatch(/limited|exclusive|last chance/i);
     expect([...group.querySelectorAll('button')].map(button => button.getAttribute('aria-label'))).toEqual(['Fixture']);
     expect(group.querySelector('.pro-theme-season-window').textContent).toBe('Jan 1 – Dec 31');
     await act(async () => group.querySelector('button').click());

@@ -34,7 +34,7 @@ function factsFor(text){
   const numerals={one:1,two:2,three:3,four:4,five:5,six:6,seven:7,eight:8,nine:9,ten:10,ena:1,en:1,dva:2,dve:2,tri:3,stiri:4,pet:5,sest:6,sedem:7,osem:8,devet:9,deset:10};
   const f=foldImport(text).replace(new RegExp(`\\b(${Object.keys(numerals).join('|')})\\b`,'g'),word=>String(numerals[word]));
   const sets=countValue(f.match(new RegExp(`\\b${RANGE}\\s*(?:(?:warm[ -]?up|top|working|back[ -]?off)\\s+)?${SET}\\b`,'i')));
-  const reps=countValue(f.match(new RegExp(`\\b${RANGE}\\s*${REP}\\b`,'i')));
+  const reps=countValue(f.match(new RegExp(`\\b${RANGE}\\s*${REP}\\b`,'i')) || f.match(new RegExp(`\\b\\d+\\s*(?:(?:top|working|back[ -]?off)\\s+)?${SET}\\s+(?:of|po)\\s+${RANGE}\\b`,'i')));
   const pair=f.match(/\b(\d+)\s*[x×]\s*(\d+)(?:\s*[–—-]\s*(\d+))?\b/);
   const restMatch=f.match(/\b(?:rest|pocitek|pavza)\s*[:=]?\s*(\d+(?:[.,]\d+)?)\s*(sec(?:onds?)?|sek(?:und[ae]?)?|min(?:utes?)?)\b/);
   const seconds=f.replace(restMatch?.[0]||'\u0000','').match(/\b(\d+(?:[.,]\d+)?)(?:\s*[–—-]\s*(\d+(?:[.,]\d+)?))?\s*(sec(?:onds?)?|sek(?:und[ae]?)?|min(?:utes?)?)\b/);
@@ -161,7 +161,7 @@ export function analyzeHybridImport(source,legacy,{heading,workoutHeading,matchN
     const ordinal=text.match(/^(?:day|dan|workout|trening)\s*(\d+)\s*[:–—-]\s*(.+)$/i),weekday=heading?.(text);
     const generic=!day&&!ordinal&&!weekday&&!bodyPartRE.test(text)?workoutHeading?.(text):null;
     if(ordinal||weekday||generic){day={id:`source-day-${line.line}`,name:ordinal?ordinal[2].trim():generic||weekday.name||'Workout',weekday:weekday?.weekday||null,location:null,sourceSpan:span(source,line.start,line.end),warmup:legacy?.days.find(d=>d.sourceLine===line.line)?.warmup};days.push(day);section=null;optional=null;previous=null;continue;}
-    if(['recovery','rest','load','warmup','warmup-review','comment','round-group'].includes(statuses.get(line.line)))continue;
+    if(['recovery','rest','load','warmup','warmup-review','warmup-instruction','table-header','comment','round-group'].includes(statuses.get(line.line)))continue;
     if(bodyPartRE.test(text)){ensureDay(line);section=span(source,line.start,line.end);continue;}
     if(/^\(?optional\)?\s*:?$/i.test(text)||/^\(?po zelji\)?\s*:?$/.test(f)){optional=span(source,line.start,line.end);continue;}
     if(/^(?:opomba|note|cue|napredovanje|progression|rest|pocitek)\s*:/i.test(f)){blocks.push({id:`note-${line.line}`,kind:'note',day:day?.id,sourceSpan:span(source,line.start,line.end)});continue;}

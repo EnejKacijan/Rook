@@ -20,7 +20,7 @@ const testProfile = {
   equipment: ["full gym"],
   priorities: ["Chest", "Back"],
   trainingPreferences:
-    "Upper / Lower / Full body",
+    "Chest & Back / Shoulders & Biceps & Triceps / Quads & Hamstrings & Glutes & Calves",
   trainingSplitChoice: "other",
   specificSplitConfirmed: true,
 };
@@ -204,9 +204,8 @@ assert.equal(
 await page.getByRole("button", { name: "CONTINUE" }).click();
 await page.getByRole("button", { name: /I already have a preferred weekly structure/ }).click();
 await page.getByRole("button", { name: "Other", exact: true }).click();
-await page
-  .getByRole("textbox", { name: "Other preferred split" })
-  .fill(testProfile.trainingPreferences);
+const { fillCustomWorkoutBlocks } = await import('./custom-weekly-structure-qa-helper.mjs');
+const expectedTrainingPreferences = await fillCustomWorkoutBlocks(page, testProfile.trainingPreferences);
 await page.getByRole("button", { name: "BUILD MY PLAN" }).click();
 await page.getByRole("heading", { name: "Your week is ready." }).waitFor();
 assert.equal(
@@ -237,7 +236,7 @@ assert.equal(
 );
 assert.equal(
   saved.profile.trainingPreferences,
-  testProfile.trainingPreferences,
+  expectedTrainingPreferences,
   "explicit custom split reaches the personalized generator",
 );
 assert.deepEqual(

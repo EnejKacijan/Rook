@@ -25,10 +25,10 @@ const saved=()=>deserializeState(localStorage.getItem(STORAGE_KEY));
 function recover(kind){click(document.querySelector('.today-missed-open'));const chooser=document.querySelector('[data-session-id]');if(chooser)click(chooser);if(kind==='skip'){click(button('More options'));click(button('Skip this session'));}else{click(button('MOVE TO ANOTHER DAY'));click(document.querySelector('[data-move-date]'));click(button('APPLY MOVE'));}}
 
 it.each([1,3])('shared header and separate accessible navigation with %i missed',count=>{
- draw(count);expect(document.querySelector('.today-missed-label').textContent).toBe(count===1?'MISSED WORKOUT':'MISSED WORKOUTS');
+ draw(count);expect(document.querySelector('.today-missed-label').textContent).toBe(count===1?'Missed workout':`${count} missed workouts`);
  expect(hide().textContent).toBe('Hide');expect(hide().getAttribute('aria-label')).toBe(count===1?'Hide missed workout reminder':'Hide missed workouts reminder');
  const row=document.querySelector('.today-missed-open');expect(row.contains(hide())).toBe(false);expect(row.getAttribute('aria-label')).toBe(count===1?'Recover UPPER B, missed Friday September 18':'View 3 missed workouts');
- expect(document.body.textContent).not.toContain('×');if(count===1){expect(row.textContent).toContain('Missed · Fri, Sep 18');expect(row.textContent).not.toContain('1 missed workout');}
+ expect(document.body.textContent).not.toContain('×');if(count===1){expect(row.querySelector('time').textContent).toBe('Fri, Sep 18');expect(row.textContent).not.toContain('1 missed workout');}
  click(row);expect(document.querySelector('h1').textContent).toBe(count===1?'UPPER B':'Choose a missed session');
 });
 it.each([1,3])('Hide and Undo touch only visibility, keeping later profile changes (%i)',count=>{
@@ -42,10 +42,10 @@ it('Hide expires at five seconds despite unrelated rerenders and remains hidden 
 });
 it('hidden count change reopens the correct singular reminder and invalidates old Hide Undo',()=>{
  draw(2);click(hide());change(s=>applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'skip',sessionId:missedFlexibleSessions(s)[0].logicalSessionId})).state);
- expect(status()).toBeNull();expect(hide().getAttribute('aria-label')).toBe('Hide missed workout reminder');expect(document.querySelector('.today-missed-label').textContent).toBe('MISSED WORKOUT');
+ expect(status()).toBeNull();expect(hide().getAttribute('aria-label')).toBe('Hide missed workout reminder');expect(document.querySelector('.today-missed-label').textContent).toBe('Missed workout');
 });
 it('one becomes multiple without stale header or accessible names',()=>{
- draw(1);change(()=>todayMissedRestFixture({count:3}));expect(document.querySelector('.today-missed-label').textContent).toBe('MISSED WORKOUTS');expect(hide().getAttribute('aria-label')).toBe('Hide missed workouts reminder');expect(document.querySelector('.today-missed-open').getAttribute('aria-label')).toBe('View 3 missed workouts');
+ draw(1);change(()=>todayMissedRestFixture({count:3}));expect(document.querySelector('.today-missed-label').textContent).toBe('3 missed workouts');expect(hide().getAttribute('aria-label')).toBe('Hide missed workouts reminder');expect(document.querySelector('.today-missed-open').getAttribute('aria-label')).toBe('View 3 missed workouts');
 });
 it.each(['move','skip'])('%s feedback survives sheet close and Undo restores only the exact occurrence mutation',kind=>{
  const before=draw(2),ids=missedFlexibleSessions(before).map(s=>s.logicalSessionId);recover(kind);

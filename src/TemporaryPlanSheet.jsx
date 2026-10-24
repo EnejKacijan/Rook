@@ -1,3 +1,4 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
 import React, { useId, useRef, useState } from 'react';
 import { exerciseCatalog, isoDay, saveState } from './domain.js';
 import { CANONICAL_GYM_EQUIPMENT, normalizeGymEquipment } from './gymProfiles.js';
@@ -52,7 +53,7 @@ export function TemporaryPlanSheet({ state, update, Header, close, persist = sav
       <p>{equipment.join(', ')}. Your usual plan resumes afterwards; history and your saved setup stay in place.</p>
       <div className="temporary-plan-changes" aria-label="Every proposed workout change">{proposal.changes.map(change => <article key={change.id}>
         <strong>{change.name}</strong><p>{dateLabel(change.originalDate)} → {change.skipped ? 'Rest day for this period' : `${dateLabel(change.toDate)} · ${change.workout.name}`}</p>
-        {change.workout && <details><summary>Review exercises ({change.workout.exercises.length})</summary><ul>{change.workout.exercises.map(exercise => <li key={exercise.id}>{exercise.name || exerciseCatalog[exercise.exerciseId]?.name} · {exercise.sets.length} sets · {exercise.repMin}–{exercise.repMax} {exercise.timed ? 'seconds' : 'reps'}</li>)}</ul></details>}
+        {change.workout && <AnimatedDetails><summary>Review exercises ({change.workout.exercises.length})</summary><ul>{change.workout.exercises.map(exercise => <li key={exercise.id}>{exercise.name || exerciseCatalog[exercise.exerciseId]?.name} · {exercise.sets.length} sets · {exercise.repMin}–{exercise.repMax} {exercise.timed ? 'seconds' : 'reps'}</li>)}</ul></AnimatedDetails>}
       </article>)}</div>
       <SheetActionFooter>{feedback}<button className="button primary" disabled={busy} onClick={() => publish(false)}>APPLY TEMPORARY PLAN</button><button className="button secondary" onClick={() => { setProposal(null); setError(''); }}>EDIT SETTINGS</button></SheetActionFooter>
     </> : <>

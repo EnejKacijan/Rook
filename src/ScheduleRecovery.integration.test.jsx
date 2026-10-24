@@ -85,7 +85,7 @@ it('a still-carried stale move remains visible, explicitly scoped and protected 
   const state = scheduleRecoveryState(); Object.values(state.flexibleWeek.sessions)[0].scheduledDate = '2026-10-15';
   mount(state); click('REVIEW SCHEDULE');
   expect(host.querySelector('.temporary-schedule-summary').textContent).toContain('another plan week');
-  expect(sheet().textContent).toContain('cannot be restored to a past date');
+  expect(button('Repair this move').disabled).toBe(false);
   expect(button('Restore original schedule').disabled).toBe(true);
   expect(current.flexibleWeek).toEqual(state.flexibleWeek); expect(publishes).not.toHaveBeenCalled();
 });

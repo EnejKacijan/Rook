@@ -8,7 +8,7 @@ import {
   exerciseCatalog,
   exerciseLoadRequirement,
   exerciseName,
-  rankExerciseSearch,
+  searchExercises,
   isExerciseAllowed,
   isoDay,
   plannedWorkoutForDate,
@@ -428,13 +428,10 @@ export function manualReplacementChoices(
   const occupied = proposal.workout.exercises
     .filter((item) => item.id !== entryId)
     .map((item) => item.exerciseId);
-  const needle = String(query || "").trim().toLowerCase();
-  return rankExerciseSearch(userSelectableReplacementCandidates(source, temporaryProfile, occupied, {
+  return searchExercises(userSelectableReplacementCandidates(source, temporaryProfile, occupied, {
     preferences,
     gymProfileId: proposal.gymProfileId,
-  })
-    .filter((item) => !needle || item.name.toLowerCase().includes(needle))
-    .slice(0, 80), query);
+  }), query).slice(0,80);
 }
 
 export function editTodayAdjustmentTargets(proposal, entryId, target, state) {

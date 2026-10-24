@@ -1,4 +1,5 @@
-import {progressionFor,workoutPerformedDate,workoutSetSummary} from './domain.js';
+import {workoutPerformedDate,workoutSetSummary} from './domain.js';
+import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
 
 export function completedProgressWorkouts(workouts=[]) {
   return workouts.filter(workout=>
@@ -39,7 +40,7 @@ export function selectProgressionRows(state,completedWorkouts=completedProgressW
       seen.add(exercise.exerciseId);
       exercises.push(exercise);
     }
-  return exercises.map(exercise=>({exercise,result:progressionFor(exercise,state.workouts,state.profile)}))
+  return exercises.map(exercise=>({exercise,result:nextWorkoutAdvice(exercise,state.workouts,state.profile)}))
     .filter(item=>item.result)
     .sort((left,right)=>priority(left.result)-priority(right.result));
 }

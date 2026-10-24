@@ -29,7 +29,7 @@ it('prepares once without starting a handoff and promotes saving, preserving gen
   expect(host.textContent).not.toMatch(/Backup created\.|Last backup created|Backup saved/);
   expect(button('SAVE BACKUP').classList.contains('primary')).toBe(true);
   expect(button('CREATE A NEW BACKUP').classList.contains('secondary')).toBe(true);
-  expect(host.textContent).toContain('ROOK does not upload it.'); expect(host.textContent).toContain('private workout photos');
+  expect(host.textContent).toContain('Nothing is uploaded.'); expect(host.textContent).toContain('private workout photos');
 });
 it.each([['downloaded', 'Download started.'], ['shared', 'Share sheet opened.']])('truthfully describes %s and calls the existing handoff once', async (result, message) => {
   mocks.presentBackupFile.mockResolvedValue(result); await click('CREATE BACKUP'); await click('SAVE BACKUP');

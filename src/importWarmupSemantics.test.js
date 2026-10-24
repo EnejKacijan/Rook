@@ -16,8 +16,9 @@ Workout
 Leg Press 3x9 130kg`;
 it('preserves a mixed imported warm-up through runtime, serialization and export',async()=>{
  const s=blankState();s.program=(await AIService.importTrainingPlan(s.profile,notes)).program;const d=s.program.days[0];
- expect(d.warmupPlan.items).toHaveLength(7);const expected=['5 min','3–5 min','5 × 5','2 × 1','','5 m',''];expect(d.warmupPlan.items.map(warmupPrescriptionLabel)).toEqual(expected);
+ expect(d.warmupPlan.items).toHaveLength(6);const expected=['5 min','3–5 min','5 × 5','2 × 1','5 m',''];expect(d.warmupPlan.items.map(warmupPrescriptionLabel)).toEqual(expected);expect(d.warmupPlan.instructions).toEqual(['60–70 % hitrosti']);
  s.activeWorkout=startWorkout(s,d);expect(s.activeWorkout.warmup.general.map(warmupPrescriptionLabel)).toEqual(expected);expect(s.activeWorkout.warmup.estimatedMinutes).toBeNull();
+ expect(s.activeWorkout.warmup.stages[0].instructions).toEqual(['60–70 % hitrosti']);
  const restored=deserializeState(JSON.parse(JSON.stringify(s)));expect(restored.activeWorkout.warmup.general.map(warmupPrescriptionLabel)).toEqual(expected);
  const text=buildWorkoutExport({workout:d}).text;for(const value of expected.filter(Boolean))expect(text).toContain(value);expect(text).toContain('60–70 % hitrosti');expect(text).toContain('Lateral Shuffle');
 });

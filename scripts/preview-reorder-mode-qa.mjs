@@ -80,7 +80,7 @@ try{for(const c of cases){
     await page.screenshot({path:`${dir}/${tag}-long-press.png`});await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
     results.push({...c,pass:true,legacyLongPress:true});await context.close();continue;
   }
-  assert.equal(await editor.locator('[data-reorder-kind]').count(),0);assert.ok(await editor.locator('img').count()>0);assert.ok(await page.getByRole('button',{name:'+ Add exercise',exact:true}).count()>0);
+  assert.ok(await editor.locator('[data-reorder-kind]').count()>0);assert.ok(await editor.locator('img').count()>0);assert.ok(await page.getByRole('button',{name:'+ Add exercise',exact:true}).count()>0);
   const cdp=await context.newCDPSession(page),row=cards.first().locator('.plan-editor-summary');await row.scrollIntoViewIfNeeded();const b=await row.boundingBox();
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:b.x+60,y:b.y+30}]});await page.waitForTimeout(430);
   assert.equal(await editor.locator('.plan-reorder-preview').count(),0);await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
@@ -88,20 +88,19 @@ try{for(const c of cases){
   await row.click();await settle(page);
   const expandedId=await cards.first().getAttribute('id');
   await cards.first().evaluate(e=>{window.qaExpandedNode=e.querySelector('.plan-editor-fields');});
-  await button('Reorder').click();
   assert.equal(await button('Reorder').count(),0);
-  assert.equal(await editor.locator('.plan-preview-mode-status').textContent(),'Reordering');
-  assert.equal(await page.getByRole('button',{name:/^Done/}).count(),1);
-  assert.equal(await button('USE THIS PLAN').count(),0);
-  const leakedEditorUI=await editor.locator('.plan-editor-summary-action:visible,.plan-review-illustration:visible,.plan-editor-fields:visible,.scratch-add-exercise:visible').evaluateAll(elements=>elements.map(element=>({className:element.className,parent:element.parentElement?.className,grandparent:element.parentElement?.parentElement?.className,display:getComputedStyle(element).display})));
-  assert.deepEqual(leakedEditorUI,[],'Reorder mode must hide expanded editor controls and illustration');
+  assert.equal(await button('Done reordering').count(),0);
+  assert.equal(await button('USE THIS PLAN').count(),1);
+  assert.ok(await editor.locator('.plan-editor-summary-action:visible').count()>0);
+  assert.ok(await editor.locator('.plan-review-illustration:visible').count()>0);
+  assert.ok(await editor.locator('.plan-editor-fields:visible').count()>0);
   const handle=cards.first().locator('.plan-exercise-drag-handle'),handleBox=await handle.boundingBox();assert.ok(handleBox.width>=44&&handleBox.height>=44);
   const scrollMode=await vertical(page,cdp,'.generated-plan-preview',true);
   assert.equal(await editor.locator('.plan-reorder-preview').count(),0);
   await editor.locator('.import-plan-meta').scrollIntoViewIfNeeded();await settle(page);await page.screenshot({path:`${dir}/${tag}-mode.png`});
-  // Two real drags. Done never ends the mode automatically after a drop.
+  // Two real drags, directly from the editable preview.
   await drag(page,handle,cards.nth(1));
-  assert.equal(await editor.locator('.plan-preview-mode-status').count(),1,'completed drag stays in reorder mode');
+  assert.equal(await button('USE THIS PLAN').isEnabled(),true,'a completed drag restores the existing acceptance action');
   assert.equal((await cards.evaluateAll(es=>es.map(e=>e.id)))[1],originalExercises[0]);
   await page.waitForTimeout(510); // existing post-drag click protection, not scroll gating
   await drag(page,cards.first().locator('.plan-exercise-drag-handle'),cards.nth(1));
@@ -113,39 +112,22 @@ try{for(const c of cases){
   const movedDays=await dayIds();assert.equal(movedDays[1],originalDays[0]);
   const immediateScroll=await vertical(page,cdp,'.generated-plan-preview');
   await drag(page,days.first().locator('.plan-workout-drag-surface'),days.nth(1),{workout:true,cancel:true});assert.deepEqual(await dayIds(),movedDays);
-  assert.equal(await editor.locator('.plan-preview-mode-status').count(),1,'cancelled drag stays in reorder mode');
+  assert.equal(await button('USE THIS PLAN').isEnabled(),true,'a cancelled drag returns to the editable preview');
   await vertical(page,cdp,'.generated-plan-preview');
   const interruptHandle=days.first().locator('.plan-workout-drag-surface');await interruptHandle.scrollIntoViewIfNeeded();const ib=await interruptHandle.boundingBox();
   await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:ib.x+22,y:ib.y+22}]});await page.locator('.plan-reorder-preview').waitFor();
   await interruptHandle.evaluate(e=>e.dispatchEvent(new PointerEvent('pointercancel',{bubbles:true,pointerType:'touch',pointerId:77})));
   assert.equal(await page.locator('.plan-reorder-preview').count(),0);await cdp.send('Input.dispatchTouchEvent',{type:'touchCancel',touchPoints:[]});
   await vertical(page,cdp,'.generated-plan-preview');assert.deepEqual(await dayIds(),movedDays);
-  await button('Done reordering').scrollIntoViewIfNeeded();await settle(page);
-  const exitLocation=await editor.locator('.plan-preview-mode-row').evaluate(row=>({top:row.getBoundingClientRect().top,bottom:row.getBoundingClientRect().bottom,position:getComputedStyle(row).position,parentPosition:getComputedStyle(row.parentElement).position}));
-  if(exitQA)assert.ok(exitLocation.bottom<0,'the non-sticky top row is out of reach at the end of a long preview');
-  assert.equal(await page.locator('.sheet-action-footer').getByRole('button',{name:'Done reordering',exact:true}).count(),1);
-  const footerBefore=await page.locator('.sheet-action-footer').evaluate(e=>{window.qaFooter=e;return {height:e.getBoundingClientRect().height,top:e.getBoundingClientRect().top,documentScroll:scrollY};});
-  await page.screenshot({path:`${dir}/${tag}-footer-mode.png`});
-  await button('Done reordering').click();await settle(page);
-  const footerAfter=await page.locator('.sheet-action-footer').evaluate(e=>({height:e.getBoundingClientRect().height,top:e.getBoundingClientRect().top,same:window.qaFooter===e,documentScroll:scrollY}));
-  assert.equal(footerAfter.same,true);assert.equal(footerAfter.height,footerBefore.height);
-  assert.ok(Math.abs(footerAfter.top-footerBefore.top)<2,'existing footer stays in place on Done');
-  assert.deepEqual(await stored(),beforeStored,'Done must not persist/replace/create history');
-  assert.equal(await button('Reorder').evaluate(b=>document.activeElement===b),true,'Done restores focus without scrolling to the top');
+  await button('USE THIS PLAN').scrollIntoViewIfNeeded();await settle(page);
+  await page.screenshot({path:`${dir}/${tag}-footer-ready.png`});
+  assert.deepEqual(await stored(),beforeStored,'moving and editing the draft must not persist/replace/create history');
   assert.equal(await button('Done reordering').count(),0);
   assert.ok(await editor.locator('.plan-review-illustration:visible').count()>0);
   assert.ok(await editor.locator('.plan-editor-summary-action:visible').count()>0);
-  assert.deepEqual(await dayIds(),movedDays);assert.equal(await editor.locator('[data-reorder-kind]').count(),0);
+  assert.deepEqual(await dayIds(),movedDays);assert.ok(await editor.locator('[data-reorder-kind]').count()>0);
   assert.equal(await page.locator(`[id="${expandedId}"]`).getAttribute('class').then(s=>s.includes('is-expanded')),true);
-  assert.ok(await page.evaluate(()=>window.qaExpandedNode===document.querySelector('.plan-editor-fields')),'expanded editor DOM is retained');
-  await button('Reorder').click();await button('Back to onboarding').click();assert.equal(await button('Reorder').getAttribute('aria-pressed'),'false');assert.deepEqual(await dayIds(),movedDays);
-  await button('Reorder').click();await screen.evaluate(e=>e.scrollTop=0);
-  // Physical-input protocol, standalone flag simulated: shared swipe invokes the same header Back.
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:8,y:380}]});
-  for(let x=30;x<=240;x+=30)await cdp.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x,y:380}]});
-  await cdp.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
-  await page.waitForFunction(()=>document.querySelector('.plan-preview-mode-row button')?.getAttribute('aria-pressed')==='false');
-  assert.deepEqual(await dayIds(),movedDays);assert.deepEqual(await stored(),beforeStored);
+  assert.ok(await page.evaluate(id=>window.qaExpandedNode===document.getElementById(id).querySelector('.plan-editor-fields'),expandedId),'expanded editor DOM is retained');
   assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
   await editor.locator('.import-plan-meta').scrollIntoViewIfNeeded();await settle(page);await page.screenshot({path:`${dir}/${tag}-done.png`});
   const expectedExerciseIds=await days.evaluateAll(ds=>Object.fromEntries(ds.map(d=>[d.dataset.dayId,[...d.querySelectorAll('.plan-editor-exercise')].map(e=>e.id.replace('import-exercise-',''))])));
@@ -174,17 +156,14 @@ try{for(const c of cases){
     const beforeReplacement=await stored();
     await page.getByRole('button',{name:/^Replace plan/}).click();
     await page.getByRole('button',{name:/^Build a personalized plan/}).click();await button('BUILD NEW PLAN').click();
-    const sheet=page.locator('.change-plan-sheet');await sheet.getByRole('button',{name:'Reorder',exact:true}).waitFor({timeout:45000});
-    await sheet.getByRole('button',{name:'Reorder',exact:true}).click();
+    const sheet=page.locator('.change-plan-sheet');await sheet.locator('.plan-exercise-drag-handle').first().waitFor({timeout:45000});
     await sheet.locator('.plan-exercise-drag-handle').first().focus();await page.keyboard.press('Alt+ArrowDown');await settle(page);
-    await sheet.getByRole('button',{name:'Done reordering',exact:true}).click();assert.deepEqual(await stored(),beforeReplacement);
-    await sheet.getByRole('button',{name:'Reorder',exact:true}).click();await sheet.getByRole('button',{name:'Back',exact:true}).click();
-    assert.equal(await sheet.getByRole('button',{name:'Reorder',exact:true}).getAttribute('aria-pressed'),'false');
+    assert.deepEqual(await stored(),beforeReplacement);
     await sheet.getByRole('button',{name:'Back',exact:true}).click();await page.getByRole('heading',{name:'Build a new personalized plan?',exact:true}).waitFor();
     assert.deepEqual(await stored(),beforeReplacement);replacementPreview=true;
   }
   assert.deepEqual(errors,[]);
-  results.push({...c,pass:true,scrollReview,scrollMode,immediateScroll,exitLocation,footerBefore,footerAfter,singleDone:'existing footer',donePersisted:false,back:true,swipe:true,reload:true,editControl:true,replacementPreview});
+  results.push({...c,pass:true,scrollReview,scrollMode,immediateScroll,directHandles:true,extraDoneStep:false,draftPersisted:false,reload:true,editControl:true,replacementPreview});
   console.log(`PASS ${tag}`);await context.close();
 }}catch(error){if(page)await page.screenshot({path:`${dir}/failure.png`}).catch(()=>{});throw error;}
 finally{await writeFile(`${dir}/${before?'before':smoke?'smoke':caseFilter?`results-${caseFilter}`:'results'}.json`,JSON.stringify(results,null,2));await browser.close();await server?.close();}

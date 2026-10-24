@@ -119,7 +119,7 @@ it('defers during focused input, then resolves on blur and native/foreground eve
   await act(async()=>vi.advanceTimersByTimeAsync(1100));expect(review.personalTheme.basePalette).toBe('autumn');
   await act(async()=>host.querySelector('input').blur());await act(async()=>vi.advanceTimersByTimeAsync(1));
   expect(review.personalTheme.basePalette).toBe('ocean');
-  expect(subscribeNativeForeground).toHaveBeenCalledTimes(2);
+  expect(subscribeNativeForeground).toHaveBeenCalledTimes(1);
 });
 it.each(['visibility','native','pageshow'])('rechecks a suspended app on %s without changing a hidden app',async event=>{
   savePersonalThemePreference(seasonal());await mount();

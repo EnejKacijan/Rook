@@ -64,7 +64,7 @@ it('keeps Data & backup compact, preserves actions, and returns through Data to 
   await render(<Profile state={state} update={update} setDetail={setDetail} onLogout={onLogout}/>);
   act(()=>button('Data & backup').click());
   for(const [label,detail] of [['Import workout history','import-workout-history'],['Export workout history','export-workout-history'],['Back up ROOK','backup-rook'],['Restore backup','restore-backup']]){act(()=>button(label).click());expect(setDetail).toHaveBeenLastCalledWith(detail);}
-  expect(document.querySelector('pre,details,.storage-status-summary')).toBeNull();expect(document.body.textContent).toContain('Keep a ROOK backup file somewhere safe.');expect(inspectStorageProtection).not.toHaveBeenCalled();
+  expect(document.querySelector('pre,details,.storage-status-summary')).toBeNull();expect(document.body.textContent).toContain('Keep a backup outside this device.');expect(inspectStorageProtection).not.toHaveBeenCalled();
   vi.stubGlobal('scrollY',275);await act(async()=>button('Storage diagnostics').click());
   expect(document.querySelector('button[aria-label="Back to Data & backup"]')).toBe(document.activeElement);expect(document.querySelector('pre')).toBeNull();
   act(()=>document.querySelector('main').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true})));

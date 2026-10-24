@@ -15,20 +15,22 @@ export const THEME_BASES = Object.freeze([
 ].map(item => Object.freeze({ ...item, light: Object.freeze(item.light), dark: Object.freeze(item.dark) })));
 // Each family owns an art-directed surface ladder for its own default tone
 // ([page background, card surface, muted surface]) and a one-line character.
+// `atmosphere` shapes the faint accent wash at the top of the main tabs; Slate
+// stays flat on purpose.
 // Other tones are derived from the shared tone vocabulary below.
 const ladder = (light, dark) => Object.freeze({ light: Object.freeze(light), dark: Object.freeze(dark) });
 export const THEME_PRESETS = Object.freeze([
-  { id: 'forest', name: 'ROOK Green', description: 'Signature · focused', accent: 'forest', base: 'neutral', canonicalStyle: 'standard',
+  { id: 'forest', name: 'ROOK Green', description: 'Signature · focused', accent: 'forest', base: 'neutral', canonicalStyle: 'standard', atmosphere: 'top',
     surfaces: ladder(['#f5f6f3', '#ffffff', '#eaede8'], ['#0f1312', '#1a1f1c', '#232926']) },
-  { id: 'champagne', name: 'ROOK Gold', description: 'Warm · premium', accent: 'champagne', base: 'warm', canonicalStyle: 'premium',
+  { id: 'champagne', name: 'ROOK Gold', description: 'Warm · premium', accent: 'champagne', base: 'warm', canonicalStyle: 'premium', atmosphere: 'glow-right',
     surfaces: ladder(['#f8f5ef', '#fffdf8', '#f0eadf'], ['#11100e', '#1a1915', '#24221d']) },
-  { id: 'ocean', name: 'Ocean', description: 'Cool · clear', accent: 'ocean', base: 'cool',
+  { id: 'ocean', name: 'Ocean', description: 'Cool · clear', accent: 'ocean', base: 'cool', atmosphere: 'top',
     surfaces: ladder(['#f1f5f9', '#fbfdff', '#e3ebf3'], ['#0c131a', '#152029', '#1e2b37']) },
-  { id: 'slate', name: 'Slate', description: 'Quiet · minimal', accent: 'slate', base: 'neutral',
+  { id: 'slate', name: 'Slate', description: 'Quiet · minimal', accent: 'slate', base: 'neutral', atmosphere: 'none',
     surfaces: ladder(['#f3f4f5', '#ffffff', '#e7e9ec'], ['#111315', '#1a1d20', '#23272b']) },
-  { id: 'plum', name: 'Plum', description: 'Rich · calm', accent: 'plum', base: 'neutral',
+  { id: 'plum', name: 'Plum', description: 'Rich · calm', accent: 'plum', base: 'neutral', atmosphere: 'glow-left',
     surfaces: ladder(['#f6f4f7', '#fffdff', '#ece7ef'], ['#131117', '#1d1a22', '#27232d']) },
-  { id: 'terracotta', name: 'Terracotta', description: 'Earthy · warm', accent: 'terracotta', base: 'warm',
+  { id: 'terracotta', name: 'Terracotta', description: 'Earthy · warm', accent: 'terracotta', base: 'warm', atmosphere: 'glow-right',
     surfaces: ladder(['#f9f4f0', '#fffcfa', '#f1e7df'], ['#15110f', '#201a17', '#2a231f']) },
 ].map(Object.freeze));
 // Each Light/Dark pair is art-directed within its family, then validated by the
@@ -167,6 +169,25 @@ export function personalThemeSurfaces(palette, tone, appearance) {
   return base[appearance].map(color => mixThemeColor(color, defaultShade(preset)[appearance], appearance === 'dark' ? .06 : .03));
 }
 
+// A palette's wash at the top of the main tabs. `spec` is a shape name (wash
+// in the accent) or { shape, light, dark, strength } with its own color. The
+// strongest point of the wash joins the surfaces every text color is resolved
+// against, so the wash never weakens contrast. Slate stays flat on purpose.
+const ATMOSPHERE_SHAPES = {
+  top: (wash, clear) => `linear-gradient(180deg, ${wash}, ${clear})`,
+  'glow-right': (wash, clear) => `radial-gradient(120% 100% at 100% 0, ${wash}, ${clear} 70%)`,
+  'glow-left': (wash, clear) => `radial-gradient(120% 100% at 0 0, ${wash}, ${clear} 70%)`,
+};
+export function themeAtmosphere(spec = 'top', fill, appearance = 'light') {
+  const config = typeof spec === 'string' ? { shape: spec } : spec || {};
+  const draw = ATMOSPHERE_SHAPES[config.shape];
+  if (!draw) return null;
+  const color = /^#[0-9a-f]{6}$/i.test(config[appearance] || '') ? config[appearance] : fill;
+  const strength = Math.min(Math.max(Number(config.strength?.[appearance] ?? config.strength) || (appearance === 'dark' ? .12 : .08), 0), .16);
+  const ink = rgbList(color);
+  return { color, strength, image: draw(`rgba(${ink}, ${strength})`, `rgba(${ink}, 0)`) };
+}
+
 export function personalThemeModel(input, systemDark = false) {
   const config = normalizePersonalTheme(input);
   const appearance = config.appearance === 'system' ? systemDark ? 'dark' : 'light' : config.appearance;
@@ -180,8 +201,10 @@ export function personalThemeModel(input, systemDark = false) {
   // set number must use readable text, even when the fill is a pale Gold shade.
   // Dark sheets and cards sit one quiet step above the card surface.
   const elevated = isDark ? mixThemeColor(surface, '#ffffff', .035) : surface;
+  const wash = themeAtmosphere(presetFor(config.basePalette)?.atmosphere, fill, appearance);
   const surfaces = [bg, surface, elevated, mutedSurface, soft, selected,
-    mixThemeColor(bg, fill, .055), mixThemeColor(bg, fill, .08)];
+    mixThemeColor(bg, fill, .055), mixThemeColor(bg, fill, .08),
+    ...(wash ? [mixThemeColor(bg, wash.color, wash.strength)] : [])];
   // Neutral ink carries a trace of the family hue so text, borders and
   // surfaces read as one palette instead of generic gray on color.
   const text = readableColor(mixThemeColor(isDark ? '#eef0ef' : '#15191a', fill, isDark ? .05 : .08), surfaces);
@@ -245,6 +268,7 @@ export function personalThemeModel(input, systemDark = false) {
     'timer-border': controlBorder,
     // Light snackbars stay dark; Dark uses the existing raised surface role.
     'inverse-accent': readableColor(fill, isDark ? ['#1b1a19', mutedSurface] : ['#1b1a19']),
+    atmosphere: wash?.image || 'none',
   };
   const tokens = Object.fromEntries(Object.entries(role).map(([key, value]) => [`--rook-${key}`, value]));
   const basePalette = presetFor(config.basePalette) || null;
@@ -253,6 +277,24 @@ export function personalThemeModel(input, systemDark = false) {
   const background = bg;
   const season = basePalette?.seasonal ? basePalette.id : null;
   return { config, appearance, tokens, background, canonicalStyle, basePalette, season, customized, name: basePalette?.name || 'Custom', accentName: accent.name, baseName: base.name };
+}
+
+// Browser-tab icon for a confirmed theme: the stable ROOK tile and letterform,
+// with the letter in that theme's accent. The tile is always the dark brand
+// tile, so the letter uses the accent's Dark value and keeps 4.5:1 on it.
+// Installed home-screen icons are fixed by the platform and never change here.
+export const ROOK_ICON_TILE = '#1b1a19';
+export const ROOK_ICON_LETTER = '#7fd0aa';
+export function personalThemeIconColor(theme) {
+  if (!theme) return ROOK_ICON_LETTER;
+  const config = normalizePersonalTheme(theme);
+  // Default ROOK Green keeps the exact stable icon.
+  if (config.accent === 'forest') return ROOK_ICON_LETTER;
+  const accent = personalThemeShades(config.basePalette).find(item => item.id === config.accent);
+  return accent ? readableColor(accent.dark, [ROOK_ICON_TILE]) : ROOK_ICON_LETTER;
+}
+export function rookIconSvg(letter = ROOK_ICON_LETTER) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128"><rect width="128" height="128" rx="28" fill="${ROOK_ICON_TILE}"/><path fill="${letter}" fill-rule="evenodd" d="M34 32h34c18 0 29 10 29 26 0 11-5 19-15 23l18 15H78L63 83H52v13H34V32zm18 15v22h15c8 0 12-4 12-11s-4-11-12-11H52z"/></svg>`;
 }
 
 // Exactly one root owner, with cleanup, for committed and staged themes.

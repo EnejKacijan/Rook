@@ -66,6 +66,18 @@ it('recognizes pre-marker production usage evidence but permits untouched first-
   storage.values.set('lift-funnel-once-v1',JSON.stringify(['first_workout_completed']));
   expect(readStartupState(storage)).toMatchObject({status:'error',code:'primary-missing'});expect(writes(storage)).toEqual([]);
 });
+it('permits uncommitted plan previews while preserving legacy saved-plan loss detection',()=>{
+  const preview=new MemoryStorage([
+    ['lift-funnel-events-v1',JSON.stringify([{name:'plan_preview_viewed',properties:{path:'personalized'}}])],
+    ['lift-funnel-once-v1',JSON.stringify(['plan_preview_viewed'])],
+  ]);
+  expect(readStartupState(preview)).toEqual({status:'empty'});
+  const legacy=new MemoryStorage([['lift-funnel-once-v1',JSON.stringify(['first_plan_viewed'])]]);
+  expect(readStartupState(legacy)).toMatchObject({status:'error',code:'primary-missing'});
+  const established=seeded();established.values.delete(P);established.values.delete(B);
+  established.values.set('lift-funnel-events-v1',JSON.stringify([{name:'plan_preview_viewed'}]));
+  expect(readStartupState(established)).toMatchObject({status:'error',code:'primary-missing'});
+});
 it('malformed collections and migrations that would drop logged data fail closed',()=>{
   const broken=structuredClone(fixture);broken.conversations=[null];expect(readStartupState(new MemoryStorage([[P,serializeState(broken)]]))).toMatchObject({status:'error',code:'validation-error'});
   const duplicate=structuredClone(fixture);duplicate.activeWorkout.exercises.push({...structuredClone(duplicate.activeWorkout.exercises[0]),id:'duplicate-instance'});

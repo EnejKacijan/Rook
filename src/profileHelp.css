@@ -1,0 +1,12 @@
+.profile-help-item:not(:last-child) { border-bottom: 1px solid var(--rook-border); }
+.profile-help-item > summary {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  min-height: 56px; padding: 14px 0; box-sizing: border-box;
+  color: var(--rook-text); font-size: 16px; font-weight: 700; line-height: 1.45;
+  list-style: none; cursor: pointer;
+}
+.profile-help-item > summary::-webkit-details-marker { display: none; }
+.profile-help-item > summary > span { min-width: 0; overflow-wrap: anywhere; }
+.profile-help-item > summary:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; border-radius: 4px; }
+.profile-screen .profile-help-item .rook-disclosure-content > p { margin: 0 0 12px; color: var(--rook-secondary); font-size: 16px; line-height: 1.55; overflow-wrap: anywhere; }
+.profile-help-item p strong { color: var(--rook-text); font-weight: 600; }

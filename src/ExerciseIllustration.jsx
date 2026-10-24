@@ -9,7 +9,7 @@ export function ExerciseIllustration({ src, className = '', style, onLoad, onErr
   // Don't let the CSS mask fetch an offscreen image ahead of native lazy loading.
   const maskSource = loadedSource === src ? `url(${JSON.stringify(src)})` : undefined;
   return <span className={`exercise-illustration ${className}`.trim()}
-    style={{ ...style, '--exercise-illustration-source': maskSource }}>
+    style={{ ...style, '--exercise-illustration-source': maskSource, '--exercise-illustration-ready':maskSource?1:0 }}>
     <img {...imageProps} src={src}
       onLoad={event => {setLoadedSource(src); onLoad?.(event);}}
       onError={event => {setLoadedSource(null); onError?.(event);}} />

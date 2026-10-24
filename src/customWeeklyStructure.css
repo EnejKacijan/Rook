@@ -1,0 +1,33 @@
+.custom-weekly-structure { min-width: 0; margin: 16px 0 0; padding: 0; border: 0; }
+.custom-weekly-structure > legend { padding: 0; color: var(--rook-text); font-size: 16px; font-weight: 700; }
+.custom-weekly-structure > p { margin: 4px 0 12px; color: var(--rook-muted); font-size: 14px; line-height: 1.4; }
+.custom-workout-blocks { display: grid; gap: 8px; }
+.custom-workout-block { min-width: 0; border: 1px solid var(--rook-border); border-radius: 16px; background: var(--rook-surface); }
+:root .custom-workout-toggle { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 78px; padding: 13px 12px; border: 0; border-radius: 15px; background: transparent; color: var(--rook-text); text-align: left; }
+.custom-workout-number { display: grid; place-items: center; flex: 0 0 26px; height: 26px; border-radius: 8px; background: var(--rook-accent-soft); color: var(--rook-accent-text); font-size: 14px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.custom-workout-copy { display: grid; flex: 1; min-width: 0; gap: 4px; }
+.custom-workout-copy strong { font-size: 15px; font-weight: 650; }
+.custom-workout-copy > span { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; color: var(--rook-muted); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.custom-workout-copy small { margin-left: 8px; color: var(--rook-muted); font-size: 13px; font-weight: 400; }
+.custom-workout-toggle .custom-workout-chevron { flex: 0 0 18px; width: 18px; height: 18px; color: var(--rook-muted); transform: rotate(90deg); }
+.custom-workout-toggle[aria-expanded="true"] .custom-workout-chevron { transform: rotate(-90deg); }
+.custom-workout-picker { padding: 0 12px 10px; }
+.custom-muscle-choices { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; }
+:root .custom-muscle-choice { display: flex; align-items: center; gap: 7px; min-width: 0; min-height: 46px; padding: 8px; border: 1px solid var(--rook-border); border-radius: 10px; background: var(--rook-surface-elevated); color: var(--rook-text); font-size: 14px; line-height: 1.35; text-align: left; }
+.custom-muscle-choice > span:last-child { min-width: 0; overflow-wrap: anywhere; }
+:root .custom-muscle-choice[aria-pressed="true"] { border-color: var(--rook-accent); background: var(--rook-accent-soft); color: var(--rook-accent-text); }
+.custom-muscle-check { display: grid; place-items: center; flex: 0 0 16px; width: 16px; height: 16px; border: 1px solid currentColor; border-radius: 4px; font-size: 12px; line-height: 1; }
+.custom-muscle-choice[aria-pressed="true"] .custom-muscle-check { background: var(--rook-accent-fill); border-color: var(--rook-accent-fill); color: var(--rook-on-accent-fill); }
+:root .custom-workout-block :is(button,summary):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: -3px; }
+.custom-workout-legacy { padding: 2px 0 3px; color: var(--rook-muted); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.custom-workout-legacy > strong { color: var(--rook-text); font-size: 14px; }
+.custom-workout-legacy > p { margin: 7px 0 0; }
+.custom-workout-legacy-actions { display: grid; gap: 7px; margin-top: 12px; }
+:root .custom-workout-legacy-actions button { min-height: 44px; padding: 9px 12px; border: 1px solid var(--rook-border); border-radius: 10px; font-size: 14px; line-height: 1.4; }
+:root .custom-workout-legacy-actions .custom-switch-focus { background: var(--rook-accent-soft); border-color: var(--rook-accent); color: var(--rook-accent-text); }
+:root .custom-workout-legacy-actions .custom-keep-focus { background: transparent; color: var(--rook-text); }
+:root[data-appearance="dark"] .custom-muscle-choice[aria-pressed="true"],
+:root[data-appearance="dark"] .custom-workout-legacy-actions .custom-switch-focus {
+  color: color-mix(in srgb, var(--rook-accent-text) 60%, var(--rook-text));
+}
+.split-preset-note { margin: 9px 2px 0; color: var(--rook-muted); font-size: 14px; line-height: 1.4; }

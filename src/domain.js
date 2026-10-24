@@ -1,4 +1,7 @@
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
+import {progressionHistory} from './progressionHistory.js';
+import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
+import {prepareTypoText,typoNameScore} from './exerciseSearchTypos.js';
 import { illustrationProvenanceForAsset } from './illustrationProvenance.js';
 import { conditioningConfiguration, isConditioning, intervalProgress, LIGHT_CARDIO_INTENSITIES } from './optionalActivity.js';
 import {intentionalNoPlan} from './trainingStyle.js';
@@ -10,12 +13,13 @@ import {normalizeCoachConversations} from './coachConversations.js';
 import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
 import {workoutPerformedDate} from './workoutDates.js';
 export {workoutPerformedDate} from './workoutDates.js';
-import { effectiveWeekSchedule,flexibleSessionStatus,missedFlexibleSessions } from './flexibleWeek.js';
+import { effectiveWeekSchedule,flexibleSessionStatus,missedFlexibleSessions,flexibleFingerprintBeforeHydration,migrateFlexibleWeekFingerprints } from './flexibleWeek.js';
 import { matchImportCatalogName } from './importExerciseMatching.js';
 import { normalizePartialTargets } from './importPartialPrescription.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { combinedAdjustment, combinedTemplate, isCombinedAdjustment, validateCombinedState, cancelCombinedWorkout } from './combinedWorkoutLifecycle.js';
-import { customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns } from './customTrainingStructure.js';
+import { allMuscleFullBody, customFullBodyExerciseLimit, customFullBodyWorkingSetLimit, customFullBodyMaxSets, customFullBodyHingeSetLimit, customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns } from './customTrainingStructure.js';
+import { customWorkoutFidelityErrors } from './customWorkoutFidelity.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import {
   BASELINE_TEMPLATE_BY_FREQUENCY,
@@ -839,7 +843,7 @@ export const exerciseCatalog = {
     name: "Band Chest Press",
     pattern: "horizontal-push",
     muscles: ["Chest", "Arms"],
-    equipment: ["resistance bands"],
+    equipment: ["resistance bands", "secure band anchor"],
     increment: 1,
     restSeconds: 90,
     kind: "compound",
@@ -849,7 +853,7 @@ export const exerciseCatalog = {
     name: "Band Fly",
     pattern: "chest-isolation",
     muscles: ["Chest"],
-    equipment: ["resistance bands"],
+    equipment: ["resistance bands", "secure band anchor"],
     increment: 1,
     restSeconds: 60,
     kind: "isolation",
@@ -859,7 +863,7 @@ export const exerciseCatalog = {
     name: "Band Row",
     pattern: "horizontal-pull",
     muscles: ["Back", "Arms"],
-    equipment: ["resistance bands"],
+    equipment: ["resistance bands", "secure band anchor"],
     increment: 1,
     restSeconds: 90,
     kind: "compound",
@@ -869,7 +873,7 @@ export const exerciseCatalog = {
     name: "Band Lat Pulldown",
     pattern: "vertical-pull",
     muscles: ["Back", "Arms"],
-    equipment: ["resistance bands"],
+    equipment: ["resistance bands", "secure band anchor"],
     increment: 1,
     restSeconds: 90,
     kind: "compound",
@@ -889,7 +893,7 @@ export const exerciseCatalog = {
     name: "Band Leg Curl",
     pattern: "knee-flexion",
     muscles: ["Hamstrings / glutes"],
-    equipment: ["resistance bands"],
+    equipment: ["resistance bands", "secure band anchor"],
     increment: 1,
     restSeconds: 60,
     kind: "isolation",
@@ -909,7 +913,7 @@ export const exerciseCatalog = {
     name: "Band Triceps Pressdown",
     pattern: "elbow-extension",
     muscles: ["Arms"],
-    equipment: ["resistance bands"],
+    equipment: ["resistance bands", "secure band anchor"],
     increment: 1,
     restSeconds: 60,
     kind: "isolation",
@@ -973,7 +977,7 @@ export const exerciseCatalog = {
     name: "Feet-elevated Push-up",
     pattern: "incline-push",
     muscles: ["Chest", "Shoulders", "Arms"],
-    equipment: ["bodyweight"],
+    equipment: ["bodyweight", "bench"],
     increment: 1,
     restSeconds: 90,
     kind: "compound",
@@ -1476,11 +1480,13 @@ for (const item of Object.values(exerciseCatalog)) {
         : item.equipment.includes("resistance bands")
           ? "band-resistance"
           : "load-and-repetition";
-  item.unilateral = /one-arm|single-leg|split-squat|lunge|side-plank/i.test(
+  item.unilateral = item.pattern==='single-leg' || /(?:one|single)[- ](?:arm|leg)|split[- ]squat|step[- ]up|lunge|side[- ]plank/i.test(
     `${item.id} ${item.name}`,
   );
   item.trackingSupport =
     item.measure === "seconds" ? "duration" : "reps-and-load";
+  // Preserve the stored legacy tag; distinguish lat isolation for new plans.
+  item.movementPattern = item.id==='straight-arm-cable-pulldown' ? 'lat-isolation' : item.pattern;
 }
 export const exerciseLibrary = exerciseCatalog;
 export const HOME_EQUIPMENT = [
@@ -1488,6 +1494,7 @@ export const HOME_EQUIPMENT = [
   "dumbbells",
   "pull-up bar",
   "resistance bands",
+    "secure band anchor",
   "bodyweight only",
 ];
 export const EQUIPMENT_BY_ENVIRONMENT = {
@@ -1504,6 +1511,7 @@ const FULL_GYM = new Set([
   "machines",
   "pull-up bar",
   "resistance bands",
+    "secure band anchor",
   "bodyweight",
   "bosu",
 ]);
@@ -2368,6 +2376,7 @@ export function deserializeState(input, { strict = false } = {}) {
     assertTemporaryPlanState(stored);
     assertWorkoutTemplates(stored.savedWorkoutTemplates);
     stored.schemaVersion = 3;
+    const flexibleFingerprint=stored.program?.days?.length?flexibleFingerprintBeforeHydration(stored):null;
     migrateBlockedExercises(stored);
     migrateMissingExerciseRest(stored);
     migrateExerciseLoadContracts(stored);
@@ -2601,6 +2610,7 @@ export function deserializeState(input, { strict = false } = {}) {
       const retained = (hydrated.activeWorkout?.exercises || []).flatMap(e=>e.sets.filter(s=>s.completed).map(s=>s.id));
       if (activeLoggedSetIds.length > retained.length || activeLoggedSetIds.some(id=>!retained.includes(id))) throw new Error('Logged sets could not be safely loaded without dropping data.');
     }
+    migrateFlexibleWeekFingerprints(hydrated,flexibleFingerprint);
     return hydrated;
   } catch (error) {
     if (strict) throw error;
@@ -3204,6 +3214,7 @@ function equipmentSet(profile) {
     "machines",
     "pull-up bar",
     "resistance bands",
+    "secure band anchor",
   ])
     if (selected.has(value)) result.add(value);
   return result;
@@ -3292,6 +3303,12 @@ export function isExerciseAllowed(item, profile, compiledTrainingSafety) {
   );
 }
 export function isExerciseAutoGeneratable(item, profile) {
+  // A flat bench does not imply a preacher station. Retain legacy/manual
+  // prescriptions, but do not invent this specialist setup in a home plan.
+  if (item?.id === 'preacher-curl' && !equipmentSet(profile).has('machines')) return false;
+  // Prefer standard stations in a fully equipped gym. Anchored bands remain
+  // available at home when explicitly declared, and for manual selection.
+  if (item?.equipment?.includes('resistance bands') && equipmentSet(profile).has('machines')) return false;
   return (
     !isExerciseAutoGenerationBlocked(item) && isExerciseAllowed(item, profile)
   );
@@ -3304,8 +3321,7 @@ export function hasBalancedPullEquipment(profile = {}) {
     "cables",
     "machines",
     "pull-up bar",
-    "resistance bands",
-  ].some((item) => available.has(item));
+  ].some((item) => available.has(item)) || available.has("resistance bands") && available.has("secure band anchor");
 }
 const slot = (patterns, options = {}) => ({
   patterns: Array.isArray(patterns) ? patterns : [patterns],
@@ -4713,6 +4729,10 @@ export function candidateScore(
   const highFatigueLower = lowerCompounds.filter(
     (entry) => entry.fatigueCost === "high",
   ).length;
+  if (item.pattern === 'horizontal-pull' && item.stability === 'low' &&
+      lowerCompounds.some(entry => entry.pattern === 'hinge' && entry.fatigueCost === 'high')) value -= 15;
+  if (Number(profile.sessionMinutes) <= 45 && item.unilateral && lowerPatterns.has(item.pattern) &&
+      lowerCompounds.some(entry => entry.unilateral)) value -= 12;
   if (
     profile.goal === "Get stronger" &&
     role !== "main" &&
@@ -4747,7 +4767,8 @@ export function makeProgramExercise(item, profile, options = {}) {
   const effort = String(profile.effortStyle || "");
   const hard = effort.startsWith("Fewer hard");
   const moderate = effort.startsWith("More moderate");
-  const maxSets = hard ? 2 : moderate ? 4 : 5;
+  const maxSets = options.fullBodyProgramming ? Math.min(customFullBodyMaxSets(profile,options.fullBodyLight),
+    item.pattern==='hinge'?customFullBodyHingeSetLimit(profile):Infinity) : hard ? 2 : moderate ? 4 : 5;
   const setCount = Math.min(
     maxSets,
     p.sets + (options.prioritySet && !hard ? 1 : 0),
@@ -4773,6 +4794,7 @@ export function makeProgramExercise(item, profile, options = {}) {
     restSeconds: p.restSeconds,
     defaultIncrement: item.increment,
     ...(options.prioritySet ? { protectedPrioritySets: 1 } : {}),
+    ...(options.fullBodyBase ? { fullBodyBase:true } : {}),
   };
 }
 export function estimateExerciseMinutes(exercise) {
@@ -4860,9 +4882,60 @@ export function estimatePersonalWorkoutMinutes(state, workout) {
 function minimumWorkingSets(profile, exercise) {
   return Math.min(
     exercise.sets.length,
-    minimumWorkingSetsForExercise(profile, exercise) +
+    Math.max(minimumWorkingSetsForExercise(profile, exercise), exercise.fullBodyBase?2:0) +
       Math.max(0, Number(exercise.protectedPrioritySets) || 0),
   );
+}
+function fullBodyDoseAllows(day, exercises, profile) {
+  return !allMuscleFullBody(day?.customFocus) ||
+    exercises.reduce((sum,exercise)=>sum+exercise.sets.length,0) <= customFullBodyWorkingSetLimit(profile,day.fullBodyLight) &&
+    exercises.every(exercise=>exercise.sets.length <= Math.min(customFullBodyMaxSets(profile,day.fullBodyLight),
+      exerciseCatalog[exercise.exerciseId]?.pattern==='hinge'?customFullBodyHingeSetLimit(profile):Infinity));
+}
+function orderCustomCompoundWork(exercises,profile={},fullBody=false) {
+  const rank=exercise=>{
+    const item=exerciseCatalog[exercise.exerciseId];
+    if(item?.kind==='power')return 0;
+    if(item?.kind!=='compound')return 4;
+    if(technicalDemand(item)>=3 && item.fatigueCost==='high')return 1;
+    if(exercise.programmingRole==='main')return 2;
+    if(!fullBody && item.pattern==='vertical-push' && !(profile.priorities||[]).includes('Chest'))return 2.5;
+    return item.pattern==='hip-extension'?3.5:3;
+  };
+  return exercises.map((exercise,index)=>({exercise,index})).sort((a,b)=>rank(a.exercise)-rank(b.exercise)||a.index-b.index).map(row=>row.exercise);
+}
+function generatedPlanGuidance(program,profile) {
+  const notes=[],fullBody=program.days.filter(day=>allMuscleFullBody(day.customFocus));
+  if(fullBody.length && Number(profile.sessionMinutes)<=30)notes.push({code:'compact-full-body',
+    message:'A compact full-body plan: main movements come first. Extra muscle work is limited by your available time.'});
+  if(fullBody.some(day=>day.fullBodyLight))notes.push({code:'alternating-workload',
+    message:'Full-body days alternate movement emphasis. Your selected effort setting is preserved.'});
+  const constraints=Object.values(program.coverageConstrained||{});
+  if(constraints.length){
+    const onlyTime=constraints.every(row=>row.reason==='time');
+    const onlyWorkload=constraints.every(row=>row.reason==='workload-policy');
+    notes.push({code:'limited-muscle-dose',message:onlyTime
+      ? 'Some selected muscles receive a smaller dose within your available time. Longer sessions can allow more work.'
+      : onlyWorkload ? 'Some selected muscles receive a smaller dose within the planned workload limits. More available time alone will not add extra work.'
+        : 'Some selected muscles receive a smaller dose within the limits of this plan. Review your equipment, workout structure and workload settings before adding more time.'});
+  }
+  if(program.days.some(day=>day.durationFidelity?.reasons?.includes('full-body-workload-limit')))notes.push({code:'bounded-workload',
+    message:'Your available time is a limit. Sessions stop sooner once the planned work is complete.'});
+  const constrainedPriorities=Object.keys(program.priorityConstrained||{});
+  if(constrainedPriorities.length)notes.push({code:'limited-priority-dose',message:
+    `Your ${constrainedPriorities.join(' and ')} priorities receive less additional work within this plan's time and workload limits.`});
+  if(program.days.some(day=>day.exercises.some(e=>exerciseCatalog[e.exerciseId].bodyweight &&
+      exerciseCatalog[e.exerciseId].kind!=='power' && e.targetRir!=null)))notes.push({code:'bodyweight-effort',message:
+    'Bodyweight difficulty varies. If the target reps feel too easy, use a harder variation or suitable resistance to match the target effort.'});
+  if(profile.goal==='Athletic performance')notes.push({code:'athletic-scope',message:
+    program.days.some(day=>day.exercises.some(e=>exerciseCatalog[e.exerciseId].kind==='power'))
+      ? 'Strength and power foundation. Keep explosive reps crisp and stop when speed or landing quality drops; sport-specific practice is separate.'
+      : 'A strength foundation for your athletic goal. Sport-specific skills, speed and conditioning are separate from these sessions.'});
+  if(['General fitness','Lose fat'].includes(profile.goal))notes.push({code:'conditioning-scope',message:
+    'These are your strength sessions. Walking or other aerobic activity is separate; optional conditioning takes additional time.'});
+  if(program.days.some(day=>day.estimatedMinutes>=Number(profile.sessionMinutes)-1))notes.push({code:'estimated-time',message:
+    'Session times are estimates. Equipment queues, setup and your pace can add time; keep the prescribed rests.'});
+  return notes;
 }
 function fitSessionToDuration(
   exercises,
@@ -4873,7 +4946,7 @@ function fitSessionToDuration(
   const result = [...exercises];
   // The requested duration is the generation budget. Display-estimation
   // tolerance belongs in validation, not as free programming time.
-  while (estimateGeneratedSessionMinutes(result, profile) > minutes) {
+  while (estimateGeneratedSessionMinutes(result, profile) > minutes || !fullBodyDoseAllows(session,result,profile)) {
     const reduciblePool = [...result]
       .reverse()
       .filter(
@@ -4911,6 +4984,68 @@ function fitSessionToDuration(
     }
   }
   return result;
+}
+function fitCustomSessionWithAlternatives(exercises,profile,session,allowed,usedCounts) {
+  const budget=Number(profile.sessionMinutes)||45;
+  const first=fitSessionToDuration(exercises,budget,profile,session);
+  if(!allMuscleFullBody(session.customFocus))return first;
+  const clocks=new WeakMap(),scores=new WeakMap(),singleClocks=new Map();
+  const clock=rows=>{if(!clocks.has(rows))clocks.set(rows,estimateGeneratedSessionMinutes(rows,profile));return clocks.get(rows);};
+  const faithful=rows=>requiredSessionRolesSatisfied(session,rows) && sessionNameMatchesExercises(session,rows);
+  const valid=rows=>faithful(rows) && fullBodyDoseAllows(session,rows,profile) && clock(rows)<=budget;
+  if(valid(first))return first;
+  const minimumDose=first.reduce((sum,row)=>sum+minimumWorkingSets(profile,row),0);
+  if(minimumDose>customFullBodyWorkingSetLimit(profile,session.fullBodyLight))return first;
+  if(budget<15 || session.slots.some(slot=>slot.essential && !allowed.some(item=>slot.patterns.includes(item.pattern) &&
+    (!slot.fullBodyCompound || item.kind==='compound'))))return first;
+  const initialIds=first.map(e=>e.exerciseId),seen=new Set();
+  let explored=0,best=first,beam=[first];
+  const rank=rows=>{if(scores.has(rows))return scores.get(rows);const score=Math.max(0,clock(rows)-budget)*1000 + (faithful(rows)?0:10000) +
+    rows.reduce((sum,e,index)=>sum+Number(e.exerciseId!==initialIds[index])*5,0) -
+    rows.reduce((sum,e)=>sum+candidateScore(exerciseCatalog[e.exerciseId],profile,usedCounts,e.slotPatterns?.[0],0,e.programmingRole,
+      rows.filter(other=>other!==e).map(other=>exerciseCatalog[other.exerciseId])),0)/100;
+    scores.set(rows,score);return score;};
+  const singleClock=row=>{const key=`${row.exerciseId}:${row.sets.length}`;if(!singleClocks.has(key))singleClocks.set(key,clock([row]));return singleClocks.get(key);};
+  // Bounded deterministic search, only after ordinary fitting fails. No rest,
+  // effort, schedule, equipment or selected-muscle requirement is relaxed.
+  for(let depth=0;depth<3;depth++){
+    const next=[];
+    for(const rows of beam)for(const [index,current]of rows.entries()){
+      const patterns=current.slotPatterns||[exerciseCatalog[current.exerciseId].pattern];
+      const posterior=patterns.some(pattern=>['hinge','knee-flexion','hip-extension'].includes(pattern));
+      const candidates=allowed.filter(item=>patterns.includes(item.pattern) &&
+        (!current.fullBodyBase || posterior || item.kind==='compound') &&
+        (profile.experience!=='Beginner'||technicalDemand(item)<=2) &&
+        !rows.some((other,i)=>i!==index && other.exerciseId===item.id));
+      const alternatives=candidates.map(item=>{
+        const replacement=makeProgramExercise(item,profile,{role:current.programmingRole,
+          requiredRole:current.requiredRole,slotPatterns:patterns,fullBodyBase:current.fullBodyBase,
+          fullBodyProgramming:true,fullBodyLight:session.fullBodyLight});
+        replacement.sets=replacement.sets.slice(0,Math.max(minimumWorkingSets(profile,replacement),Math.min(current.sets.length,replacement.sets.length)));
+        return replacement;
+      });
+      const quality=[...alternatives].sort((a,b)=>candidateScore(exerciseCatalog[b.exerciseId],profile,usedCounts)-candidateScore(exerciseCatalog[a.exerciseId],profile,usedCounts)||a.exerciseId.localeCompare(b.exerciseId));
+      const quick=[...alternatives].sort((a,b)=>singleClock(a)-singleClock(b)||a.exerciseId.localeCompare(b.exerciseId));
+      const pool=new Map([...quality.slice(0,4),...quick.slice(0,4)].map(e=>[e.exerciseId,e]));
+      for(const replacement of pool.values()){
+        if(replacement.exerciseId===current.exerciseId)continue;
+        const attempt=rows.map((row,i)=>i===index?replacement:row);
+        const fitted=fitSessionToDuration(orderCustomCompoundWork(structuredClone(attempt),profile,true),budget,profile,session);
+        const key=fitted.map(e=>`${e.exerciseId}:${e.sets.length}`).join('|');
+        if(seen.has(key))continue;
+        seen.add(key);explored++;
+        if(rank(fitted)<rank(best))best=fitted;
+        next.push(fitted);
+      }
+    }
+    next.sort((a,b)=>rank(a)-rank(b));
+    const accepted=next.find(valid);
+    if(accepted){Object.defineProperty(accepted,'feasibilitySearch',{value:{explored,substitutions:accepted.filter((e,index)=>e.exerciseId!==initialIds[index]).map(e=>e.exerciseId)}});return accepted;}
+    beam=next.slice(0,8);
+    if(!beam.length)break;
+  }
+  Object.defineProperty(best,'feasibilitySearch',{value:{explored,bestAttemptMinutes:clock(best),budget}});
+  return best;
 }
 const IDEAL_SCHEDULES = {
   2: [1, 4],
@@ -5098,7 +5233,7 @@ function sessionFocus(day) {
   return "mixed";
 }
 function sessionNameMatchesExercises(day, exercises = day?.exercises || []) {
-  if (day?.customFocus) return customFocusSatisfied(day.customFocus, exercises.map(exercise => exerciseCatalog[exercise.exerciseId]));
+  if (day?.customFocus) return customFocusSatisfied(day.customFocus, exercises.map(exercise => exerciseCatalog[exercise.exerciseId]), day.customFullBodyAccessories);
   const focus = namedSessionFocus(day);
   if (!focus || !exercises.length) return true;
   const lowerPatterns = new Set([
@@ -5139,7 +5274,7 @@ function sessionNameMatchesExercises(day, exercises = day?.exercises || []) {
   return true;
 }
 function requiredSessionRolesSatisfied(day, exercises = day?.exercises || []) {
-  if (day?.customFocus) return customFocusSatisfied(day.customFocus, exercises.map(exercise => exerciseCatalog[exercise.exerciseId]));
+  if (day?.customFocus) return customFocusSatisfied(day.customFocus, exercises.map(exercise => exerciseCatalog[exercise.exerciseId]), day.customFullBodyAccessories);
   const focus = namedSessionFocus(day);
   if (!focus || !exercises.length) return true;
   const patterns = new Set(
@@ -5273,6 +5408,29 @@ function adaptConsecutiveSessionRecovery(days, profile) {
     const previous = adjusted[(index - 1 + adjusted.length) % adjusted.length];
     const current = adjusted[index];
     if (weekdayGap(previous.weekday, current.weekday) !== 1) continue;
+    // Prefer a comparable lower-body movement over repeating the very same
+    // demanding lift on adjacent days. This is a soft choice, not a rest rule.
+    if(allMuscleFullBody(current.customFocus))for(const [exerciseIndex,exercise]of current.exercises.entries()){
+      const original=exerciseCatalog[exercise.exerciseId];
+      if(!['squat','hinge','single-leg'].includes(original.pattern) || original.fatigueCost!=='high' ||
+         !previous.exercises.some(e=>e.exerciseId===exercise.exerciseId))continue;
+      const context=current.exercises.filter(e=>e!==exercise).map(e=>exerciseCatalog[e.exerciseId]);
+      const candidates=Object.values(exerciseCatalog).filter(item=>item.pattern===original.pattern &&
+        isExerciseAutoGeneratable(item,profile) && (!exercise.fullBodyBase || !item.unilateral) &&
+        !current.exercises.some(e=>e.exerciseId===item.id) && !previous.exercises.some(e=>e.exerciseId===item.id) &&
+        (profile.experience!=='Beginner'||technicalDemand(item)<=2))
+        .sort((a,b)=>candidateScore(b,profile,new Map(),b.pattern,index,exercise.programmingRole,context)-
+          candidateScore(a,profile,new Map(),a.pattern,index,exercise.programmingRole,context)||a.id.localeCompare(b.id));
+      for(const item of candidates){
+        if(candidateScore(item,profile,new Map(),item.pattern,index,exercise.programmingRole,context)<
+           candidateScore(original,profile,new Map(),original.pattern,index,exercise.programmingRole,context)-8)break;
+        const replacement={...exercise,exerciseId:item.id,loadRequirement:exerciseLoadRequirement(item),defaultIncrement:item.increment};
+        const next=current.exercises.map((e,i)=>i===exerciseIndex?replacement:e);
+        if(!fullBodyDoseAllows(current,next,profile) || !sessionNameMatchesExercises(current,next) ||
+           !requiredSessionRolesSatisfied(current,next) || estimateGeneratedSessionMinutes(next,profile)>Number(profile.sessionMinutes))continue;
+        current.exercises=next;break;
+      }
+    }
     const relationship = overlapRelationship(
       previous.structureKey || sessionStructureKey(previous),
       current.structureKey || sessionStructureKey(current),
@@ -5303,6 +5461,65 @@ function adaptConsecutiveSessionRecovery(days, profile) {
     current.estimatedMinutes = estimateGeneratedSessionMinutes(current.exercises, profile);
   }
   return adjusted;
+}
+
+function balanceCustomLowerAccessories(program,profile,allowed) {
+  if(profile.goal!=='Build muscle'||isFewerHardSets(profile))return;
+  for(const day of program.days){
+    if(!day.customFocus || allMuscleFullBody(day.customFocus) || !sessionSupportsStimulus(day,'Quads'))continue;
+    const knee=day.exercises.filter(e=>stimulusProfileForExercise(e.exerciseId).Quads===1);
+    const posterior=day.exercises.filter(e=>['knee-flexion','hip-extension'].includes(exerciseCatalog[e.exerciseId].pattern));
+    if(knee.reduce((s,e)=>s+e.sets.length,0)>4 || posterior.length<2 ||
+       posterior.reduce((s,e)=>s+e.sets.length,0)<7 || day.exercises.length>=8)continue;
+    const item=allowed.find(item=>item.pattern==='knee-extension'&&!day.exercises.some(e=>e.exerciseId===item.id));
+    if(!item || !customFocusPatterns(day.customFocus).includes(item.pattern))continue;
+    const addition=makeProgramExercise(item,profile,{requiredRole:false});
+    addition.sets=addition.sets.slice(0,minimumWorkingSets(profile,addition));
+    const next=day.exercises.map(e=>posterior.includes(e)&&e.sets.length>minimumWorkingSets(profile,e)
+      ? {...e,sets:e.sets.slice(0,-1)}:e);
+    next.push(addition);
+    if(estimateGeneratedSessionMinutes(next,profile)>Number(profile.sessionMinutes) || !sessionNameMatchesExercises(day,next) ||
+       !requiredSessionRolesSatisfied(day,next))continue;
+    day.exercises=orderCustomCompoundWork(next,profile);day.estimatedMinutes=estimateGeneratedSessionMinutes(day.exercises,profile);
+  }
+}
+
+function balanceCustomBackPlanes(program,profile,allowed) {
+  const candidates=allowed.filter(item=>item.pattern==='vertical-pull' && item.kind==='compound')
+    .sort((a,b)=>candidateScore(b,profile)-candidateScore(a,profile)||a.id.localeCompare(b.id));
+  const policies=profile.goal==='Build muscle'?hypertrophyVolumeTargets(profile):{};
+  for(const day of program.days){
+    if(!day.customFocus || allMuscleFullBody(day.customFocus) ||
+       !day.exercises.some(e=>exerciseCatalog[e.exerciseId].pattern==='horizontal-pull') ||
+       day.exercises.some(e=>exerciseCatalog[e.exerciseId].pattern==='vertical-pull' && exerciseCatalog[e.exerciseId].kind==='compound'))continue;
+    const index=day.exercises.findIndex(e=>e.exerciseId==='straight-arm-cable-pulldown');
+    if(index<0)continue;
+    const before=weeklyStimulusVolume(program);
+    let accepted=null;
+    for(const item of candidates){
+      const replacement=makeProgramExercise(item,profile,{requiredRole:day.exercises[index].requiredRole});
+      const next=day.exercises.map((e,i)=>i===index?replacement:{...e,sets:[...e.sets]});
+      for(let guard=0;guard<8;guard++){
+        if(estimateGeneratedSessionMinutes(next,profile)<=Number(profile.sessionMinutes))break;
+        const donors=next.filter(e=>!isPriorityExercise(exerciseCatalog[e.exerciseId],profile) && e!==replacement &&
+          e.sets.length>minimumWorkingSets(profile,e)).sort((a,b)=>
+            Number(exerciseCatalog[b.exerciseId].kind==='isolation')-Number(exerciseCatalog[a.exerciseId].kind==='isolation') ||
+            Number(a.requiredRole)-Number(b.requiredRole));
+        const source=donors.find(e=>{
+          const trial={...program,days:program.days.map(d=>d===day?{...day,exercises:next.map(row=>row===e?{...row,sets:row.sets.slice(0,-1)}:row)}:d)};
+          const volume=weeklyStimulusVolume(trial);
+          return Object.entries(policies).every(([muscle,policy])=>(volume[muscle]||0)>=Math.min(before[muscle]||0,policy.floor));
+        });
+        if(!source)break;
+        source.sets.pop();
+      }
+      const proposedVolume=weeklyStimulusVolume({...program,days:program.days.map(d=>d===day?{...day,exercises:next}:d)});
+      if(Object.entries(policies).some(([muscle,policy])=>(proposedVolume[muscle]||0)>policy.hardCap))continue;
+      if(estimateGeneratedSessionMinutes(next,profile)<=Number(profile.sessionMinutes) &&
+         sessionNameMatchesExercises(day,next) && requiredSessionRolesSatisfied(day,next)){accepted=next;break;}
+    }
+    if(accepted){day.exercises=orderCustomCompoundWork(accepted,profile);day.estimatedMinutes=estimateGeneratedSessionMinutes(day.exercises,profile);}
+  }
 }
 function repairProgramSchedule(program) {
   if (!program || !Array.isArray(program.days) || program.days.length < 2)
@@ -5517,6 +5734,7 @@ function resolveTemplateSession(
       definition.patterns.includes("incline-push") &&
       !definition.patterns.includes("horizontal-push"),
   );
+  const hasDedicatedSingleLegSlot=slots.some(definition=>definition.patterns.length===1 && definition.patterns[0]==='single-leg');
   for (const definition of slots) {
     const patterns =
       chestHypertrophyPriority &&
@@ -5550,10 +5768,38 @@ function resolveTemplateSession(
     let candidates = allowed.filter(
       (item) =>
         !selected.has(item.id) &&
+        (!definition.fullBodyCompound || item.kind === 'compound') &&
         patterns.includes(item.pattern) &&
+        !(patterns.length===1 && patterns[0]==='vertical-pull' && item.kind!=='compound') &&
         !(item.kind === "compound" && usedCompoundPatterns.has(item.pattern)) &&
         (profile.experience !== "Beginner" || technicalDemand(item) <= 2),
     );
+    if (session.fullBodyProgramming) {
+      if (definition.fullBodyBase && patterns.includes('hinge') && profile.exercisePreference==='Prefer machines') {
+        const supported=candidates.filter(item=>item.equipment.some(key=>['machines','cables'].includes(key)));
+        if(supported.length)candidates=supported;
+      }
+      if (definition.preferredPatterns?.length) {
+        const preferred=candidates.filter(item=>definition.preferredPatterns.includes(item.pattern));
+        if(preferred.length)candidates=preferred;
+      }
+      if (definition.fullBodyBase) {
+        const bilateral=candidates.filter(item=>!item.unilateral);
+        if(bilateral.length)candidates=bilateral;
+      }
+      if (definition.fullBodyBase && (session.fullBodyLight || profile.experience==='Beginner')) {
+        const stable=candidates.filter(item=>item.stability==='high' && technicalDemand(item)<=2 && item.fatigueCost!=='high');
+        if(stable.length)candidates=stable;
+      }
+      if(definition.fullBodyBase){
+        const manageable=candidates.filter(item=>technicalDemand(item)<=2);
+        if(manageable.length)candidates=manageable;
+      }
+      if (definition.role==='main' && profile.goal==='Get stronger' && profile.experience!=='Beginner' && profile.exercisePreference!=='Prefer machines') {
+        const barbell=candidates.filter(item=>item.kind==='compound' && item.equipment.includes('barbell'));
+        if(barbell.length)candidates=barbell;
+      }
+    }
     const externallyLoadable = candidates.filter(
       (item) =>
         !item.bodyweight && item.progressionQuality === "load-and-repetition",
@@ -5564,6 +5810,8 @@ function resolveTemplateSession(
       .filter(Boolean);
     const chosen = [...candidates].sort(
       (a, b) =>
+        (Number(a.unilateral && patterns.includes('hinge') && hasDedicatedSingleLegSlot)-
+         Number(b.unilateral && patterns.includes('hinge') && hasDedicatedSingleLegSlot))*16 +
         candidateScore(
           b,
           profile,
@@ -5589,15 +5837,21 @@ function resolveTemplateSession(
     exercises.push(
       makeProgramExercise(chosen, profile, {
         role: definition.role,
-        prioritySet,
+        // Full-body priorities are allocated across the whole week below.
+        // A local bonus must not become an impossible protected minimum.
+        prioritySet:prioritySet && !session.fullBodyProgramming,
         requiredRole: definition.essential,
         slotPatterns: patterns,
+        fullBodyBase:definition.fullBodyBase,
+        fullBodyProgramming:session.fullBodyProgramming,
+        fullBodyLight:session.fullBodyLight,
       }),
     );
     selected.add(chosen.id);
     usedCounts.set(chosen.id, (usedCounts.get(chosen.id) || 0) + 1);
   }
-  return sequenceMixedUpperExercises(exercises, session, profile);
+  return session.customFocus ? orderCustomCompoundWork(exercises,profile,allMuscleFullBody(session.customFocus))
+    : sequenceMixedUpperExercises(exercises, session, profile);
 }
 export function stimulusProfileForExercise(itemOrId) {
   const item = typeof itemOrId === "string" ? exerciseCatalog[itemOrId] : itemOrId;
@@ -5761,7 +6015,10 @@ function sessionSupportsStimulus(day, muscle) {
 
 function refreshHypertrophyCoverage(program, profile) {
   if (profile.goal !== "Build muscle") return program;
-  const targets = hypertrophyVolumeTargets(profile);
+  const allTargets = hypertrophyVolumeTargets(profile);
+  const selectedMuscles=program.days.every(day=>day.customFocus?.length)
+    ? new Set(program.days.flatMap(day=>customFocusGroups(day.customFocus).flat())) : null;
+  const targets=Object.fromEntries(Object.entries(allTargets).filter(([muscle])=>!selectedMuscles || selectedMuscles.has(muscle)));
   const volume = weeklyStimulusVolume(program);
   program.volumeTargets = targets;
   program.coverageConstrained = Object.fromEntries(Object.entries(targets)
@@ -5769,9 +6026,24 @@ function refreshHypertrophyCoverage(program, profile) {
     .map(([muscle, policy]) => [muscle, {
       actual: volume[muscle] || 0,
       floor: policy.floor,
-      reason: program.coverageConstraintReasons?.[muscle] || "time",
+      reason: coverageConstraintReason(program,profile,muscle),
     }]));
   return program;
+}
+
+function coverageConstraintReason(program,profile,muscle) {
+  const recorded=program.coverageConstraintReasons?.[muscle] || 'time';
+  if(recorded!=='time')return recorded;
+  // Probe a useful increment without changing the plan. Spare clock time does
+  // not explain a blocked increment when the actual limit is programming dose.
+  for(const day of program.days.filter(day=>allMuscleFullBody(day.customFocus))){
+    for(const exercise of day.exercises){
+      if(!(stimulusProfileForExercise(exerciseCatalog[exercise.exerciseId])[muscle]>0))continue;
+      const next=day.exercises.map(row=>row!==exercise?row:{...row,sets:[...row.sets,{...row.sets.at(-1)}]});
+      if(estimateGeneratedSessionMinutes(next,profile)<=Number(profile.sessionMinutes||45) && !fullBodyDoseAllows(day,next,profile))return 'workload-policy';
+    }
+  }
+  return recorded;
 }
 
 function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts = new Map()) {
@@ -5815,7 +6087,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
       let selected = candidates.find(entry => {
         const nextSets = [...entry.exercise.sets, { ...entry.exercise.sets.at(-1), id: uid("set") }];
         const nextExercises = entry.day.exercises.map(exercise => exercise === entry.exercise ? { ...exercise, sets: nextSets } : exercise);
-        return estimateGeneratedSessionMinutes(nextExercises, profile) <= Number(profile.sessionMinutes || 45) &&
+        return fullBodyDoseAllows(entry.day,nextExercises,profile) && estimateGeneratedSessionMinutes(nextExercises, profile) <= Number(profile.sessionMinutes || 45) &&
           mutationWithinVolumePolicy({ addItem: entry.item, addSets: 1 });
       });
       let donor = null;
@@ -5843,7 +6115,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
               if (exercise === entry.exercise) return { ...exercise, sets: exercise.sets.slice(0, -1) };
               return exercise;
             });
-            return estimateGeneratedSessionMinutes(nextExercises, profile) <= Number(profile.sessionMinutes || 45) &&
+            return fullBodyDoseAllows(candidate.day,nextExercises,profile) && estimateGeneratedSessionMinutes(nextExercises, profile) <= Number(profile.sessionMinutes || 45) &&
               mutationWithinVolumePolicy({
                 addItem: candidate.item,
                 addSets: 1,
@@ -5870,7 +6142,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
               exercise === candidate.exercise
                 ? { ...exercise, sets: [...exercise.sets, { ...exercise.sets.at(-1), id: uid("set") }] }
                 : exercise);
-            return estimateGeneratedSessionMinutes(next, profile) <= Number(profile.sessionMinutes || 45) &&
+            return fullBodyDoseAllows(candidate.day,next,profile) && estimateGeneratedSessionMinutes(next, profile) <= Number(profile.sessionMinutes || 45) &&
               requiredSessionRolesSatisfied(candidate.day, next) && sessionNameMatchesExercises(candidate.day, next);
           });
           if (removed) {
@@ -5891,7 +6163,8 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
         const externallyLoadable = directAllowed.filter(item => !item.bodyweight && item.progressionQuality === "load-and-repetition");
         const additionPool = externallyLoadable.length ? externallyLoadable : directAllowed;
         const additions = program.days.flatMap((day, dayIndex) => {
-          if (!sessionSupportsStimulus(day, muscle) || day.exercises.length >= 8) return [];
+          if (!sessionSupportsStimulus(day, muscle) || day.exercises.length >=
+            (allMuscleFullBody(day.customFocus) ? customFullBodyExerciseLimit(profile) : 8)) return [];
           const existing = new Set(day.exercises.map(exercise => exercise.exerciseId));
           const existingPatterns = new Set(day.exercises.map(exercise => exerciseCatalog[exercise.exerciseId]?.pattern).filter(Boolean));
           return additionPool.filter(item => !existing.has(item.id) && !existingPatterns.has(item.pattern) &&
@@ -5905,6 +6178,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
           const exercise = makeProgramExercise(entry.item, profile, {
             requiredRole: false,
             slotPatterns: [entry.item.pattern],
+            fullBodyProgramming:allMuscleFullBody(entry.day.customFocus),fullBodyLight:entry.day.fullBodyLight,
           });
           const desiredSets = Math.max(minimumWorkingSets(profile, exercise), Math.ceil(deficit));
           exercise.sets = exercise.sets.slice(0, Math.min(exercise.sets.length, desiredSets));
@@ -5912,7 +6186,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
         };
         let addition = additions.find(entry => {
           entry.exercise = makeAddition(entry);
-          return estimateGeneratedSessionMinutes([...entry.day.exercises, entry.exercise], profile) <= Number(profile.sessionMinutes || 45) &&
+          return fullBodyDoseAllows(entry.day,[...entry.day.exercises,entry.exercise],profile) && estimateGeneratedSessionMinutes([...entry.day.exercises, entry.exercise], profile) <= Number(profile.sessionMinutes || 45) &&
             mutationWithinVolumePolicy({ addItem: entry.item, addSets: entry.exercise.sets.length });
         });
         if (!addition) {
@@ -5932,7 +6206,7 @@ function rebalanceHypertrophyFloors(program, profile, allowed = [], usedCounts =
               .sort((a, b) => b.exerciseIndex - a.exerciseIndex || a.exercise.exerciseId.localeCompare(b.exercise.exerciseId));
             const swap = donors.find(candidate => {
               const next = entry.day.exercises.map((current, index) => index === candidate.exerciseIndex ? exercise : current);
-              return estimateGeneratedSessionMinutes(next, profile) <= Number(profile.sessionMinutes || 45) &&
+              return fullBodyDoseAllows(entry.day,next,profile) && estimateGeneratedSessionMinutes(next, profile) <= Number(profile.sessionMinutes || 45) &&
                 requiredSessionRolesSatisfied(entry.day, next) && sessionNameMatchesExercises(entry.day, next);
             });
             if (swap) {
@@ -6494,7 +6768,9 @@ function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
         })),
       )
       .filter((entry) => priorityGroupMatchesDirectExercise(group, entry.exercise))
-      .filter((entry) => entry.exercise.sets.length < 5)
+      .filter((entry) => entry.exercise.sets.length < (allMuscleFullBody(entry.day.customFocus)
+        ? customFullBodyMaxSets(profile,entry.day.fullBodyLight) : isFewerHardSets(profile)?2
+          : String(profile.effortStyle||'').startsWith('More moderate')?4:5))
       .filter((entry) =>
         Object.entries(stimulusProfileForExercise(entry.item)).every(
           ([muscle, credit]) =>
@@ -6518,6 +6794,7 @@ function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
           : exercise,
       );
       if (
+        fullBodyDoseAllows(candidate.day,withAddedSet,profile) &&
         estimateGeneratedSessionMinutes(withAddedSet, profile) <= Number(profile.sessionMinutes || 45)
       ) {
         candidate.exercise.sets.push(addedSet);
@@ -6534,7 +6811,7 @@ function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
           .filter((entry) => entry.exercise !== candidate.exercise)
           .filter(
             (entry) =>
-              !priorityGroupMatchesDirectExercise(group, entry.exercise) &&
+              !isPriorityExercise(entry.item, profile) &&
               entry.exercise.sets.length > minimumWorkingSets(profile, entry.exercise),
           )
           .filter((entry) =>
@@ -6548,7 +6825,10 @@ function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
             Number(a.exercise.programmingRole === "main") -
               Number(b.exercise.programmingRole === "main") ||
             b.exerciseIndex - a.exerciseIndex,
-          )[0];
+          ).find(entry=>{
+            const next=withAddedSet.map(row=>row.id===entry.exercise.id?{...row,sets:row.sets.slice(0,-1)}:row);
+            return fullBodyDoseAllows(candidate.day,next,profile) && estimateGeneratedSessionMinutes(next,profile)<=Number(profile.sessionMinutes||45);
+          });
         if (!donor) continue;
         donor.exercise.sets.pop();
         candidate.exercise.sets.push(addedSet);
@@ -6563,6 +6843,7 @@ function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
     }
     if (!applied) break;
   }
+  reallocateFullBodyPriorityAccessories(program,profile,group,target);
   const actual = directPriorityGroupSets(program, group);
   if (actual < target) {
     program.priorityConstrained ||= {};
@@ -6571,6 +6852,46 @@ function addProtectedPrioritySets(program, baseline, profile, group, bonus) {
       target,
       reason: "time-recovery-or-volume",
     };
+  }
+}
+
+function reallocateFullBodyPriorityAccessories(program,profile,group,target) {
+  const policies=hypertrophyVolumeTargets(profile);
+  const allowed=Object.values(exerciseCatalog).filter(item=>isExerciseAutoGeneratable(item,profile) &&
+    priorityGroupMatchesDirectExercise(group,{exerciseId:item.id}));
+  for(let guard=0;guard<4 && directPriorityGroupSets(program,group)<target;guard++){
+    const attempts=[];
+    for(const [dayIndex,day]of program.days.entries()){
+      if(!allMuscleFullBody(day.customFocus))continue;
+      const donors=[null,...day.exercises.filter(e=>!e.requiredRole && !e.fullBodyBase && !e.protectedPrioritySets &&
+        e.programmingRole!=='power' && !isPriorityExercise(exerciseCatalog[e.exerciseId],profile))];
+      for(const donor of donors)for(const item of allowed){
+        if(day.exercises.some(e=>e.exerciseId===item.id))continue;
+        const addition=makeProgramExercise(item,profile,{requiredRole:false,fullBodyProgramming:true,fullBodyLight:day.fullBodyLight});
+        addition.sets=addition.sets.slice(0,Math.max(minimumWorkingSets(profile,addition),Math.min(addition.sets.length,target-directPriorityGroupSets(program,group))));
+        const next=orderCustomCompoundWork([...day.exercises.filter(e=>e!==donor).map(e=>({...e,sets:[...e.sets]})),addition],profile,true);
+        let borrowed=0;
+        while(estimateGeneratedSessionMinutes(next,profile)>Number(profile.sessionMinutes) && borrowed<12){
+          const source=next.filter(e=>e!==addition && !isPriorityExercise(exerciseCatalog[e.exerciseId],profile) &&
+            e.sets.length>minimumWorkingSets(profile,e))
+            .sort((a,b)=>b.sets.length-a.sets.length || Number(a.requiredRole)-Number(b.requiredRole) ||
+              Number(a.programmingRole==='main')-Number(b.programmingRole==='main'))[0];
+          if(!source)break;
+          source.sets.pop();borrowed++;
+        }
+        if(next.length>customFullBodyExerciseLimit(profile) || !fullBodyDoseAllows(day,next,profile) ||
+           !requiredSessionRolesSatisfied(day,next) || !sessionNameMatchesExercises(day,next) ||
+           estimateGeneratedSessionMinutes(next,profile)>Number(profile.sessionMinutes))continue;
+        const proposed={...program,days:program.days.map(other=>other===day?{...day,exercises:next}:other)};
+        const volume=weeklyStimulusVolume(proposed),before=weeklyStimulusVolume(program);
+        if(Object.keys(policies).some(muscle=>(volume[muscle]||0)>policies[muscle].hardCap ||
+          before[muscle]>0 && !(volume[muscle]>0)))continue;
+        attempts.push({day,next,score:((donor?donor.sets.length:0)+borrowed)*10 + Number(item.kind!=='isolation')*4 + dayIndex});
+      }
+    }
+    attempts.sort((a,b)=>a.score-b.score);
+    if(!attempts.length)break;
+    const {day,next}=attempts[0];day.exercises=next;day.estimatedMinutes=estimateGeneratedSessionMinutes(next,profile);
   }
 }
 
@@ -6625,12 +6946,17 @@ function programStructureFor(profile, trainingSafety) {
   const frequency = Math.max(2, Math.min(6, Number(profile.daysPerWeek) || 3));
   const structuralSelection = selectStructuralTemplate(profile, frequency);
   if (structuralSelection.customSessions) {
-    const sessionDefinitions = structuralSelection.customSessions.map(customSessionDefinition);
     const allowed = Object.values(exerciseCatalog).filter(item => isExerciseAutoGeneratable(item, profile));
+    const availablePatterns=new Set(allowed.map(item=>item.pattern));
+    let fullBodyIndex = 0;
+    const fullBodyCount = structuralSelection.customSessions.filter(session => allMuscleFullBody(session.concepts)).length;
+    const sessionDefinitions = structuralSelection.customSessions.map(session => customSessionDefinition(session, {
+      profile, availablePatterns,fullBodyCount, fullBodyIndex: allMuscleFullBody(session.concepts) ? fullBodyIndex++ : 0,
+    }));
     const usedCounts = new Map(), budgets = prioritySetBudgets(profile);
-    const resolvedSessions = sessionDefinitions.map((definition, index) => fitSessionToDuration(
+    const resolvedSessions = sessionDefinitions.map((definition, index) => fitCustomSessionWithAlternatives(
       resolveTemplateSession(definition, profile, allowed, usedCounts, index, budgets),
-      Number(profile.sessionMinutes) || 45, profile, definition,
+      profile, definition, allowed, usedCounts,
     ));
     // The same deterministic capability gate serves live validation and build.
     // Restrictions/equipment may limit a focus; never swap in another focus.
@@ -6638,16 +6964,24 @@ function programStructureFor(profile, trainingSafety) {
     const conflictIndex = sessionDefinitions.findIndex((day, index) =>
       !sessionNameMatchesExercises(day, resolvedSessions[index]) || resolvedSessions[index].length < 2 ||
       estimateGeneratedSessionMinutes(resolvedSessions[index], profile) > (Number(profile.sessionMinutes) || 45) ||
+      !fullBodyDoseAllows(day,resolvedSessions[index],profile) ||
       (day.weekday && available.length && !available.includes(day.weekday)));
     if (conflictIndex !== -1) {
       const error = new Error('Your custom focuses cannot be preserved with this equipment, restrictions, schedule or session length. Clarify the weekly structure before building.');
       error.code = 'custom-split-conflict';
       const day = sessionDefinitions[conflictIndex];
+      error.generationDiagnostics={session:day.name,budget:Number(profile.sessionMinutes)||45,
+        bestAttemptMinutes:estimateGeneratedSessionMinutes(resolvedSessions[conflictIndex],profile),
+        search:resolvedSessions[conflictIndex].feasibilitySearch||null,
+        exercises:resolvedSessions[conflictIndex].map(e=>({id:e.exerciseId,sets:e.sets.length,rest:e.restSeconds})),
+        availablePatterns:[...availablePatterns]};
       error.clarification = day.weekday && available.length && !available.includes(day.weekday)
         ? { reason: 'available-days', message: `${day.weekday} is not selected as an available day. Adjust your available days or the weekday labels.` }
         : estimateGeneratedSessionMinutes(resolvedSessions[conflictIndex], profile) > (Number(profile.sessionMinutes) || 45)
           ? { reason: 'duration', message: `${day.name} cannot fit the selected session length. Increase the time or simplify that workout's focuses.` }
-          : { reason: 'capability', message: `${day.name} cannot be built faithfully with your current equipment, restrictions and session length. Adjust those settings or this focus.` };
+          : !fullBodyDoseAllows(day,resolvedSessions[conflictIndex],profile)
+            ? {reason:'workload',message:`${day.name} cannot fit your selected effort and workload limits. Choose a different effort setting, frequency or session length.`}
+            : { reason: 'capability', message: `${day.name} cannot be built faithfully with your current equipment, restrictions and session length. Adjust those settings or this focus.` };
       throw error;
     }
     return { frequency, structuralSelection, templateId: 'CUSTOM',
@@ -6759,12 +7093,20 @@ export function customSplitIsValid(profile, trainingSafety = null) {
 }
 
 function verifyCustomProgram(program, profile) {
-  if (program.source === 'custom-structure') {
+  const requested = profile.trainingSplitChoice === 'other'
+    ? selectStructuralTemplate(profile, profile.daysPerWeek).customSessions : null;
+  if (requested) {
+    const fidelityErrors = customWorkoutFidelityErrors(program, requested, id => {
+      const item = exerciseCatalog[id];
+      return item && isExerciseAutoGeneratable(item, profile) ? item : null;
+    }, profile, new Set(Object.values(exerciseCatalog).filter(item=>isExerciseAutoGeneratable(item,profile)).map(item=>item.pattern)));
     const validation = validateProgram(program, profile, { requireProgramQuality: true });
-    if (!validation.valid) {
-      const error = new Error(`The custom structure cannot be preserved within the current training limits: ${validation.errors.join(' ')}`);
+    if (fidelityErrors.length || !validation.valid) {
+      const error = new Error(`The custom structure cannot be preserved within the current training limits: ${[...fidelityErrors, ...validation.errors].join(' ')}`);
       error.code = 'custom-split-conflict';
-      error.clarification = { reason: 'training-limits', message: 'This structure cannot meet the current weekly volume, recovery or session limits without changing your focuses. Adjust the structure or training settings.' };
+      error.clarification = fidelityErrors.length
+        ? { reason: 'focus-mismatch', message: 'The selected muscle groups could not be preserved in every workout. Review the workout blocks and build again.' }
+        : { reason: 'training-limits', message: 'This structure cannot meet the current weekly volume, recovery or session limits without changing your focuses. Adjust the structure or training settings.' };
       throw error;
     }
   }
@@ -6783,6 +7125,7 @@ function completeDurationPlanning(program, profile, definitions, allowed) {
     return Object.keys(a).reduce((sum, muscle) => sum + Math.min(a[muscle], b[muscle] || 0), 0);
   };
   const limits = (day, next, item, addedSets, volume) => {
+    if(!fullBodyDoseAllows(day,next,profile))return 'full-body-workload-limit';
     const stimulus = stimulusProfileForExercise(item);
     const sessionVolume = fractionalVolumeForExercises(day.exercises);
     for (const [muscle, credit] of Object.entries(stimulus)) {
@@ -6807,7 +7150,7 @@ function completeDurationPlanning(program, profile, definitions, allowed) {
   const tryExtend = (day, volume) => {
     const counts = {};
     const reject = reason => { counts[reason] = (counts[reason] || 0) + 1; };
-    const definition = definitionsByKey.get(day.structureKey);
+    const definition = allMuscleFullBody(day.customFocus) ? definitions[program.days.indexOf(day)] : definitionsByKey.get(day.structureKey);
     const patterns = new Set(day.exercises.map(exercise => exerciseCatalog[exercise.exerciseId]?.pattern));
     const existing = new Set(day.exercises.map(exercise => exercise.exerciseId));
     const slots = (definition?.slots || []).filter(slot => !slot.patterns.some(pattern => patterns.has(pattern)));
@@ -6818,16 +7161,17 @@ function completeDurationPlanning(program, profile, definitions, allowed) {
       .sort((a, b) => Number(b.slot.essential) - Number(a.slot.essential) ||
         Number(isPriorityExercise(b.item, profile)) - Number(isPriorityExercise(a.item, profile)) ||
         candidateScore(b.item, profile) - candidateScore(a.item, profile) || a.item.id.localeCompare(b.item.id));
-    if (day.exercises.length >= 8) reject('eight-exercise-complexity-limit');
+    if (day.exercises.length >= (allMuscleFullBody(day.customFocus) ? customFullBodyExerciseLimit(profile) : 8)) reject('eight-exercise-complexity-limit');
     else for (const { item, slot } of additions) {
       // Fewer-hard-sets deliberately limits workload; missing optional slots
       // are not permission to bypass that choice with extra exercise blocks.
       if (isFewerHardSets(profile)) { reject('experience-or-effort-set-limit'); continue; }
-      const addition = makeProgramExercise(item, profile, { role: slot.role, requiredRole: slot.essential, slotPatterns: slot.patterns });
+      const addition = makeProgramExercise(item, profile, { role: slot.role, requiredRole: slot.essential, slotPatterns: slot.patterns,
+        fullBodyProgramming:allMuscleFullBody(day.customFocus),fullBodyLight:day.fullBodyLight });
       const next = [...day.exercises, addition];
       const reason = limits(day, next, item, addition.sets.length, volume);
       if (reason) { reject(reason); continue; }
-      day.exercises = sequenceMixedUpperExercises(next, day, profile);
+      day.exercises = day.customFocus ? orderCustomCompoundWork(next,profile,allMuscleFullBody(day.customFocus)) : sequenceMixedUpperExercises(next, day, profile);
       return true;
     }
     if (!additions.length) reject('no-missing-compatible-template-role');
@@ -6836,9 +7180,10 @@ function completeDurationPlanning(program, profile, definitions, allowed) {
         a.exercise.sets.length - b.exercise.sets.length || a.index - b.index);
     for (const { exercise, item } of rows) {
       const prescription = trainingPrescription(profile, item, exercise.programmingRole);
-      const maxSets = isFewerHardSets(profile) ? 2
+      const maxSets = allMuscleFullBody(day.customFocus) ? customFullBodyMaxSets(profile,day.fullBodyLight) : isFewerHardSets(profile) ? 2
         : profile.experience === 'Beginner' || item.kind === 'power' ? prescription.sets
-          : String(profile.effortStyle || '').startsWith('More moderate') ? 4 : 5;
+          : String(profile.effortStyle || '').startsWith('More moderate') ? 4
+            : !isPriorityExercise(item,profile) ? Math.max(item.kind==='isolation'?3:4,prescription.sets) : 5;
       if (exercise.sets.length >= maxSets) { reject('experience-or-effort-set-limit'); continue; }
       const next = day.exercises.map(row => row !== exercise ? row : {
         ...row, sets: [...row.sets, { id: uid('set'), weight: null, reps: row.repMin, completed: false, rir: null }],
@@ -6931,6 +7276,8 @@ export function buildProgram(profile, options = {}) {
       structureKey: sessionStructureKey(definition),
       durationPlanningVersion: DURATION_PLANNING_VERSION,
       ...(definition.customFocus ? { customFocus: [...definition.customFocus] } : {}),
+      ...(definition.customFullBodyAccessories ? { customFullBodyAccessories: [...definition.customFullBodyAccessories] } : {}),
+      ...(definition.fullBodyProgramming ? {fullBodyProgramming:true,fullBodyLight:definition.fullBodyLight} : {}),
       estimatedMinutes: estimateGeneratedSessionMinutes(fitted, profile),
       exercises: fitted,
     };
@@ -7015,10 +7362,17 @@ export function buildProgram(profile, options = {}) {
       days,
   };
   rebalanceHypertrophyFloors(generatedProgram, profile, allowed, usedCounts);
+  balanceCustomLowerAccessories(generatedProgram,profile,allowed);
+  balanceCustomBackPlanes(generatedProgram,profile,allowed);
   generatedProgram.days = adaptConsecutiveSessionRecovery(generatedProgram.days, profile);
   const finalized = enforceInitialVolumeCeilings(generatedProgram, profile);
   const finish = program => {
+    for(const day of program.days)if(day.customFocus){
+      day.exercises=orderCustomCompoundWork(day.exercises,profile,allMuscleFullBody(day.customFocus));
+      day.exercises=fitSessionToDuration(day.exercises,Number(profile.sessionMinutes)||45,profile,day);
+    }
     completeDurationPlanning(program, profile, sessionDefinitions, allowed);
+    program.generationGuidance=generatedPlanGuidance(program,profile);
     program.trainingBlock = createTrainingBlock(program);
     return verifyCustomProgram(program, profile);
   };
@@ -7197,7 +7551,9 @@ export function buildReplacementProgram(
       ];
     const replaced = { ...exercise, exerciseId: replacement.id, restSeconds: replacement.restSeconds };
     const nextExercises = program.days[dayIndex].exercises.map(row => row === exercise ? replaced : row);
-    if (estimateGeneratedSessionMinutes(nextExercises, profile) > durationTargetBand(profile.sessionMinutes).upper) {
+    const timeLimit = allMuscleFullBody(program.days[dayIndex].customFocus)
+      ? Number(profile.sessionMinutes) || 45 : durationTargetBand(profile.sessionMinutes).upper;
+    if (estimateGeneratedSessionMinutes(nextExercises, profile) > timeLimit) {
       occupied.add(exercise.exerciseId);
       continue;
     }
@@ -7211,7 +7567,7 @@ export function buildReplacementProgram(
   completeDurationPlanning(program, profile, programStructureFor(profile, safety).sessionDefinitions,
     Object.values(exerciseCatalog).filter(item => isExerciseAutoGeneratable(item, profile)));
   program.trainingBlock = createTrainingBlock(program);
-  return {
+  return verifyCustomProgram({
     ...program,
     source: "personalized-replacement",
     generatorVersion: REPLACEMENT_GENERATOR_VERSION,
@@ -7222,7 +7578,7 @@ export function buildReplacementProgram(
       minimumChanged,
       limitedBySafeAlternatives: difference.changed < minimumChanged,
     },
-  };
+  }, profile);
 }
 export function validateProgram(program, profile = null, options = {}) {
   const errors = [];
@@ -7438,7 +7794,10 @@ export function validateProgram(program, profile = null, options = {}) {
   if (!allowImportedExercises && profile?.goal === "Build muscle" && program.volumeTargets && (!program.userEdited || options.requireProgramQuality)) {
     const volume = weeklyStimulusVolume(program);
     const targets = hypertrophyVolumeTargets(profile);
+    const requestedMuscles=program.days.every(day=>day.customFocus?.length)
+      ? new Set(program.days.flatMap(day=>customFocusGroups(day.customFocus).flat())) : null;
     for (const [muscle, policy] of Object.entries(targets)) {
+      if(requestedMuscles && !requestedMuscles.has(muscle))continue;
       const constrained = program.coverageConstrained?.[muscle];
       if ((volume[muscle] || 0) < policy.floor &&
           (!constrained || constrained.actual !== (volume[muscle] || 0) || constrained.floor !== policy.floor || !constrained.reason))
@@ -7600,15 +7959,19 @@ export function rankExerciseSearch(candidates, query) {
     .sort((a, b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
     .map(entry => entry.item);
 }
-// Prepared local search for the Add Exercise picker. This is the same query
-// membership and relevance policy as the functions above, with name/alias
-// normalization performed once per catalog rather than on every keystroke.
+// Explicit interactive search, distinct from strict importer identity matching.
+export function searchExercises(candidates,query) {
+  return createExerciseSearchIndex(candidates)(query);
+}
+// Prepared local search. Exact names and aliases retain their existing order;
+// small typo suggestions are considered when there is no complete exact name.
 export function createExerciseSearchIndex(items) {
+  if(!items.length)return()=>[];
   const prepared = new Map();
   const name = value => {
     const normalized = normalizedExerciseName(value);
     const plural = pluralizedExerciseName(value);
-    return { normalized, plural, compact: normalized.replace(/\s+/g, ''), pluralCompact: plural.replace(/\s+/g, '') };
+    return { normalized, plural, compact: normalized.replace(/\s+/g, ''), pluralCompact: plural.replace(/\s+/g, ''), typoForms:[...new Set([normalized,...(normalized.split(' ').at(-1)?.length>=4?[plural]:[])])].map(prepareTypoText) };
   };
   const prepare = item => {
     if (!prepared.has(item)) prepared.set(item, { item, primary: name(item.name), aliases: (item.aliases || []).filter(Boolean).map(name) });
@@ -7638,10 +8001,19 @@ export function createExerciseSearchIndex(items) {
       if (forms.some(form => tokens.every(token => form.normalized.includes(token)))) return 3;
       return 4;
     };
-    return available.filter(entry => names(entry).some(matches))
+    const strict=available.filter(entry => names(entry).some(matches));
+    const ranked=strict
       .map((entry, index) => ({ item: entry.item, index, tier: tier(entry) }))
       .sort((a,b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
       .map(entry => entry.item);
+    if(strict.some(entry=>names(entry).some(whole))||compact.length<4||normalized.length>128)return ranked;
+    const matched=new Set(strict),typoQuery=prepareTypoText(normalized),typoCache=new Map();
+    const suggestions=available.filter(entry=>!matched.has(entry)).map((entry,index)=>({item:entry.item,index,score:Math.min(...names(entry).map((form,i)=>Math.min(...form.typoForms.map(name=>typoNameScore(name,typoQuery,typoCache)))+Number(i>0)))}))
+      .filter(entry=>Number.isFinite(entry.score)).sort((a,b)=>a.score-b.score||a.index-b.index).map(entry=>entry.item);
+    // A partial match that only crosses a removed word boundary ("squatt"
+    // inside "squat thrust") must not outrank a corrected whole word (Squat).
+    const textual=new Set(strict.filter(entry=>names(entry).some(form=>form.normalized.includes(normalized)||form.plural.includes(normalized)||tokens.every(token=>form.normalized.includes(token)))).map(entry=>entry.item));
+    return ranked.filter(item=>textual.has(item)).concat(suggestions,ranked.filter(item=>!textual.has(item)));
   };
 }
 function importedSourceName(value) {
@@ -8170,6 +8542,7 @@ export function normalizeGeneratedProgram(raw, profile, options = {}) {
             mode: "custom",
             provenance: "imported",
             items: importedWarmupItems,
+            ...(day.warmup?.instructions?.length?{instructions:[...day.warmup.instructions]}:{}),
             rampUpSets: [],
           }
         : undefined,
@@ -8440,11 +8813,13 @@ export function optionalStrengthForDate(state, date = new Date()) {
     )?.workout || null
   );
 }
-export function previousExercise(workouts, exerciseId) {
+export function previousExercise(workouts, exerciseId, importRole = null, entryId = null) {
   for (const workout of [...workouts].reverse()) {
     const found = workout.exercises.find(
       (item) =>
         item.exerciseId === exerciseId &&
+        (!importRole || item.importRole === importRole) &&
+        (!entryId || item.id === entryId) &&
         item.sets.some((set) => set.completed),
     );
     if (found) return found;
@@ -8525,6 +8900,7 @@ function customWarmupForWorkout(workout, plan) {
         exerciseIndex,
         exerciseName: exerciseName(exercise),
         general: exerciseIndex === 0 ? general : [],
+        ...(exerciseIndex===0&&plan.instructions?.length?{instructions:[...plan.instructions]}:{}),
         movementPreparation: [],
         rampUpSets: ramps,
         estimatedMinutes: exerciseIndex === 0 && general.some(item => item.minutes === null) ? null : Math.max(
@@ -8542,6 +8918,7 @@ function customWarmupForWorkout(workout, plan) {
     generatorVersion: 3,
     source: "custom",
     general,
+    ...(plan.instructions?.length?{instructions:[...plan.instructions]}:{}),
     movementPreparation: [],
     rampUpSets,
     stages,
@@ -8723,7 +9100,8 @@ export function startWorkout(state, template) {
       const reviewedStart = base.nextBlockStartingLoad && template.trainingBlock && base.nextBlockStartingLoad.blockId === template.trainingBlock.blockId &&
         !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
         ? base.nextBlockStartingLoad.weight : null;
-      const previous = previousExercise(state.workouts, base.exerciseId);
+      const repeatedPrescription=template.exercises.filter(e=>e.exerciseId===base.exerciseId).length>1;
+      const previous = previousExercise(state.workouts, base.exerciseId, base.importRole, repeatedPrescription?base.id:null);
       const compatiblePrevious = previous &&
         loggingModeOf(previous) === loggingModeOf(base) &&
         exerciseMeasure(previous) === exerciseMeasure(base) &&
@@ -8751,7 +9129,7 @@ export function startWorkout(state, template) {
             completed: false,
             weight,
             weightProvenance:
-              loadRequirement === "none" ? null : hasUnspecifiedRepTarget(base) ? set.weightProvenance ?? null : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0
+              loadRequirement === "none" ? null : hasUnspecifiedRepTarget(base) ? set.weightProvenance ?? null : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0 || loadRequirement === 'optional' && previousSet && previousSet.rawImport?.version !== 2 && Object.hasOwn(previousSet,'weight') && (previousSet.weight === null || previousSet.weight === 0)
                 ? "history"
                 : Number(weight) > 0
                   ? set.weightProvenance || "explicit-plan"
@@ -8923,18 +9301,21 @@ export function collectProgressionEvidence(exercise, history) {
   const timed = exerciseMeasure(exercise) === "seconds";
   const catalogItem = exerciseCatalog[exercise.exerciseId];
   const loadRequirement = exerciseLoadRequirement(exercise);
-  const appearances = (history || [])
+  const appearances = progressionHistory(history)
     .map((workout, index) => ({
       workout,
       index,
       // A known slot with a different variation interrupts evidence instead of
       // silently recovering an older appearance of the original exercise.
       item: (exercise.id && workout.exercises?.find(item => item.id === exercise.id)) ||
-        workout.exercises?.find(item => item.exerciseId === exercise.exerciseId),
+        (workout.exercises?.filter(item=>item.exerciseId===exercise.exerciseId).length===1
+          ? workout.exercises.find(item=>item.exerciseId===exercise.exerciseId) : null),
+      ambiguous: workout.exercises?.filter(item=>item.exerciseId===exercise.exerciseId).length>1,
     }))
-    .filter((entry) => entry.item);
+    .filter((entry) => entry.item || entry.ambiguous);
   const observations = appearances
     .map((entry) => {
+      if(!entry.item)return {...entry,completed:[]};
       const planned = (entry.item.sets || []).filter(
         (set) =>
           set.planned !== false && !set.added && progressionComparableSet(set),
@@ -8950,10 +9331,11 @@ export function collectProgressionEvidence(exercise, history) {
       // Stored weights are already canonical kilograms. On optional-load
       // exercises zero and no added load represent the same BW setup.
       const loads = completed.map((set) =>
-        set.weight === null ||
+        loadRequirement === 'none' || set.weight === null ||
         set.weight === undefined ||
         set.weight === "" ||
         !Number.isFinite(Number(set.weight)) || Number(set.weight) < 0 ||
+        (loadRequirement === 'required' && Number(set.weight)===0) ||
         (loadRequirement === "optional" && Number(set.weight) === 0)
           ? null
           : Number(set.weight),
@@ -8987,6 +9369,7 @@ export function collectProgressionEvidence(exercise, history) {
         loadKinds: loadKinds.join("|"),
         hasLoad,
         loadKey,
+        uniformLoad: hasLoad && new Set(loads).size===1,
         weight: hasLoad ? loads[0] : null,
         allAtTop:
           complete &&
@@ -8997,6 +9380,7 @@ export function collectProgressionEvidence(exercise, history) {
         topReps: completed.length
           ? Math.max(...completed.map((set) => Number(effectiveSetReps(entry.item, set))))
           : null,
+        totalReps: completed.reduce((sum,set)=>sum+Number(effectiveSetReps(entry.item,set)),0),
         effortOkay,
         effortRecorded,
         // Conservative advice thresholds, not measurements of form or readiness.
@@ -9020,6 +9404,8 @@ export function progressionFor(exercise, history, profile = null) {
   const latest = observations.at(-1);
   if (!latest.complete || latest.index !== appearances.at(-1)?.index ||
       !progressionContextMatches(latest.item, exercise)) return null;
+  const requested=exercise.sets?.filter(set=>set.planned!==false&&!set.added&&progressionComparableSet(set));
+  if(requested && requested.length!==latest.planned.length)return null;
   if (loadRequirement === "optional" && !latest.hasLoad && !latest.hasNoLoad) return null;
   const structurallyComparable = observations.filter(
     (entry) => entry.complete && entry.planned.length === latest.planned.length &&
@@ -9032,7 +9418,8 @@ export function progressionFor(exercise, history, profile = null) {
       return entry.hasNoLoad;
     return entry.loadKey !== null && entry.loadKey === latest.loadKey;
   });
-  const previous = comparable.at(-2);
+  const candidate = comparable.at(-2);
+  const previous = candidate?.index===appearances.at(-2)?.index ? candidate : null;
   // Underperformance needs consecutive evidence, not an old matching load
   // recovered across changed/partial sessions. Compare effort per working set
   // when recorded; missing effort never becomes a fabricated RIR value.
@@ -9047,6 +9434,7 @@ export function progressionFor(exercise, history, profile = null) {
     loadRequirement === "required" &&
     !latest.hasLoad &&
     previousWithoutLoad &&
+    previousWithoutLoad.index===appearances.at(-2)?.index &&
     latest.allAtTop &&
     previousWithoutLoad.allAtTop
   )
@@ -9129,6 +9517,10 @@ export function progressionFor(exercise, history, profile = null) {
         detail:
           "The rep target was reached, but no external load was logged. Keep the prescription and record the load before increasing it.",
       };
+    if(!latest.uniformLoad)return {
+      type:'hold',title:'Keep your load pattern',
+      detail:'Both sessions reached the rep target with different loads across sets. Keep those set-by-set loads; review each load separately before increasing.',
+    };
     const equipmentKey = catalogItem?.equipment?.find((value) =>
       Object.hasOwn(profile?.increments || {}, value),
     );
@@ -9153,13 +9545,14 @@ export function progressionFor(exercise, history, profile = null) {
       return {
         type: "hold",
         title: "Use a smaller increment",
-        detail: `Two sessions reached the top of the range, but the available ${increment || "next"} kg jump is too large for this load. Keep building or choose a smaller real increment.`,
+        detail: `Two sessions reached the top of the range, but the available ${increment > 0 ? `${displayWeight(increment,profile?.units)} ${weightUnit(profile?.units)}` : 'next'} jump is too large for this load. Keep building or choose a smaller real increment.`,
       };
     return {
       type: "progress",
       title: effortUnconfirmed ? "Consider a small increase" : "Ready to progress",
       detail: progressionEvidence,
       weight: Number((latest.weight + increment).toFixed(2)),
+      fromWeight: latest.weight,
       evidenceExposures: 2,
     };
   }
@@ -9169,7 +9562,20 @@ export function progressionFor(exercise, history, profile = null) {
       title: "Repeat to confirm",
       detail: `You reached the rep target last workout. Repeat at the ${sameSetup} to confirm before increasing.`,
     };
-  const completeRecent = structurallyComparable;
+  if(timed)return {
+    type:'hold',title:latest.allAtTop?'Repeat to confirm':'Build hold time',
+    detail:latest.allAtTop
+      ? `You reached ${max} seconds in every hold last workout. Repeat the same setup before progressing.`
+      : `Keep the same setup. Build gradually toward ${max} seconds per hold without losing control.`,
+  };
+  // A plateau needs an uninterrupted like-for-like window, and progress in
+  // later sets counts too. A flat best set alone is not evidence of a stall.
+  const completeRecent = [];
+  for(let i=appearances.length-1;i>=0;i--){
+    const entry=comparable.find(item=>item.index===appearances[i].index);
+    if(!entry || !entry.effortOkay || entry.completed.some((set,index)=>progressionRir(set)!==progressionRir(latest.completed[index])))break;
+    completeRecent.unshift(entry);
+  }
   const plateauWindow = completeRecent.slice(
     -Math.max(4, completeRecent.length >= 6 ? 6 : 4),
   );
@@ -9198,7 +9604,8 @@ export function progressionFor(exercise, history, profile = null) {
         entry.weight <= first.weight,
     );
     const noRepGain = plateauWindow.every(
-      (entry) => entry.topReps <= first.topReps,
+      (entry) => entry.totalReps <= first.totalReps && entry.completed.every((set,index)=>
+        Number(effectiveSetReps(entry.item,set))<=Number(effectiveSetReps(first.item,first.completed[index]))),
     );
     if (noLoadGain && noRepGain)
       return {
@@ -9690,6 +10097,7 @@ export function coachContext(state) {
               name: exerciseName(item),
               target: [item.repMin, item.repMax],
               sets: item.sets.length,
+              prescription: reusableExerciseDefinition(item,{prescribed:true}),
             })),
           })),
         }
@@ -9698,6 +10106,7 @@ export function coachContext(state) {
       id: template.id,
       name: template.name,
       exerciseCount: template.exercises.length,
+      prescription: structuredClone(template.exercises),
     })),
     availableExercises: Object.values(exerciseCatalog)
       .filter((item) => isExerciseAutoGeneratable(item, state.profile))
@@ -9762,7 +10171,7 @@ export function coachContext(state) {
     progressionResults: uniqueExercises.map((item) => ({
       exerciseId: item.exerciseId,
       name: exerciseName(item),
-      result: progressionFor(item, state.workouts, state.profile),
+      result: nextWorkoutAdvice(item, state.workouts, state.profile),
     })),
     fatigueSignal: possibleFatigueSignal(state.workouts),
     missedWorkouts: missedPlannedWorkouts(state),
@@ -9782,6 +10191,7 @@ export function coachContext(state) {
         coach: entry.reply?.text || null,
         action: entry.reply?.action || null,
         actionResult: entry.actionResult || null,
+        ...(entry.requestContext?{requestedDay:{date:entry.requestContext.date,occurrenceId:entry.requestContext.occurrenceId,unresolved:entry.requestContext.unresolved}}:{}),
       })),
   };
 }
@@ -9938,6 +10348,11 @@ export function proposeOptionalStrengthWorkout(
   date = new Date(),
 ) {
   const lower = String(message || "").toLocaleLowerCase();
+  // A named personal workout must use the deterministic original-prescription
+  // review. The generic optional generator cannot stand in for that workout.
+  const comparable=value=>String(value||'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
+  const ownWorkoutNames=[...(state.program?.days||[]),...(state.savedWorkoutTemplates||[])].map(item=>comparable((item.workoutName||item.name||'').split(/\s*[—–(]/u)[0])).filter(Boolean);
+  if(ownWorkoutNames.some(name=>(` ${comparable(message)} `).includes(` ${name} `)))return null;
   const mentionsToday = /\b(?:today|tonight|danes|dans|nocoj)\b/u.test(lower);
   const wantsTraining =
     /\b(?:train|training|workout|lift|trenir\p{L}*|vadb\p{L}*)\b/u.test(lower);
@@ -10295,7 +10710,7 @@ export function deterministicCoach(state, message) {
     const planned =
       plannedExercises.find((item) => item.exerciseId === exerciseId) ||
       history;
-    const recommendation = progressionFor(
+    const recommendation = nextWorkoutAdvice(
       planned,
       state.workouts,
       state.profile,

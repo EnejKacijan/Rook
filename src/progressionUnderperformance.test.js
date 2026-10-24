@@ -4,15 +4,18 @@ import {createReturningUserFixture} from './demoFixture.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
 
 const target = {exerciseId:'barbell-bench-press', repMin:8, repMax:12, targetRir:2, defaultIncrement:1};
+let exposureNumber=0;
 const session = (reps, options = {}) => ({
-  id:options.id || 'exposure', completedAt:'2026-10-01T12:00:00Z',
+  id:options.id || `exposure-${++exposureNumber}`, completedAt:'2026-10-01T12:00:00Z',
   ...options.workout,
   exercises:[{...target, ...options.exercise, sets:reps.map((reps, index) => ({
     reps, weight:70, rir:2, planned:true, completed:true, ...options.set,
     ...(options.rirs ? {rir:options.rirs[index]} : {}),
   }))}],
 });
-const result = (history, exercise = target) => progressionFor(exercise, history);
+// Each array entry here models a separate training exposure, including the
+// cases that reuse one values object. Revision/duplicate IDs have dedicated tests.
+const result = (history, exercise = target) => progressionFor(exercise, history.map((workout,index)=>({...workout,id:`${workout.id}-${index}`})));
 const dip = () => session([6,6,6]);
 
 describe('like-for-like next-session progression evidence', () => {
@@ -145,7 +148,7 @@ describe('like-for-like next-session progression evidence', () => {
   });
   it('queue/current set logging cannot change guidance before completing the workout', () => {
     const history=[session([10,10,10]),dip()];
-    expect(nextWorkoutAdvice({...target,sets:[{completed:true,weight:75,reps:5}]},history)).toEqual(result(history));
+    expect(nextWorkoutAdvice({...target,sets:[0,1,2].map(index=>({completed:index===0,weight:75,reps:5}))},history)).toEqual(result(history));
   });
   it('real completion + strict reload deterministically retains notes, history and guidance', () => {
     let state=createReturningUserFixture(0);

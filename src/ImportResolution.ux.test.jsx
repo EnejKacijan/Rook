@@ -35,11 +35,10 @@ it('invalidates only set-slot decisions when count changes, preserving other ans
  await fill('Min reps','8');await fill('Max reps','10');await click('CONTINUE');
  const rir=active().querySelector('select');await act(async()=>{rir.value='2';rir.dispatchEvent(new Event('change',{bubbles:true}));});await click('Back');await click('Edit source values');await fill('Sets','2');await click('CONTINUE');expect(active().querySelector('select').value).toBe('2');expect(button('REVIEW PLAN').disabled).toBe(false);
 });
-it('requires a fresh special-set choice after its source set count is corrected',async()=>{
+it('keeps the explicit last-set drop on only the last slot when its source set count is corrected',async()=>{
  const {saved}=await setup('Monday: Upper\nPlank 3 sets last set dropset');await fill('Min reps','8');await fill('Max reps','10');
- const choose=async value=>act(async()=>{const e=active().querySelector('[aria-label="Reviewed set method"]');e.value=value;e.dispatchEvent(new Event('change',{bubbles:true}));});
- await choose('drop');expect(button('REVIEW PLAN').disabled).toBe(false);await click('Edit source values');await fill('Sets','4');expect(active().querySelector('[aria-label="Reviewed set method"]').value).toBe('__choose');expect(button('REVIEW PLAN').disabled).toBe(true);
- await choose('drop');await click('REVIEW PLAN');await click('USE THIS PLAN');const e=saved.mock.calls[0][0].days[0].exercises[0];expect(e.sets).toHaveLength(4);expect(e.sets.filter(s=>s.setType==='drop')).toHaveLength(1);expect(e.sets.at(-1).setType).toBe('drop');
+ expect(active().querySelector('[aria-label="Reviewed set method"]')).toBeNull();expect(button('REVIEW PLAN').disabled).toBe(false);await click('Edit source values');await fill('Sets','4');expect(button('REVIEW PLAN').disabled).toBe(false);
+ await click('REVIEW PLAN');await click('USE THIS PLAN');const e=saved.mock.calls[0][0].days[0].exercises[0];expect(e.sets).toHaveLength(4);expect(e.sets.filter(s=>s.setType==='drop')).toHaveLength(1);expect(e.sets.at(-1).setType).toBe('drop');
 });
 it('Next/Done moves only through editable values and never advances the decision',async()=>{
  await setup('Monday: Upper\nPlank 3 sets');const min=active().querySelector('[aria-label="Reviewed Min reps"]'),max=active().querySelector('[aria-label="Reviewed Max reps"]');

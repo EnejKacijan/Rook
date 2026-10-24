@@ -112,12 +112,16 @@ export function applyHybridDecision(program,issue,value,{excluded,resolved={},is
     const index=anchored>=0?anchored:day.exercises.findIndex(e=>e.hybridSource?.sourceSpan.start>ex.hybridSource.sourceSpan.start);
     day.exercises.splice(index<0?day.exercises.length:index,0,ex);
     program.importMetadata.pendingHybrid=[...new Set([...program.importMetadata.pendingHybrid,...previous.pending])];
+    program.importMetadata.pendingSourceDecisions=[...new Set([...(program.importMetadata.pendingSourceDecisions||[]),...(previous.pendingSource||[])])];
   }
   if(issue.field==='optional'&&(!ex||!['include','exclude'].includes(value?.value)))return false;
   if(issue.field==='optional'&&ex){
     ex.hybridSource.optionalDecision=value.value;
     if(value.value==='exclude'){
       excluded?.set(ex.id,{exercise:structuredClone(ex),followingIds:day.exercises.slice(day.exercises.indexOf(ex)+1).map(e=>e.id),pending:program.importMetadata.pendingHybrid.filter(id=>id.startsWith(`hybrid-${ex.id}-`)),resolved:Object.fromEntries(issues.filter(i=>i.exerciseId===ex.id).map(i=>[i.id,resolved[i.id]||false]))});
+      const sourceIds=issues.filter(i=>i.exerciseId===ex.id&&i.sourceFidelity).map(i=>i.id);
+      const cached=excluded?.get(ex.id);if(cached)cached.pendingSource=(program.importMetadata.pendingSourceDecisions||[]).filter(id=>sourceIds.includes(id));
+      if(program.importMetadata.pendingSourceDecisions)program.importMetadata.pendingSourceDecisions=program.importMetadata.pendingSourceDecisions.filter(id=>!sourceIds.includes(id));
       // Explicitly excluded work remains in durable source notes, not in the
       // mandatory execution list. Other answers for it are no longer required.
       day.exercises=day.exercises.filter(e=>e.id!==ex.id);

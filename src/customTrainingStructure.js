@@ -1,4 +1,4 @@
-import { priorityProgrammingGroupsForProfile, STIMULUS_PROFILE_BY_PATTERN } from './trainingVolume.js';
+import { priorityProgrammingGroupsForProfile, STIMULUS_PROFILE_BY_PATTERN, stimulusProfileForItem } from './trainingVolume.js';
 
 // These are the existing priority/stimulus taxonomy labels, not exercise lists
 // or named weekly splits. A group needs one direct exposure in its session.
@@ -119,18 +119,98 @@ export function customFocusPatterns(concepts) {
     return Object.keys(STIMULUS_PROFILE_BY_PATTERN).filter(pattern =>
       Object.entries(STIMULUS_PROFILE_BY_PATTERN[pattern]).some(([name, credit]) => credit === 1 && muscles.has(name)));
   }));
-  return Object.keys(STIMULUS_PROFILE_BY_PATTERN).filter(pattern => allowed.has(pattern));
+  const patterns=Object.keys(STIMULUS_PROFILE_BY_PATTERN).filter(pattern => allowed.has(pattern));
+  return allMuscleFullBody(concepts) ? [...patterns,'power-lower','power-upper'] : patterns;
 }
 const focusRequirements = concepts => (concepts || []).flatMap(key =>
   (CUSTOM_FOCUSES[key]?.groups || []).map(group => ({ group, patterns: customFocusPatterns([key])
     .filter(pattern => group.some(name => STIMULUS_PROFILE_BY_PATTERN[pattern][name] === 1)) })));
-export function customFocusSatisfied(concepts, items) {
+
+// Selecting every primary muscle is a full-body intent, not separate mandatory
+// isolation patterns in every session. Partial selections retain exact direct
+// focus semantics, including saved Push/Pull and specific shoulder regions.
+const FULL_BODY_MUSCLES = ['chest','back','shoulders','biceps','triceps','quads','hamstrings','glutes','calves','core'];
+export const allMuscleFullBody = concepts => concepts?.length === FULL_BODY_MUSCLES.length &&
+  FULL_BODY_MUSCLES.every(key => concepts.includes(key));
+export function customFullBodyExerciseLimit(profile = {}) {
+  const minutes = Number(profile.sessionMinutes) || 45;
+  return minutes <= 30 ? 5 : minutes <= 45 ? 6 : minutes <= 60 ? 7 : 8;
+}
+export function customFullBodyWorkingSetLimit(profile = {}, light = false) {
+  const minutes = Number(profile.sessionMinutes) || 45, frequency = Number(profile.daysPerWeek) || 3;
+  const baseline = profile.experience === 'Beginner' ? 18 : profile.experience === 'Advanced' ? 28 : 24;
+  // Conservative generator defaults, not a universal physiological threshold.
+  // Availability is a ceiling; a long clock target must not force junk volume.
+  return Math.min(baseline, minutes <= 30 ? 10 : minutes <= 45 ? 18 : Infinity,
+    frequency >= 5 ? 18 : frequency === 4 ? 20 : Infinity,
+    light ? String(profile.effortStyle || '').startsWith('More moderate') ? 18 : 12 : Infinity);
+}
+export function customFullBodyMaxSets(profile = {}, light = false) {
+  if (String(profile.effortStyle || '').startsWith('Fewer hard')) return 2;
+  return light ? String(profile.effortStyle || '').startsWith('More moderate') ? 3 : 2
+    : profile.experience === 'Beginner' ? 3 : 4;
+}
+export function customFullBodyHingeSetLimit(profile = {}) {
+  if(String(profile.effortStyle||'').startsWith('More moderate'))return 3;
+  return profile.experience==='Beginner' || Number(profile.daysPerWeek)>=4 ? 2 : 3;
+}
+export function fullBodyRequiredAccessories(count, index, availablePatterns = null) {
+  const preferred=count === 1 ? ['core','calf'] : [['core'],['calf'],['shoulder-isolation']][index % Math.min(3,count || 2)];
+  // A rotating isolation is not a reason to reject an otherwise faithful week
+  // when that modality is unavailable. Weekly selected-muscle checks still apply.
+  return [...new Set(preferred.map(pattern=>!availablePatterns || availablePatterns.has(pattern)?pattern
+    : ['core','calf','shoulder-isolation'].find(candidate=>availablePatterns.has(candidate)) || pattern))];
+}
+export function fullBodyMuscleCoverage(concepts, items) {
+  return (concepts || []).every(key => CUSTOM_FOCUSES[key]?.groups.flat()
+    .some(muscle => items.some(item => (stimulusProfileForItem(item)[muscle] || 0) > 0)));
+}
+export function customFocusSatisfied(concepts, items, fullBodyAccessories = []) {
   const allowed = new Set(customFocusPatterns(concepts));
+  if (allMuscleFullBody(concepts)) {
+    const patterns = new Set(items.filter(Boolean).map(item => item.pattern));
+    return items.length > 0 && items.every(item => item && allowed.has(item.pattern)) &&
+      [['horizontal-push','incline-push'],['horizontal-pull','vertical-pull','upper-back-pull'],
+        ['squat','single-leg','knee-extension'],['hinge','knee-flexion','hip-extension']]
+        .every(group => group.some(pattern => patterns.has(pattern))) &&
+      ['core','calf','shoulder-isolation'].some(pattern => patterns.has(pattern)) &&
+      fullBodyAccessories.every(pattern => patterns.has(pattern));
+  }
   return items.length > 0 && items.every(item => item && allowed.has(item.pattern)) &&
     focusRequirements(concepts).every(({ patterns }) => items.some(item => patterns.includes(item?.pattern)));
 }
 
-export function customSessionDefinition(session) {
+export function customSessionDefinition(session, context = {}) {
+  if (allMuscleFullBody(session.concepts)) {
+    const index = context.fullBodyIndex || 0;
+    const other = index % 2 === 1;
+    const light = context.fullBodyCount >= 4 && other;
+    const requiredAccessories = fullBodyRequiredAccessories(context.fullBodyCount || 2,index,context.availablePatterns);
+    const minutes=Number(context.profile?.sessionMinutes)||45;
+    const roomForProtectedPress=minutes>=60 || !String(context.profile?.effortStyle||'').startsWith('More moderate');
+    if(index%3===1 && minutes>=45 && roomForProtectedPress && context.availablePatterns?.has('vertical-push'))requiredAccessories.push('vertical-push');
+    const base = [['squat','single-leg'],['horizontal-push','incline-push'],
+      other ? ['knee-flexion','hip-extension','hinge'] : ['hinge','knee-flexion','hip-extension'],
+      ['horizontal-pull','vertical-pull','upper-back-pull']];
+    const extras = index % 3 === 1 ? ['vertical-push','rear-delt','core','shoulder-isolation']
+      : index % 3 === 2 ? ['core','calf','elbow-extension','vertical-push']
+        : ['shoulder-isolation','elbow-flexion','calf','rear-delt'];
+    const accessories = [...requiredAccessories,...extras.filter(pattern=>!requiredAccessories.includes(pattern))];
+    const limit = customFullBodyExerciseLimit(context.profile);
+    const slots = base.map((patterns, i) => ({patterns,essential:true,fullBodyBase:true,
+      fullBodyCompound:i!==2 || (!other && context.profile?.exercisePreference!=='Prefer machines'),role:i<2?'main':'accessory',
+      preferredPatterns:i===2 ? (other || context.profile?.exercisePreference==='Prefer machines' && index%3===2) ? ['knee-flexion']
+        : context.profile?.exercisePreference==='Prefer machines'?['hinge','hip-extension']:['hinge']
+        :i===3 ? other?['vertical-pull']:['horizontal-pull','upper-back-pull']:null}));
+    if(context.profile?.goal==='Athletic performance' && Number(context.profile.sessionMinutes)>=60 &&
+       context.availablePatterns?.has('power-lower') && slots.length+requiredAccessories.length<limit)
+      slots.unshift({patterns:['power-lower'],essential:false,role:'power'});
+    for (const [i, pattern] of accessories.slice(0, limit - slots.length).entries())
+      slots.push({patterns:[pattern],essential:i<requiredAccessories.length,role:'accessory'});
+    return {name:`Full Body ${String.fromCharCode(65 + index)}`,structureKey:session.key,
+      customFocus:session.concepts,customFullBodyAccessories:requiredAccessories,
+      fullBodyProgramming:true,fullBodyLight:light,weekday:session.weekday,slots};
+  }
   const groups = customFocusGroups(session.concepts);
   const all = customFocusPatterns(session.concepts);
   const requirements = focusRequirements(session.concepts).filter((item,index,items) =>

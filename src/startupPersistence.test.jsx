@@ -32,8 +32,11 @@ it('does not mount autosave while loading/error, and retries in place',async()=>
  function Child({state}){useLayoutEffect(()=>saved(state),[state]);return <p>Recovered plan</p>;}
  const host=document.createElement('div');document.body.append(host);root=createRoot(host);
  await act(async()=>root.render(<StartupBoundary load={load}>{s=><Child state={s.state}/>}</StartupBoundary>));
- expect(document.querySelector('[aria-busy=true]')).not.toBeNull();expect(saved).not.toHaveBeenCalled();
+ expect(document.querySelector('[role=status]')?.textContent).toContain('Opening your saved data');expect(saved).not.toHaveBeenCalled();
+ expect(document.querySelector('.startup-loading-spinner')?.getAttribute('aria-hidden')).toBe('true');
+ expect(document.querySelector('[role=status]')?.hasAttribute('aria-busy')).toBe(false);
  await act(async()=>finish({status:'error',error:new Error('temporary')}));expect(saved).not.toHaveBeenCalled();expect(document.body.textContent).not.toContain('Create plan');
+ expect(document.querySelector('.startup-loading-spinner')).toBeNull();expect(document.querySelector('[role=alert]')).not.toBeNull();
  await act(async()=>document.querySelector('button').click());expect(load).toHaveBeenCalledTimes(2);expect(saved).toHaveBeenCalledOnce();expect(saved).toHaveBeenCalledWith(ready);
 });
 it('a throwing normalizer also fails closed',async()=>{

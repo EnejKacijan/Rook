@@ -105,9 +105,9 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
  const apply=()=>{if(lock.current)return;lock.current=true;setError('');try{onAccept({...action,proposal});}catch(e){lock.current=false;setError(e.message);}};
  return <div onMouseDownCapture={keepComposerFocus} className={`action-card combine-card${reviewing?' action-card-reviewing combine-review-surface':''}`}>
    {reviewing&&!draftSchedule&&<button ref={backRef} type="button" className="text-button" aria-label="Back to combined workout proposal" onClick={()=>{setReviewing(false);setError('');}}>‹ Back</button>}
-   <h3>{proposal.revisionSummary?'Updated combined workout':'Combined workout'}</h3><p>~{Math.round(proposal.workout.estimatedMinutes)} min · Today only</p><CombinedProvenance adjustment={proposal}/>
+   <h3>{proposal.revisionSummary?'Updated combined workout':'Combined workout'}</h3><p>About {Math.round(proposal.workout.estimatedMinutes)} min · Today only</p><CombinedProvenance adjustment={proposal}/>
    {!reviewing?<button ref={reviewRef} type="button" className="button secondary" onClick={()=>{setReviewing(true);onReviewCancelled?.(false);}}>REVIEW COMBINED WORKOUT</button>:<>
-     {proposal.revisionSummary&&<div className="combine-revision-summary"><strong>Estimate: ~{Math.round(proposal.revisionSummary.previousMinutes)} → ~{Math.round(proposal.estimatedMinutes)} min</strong><span>New total-time target: {proposal.requestedMinutes===null?'No strict limit':`${proposal.requestedMinutes} min`}</span>
+     {proposal.revisionSummary&&<div className="combine-revision-summary"><strong>Estimated time: <span style={{whiteSpace:'nowrap'}}>{Math.round(proposal.revisionSummary.previousMinutes)} min</span> → <span style={{whiteSpace:'nowrap'}}>{Math.round(proposal.estimatedMinutes)} min</span></strong><span>New total-time target: {proposal.requestedMinutes===null?'No strict limit':`${proposal.requestedMinutes} min`}</span>
        {proposal.revisionSummary.added.map(e=><span key={e.id}>{e.origin==='coach-added'?'Coach-added':'Restored from source'}: {e.name}</span>)}
        {proposal.revisionSummary.removed.map(e=><span key={e.id}>Removed: {e.name}</span>)}
        {proposal.revisionSummary.sets.map(e=><span key={e.id}>{e.name}: {e.before} → {e.after} sets</span>)}

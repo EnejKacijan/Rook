@@ -5,7 +5,7 @@ describe('privacy-conscious funnel analytics', () => {
   beforeEach(() => { localStorage.clear(); sessionStorage.clear(); });
 
   it('defines the complete product and monetization funnel without requiring an SDK', () => {
-    expect(FUNNEL_EVENTS).toEqual(expect.arrayContaining(['app_open', 'onboarding_started', 'onboarding_completed', 'plan_generation_started', 'plan_generation_completed', 'plan_generation_failed', 'first_plan_viewed', 'first_workout_started', 'first_workout_completed', 'paywall_viewed', 'purchase_started', 'purchase_completed', 'purchase_failed']));
+    expect(FUNNEL_EVENTS).toEqual(expect.arrayContaining(['app_open', 'onboarding_started', 'onboarding_completed', 'plan_generation_started', 'plan_generation_completed', 'plan_generation_failed', 'plan_preview_viewed', 'first_plan_viewed', 'first_workout_started', 'first_workout_completed', 'paywall_viewed', 'purchase_started', 'purchase_completed', 'purchase_failed']));
   });
 
   it('keeps only approved, non-content properties and emits an adapter event', () => {

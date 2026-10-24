@@ -8,7 +8,7 @@ import { PhotoComparisonViewer } from './PhotoComparisonViewer.jsx';
 import { createReturningUserFixture } from './demoFixture.js';
 import { isoDay, startWorkout } from './domain.js';
 import { useSemanticSwipeBack } from './useSemanticSwipeBack.js';
-import { bindStandalonePageZoom, PAGE_ZOOM_PREFERENCE } from './standalonePageZoom.js';
+import { bindStandalonePageZoom, PAGE_ZOOM_PREFERENCE, setStandalonePageZoomAllowed } from './standalonePageZoom.js';
 import policyCSS from './standalonePageZoom.css?raw';
 import calendarCSS from './calendar.css?raw';
 import viewerCSS from './fullscreenViewerDrag.css?raw';
@@ -103,6 +103,35 @@ it.each([320, 390, 430])('keeps logger inputs and edge Back without completing a
   expect(document.activeElement).toBe(input); expect(input.value).toBe(value);
   touch(surface, 'touchstart', 4); touch(surface, 'touchmove', w * .65); advance(120); touch(surface, 'touchend', w * .65); advance(250);
   expect(back).toHaveBeenCalledExactlyOnceWith('today'); expect(finish).not.toHaveBeenCalled(); expect(initial.activeWorkout).toEqual(before);
+});
+it.each(['locked', 'allowed'])('counts both rapid + taps in the real logger with page zoom %s', mode => {
+  if (mode === 'allowed') setStandalonePageZoomAllowed(true);
+  const initial = createReturningUserFixture(0);
+  initial.profile.showExerciseImages = false; initial.profile.restTimerEnabled = false;
+  initial.activeWorkout = startWorkout(initial, initial.program.days[0]);
+  initial.activeWorkout.exercises.forEach(exercise => exercise.sets.forEach(set => { set.weight = 52.5; set.reps = 12; }));
+  const before = structuredClone(initial.activeWorkout), finish = vi.fn();
+  function Harness() {
+    const [state, setState] = useState(initial);
+    return <ActiveWorkout state={state} update={fn => setState(value => fn(structuredClone(value)))} setPage={() => {}} setDetail={() => {}} onLiveFinish={finish} />;
+  }
+  mount(<Harness />);
+  const reps = host.querySelector('.logger-reps'), input = reps.querySelector('input'), plus = reps.querySelector('button:last-child');
+  act(() => input.focus());
+  for (let i = 0; i < 2; i++) {
+    expect(touch(plus, 'touchstart').defaultPrevented).toBe(false);
+    advance(50); expect(touch(plus, 'touchend').defaultPrevented).toBe(true); advance(50);
+  }
+  expect(input.value).toBe('14'); expect(document.activeElement).toBe(input);
+  act(() => input.blur()); expect(input.value).toBe('14');
+  // Scrolling from + remains native and never adds another rep.
+  touch(plus, 'touchstart'); expect(touch(plus, 'touchmove', 180, 250).defaultPrevented).toBe(false);
+  expect(touch(plus, 'touchend', 180, 250).defaultPrevented).toBe(false);
+  expect(input.value).toBe('14'); expect(finish).not.toHaveBeenCalled(); expect(initial.activeWorkout).toEqual(before);
+  // Returning to an ordinary tab removes the touch adapter; native clicks work.
+  standalone = false; act(() => window.dispatchEvent(new Event('pageshow')));
+  touch(plus, 'touchstart'); expect(touch(plus, 'touchend').defaultPrevented).toBe(false);
+  act(() => plus.click()); expect(input.value).toBe('15');
 });
 it('keeps the real Display accessibility switch reversible, persisted and absent in browser mode', () => {
   const state = createReturningUserFixture(0);

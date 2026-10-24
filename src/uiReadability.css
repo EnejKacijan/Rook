@@ -1,0 +1,325 @@
+/* Reading text is distinct from compact chart/calendar metadata. Keep this
+   scale scoped to content roles; numeric inputs retain their 16px zoom floor. */
+:root .eyebrow { font-size:12px; line-height:1.3; }
+:root .list-row small,
+:root .choice-row small,
+:root .profile-screen .list-row small,
+:root .profile-current-program p,
+:root .profile-screen .planning-setup-copy,
+:root .profile-training-style-note,
+:root .profile-progression-tips .progression-guidance-help,
+:root .setting-switch-copy > small,
+:root .plan-warmup-preference > small,
+:root .setting-help,
+:root .option-card-copy small,
+:root .schedule-duration-note,
+:root .schedule-hint,
+:root .setup-confirmation small,
+:root .priority-selection-summary small,
+:root .specific-split-toggle small,
+:root .physique-review-entry small,
+:root .photo-guidance,
+:root .photo-inputs small,
+:root .photo-privacy,
+:root .physique-suggestions small,
+:root .physique-suggestions em,
+:root .logged-exercise-row small,
+:root .rest-up-next time,
+:root .rest-up-next-summary,
+:root .exercise-history-meta,
+:root .freestyle-picker .list-row small,
+:root .queue-search-body small,
+:root .rest-training-option small,
+:root .move-workout-row small,
+:root .rest-day-choice small,
+:root .adjust-equipment-mode small,
+:root .adjust-equipment-item small,
+:root .adjust-saved-gyms small,
+:root .adjust-custom-equipment small,
+:root .gym-default-choice small,
+:root .adjust-keep-row small,
+:root .adjust-change-row small,
+:root .adjust-change-row > span,
+:root .gym-profile-row small,
+:root .plate-config-row small,
+:root .gym-plate-setup-entry small,
+:root .history-export-notes small,
+:root .history-import-source-list small,
+:root .history-import-special-actions small,
+:root .plan-editor-heading > small,
+:root .plan-editor-last-session small,
+:root .plan-editor-starting-weight > small,
+:root .plan-editor-picker > div > small,
+:root .import-review-summary small,
+:root .import-plan-meta small,
+:root .import-day > .plan-editor-workout-title > small,
+:root .plan-warmup-card small,
+:root .plan-warmup-card-header em,
+:root .plan-warmup-ramp > span:first-child small,
+:root .scratch-days > small,
+:root .session-note-heading small,
+:root .session-note-editor > small,
+:root .workout-photo-heading > p > small,
+:root .workout-photo-entry-card small,
+:root .workout-photo-entry-privacy,
+:root .session-feedback > p,
+:root .session-feedback-choices legend small,
+:root .session-feedback-history,
+:root .pro-theme-season-return {
+  font-size:14px; line-height:1.45;
+}
+
+/* Older screen-level paragraph rules used !important. Raise only their
+   explanatory copy, without changing headings or larger body text. */
+:root :is(.goal-progress-footnote,.weight-trend-notice,.weight-entry-helper,
+  .weight-saved,.plan-history-empty p,.plan-history-empty-copy,
+  .backup-photo-privacy,.restore-replace-warning,.backup-last-created,
+  .backup-status,.training-block-workouts p,.training-block-history-count,
+  .training-block-warning,.adjust-calm-note,.adjust-today-note,
+  .physique-control-copy,.physique-caution,.rest-notification-status,
+  .restriction-helper,.restriction-plan-notice,.training-safety-summary p,.weekly-review-context,
+  .weekly-review-summary p,.replacement-loading) {
+  font-size:14px !important; line-height:1.5;
+}
+
+:root :is(.personal-fields label,.personal-fields .personal-field,
+  .weight-entry-form > label,.gym-name-field,.optional-field > span,
+  .optional-duration > span,.optional-control-field > span,
+  .optional-activity-editor .stepper-row > span,.adjustment-target-editor label,
+  .plan-editor-select > span,.plan-editor-prescription span,
+  .plan-editor-weights > span,.plan-editor-starting-weight > span,
+  .plan-editor-last-session > span,.history-number-fields label,
+  .history-import-setup label,.history-import-load-choice) {
+  font-size:14px; line-height:1.4;
+}
+:root :is(.personal-fields .privacy-note,.personal-fields .optional,
+  .custom-exercise-form > label > span,.custom-exercise-form legend) {
+  font-size:13px; line-height:1.4;
+}
+:root :is(.day-options .option-card-copy strong,
+  .schedule-frequency .option-card-copy strong,
+  .schedule-duration .option-card-copy strong,
+  .setup-environment .option-card-copy strong,
+  .setup-confirmation strong,.setup-confirmation > button,
+  .setup-confirmation-actions > button,.scratch-day-options button,
+  .onboarding-preferences .split-options strong,
+  .onboarding-preferences .exercise-preference-options strong,
+  .specific-split-toggle strong,.restriction-disclosure strong,
+  .onboarding-preferences .split-recommendation .option-card-copy strong) {
+  font-size:14px; line-height:1.4;
+}
+:root .setup-confirmation { flex-direction:column; align-items:stretch; gap:12px; }
+:root .setup-confirmation > button { align-self:flex-start; min-height:44px; text-align:left; }
+:root .setup-confirmation-actions { flex-wrap:wrap; }
+:root :is(.schedule-selection-count,.onboarding-group-heading > strong,
+  .onboarding-group-heading > small,.priority-choice-group > .eyebrow,
+  .goal-plan-preview > span,.setup-equipment-title-row > strong) {
+  font-size:12px; line-height:1.4;
+}
+:root .goal-plan-preview > p { font-size:14px; line-height:1.45; }
+:root .restriction-disclosure { border-bottom:0; }
+:root .import-format-examples code { font-size:13px; line-height:1.5; }
+
+:root :is(.stat-grid small,.goal-progress-metric > span,
+  .weight-trend-summary > span,.weekly-review-metrics dt,
+  .exercise-performance-metrics dt,.training-block-summary dt,
+  .training-block-week > span small,.training-block-week > i,
+  .history-import-summary-grid dt,.history-import-result-grid dt,
+  .optional-session-facts dt) { font-size:12px; line-height:1.4; white-space:normal; }
+:root :is(.goal-progress-breakdown,.weight-trend-summary > small,
+  .goal-progress-action,.weight-history-actions button,
+  .logged-exercises-all,.progression-view-all,.progression-all-count,
+  .training-block-week > div small,.plan-history-retention,
+  .plan-history-list small,.weight-history-average-row small) {
+  font-size:14px; line-height:1.45;
+}
+:root .training-block-summary dd { font-size:16px; }
+:root .plan-history-list time small { font-size:13px; }
+:root .plan-history-list .plan-history-version { grid-template-columns:76px minmax(0,1fr) 18px; }
+:root :is(.e1rm-axis text,.e1rm-axis-unit,.e1rm-date,.e1rm-point-value) { font-size:12px; }
+:root .exercise-e1rm-trend .e1rm-summary { font-size:13px; line-height:1.5; }
+:root .exercise-e1rm-note { font-size:13px !important; line-height:1.5; }
+:root .month-calendar-weekdays > span { font-size:12px; }
+:root .month-calendar-legend { font-size:14px; line-height:1.4; flex-wrap:wrap; }
+
+:root :is(.today-screen .exercise-list-row > .navigation-row-end,
+  .today-optional-actions > button,.rest-day-actions > .rest-day-action,
+  .up-next .up-next-prescription,.up-next .up-next-note,
+  .session-log-summary,.session-log-set,.session-feedback-options button,
+  .session-feedback-skip,.session-feedback-change,.optional-session-header > div small,
+  .rest-timer .button,.workout-confirm .button,.today-exercise-edit-copy small,
+  .today-exercise-edit-target,.today-edit-help,.today-edit-lock-note) {
+  font-size:14px; line-height:1.4;
+}
+:root .workout-screen .warmup-count-note,
+:root .workout-screen .warmup-general-guidance { font-size:14px; line-height:1.45; }
+:root .workout-screen .warmup-section-label,
+:root .rest-timer .eyebrow { font-size:12px; line-height:1.3; }
+:root .workout-screen .sets .stepper-empty-label { font-size:12px; line-height:1.2; white-space:nowrap; }
+:root .optional-session-header > div strong { font-size:13px; }
+:root .conditioning-action-footer > .sheet-footnote { font-size:14px; line-height:1.5; }
+:root .adjust-today-sheet .adjust-option-list small { font-size:14px; line-height:1.45; }
+:root .adjustment-target-editor > small { font-size:14px; line-height:1.5; }
+:root .today-exercise-edit-copy strong,
+:root .plan-editor-picker-trigger strong { font-size:16px; line-height:1.35; }
+:root .plan-editor-last-session strong { font-size:14px; }
+:root .plan-editor-summary-action b,
+:root .plan-editor-actions button { font-size:12px; line-height:1.4; }
+:root .plan-editor-picker > div > button { font-size:16px; line-height:1.4; }
+:root .today-exercise-cancel { font-size:14px; }
+:root .exercise-pr-sheet .exercise-pr-explanation { font-size:14px; line-height:1.5; }
+
+:root :is(.coach-empty p,.coach-shortcut-helper,.coach-history-group small,
+  .coach-history-header button:last-child,.coach-screen .adapt-duration-contract,
+  .coach-screen .adapt-suggestion-row small,.coach-screen .adapt-review-list small,
+  .coach-screen .adapt-review-row > .text-button) { font-size:14px; line-height:1.45; }
+:root .coach-screen .adapt-suggestion-row strong,
+:root .coach-screen .adapt-review-list strong { font-size:15px; line-height:1.35; }
+:root .coach-screen .action-card-buttons .button { font-size:12px; line-height:1.4; }
+:root .coach-header { gap:8px; }
+:root .coach-header-context { flex:1 1 0; }
+:root .coach-header-context > div { min-width:0; }
+:root .coach-header-actions { gap:2px; }
+:root :is(.coach-new-trigger > span,.coach-history-trigger > span) {
+  font-size:12px; letter-spacing:.02em; line-height:1.2;
+}
+:root .coach-header-actions .coach-history-trigger { min-width:0; padding-inline:4px; }
+:root .coach-header-actions > button { gap:4px; }
+:root .coach-history-header { grid-template-columns:44px minmax(0,1fr) max-content; gap:8px; }
+
+:root :is(.entry-v2 .entry-action-copy small,.entry-v2 .entry-primary-note,
+  .entry-v2 .restore-backup-action,.entry-v2 .entry-account-actions button,
+  .backup-includes ul,.history-export-count,.history-export-explanation,
+  .history-import-setup p,.history-import-setup small,.history-import-warnings,
+  .history-import-format summary) { font-size:14px; line-height:1.5; }
+:root .export-preview { font-size:13px; line-height:1.5; white-space:pre-wrap; overflow:auto; }
+:root .export-preview .export-effort { white-space:nowrap; }
+:root .export-helper small { font-size:14px; line-height:1.5; }
+:root .history-import-atomic-note { font-size:13px; line-height:1.5; }
+:root .workout-photo-timeline-item strong { font-size:14px; line-height:1.4; }
+:root .workout-photo-timeline-item small { font-size:13px; line-height:1.4; }
+:root :is(.workout-photo-position,.workout-photo-viewer-context small,
+  .photo-comparison-labels time,.photo-compare-privacy) { font-size:13px; line-height:1.45; }
+:root .photo-comparison-hint { font-size:14px; line-height:1.45; }
+:root .physique-suggestions .eyebrow { font-size:13px; }
+:root .appearance-credits p { font-size:13px; line-height:1.55; }
+:root .appearance-theme-help { font-size:14px; line-height:1.45; }
+:root .change-plan-sheet .plan-choice small { font-size:14px; line-height:1.45; }
+:root .change-plan-sheet .plan-choice strong { font-size:16px; line-height:1.35; }
+:root .personal-fields :is(label,.personal-field) > span > small { font-size:12px; }
+:root .physique-review-entry strong { font-size:14px; line-height:1.4; }
+:root .plan-name-field > span,
+:root .workout-name-field > span { font-size:12px; line-height:1.4; }
+:root .plan-workout-day-label { font-size:14px; line-height:1.4; }
+:root .workout-warmup-toggle small,
+:root .workout-screen .exercise-heading .exercise-meta,
+:root .workout-screen .recommendation p { font-size:14px; line-height:1.45; }
+:root .workout-screen .recommendation strong { font-size:14px; line-height:1.4; }
+:root .workout-exercise-actions .text-button { font-size:14px; }
+:root .complete-save-workout { font-size:14px; }
+:root :is(.completion-eyebrow,.completion-summary dt,
+  .completed-workout-summary small,.completed-photo-marker,
+  .e1rm-heading > small,.weekly-review-heading > small) { font-size:12px; line-height:1.4; }
+:root .pro-theme-studio fieldset button { font-size:14px; line-height:1.4; }
+:root .pro-theme-preset-note { font-size:13px; line-height:1.4; }
+:root .pro-theme-preset-name { display:flex; align-items:center; flex-wrap:wrap; gap:4px; }
+:root .pro-theme-preset-name .theme-new-badge { margin-inline-start:0; }
+
+/* Flat lists have separators between items. Card/field outlines, graphs,
+   navigation boundaries, and the single action-footer boundary stay intact. */
+:root .standalone-zoom-preference .setting-switch,
+:root .plan-warmup-preference .setting-switch,
+:root .week-row:last-child,
+:root .progress-focus-options > button:last-child,
+:root .session-log-item:last-child,
+:root .logged-exercises-sheet .logged-exercise-row:last-child,
+:root .progression-all-list .progression-row:last-child,
+:root .weight-history-list .list-row:last-child,
+:root .weight-history-actions:last-child,
+:root .adjust-review-section > :is(.adjust-keep-row,.adjust-change-row):last-child,
+:root .adjust-check-list[aria-label="Unavailable exercises"] > button:last-child,
+:root .history-correction-diff article:last-child,
+:root .plate-bar-list > .plate-config-row:last-child,
+:root .coach-history-group > div > button:last-child,
+:root .active-exercise-options-sheet .active-exercise-note-action { border-bottom:0; }
+:root .workout-screen .workout-warmup { border-top:0; }
+:root .up-next-queue > [data-swipe-row]:last-child .swipe-up-next-body { border-bottom:0; }
+:root .substitution-preference-toggle { border-top:0; }
+:root .history-export-notes { border-bottom:0; }
+:root .gym-profile-list:empty { border:0; margin-top:0 !important; }
+:root .history-import-result-grid { border-bottom:0; }
+:root .exercise-performance-history > .list-row:last-child { border-bottom:0; }
+
+/* A standalone badge must not inherit the column layout used for row copy. */
+:root .theme-new-badge { display:inline-flex; flex:0 0 auto; align-self:flex-start; width:max-content; max-width:100%; font-size:12px; }
+:root .list-row .theme-title { display:flex; flex-direction:row; align-items:center; flex-wrap:wrap; gap:8px; }
+:root .theme-title > .theme-new-badge { align-self:center; margin-inline-start:0; }
+:root .profile-settings-list .list-row strong,
+:root .standalone-zoom-preference .setting-switch-copy > strong { font-size:16px; line-height:1.4; }
+
+:root .freestyle-previous .text-button,
+:root .adjust-keep-row .text-button { font-size:14px; line-height:1.4; }
+:root .scratch-add-exercise > button { font-size:16px; line-height:1.4; }
+:root .plan-workout-tools > .plan-workout-add { font-size:16px; line-height:1.4; }
+:root .scratch-plan-name > span { font-size:12px; line-height:1.4; }
+:root .import-format-examples > small { font-size:12px; line-height:1.4; }
+:root .substitution-preference-toggle small { font-size:14px; line-height:1.45; }
+:root .plan-editor-heading > strong,
+:root .exercise-picker-label > strong { font-size:16px; line-height:1.35; }
+:root .exercise-picker-label > small { font-size:14px; line-height:1.45; }
+:root .exercise-performance-history > .list-row > span:last-child { font-size:14px; }
+:root .gym-profile-editor .onboarding-group-heading > small,
+:root .plate-config-section .onboarding-group-heading > small { font-size:14px; line-height:1.45; }
+:root .plate-add-row label > span,
+:root .plate-inventory-labels { font-size:12px; line-height:1.3; }
+:root .plate-inventory-row label small { font-size:14px; }
+:root .custom-exercise-fallback { font-size:14px; line-height:1.4; }
+:root .scratch-exercise-results .scratch-custom-exercise small { font-size:14px; line-height:1.45; }
+:root :is(.detail-screen,.sheet) .sheet-action-footer > .button { font-size:14px; line-height:1.4; }
+:root .plan-editor-prescription label { min-width:0; }
+:root .plan-editor-prescription span { overflow-wrap:anywhere; }
+:root .restriction-disclosure strong { white-space:normal; overflow:visible; }
+
+@media (max-width:360px) {
+  :root .coach-history-header h2 { font-size:14px; }
+}
+
+/* Type floor for persistent chrome. Labels people read on every visit were
+   9-11px; they now start at 11px (uppercase, tracked) or 13px (mixed case).
+   Dense charts and calendar metadata keep their own compact scale. */
+:root .week-strip button > small { font-size:11px; line-height:1; }
+:root .week-strip button > strong { font-size:13px; line-height:1.1; }
+:root .week-navigation span { font-size:13px; }
+:root .today-block-week { font-size:13px; letter-spacing:.02em; }
+:root .today-adjust-entry { font-size:12px !important; }
+:root .nav-label { font-size:11px; letter-spacing:.09em; }
+:root .workout-screen .sets .set-labels { --logger-label-size:11px; --logger-label-track:.1em; }
+:root .plan-reorder-a11y button { font-size:11px; }
+:root .rest-timer .eyebrow { font-size:11px; }
+/* Remaining sub-11px copy outside the set logger's fixed columns. */
+:root :is(.move-preview small,.coach-message header strong,.plan-conditioning-card > div span,
+  .personalization-summary dt,.superset-role,.import-review-status,
+  .import-review-picker .import-review-picker-label,.import-review-custom-name > span,
+  .gym-profile-row-end > small,.import-match-confirmation > small,
+  .workout-photo-thumbnail > span,.workout-photo-thumbnail-loading small,
+  .history-import-invalid-toggle b,.plan-warmup-editor-group > header small,
+  .plan-warmup-item label > span,.workout-options-trigger,.day-options .option-card-check) { font-size:11px; }
+:root :is(.optional-session-cancel-confirm button,.coach-copy-error,.coach-message header span,
+  .coach-screen .schedule-change small,.personalization-summary .split-adaptation-note,
+  .scratch-days-heading > button,.scratch-workout-day .scratch-day-status > small,
+  .scratch-exercise-search button,.plan-reorder-preview small,.plan-editor-heading > .superset-round-rest,
+  .import-review-resolution .import-review-primary strong,.import-review-custom-trigger strong,
+  .import-review-custom-trigger small,.import-review-custom-name > button,
+  .import-review-compact-editor small,.import-review-compact-editor > button,
+  .plan-editor-custom-name > small,.plan-editor .match-review > div > span,.bulk-match-review small,
+  .entry-v2 .entry-micro-label,.restriction-collapse,.active-performance-pr,.clearance-limit-row span,
+  .training-safety-actions button,.plan-conflict-kicker,.plate-combination small,
+  .training-block-deload small,.remember-import-match small,.workout-photo-actions > button,
+  .workout-photo-missing button,.workout-photo-viewer-actions > button,.workout-photo-delete,
+  .workout-photo-delete-confirm button,.workout-photo-timeline-image > span,
+  .history-import-mapping-row > span small,.history-import-mapping-row > button,
+  .history-import-duplicates > p small,.history-import-invalid-toggle small,.history-import-invalid > p,
+  .completed-import-marker,.warmup-layer small,.warmup-ramp > small,.warmup-finish,
+  .warmup-complete-status small,.exercise-options-button,.plan-warmup-editor-group > header span) { font-size:12px; }
+:root :is(.coach-message header span,.coach-copy-error,.import-review-custom-trigger small,
+  .history-import-invalid > p,.warmup-layer small,.warmup-complete-status small) { line-height:1.4; }

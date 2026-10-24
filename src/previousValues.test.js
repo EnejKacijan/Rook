@@ -19,7 +19,7 @@ const target=state=>state.activeWorkout.exercises[0].sets[0];
 it('retains canonical single-set overwrite, cleared RIR and provenance semantics without copying completion',()=>{
  const state=fixture(),before=structuredClone(state),id=identity(state),result=preparePreviousValues(state,id);
  expect(result.state).toEqual(copyFreestylePrevious(state,id.exerciseId,id.setId,0));expect(state).toEqual(before);
- expect(target(result.state)).toMatchObject({weight:90,reps:7,rir:null,touched:true,completed:false,weightEntryMode:'manual',repsEntryMode:'manual',weightProvenance:'history'});
+ expect(target(result.state)).toMatchObject({weight:90,reps:7,rir:null,touched:true,completed:false,weightEntryMode:'history',repsEntryMode:'manual',weightProvenance:'history'});
  expect(target(result.state)).not.toHaveProperty('weightSourceSetId');expect(target(result.state)).not.toHaveProperty('repsSourceSetId');expect(result.state.activeWorkout.exercises[0].sets[1]).toEqual(before.activeWorkout.exercises[0].sets[1]);expect(result.state.activeWorkout.rest).toEqual(state.activeWorkout.rest);
  expect(undoPreviousValues(result.state,result.record)).toEqual(before);
 });

@@ -23,11 +23,12 @@
 :root .modal-layer.edit-plan-page-layer .first-run-step-motion > .onboarding,
 :root .edit-plan-page-layer > .generated-plan-preview {
   width: 100%; max-width: 500px; height: 100%; min-height: 0; max-height: 100%;
-  overflow-y: auto; border: 0; border-radius: 0; box-shadow: none;
+  overflow-y: auto; overscroll-behavior-y: none; border: 0; border-radius: 0; box-shadow: none;
   padding-top: calc(20px + env(safe-area-inset-top));
   background: var(--rook-bg); color: var(--rook-text);
 }
-.persistence-host > .first-run-navigation > .first-run-page > :is(.onboarding,.initial-import-screen) {
+.persistence-host > .first-run-navigation > .first-run-page > :is(.onboarding,.initial-import-screen),
+.persistence-host > .welcome-pro-host > .first-run-navigation > .first-run-page > :is(.onboarding,.initial-import-screen) {
   min-height: calc(100dvh - 74px - env(safe-area-inset-top));
 }
 .first-run-freestyle-screen { min-height: 100dvh; }

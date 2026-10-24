@@ -1,0 +1,113 @@
+:root .onboarding.welcome-screen { display:flex; flex-direction:column; gap:12px; padding:calc(16px + var(--welcome-safe-top,env(safe-area-inset-top))) 24px calc(16px + var(--welcome-safe-bottom,env(safe-area-inset-bottom))); min-height:100dvh; overflow:visible; color:var(--rook-text); background:var(--rook-bg); }
+.welcome-header { display:flex; align-items:center; justify-content:space-between; min-height:44px; }
+.welcome-header .brand { font-size:16px; font-weight:800; letter-spacing:.15em; color:var(--rook-accent-text); }
+.welcome-screen .welcome-quiet { min-height:44px; padding:8px 10px; border:0; background:transparent; color:var(--rook-secondary); font-size:14px; }
+.welcome-header .welcome-quiet { margin-right:-10px; }
+.welcome-carousel { display:grid; grid-template-columns:minmax(0,1fr); grid-template-rows:auto auto; min-width:0; outline:none; touch-action:pan-y pinch-zoom; }
+/* Share parent tracks directly. Nested subgrid could under-measure the
+   contained logger in WebKit, letting its status line overlap the caption. */
+.welcome-slide { display:contents; visibility:hidden; pointer-events:none; }
+.welcome-slide > .welcome-visual { grid-area:2 / 1; }
+.welcome-slide > .welcome-story { grid-area:1 / 1; }
+.welcome-slide[data-active] { visibility:visible; pointer-events:auto; }
+.welcome-slide[data-active] > * { animation:welcome-reveal 180ms ease-out; }
+.welcome-visual { margin:12px 0 0; min-height:260px; display:flex; flex-direction:column; justify-content:center; }
+.welcome-visual > div { flex:0 0 auto; min-height:230px; display:flex; flex-direction:column; justify-content:center; }
+.welcome-visual figcaption { text-align:center; margin-top:10px; color:var(--rook-secondary); font-size:11px; }
+.welcome-week-example,.welcome-log-example { min-width:0; padding:16px; border:1px solid var(--rook-border); border-radius:22px; background:var(--rook-bg); box-shadow:none; }
+:root .welcome-screen :is(.welcome-week-example.today-screen,.welcome-log-example.workout-screen) { padding:16px; min-height:0; height:auto; }
+.welcome-example-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:12px; font-size:11px; font-weight:700; color:var(--rook-secondary); }
+.welcome-example-heading > span:first-child { letter-spacing:.12em; }
+.welcome-week-example .week-selector { margin:0; }
+.welcome-week-example .week-strip { display:grid; grid-template-columns:repeat(7,minmax(0,1fr)); }
+/* Show the calendar-to-start slice of Today. The program name is already in
+   the workout title; omitting its extra header line keeps the intro in view. */
+:root .welcome-week-example .today-program-name { display:none; }
+:root .welcome-week-example .screen-top { height:20px; min-height:0; }
+:root .welcome-week-example .welcome-sample-week-heading { display:flex; justify-content:space-between; align-items:center; gap:12px; }
+.welcome-week-hint { color:var(--rook-secondary); font-size:12px; }
+.welcome-sample-try-slot { min-height:52px; }
+:root .welcome-week-example .week-pager-viewport { margin-top:12px; }
+:root .welcome-week-example .welcome-today-hero { margin:0; padding:8px 0 0; }
+.welcome-today-hero .today-day-header { margin-bottom:8px; }
+.welcome-today-hero .workout-title { margin:0; font-size:clamp(28px,7vw,32px); line-height:1.04; letter-spacing:-.03em; }
+:root .welcome-week-example .welcome-today-meta { margin:8px 0; font-size:13px; line-height:1.4; }
+:root .welcome-week-example .welcome-today-hero .today-start-button { min-height:52px; margin:0; }
+.welcome-log-example .welcome-exercise-name { display:block; margin:0; font-size:27px; line-height:1.04; letter-spacing:-.025em; }
+.workout-screen .exercise-heading.welcome-exercise-heading { --active-exercise-art-size:80px; margin:0; padding:0; }
+.welcome-exercise-heading .exercise-heading-body { margin:0; }
+.welcome-log-example .exercise-meta { margin:6px 0 0; }
+/* The sample uses the actual .sets/.set-row/.stepper styles, including the
+   logger's responsive grid and check mark. Only its state is disposable. */
+.welcome-sample-stepper output { display:flex; align-items:center; justify-content:center; width:100%; min-width:0; height:100%; margin:0; padding:0; color:var(--rook-text); }
+.welcome-log-example .set-done output { color:var(--rook-secondary); }
+.welcome-sample-action-row { display:flex; align-items:center; gap:12px; min-height:44px; margin-top:8px; }
+:root .welcome-log-example.workout-screen .welcome-sample-guidance { flex:1; min-width:0; margin:0; font-size:12px; line-height:1.4; color:var(--rook-secondary); }
+.welcome-story { margin-top:0; }
+.welcome-screen .welcome-story h1 { margin:0; color:var(--rook-text); font-size:clamp(32px,8.5vw,39px); line-height:1.04; font-weight:800; letter-spacing:-.04em; max-width:12ch; }
+.welcome-screen .welcome-story p { margin:12px 0 0; color:var(--rook-secondary); font-size:16px; line-height:1.5; max-width:34ch; min-height:3em; }
+.welcome-progress { display:flex; align-items:center; justify-content:space-between; margin:12px 0 8px; }
+.welcome-page-arrow { display:grid; place-items:center; border:0; background:transparent; color:var(--rook-accent-text); width:44px; height:44px; padding:0; }
+.welcome-page-arrow:disabled { visibility:hidden; }
+.welcome-dots { display:flex; gap:7px; }
+.welcome-dots i { width:6px; height:6px; border-radius:6px; background:var(--rook-border); transition:width 260ms ease,background-color 260ms ease; }
+.welcome-dots i.active { width:20px; border-radius:6px; background:var(--rook-accent-text); }
+.welcome-actions { margin-top:auto; padding-top:4px; }
+.welcome-actions > .button { min-height:54px; font-size:15px; letter-spacing:.02em; }
+.welcome-screen .welcome-actions p { margin:10px 0 2px; text-align:center; color:var(--rook-secondary); font-size:12px; }
+.welcome-actions > div { display:flex; align-items:center; justify-content:center; gap:20px; flex-wrap:wrap; }
+.welcome-screen button:focus-visible,.welcome-carousel:focus-visible { outline:2px solid var(--rook-focus-ring); outline-offset:3px; }
+@keyframes welcome-reveal { from { opacity:.4; transform:translateX(calc(12px * var(--welcome-direction,1))); } to { opacity:1; transform:translateX(0); } }
+@media (max-width:359px) { :root .onboarding.welcome-screen { padding-inline:16px; gap:12px; } .welcome-visual { min-height:240px; } :root .welcome-screen :is(.welcome-week-example.today-screen,.welcome-log-example.workout-screen) { padding:8px; } .welcome-example-heading { font-size:10px; } .workout-screen .exercise-heading.welcome-exercise-heading { --active-exercise-art-size:64px; } .welcome-log-example .welcome-exercise-name { font-size:24px; } }
+@media (max-height:740px) { :root .onboarding.welcome-screen { gap:8px; } .welcome-visual { min-height:220px; } .welcome-visual > div { min-height:200px; } }
+@media (min-width:501px) { :root .onboarding.welcome-screen { min-height:calc(100dvh - 40px); } }
+@media (prefers-reduced-motion:reduce) { .welcome-slide[data-active] > * { animation:none; } }
+@media (forced-colors:active) { .welcome-week-example,.welcome-log-example { border-color:CanvasText; } .welcome-dots i.active { background:Highlight; } }
+
+/* One physical track for the complete first-run sequence, including the real
+   action page. Dragging reveals its neighbour directly under the finger. */
+.welcome-pager {
+  width:100%; max-width:500px; margin:0 auto; position:relative;
+  height:var(--welcome-viewport-height,100dvh); overflow:hidden;
+  background:var(--rook-bg); color:var(--rook-text); touch-action:pan-y pinch-zoom;
+}
+.welcome-pager-track {
+  display:flex; align-items:flex-start; width:100%; height:100%;
+  transform:translate3d(calc(-100% * var(--welcome-page,0) + var(--welcome-drag,0px)),0,0);
+  transition:transform var(--welcome-settle-duration,360ms) cubic-bezier(.25,.65,.3,1); will-change:transform;
+}
+.welcome-pager[data-dragging] .welcome-pager-track { transition:none; user-select:none; }
+.welcome-pager-page { flex:0 0 100%; width:100%; min-width:0; height:100%; overflow-x:hidden; overflow-y:auto; overscroll-behavior-y:none; overflow-anchor:none; }
+.welcome-pager-page[data-scrollable="false"] { overflow-y:hidden; }
+.welcome-pager[data-zoomed],.welcome-pager[data-zoomed] .welcome-carousel { touch-action:pan-x pan-y pinch-zoom; }
+/* Skip/Get started should dissolve to the destination rather than rush past
+   two intermediate pages. Both pages keep their original layout and state. */
+.welcome-pager[data-jumping] .welcome-pager-track { transition:none; }
+.welcome-pager[data-jumping] .welcome-pager-page { visibility:hidden; }
+.welcome-pager[data-jumping] .welcome-pager-page[data-active] { visibility:visible; animation:welcome-page-in 240ms ease-out both; }
+.welcome-pager[data-jumping] .welcome-pager-page[data-leaving] {
+  visibility:visible; transform:translateX(calc(100% * var(--welcome-jump-offset)));
+  animation:welcome-page-out 200ms ease-out both;
+}
+@keyframes welcome-page-in { from { opacity:0; } to { opacity:1; } }
+@keyframes welcome-page-out { from { opacity:1; } to { opacity:0; } }
+.welcome-pager-page > .onboarding { width:100%; max-width:none; margin:0; box-shadow:none; }
+:root .welcome-pager-page > .onboarding.welcome-screen { min-height:100%; }
+.welcome-pager-page[data-kind="intro"] .welcome-visual { min-height:var(--welcome-shared-visual,260px); }
+.welcome-pager-page[data-kind="intro"] .welcome-story { min-height:var(--welcome-shared-story,0px); }
+.welcome-pager .welcome-visual { grid-area:2 / 1; }
+.welcome-pager .welcome-story { grid-area:1 / 1; }
+.welcome-pager .welcome-landing .welcome-story { grid-area:1 / 1; }
+.welcome-pager:focus-visible { outline:2px solid var(--rook-focus-ring); outline-offset:-3px; }
+/* Constrain only the visible intro. Retained, hidden pages must not lock the
+   actual questionnaire, account forms or subsequent app routes. */
+:root:has(.first-run-page:not([hidden]) > .welcome-pager),
+body:has(.first-run-page:not([hidden]) > .welcome-pager) { overscroll-behavior-y:none; }
+:root:not(:has(.persistence-warning)):has(.first-run-page:not([hidden]) > .welcome-pager),
+body:not(:has(.persistence-warning)):has(.first-run-page:not([hidden]) > .welcome-pager) { overflow-y:hidden; }
+@media (min-width:501px) { .welcome-pager { --welcome-viewport-height:calc(100dvh - 40px); border-radius:32px; } }
+@media (prefers-reduced-motion:reduce) {
+  .welcome-pager-track,.welcome-dots i { transition:none; }
+  .welcome-pager[data-jumping] .welcome-pager-page[data-active] { animation:none; }
+  .welcome-pager[data-jumping] .welcome-pager-page[data-leaving] { visibility:hidden; animation:none; }
+}

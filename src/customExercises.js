@@ -7,6 +7,7 @@ export const CUSTOM_EXERCISE_EQUIPMENT = [
   ["dumbbells", "Dumbbells"],
   ["bodyweight", "Bodyweight"],
   ["resistance bands", "Resistance bands"],
+  ["secure band anchor", "Secure band anchor"],
   ["kettlebells", "Kettlebell"],
   ["other", "Other"],
 ];

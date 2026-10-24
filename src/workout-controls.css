@@ -47,6 +47,8 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+:root .workout-screen .workout-header-center > .workout-extra-label { font-size:11px; color:var(--rook-accent-text); font-weight:650; }
+.workout-screen[data-plan-extra] .workout-header-center > strong { white-space:normal; overflow-wrap:anywhere; }
 .workout-header-actions { width: 90px; min-height: 44px; justify-self: end; align-self: center; display: inline-flex; align-items: center; justify-content: flex-end; gap: 2px; }
 .workout-header-actions > .text-button { min-width: 44px; min-height: 44px; padding: 0 3px; }
 .workout-options-trigger { flex:0 0 44px;width:44px;height:44px;padding:0;border:0;border-radius:9px;background:transparent;color:var(--rook-muted);font-size:9px;letter-spacing:1px;appearance:none;-webkit-tap-highlight-color:transparent; }
@@ -65,7 +67,8 @@
 .workout-screen .workout-warmup { margin-top: 11px !important; }
 .workout-screen .workout-warmup-toggle { padding-top: 11px; padding-bottom: 11px; }
 .workout-screen .workout-warmup-toggle { min-height: 52px; min-width: 0; }
-.workout-screen .workout-warmup-toggle > span { min-width: 0; overflow-wrap: anywhere; }
+.workout-screen .workout-warmup-toggle > span { min-width: 0; overflow-wrap: anywhere; flex:1; }
+.workout-screen .workout-warmup-toggle > .warmup-inline-progress { flex:none; margin:0 8px; font-variant-numeric:tabular-nums; }
 .workout-screen .workout-warmup-content { min-height: 0; }
 .workout-screen .warmup-summary-check { margin-right: 7px; color: var(--rook-accent-text); font-style: normal; }
 .workout-screen .warmup-skip { min-width: 44px; min-height: 44px; flex: 0 0 auto; }
@@ -85,8 +88,8 @@
   font-size: 9px;
   font-weight: 800;
   line-height: 1.3;
-  letter-spacing: .11em;
-  text-transform: uppercase;
+  letter-spacing: normal;
+  text-transform: none;
   overflow-wrap: anywhere;
 }
 .workout-screen .warmup-general-guidance {
@@ -110,7 +113,7 @@
   align-items: center;
   gap: 9px;
   text-align: left;
-  font-size: 12px;
+  font-size: 14px;
 }
 .workout-screen button.warmup-check-row.current {
   background: var(--rook-accent-soft, #eaf2ee);
@@ -122,7 +125,7 @@
 }
 .workout-screen button.warmup-check-row > strong {
   color: var(--rook-secondary, #6f6c68);
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 700;
   min-width: 0;
   max-width: 110px;
@@ -169,7 +172,13 @@
   min-height: 46px;
   height: auto;
   margin-top: 2px;
+  font-size:14px;
 }
+.workout-screen .warmup-exit.text-button { padding:10px 8px; text-align:left; }
+.workout-screen .warmup-tips { margin-top:4px; }
+.workout-screen .warmup-tips > summary { min-height:44px; padding:12px 8px; color:var(--rook-secondary); cursor:pointer; font-size:14px; line-height:1.4; }
+.workout-screen .warmup-tips > summary::marker { color:var(--rook-accent-text); }
+.workout-screen .warmup-tips > p { margin:4px 8px 10px; color:var(--rook-secondary); font-size:14px; line-height:1.45; overflow-wrap:anywhere; }
 
 .workout-screen .exercise-heading {
   /* Keep the artwork footprint independent of title length. */
@@ -237,7 +246,9 @@
   font-size: 10px;
   letter-spacing: 1px;
 }
-.exercise-options-button:focus-visible { background: var(--rook-accent-soft); color: var(--rook-accent-text); }
+/* Returning from a text editor can retain native :focus-visible after a tap.
+   The shared focus manager records pointer intent; keyboard focus stays visible. */
+.exercise-options-button:focus-visible:not([data-rook-pointer-focus="true"]) { background: var(--rook-accent-soft); color: var(--rook-accent-text); }
 .exercise-options-button:disabled { color: #b9b6b1; }
 .exercise-heading .exercise-meta {
   margin: 9px 0 0;
@@ -364,10 +375,9 @@
 .exercise-heading .exercise-meta > span + span::before { content: "·\00a0"; color: #aaa7a2; white-space: nowrap; }
 .exercise-heading :is(.exercise-program-note, .exercise-personal-note) { display: block; margin-top: 6px; color: #8a8783; font-size: 11.5px; font-weight: 500; line-height: 1.35; overflow-wrap: anywhere; white-space: pre-wrap; }
 .exercise-heading .exercise-personal-note-action { width: 100%; min-height: 44px; padding: 8px 0; border: 0; border-radius: 6px; background: transparent; text-align: left; }
-.exercise-heading .exercise-personal-note-action > span { color: var(--rook-accent-text); text-decoration: underline; text-underline-offset: 3px; }
 .exercise-heading .exercise-personal-note span,
 .up-next-personal-note span,
-.exercise-detail-personal-note span { font-size: .88em; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.exercise-detail-personal-note span { color: inherit; font: inherit; letter-spacing: normal; text-transform: none; text-decoration: none; }
 .exercise-note-button { position: relative; width: auto; height: 44px; flex: 0 0 auto; margin: -8px -4px; padding: 0 4px; border: 0; border-radius: 11px; display: inline-flex; align-items: center; justify-content: center; gap: 4px; background: transparent; color: #77736f; }
 .exercise-note-button > span { font-size: 12px; font-weight: 600; }
 .exercise-source-link { display: block; white-space: normal; text-align: left; font-size: 12px; margin-top: 4px; }
@@ -380,7 +390,7 @@
 .exercise-note-button svg { width: 17px; height: 17px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .exercise-note-button.has-note { color: var(--rook-accent-text); }
 .exercise-note-button > i { position: absolute; top: 8px; right: 8px; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
-.exercise-note-button:focus-visible { background: var(--rook-accent-soft); color: var(--rook-accent-text); }
+.exercise-note-button:focus-visible:not([data-rook-pointer-focus="true"]) { background: var(--rook-accent-soft); color: var(--rook-accent-text); }
 .exercise-note-sheet { padding-bottom: var(--rook-sheet-safe-bottom); }
 .modal-layer > .sheet.exercise-note-sheet { padding: 0; }
 .exercise-note-sheet > .sheet-scroll { padding-bottom: 12px; }

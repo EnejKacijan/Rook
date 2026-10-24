@@ -8,7 +8,7 @@ const DEDICATED_PULL_TEMPLATE = /(?:PPL|(?:^|-)PP(?:$|-)|ARNOLD|(?:^|-)BP(?:$|-)
 function bodyweightFallbackReason(profileOrText, templateId) {
   if (!profileOrText || typeof profileOrText === 'string' || profileOrText.environment !== 'Home gym') return null;
   const equipment = new Set(profileOrText.equipment || []);
-  const hasPullEquipment = ['full gym', 'barbell/rack/bench', 'dumbbells', 'pull-up bar', 'resistance bands'].some(item => equipment.has(item));
+  const hasPullEquipment = ['full gym', 'barbell/rack/bench', 'dumbbells', 'pull-up bar'].some(item => equipment.has(item)) || equipment.has('resistance bands') && equipment.has('secure band anchor');
   if (!equipment.has('bodyweight only') || hasPullEquipment) return null;
   if (DEDICATED_PULL_TEMPLATE.test(templateId)) return 'split-needs-pull-equipment';
   if (['T5-FB', 'T6-FB'].includes(templateId)) return 'bodyweight-high-frequency-volume';

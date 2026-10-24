@@ -710,10 +710,11 @@ describe("workout input and duration contracts", () => {
   });
 
   it("shows the reviewed duration without claiming an over-budget workout fits", () => {
-    expect(adaptationDurationLabel(35, 34)).toBe("~35 min · 35 min goal");
-    expect(adaptationDurationLabel(35, 39)).toBe("Estimated ~40 min · 35 min goal");
+    expect(adaptationDurationLabel(null, 34)).toBe("About 35 min");
+    expect(adaptationDurationLabel(35, 34)).toBe("About 35 min · Goal: 35 min");
+    expect(adaptationDurationLabel(35, 39)).toBe("About 40 min · Goal: 35 min");
     expect(adaptationDurationLabel(35, 44)).toBe(
-      "Estimated ~45 min · 35 min goal",
+      "About 45 min · Goal: 35 min",
     );
   });
 });

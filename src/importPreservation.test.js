@@ -8,8 +8,9 @@ const parse=text=>AIService.importTrainingPlan(blankState().profile,text,{review
 it('complex five-day source has only executable blockers and every source line preserved',async()=>{
  const result=await parse(complexPreservationNotes),review=result.sourceReview,exercises=result.program.days.flatMap(day=>day.exercises);
  expect(result.program.days).toHaveLength(5);expect(exercises.filter(exercise=>['original','needs-name-review'].includes(exercise.matchStatus)).length).toBeGreaterThanOrEqual(3);
- expect(pendingImportIssues(review).map(issue=>issue.field)).toEqual(['alternative']);
- expect(review.issues.filter(issue=>issue.category==='preserved')).toHaveLength(10);
+ expect(pendingImportIssues(review).map(issue=>issue.field)).toEqual(['alternative','sourcePrescription']);
+ expect(pendingImportIssues(review).find(issue=>issue.field==='sourcePrescription')).toMatchObject({requiresSourceEdit:true});
+ expect(review.issues.filter(issue=>issue.category==='preserved').every(issue=>complexPreservationNotes.includes(issue.source))).toBe(true);
  expect(exercises.some(exercise=>exercise.importedName==='Y Balance Reach')).toBe(true);
  expect(exercises.some(exercise=>/Kolo/.test(exercise.importedName))).toBe(false);
  const preserved=result.program.importMetadata.sourceNotes.map(note=>note.text).join('\n');
@@ -24,11 +25,11 @@ it('complex five-day source has only executable blockers and every source line p
  expect(options.map(option=>[option.sets,option.repMin,option.weight])).toEqual([[3,9,155],[3,8,173]]);
  expect(pendingImportIssues(review,Object.fromEntries(pendingImportIssues(review).map(issue=>[issue.id,true])))).toEqual([]);
 });
-it('clear shared per-side source maps automatically; an operated leg remains one-sided instruction',async()=>{
+it('clear shared per-side source maps automatically; an operated-leg dose requires source review',async()=>{
  const result=await parse('MONDAY\nLateral Skater Hops 3x12/stran\nForward Single-Leg Hops 2x6/operirana noga\nRear Delt Fly 2x7/stran 35kg');
  expect(result.program.days[0].exercises.map(exercise=>exercise.loggingMode)).toEqual(['per_side','normal','per_side']);
  expect(result.program.days[0].exercises[1].notes).toContain('operirana noga');
- expect(pendingImportIssues(result.sourceReview)).toEqual([]);
+ expect(pendingImportIssues(result.sourceReview)).toHaveLength(1);expect(pendingImportIssues(result.sourceReview)[0]).toMatchObject({field:'sourcePrescription',requiresSourceEdit:true});
 });
 it('durable scoped source survives backup/restore without adding transient review state',async()=>{
  const result=await parse('MONDAY\nBench Press 3x8\nTechnique: keep the movement controlled.\nSUNDAY - REST\nWalk as desired.');

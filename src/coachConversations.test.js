@@ -2,42 +2,45 @@ import { describe, it, expect, vi } from 'vitest';
 import { blankState, buildProgram, deserializeState, serializeState, isoDay, coachContext } from './domain.js';
 import {combineSources,buildCombinedProposal,applyCombinedProposal,buildCombinedRevision} from './combineWorkouts.js';
 import {flexibleSessions} from './flexibleWeek.js';
-import { enterCoachConversation, normalizeCoachConversations, pendingCoachWorkflows, persistCoachEntry, cancelCoachWorkflows } from './coachConversations.js';
+import { enterCoachConversation, normalizeCoachConversations, pendingCoachWorkflows, persistCoachEntry, cancelCoachWorkflows, touchCoachConversation } from './coachConversations.js';
 
 const day = value => new Date(`2026-09-${value}T12:00:00`);
 const enter = (state, date = day(18), options = {}) => enterCoachConversation(state, {now:date,...options});
 const entry = (id, reply = {text:'A complete answer.'}, extra = {}) => ({id,conversationId:'old',createdAt:day(18).getTime(),user:'Training question',reply,...extra});
-function fixture(messages = [entry('one')]) { return {...blankState(),conversations:messages,activeCoachConversationId:'old',coachDraft:'Draft answer'}; }
+function fixture(messages = [entry('one')]) { return {...blankState(),conversations:messages,activeCoachConversationId:'old',coachDraft:''}; }
 const request = {text:'How much time?',combineRequest:{step:'time',sourceIds:['upper','lower']}};
 const proposal = {text:'Review this',action:{type:'combine-workouts',proposal:{id:'combined',mode:'combine'}}};
 
 it('plain HTTP LAN previews can create distinct stable IDs without secure-context crypto',()=>{
   vi.stubGlobal('crypto',undefined);
-  try {const a=enter(blankState()),b=enter(a,day(18),{manual:true});expect(a.activeCoachConversationId).not.toBe(b.activeCoachConversationId);expect(enter(deserializeState(serializeState(b))).activeCoachConversationId).toBe(b.activeCoachConversationId);}
+  try {const a=enter(blankState());a.conversations.push({...entry('first'),conversationId:a.activeCoachConversationId});const b=enter(a,day(18),{manual:true});expect(a.activeCoachConversationId).not.toBe(b.activeCoachConversationId);expect(enter(deserializeState(serializeState(b))).activeCoachConversationId).toBe(b.activeCoachConversationId);}
   finally{vi.unstubAllGlobals();}
 });
 
 it('A/E/F same-day entry, tab return and persisted restart preserve stable identity and draft',()=>{
-  const first=enter(fixture());
+  const first=enter({...fixture(),coachDraft:'Draft answer'});
   for(const state of [first,deserializeState(serializeState(first)),structuredClone(first)]) {
     expect(enter(state).activeCoachConversationId).toBe('old');expect(enter(state).coachDraft).toBe('Draft answer');
   }
 });
-it('B a new local day retains all messages and workout state, clearing only the current draft',()=>{
-  const before=fixture();before.activeWorkout={id:'live',startedAt:123,exercises:[]};before.todayAdaptation={id:'applied'};
+it('B a new local day starts a fresh conversation when no work or draft needs continuity',()=>{
+  const before=fixture();before.todayAdaptation={id:'applied'};
   const next=enter(before,day(19));expect(next.activeCoachConversationId).not.toBe('old');expect(next.coachDraft).toBe('');
   expect(next.conversations).toEqual(before.conversations);expect(next.activeWorkout).toEqual(before.activeWorkout);expect(next.todayAdaptation).toEqual(before.todayAdaptation);
   expect(next.coachConversationMeta.old.localDateStarted).toBe('2026-09-18');
 });
 it.each([request,proposal,{text:'Adjust today',action:{type:'adapt-today'}},null])('C pending structured workflow survives reload and next day: %j',reply=>{
-  const before=enter(fixture([entry('pending',reply,{combineSelection:['upper'],combineReview:{id:'candidate'}})]));
+  const before=enter({...fixture([entry('pending',reply,{combineSelection:['upper'],combineReview:{id:'candidate'}})]),coachDraft:'Draft answer'});
   const next=enter(deserializeState(serializeState(before)),day(19));expect(next.activeCoachConversationId).toBe('old');expect(next.coachDraft).toBe('Draft answer');expect(next.conversations).toEqual(before.conversations);
 });
-it('D resolving next-day pending work only rolls over on the next entry',()=>{
+it('D meaningful work on an older conversation counts as today, while a late reply alone does not',()=>{
   const state=enter(fixture([entry('question',request),entry('review',proposal)]),day(19));
   state.conversations[1].actionResult={status:'applied'};
   expect(pendingCoachWorkflows(state)).toEqual([]);expect(state.activeCoachConversationId).toBe('old');
   expect(enter(state,day(19)).activeCoachConversationId).not.toBe('old');
+  touchCoachConversation(state,'old',day(19).getTime(),{user:true});
+  expect(enter(deserializeState(serializeState(state)),day(19)).activeCoachConversationId).toBe('old');
+  expect(enter(state,day(20)).activeCoachConversationId).not.toBe('old');
 });
 it('plain questions never block rollover; conflict is pending, undo-conflict already applied',()=>{
   expect(enter(fixture([entry('q',{text:'How was your training?'})]),day(19)).activeCoachConversationId).not.toBe('old');
@@ -45,9 +48,11 @@ it('plain questions never block rollover; conflict is pending, undo-conflict alr
   expect(pendingCoachWorkflows(fixture([entry('q',proposal,{actionResult:{status:'undo-conflict'}})]))).toHaveLength(0);
 });
 it('G multiple same-day manual chats have distinct identities and retain all old messages',()=>{
-  const a=enter(fixture()),b=enter(a,day(18),{manual:true}),c=enter(b,day(18),{manual:true});
+  const a=enter(fixture()),b=enter(a,day(18),{manual:true});
+  b.conversations.push({...entry('second'),conversationId:b.activeCoachConversationId});
+  const c=enter(b,day(18),{manual:true});
   expect(new Set([a.activeCoachConversationId,b.activeCoachConversationId,c.activeCoachConversationId]).size).toBe(3);
-  expect(c.conversations).toEqual(a.conversations);expect(c.coachDraft).toBe('');expect(Object.keys(c.coachConversationMeta)).toHaveLength(2);
+  expect(c.conversations).toEqual(b.conversations);expect(c.coachDraft).toBe('');expect(Object.keys(c.coachConversationMeta)).toHaveLength(3);
 });
 it('H explicit pending cancellation is required and keeps applied reservations/provenance intact',()=>{
   const before=fixture([entry('applied',proposal,{actionResult:{status:'applied'}}),entry('revision',proposal)]);
@@ -62,6 +67,18 @@ it('I legacy migration is stable, non-destructive and does not invent daily boun
   const once=normalizeCoachConversations(before),twice=normalizeCoachConversations(once);
   expect(twice).toEqual(once);expect(once.conversations.map(e=>e.conversationId)).toEqual(['legacy','legacy']);expect(once.coachConversationMeta.legacy.localDateStarted).toBeNull();
   expect(enter(once).conversations.map(e=>e.user)).toEqual(['first','second']);
+});
+it('migrates user activity from dated messages without mistaking a later reply for user activity',()=>{
+  const messageTime=day(18).getTime(),replyTime=day(19).getTime();
+  const before=fixture([entry('question')]);
+  before.coachConversationMeta={old:{id:'old',createdAt:messageTime,lastActivityAt:replyTime,localDateStarted:isoDay(messageTime)}};
+  const snapshot=structuredClone(before),once=normalizeCoachConversations(before);
+  expect(once.coachConversationMeta.old).toEqual({...before.coachConversationMeta.old,lastUserActivityAt:messageTime});
+  expect(normalizeCoachConversations(once)).toEqual(once);
+  expect(before).toEqual(snapshot);
+  expect(enter(once,day(19)).activeCoachConversationId).not.toBe('old');
+  touchCoachConversation(once,'old',replyTime,{user:true});
+  expect(enter(deserializeState(serializeState(once)),day(19)).activeCoachConversationId).toBe('old');
 });
 it('legacy spanning dated messages stays one conversation; resolver uses timestamps not array order',()=>{
   const before=fixture([entry('newest',undefined,{conversationId:'new',createdAt:day(19).getTime()}),entry('oldest')]);before.activeCoachConversationId=null;
@@ -89,9 +106,37 @@ it('L no eager conversations during five days without Coach; empty visits do not
 });
 it('N cancellation and next-day creation fail atomically without losing draft/history',()=>{
   for(const pending of [false,true]) {
-    const state=fixture([entry('one',pending?request:undefined)]),before=structuredClone(state);
-    expect(()=>persistCoachEntry(state,{now:day(19),manual:true,cancelPending:true},()=>false)).toThrow('unchanged');expect(state).toEqual(before);
+    const state={...fixture([entry('one',pending?request:undefined)]),coachDraft:'Unsent draft'},before=structuredClone(state);
+    expect(()=>persistCoachEntry(state,{now:day(19),manual:true,cancelPending:true,discardDraft:true},()=>false)).toThrow('unchanged');expect(state).toEqual(before);
   }
+});
+
+it('preserves a nonempty draft across a new day and requires explicit discard for manual New chat',()=>{
+  const before={...fixture(),coachDraft:'  Still writing\nmy question  '};
+  const restored=deserializeState(serializeState(before));
+  expect(enter(restored,day(19)).activeCoachConversationId).toBe('old');
+  expect(enter(restored,day(19)).coachDraft).toBe(before.coachDraft);
+  expect(()=>enter(restored,day(19),{manual:true})).toThrow('unsent draft');
+  const next=enter(restored,day(19),{manual:true,discardDraft:true});
+  expect(next.coachDraft).toBe('');expect(next.conversations).toEqual(before.conversations);
+});
+it.each(['activeWorkout','activeOptionalSession'])('keeps chat continuity during %s across midnight',key=>{
+  const state=fixture();state[key]={id:'active-session'};
+  expect(enter(state,day(19)).activeCoachConversationId).toBe('old');
+  state[key]=null;expect(enter(state,day(19)).activeCoachConversationId).not.toBe('old');
+});
+it('repeated manual New chat on an already empty chat reuses the saved identity',()=>{
+  const first=enter(blankState()),persist=vi.fn(()=>true);
+  const next=persistCoachEntry(first,{manual:true,now:day(18)},persist);
+  expect(next.activeCoachConversationId).toBe(first.activeCoachConversationId);
+  expect(next).toBe(first);expect(persist).not.toHaveBeenCalled();
+});
+it('restores the saved identity and draft of an empty conversation whose legacy metadata lacks an id',()=>{
+  const state={...blankState(),activeCoachConversationId:'empty',coachDraft:'Still writing',
+    coachConversationMeta:{empty:{createdAt:day(18).getTime()}}};
+  const next=enter(deserializeState(serializeState(state)),day(19));
+  expect(next.activeCoachConversationId).toBe('empty');expect(next.coachDraft).toBe('Still writing');
+  expect(next.coachConversationMeta.empty).toMatchObject({id:'empty',localDateStarted:'2026-09-18'});
 });
 it('Combine clarification advances once, revisions supersede same candidate, and cancellation stays terminal after a late reply',()=>{
   const state=fixture([entry('a',request),entry('b',request),entry('c',proposal),entry('d',proposal)]);

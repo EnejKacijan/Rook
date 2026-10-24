@@ -3,7 +3,7 @@ import {
   exerciseCatalog,
   exerciseName,
   exerciseLoadRequirement,
-  rankExerciseSearch,
+  searchExercises,
   storedWeight,
   workoutPerformedDate,
 } from "./domain.js";
@@ -457,17 +457,15 @@ export function applyHistoricalWorkoutImport(state, preview, { ambiguousAction =
 }
 
 export function historicalExerciseChoices(state, query = "") {
-  const normalized = normalizeExerciseAlias(query);
   const builtIn = Object.values(exerciseCatalog)
-    .map((item) => ({ id: item.id, name: item.name, custom: false }));
+    .map((item) => ({ id: item.id, name: item.name, aliases:item.aliases, custom: false }));
   const custom = (state.customExercises || [])
     .filter((item) => !item.deletedAt)
-    .map((item) => ({ id: item.id, name: item.name, custom: true }));
-  return rankExerciseSearch([...builtIn, ...custom]
+    .map((item) => ({ id: item.id, name: item.name, aliases:item.aliases, custom: true }));
+  return searchExercises([...builtIn, ...custom]
     .filter((item, index, values) => values.findIndex((value) => value.id === item.id) === index)
-    .filter((item) => !normalized || normalizeExerciseAlias(item.name).includes(normalized))
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .slice(0, 30), query);
+    .sort((left, right) => left.name.localeCompare(right.name)), query)
+    .slice(0,30).map(({id,name,custom})=>({id,name,custom}));
 }
 
 export function historicalExerciseLabel(state, exerciseId) {

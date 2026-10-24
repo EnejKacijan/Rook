@@ -8,6 +8,7 @@ export const FUNNEL_EVENTS = Object.freeze([
   'plan_generation_started',
   'plan_generation_completed',
   'plan_generation_failed',
+  'plan_preview_viewed',
   'first_plan_viewed',
   'first_workout_started',
   'first_workout_completed',

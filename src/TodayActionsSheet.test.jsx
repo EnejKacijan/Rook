@@ -24,7 +24,7 @@ const draw=()=>act(()=>root.render(<TodayActionsSheet state={state} date={state.
 
 it.each([0,1,2,3,4])('keeps %i completed workouts at zero or one Repeat/Delete actions, with no history index',count=>{
   state=dayOverflowFixture({count});draw();
-  expect(rows().map(row=>row.textContent)).toEqual(count?['Conditioning','Repeat a workout','Adjust week','Rest-day activities','Start freestyle workout',count===1?'Delete workout':'Delete a workout']:['Adjust week','Rest-day activities']);
+  expect(rows().map(row=>row.textContent)).toEqual(count?['Conditioning','Repeat a workout','Adjust week','Rest-day activities','Start freestyle workout','Choose a workout',count===1?'Delete workout':'Delete a workout']:['Adjust week','Rest-day activities']);
   expect(document.querySelector('.today-workout-chooser')).toBeNull();
   expect(document.body.textContent).not.toContain('View history');expect(document.body.textContent).not.toContain('UPPER B');
 });
@@ -47,7 +47,7 @@ it.each(['repeat','delete'])('%s shares the compact ID chooser and preserves row
 it('chooser back restores the concise actions and their keyboard focus',async()=>{
   draw();click(button('Repeat a workout'));click(document.querySelector('[aria-label="Back"]'));
   await act(async()=>vi.advanceTimersToNextFrame());
-  expect(rows()).toHaveLength(6);expect(document.activeElement).toBe(button('Repeat a workout'));
+  expect(rows()).toHaveLength(7);expect(document.activeElement).toBe(button('Repeat a workout'));
   click(button('Delete a workout'));click(document.querySelector('[aria-label="Close Delete a workout"]'));expect(close).toHaveBeenCalledOnce();
 });
 it.each(['activeWorkout','activeOptionalSession'])('hides conflicting actions with %s and keeps scheduling available',key=>{

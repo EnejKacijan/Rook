@@ -11,9 +11,14 @@ import {focusNavigationTarget} from './navigationFocus.js';
 import {useExerciseSearchSheet} from './useExerciseSearchSheet.js';
 import {useExerciseRemoveUndo} from './SwipeActionRow.jsx';
 import {canUndoWorkoutAddition,undoWorkoutAddition} from './freestyleWorkout.js';
+import {startFreestyleWorkout} from './freestyleWorkout.js';
 import {templateDraft,saveWorkoutTemplate,deleteWorkoutTemplate,templateUseIssues,templateOverlaps,useSavedWorkout} from './savedWorkouts.js';
 import {saveFirstRunWorkout} from './firstRunNoPlan.js';
 import {recordAccountSyncDeleteIntent} from './accountSyncOutbox.js';
+import {planWorkoutChoices,resolvePlanWorkout,startPlanWorkoutExtra} from './planWorkoutTemplates.js';
+import {planScheduledOptions,reviewPlanWorkoutStart,startScheduledPlanWorkout} from './planWorkoutSchedule.js';
+import {PlanWorkoutStartSheet} from './PlanWorkoutStartSheet.jsx';
+import {searchWorkoutNames} from './workoutSearch.js';
 import './savedWorkouts.css';
 
 export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,initialTemplateId=null,createNew=false,firstRun=false,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved,dialogLabel}) {
@@ -25,11 +30,20 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
   const [deleteConfirmation,setDeleteConfirmation]=useState(null),[deleteError,setDeleteError]=useState('');
   const pendingDelete=useRef(null),deleteBackground=useRef(null),deleteSubmitted=useRef(false),deleteOutcome=useRef(null);
   const [optionsOpen,setOptionsOpen]=useState(false);
+  const [planSelection,setPlanSelection]=useState(null);
+  const [planStart,setPlanStart]=useState(null);
+  const planStartBackground=useRef(null),planStartTrigger=useRef(null);
+  const copyReference=useRef(null);
   const optionsBackground=useRef(null),optionsTrigger=useRef(null),optionsAction=useRef(null),actionFocus=useRef(null),editPosition=useRef(null);
   const editorDirty=useRef(false);
   const createId=useRef(uid('workout-template')),request=useRef(initialTemplateId?uid('template-use'):null),sessionId=useRef(state.activeWorkout?.id||null).current;
-  const selected=selection,review=draft||selected;
+  const selected=selection,review=draft||planSelection?.todayDraft||planSelection?.draft||selected;
+  const planChoices=!embedded&&!state.activeWorkout&&!firstRun&&!source?planWorkoutChoices(state):[];
+  let planError='';
+  if(planSelection){try{resolvePlanWorkout(state,planSelection.reference);}catch(e){planError=e.message;}}
+  const scheduled=planError?null:planSelection?.scheduled;
   const searchQuery=browseQuery??query;
+  const filteredPlanChoices=searchWorkoutNames(planChoices,searchQuery),filteredTemplates=searchWorkoutNames(state.savedWorkoutTemplates||[],searchQuery);
   useLayoutEffect(()=>{if(!review){const list=screen.current?.querySelector('.saved-workout-list');if(list)list.scrollTop=browseScroll.current;}},[Boolean(review)]);
   useLayoutEffect(()=>{onViewChange?.(Boolean(review));},[Boolean(review),onViewChange]);
   useLayoutEffect(()=>{onEditingChange?.(editing);return()=>onEditingChange?.(false);},[editing,onEditingChange]);
@@ -72,7 +86,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     optionsAction.current=action;
     if(requestClose()===false)optionsAction.current=null;
   };
-  const reset=()=>{setDraft(null);setSelection(null);setRenaming(false);setEditing(false);setError('');setConfirmed(false);};
+  const reset=()=>{setDraft(null);setSelection(null);setPlanSelection(null);setPlanStart(null);copyReference.current=null;setRenaming(false);setEditing(false);setError('');setConfirmed(false);};
   const closeDelete=()=>{
     setDeleteConfirmation(null);setDeleteError('');
     if(deleteOutcome.current){
@@ -99,28 +113,65 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
         !window.confirm('Discard this workout draft and return to the start?')) return;
     close();
   };
-  const back=()=>{if(firstRun){leaveFirstRun();return;}if(editing){setEditing(false);return;}if(source&&onBack){onBack();return;}if(renaming){setRenaming(false);setDraft(null);return;}if(source){close();return;}reset();};
+  const back=()=>{if(firstRun){leaveFirstRun();return;}if(editing){setEditing(false);return;}if(source&&onBack){onBack();return;}if(renaming){setRenaming(false);setDraft(null);copyReference.current=null;return;}if(source){close();return;}reset();};
   if(navigationRef)navigationRef.current=back;
   const save=value=>{
-    try{const result=commit(current=>(firstRun?saveFirstRunWorkout:saveWorkoutTemplate)(current,value,{id:selected?.id||createId.current,revision:selected?.revision??null}));if(!result.changed)return;setNotice('Workout saved');if(firstRun||source){(onSaved||close)();return;}createId.current=uid('workout-template');reset();}catch(e){setError(e.message);}
+    try{const result=commit(current=>{if(copyReference.current)resolvePlanWorkout(current,copyReference.current);return (firstRun?saveFirstRunWorkout:saveWorkoutTemplate)(current,value,{id:selected?.id||createId.current,revision:selected?.revision??null});});if(!result.changed)return;setNotice('Workout saved');if(firstRun||source){(onSaved||close)();return;}reset();}catch(e){setError(e.message);}
   };
+  const openPlan=choice=>{
+    try{
+      const current=latest.current,{draft}=resolvePlanWorkout(current,choice.reference),scheduled=planScheduledOptions(current,choice.reference);
+      const today=scheduled.options.find(item=>item.date===scheduled.today);
+      const actual=today?reviewPlanWorkoutStart(current,{reference:choice.reference,snapshot:scheduled,sessionId:today.id}):null;
+      browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;
+      setPlanSelection({...choice,draft,scheduled,todayDraft:actual?.draft,adjusted:actual?.adjusted});request.current=uid('plan-extra');setError('');setNotice('');
+    }catch(e){setError(e.message);}
+  };
+  const startExtra=()=>{
+    try{const result=commit(current=>startPlanWorkoutExtra(current,{reference:planSelection.reference,requestId:request.current}));if(result.changed)onStarted?.();}catch(e){setError(e.message);}
+  };
+  const startScheduled=details=>{
+    try{const result=commit(current=>startScheduledPlanWorkout(current,{reference:planSelection.reference,requestId:request.current,...details}));if(result.changed)onStarted?.();return true;}catch(e){setError(e.message);return false;}
+  };
+  const choosePlanStart=()=>{
+    setError('');
+    const today=scheduled.options.find(item=>item.date===scheduled.today);
+    if(today){startScheduled({snapshot:scheduled,sessionId:today.id});return;}
+    planStartBackground.current=screen.current?.closest('.modal-layer')?.firstElementChild||screen.current;
+    setPlanStart(scheduled);
+  };
+  const copyPlan=()=>{
+    try{const {draft}=resolvePlanWorkout(latest.current,planSelection.reference);copyReference.current=planSelection.reference;screen.current?.querySelector('.saved-workout-preview')?.scrollTo?.({top:0});actionFocus.current='.saved-template-name input';setDraft({...draft,name:draft.name.slice(0,100)});setPlanSelection(null);setRenaming(true);setError('');createId.current=uid('workout-template');}catch(e){setError(e.message);}
+  };
+  const create=()=>{createId.current=uid('workout-template');setDraft({name:'New workout',exercises:[]});setEditing(true);setError('');};
   const use=()=>{
     try{const result=commit(current=>useSavedWorkout(current,{templateId:selected.id,revision:selected.revision,sessionId,requestId:request.current,confirmDuplicates:confirmed}));if(result.changed){setNotice(sessionId?'Exercises added to Up Next':'Workout started');if(!sessionId)onStarted?.();else {const record={sessionId,requestId:request.current,ids:result.state.activeWorkout.exercises.filter(e=>e.queueAdditionId===request.current).map(e=>e.id)};undo.show({message:`${record.ids.length} exercises added`,valid:()=>canUndoWorkoutAddition(latest.current,record),undo:()=>{try{commit(current=>undoWorkoutAddition(current,record));setNotice('Addition undone');}catch(e){setError(e.message);}}});}}}catch(e){setError(e.message);}
   };
   const issues=review?templateUseIssues(state,review):[],overlaps=selected?templateOverlaps(state,selected):[];
   const editorSource=useMemo(()=>editing&&review&&{id:'saved-workout-editor',source:'manual',name:review.name,days:[{id:'saved-workout-day',name:review.name,workoutName:review.name,weekday:'Mon',exercises:structuredClone(review.exercises).map(e=>({...e,sets:e.sets.map(s=>({...s,completed:false}))}))}]},[editing,review]);
   const applied=state.activeWorkout?.queueCommandIds?.includes(request.current);
-  return <><main hidden={hidden} ref={screen} role={dialogLabel ? 'dialog' : undefined} aria-modal={dialogLabel ? 'true' : undefined} aria-label={dialogLabel} className={`${embedded?'':'screen detail-screen '}${editing?'edit-plan-screen ':''}saved-workouts`}>
-    {!embedded&&<Header title={source?'Save workout':editing&&!selected?'Create workout':editing?'Edit saved workout':review?'Saved workout':'Saved workouts'} onBack={firstRun||review?back:undefined} backLabel={firstRun?'Back to start':'Back'} onClose={firstRun?undefined:close}/>}
+  return <><main hidden={hidden} data-plan-start-open={Boolean(planStart)} ref={screen} role={dialogLabel ? 'dialog' : undefined} aria-modal={dialogLabel ? 'true' : undefined} aria-label={dialogLabel} className={`${embedded?'':'screen detail-screen '}${editing?'edit-plan-screen ':''}saved-workouts`}>
+    {!embedded&&<Header title={planSelection?'From your plan':source?'Save workout':editing&&!selected?'Create workout':editing?'Edit saved workout':draft&&!selected?'Save workout':review?'Saved workout':'Choose a workout'} onBack={firstRun||review?back:undefined} backLabel={firstRun?'Back to start':'Back'} onClose={firstRun?undefined:close}/>}
     {!review&&scopeBar}
     {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
       copyOverride={{eyebrow:selected?'SAVED WORKOUT':'CREATE WORKOUT',title:selected?'Edit workout':'Build your workout',body:'Choose exercises and set targets for your workout.',action:'REVIEW WORKOUT'}}
       onSave={program=>{editorDirty.current=true;setDraft({name:review.name,exercises:program.days[0].exercises});setEditing(false);setRenaming(true);}} onCancel={firstRun?leaveFirstRun:()=>setEditing(false)} onDirtyChange={firstRun?value=>{editorDirty.current=value;}:undefined}/>:review?<>
       <div className="saved-workout-preview" data-exercise-search-scroll>
-      {(source||renaming||draft)?<label className="saved-template-name">Workout name<input maxLength={100} value={review.name} onChange={e=>setDraft({...review,name:e.target.value})}/></label>:<div className="saved-template-title"><h1>{review.name}</h1><button ref={optionsTrigger} className="saved-template-options-trigger" type="button" aria-label="Saved workout options" aria-haspopup="dialog" aria-expanded={optionsOpen} onClick={()=>{optionsBackground.current=screen.current.closest('.screen')||screen.current;optionsAction.current=null;setOptionsOpen(true);}}><OverflowIcon/></button></div>}
-      <p>{pluralize(review.exercises.length,'exercise')} · Reuse these exercises and targets anytime.</p>
+      {(source||renaming||draft)?<label className="saved-template-name">Workout name<input maxLength={100} value={review.name} onChange={e=>setDraft({...review,name:e.target.value})}/></label>:<div className="saved-template-title"><h1>{review.name}</h1>{!planSelection&&<button ref={optionsTrigger} className="saved-template-options-trigger" type="button" aria-label="Saved workout options" aria-haspopup="dialog" aria-expanded={optionsOpen} onClick={()=>{optionsBackground.current=screen.current.closest('.screen')||screen.current;optionsAction.current=null;setOptionsOpen(true);}}><OverflowIcon/></button>}</div>}
+      <p>{planSelection?`${planSelection.contextLabel} · `:''}{pluralize(review.exercises.length,'exercise')}{!planSelection&&' · Reuse these exercises and targets anytime.'}</p>
+      {planSelection?.todayDraft&&<p className="plan-template-note">{planSelection.adjusted?'Adjusted for today':'Scheduled for today'}</p>}
+      {copyReference.current&&<p className="plan-template-note">Saved separately from your plan.</p>}
       <ol className="saved-template-exercises">{review.exercises.map((e,index)=><li key={e.id||index}><ExercisePickerIdentity item={e.importedExercise||exerciseCatalog[e.exerciseId]||{id:e.exerciseId,name:exerciseName(e)}} enabled={state.profile.showExerciseImages!==false}><strong>{exerciseName(e)}</strong><small>{pluralize(e.sets.length,'set')} · {e.repMin==null?'Target not set':`${e.repMin}${e.repMax!==e.repMin?`–${e.repMax}`:''} ${exerciseMeasure(e)==='seconds'?'sec':'reps'}`}{e.loggingMode==='per_side'?' · per side':''}</small></ExercisePickerIdentity></li>)}</ol>
-      {(source||draft||renaming)?<>{source&&<p className="saved-template-copy-note">Saves the exercises and targets, not your logged results.</p>}<div className="saved-template-save-actions"><button className="text-button" type="button" onClick={edit}>Edit workout</button><button className="button primary" type="button" disabled={!review.name.trim()||!review.exercises.length} onClick={()=>save(review)}>{selected ? 'SAVE CHANGES' : 'SAVE WORKOUT'}</button></div></>:<>
+      {planSelection?<div className="plan-template-actions">
+        {planError&&<p role="alert">{planError}</p>}
+        {issues.length>0&&<div role="status"><p>Review before using</p><ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></div>}
+        <p id={`${overlapDescriptionId}-extra`} className="plan-template-note">{scheduled?.options.length?'Use a scheduled workout, or start an extra without changing your plan.':'This won’t mark a scheduled workout as complete.'}</p>
+        {state.activeWorkout||state.activeOptionalSession?<><p role="status">Resume or finish your active session first.</p><button key="resume" type="button" className="button primary" onClick={state.activeWorkout?onStarted:close}>{state.activeWorkout?'Resume workout':'Back to Today'}</button></>:<>
+          {scheduled?.options.length>0&&<button ref={planStartTrigger} type="button" className="button primary" disabled={Boolean(planError)} onClick={choosePlanStart}>{scheduled.options.some(item=>item.date===scheduled.today)?'Start planned workout':'Start workout'}</button>}
+          <button key="extra" type="button" className={scheduled?.options.length?'text-button':'button primary'} aria-describedby={`${overlapDescriptionId}-extra`} disabled={Boolean(planError)||issues.length>0} onClick={planSelection.todayDraft&&planSelection.adjusted?()=>{setPlanSelection({...planSelection,todayDraft:null,scheduled:null,adjusted:false});setError('');}:startExtra}>{planSelection.todayDraft&&planSelection.adjusted?'Preview extra workout':'Start extra workout'}</button>
+        </>}
+        <button type="button" className="text-button" disabled={Boolean(planError)} onClick={copyPlan}>Save a copy</button>
+      </div>:(source||draft||renaming)?<>{source&&<p className="saved-template-copy-note">Saves the exercises and targets, not your logged results.</p>}<div className="saved-template-save-actions"><button className="text-button" type="button" onClick={edit}>Edit workout</button><button className="button primary" type="button" disabled={!review.name.trim()||!review.exercises.length} onClick={()=>save(review)}>{selected ? 'SAVE CHANGES' : 'SAVE WORKOUT'}</button></div></>:<>
         {issues.length>0&&<div role="status"><p>Review before using</p><ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></div>}
         {!applied&&overlaps.length>0&&<div className="saved-template-overlaps">
           <div id={overlapDescriptionId} className="saved-template-overlap-context">
@@ -135,17 +186,19 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
       </>}
       </div>
     </>:<>
-      {!embedded&&<button className="button secondary saved-workout-create" type="button" onClick={()=>{const start=()=>{setDraft({name:'New workout',exercises:[]});setEditing(true);setError('');};start();}}>+ CREATE WORKOUT</button>}
-      {!embedded&&<SearchInput className="exercise-search" aria-label="Search saved workouts" placeholder="Search saved workouts" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/>}
+      {!embedded&&<SearchInput className="exercise-search" aria-label="Search workouts" placeholder="Search workouts" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/>}
       <div className="saved-workout-list" data-exercise-search-scroll>
-      {(state.savedWorkoutTemplates||[]).filter(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase())).map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><NavigationChevron/></button>)}
-      {!state.savedWorkoutTemplates?.length&&<div className="saved-workouts-empty"><h2>No saved workouts yet</h2><p>Create a workout to reuse anytime, or save a completed workout for later.</p></div>}
-      {state.savedWorkoutTemplates?.length>0&&!(state.savedWorkoutTemplates||[]).some(t=>t.name.toLocaleLowerCase().includes(searchQuery.toLocaleLowerCase()))&&<p>No saved workouts match your search.</p>}
+      {filteredPlanChoices.length>0&&<section className="plan-template-list" aria-label="From your plan"><h2>From your plan</h2>{filteredPlanChoices.map(choice=><button key={choice.reference.dayId} type="button" className="list-row" onClick={()=>openPlan(choice)}><span><strong>{choice.name}</strong><small>{choice.contextLabel} · {pluralize(choice.exerciseCount,'exercise')}</small></span><NavigationChevron/></button>)}</section>}
+      {!embedded&&<div className="saved-template-section-heading"><h2 className="saved-template-section-title">Saved workouts</h2><button className="text-button saved-workout-create" type="button" onClick={create}>Create workout</button></div>}
+      {filteredTemplates.map(template=><button key={template.id} className="list-row" type="button" onClick={()=>{browseScroll.current=screen.current?.querySelector('.saved-workout-list')?.scrollTop||0;setSelection(structuredClone(template));request.current=uid('template-use');setConfirmed(false);setError('');}}><span><strong>{template.name}</strong><small>{template.exercises.length} exercises</small></span><NavigationChevron/></button>)}
+      {!state.savedWorkoutTemplates?.length&&!planChoices.length&&<div className="saved-workouts-empty"><h2>{embedded?'No saved workouts yet':'No workouts yet'}</h2><p>Create a workout to reuse anytime, or save a completed workout for later.</p>{!embedded&&!state.activeWorkout&&!state.activeOptionalSession&&onStarted&&<button type="button" className="button primary" onClick={()=>{try{commit(startFreestyleWorkout);onStarted();}catch(e){setError(e.message);}}}>Start freestyle workout</button>}</div>}
+      {Boolean(state.savedWorkoutTemplates?.length||planChoices.length)&&!filteredTemplates.length&&!filteredPlanChoices.length&&<p>No workouts match your search.</p>}
       </div>
     </>}
     {notice&&<p role="status">{notice}</p>}{error&&<p role="alert">{error}</p>}
     {undo.surface}
   </main>
+    {planStart&&planSelection&&<PlanWorkoutStartSheet state={state} reference={planSelection.reference} snapshot={planStart} Modal={Modal} Header={Header} close={()=>{setPlanStart(null);setError('');}} confirm={startScheduled} startExtra={startExtra} error={error} backgroundRef={planStartBackground} returnFocusRef={planStartTrigger}/>}
     {optionsOpen&&createPortal(<Modal close={dismissOptions} backgroundRef={optionsBackground} returnFocusRef={optionsTrigger} lockDocument={false}>{requestClose=><main className="screen detail-screen saved-template-options" role="dialog" aria-modal="true" aria-label="Saved workout options">
       <Header title="Saved workout options" onBack={requestClose} backLabel="Back to saved workout" onClose={requestClose}/>
       <button className="list-row" type="button" onClick={()=>chooseOption('rename',requestClose)}>Rename</button>

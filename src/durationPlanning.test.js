@@ -39,11 +39,11 @@ describe('shared generated duration fidelity', () => {
       loggingMode: 'per_side', restSeconds: 0 })];
     const original = structuredClone(exercises);
     const timing = generatedSessionTiming(exercises, noWarmup, exerciseCatalog);
-    expect(timing.workSeconds).toBe(405);
+    expect(timing.workSeconds).toBe(450); // Includes three 15-second side changes.
     expect(timing.restSeconds).toBe(180);
     expect(timing.setupSeconds).toBe(120);
     expect(timing.warmupMinutes).toBe(0);
-    expect(timing.minutes).toBe(12);
+    expect(timing.minutes).toBe(13);
     expect(exercises).toEqual(original);
   });
   it('counts superset rests once per pair round rather than twice', () => {

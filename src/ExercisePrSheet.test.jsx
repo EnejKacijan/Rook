@@ -41,15 +41,15 @@ it('the live badge opens truthful PR evidence and returns to the same mounted lo
   mount();const before=structuredClone(current),logger=document.querySelector('.workout-screen'),input=logger.querySelector('input');
   const badge=document.querySelector('.active-performance-pr-trigger');
   expect(badge.tagName).toBe('BUTTON');expect(badge.getAttribute('aria-haspopup')).toBe('dialog');
-  expect(badge.getAttribute('aria-label')).toBe('View estimated 1RM personal record');
+  expect(badge.getAttribute('aria-label')).toBe('View rep best, +1 rep');
   click(badge);
   const sheet=document.querySelector('.exercise-pr-sheet');
   expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   expect(document.querySelector('[role="dialog"]').getAttribute('aria-label')).toBe('Personal record');
-  expect(sheet.querySelector('.exercise-pr-value').textContent).toBe('38 kg');
-  expect(sheet.querySelector('.exercise-pr-evidence').textContent).toContain('30 kg × 8 reps');
-  expect(sheet.querySelector('.exercise-pr-evidence').textContent).toContain('37 kg');
-  expect(sheet.textContent).toContain('not a tested maximum');expect(sheet.textContent).toContain('does not change today’s targets');
+  expect(sheet.querySelector('.exercise-pr-value').textContent).toBe('30 kg × 8 reps');
+  expect(sheet.querySelector('.exercise-pr-evidence').textContent).toContain('Previous best at 30 kg');
+  expect(sheet.querySelector('.exercise-pr-evidence').textContent).toContain('7 reps');
+  expect(sheet.textContent).not.toContain('Epley');expect(sheet.textContent).toContain('Your workout targets stay the same.');
   click(button('CONTINUE TRAINING'));
   expect(document.querySelector('.exercise-pr-sheet')).toBeNull();
   expect(document.querySelector('.workout-screen')).toBe(logger);expect(logger.querySelector('input')).toBe(input);
@@ -63,7 +63,7 @@ it('recorded history and Back preserve the active session and return to its curr
   expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   expect(document.querySelector('[role="dialog"]').getAttribute('aria-label')).toBe('Incline Dumbbell Press');
   click(document.querySelector('button[aria-label="Back to personal record"]'));
-  expect(document.querySelector('.exercise-pr-value').textContent).toBe('38 kg');
+  expect(document.querySelector('.exercise-pr-value').textContent).toBe('30 kg × 8 reps');
   expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
   expect(document.querySelector('[role="dialog"]').getAttribute('aria-label')).toBe('Personal record');
   expect(current).toEqual(before);expect(updates).not.toHaveBeenCalled();
@@ -84,19 +84,32 @@ it('a stale request cannot show evidence from another active session or exercise
   expect(host.querySelector('.exercise-pr-history')).toBeNull();
 });
 
-it('small estimate gains survive whole-unit display rounding and lb conversion',()=>{
+it('small weight gains survive whole-unit display rounding and lb conversion',()=>{
   const history=[{id:'prior',completedAt:'2026-10-04',exercises:[{exerciseId:'bench',sets:[{completed:true,weight:40,reps:8}]}]}];
   const exercise={exerciseId:'bench',name:'Bench',sets:[{completed:true,weight:40.25,reps:8}]};
   act(()=>root.render(<ExercisePrSheet exercise={exercise} workouts={history} units="lb" e1rmEligible Header={()=>null} close={()=>{}}/>));
-  expect(host.querySelector('.exercise-pr-change').textContent).toBe('Increase <1 lb');
+  expect(host.querySelector('.exercise-pr-change').textContent).toBe('+0.55 lb');
   expect(host.querySelector('.exercise-pr-value').textContent).toContain('lb');
+});
+
+it('an estimate-only improvement is identified and explained separately from a lifted weight best',()=>{
+  const history=[{id:'prior',completedAt:'2026-10-04',exercises:[{exerciseId:'bench',sets:[{completed:true,weight:30,reps:5},{completed:true,weight:25,reps:8}]}]}];
+  const exercise={exerciseId:'bench',name:'Bench',sets:[{completed:true,weight:27.5,reps:9}]};
+  act(()=>root.render(<ExercisePrSheet exercise={exercise} workouts={history} units="kg" e1rmEligible Header={()=>null} close={()=>{}}/>));
+  expect(host.querySelector('.eyebrow').textContent).toBe('Strength estimate');
+  expect(host.querySelector('.exercise-pr-value').textContent).toBe('35.8 kg');
+  expect(host.querySelector('.exercise-pr-change').textContent).toBe('↑ 0.8 kg');
+  expect(host.querySelector('.exercise-pr-evidence').textContent).toContain('27.5 kg × 9 reps');
+  expect(host.querySelector('.exercise-pr-evidence').textContent).toContain('35 kg');
+  expect(host.textContent).toContain('not a tested maximum');
+  expect(host.textContent).toContain('RIR is not included');
 });
 
 it('rep-only records do not promise an estimated maximum',()=>{
   const history=[{id:'prior',completedAt:'2026-10-04',exercises:[{exerciseId:'bench',sets:[{completed:true,weight:30,reps:14}]}]}];
   const exercise={exerciseId:'bench',name:'Bench',sets:[{completed:true,weight:30,reps:15}]};
   act(()=>root.render(<ExercisePrSheet exercise={exercise} workouts={history} units="kg" e1rmEligible={false} Header={()=>null} close={()=>{}}/>));
-  expect(host.querySelector('.exercise-pr-value').textContent).toBe('15 reps');
+  expect(host.querySelector('.exercise-pr-value').textContent).toBe('30 kg × 15 reps');
   expect(host.textContent).not.toMatch(/Epley|tested maximum|ESTIMATED 1RM/);
   expect(host.textContent).toContain('14 reps');
 });

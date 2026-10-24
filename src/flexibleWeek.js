@@ -18,14 +18,27 @@ export function remainingPlanWeekDates(today = isoDay()) {
 const validDate = date => /^\d{4}-\d{2}-\d{2}$/.test(date || '') && isoDay(new Date(`${date}T12:00:00`)) === date;
 const identity = item => `${item.workoutId}:${item.originalDate}`;
 const records = state => Object.values(state.flexibleWeek?.sessions || {});
-export function flexiblePlanFingerprint(state) {
+const sorted=value=>Array.isArray(value)?value.map(sorted):value&&typeof value==='object'?Object.fromEntries(Object.keys(value).sort().map(key=>[key,sorted(value[key])])):value;
+function planFingerprint(state,legacy=false) {
   const program = state.program;
   if (!program) return 'none';
-  const serialized = JSON.stringify({ id: program.id, version: program.version, days: program.days, rotationStartDate: program.rotationStartDate,
-    block: program.trainingBlock && { id: program.trainingBlock.id, weeks: program.trainingBlock.weeks, totalWeeks: program.trainingBlock.totalWeeks } });
+  const shape={ id: program.id, version: program.version, days: legacy?program.days:program.days.map(({estimatedMinutes,...day})=>day), rotationStartDate: program.rotationStartDate,
+    block: program.trainingBlock && { id: program.trainingBlock.id, weeks: program.trainingBlock.weeks, totalWeeks: program.trainingBlock.totalWeeks } };
+  const serialized = JSON.stringify(legacy?shape:sorted(shape));
   let first = 2166136261, second = 5381;
   for (const char of serialized) { first = Math.imul(first ^ char.charCodeAt(0), 16777619); second = Math.imul(second, 33) ^ char.charCodeAt(0); }
-  return `${serialized.length}:${first >>> 0}:${second >>> 0}`;
+  return `${legacy?'':'fw2:'}${serialized.length}:${first >>> 0}:${second >>> 0}`;
+}
+export const flexiblePlanFingerprint=state=>planFingerprint(state);
+export function flexibleFingerprintBeforeHydration(state){return {current:planFingerprint(state),legacy:planFingerprint(state,true)};}
+export function migrateFlexibleWeekFingerprints(state,before){
+  const current=planFingerprint(state),legacy=planFingerprint(state,true);
+  for(const record of records(state)){
+    if(record.id!==`${record.workoutId}:${record.originalDate}`||!state.program?.days?.some(day=>day.id===record.workoutId)||record.blockId&&record.blockId!==state.program?.trainingBlock?.id)continue;
+    // A legacy hash is upgraded only with evidence that it belongs to this
+    // exact prescription. Recomputing a time estimate cannot invalidate a move.
+    if(record.planFingerprint===legacy || before?.current===current&&[before.legacy,before.current].includes(record.planFingerprint))record.planFingerprint=current;
+  }
 }
 export function flexibleReviewFingerprint(state) {
   return JSON.stringify([flexiblePlanFingerprint(state), state.flexibleWeek, state.weekScheduleOverrides, state.workoutOccurrenceOverrides,

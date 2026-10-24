@@ -147,7 +147,10 @@ it.each([false,true])('direct handle release preserves the active session and pl
  const row=host.querySelector('.up-next [data-swipe-enabled="true"]');row.getBoundingClientRect=()=>({width:320,height:48});
  const handle=row.querySelector('[data-reorder-kind]');touch('touchstart',handle,290);touch('touchmove',handle,90);expect(current.activeWorkout.exercises).toHaveLength(before.activeWorkout.exercises.length);touch('touchend',handle,90);
  expect(current.activeWorkout.id).toBe(before.activeWorkout.id);expect(current.activeWorkout.startedAt).toBe(before.activeWorkout.startedAt);expect(current.program).toEqual(before.program);
- expect(current.activeWorkout.exercises[0].sets[0].weight).toBe(142.5);expect(host.querySelector('[aria-label="Weight in kg for set 1"]')).toBe(input);
+ // A rejected durable input write stays a raw draft, rather than publishing
+ // an unsaved canonical value. The attempted queue change must not erase it.
+ expect(current.activeWorkout.exercises[0].sets[0].weight).toBe(fail?before.activeWorkout.exercises[0].sets[0].weight:142.5);
+ expect(input.value).toBe('142.5');expect(host.querySelector('[aria-label="Weight in kg for set 1"]')).toBe(input);
  expect(current.activeWorkout.exercises).toHaveLength(before.activeWorkout.exercises.length-(fail?0:1));
  if(fail){expect(host.querySelector('[data-row-exit]')).toBeNull();expect(host.textContent).toContain('Could not save');expect(button('Undo')).toBeUndefined();expect(row.querySelector('[data-swipe-content]').style.transform).toBe('');write.mockRestore();}
  else {

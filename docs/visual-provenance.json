@@ -3,12 +3,10 @@
   "auditedAt": "2026-10-04",
   "scope": "Maintained src/public/branding assets, native icon/splash outputs, regeneration masters, legacy exercise SVGs and inline SVG renderer blocks. Compiled bundles are duplicates, listed separately in the review report.",
   "counts": {
-    "rook_ai_generated": 662,
-    "rook_original": 18,
     "licensed_third_party": 93,
-    "public_domain": 0,
-    "reference_only": 0,
-    "unknown": 11
+    "rook_ai_generated": 662,
+    "unknown": 11,
+    "rook_original": 23
   },
   "exerciseReferenceSources": [
     {
@@ -31553,6 +31551,36 @@
       ]
     },
     {
+      "assetId": "inline-app-11",
+      "path": "src/App.jsx",
+      "sourceLine": 10187,
+      "selector": "inline_svg",
+      "codeSha256": "08045a8fc2e2f1d72a45c9810442d8460313d0d6ac7e80a2c1f2192d29347ec1",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/App.jsx",
+          "line": 10187
+        }
+      ],
+      "notes": [
+        "Source-defined Coach 'New chat' pencil icon added with the local review Coach header. No copyright ownership assertion."
+      ]
+    },
+    {
       "assetId": "inline-estimatedonerepmaxchart-1",
       "path": "src/EstimatedOneRepMaxChart.jsx",
       "sourceLine": 37,
@@ -31576,11 +31604,24 @@
           "type": "repository_inline_geometry",
           "path": "src/EstimatedOneRepMaxChart.jsx",
           "line": 37
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "codeSha256": "4b29236e2c84f4ccdcb62f06587a7aa931b6ffba3695250129ec8a47ca6cf541",
+          "path": "src/EstimatedOneRepMaxChart.jsx"
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/EstimatedOneRepMaxChart.jsx",
+          "line": 37,
+          "reviewedAt": "2026-10-24"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion."
-      ]
+      ],
+      "lfCodeSha256": "2a3d8ba0f3a45e169a25f362488b935c816d6218f5af291447ca2b20e3555380",
+      "crlfCodeSha256": "4b29236e2c84f4ccdcb62f06587a7aa931b6ffba3695250129ec8a47ca6cf541"
     },
     {
       "assetId": "inline-exercisequeuepreview-1",
@@ -31696,16 +31737,29 @@
           "type": "repository_inline_geometry",
           "path": "src/MonthCalendar.jsx",
           "line": 12
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "codeSha256": "741ae716cbc5b317128879133d948b62567974fa00f2757b67287970bbcca4f7",
+          "path": "src/MonthCalendar.jsx"
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/MonthCalendar.jsx",
+          "line": 12,
+          "reviewedAt": "2026-10-24"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion."
-      ]
+      ],
+      "lfCodeSha256": "12299d1193b40edcc54c27676ac70760da7429952327b39e18db2108c5c2836b",
+      "crlfCodeSha256": "741ae716cbc5b317128879133d948b62567974fa00f2757b67287970bbcca4f7"
     },
     {
       "assetId": "inline-navigationchevron-1",
       "path": "src/NavigationChevron.jsx",
-      "sourceLine": 2,
+      "sourceLine": 4,
       "selector": "inline_svg",
       "codeSha256": "9aa35fc4dfa6d055b4bcca656fb6dab39008281a2e70a07de9f1e138f15c4847",
       "exerciseIds": [],
@@ -31726,11 +31780,24 @@
           "type": "repository_inline_geometry",
           "path": "src/NavigationChevron.jsx",
           "line": 2
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "codeSha256": "9aa35fc4dfa6d055b4bcca656fb6dab39008281a2e70a07de9f1e138f15c4847",
+          "path": "src/NavigationChevron.jsx"
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/NavigationChevron.jsx",
+          "line": 4,
+          "reviewedAt": "2026-10-24"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion."
-      ]
+      ],
+      "lfCodeSha256": "3fa0b0f98abbf437b9e6f94ea43826c066f924f19ba46e65b629ec25d8438fee",
+      "crlfCodeSha256": "9aa35fc4dfa6d055b4bcca656fb6dab39008281a2e70a07de9f1e138f15c4847"
     },
     {
       "assetId": "inline-overflowicon-1",
@@ -31756,11 +31823,24 @@
           "type": "repository_inline_geometry",
           "path": "src/OverflowIcon.jsx",
           "line": 6
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "codeSha256": "3fa8f3f27545c8ce9765f8c5110f39b4cca5bc37a527057f23b11947c2d29f01",
+          "path": "src/OverflowIcon.jsx"
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/OverflowIcon.jsx",
+          "line": 6,
+          "reviewedAt": "2026-10-24"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion."
-      ]
+      ],
+      "lfCodeSha256": "a55194e90135db5cf6bb494ea8b383be6aeacc0c8153ab8642d1dc4abf2407a7",
+      "crlfCodeSha256": "3fa8f3f27545c8ce9765f8c5110f39b4cca5bc37a527057f23b11947c2d29f01"
     },
     {
       "assetId": "inline-swipeactionrow-1",
@@ -31791,6 +31871,138 @@
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion."
       ]
+    },
+    {
+      "assetId": "inline-accountsyncpanel-1",
+      "path": "src/AccountSyncPanel.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/AccountSyncPanel.jsx",
+          "line": 104,
+          "reviewedAt": "2026-10-24"
+        }
+      ],
+      "notes": [
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion."
+      ],
+      "sourceLine": 104,
+      "codeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
+      "lfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
+      "crlfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc"
+    },
+    {
+      "assetId": "inline-firstrunwelcome-1",
+      "path": "src/FirstRunWelcome.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/FirstRunWelcome.jsx",
+          "line": 107,
+          "reviewedAt": "2026-10-24"
+        }
+      ],
+      "notes": [
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion."
+      ],
+      "sourceLine": 107,
+      "codeSha256": "d18323c89db106a6f374513645b90f30ac85eb3bbb66a2307145de49dd0df9e7",
+      "lfCodeSha256": "d18323c89db106a6f374513645b90f30ac85eb3bbb66a2307145de49dd0df9e7",
+      "crlfCodeSha256": "d18323c89db106a6f374513645b90f30ac85eb3bbb66a2307145de49dd0df9e7"
+    },
+    {
+      "assetId": "inline-profileaccountentry-1",
+      "path": "src/ProfileAccountEntry.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/ProfileAccountEntry.jsx",
+          "line": 33,
+          "reviewedAt": "2026-10-24"
+        }
+      ],
+      "notes": [
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion."
+      ],
+      "sourceLine": 33,
+      "codeSha256": "09113ddc45d9b36d578e5dedc748cc1e83effa473327e2ad5440e074a90e8ad9",
+      "lfCodeSha256": "09113ddc45d9b36d578e5dedc748cc1e83effa473327e2ad5440e074a90e8ad9",
+      "crlfCodeSha256": "09113ddc45d9b36d578e5dedc748cc1e83effa473327e2ad5440e074a90e8ad9"
+    },
+    {
+      "assetId": "inline-profileinformation-1",
+      "path": "src/ProfileInformation.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/ProfileInformation.jsx",
+          "line": 9,
+          "reviewedAt": "2026-10-24"
+        }
+      ],
+      "notes": [
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion."
+      ],
+      "sourceLine": 9,
+      "codeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
+      "lfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
+      "crlfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc"
     }
   ]
 }

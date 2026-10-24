@@ -11,9 +11,10 @@ function Harness() {
   return <div>{notice.surface}</div>;
 }
 const snackbar = () => host.querySelector('.rook-snackbar');
-function pointer(target, type, x, y = 100, stamp = null) {
+const advance = ms => act(() => vi.advanceTimersByTime(ms));
+function pointer(target, type, x, y = 100, stamp = null, pointerId = 1) {
   const event = new Event(type, { bubbles: true, cancelable: true });
-  for (const [key, value] of Object.entries({ pointerId: 1, isPrimary: true, clientX: x, clientY: y }))
+  for (const [key, value] of Object.entries({ pointerId, isPrimary: true, clientX: x, clientY: y }))
     Object.defineProperty(event, key, { value });
   if (stamp !== null) Object.defineProperty(event, 'timeStamp', { value: stamp });
   act(() => target.dispatchEvent(event));
@@ -72,13 +73,89 @@ it('does not double-dismiss when a timeout and swipe race', () => {
   act(() => vi.advanceTimersByTime(200)); expect(snackbar()).toBeNull();
   expect(rollback).not.toHaveBeenCalled();
 });
-it('cedes vertical motion to scroll and cleans pointercancel', () => {
+it('rejects upward motion and cleans pointercancel', () => {
   show(); pointer(snackbar(), 'pointerdown', 10);
-  const vertical = pointer(window, 'pointermove', 13, 145);
+  const vertical = pointer(window, 'pointermove', 13, 55);
   expect(vertical.defaultPrevented).toBe(false);
   expect(snackbar().style.transform).toBe('');
+  pointer(window, 'pointerup', 13, 55);
   drag(10, 40); pointer(window, 'pointercancel', 40);
   expect(snackbar().style.transform).toBe('');
+});
+it('follows a downward drag and exits below the viewport without Undo', () => {
+  show(); const node = snackbar();
+  vi.spyOn(node, 'getBoundingClientRect').mockReturnValue({top: window.innerHeight - 150});
+  pointer(node, 'pointerdown', 100, 100, 100);
+  const down = pointer(window, 'pointermove', 103, 160, 900);
+  expect(down.defaultPrevented).toBe(true);
+  expect(node.style.transform).toBe('translate3d(0, 60px, 0)');
+  pointer(window, 'pointerup', 103, 160, 1000);
+  expect(node.style.transform).toBe('translate3d(0, 234px, 0)');
+  advance(169); expect(snackbar()).toBe(node);
+  advance(1); expect(snackbar()).toBeNull(); expect(rollback).not.toHaveBeenCalled();
+});
+it('settles a short downward drag, preserving the timeout through spring-back', () => {
+  show(); advance(3000); const node = snackbar();
+  pointer(node, 'pointerdown', 100, 100, 100);
+  pointer(window, 'pointermove', 100, 145, 900);
+  advance(5000);
+  pointer(window, 'pointerup', 100, 145, 1000);
+  expect(node.style.transform).toBe('');
+  advance(170 + 1999); expect(snackbar()).toBe(node);
+  advance(1); expect(snackbar()).toBeNull(); expect(rollback).not.toHaveBeenCalled();
+});
+it('accepts a recent downward flick but rejects a held or reversing short drag', () => {
+  show(); pointer(snackbar(), 'pointerdown', 100, 100, 100);
+  pointer(window, 'pointermove', 100, 110, 900);
+  pointer(window, 'pointermove', 100, 140, 930);
+  pointer(window, 'pointerup', 100, 140, 940);
+  advance(170); expect(snackbar()).toBeNull();
+  show(); pointer(snackbar(), 'pointerdown', 100, 100, 100);
+  pointer(window, 'pointermove', 100, 140, 120);
+  pointer(window, 'pointerup', 100, 140, 1000);
+  expect(snackbar()).not.toBeNull(); expect(snackbar().style.transform).toBe('');
+  advance(170);
+  pointer(snackbar(), 'pointerdown', 100, 100, 1000);
+  pointer(window, 'pointermove', 100, 145, 1020);
+  pointer(window, 'pointermove', 100, 132, 1040);
+  pointer(window, 'pointerup', 100, 132, 1050);
+  expect(snackbar()).not.toBeNull(); expect(snackbar().style.transform).toBe('');
+});
+it.each([[0, 70], [50, 150]])('a rejected upward or diagonal drag never activates Undo (%s, %s)', (dx, y) => {
+  show(); const button = snackbar().querySelector('button');
+  pointer(button, 'pointerdown', 100, 100, 100);
+  pointer(window, 'pointermove', 100 + dx, y, 900);
+  pointer(window, 'pointerup', 100 + dx, y, 1000);
+  act(() => button.click());
+  expect(snackbar()).not.toBeNull(); expect(snackbar().style.transform).toBe('');
+  expect(rollback).not.toHaveBeenCalled();
+  advance(170); act(() => button.click()); expect(rollback).toHaveBeenCalledOnce();
+});
+it.each(['pointercancel', 'lostpointercapture'])('cancels a downward drag on %s and keeps Undo available', reason => {
+  show(); const node = snackbar();
+  pointer(node, 'pointerdown', 100);
+  pointer(window, 'pointermove', 100, 160);
+  pointer(window, reason, 100, 160, null, 2); // Another contact cannot cancel this gesture.
+  expect(node.style.transform).toBe('translate3d(0, 60px, 0)');
+  pointer(window, reason, 100, 160);
+  expect(node.style.transform).toBe(''); advance(170);
+  act(() => node.querySelector('button').click()); expect(rollback).toHaveBeenCalledOnce();
+});
+it('locks the direction and does not turn a horizontal drag into downward dismissal', () => {
+  show(); pointer(snackbar(), 'pointerdown', 100, 100, 100);
+  pointer(window, 'pointermove', 120, 101, 500);
+  pointer(window, 'pointermove', 120, 180, 900);
+  expect(snackbar().style.transform).toBe('translate3d(20px, 0, 0)');
+  pointer(window, 'pointerup', 120, 180, 1000);
+  expect(snackbar()).not.toBeNull(); expect(snackbar().style.transform).toBe('');
+});
+it('a downward swipe starting on Undo only dismisses, including reduced motion', () => {
+  reduced = true; show(); const button = snackbar().querySelector('button');
+  pointer(button, 'pointerdown', 100);
+  pointer(window, 'pointermove', 100, 160);
+  pointer(window, 'pointerup', 100, 160);
+  act(() => button.click());
+  expect(snackbar()).toBeNull(); expect(rollback).not.toHaveBeenCalled();
 });
 it('uses immediate reduced-motion settlement', () => {
   reduced = true; show(); drag(10, -100); pointer(window, 'pointerup', -100);

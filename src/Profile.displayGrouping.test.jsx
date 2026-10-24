@@ -1,14 +1,14 @@
-import React, {act, useRef, useState} from 'react';
+import React, {act, useLayoutEffect, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {BottomNav, Detail, ModalLayer, Profile, SheetHeader} from './App.jsx';
-import {PersonalThemesProvider} from './PersonalThemesContext.jsx';
+import {PersonalThemesProvider,usePersonalThemes} from './PersonalThemesContext.jsx';
 import {createReturningUserFixture} from './demoFixture.js';
 import {deserializeState, startWorkout, STORAGE_KEY} from './domain.js';
 import {useDurableAction} from './useDurableAction.js';
 import {readPersonalThemePreference, savePersonalThemePreference} from './personalThemePreference.js';
 import {useAnimationClock} from './testAnimationClock.js';
-import {THEME_DISCOVERY_KEY, readSeenThemeReleases} from './themeDiscovery.js';
+import {themeDiscoveryKey, readSeenThemeReleases} from './themeDiscovery.js';
 import {PERSONAL_THEME_PREFERENCE} from './personalThemePreference.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -19,6 +19,13 @@ const row = label => [...host.querySelectorAll('.profile-screen button.list-row'
 const open = area => click(host.querySelector(`[data-profile-area="${area}"]`));
 const screen = () => host.querySelector('.profile-screen');
 const title = () => host.querySelector('.profile-subpage-header strong')?.textContent;
+const signedIn={enabled:true,linked:true,state:'synced',accountCreatedAt:'2026-09-01T12:00:00Z'};
+const seen=()=>readSeenThemeReleases(undefined,themeDiscoveryKey(current.profile.id));
+function DiscoveryAudience({profileId,sync}) {
+  const themes=usePersonalThemes();
+  useLayoutEffect(()=>themes.setDiscoveryAudience({profileId,eligible:Boolean(sync.enabled&&sync.linked&&!sync.locked),accountCreatedAt:sync.accountCreatedAt}),[themes.setDiscoveryAudience,profileId,sync]);
+  return null;
+}
 beforeEach(() => {
   useAnimationClock(); standalone = true; writes = vi.fn(); details = vi.fn(); navigate = vi.fn();
   vi.stubGlobal('matchMedia', query => ({matches: query.includes('standalone') ? standalone : false, addEventListener() {}, removeEventListener() {}}));
@@ -46,7 +53,7 @@ async function mount(initial = createReturningUserFixture(0), {sync = {state: 'n
     const update = fn => persist ? durable.commit(previous => fn(structuredClone(previous)))
       : setState(previous => {const next = fn(structuredClone(previous)); writes(next); return next;});
     const requestDetail = next => {details(next); setDetail(next);};
-    return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><div className="app-shell">
+    return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><DiscoveryAudience profileId={state.profile.id} sync={sync}/><div className="app-shell">
       <div ref={background} className="app-content">
         <Profile state={state} update={update} setDetail={requestDetail} setPage={navigate} accountSync={sync}/>
         {!detail && <BottomNav page="profile" setPage={navigate}/>}
@@ -59,19 +66,20 @@ async function mount(initial = createReturningUserFixture(0), {sync = {state: 'n
   await act(async () => root.render(<Harness/>)); await tick();
 }
 
-it('consolidates four unchanged destinations under Settings while keeping contextual sections separate', async () => {
+it('groups settings and Help while keeping contextual sections separate', async () => {
   await mount();
   const groups = [...host.querySelectorAll('.profile-manage')];
   expect(groups.map(group => group.getAttribute('aria-label'))).toEqual(['Settings']);
   expect(groups[0].querySelector('.eyebrow').textContent).toBe('SETTINGS');
   expect(host.querySelector('.profile-program-entry .eyebrow').textContent).toBe('CURRENT TRAINING');
   expect(groups.map(group => [...group.querySelectorAll('[data-profile-area]')].map(button => button.dataset.profileArea)))
-    .toEqual([['training', 'preferences', 'display', 'data']]);
-  expect(groups[0].querySelectorAll('.rook-navigation-chevron')).toHaveLength(4);
+    .toEqual([['training', 'preferences', 'display', 'data', 'help']]);
+  expect(groups[0].querySelectorAll('.rook-navigation-chevron')).toHaveLength(5);
   expect(groups[0].textContent).toContain('Workout preferences');
   expect(host.querySelectorAll('[data-profile-area="display"]')).toHaveLength(1);
   expect(host.querySelectorAll('.profile-current-program[data-profile-area="program"]')).toHaveLength(1);
-  expect(host.querySelector('.account-sync-panel')).not.toBeNull();
+  expect(host.querySelector('.account-sync-panel')).toBeNull();
+  expect(host.querySelectorAll('[data-profile-area="account"]')).toHaveLength(1);
   expect(groups[0].querySelector('.account-sync-panel')).toBeNull();
   expect(writes).not.toHaveBeenCalled(); expect(details).not.toHaveBeenCalled();
 });
@@ -80,36 +88,38 @@ it('guides new-theme discovery through the real navigation path and acknowledges
   vi.setSystemTime(new Date('2026-10-19T12:00:00'));
   savePersonalThemePreference({basePalette:'ocean',appearance:'dark'});
   const stored=localStorage.getItem(PERSONAL_THEME_PREFERENCE);
-  await mount();
+  await mount(undefined,{sync:signedIn});
   expect(host.querySelector('[aria-label="PROFILE"][aria-describedby] .theme-new-dot')).not.toBeNull();
   expect(host.querySelector('[data-profile-area="display"] .theme-new-badge')).not.toBeNull();
   await open('display');expect(row('Appearance').querySelector('.theme-new-badge')).not.toBeNull();
-  expect(readSeenThemeReleases().size).toBe(0);
+  expect(seen().size).toBe(0);
   await click(row('Appearance'));
   const choose=[...host.querySelectorAll('button')].find(node=>node.querySelector('strong')?.textContent==='Choose a theme');
   expect(choose.querySelector('.theme-new-badge')).not.toBeNull();
-  expect(readSeenThemeReleases().size).toBe(0);
+  expect(seen().size).toBe(0);
   await click(choose);
   const studio=document.querySelector('.pro-theme-studio');
   expect(studio.querySelector('[aria-label="Halloween"] .theme-new-badge')).not.toBeNull();
   expect(studio.querySelector('[aria-label="Christmas"]')).toBeNull();
-  expect(readSeenThemeReleases().size).toBe(7);expect(readSeenThemeReleases().has('season:halloween:v1:2026')).toBe(true);
+  expect(seen().size).toBe(7);expect(seen().has('season:halloween:v1:2026')).toBe(true);
   expect(localStorage.getItem(PERSONAL_THEME_PREFERENCE)).toBe(stored);expect(writes).not.toHaveBeenCalled();
   await click([...studio.querySelectorAll('button')].find(node=>node.textContent==='Cancel'));
   expect(host.querySelector('.theme-new-dot')).toBeNull();
   expect(localStorage.getItem(PERSONAL_THEME_PREFERENCE)).toBe(stored);
-  await act(async()=>root.unmount());root=createRoot(host);await mount();
+  const sameProfile=current;
+  await act(async()=>root.unmount());root=createRoot(host);await mount(sameProfile,{sync:signedIn});
   expect(host.querySelector('.theme-new-badge')).toBeNull();expect(host.querySelector('.theme-new-dot')).toBeNull();
 });
 
 it('refreshes new-season discovery after midnight, foreground and next year without re-announcing seen occurrences', async () => {
-  vi.setSystemTime(new Date('2026-09-30T23:59:59'));await mount();
+  vi.setSystemTime(new Date('2026-09-30T23:59:59'));await mount(undefined,{sync:signedIn});
   expect(host.querySelector('.theme-new-dot')).toBeNull();
   await tick(1100);expect(host.querySelector('.theme-new-dot')).not.toBeNull();
-  localStorage.setItem(THEME_DISCOVERY_KEY,JSON.stringify(['season:halloween:v1:2026']));
-  await act(async()=>window.dispatchEvent(new StorageEvent('storage',{key:THEME_DISCOVERY_KEY})));
+  const discoveryKey=themeDiscoveryKey(current.profile.id);
+  localStorage.setItem(discoveryKey,JSON.stringify(['season:halloween:v1:2026']));
+  await act(async()=>window.dispatchEvent(new StorageEvent('storage',{key:discoveryKey})));
   expect(host.querySelector('.theme-new-dot')).toBeNull();
-  localStorage.setItem(THEME_DISCOVERY_KEY,JSON.stringify(['season:halloween:v1:2026',...['forest','champagne','ocean','slate','plum','terracotta'].map(id=>`palette:${id}:v1`)]));
+  localStorage.setItem(discoveryKey,JSON.stringify(['season:halloween:v1:2026',...['forest','champagne','ocean','slate','plum','terracotta'].map(id=>`palette:${id}:v1`)]));
   vi.setSystemTime(new Date('2027-10-01T12:00:00'));
   await act(async()=>window.dispatchEvent(new Event('pageshow')));
   expect(host.querySelector('.theme-new-dot')).not.toBeNull();
@@ -127,7 +137,7 @@ it.each(['no-plan','freestyle','saved-first','imported','manual','generated'])('
   else if(kind==='manual')state.program.source='manual';
   const before=structuredClone(state);await mount(state);
   expect([...host.querySelectorAll('.profile-manage [data-profile-area]')].map(button => button.dataset.profileArea))
-    .toEqual(['training', 'preferences', 'display', 'data']);
+    .toEqual(['training', 'preferences', 'display', 'data', 'help']);
   const program=host.querySelector('.profile-program-entry');
   expect(program.querySelector('.eyebrow').textContent).toBe('CURRENT TRAINING');
   expect(program.querySelector('p').textContent).toBeTruthy();
@@ -138,12 +148,13 @@ it.each(['no-plan','freestyle','saved-first','imported','manual','generated'])('
 it.each([
   ['training', 'Training setup'], ['preferences', 'Workout preferences'],
   ['display', 'Display'], ['data', 'Data & backup'],
+  ['help', 'Help'],
 ])('Settings row %s opens and returns through its existing destination without domain writes', async (area, heading) => {
   await mount(); const before = structuredClone(current);
   await open(area); expect(title()).toBe(heading);
   await click(host.querySelector('[aria-label="Back to Profile"]'));
   expect(host.querySelector('.profile-manage').getAttribute('aria-label')).toBe('Settings');
-  expect(host.querySelectorAll('.profile-manage [data-profile-area]')).toHaveLength(4);
+  expect(host.querySelectorAll('.profile-manage [data-profile-area]')).toHaveLength(5);
   expect(current).toEqual(before); expect(writes).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();
 });
 
@@ -157,14 +168,89 @@ it.each([true, false].flatMap(complete => [
   await mount(initial, {sync});
   expect(host.querySelectorAll('.complete-profile')).toHaveLength(complete ? 0 : 1);
   expect(host.querySelectorAll('.profile-manage')).toHaveLength(1);
-  expect(host.querySelector('.profile-manage').querySelectorAll('[data-profile-area]')).toHaveLength(4);
+  expect(host.querySelector('.profile-manage').querySelectorAll('[data-profile-area]')).toHaveLength(5);
+  expect(host.querySelector('.account-sync-panel')).toBeNull();
+  await open('account');
   const account = host.querySelector('.account-sync-panel');
-  expect(account.textContent).toContain('ACCOUNT & SYNC');
+  expect(title()).toBe('Account & sync');
+  expect(account.querySelector('[aria-label="Sync information"]')).not.toBeNull();
   if (name === 'synced') {
     expect(account.textContent).toContain(sync.email); expect(account.textContent).toContain('Synced');
-    expect(account.textContent).toContain('Workout photos stay on this device; cloud sync does not include them.');
+    expect(account.textContent).not.toContain('Workout photos stay on this device');
   }
   expect(current).toEqual(initial); expect(writes).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['anonymous cloud copy', {state:'synced',linked:false,pendingCount:0}, 'No linked account · Recovery not set up', false],
+  ['checking account', {state:'connecting'}, 'Checking account…', false],
+  ['linked current', {state:'synced',linked:true,pendingCount:0}, 'Signed in · Synced', false],
+  ['pending', {state:'synced',linked:true,pendingCount:2}, 'Changes waiting to sync', false],
+  ['unknown pending count', {state:'synced',linked:true}, 'Changes waiting to sync', false],
+  ['syncing', {state:'syncing',linked:true,pendingCount:2}, 'Syncing changes…', false],
+  ['retry', {state:'retry',linked:true,pendingCount:2}, 'Changes waiting to sync', false],
+  ['offline current', {state:'offline',linked:true,pendingCount:0}, 'Signed in · Offline', false],
+  ['offline pending', {state:'offline',linked:true,pendingCount:2}, 'Changes waiting to sync', false],
+  ['unlinked error', {state:'needs-attention',linked:false}, 'Recovery not set up', true],
+  ['connection error', {state:'auth-unavailable',linked:false}, 'Account connection needs attention', true],
+  ['email unverified', {state:'synced',linked:true,pendingCount:0,hasPassword:true,emailVerified:false}, 'Verify your email', true],
+  ['signed out', {state:'signed-out',linked:false,locked:true}, 'Signed out · Local data retained', false],
+  ['unavailable', {state:'not-configured',category:'rollout-off'}, 'Cloud backup unavailable', false],
+])('compact account entry truthfully represents %s without exposing account controls on the hub', async (label, sync, copy, attention) => {
+  await mount(undefined,{sync});
+  const entry=host.querySelector('[data-profile-area="account"]');
+  expect(entry.textContent).toContain('Account & sync'); expect(entry.textContent).toContain(copy);
+  expect(Boolean(entry.querySelector('.needs-attention'))).toBe(attention);
+  expect(host.querySelector('.account-sync-panel')).toBeNull();
+  if(label!=='linked current')expect(entry.textContent).not.toContain('· Synced');
+  if(label==='unlinked error')expect(entry.textContent).toContain('Sync needs attention');
+  if(label==='offline current')expect(entry.textContent).not.toContain('Changes waiting');
+  expect(writes).not.toHaveBeenCalled();
+});
+
+it.each([['Alex Morgan','AM'],['   Živa   Černe  ','ŽČ'],['Alex','A'],['',''],['  ','']])('uses the entered name %s for decorative initials and a neutral glyph when absent', async (name,initials) => {
+  const initial=createReturningUserFixture(0);initial.profile.name=name;
+  await mount(initial,{sync:{...signedIn,email:'do.not.infer.initials@example.test'}});
+  const avatar=host.querySelector('.profile-account-avatar');
+  expect(avatar.getAttribute('aria-hidden')).toBe('true');expect(avatar.textContent).toBe(initials);
+  expect(Boolean(avatar.querySelector('svg'))).toBe(!initials);
+  expect(host.querySelector('[data-profile-area="account"]').textContent).not.toContain('example.test');
+});
+
+it('opens the account page, preserves sign-out confirmation and returns focus without writing training data', async () => {
+  const signOutAccount=vi.fn();const initial=createReturningUserFixture(0);initial.profile.name='Alex Morgan';
+  await mount(initial,{sync:{...signedIn,pendingCount:0,email:'alex@example.test',providerName:'Google',canAddPassword:true,signOutAccount}});
+  await open('account');expect(title()).toBe('Account & sync');
+  expect(host.querySelector('.account-sync-name').textContent).toBe('Alex Morgan');
+  expect(host.querySelector('.account-sync-identity').textContent).toBe('alex@example.test');
+  const info=host.querySelector('[aria-label="Sync information"]');
+  await click(info);expect(document.querySelector('.account-sync-information').textContent).toContain('Workout photos stay on this device');
+  await act(async()=>document.querySelector('[aria-label="Close sync information"]').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));await tick();await tick(32);
+  expect(title()).toBe('Account & sync');expect(document.querySelector('.account-sync-information')).toBeNull();expect(document.activeElement).toBe(info);
+  expect(row('Add password')).toBeTruthy();
+  await click(row('Sign out'));expect(document.querySelector('[role="dialog"]').textContent).toContain('Sign out?');
+  const cancel=[...document.querySelectorAll('[role="dialog"] button')].find(button=>button.textContent==='CANCEL');
+  await act(async()=>cancel.dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));await tick();await tick(32);
+  expect(title()).toBe('Account & sync');expect(document.querySelector('.account-confirm-sheet')).toBeNull();
+  expect(document.activeElement).toBe(row('Sign out'));expect(signOutAccount).not.toHaveBeenCalled();
+  await click(host.querySelector('[aria-label="Back to Profile"]'));
+  expect(document.activeElement).toBe(host.querySelector('[data-profile-area="account"]'));
+  expect(host.querySelector('.account-sync-panel')).toBeNull();expect(current).toEqual(initial);expect(writes).not.toHaveBeenCalled();
+});
+
+it('keeps an in-flight account action mounted on Back, Escape and Profile retap', async () => {
+  let reject;const secureWithGoogle=vi.fn(()=>new Promise((_,fail)=>{reject=fail;}));
+  await mount(undefined,{sync:{state:'synced',linked:false,pendingCount:0,canSecure:true,secureWithGoogle}});
+  await open('account');await click(row('Create account with Google'));
+  expect(secureWithGoogle).toHaveBeenCalledOnce();
+  await click(host.querySelector('[aria-label="Back to Profile"]'));expect(title()).toBe('Account & sync');
+  await act(async()=>screen().dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));await tick();
+  expect(title()).toBe('Account & sync');
+  await click(host.querySelector('.bottom-nav [aria-label^="PROFILE"]'));expect(title()).toBe('Account & sync');
+  await act(async()=>reject(new Error('Connection unavailable. Your local data is unchanged.')));await tick();
+  expect(host.querySelector('[role="alert"]').textContent).toContain('Connection unavailable');
+  await click(host.querySelector('[aria-label="Back to Profile"]'));expect(host.querySelector('.profile-hub')).not.toBeNull();
+  expect(writes).not.toHaveBeenCalled();
 });
 
 it('a setting changed through the existing Display route survives back navigation and canonical storage reload', async () => {
@@ -271,4 +357,21 @@ it('Data & backup remains a separate unchanged destination after regrouping', as
   expect(title()).toBe('Data & backup'); expect(row('Back up ROOK')).toBeTruthy(); expect(row('Restore backup')).toBeTruthy();
   expect(row('Appearance')).toBeUndefined(); expect(host.querySelector('.standalone-zoom-preference')).toBeNull();
   expect(current).toEqual(before); expect(writes).not.toHaveBeenCalled();
+});
+
+it.each([
+  ['training','About training setup','Training setup','These settings guide Coach'],
+  ['preferences','About progression guidance','Progression guidance','Your logs and Progress stay unchanged'],
+])('keeps %s explanations behind info and restores the same screen and focus on Escape', async (area,label,heading,copy) => {
+  await mount();const before=structuredClone(current);await open(area);
+  const trigger=host.querySelector(`[aria-label="${label}"]`);
+  expect(document.querySelector('.profile-information-sheet')).toBeNull();
+  expect(host.querySelector('.profile-screen').textContent).not.toContain(copy);
+  await click(trigger);
+  const dialog=document.querySelector('.profile-information-sheet');
+  expect(dialog.querySelector('h1').textContent).toBe(heading);expect(dialog.textContent).toContain(copy);
+  expect(screen().inert).toBe(true);
+  await act(async()=>dialog.querySelector('button').dispatchEvent(new KeyboardEvent('keydown',{key:'Escape',bubbles:true,cancelable:true})));await tick();await tick(32);
+  expect(document.querySelector('.profile-information-sheet')).toBeNull();expect(title()).toBe(area==='training'?'Training setup':'Workout preferences');
+  expect(document.activeElement).toBe(trigger);expect(screen().inert).toBe(false);expect(current).toEqual(before);expect(writes).not.toHaveBeenCalled();
 });

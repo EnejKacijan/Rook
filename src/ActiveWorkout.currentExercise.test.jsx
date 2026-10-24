@@ -46,10 +46,26 @@ it('removes the current session exercise through overflow, then Undo restores it
  expect(current.activeWorkout.exerciseIndex).toBe(0);
 });
 
-it('does not offer move or removal after the current exercise has meaningful saved values',()=>{
- const initial=make();initial.activeWorkout.exercises[0].sets[0].touched=true;
- mount(initial);open();expect(action('Move to Up Next')).toBeUndefined();
- expect(action('Remove from this workout')).toBeUndefined();
+it('explains disabled move and removal after a set has actually been logged',()=>{
+ const initial=make();initial.activeWorkout.exercises[0].sets[0].completed=true;
+ mount(initial);open();expect(action('Move to Up Next').disabled).toBe(true);
+ expect(action('Remove from this workout').disabled).toBe(true);
+ expect(host.querySelector('.active-exercise-options-sheet').textContent).toContain('locked after work has been logged');
+});
+it.each(['planned','extra'])('%s prepared values remain movable and removable, with exact Undo',kind=>{
+ const initial=make();if(kind==='extra'){initial.activeWorkout.source='freestyle';initial.activeWorkout.planWorkoutOrigin={programId:initial.program.id,dayId:initial.program.days[0].id};}
+ const exercise=initial.activeWorkout.exercises[0],id=exercise.id;
+ Object.assign(exercise.sets[0],{weight:20,reps:8,touched:true,weightEntryMode:'history'});
+ const before=structuredClone(exercise),plan=structuredClone(initial.program);
+ mount(initial);open();expect(action('Move to Up Next').disabled).toBe(false);
+ expect(action('Remove from this workout').disabled).toBe(false);
+ act(()=>action('Remove from this workout').click());
+ expect(current.activeWorkout.exercises.some(entry=>entry.id===id)).toBe(false);
+ act(()=>[...host.querySelectorAll('button')].find(button=>button.textContent.trim()==='Undo').click());
+ expect(current.activeWorkout.exercises[0]).toEqual(before);expect(current.program).toEqual(plan);
+ open();act(()=>action('Move to Up Next').click());
+ expect(current.activeWorkout.exercises[1]).toEqual(before);
+ expect(deserializeState(serializeState(current),{strict:true}).activeWorkout.exercises[1]).toEqual(before);
 });
 it('a failed current-exercise write leaves the session and menu unchanged',()=>{
  const initial=make(),before=structuredClone(initial.activeWorkout);

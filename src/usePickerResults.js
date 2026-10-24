@@ -1,6 +1,6 @@
 import {useEffect,useMemo,useState} from 'react';
 import {freestyleCatalog} from './freestyleWorkout.js';
-import {exerciseMatchesQuery,rankExerciseSearch} from './domain.js';
+import {createExerciseSearchIndex} from './domain.js';
 
 // One small cache, invalidated by every input used by equipment/safety filtering.
 // Prepared only on demand; a new session or changed inputs replace this entry.
@@ -23,9 +23,10 @@ export function usePickerResults(state,query,enabled=true,screen) {
     if(!warm||key.some((value,i)=>value!==warm.key[i]))warm={key,items:freestyleCatalog(state).sort((a,b)=>a.name.localeCompare(b.name))};
     return warm.items;
   },[ready,state.profile,state.gymProfiles,state.customExercises,state.activeWorkout?.id,state.activeWorkout?.adjustment,state.defaultGymProfileId]);
+  const search=useMemo(()=>createExerciseSearchIndex(catalog),[catalog]);
   const results=useMemo(()=>{
     if(!catalog.length)return [];
-    if(query)return rankExerciseSearch(catalog.filter(item=>exerciseMatchesQuery(item,query)),query);
+    if(query)return search(query);
     const available=new Map(catalog.map(item=>[item.id,item])),recent=new Set();
     for(let i=state.workouts.length-1;i>=0&&recent.size<6;i--){
       const workout=state.workouts[i];
@@ -35,6 +36,6 @@ export function usePickerResults(state,query,enabled=true,screen) {
       }
     }
     return [...recent].map(id=>available.get(id)).concat(catalog.filter(item=>!recent.has(item.id)));
-  },[catalog,query,state.workouts]);
+  },[catalog,query,state.workouts,search]);
   return {ready,catalog,results};
 }

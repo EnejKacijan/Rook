@@ -8,7 +8,7 @@ import { startWorkout } from './domain.js';
 import { useResolvedTheme } from './useResolvedTheme.js';
 import { PERSONAL_THEME_PREFERENCE, readPersonalThemePreference } from './personalThemePreference.js';
 import { THEME_DISCOVERY_KEY } from './themeDiscovery.js';
-import { normalizePersonalTheme, selectPersonalThemePalette, updatePersonalTheme, personalThemeModel } from './personalThemes.js';
+import { normalizePersonalTheme, selectPersonalThemePalette, updatePersonalTheme, personalThemeModel, personalThemeIconColor as personalThemeIconColorFor } from './personalThemes.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const legacyOriginal = { accent: 'ocean', base: 'warm', appearance: 'system' };
@@ -247,4 +247,21 @@ it('Apply/reload keeps Ocean and Plum independently, and Cancel rolls back edits
   await act(async()=>root.unmount());host.remove();await mount();expect(rootTheme()).toEqual(applied);
   await open();await click('Azure');await click('Neutral');await click('Plum');await click('Violet');await click('Cool');
   await click('Cancel');expect(rootTheme()).toEqual(applied);expect(readPersonalThemePreference()).toEqual(committed);expect(localStorage.getItem(PERSONAL_THEME_PREFERENCE)).toBe(raw);await tick();
+});
+
+it('the browser-tab icon follows only the applied theme, never the live preview', async () => {
+  const link = document.createElement('link'); link.rel = 'icon'; link.href = '/icon.svg'; document.head.append(link);
+  try {
+    await act(async () => root.unmount()); host.remove(); await mount();
+    const initial = link.getAttribute('href');
+    expect(decodeURIComponent(initial)).toContain(personalThemeIconColorFor(original));
+    await open(); await click('Plum'); await tick();
+    expect(link.getAttribute('href')).toBe(initial);
+    await click('Cancel'); await tick();
+    expect(link.getAttribute('href')).toBe(initial);
+    await open(); await click('Plum'); await click('Apply theme'); await tick();
+    expect(decodeURIComponent(link.getAttribute('href'))).toContain(personalThemeIconColorFor(selectPersonalThemePalette(original, 'plum')));
+    await open(); await click('ROOK Green'); await click('Apply theme'); await tick();
+    expect(link.getAttribute('href')).toBe('/icon.svg');
+  } finally { link.remove(); }
 });

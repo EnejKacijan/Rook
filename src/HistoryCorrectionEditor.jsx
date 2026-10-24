@@ -1,3 +1,4 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { displayWeight, storedWeight, exerciseName, exerciseMeasure, exerciseLoadRequirement, saveState } from './domain.js';
@@ -53,7 +54,7 @@ export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,
     {stage==='edit'?<>
       <label className="history-note">Session note<textarea aria-label="Session note" maxLength={500} rows={2} value={draft.workout.sessionNote||''} onChange={event=>change(w=>w.sessionNote=event.target.value)}/></label>
       <SessionFeedbackChoices value={draft.workout.sessionFeedback} onChange={value=>change(w=>w.sessionFeedback=value)} />
-      {draft.workout.exercises.map((exercise,index)=><details className="history-edit-exercise" key={exercise.id} open={index===0?true:undefined}>
+      {draft.workout.exercises.map((exercise,index)=><AnimatedDetails className="history-edit-exercise" key={exercise.id} defaultOpen={index===0}>
         <summary>{exerciseName(exercise)}<small>{exercise.repMin!=null?`Prescribed ${exercise.originalPrescription?.sets?.length??exercise.sets.filter(s=>!s.added&&s.planned!==false).length} × ${exercise.repMin}–${exercise.repMax}${exercise.targetRir!=null?` · ${exercise.targetRir} RIR`:''}`:'Original target unknown'}</small></summary>
         {exercise.sets.map((set,setIndex)=><section className="history-edit-set" key={set.id}>
           <div className="history-set-heading"><strong>Set {setIndex+1}{set.added?' · Added':''}</strong><label><input type="checkbox" aria-label={`Set ${setIndex+1} logged`} checked={Boolean(set.completed)} onChange={event=>editSet(exercise.id,set.id,s=>s.completed=event.target.checked)}/>Logged</label></div>
@@ -69,7 +70,7 @@ export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,
         </section>)}
         <button className="text-button" onClick={()=>change(w=>w.exercises.find(e=>e.id===exercise.id).sets.push({id:crypto.randomUUID(),planned:false,added:true,completed:false,weight:null,reps:null,rir:null}))}>Add missed set</button>
         <label className="history-note">Exercise note<textarea aria-label={`${exerciseName(exercise)} note`} rows={2} maxLength={120} value={exercise.personalNote||''} onChange={event=>change(w=>w.exercises.find(e=>e.id===exercise.id).personalNote=event.target.value)}/></label>
-      </details>)}
+      </AnimatedDetails>)}
     </>:<section className="history-correction-diff">{[
       ['Session note', checked.original?.sessionNote || '', checked.corrected?.sessionNote || ''],
       ['Session felt', sessionFeedbackLabel(checked.original?.sessionFeedback) || (checked.original?.sessionFeedback === 'skipped' ? 'Skipped' : 'Not provided'), sessionFeedbackLabel(checked.corrected?.sessionFeedback) || (checked.corrected?.sessionFeedback === 'skipped' ? 'Skipped' : 'Not provided')],

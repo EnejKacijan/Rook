@@ -1,5 +1,6 @@
 import { workoutPerformedDate } from './workoutDates.js';
-import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, progressionFor, compatibleReplacementCandidates, isExerciseAllowed, isoDay } from './domain.js';
+import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, compatibleReplacementCandidates, isExerciseAllowed, isoDay } from './domain.js';
+import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
 import { effectiveSetReps, progressionComparableSet, loggingModeOf } from './advancedLogging.js';
 import { summarizeSessionFeedback } from './sessionFeedback.js';
 import { exercisePerformance, prEventsForWorkouts } from './performanceInsights.js';
@@ -54,7 +55,7 @@ function exerciseOutcome(state, block, day, exercise, workouts) {
   });
   const latest=comparable.at(-1)?.exercises[0];
   const cohort=latest?comparable.filter(w=>shape(w.exercises[0])===shape(latest)):[];
-  const decision=cohort.length>=2?progressionFor(latest,cohort,baseGym(state).profile):null;
+  const decision=cohort.length>=2?nextWorkoutAdvice(latest,appearances.filter(w=>!w.trainingBlock?.plannedDeload&&!w.adjustment),baseGym(state).profile):null;
   let status=cohort.length<2?'insufficient':'held',reason=cohort.length<2?'Not enough comparable sessions to recommend a change.':'Keep the exercise and continue the current progression.';
   if(decision?.type==='progress'){status='progressed';reason=decision.detail;}
   else if(decision?.type==='stalled' || decision?.title==='Review the load' || decision?.title==='Review the variation' || decision?.title==='Reduce the hold target slightly'){status='review';reason=decision.detail;}

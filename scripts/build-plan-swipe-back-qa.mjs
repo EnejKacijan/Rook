@@ -120,16 +120,18 @@ try {for(const [index,test] of cases.entries()) {
  await b('CONTINUE').click();await step(7);await page.getByRole('button',{name:/Balanced starting point/}).click();const effort=await form();
  await b('CONTINUE').click();await step(8);
  await page.getByRole('button',{name:/I already have a preferred weekly structure/}).click();await b('Other').click();
- const raw='  Upper / Quantum split / Lower  ';await page.getByLabel('Other preferred split').fill(raw);
+ const {fillCustomWorkoutBlocks,readCustomWorkoutBlocks}=await import('./custom-weekly-structure-qa-helper.mjs');
+ await fillCustomWorkoutBlocks(page,['Chest','','Quads']);const raw=await readCustomWorkoutBlocks(page);
  await page.getByRole('button',{name:/Add movements or exercises to avoid/}).click();await page.getByLabel('Restrictions or clinician limits').fill('No jumping');
  await b('Machines').click();
  assert.equal(await b('BUILD MY PLAN').isDisabled(),true);const preferences=await form();
- // Focused form controls keep ownership; an edge drag must not navigate.
- await page.getByLabel('Other preferred split').focus();await touch('touchStart',3,215);await touch('touchMove',75,216);await touch('touchEnd');await frames();await step(8);
- assert.equal(await page.getByLabel('Other preferred split').inputValue(),raw);
+ // A drag on an interactive workout control must not navigate.
+ const workoutControl=await page.locator('.custom-workout-toggle').first().boundingBox();
+ await touch('touchStart',workoutControl.x+40,workoutControl.y+20);await touch('touchMove',workoutControl.x+115,workoutControl.y+21);await touch('touchEnd');await frames();await step(8);
+ assert.deepEqual(await readCustomWorkoutBlocks(page),raw);
  await page.locator('.onboarding h1').click();await drag();await step(7);assert.deepEqual(await form(),effort);
  await b('CONTINUE').click();await step(8);assert.deepEqual(await form(),preferences);assert.equal(await b('BUILD MY PLAN').isDisabled(),true);
- await page.getByLabel('Other preferred split').fill('Upper / Lower / Upper / Lower');assert.equal(await b('BUILD MY PLAN').isEnabled(),true);
+ await fillCustomWorkoutBlocks(page,'Chest & Triceps / Back & Biceps / Quads & Hamstrings & Glutes & Calves / Shoulders & Core');assert.equal(await b('BUILD MY PLAN').isEnabled(),true);
  const validPreferences=await form();await page.locator('.onboarding h1').click();await drag();await step(7);
  await b('CONTINUE').click();await step(8);assert.deepEqual(await form(),validPreferences);
  // Back through every parent using the same footer action. No answer hydration.

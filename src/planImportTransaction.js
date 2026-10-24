@@ -12,8 +12,9 @@ export function preparePlanImport(state, program, importedProfile, { date, weekd
     throw new Error('Finish or discard your active workout before replacing your plan.');
   const next = structuredClone(state);
   const candidate = structuredClone(program);
+  if(candidate.importMetadata?.pendingSourceDecisions?.length)throw new Error('Resolve the source details before importing. Unsupported prescriptions need an edit to the original notes.');
   if(candidate.importMetadata?.pendingHybrid?.length)throw new Error('Resolve the source prescriptions and optional work before importing.');
-  if(candidate.days.some(day=>day.exercises.some(ex=>ex.hybridSource&&['unresolved','needs-name-review'].includes(ex.matchStatus))))throw new Error('Resolve the source exercise choices before importing.');
+  if(candidate.days.some(day=>day.exercises.some(ex=>['unresolved','needs-name-review'].includes(ex.matchStatus))))throw new Error('Resolve the source exercise choices before importing.');
   const safetyIssues=planImportSafetyIssues(candidate,state.profile);
   if(safetyIssues.length)throw new Error(safetyIssues[0]);
   const profile = { ...state.profile, environment: importedProfile.environment,

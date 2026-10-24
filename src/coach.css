@@ -27,7 +27,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
   flex: 1;
   overflow-x: hidden;
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   padding-bottom: 12px;
 }
 .coach-transcript { display: flow-root; }
@@ -67,10 +67,17 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-header-context > div { display: flex; flex-direction: column; gap: 6px; }
 .coach-conversation-back { flex: 0 0 44px; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-text); font-size: 31px; line-height: 1; }
 .coach-screen > .coach-history-parent { visibility: hidden; pointer-events: none; animation: none; }
-.coach-header { position: relative; z-index: 19; flex: 0 0 auto; width: calc(100% + 48px); min-height: 48px; margin: 0 -24px; padding: 0 24px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; background: #f6f5f2; }
+.coach-header { position: relative; z-index: 19; flex: 0 0 auto; width: calc(100% + 48px); min-height: 48px; margin: 0 -24px; padding: 0 24px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; background: transparent; }
 .coach-header > div { display: flex; flex-direction: column; gap: 6px; }
 .coach-header strong { font-size: 13px; }
-.coach-header > .coach-history-trigger { width: auto; min-width: 88px; height: 44px; flex: 0 0 auto; margin-top: -12px; padding: 0 2px 0 8px; border: 0; background: transparent; color: #55524e; display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+.coach-header > .coach-header-actions { display:flex;flex-direction:row;flex:0 0 auto;gap:4px;margin-top:-12px;align-items:center; }
+.coach-header-context { min-width:0; }
+.coach-header-context strong { overflow:hidden;text-overflow:ellipsis;white-space:nowrap; }
+.coach-header-actions > button { width:auto;min-width:44px;height:44px;flex:0 0 auto;padding:0 4px;border:0;background:transparent;color:var(--rook-secondary);display:flex;align-items:center;justify-content:flex-end;gap:6px; }
+.coach-header-actions .coach-history-trigger { min-width:88px;padding:0 2px 0 8px; }
+.coach-new-trigger > svg { width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round; }
+.coach-new-trigger > span { font-size:9px;font-weight:800;line-height:1;letter-spacing:.1em;white-space:nowrap; }
+.coach-new-trigger:focus-visible { outline:2px solid var(--rook-accent-text);outline-offset:2px;border-radius:6px; }
 .coach-history-trigger > svg { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .coach-history-trigger > span { flex: 0 0 auto; font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .1em; white-space: nowrap; }
 .coach-history-trigger:focus-visible { color: var(--rook-accent-text); }
@@ -86,7 +93,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-history-header button { min-height: 44px; padding: 0; border: 0; background: transparent; color: #1b1a19; }
 .coach-history-header button:first-child { justify-self: start; width: 44px; font-size: 31px; font-weight: 350; line-height: 1; }
 .coach-history-header button:last-child { justify-self: end; color: var(--rook-accent-text); font-size: 10px; font-weight: 800; letter-spacing: .1em; }
-.coach-history-scroll { min-height: 0; flex: 1; padding: 22px 24px calc(24px + env(safe-area-inset-bottom)); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+.coach-history-scroll { min-height: 0; flex: 1; padding: 22px 24px calc(24px + env(safe-area-inset-bottom)); overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain none; }
 .coach-history-scroll > .coach-history-group { margin-top: 0; }
 .coach-history-group + .coach-history-group { margin-top: 28px; }
 .coach-history-group > .eyebrow { display: block; margin: 0 0 7px; }
@@ -143,7 +150,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 
 .coach-screen .coach-input { position: static; flex: 0 0 auto; align-items: flex-end; margin: 0 -24px; padding: 6px 24px; border-top: 1px solid rgba(27, 26, 25, .08); background: rgba(246, 245, 242, .97); backdrop-filter: blur(14px); }
 .coach-screen .coach-input textarea { height: 54px; min-height: 54px; max-height: 124px; flex: 1; min-width: 0; padding: 15px 16px; overflow-y: hidden; resize: none; border: 1px solid rgba(27, 26, 25, .1); border-radius: 14px; outline: none; background: #fff; color: #1b1a19; box-shadow: 0 1px 4px rgba(27, 26, 25, .025); font: inherit; font-size: 16px; line-height: 22px; overflow-wrap: anywhere; }
-.coach-screen .coach-input textarea { overscroll-behavior-y: contain; }
+.coach-screen .coach-input textarea { overscroll-behavior-y: none; }
 .coach-screen .coach-input textarea:focus { border-color: var(--rook-accent-text); box-shadow: 0 0 0 3px var(--rook-accent-soft); }
 .coach-screen .coach-input textarea:disabled { color: #8a8783; background: #f1f0ec; }
 .coach-screen .coach-input .button { width: 54px; height: 54px; min-height: 54px; max-height: 54px; flex: 0 0 54px; align-self: flex-end; padding: 0; border-radius: 14px; font-size: 19px; line-height: 1; letter-spacing: 0; }
@@ -170,7 +177,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-screen .today-update-copy > .action-undo { grid-column: 2; width: fit-content; min-height: 32px; margin: 3px 0 -5px auto; padding: 0; color: #6f6c68; font-size: 12px; text-align: right; }
 .coach-screen .action-card-buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 18px; padding: 0; border: 0; }
 .coach-screen .action-card-buttons .button { min-width: 0; margin: 0; padding-inline: 10px; font-size: 10px; }
-.coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons { position: static; margin-top: 18px; padding-top: 14px; border-top: 1px solid rgba(27, 26, 25, .07); }
+.coach-screen .action-card-reviewing:not(.combine-card) .action-card-buttons { position: static; margin-top: 18px; padding-top: 0; border-top: 0; }
 .coach-screen .adapt-skip-summary { margin: 12px 0 0; color: #6f6c68; }
 .coach-screen .adapt-duration-contract { margin: -4px 0 14px; color: var(--rook-accent-text); font-size: 12px; font-weight: 700; }
 .coach-screen .adapt-suggestion-list { margin-top: 8px; border-top: 1px solid rgba(27, 26, 25, .07); }
@@ -243,3 +250,16 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-runtime-diagnostics { margin-block: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .coach-runtime-diagnostics p { margin-block: 8px 0; }
 .coach-screen .offline-banner p { margin: 0 0 8px; }
+.coach-screen .coach-input:has(.coach-day-context){flex-wrap:wrap}
+.coach-day-context{flex:0 0 100%;display:flex;align-items:center;gap:8px;padding:4px 8px 4px 12px;border:1px solid var(--rook-border);border-radius:12px;background:var(--rook-surface);color:var(--rook-secondary);font-size:13px;line-height:1.4;min-width:0;box-sizing:border-box}
+.coach-day-context>span{min-width:0;flex:1;overflow-wrap:anywhere}
+.coach-day-context>button{flex:0 0 44px;width:44px;height:44px;background:transparent;border:0;color:var(--rook-secondary);font-size:22px}
+.today-actions-sheet>.today-ask-coach{margin-top:12px;border-bottom:0}
+.today-ask-coach strong{font-size:inherit;font-weight:600}
+.coach-reuse-choices .list-row small{display:block;color:var(--rook-secondary);font-size:13px;margin-top:4px}
+.coach-reuse-sheet .saved-workout-preview{flex:1}
+.coach-reuse-sheet .saved-template-exercises details{margin-top:6px}
+.coach-reuse-sheet .saved-template-exercises summary{min-height:44px;align-content:center;font-size:14px;color:var(--rook-accent-text)}
+.coach-reuse-sheet .coach-reuse-set-targets{list-style:none;margin:0;padding:0;font-size:14px;color:var(--rook-secondary)}
+.coach-reuse-sheet .coach-reuse-set-targets>li{padding:4px 0;border:0}
+.coach-reuse-sheet .sheet-action-footer .plan-template-note{font-size:13px;color:var(--rook-secondary);text-align:center;margin:0 0 10px}

@@ -48,27 +48,36 @@ describe('Seasonal registry', () => {
   });
 });
 
-it('limits seasonal decoration to the four main tabs and hides it in forced colors', async () => {
+it('limits theme decoration to the four main tabs and hides it in forced colors', async () => {
   const { readFileSync } = await import('node:fs');
   const css = readFileSync('src/personalThemeApp.css', 'utf8');
   const { default: postcss } = await import('postcss');
-  const selector = ':root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen)';
+  const selector = ':root[data-personal-theme] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen)';
   for (const source of [css.replace(/\r\n/g, '\n'), css.replace(/\r?\n/g, '\r\n')]) {
     const ast = postcss.parse(source);
     const decorations = [];
     ast.walkRules(rule => {
-      if (rule.selector.includes('data-season')) expect(rule.selector).not.toMatch(/workout|sheet|modal/);
+      if (/data-season|data-personal-theme/.test(rule.selector)) expect(rule.selector).not.toMatch(/workout|sheet|modal|set-|stepper|timer/);
       if (rule.selector === selector) decorations.push(rule);
     });
     const normal = decorations.find(rule => rule.parent.type === 'root');
     expect(normal).toBeDefined();
     const declarations = Object.fromEntries(normal.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
-    expect(declarations).toMatchObject({
-      'background-image': 'var(--rook-season-decor, none)',
-      'background-position': 'right 0 top env(safe-area-inset-top, 0px)',
-    });
+    // The season band stays the front layer, in the safe top padding.
+    expect(declarations['background-image'].split(/,\s*(?=var)/)).toEqual(['var(--rook-season-decor, none)', 'var(--rook-atmosphere, none)']);
+    expect(declarations['background-position'].startsWith('right 0 top env(safe-area-inset-top, 0px),')).toBe(true);
     const forced = decorations.find(rule => rule.parent.type === 'atrule' && rule.parent.name === 'media' && rule.parent.params === '(forced-colors: active)');
     expect(forced).toBeDefined();
     expect(forced.nodes.some(node => node.type === 'decl' && node.prop === 'background-image' && node.value === 'none')).toBe(true);
+    // The perched motif never takes a tap and disappears in forced colors.
+    let perch, hidden = false;
+    ast.walkRules(rule => {
+      if (rule.selector.endsWith('::after') && rule.selector.includes('today-start-button')) {
+        if (rule.parent.type === 'root') perch = Object.fromEntries(rule.nodes.filter(node => node.type === 'decl').map(node => [node.prop, node.value]));
+        else if (rule.parent.params === '(forced-colors: active)') hidden = rule.nodes.some(node => node.prop === 'display' && node.value === 'none');
+      }
+    });
+    expect(perch).toMatchObject({ 'pointer-events': 'none', content: '""' });
+    expect(hidden).toBe(true);
   }
 });

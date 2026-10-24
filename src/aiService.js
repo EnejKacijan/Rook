@@ -4,6 +4,8 @@ import { aiAuthorizationHeaders } from './aiAuthorization.js';
 import { physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
+import {resolveCoachDayContext,coachActionMatchesDay} from './coachDayContext.js';
+import {coachWorkoutReuseReply} from './coachWorkoutReuse.js';
 import {
   HOME_EQUIPMENT,
   PHYSIQUE_PRIORITY_OPTIONS,
@@ -33,6 +35,8 @@ import {
   workoutPlanDate,
 } from "./domain.js";
 import { plannerCatalog, summarizeTrainingHistory } from "./planQuality.js";
+import {noteTableCells,noteTableHeader,tableExerciseLine} from './importNoteTable.js';
+import {finalizeSourceFidelity,sourceEffort} from './importSourceFidelity.js';
 import { buildPlanImportReview } from './planImportReview.js';
 import {analyzeHybridImport,mergeHybridInterpretation} from './hybridImport.js';
 import {compileHybridImport,finalizeHybridReview} from './hybridImportReview.js';
@@ -640,7 +644,7 @@ function parseWarmupNoteItem(value) {
     sets = prescription.count;
     reps = prescription.repMin;
     const originalPrescription = raw.slice(prescription.index, prescription.index + prescription.length).trim();
-    if (prescription.repMin !== prescription.repMax || /round|krog|rund|ronda/iu.test(originalPrescription))
+    if (prescription.repMin !== prescription.repMax || /round|krog|rund|ronda|(?:kg|lbs?)\b/iu.test(originalPrescription))
       prescriptionText = originalPrescription;
     label = `${raw.slice(0, prescription.index)} ${raw.slice(prescription.index + prescription.length)}`
       .replace(/^[\s:|,·\-–—]+|[\s:|,·\-–—]+$/gu, '').trim();
@@ -698,6 +702,8 @@ function parseNotePrescription(value) {
       failure: false,
     };
   }
+  const timedTarget=source.match(/(\d+)\s*[x×*]\s*(\d+(?:[.,]\d+)?)(?:\s*[-–—]\s*(\d+(?:[.,]\d+)?))?\s*(min(?:ute)?s?|sec(?:ond)?s?|s|sek(?:und[ei]?)?)\b/iu);
+  if(timedTarget){const factor=/^min/i.test(timedTarget[4])?60:1;return {index:timedTarget.index,length:timedTarget[0].length,count:Number(timedTarget[1]),repMin:Number(timedTarget[2].replace(',','.'))*factor,repMax:Number((timedTarget[3]||timedTarget[2]).replace(',','.'))*factor,suffix:`seconds ${source.slice(timedTarget.index+timedTarget[0].length)}`,failure:false};}
   const timeFirst = source.match(
     /(\d+)\s*(s|sec(?:ond)?s?|sek(?:und[ei]?)?)\s*[x×*]\s*(\d+)/iu,
   );
@@ -782,17 +788,21 @@ function parseNotePrescription(value) {
       "iu",
     ),
   );
-  if (standard)
+  if (standard) {
+    // A spaced negative load is assistance, not the upper end of a rep range.
+    const assistance=standard[3] && /^\s*(?:kg|lbs?)\b/i.test(source.slice(standard.index+standard[0].length));
+    const length=assistance?standard[0].search(/[-–—]\s*\d/):standard[0].length;
     return {
       ...(/\d+\s*(?:round|krog|rund|ronda)/iu.test(standard[0])?{importedRoundPrescription:{count:Number(standard[1])}}:{}),
       index: standard.index,
-      length: standard[0].length,
+      length,
       count: Number(standard[1]),
       repMin: Number(standard[2]),
-      repMax: Number(standard[3] || standard[2]),
-      suffix: source.slice(standard.index + standard[0].length),
+      repMax: Number(assistance ? standard[2] : standard[3] || standard[2]),
+      suffix: source.slice(standard.index + length),
       failure: false,
     };
+  }
   const failure = source.match(
     /(\d+)\s*[x×*]\s*(?:amrap|max(?:\s+reps?)?|failure|do\s+odpovedi|al\s+fallo)/iu,
   );
@@ -918,7 +928,7 @@ function prescribedExerciseNames(sourceText) {
     .filter(Boolean);
 }
 function parsedRestSeconds(value) {
-  const restText = String(value || '').replace(/^(\d+(?:[.,]\d+)?)\s*(min(?:ute)?s?|sec(?:ond)?s?|s)\s+rest\s*$/i, 'Rest $1 $2');
+  const restText = String(value || '').replace(/(\d)\s*[″"]/g,'$1 sec').replace(/(\d)\s*[′']/g,'$1 min').replace(/^(\d+(?:[.,]\d+)?)\s*(min(?:ute)?s?|sec(?:ond)?s?|s)\s+rest\s*$/i, 'Rest $1 $2');
   const match = restText.match(
     /^(?:rest|po[cč]itek|odmor|pause|descanso)\s*:?\s*(\d+(?:[.,]\d+)?)\s*(?:[\u2013\u2014-]\s*(\d+(?:[.,]\d+)?))?\s*(min(?:ute)?s?|sec(?:ond)?s?|s|sek(?:und[ei]?)?)\b/i,
   );
@@ -947,63 +957,6 @@ function parsedLoggedSetLine(value) {
   if (repsOnly)
     return { reps: Number(repsOnly[1]), suffix: repsOnly[2].trim() };
   return null;
-}
-function noteTableCells(value) {
-  const line = String(value || "").replace(/\r$/u, "");
-  let cells = null;
-  if (line.includes("\t")) cells = line.split("\t");
-  else if ((line.match(/\|/g) || []).length >= 2)
-    cells = line.trim().replace(/^\||\|$/g, "").split("|");
-  else if (/^\s*(?:day|weekday|dan|exercise|vaja|ubung|übung|ejercicio)\s*,/iu.test(line))
-    cells = line.split(",");
-  else if (
-    /^\s*(?:day|weekday|dan|exercise|vaja|ubung|übung|ejercicio)\s*;/iu.test(line) &&
-    (line.match(/;/g) || []).length >= 2
-  )
-    cells = line.split(";");
-  return cells?.map((cell) => cell.trim()).filter((cell, index, all) => cell || all.length > 1) || null;
-}
-function noteTableHeader(cells) {
-  if (!cells) return null;
-  const aliases = {
-    day: /^(?:day|weekday|dan)$/i,
-    name: /^(?:exercise|movement|vaja|ubung|übung|ejercicio|name)$/i,
-    sets: /^(?:sets?|serije?|satze|sätze|series?)$/i,
-    reps: /^(?:reps?|ponovitve?|wdh|repeticiones?)$/i,
-    weight: /^(?:weight|load|teza|teža|gewicht|peso)(?:\s*\([^)]*\))?$/i,
-    rir: /^(?:rir|rpe|effort)$/i,
-    rest: /^(?:rest|pocitek|počitek|odmor|pause|descanso)$/i,
-    notes: /^(?:notes?|opombe?|notizen|notas?)$/i,
-  };
-  const header = {};
-  cells.forEach((cell, index) => {
-    const key = Object.entries(aliases).find(([, pattern]) => pattern.test(cell))?.[0];
-    if (key && header[key] === undefined) header[key] = index;
-    if (key === 'rir' && /^rpe$/i.test(cell)) header.effortMode = 'RPE';
-  });
-  return header.name !== undefined && (header.sets !== undefined || header.reps !== undefined)
-    ? header
-    : null;
-}
-function tableExerciseLine(cells, header) {
-  if (!cells || !header) return null;
-  const at = (key) =>
-    header[key] === undefined ? "" : String(cells[header[key]] || "").trim();
-  const name = at("name");
-  const sets = Number(at("sets"));
-  const reps = at("reps").replace(/^x\s*/i, "");
-  if (!name || !Number.isInteger(sets) || sets < 1 || sets > 20 || reps && !/^(?:\d+(?:\s*[–—-]\s*\d+)?|AMRAP|max reps|failure|to failure|do odpovedi)$/iu.test(reps))
-    return null;
-  return [
-    name,
-    reps?`${sets}x${reps}`:`${sets} sets`,
-    at("weight"),
-    at("rir") && /r(?:ir|pe)/i.test(at("rir")) ? at("rir") : at("rir") ? `${header.effortMode || 'RIR'} ${at("rir")}` : "",
-    at("rest") ? `rest: ${at("rest")}` : "",
-    at("notes"),
-  ]
-    .filter(Boolean)
-    .join(" | ");
 }
 // Split only explicit section headers and boundaries before another prescription.
 // Decimal points, exercise-name punctuation and instruction-only tails stay intact.
@@ -1040,32 +993,32 @@ function inlineNoteFragments(line) {
   return fragments.length > 1 && headers[0].index === 0 ? fragments : null;
 }
 function expandStructuredNoteLines(sourceText, sourceMap = [], tableDays = new Map(), sourceFragments = new Map()) {
-  const rawLines = String(sourceText || "").split(/\r?\n/u);
+  const rawLines = String(sourceText || "").split(/\n/u);
   const expanded = [];
   let tableHeader = null;
+  let tableHeaderText = null;
   let tableId = 0;
   for (const [sourceIndex, rawLine] of rawLines.entries()) {
     const line = rawLine.trim();
     if (!line) continue;
-    let cells = noteTableCells(rawLine);
-    if (!cells && tableHeader && line.includes(";"))
-      cells = line.split(";").map((cell) => cell.trim());
-    if (!cells && tableHeader && line.includes(","))
-      cells = line.split(",").map((cell) => cell.trim());
+    const cells = noteTableCells(rawLine,tableHeader?.delimiter);
     const header = noteTableHeader(cells);
     if (header) {
       tableHeader = header;
+      tableHeaderText = rawLine.replace(/\r$/,'');
       tableId++;
       continue;
     }
     if (tableHeader && /^\s*:?-{2,}/u.test(line.replace(/^\|/u, ""))) continue;
     const tableLine = tableExerciseLine(cells, tableHeader);
     if (tableLine) {
+      const start=rawLines.slice(0,sourceIndex).reduce((sum,value)=>sum+value.length+1,0),text=rawLine.replace(/\r$/,'');
+      sourceFragments.set(expanded.length,{start,end:start+text.length,text,table:{header:tableHeaderText,normalized:tableLine}});
       if (tableHeader.day !== undefined) {
         const sourceDay = String(cells[tableHeader.day] || '').trim();
         const weekday = NOTE_WEEKDAYS[foldNoteText(sourceDay)] || null;
         tableDays.set(expanded.length, {
-          weekday, name: sourceDay || 'Workout',
+          weekday, name: weekday ? 'Workout' : sourceDay || 'Workout',
           // Blank cells have no implied fill-down relationship.
           key: `${tableId}:${weekday || (sourceDay ? `unknown:${sourceDay}` : `missing:${sourceIndex}`)}`,
         });
@@ -1227,6 +1180,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
   const roundDirective = value => /^(?:\d+\s*(?:rounds?|krogi|kroge|kroga|krogov)|(?:circuit|krog|circuito|zirkel|giant set)\s*(?:[a-z]\s*)?(?:x|×|:|-)?\s*\d+(?:\s*(?:rounds?|krogi|kroge|kroga|krogov))?)\s*:?[\s]*$/iu.test(cleanNoteItem(value));
   for (let index = 0; index < lines.length; index++) {
     const line = lines[index];
+    if(/^ignore\b.*\binstructions\b/i.test(line)){mark(index,'comment');continue;}
     const candidatePartial = partialPrescription(line);
     // Outside the decision flow, only a known set structure is executable.
     // Merely recognizing a movement in a list of ideas is not a ready plan.
@@ -1347,6 +1301,11 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       mark(index, 'note');
       continue;
     }
+    if(current.exercises.length && /^(?:note|cue|technique|opomba|tehnika|napredovanje)\s*:/i.test(cleanNoteItem(line))){
+      const previous=current.exercises.at(-1);previous.notes=[previous.notes,line].filter(Boolean).join('\n');
+      if(review)previous.sourceLines.push(sourceMap[index]+1);
+      mark(index,'note');continue;
+    }
     const nextSectionMode = noteSectionMode(line);
     if (nextSectionMode) {
       mark(index, 'section');
@@ -1354,7 +1313,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       if (sectionMode === "warmup") {
         current.warmup ||= { items: [], rampUpSets: [] };
         const inlineItem = parseWarmupNoteItem(line);
-        if (inlineItem) current.warmup.items.push(inlineItem);
+        if (inlineItem) {current.warmup.items.push(inlineItem);mark(index,review?'warmup-review':'warmup');}
       }
       continue;
     }
@@ -1367,12 +1326,16 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       continue;
     }
     if (/^(?:progression|progresija|tvoj glavni princip)/i.test(foldNoteText(line))) {
+      if(current?.exercises.length){const ex=current.exercises.at(-1);if(review)ex.sourceLines.push(sourceMap[index]+1);ex.notes=[ex.notes,line].filter(Boolean).join('\n');}
       current = null;
       recoverySection = true;
       mark(index, 'comment');
       continue;
     }
     if (sectionMode === "warmup") {
+      if(/^\s*\d+(?:\s*[-–—]\s*\d+)?\s*%\s*(?:hitrosti|speed|intensity|effort)\b/i.test(line)){
+        current.warmup.instructions||=[];current.warmup.instructions.push(line);mark(index,'warmup-instruction');continue;
+      }
       // Numeric ramp loads are not counts of general warm-up movements.
       const warmupItem = review && /^\s*\d+(?:[.,]\d+)?\s*(?:kg|lbs?)?\s*[x×]/i.test(line) ? null : parseWarmupNoteItem(line);
       if (warmupItem) current.warmup.items.push(warmupItem);
@@ -1387,6 +1350,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
     }
     if (rest !== null && current.exercises.length) {
       current.exercises.at(-1).restSeconds = rest;
+      if(review)current.exercises.at(-1).sourceLines.push(sourceMap[index]+1);
       mark(index, 'rest');
       continue;
     }
@@ -1474,12 +1438,12 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       )
       .replace(/^[\s\u00b7,|;]+/u, "")
       .trim();
-    const rirMatch = detail.match(/\b(?:RIR\s*[:=]?\s*([0-4])|([0-4])\s*RIR)\b/i);
-    const rpeMatch = detail.match(/\b(?:RPE\s*[:=]?\s*([6-9]|10)|([6-9]|10)\s*RPE)\b/i);
+    const rirValues=sourceEffort(detail);
+    const simpleRir=rirValues.length===1&&rirValues[0][0]===rirValues[0][1]&&Number.isInteger(rirValues[0][0])&&rirValues[0][0]>=0&&rirValues[0][0]<=4;
     const inlineRest = parsedRestSeconds(detail) ?? parsedRestSeconds(detail.match(/\b(?:rest|po[cč]itek|odmor)\s*:?\s*\d[\s\S]*/i)?.[0]);
     const note = detail
-      .replace(/\b(?:RIR\s*[:=]?\s*[0-4]|[0-4]\s*RIR)\b/gi, "")
-      .replace(/\b(?:RPE\s*[:=]?\s*(?:[6-9]|10)|(?:[6-9]|10)\s*RPE)\b/gi, "")
+      .replace(simpleRir?/\b(?:RIR\s*[:=]?\s*[0-4]|[0-4]\s*RIR)\b/gi:/$^/, "")
+      .replace(/^\s*@?\s*\d+(?:[.,]\d+)?\s*(?:kg|kgs|lb|lbs)\b[\s|,;]*/i,'')
       .replace(/^[\s\u00b7,|;]+|[\s\u00b7,|;]+$/gu, "")
       .trim();
     if (!prescription.partial && (count < 1 || count > 20 || (!prescription.failure && (repMin < 1 || repMax < repMin)))) continue;
@@ -1516,11 +1480,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
       sets: count,
       repMin,
       repMax,
-      targetRir: rirMatch
-        ? Number(rirMatch[1] || rirMatch[2])
-        : rpeMatch
-          ? Math.max(0, Math.min(4, 10 - Number(rpeMatch[1] || rpeMatch[2])))
-          : null,
+      targetRir: simpleRir?rirValues[0][0]:null,
       restSeconds: inlineRest,
       measure: timed ? "seconds" : null,
       failureTarget: prescription.failure,
@@ -1586,7 +1546,7 @@ export function parseStructuredTrainingNotes(sourceText, profile = {}, { review 
   const sourceLines = review ? String(sourceText).split(/\n/u).map((raw, index) => {
     const text = raw.replace(/\r$/u, '');
     const record = { line: index + 1, start: sourceOffset, end: sourceOffset + text.length,
-      text, status: classified.get(index) || (/^[\s\p{P}\p{S}]*$/u.test(text) ? 'formatting' : 'unclassified') };
+      text, status: classified.get(index) || (noteTableHeader(noteTableCells(text))?'table-header':/^[\s\p{P}\p{S}]*$/u.test(text) ? 'formatting' : 'unclassified') };
     sourceOffset += raw.length + 1;
     return record;
   }) : [];
@@ -2015,6 +1975,10 @@ export const AIService = {
   },
   async importTrainingPlan(profile, existingPlanText, { signal = null, review = false, onStage, interpretWithAI = false } = {}) {
     onStage?.('reading');
+    if(review){
+      const invalid=String(existingPlanText).split(/\r?\n/).map((text,index)=>({text,line:index+1,rx:text.match(/^(.+?)\s+(\d+)\s*[x×*]\s*(\d+)/)})).find(row=>row.rx&&(Number(row.rx[2])===0||Number(row.rx[3])===0));
+      if(invalid)throw new Error(`Line ${invalid.line}: ${invalid.text.trim()} — sets and targets must be greater than zero. Edit this line and import again; your other notes and current plan are unchanged.`);
+    }
     if (review && String(existingPlanText).length > 100000) throw new Error('This note is too long. Import one weekly plan at a time.');
     if (review && new Set([...String(existingPlanText).matchAll(/^[^\p{L}\p{N}\r\n]*(?:week|teden)\s+(\d+)\b/gimu)].map(match => match[1])).size > 1)
       throw new Error('This note contains multiple program weeks that the current importer cannot represent automatically. Import one week, then review its Training Block separately.');
@@ -2043,7 +2007,7 @@ export const AIService = {
         onStage?.('checking');
         const raw=compileHybridImport(analysis);
         if(raw.days.length){
-          const result=finalizeHybridReview(finalizeImportedPlan(profile,existingPlanText,raw,{review:true}),raw,analysis);
+          const result=finalizeSourceFidelity(finalizeHybridReview(finalizeImportedPlan(profile,existingPlanText,raw,{review:true}),raw,analysis));
           return {...result,hybrid:{...result.hybrid,attemptedAI:interpretWithAI,error:interpretationError}};
         }
       }
@@ -2055,7 +2019,7 @@ export const AIService = {
         throw new Error('Round/circuit groups require source review before this plan can be used.');
       onStage?.('checking');
       if (review) {
-        try { return finalizeImportedPlan(profile, existingPlanText, locallyParsed, { review }); }
+        try { return finalizeSourceFidelity(finalizeImportedPlan(profile, existingPlanText, locallyParsed, { review })); }
         catch (error) { throw new Error(`ROOK couldn’t prepare this plan for review. Check the workout days and prescriptions. ${/between 1 and 7/.test(error.message) ? 'Import at most seven workouts at a time.' : ''}`); }
       }
       try {
@@ -2086,11 +2050,15 @@ export const AIService = {
       message,
       state.conversations.filter(entry => (entry.conversationId || 'legacy') === state.activeCoachConversationId),
     );
-    const combined=await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload)});
+    const selectedDay=combineOptions.requestContext?resolveCoachDayContext(state,combineOptions.requestContext):null;
+    const reuse=coachWorkoutReuseReply(state,message,{requestContext:combineOptions.requestContext,language:responseLanguage});
+    if(reuse)return reuse;
+    const explicitDate=/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/i.test(message);
+    const combined=selectedDay||explicitDate?null:await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload)});
     if(combined)return combined;
-    const missed=coachMissedReply(state,message);
+    const missed=selectedDay||explicitDate?null:coachMissedReply(state,message);
     if(missed)return missed;
-    const deterministic = deterministicCoach(state, message);
+    const deterministic = selectedDay||explicitDate?{action:null,source:'offline',text:'Review the selected calendar day in Coach.'}:deterministicCoach(state, message);
     if (deterministic.final) return deterministic;
     try {
       // The UI has already checked configuration. A real send needs no probe
@@ -2102,7 +2070,7 @@ export const AIService = {
       const payload = {
         message,
         responseLanguage,
-        context: {...coachContext(state),combineRevisionContext:combineRevisionContext(state),combineSessions:flexibleSessions(state).map(s=>({id:s.logicalSessionId,name:s.workout.name,date:s.scheduledDate,status:s.status}))},
+        context: {...coachContext(state),...(selectedDay?{selectedDay}:{}),combineRevisionContext:combineRevisionContext(state),combineSessions:flexibleSessions(state).map(s=>({id:s.logicalSessionId,name:s.workout.name,date:s.scheduledDate,status:s.status}))},
         deterministicAnalysis:
           deterministic.source === "offline" ? null : deterministic,
       };
@@ -2113,6 +2081,9 @@ export const AIService = {
           previousLanguageMismatch: `The previous reply was not in ${responseLanguage}. Rewrite the answer and any explanation entirely in ${responseLanguage}.`,
         });
       data.text = normalizeCoachText(data.text);
+      const exactReuse=coachWorkoutReuseReply(state,message,{requestContext:combineOptions.requestContext,proposedAction:data.action,language:responseLanguage});
+      if(exactReuse)return exactReuse;
+        if(selectedDay&&['combine-workouts','revise-combined-workout'].includes(data.action?.type))return {text:responseLanguage==='Slovenian'?'Za združevanje odpri možnost Combine two workouts, kjer lahko pregledaš oba točna treninga.':'Open Combine two workouts to select and review both exact sessions.',action:null,source:'validated-fallback'};
       if(data.action?.type==='combine-workouts')return coachCombineReply(state,message,{
         selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,
       });
@@ -2131,6 +2102,7 @@ export const AIService = {
           source: "validated-fallback",
         };
       const action = aiAction || fallbackAction;
+        if(!coachActionMatchesDay(action,selectedDay))return {text:responseLanguage==='Slovenian'?'Predlagana sprememba se ne ujema z izbranim dnevom. Odstrani kontekst ali ponovno izberi dan, nato pojasni, kaj želiš spremeniti. Ničesar nisem spremenil.':'That proposed change does not match the selected day. Remove the context or choose the day again, then clarify the change. Nothing was changed.',action:null,source:'validated-fallback'};
       // A proposal is not a mutation. Keep the conversational copy aligned with
       // the explicit Apply control even if a provider phrases a draft as complete.
       const text =
@@ -2225,6 +2197,7 @@ function inferImportedProfile(profile, program, schedule) {
   if (homeRequirements.has("pull-up bar")) homeEquipment.push("pull-up bar");
   if (homeRequirements.has("resistance bands"))
     homeEquipment.push("resistance bands");
+  if (homeRequirements.has("secure band anchor")) homeEquipment.push("secure band anchor");
   if (homeRequirements.has("bodyweight")) homeEquipment.push("bodyweight only");
   if (locations.has("Home") && !locations.has("Commercial gym"))
     return {

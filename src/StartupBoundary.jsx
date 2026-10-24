@@ -1,3 +1,5 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
+import {ScrollBoundary} from './ScrollBoundary.jsx';
 import React, {useEffect,useRef,useState} from 'react';
 import { hydrateStoredState } from './domain.js';
 import { restoreLocalCheckpoint, deleteLocalState, storageDiagnostics, inspectStorageProtection } from './localStateStorage.js';
@@ -26,12 +28,12 @@ function StartupProviderRestore({startup,busy,setBusy,setError,onRetry}) {
 export function StorageDiagnosticView() {
   const [value,setValue]=useState(()=>storageDiagnostics());
   const inspect=async()=>{await inspectStorageProtection();setValue(storageDiagnostics());};
-  return <details className="storage-diagnostics" onToggle={event=>{if(event.currentTarget.open)inspect();}}>
+  return <AnimatedDetails className="storage-diagnostics" onOpenChange={open=>{if(open)inspect();}}>
     <summary>Local storage diagnostics</summary>
     <p>Technical status only. No workout contents or messages. Nothing is uploaded.</p>
-    <pre tabIndex="0">{JSON.stringify(value,null,2)}</pre>
+    <ScrollBoundary as="pre" tabIndex="0">{JSON.stringify(value,null,2)}</ScrollBoundary>
     <p>Local copies can be lost with device or browser data. Keep a ROOK backup file somewhere safe.</p>
-  </details>;
+  </AnimatedDetails>;
 }
 
 export function StartupRecovery({loading=false,onRetry,restoreError=false,startup={},renderImport}) {
@@ -47,8 +49,11 @@ export function StartupRecovery({loading=false,onRetry,restoreError=false,startu
     finally {setBusy(false);}
   };
   if(action==='import'&&renderImport)return renderImport({close:()=>setAction(null),onRestored:()=>{setAction(null);onRetry();}});
-  return <main className="fatal-error-screen startup-recovery" role={loading?'status':'alert'} aria-busy={loading}>
+  // Do not mark the live region busy: its loading message must be announced
+  // now, rather than deferred until the whole screen is removed.
+  return <main className={`fatal-error-screen startup-recovery${loading?' startup-loading':''}`} role={loading?'status':'alert'}>
     <p className="eyebrow">ROOK</p>
+    {loading&&<span className="startup-loading-spinner" aria-hidden="true"/>}
     <h1>{loading?'Opening your saved data…':missing&&!startup.recovery?'Your local ROOK data is no longer available.':restoreError?'ROOK couldn’t safely reopen your data.':'ROOK couldn’t load your local data.'}</h1>
     {!loading&&<>
       <p>{startup.code==='delete-incomplete'?'Your requested deletion did not finish. Retry Start over to finish deleting, or import a backup.':startup.code==='restore-error'?'An interrupted restore could not be safely reopened. Retry before importing a backup or starting over.':missing?'ROOK was previously used here, but its main saved state is missing.':"Your saved data couldn’t be read safely. ROOK has not replaced it."}</p>

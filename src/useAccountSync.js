@@ -12,7 +12,7 @@ import { openProtectedAccount, protectedProfileAccess } from './accountProfileAc
 import { clearFirstRunAccountClaim, readFirstRunAccountClaim } from './firstRunAccountClaim.js';
 import { signInFirstRunAccount } from './firstRunAccountSignIn.js';
 import { ACCOUNT_SYNC_SCHEMA } from './accountSyncModel.js';
-import {authenticateEmailAccount,linkEmailAnonymousAccount,resetEmailAccountPassword} from './emailAccountAuth.js';
+import {authenticateEmailAccount,linkEmailAnonymousAccount,resetEmailAccountPassword,canAddGoogleAccountPassword,addGoogleAccountPassword,confirmGooglePasswordAccount} from './emailAccountAuth.js';
 
 export const ACCOUNT_SIGNED_OUT_KEY = 'rook-account-signed-out-v1';
 const INITIAL_DEBOUNCE_MS = 15000;
@@ -65,6 +65,30 @@ export function useAccountSync({ state, update, persistenceFailed }) {
   }), [accountAction]);
   const secureWithGoogle = useCallback(() => secureWithProvider('google.com'), [secureWithProvider]);
   const registerWithEmail=useCallback(details=>secureWithProvider('password',(client,isCurrent)=>linkEmailAnonymousAccount(client,details,{isCurrent})),[secureWithProvider]);
+  const passwordAccountAction=useCallback((operation,details)=>accountAction(async current=>{
+    const client=clientRef.current,user=client?.auth.currentUser,storage=globalThis.localStorage;
+    const profileId=latest.current.state.profile.id;
+    const ownerCurrent=()=>{
+      try {
+        const latestState=latest.current.state,snapshot=readLocalSyncSnapshot(storage,hydrateStoredState);
+        return current() && safelyConfigured() && availableAccountProviders().includes('password') &&
+          latestState.profile.onboardingComplete && latestState.profile.id===profileId && !latest.current.persistenceFailed &&
+          client?.auth.currentUser?.uid===user?.uid && !user?.isAnonymous &&
+          readAccountSyncLedger(storage,profileId)?.accountUid===user?.uid &&
+          snapshot.state.profile.id===profileId && snapshot.raw===serializeState(latestState) &&
+          storage.getItem(ACCOUNT_SIGNED_OUT_KEY)!=='true' && storage.getItem(PROFILE_SWITCHING_KEY)!=='true';
+      } catch { return false; }
+    };
+    if(!ownerCurrent())throw new Error('Reopen your saved Google profile before adding a password.');
+    const result=await (operation==='confirm'?confirmGooglePasswordAccount(client,{isCurrent:ownerCurrent})
+      :addGoogleAccountPassword(client,details,{isCurrent:ownerCurrent}));
+    if(!ownerCurrent())throw new Error('Your account changed. Reopen password settings.');
+    // Auth provider metadata changed; the training owner and sync ledger do not.
+    setSync(previous=>({...previous,linked:true,email:client.auth.currentUser.email}));
+    return result;
+  }),[accountAction]);
+  const addPassword=useCallback(details=>passwordAccountAction('add',details),[passwordAccountAction]);
+  const confirmPasswordAccount=useCallback(()=>passwordAccountAction('confirm'),[passwordAccountAction]);
   const signOutAccount = useCallback(() => accountAction(async () => {
     const client = clientRef.current, user = client?.auth.currentUser;
     const ledger = readAccountSyncLedger(globalThis.localStorage, latest.current.state.profile.id);
@@ -311,8 +335,18 @@ export function useAccountSync({ state, update, persistenceFailed }) {
       && globalThis.localStorage.getItem(ACCOUNT_SIGNED_OUT_KEY) !== 'true'
       && globalThis.localStorage.getItem(PROFILE_SWITCHING_KEY) !== 'true');
   } catch { /* Unreadable local account metadata cannot authorize linking. */ }
-  const linkedProvider = clientRef.current?.auth.currentUser?.providerData?.[0]?.providerId || 'google.com';
-  return { ...sync, providerName: accountProviderName(linkedProvider), emailVerified:clientRef.current?.auth.currentUser?.emailVerified===true, providers: availableAccountProviders(),
+  const accountUser=clientRef.current?.auth.currentUser;
+  const linkedProvider = accountUser?.providerData?.[0]?.providerId || 'google.com';
+  const hasPassword=Boolean(accountUser?.providerData?.some(provider=>provider.providerId==='password'));
+  const hasGoogle=Boolean(accountUser?.providerData?.some(provider=>provider.providerId==='google.com'));
+  let canAddPassword=false;
+  try {canAddPassword=Boolean(safelyConfigured() && availableAccountProviders().includes('password') && state.profile.onboardingComplete &&
+    !persistenceFailed && !sync.locked && canAddGoogleAccountPassword(accountUser) &&
+    readAccountSyncLedger(globalThis.localStorage,state.profile.id)?.accountUid===accountUser.uid &&
+    globalThis.localStorage.getItem(ACCOUNT_SIGNED_OUT_KEY)!=='true' && globalThis.localStorage.getItem(PROFILE_SWITCHING_KEY)!=='true');}catch{/* Fail closed. */}
+  return { ...sync, providerName: hasGoogle&&hasPassword?'Google & Email':accountProviderName(linkedProvider), hasPassword, canAddPassword, addPassword, confirmPasswordAccount,
+    emailVerified:accountUser?.emailVerified===true, providers: availableAccountProviders(),
+    accountCreatedAt:sync.linked && !accountUser?.isAnonymous ? accountUser?.metadata?.creationTime || null : null,
     enabled: safelyConfigured(), separate, canSecure, secureWithGoogle, secureWithProvider, signOutAccount, signInToThisDevice, signInWithAnotherAccount,
     useSeparateProfile, switchToSavedProfile, signInFirstRunWithGoogle, signInFirstRunWithProvider, detachFirstRunAccountAfterBackup,
     registerWithEmail,signInFirstRunWithEmail,signInToThisDeviceWithEmail,signInWithAnotherEmail,resetPasswordWithEmail,verifyEmail,refreshEmailVerification };

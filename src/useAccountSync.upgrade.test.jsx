@@ -11,6 +11,7 @@ import {saveWorkoutTemplate,templateDraft} from './savedWorkouts.js';
 import {applyFlexibleWeek,missedFlexibleSessions,proposeFlexibleWeek} from './flexibleWeek.js';
 import {createCustomExercise} from './customExercises.js';
 import {useAccountSync} from './useAccountSync.js';
+import {authenticateEmailAccount} from './emailAccountAuth.js';
 
 const firebase=vi.hoisted(()=>({client:null,cloud:null,link:vi.fn()}));
 vi.mock('./firebaseSyncClient.js',()=>({
@@ -31,6 +32,7 @@ afterEach(()=>{
   localStorage.clear();
   firebase.client=null;firebase.cloud=null;firebase.link.mockReset();
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 function cloud() {
@@ -166,13 +168,13 @@ it('upgrades a populated local profile in place while Firestore is offline, then
   expect(after.profile.onboardingComplete).toBe(true);
 });
 
-async function openLocalAccount(link){
+async function openLocalAccount(link,{google=false,weeks=0}={}){
   localStorage.clear();
-  const state=hydrateStoredState(createReturningUserFixture(0));
+  const state=hydrateStoredState(createReturningUserFixture(weeks));
   expect(saveState(state,{storage:localStorage,reason:'existing-profile-test'})).toBe(true);
   const raw=localStorage.getItem(PRIMARY_KEY);
   ensureAccountSyncLedger(localStorage,state.profile.id,{accountUid:'anonymous-uid'});
-  firebase.client={auth:{currentUser:{uid:'anonymous-uid',isAnonymous:true}},authApi:{onAuthStateChanged:()=>()=>{}}};
+  firebase.client={auth:{currentUser:google?{uid:'anonymous-uid',isAnonymous:false,email:'owner@example.test',emailVerified:true,providerData:[{providerId:'google.com'}]}:{uid:'anonymous-uid',isAnonymous:true}},authApi:{onAuthStateChanged:()=>()=>{}}};
   firebase.cloud=cloud();firebase.link.mockImplementation(link);
   let current;
   const Harness=()=>{current=useAccountSync({state,update:vi.fn(),persistenceFailed:false});return null;};
@@ -181,6 +183,64 @@ async function openLocalAccount(link){
   await waitForState(()=>current,'offline');
   return {sync:()=>current,raw,state};
 }
+
+it('adds a password to a populated Google account and restores the same workouts after email sign-in on a clean device',async()=>{
+  vi.stubEnv('VITE_ROOK_EMAIL_PASSWORD_ROLLOUT','true');
+  const {sync,raw,state}=await openLocalAccount(async()=>{},{google:true,weeks:1}),client=firebase.client;
+  const owner=client.auth.currentUser,ledgerBefore=localStorage.getItem('rook-account-sync-ledger-v1');
+  expect(state.workouts.length).toBeGreaterThan(0);expect(sync().canAddPassword).toBe(true);
+  client.authApi.EmailAuthProvider={credential:(email,password)=>({email,password,providerId:'password'})};
+  client.authApi.linkWithCredential=vi.fn(async user=>({user:client.auth.currentUser={...user,providerData:[...user.providerData,{providerId:'password'}]}}));
+  client.authApi.createUserWithEmailAndPassword=vi.fn();
+  await act(async()=>expect(await sync().addPassword({password:'Synthetic linked password 8'})).toMatchObject({status:'password-added',uid:owner.uid}));
+  expect(sync().hasPassword).toBe(true);expect(sync().canAddPassword).toBe(false);expect(sync().providerName).toBe('Google & Email');
+  expect(client.authApi.createUserWithEmailAndPassword).not.toHaveBeenCalled();expect(firebase.link).not.toHaveBeenCalled();
+  expect(localStorage.getItem(PRIMARY_KEY)).toBe(raw);expect(localStorage.getItem('rook-account-sync-ledger-v1')).toBe(ledgerBefore);
+  for(let i=0;i<localStorage.length;i++)expect(localStorage.getItem(localStorage.key(i))).not.toContain('Synthetic linked password 8');
+  firebase.cloud.setOnline();await act(async()=>window.dispatchEvent(new Event('online')));await waitForState(()=>sync(),'synced',5000);
+  expect(readAccountSyncLedger(localStorage,state.profile.id).accountUid).toBe(owner.uid);
+  const linkedUser=client.auth.currentUser;client.auth.currentUser=null;
+  client.authApi.signInWithEmailAndPassword=vi.fn(async(auth,email,password)=>{
+    expect(email).toBe(owner.email);expect(password).toBe('Synthetic linked password 8');return {user:auth.currentUser=linkedUser};
+  });
+  const signedIn=await authenticateEmailAccount(client,{email:owner.email,password:'Synthetic linked password 8'});
+  expect(signedIn.user.uid).toBe(owner.uid);
+  const cleanDevice=memoryStorage(),restored=await resolveAccountStartup({status:'empty'},{
+    storage:cleanDevice,configured:()=>true,getClient:async()=>client,getAdapter:()=>firebase.cloud,
+    resolveIdentity:async()=>({user:client.auth.currentUser,created:false}),
+    readLocal:store=>readLocalState(store,hydrateStoredState),save:(next,options)=>saveState(next,{...options,storage:cleanDevice}),
+  });
+  expect(restored.status).toBe('ready');expect(restored.state.profile.id).toBe(state.profile.id);
+  expect(restored.state.program).toEqual(state.program);expect(restored.state.workouts).toEqual(state.workouts);
+  expect(readAccountSyncLedger(cleanDevice,state.profile.id).accountUid).toBe(owner.uid);
+});
+
+it('blocks password enrollment when local account ownership or the rollout does not match',async()=>{
+  vi.stubEnv('VITE_ROOK_EMAIL_PASSWORD_ROLLOUT','true');
+  const {sync,raw}=await openLocalAccount(async()=>{},{google:true}),client=firebase.client;
+  client.authApi.linkWithCredential=vi.fn();
+  const ledger=JSON.parse(localStorage.getItem('rook-account-sync-ledger-v1'));ledger.accountUid='different-owner';localStorage.setItem('rook-account-sync-ledger-v1',JSON.stringify(ledger));
+  await expect(sync().addPassword({password:'Synthetic linked password 8'})).rejects.toThrow('Reopen');
+  expect(client.authApi.linkWithCredential).not.toHaveBeenCalled();expect(localStorage.getItem(PRIMARY_KEY)).toBe(raw);
+  ledger.accountUid=client.auth.currentUser.uid;localStorage.setItem('rook-account-sync-ledger-v1',JSON.stringify(ledger));
+  vi.stubEnv('VITE_ROOK_EMAIL_PASSWORD_ROLLOUT','false');
+  await expect(sync().addPassword({password:'Synthetic linked password 8'})).rejects.toThrow('Reopen');expect(client.authApi.linkWithCredential).not.toHaveBeenCalled();
+});
+
+it('preserves Google ownership and stored training after a recent-login rejection, Google confirmation, and retry',async()=>{
+  vi.stubEnv('VITE_ROOK_EMAIL_PASSWORD_ROLLOUT','true');
+  const {sync,raw,state}=await openLocalAccount(async()=>{},{google:true,weeks:1}),client=firebase.client;
+  client.authApi.EmailAuthProvider={credential:(email,password)=>({email,password,providerId:'password'})};
+  client.authApi.GoogleAuthProvider=class {setCustomParameters(){}};
+  client.authApi.reauthenticateWithPopup=vi.fn(async user=>({user}));
+  client.authApi.linkWithCredential=vi.fn().mockRejectedValueOnce({code:'auth/requires-recent-login'})
+    .mockImplementationOnce(async user=>({user:client.auth.currentUser={...user,providerData:[...user.providerData,{providerId:'password'}]}}));
+  await act(async()=>expect(sync().addPassword({password:'Synthetic linked password 8'})).rejects.toMatchObject({code:'auth/requires-recent-login'}));
+  expect(localStorage.getItem(PRIMARY_KEY)).toBe(raw);expect(sync().canAddPassword).toBe(true);
+  await act(async()=>sync().confirmPasswordAccount());await act(async()=>sync().addPassword({password:'Synthetic linked password 8'}));
+  expect(sync().hasPassword).toBe(true);expect(localStorage.getItem(PRIMARY_KEY)).toBe(raw);
+  expect(readAccountSyncLedger(localStorage,state.profile.id).accountUid).toBe(client.auth.currentUser.uid);
+});
 
 it('registers email in place, verifies it and refreshes the Firebase token without changing training data',async()=>{
   const {sync,raw,state}=await openLocalAccount(async()=>{}),client=firebase.client;

@@ -29,18 +29,18 @@ it.each([true,false,undefined])('describes existing illustration state %s with t
   const state=blankState();state.profile.showExerciseImages=flag;await mount(state);
   const control=host.querySelector('[role="switch"][aria-label="Exercise illustrations"]');
   expect(control.checked).toBe(flag!==false);
-  expect(host.querySelector('.setting-help').textContent).toBe(`Exercise images are ${flag===false?'hidden':'shown'} while training and in exercise details.`);
+  expect(host.querySelector('.setting-help').textContent).toBe(`${flag===false?'Hidden':'Shown'} in workouts and exercise details.`);
   expect(writes).not.toHaveBeenCalled();
 });
 it('updates helper immediately using only the existing profile flag, and survives canonical serialization/reload',async()=>{
   const state=blankState();state.profile.showExerciseImages=true;await mount(state);
   const baseline=structuredClone(current),control=host.querySelector('[role="switch"]');
   await act(async()=>control.click());
-  expect(control.checked).toBe(false);expect(host.querySelector('.setting-help').textContent).toContain('are hidden');
+  expect(control.checked).toBe(false);expect(host.querySelector('.setting-help').textContent).toContain('Hidden');
   const expected=structuredClone(baseline);expected.profile.showExerciseImages=false;expect(current).toEqual(expected);
   const restored=deserializeState(serializeState(current));
   await act(async()=>root.render(<Detail detail="appearance" state={restored} update={()=>{}} close={()=>{}}/>));
-  expect(host.querySelector('[role="switch"]').checked).toBe(false);expect(host.querySelector('.setting-help').textContent).toContain('are hidden');
+  expect(host.querySelector('[role="switch"]').checked).toBe(false);expect(host.querySelector('.setting-help').textContent).toContain('Hidden');
 });
 it('preserves the real exercise-detail image gate and the credits while illustrations are off',()=>{
   const state=blankState(),exercise=makeProgramExercise(exerciseCatalog['barbell-bench-press'],state.profile);

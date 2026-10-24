@@ -1,3 +1,4 @@
+import {noteTableCells,noteTableHeader} from './importNoteTable.js';
 const normalize = unit => /^lbs?$/i.test(unit) ? 'lb' : /^kgs?$/i.test(unit) ? 'kg' : null;
 
 // Only a written declaration establishes context. A nearby exercise's kg/lb,
@@ -7,16 +8,16 @@ export function declaredSourceWeightUnit(line) {
   return normalize(match?.[1]||'');
 }
 export function sourceWeightUnitAt(source, lineNumber) {
-  let unit=null,tableUnit=null;
+  let unit=null,table=null;
   for(const line of String(source).split(/\r?\n/).slice(0,lineNumber)){
     const declared=declaredSourceWeightUnit(line);
     if(declared)unit=declared;
-    if(!line.includes('|'))tableUnit=null;
-    // An explicitly unit-labelled weight column applies to its table rows.
-    if(/\|/.test(line)&&/\b(?:exercise|name|vaja)\b/i.test(line))
-      tableUnit=normalize(line.match(/(?:^|\|)\s*(?:weight|load)\s*\((kg|kgs|lb|lbs)\)/i)?.[1]||'');
+    const cells=noteTableCells(line,table?.delimiter);
+    const header=noteTableHeader(cells);
+    if(header)table=header;
+    else if(!cells)table=null;
   }
-  return tableUnit||unit;
+  return table?.weightUnit||unit;
 }
 export function unitlessPrescriptionLoads(prescription) {
   if(/^\s*@\s*[0-4](?:\s|$)/u.test(prescription.suffix||''))return null; // Existing effort-notation decision owns @1/@2.

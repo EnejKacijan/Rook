@@ -74,7 +74,7 @@ function rampSetCount({
     ["machines", "cables"].includes(key),
   );
   if (!firstDemanding) {
-    if (repMax <= 5 && sessionMinutes > 30) return 2;
+    if (repMax <= 6 && sessionMinutes > 30) return 2;
     return 1;
   }
   if (repMax >= 10 && machineSupported) return 1;
@@ -83,7 +83,7 @@ function rampSetCount({
     const increment = equipmentIncrement(item, profile);
     const establishedLoadSteps = Number(workingWeight) / increment;
     if (
-      repMax <= 5 ||
+      repMax <= 6 ||
       establishedLoadSteps >= 10 ||
       profile.experience === "Advanced"
     )
@@ -215,17 +215,23 @@ export function generateWarmup(
           : 2;
     for (const row of exercises) {
       if (!eligible(row)) continue;
-      const family = movementFamily(row.item.pattern);
+      const verticalFreePress=row.item.pattern==='vertical-push' && Number(row.exercise.repMax)<=8 &&
+        Number(profile.sessionMinutes)>=45 && row.item.equipment.some(key=>['barbell','dumbbells'].includes(key));
+      const family = row.item.kind==='power' || verticalFreePress ? row.item.pattern : movementFamily(row.item.pattern);
       if (seenFamilies.has(family)) continue;
+      // A later demanding hinge is a new loaded movement, even after the
+      // generic group budget has been used by a squat and upper-body press.
+      const demandingHinge=row.item.pattern==='hinge' && row.item.fatigueCost==='high';
+      const firstLoadedAfterPower=row.item.kind==='compound' && candidates.every(candidate=>candidate.item.kind==='power');
+      if(candidates.filter(candidate=>candidate.item.kind!=='power').length>=maxGroups && !demandingHinge && !firstLoadedAfterPower && !verticalFreePress)continue;
       seenFamilies.add(family);
       candidates.push(row);
-      if (candidates.length >= maxGroups) break;
     }
     const createRamp = ({ exercise, exerciseIndex, item }, candidateIndex) => {
       const workingWeight =
         (exercise.sets || []).find((set) => Number(set.weight) > 0)?.weight ??
         null;
-      const first = candidateIndex === 0;
+      const first = candidateIndex === 0 || item.kind!=='power' && !candidates.slice(0,candidateIndex).some(row=>row.item.kind!=='power');
       const increment = equipmentIncrement(item, profile);
       const count =
         item.kind === "power"
@@ -238,10 +244,14 @@ export function generateWarmup(
               firstDemanding: first,
             });
       const seenWeights = new Set();
-      const sets = rampPrescription(count, {
+      const prescription=item.kind==='power' && item.bodyweight
+        ? [{reps:3,loadPercent:null,loadInstruction:item.pattern==='power-lower'
+          ? 'Easy practice jumps · controlled landings' : 'Easy practice reps',technique:true}]
+        : rampPrescription(count, {
         beginner: profile.experience === "Beginner" && first,
         later: !first,
-      })
+      });
+      const sets = prescription
         .map((set, index) => {
           const weight =
             item.kind === "power"
@@ -256,7 +266,7 @@ export function generateWarmup(
             ...set,
             loadInstruction:
               item.kind === "power"
-                ? "Controlled technique reps"
+                ? set.loadInstruction || "Controlled technique reps"
                 : workingWeight
                   ? null
                   : set.loadInstruction,
@@ -265,7 +275,7 @@ export function generateWarmup(
           };
         })
         .filter((set) => {
-          if (!(Number(workingWeight) > 0)) return true;
+          if (item.kind==='power' || !(Number(workingWeight) > 0)) return true;
           if (!(Number(set.weight) > 0) || Number(set.weight) >= Number(workingWeight))
             return false;
           const key = Number(set.weight).toFixed(2);
@@ -293,8 +303,14 @@ export function generateWarmup(
     general.reduce((sum, item) => sum + item.minutes, 0) +
       movementPreparation.reduce((sum, item) => sum + item.minutes, 0),
   );
-  const rampCount = rampUpSets.reduce((sum, item) => sum + item.sets.length, 0);
-  const estimatedMinutes = nonRampMinutes + Math.ceil(rampCount * 0.5);
+  const rampMinutes = entries => entries.reduce((sum,entry)=>{
+    const exercise=workout.exercises[entry.exerciseIndex];
+    const max=Number(exercise.repMax ?? exercise.repMin);
+    // Heavy low-rep work needs load changes and recovery between ramps. This
+    // allowance is an estimate, not a timer or a prescribed working-set rest.
+    return sum+entry.sets.length*(max>0 && max<=6 ? 1.5 : .5);
+  },0);
+  const estimatedMinutes = nonRampMinutes + Math.ceil(rampMinutes(rampUpSets));
   const stageRow = (exerciseIndex) => {
     const matched = exercises.find((row) => row.exerciseIndex === exerciseIndex);
     if (matched) return matched;
@@ -332,10 +348,6 @@ export function generateWarmup(
         !stageRampUpSets.length)
     )
       return null;
-    const stageRampCount = stageRampUpSets.reduce(
-      (sum, entry) => sum + entry.sets.length,
-      0,
-    );
     const stageNonRampMinutes =
       stageGeneral.reduce((sum, item) => sum + item.minutes, 0) +
       stageMovementPreparation.reduce((sum, item) => sum + item.minutes, 0);
@@ -350,7 +362,7 @@ export function generateWarmup(
       rampUpSets: stageRampUpSets,
       estimatedMinutes: Math.max(
         1,
-        stageNonRampMinutes + Math.ceil(stageRampCount * 0.5),
+        stageNonRampMinutes + Math.ceil(rampMinutes(stageRampUpSets)),
       ),
       completed: false,
       skipped: false,

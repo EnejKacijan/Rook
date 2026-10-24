@@ -45,6 +45,12 @@ it('typing retains the same input, focus and surviving option identity',() => {
   const field=input();type('squ');const squat=[...host.querySelectorAll('[role=option]')].find(node=>node.textContent==='Squat');
   type('squat');expect(input()).toBe(field);expect(document.activeElement).toBe(field);expect([...host.querySelectorAll('[role=option]')].find(node=>node.textContent==='Squat')).toBe(squat);
 });
+it('shows typo suggestions immediately and waits for explicit selection',()=>{
+  type('bnech press');expect(names()[0]).toBe('Bench Press');
+  expect(document.activeElement).toBe(input());expect(select).not.toHaveBeenCalled();
+  act(()=>host.querySelector('[role=option]').click());
+  expect(select).toHaveBeenCalledWith('barbell-bench-press');
+});
 it('custom creation receives the current query without mutating or selecting a draft',() => {
   type('My custom movement');act(()=>host.querySelector('[aria-label="Create custom exercise"]').click());
   expect(create).toHaveBeenCalledWith('My custom movement');expect(select).not.toHaveBeenCalled();

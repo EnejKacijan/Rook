@@ -47,7 +47,7 @@ function mount() {
       }</ModalLayer></>;
   }
   act(() => root.render(<Harness/>)); advance(300);
-  click(detail().querySelector('.saved-workout-list button')); advance(32);
+  click(detail().querySelector('.saved-workout-list > .list-row')); advance(32);
 }
 function openDelete() {
   click(detail().querySelector('[aria-label="Saved workout options"]')); advance(300);
@@ -115,7 +115,7 @@ it.each([false, true])('G–L/N: explicit double-tap deletes exactly the capture
   expect({ ...current, savedWorkoutTemplates: initial.savedWorkoutTemplates }).toEqual(initial);
   expect(recordAccountSyncDeleteIntent).toHaveBeenCalledExactlyOnceWith(localStorage, initial.profile.id, 'savedWorkoutTemplates', 'delete-target');
   expect(confirmation()).toBeNull(); expect(preview()).toBeNull(); expect(detail().querySelector('.saved-workout-list')).not.toBeNull();
-  expect(detail().querySelectorAll('.saved-workout-list button')).toHaveLength(1);
+  expect(detail().querySelectorAll('.saved-workout-list > .list-row')).toHaveLength(1);
   expect(detail().inert).toBe(false); expect(closed).not.toHaveBeenCalled();
   expect(document.querySelector('.rook-snackbar').textContent).toBe('Saved workout deleted');
   expect(document.querySelector('.rook-snackbar button')).toBeNull(); // No invented Undo.

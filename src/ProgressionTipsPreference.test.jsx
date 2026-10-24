@@ -73,7 +73,7 @@ it('hides all proactive tips persistently without changing logging, targets, his
 it('offers the same persisted switch directly in Workout preferences and can turn cards back on', async () => {
   const initial = fixture(); initial.profile.showProgressionTips = false; mount(initial);
   const before = structuredClone(current); await preferences();
-  expect(mode('Off').getAttribute('aria-checked')).toBe('true'); expect(host.textContent).toContain('Your logs and Progress stay unchanged');
+  expect(mode('Off').getAttribute('aria-checked')).toBe('true'); expect(host.textContent).toContain('Your logs stay unchanged');
   click(toggle()); expect(current.profile.showProgressionTips).toBe(true); expect(saveState).toHaveBeenCalledOnce();
   expect(current.activeWorkout).toEqual(before.activeWorkout); expect(current.workouts).toEqual(before.workouts);
   act(() => page('workout')); expect(tip()).not.toBeNull();
@@ -106,6 +106,23 @@ it('a failed settings write leaves the saved preference unchanged', async () => 
 });
 it('does not add advice to a session that was already ineligible', () => {
   const initial = fixture(); initial.activeWorkout.source = 'freestyle'; mount(initial); expect(tip()).toBeNull();
+});
+
+it('a failed progression Apply stays retryable, then one Undo restores the exact eligible set values',()=>{
+  mount();const before=structuredClone(current),apply=()=>host.querySelector('.recommendation button[data-workout-replaces]');
+  saveState.mockReturnValue(false);click(apply());expect(current).toEqual(before);expect(host.querySelector('[role="alert"]').textContent).toContain('Could not save');
+  expect(button('Undo')).toBeUndefined();saveState.mockReturnValue(true);click(apply());
+  expect(current.activeWorkout.exercises[0].sets.map(set=>set.weight)).toEqual([41,41]);
+  click(button('Undo'));expect(current.activeWorkout.exercises).toEqual(before.activeWorkout.exercises);
+  expect(current.workouts).toEqual(before.workouts);expect(current.program).toEqual(before.program);
+});
+it('Apply counts and preserves manually adjusted sets while Why stays available without touching training data',()=>{
+  const state=fixture();Object.assign(state.activeWorkout.exercises[0].sets[1],{weight:42,weightEntryMode:'manual',weightProvenance:'explicit'});mount(state);
+  const before=structuredClone(current),why=host.querySelector('.recommendation summary');
+  expect(why.getAttribute('aria-expanded')).toBe('false');click(why);expect(why.getAttribute('aria-expanded')).toBe('true');
+  expect(host.querySelector('.progression-evidence').textContent).toContain('Two complete sessions');expect(current).toEqual(before);expect(saveState).not.toHaveBeenCalled();
+  const apply=host.querySelector('.recommendation button[data-workout-replaces]');expect(apply.getAttribute('aria-label')).toContain('1 remaining set');click(apply);
+  expect(current.activeWorkout.exercises[0].sets.map(set=>set.weight)).toEqual([41,42]);
 });
 it('Undo only restores its preference, retaining other settings changed meanwhile', async () => {
   mount(); await hide();

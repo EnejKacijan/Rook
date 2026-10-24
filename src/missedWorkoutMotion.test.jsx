@@ -63,7 +63,7 @@ it('ordinary rerenders do not restart collapse or the five-second Undo lifetime'
  act(()=>vi.advanceTimersByTime(2500));change(s=>({...s,profile:{...s.profile,units:'lb'}}));
  expect(animations).toHaveLength(count);expect(geometry()).toBe(closing);finish();
  act(()=>vi.advanceTimersByTime(2499));expect(host.querySelector('.exercise-remove-undo')).not.toBeNull();
- act(()=>vi.advanceTimersByTime(1));expect(host.querySelector('.exercise-remove-undo')).toBeNull();expect(region().style.height).toBe('0px');
+ act(()=>vi.advanceTimersByTime(1));expect(host.querySelector('.exercise-remove-undo')).not.toBeNull();act(()=>animations.at(-1).onfinish());expect(host.querySelector('.exercise-remove-undo')).toBeNull();expect(region().style.height).toBe('0px');
 });
 it('leaving Today during collapse cleans up; Undo off-route restores normally on return',()=>{
  const before=draw();hide();const closing=geometry();show(false);
@@ -73,7 +73,7 @@ it('leaving Today during collapse cleans up; Undo off-route restores normally on
 it('a changed occurrence group never inherits stale height or an obsolete Undo',()=>{
  draw();const old=region();hide();const closing=geometry();change(()=>todayMissedRestFixture({count:1}));
  expect(closing.cancel).toHaveBeenCalled();expect(region()).not.toBe(old);act(()=>closing.onfinish());
- expect(region().style.height).toBe('auto');expect(host.querySelector('.today-missed-label').textContent).toBe('MISSED WORKOUT');expect(host.querySelector('.exercise-remove-undo')).toBeNull();
+ expect(region().style.height).toBe('auto');expect(host.querySelector('.today-missed-label').textContent).toBe('Missed workout');expect(host.querySelector('.exercise-remove-undo')).toBeNull();
 });
 it('reduced motion closes/restores immediately with identical presentation-only semantics',()=>{
  vi.stubGlobal('matchMedia',()=>({matches:true}));const before=draw();hide();

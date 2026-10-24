@@ -12,8 +12,9 @@ beforeEach(()=>{
  HTMLElement.prototype.scrollTo=()=>{};host=document.createElement('div');document.body.append(host);root=createRoot(host);writes=vi.fn();
 });
 afterEach(()=>{act(()=>root.unmount());host.remove();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});
-function mount({weight=null,id='pull-up',units='kg'}={}){
+function mount({weight=null,id='pull-up',units='kg',increment}={}){
  const s=createReturningUserFixture(0);Object.assign(s.profile,{units,rirEnabled:true,showExerciseImages:false,restTimerEnabled:false});s.selectedDate=isoDay();
+ if(increment!==undefined)s.profile.increments.barbell=increment;
  const t=structuredClone(s.program.days[0]);t.exercises=t.exercises.slice(0,2);t.exercises[0].exerciseId=id;
  s.activeWorkout=startWorkout(s,t);s.activeWorkout.startedAt=Date.now()-185000;s.activeWorkout.exercises[0].sets=s.activeWorkout.exercises[0].sets.slice(0,3);
  s.activeWorkout.exercises[0].sets.forEach(set=>Object.assign(set,{weight,reps:9,rir:null,completed:false,weightEntryMode:undefined,weightSourceSetId:undefined}));
@@ -27,6 +28,18 @@ const minus=(n=1)=>row(n).querySelector('.logger-load button:first-child');
 const label=(n=1)=>row(n).querySelector('.stepper-display-label')?.textContent;
 const sets=()=>current.activeWorkout.exercises[0].sets;
 function type(el,value){act(()=>el.focus());act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(el,value);el.dispatchEvent(new Event('input',{bubbles:true}));});}
+it.each([{increment:.5,units:'kg',shown:'0.5'},{increment:2.5,units:'kg',shown:'2.5'},{increment:2.5,units:'lb',shown:'5.51'}])('starts an empty required load at its first positive step ($increment kg, $units)',options=>{
+ mount({...options,id:'barbell-bench-press'});const el=input(),before=structuredClone(current.activeWorkout);
+ expect(el.value).toBe('');expect(minus().disabled).toBe(true);expect(plus().disabled).toBe(false);expect(writes).not.toHaveBeenCalled();
+ act(()=>plus().click());expect(el.value).toBe(options.shown);expect(sets()[0].weight).toBe(options.increment);expect(sets()[0].completed).toBe(false);expect(writes).toHaveBeenCalledOnce();
+ expect(current.activeWorkout.id).toBe(before.id);expect(current.activeWorkout.startedAt).toBe(before.startedAt);expect(input()).toBe(el);
+ expect(deserializeState(serializeState(current)).activeWorkout.exercises[0].sets[0].weight).toBe(options.increment);
+});
+it('cleared required load plus uses the first step and later blur cannot restore its old load',()=>{
+ mount({weight:40,id:'barbell-bench-press',increment:.5});const el=input();type(el,'');expect(sets()[0].weight).toBe(40);expect(plus().disabled).toBe(false);
+ act(()=>plus().click());expect(el.value).toBe('0.5');expect(sets()[0].weight).toBe(.5);act(()=>el.blur());expect(sets()[0].weight).toBe(.5);expect(writes).toHaveBeenCalledOnce();
+ act(()=>plus().click());expect(sets()[0].weight).toBe(1);expect(writes).toHaveBeenCalledTimes(2);
+});
 it.each([null,0])('presents %s as BW with a full accessible description and unchanged numeric value',weight=>{
  mount({weight});expect(label()).toBe('BW');expect(input().value).toBe(weight===null?'':'0');expect(document.getElementById(input().getAttribute('aria-describedby')).textContent).toBe('Bodyweight, no added load');expect(sets()[0].weight).toBe(weight);
  expect(row().querySelector('.bodyweight-load-token')?.textContent).toBe('BW');

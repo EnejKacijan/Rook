@@ -1,0 +1,3 @@
+/* Only genuinely overflowing optional inner lists opt in. A fitting list
+   keeps passing vertical gestures to the page; horizontal behavior is intact. */
+:root [data-rook-overflow-scroll] { overscroll-behavior-y: none; }

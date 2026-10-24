@@ -1,0 +1,80 @@
+ROOK — pregled uvoza treningov iz Notes
+21. oktober 2026
+
+Obseg in dokazila
+80 sintetičnih primerov: 50 novih ročno napisanih zapisov in 30 obstoječih kontrol.
+Vsak je izveden dvakrat skozi AIService.importTrainingPlan(..., {review:true}).
+78 osnutkov, dve razumljivi zavrnitvi: več programskih tednov in nič serij.
+Pri vseh sprejetih zapisih je celoten original ohranjen; primerjava je deterministična.
+Pri tem pregledu ni bilo nobenega omrežnega ali modelskega klica iz importerja.
+Ločeno je opravljen kritični pregled dejanskih rezultatov v ChatGPT, v načinu Chat.
+
+Preverjanje
+64 testnih datotek, 1.537 uspešnih testov v izbranem regresijskem sklopu.
+Vključeni so importer, njegove dejanske UI odločitve, domain, generator,
+ogrevanje, opombe in predhodno produkcijsko stanje. Build uspe.
+To ni trditev, da je bil ponovno izveden celoten repozitorijski testni sklop.
+Dodatnih 27 neposrednih preverjanj potrjevanja in izvajanja je v transactions.txt.
+Po zadnji ciljni pripombi N28 je uspešnih še vseh 146 ciljnih preverjanj,
+vključno z dejansko UI izbiro neznane asistence in potrditvijo transakcije.
+Nato je ponovno uspešen celoten izbrani sklop uvoza: 53 datotek / 1.032 testov.
+Končni build prav tako uspe. Nova ciljna UI regresija je dodatna glede na
+prejšnji širši sklop 1.537 testov; preostali testi generatorja se niso spreminjali.
+
+Glavni popravki
+- CSV/TSV/podpičja in narekovaji; enote teže, ponovitev in počitka iz glave.
+- Časovne vrstice in minute, mešane tabele ter natančni originalni source spani.
+- Top/back-off ohrani 5/100 kg in 8/80 kg; zgodovina ponovljenih blokov se ne meša.
+- Razponi in konflikti RIR ter decimalni RPE ne postanejo ugibana ena vrednost.
+- Razpon počitka je izvorno navodilo; izbira timerja je izrecna odločitev.
+- Zapis ′/″ se pravilno pretvori v minute/sekunde.
+- Počitek po paru prevlada nad katalogovim privzetim počitkom posamezne vaje.
+- A1/A2/A3 ne postane tiho dvočlanski superset z nepovezano tretjo vajo.
+- Dve 20-kg ročki ne ustvarita alternativnega predpisa; odstotek ni RIR ali kg.
+- Negativna pomoč pri vaji ni zgornja meja ponovitev ali pozitivna dvignjena teža.
+- Tudi odločitev o asistenci je blokirana pri neposredni transakciji; po izrecni
+  izbiri neznane teže ostane izvorni -25 kg ohranjen in nobenih 25 kg ni izmišljenih.
+- Ogrevanje ni podvojeno. Navodilo o intenzivnosti nima dodatne serije/checkboxa.
+- Ogrevalne teže, tehnika in napredovanje so uporabni tudi po začetku in reloadu.
+- Last-set drop se postavi na zadnjo serijo, tudi ob popravku števila serij.
+- Tabelarične glave ne povzročajo odvečnega opozorila; izvorna glava še dokazuje RPE.
+- Nedoločena unilateralna vaja ne dobi samodejno bolj specifične stoječe variante.
+- Tipkarsko podobne knjižnične vaje ostanejo predlogi, ki jih uporabnik sam izbere.
+- Neveljavna ničelna vrstica ima razumljivo napako z vrstico in imenom, ne internim ID.
+
+Obvezni pregledi in omejitve
+Različni cilji posameznih serij na eni vrstici, razdalja, več dni pod enim naslovom,
+mešan fixed/open failure in samo leva/desna/operirana stran ostanejo ohranjeni,
+a zahtevajo natančno označen popravek izvirnika. Ne pretvarjajo se v ugibane cilje.
+Jasni ločeni bloki iste vaje so podprti. Celoten izvirnik ostane za referenco.
+Razpoložljivi logger ima skupen rep target na ravni vaje, zato piramid ni dovolj
+pravilno prikazati samo v osnutku: morale bi ostati pravilne tudi ob naslednjem startu.
+
+Nerešene materialne odločitve imajo trajni pending guard pri preparePlanImport,
+ne le onemogočen gumb. Sprememba v neveljaven odgovor in Undo ga obnovita.
+Nepodprte strukture ni mogoče odobriti z običajno izbiro. Uporabnik lahko popravi
+izvirnik ali zavestno odstrani vajo; originalni zapis je še vedno ohranjen.
+Nerešene identitete se preverijo tudi pri neposrednem potrjevanju programa.
+
+Lokalni predogled
+http://127.0.0.1:4401/artifacts/notes-parser-review/
+Dejanski PlanEditor, lokalni primeri in možnost lastnega vnosa. Potrjevanje je
+omejeno na pomnilnik predogleda; ne zamenja uporabnikovega shranjenega programa.
+Primerjava vseh 80 primerov: /artifacts/notes-parser-review/report.html
+
+Reprodukcija
+node artifacts/notes-parser-review/audit.mjs final
+node artifacts/notes-parser-review/transactions.mjs
+Ročni izvorni primeri: scripts/fixtures/notes-fidelity-corpus.mjs
+Glavne nove regresije: src/importSourceFidelity.test.js,
+src/NotesImport.sourceDecisions.test.jsx
+Dokazila pred/po in izpisi pregledov: artifacts/notes-parser-review/
+
+Objava
+Vse spremembe so lokalne. Brez commita, pusha, mergea ali deploya.
+Končna ocena ChatGPT: APPROVED za prikazanih 80 izidov in predložena preverjanja.
+Naknadna ciljna pripomba N28 je odpravljena in potrjena kot zaprta. Dodatnih
+zahtevanih popravkov ni. To je pregled predloženih izidov, ne certificiranje
+vseh mogočih formatov ali neodvisno izvajanje produkcijske kode.
+Končni pogovor: https://chatgpt.com/c/6ad8bbc2-28ac-83eb-b6b9-936c5b5b99a2
+Prva dva kroga: https://chatgpt.com/c/6ad8ad4f-1b30-83ed-8f12-268d5aa260f3

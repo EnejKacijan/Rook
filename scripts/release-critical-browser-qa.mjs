@@ -4,7 +4,7 @@ import {mkdir,writeFile} from 'node:fs/promises';
 const out='artifacts/release-2026-09-13';await mkdir(`${out}/critical-browser`,{recursive:true});
 const defaultCases=[
  ['startup-persistence-qa'],['scratch-reentry-navigation-qa'],['scratch-drag-scroll-qa'],
- ['preview-reorder-mode-qa','--exit-toggle'],['split-taxonomy-qa'],['duration-fidelity-qa'],
+ ['preview-reorder-mode-qa'],['split-taxonomy-qa'],['duration-fidelity-qa'],
  ['import-open-targets-qa'],['coach-time-revision-qa'],['coach-keyboard-inset-qa'],
  ['coach-tab-exit-qa'],['dark-theme-state-qa'],['illustration-surface-qa'],
 ];

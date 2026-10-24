@@ -96,6 +96,12 @@ export function matchImportCatalogName(name,catalog,{advanced=false,loadRequirem
       const comparison=optionalAddedLoad?{...source,load:null,tokens:source.tokens.filter(t=>t!=='weighted'),key:source.tokens.filter(t=>t!=='weighted').join(' ')}:source;
       const compactEquivalent=compact(label)===compact(identity);
       const conflicts=contradictions(compactEquivalent?features:comparison,features);
+      // A library alias may omit the posture of a unilateral machine variant.
+      // The written Single Leg Curl does not establish Standing Leg Curl.
+      const canonicalFeatures=importNameFeatures(definition.name,definition);
+      if(source.unilateral&&!source.positions.some(p=>['seated','standing','lying'].includes(p))&&
+        canonicalFeatures.positions.some(p=>['seated','standing','lying'].includes(p))&&
+        !features.positions.some(p=>['seated','standing','lying'].includes(p)))conflicts.push('unspecified posture');
       const literal=normalizeExerciseAlias(label)===identity;
       const namedEquivalent=compactEquivalent||bag(source.normalized.split(' '))===bag(features.normalized.split(' '));
       const equivalent=comparison.key===features.key;

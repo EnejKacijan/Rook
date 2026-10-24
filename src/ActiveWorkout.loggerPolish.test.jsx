@@ -34,7 +34,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-function mount({ rirEnabled = true, kind = "weighted" } = {}) {
+function mount({ rirEnabled = true, kind = "weighted", reps } = {}) {
   const state = createReturningUserFixture(0);
   Object.assign(state.profile, {
     rirEnabled,
@@ -51,7 +51,7 @@ function mount({ rirEnabled = true, kind = "weighted" } = {}) {
   state.activeWorkout.exercises[0].sets.forEach((set, index) => {
     Object.assign(set, {
       weight: kind === "timed" ? null : 40,
-      reps: kind === "timed" ? 30 : 8,
+      reps: reps === undefined ? kind === "timed" ? 30 : 8 : reps,
       rir: rirEnabled && kind !== "timed" ? 2 : null,
       completed: index === 0,
       ...(kind === 'per-side' ? {sides:{left:{reps:8},right:{reps:7}}} : {}),
@@ -75,6 +75,25 @@ function mount({ rirEnabled = true, kind = "weighted" } = {}) {
 
 const labels = () => [...host.querySelectorAll(".set-labels .logger-column-label")];
 const firstRow = () => host.querySelector('.set-row[aria-label="set 1"]');
+
+it.each(['unset','cleared'])('empty %s reps start at one and survive blur without logging the set',source=>{
+  mount({reps:source==='unset'?null:8});
+  const row=host.querySelector('.set-row[aria-label="set 2"]');
+  const input=row.querySelector('[aria-label="Reps for set 2"]');
+  const plus=row.querySelector('[aria-label="Increase Reps for set 2"]');
+  if(source==='cleared'){
+    act(()=>input.focus());
+    act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'');input.dispatchEvent(new Event('input',{bubbles:true}));});
+    expect(current.activeWorkout.exercises[0].sets[1].reps).toBe(8);
+  }
+  expect(input.value).toBe('');expect(plus.disabled).toBe(false);
+  expect(row.querySelector('[aria-label="Decrease Reps for set 2"]').disabled).toBe(true);
+  act(()=>plus.click());expect(input.value).toBe('1');
+  expect(current.activeWorkout.exercises[0].sets[1]).toMatchObject({reps:1,weight:40,completed:false});
+  act(()=>input.blur());expect(input.value).toBe('1');
+  act(()=>plus.click());expect(input.value).toBe('2');
+  expect(current.activeWorkout.exercises[0].sets[1]).toMatchObject({reps:2,weight:40,completed:false});
+});
 
 it('keeps exercise actions above the title, target and prior performance without changing logging', () => {
   mount();

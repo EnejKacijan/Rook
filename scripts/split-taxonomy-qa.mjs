@@ -4,15 +4,18 @@ import { chromium } from 'playwright-core';
 import { onboardingSplitOptions, TRAINING_STRUCTURES } from '../src/splitPreferences.js';
 import { buildProgram, sessionStructureKey, exerciseCatalog } from '../src/domain.js';
 import { customFocusSatisfied } from '../src/customTrainingStructure.js';
+import { fillCustomWorkoutBlocks, readCustomWorkoutBlocks } from './custom-weekly-structure-qa-helper.mjs';
 
 const base=process.env.ROOK_QA_URL||'http://127.0.0.1:4173',dir='artifacts/ROOK-SPLIT-RESEARCH',results=[];
 const examples=[
-  ['Horizontal push + horizontal pull / Squat + hip hinge / Vertical push + vertical pull',3],
-  ['Chest + front delts / Back + rear delts / Legs / Side delts + arms',4],
-  ['Pecs + triceps / Back + bicep / Quadriceps + calf / Deltoids + arms / Total body',5],
-  ['Total-body',2], ['Chest / Back / Legs / Deltoids / Arms / Core',6],
+  ['Chest + Back / Shoulders + Biceps + Triceps / Quads + Hamstrings + Glutes + Calves',3],
+  ['Chest + Triceps / Back + Biceps / Quads + Hamstrings + Glutes + Calves / Shoulders + Core',4],
+  ['Pecs + Triceps / Back + Bicep / Quadriceps + Calf / Deltoids + Core / Hamstrings + Glutes',5],
+  ['Chest + Back + Quads + Hamstrings + Core / Chest + Back + Quads + Hamstrings + Core',2],
+  ['Chest / Back / Quads / Shoulders / Biceps + Triceps / Hamstrings + Glutes + Calves + Core',6],
   ['Gluteals + hamstring / Pecs + tricep / Back + bicep / Quad + abs',4],
-  ['Bro split',5], ['Upper body / Lower body / Total body',3],
+  ['Chest + Triceps / Back + Biceps / Quads + Calves / Shoulders + Core / Hamstrings + Glutes',5],
+  ['Chest + Back / Shoulders + Biceps + Triceps / Quads + Hamstrings + Glutes + Calves',3],
 ];
 const matrix=[320,390].flatMap(width=>['light','dark'].flatMap(appearance=>['standard','premium'].map(style=>({width,appearance,style}))));
 const cases=matrix.map((visual,i)=>({...visual,text:examples[i][0],days:examples[i][1],avoid:i===0?'No jumping':null}));
@@ -52,23 +55,19 @@ try{for(const [i,test]of cases.entries()){
   await page.getByRole('button',{name:/Balanced starting point/}).click();await button('CONTINUE').click();
   await page.getByRole('button',{name:/I already have a preferred weekly structure/}).click();await button('Other').click();
   await page.evaluate(({appearance,style})=>{document.documentElement.dataset.appearance=appearance;document.documentElement.dataset.style=style;},test);
-  const input=page.getByLabel('Other preferred split'),build=button('BUILD MY PLAN'),error=page.locator('#custom-split-error');
+  const input=page.locator('.custom-workout-toggle').first(),build=button('BUILD MY PLAN'),error=page.locator('#custom-split-error');
   const labels=onboardingSplitOptions(test.days).filter(o=>TRAINING_STRUCTURES[o.id]).map(o=>o.label);
-  if(!test.home)for(const label of labels){await input.fill(label);assert.equal(await build.isEnabled(),true,label);assert.equal(await error.count(),0);}
-  const invalid=[['Anterior / Posterior',/vary/],['Upper strength / Lower strength',/intensity/],['Quantum split',/recognize/],['Chest / Back / Legs / Legs / Legs / Legs / Legs',/7 workout/]];
-  for(const [text,copy]of invalid){
-    await input.fill(text);assert.equal(await build.isDisabled(),true);assert.equal(await input.inputValue(),text);
-    assert.match(await error.innerText(),copy);assert.equal(await input.getAttribute('aria-describedby'),'custom-split-error');
-    assert.equal(await error.getAttribute('role'),'alert');
-    assert.equal(await error.evaluate(e=>getComputedStyle(e).backgroundColor),'rgba(0, 0, 0, 0)');
-  }
-  await input.fill('Anterior / Posterior');await input.scrollIntoViewIfNeeded();await capture('clarification');
+  if(!test.home)for(const label of labels){await button(label).click();assert.equal(await build.isEnabled(),true,label);assert.equal(await error.count(),0);await button('Other').click();}
+  // Unsupported free text can no longer be entered. Incomplete selections
+  // still block generation and survive navigating away and back.
+  await fillCustomWorkoutBlocks(page,['Chest']);assert.equal(await build.isDisabled(),true);
+  assert.equal(await page.locator('.custom-workout-block input,.custom-workout-block textarea').count(),0);
+  const invalidRows=await readCustomWorkoutBlocks(page);await input.scrollIntoViewIfNeeded();await capture('clarification');
   await page.getByRole('button',{name:'Back',exact:true}).last().click();await button('CONTINUE').click();
-  assert.equal(await input.inputValue(),'Anterior / Posterior');assert.equal(await build.isDisabled(),true);
-  const started=performance.now();await input.fill(test.text);const fillMs=performance.now()-started;
-  assert.equal(await input.inputValue(),test.text);
+  assert.deepEqual(await readCustomWorkoutBlocks(page),invalidRows);assert.equal(await build.isDisabled(),true);
+  const started=performance.now();const expectedText=await fillCustomWorkoutBlocks(page,test.text);const fillMs=performance.now()-started;
   if(test.home){
-    assert.equal(await build.isDisabled(),true);assert.match(await error.innerText(),/equipment/);
+    assert.equal(await build.isDisabled(),true);assert.match(await error.innerText(),/equipment|built faithfully|cannot meet/);
     await input.scrollIntoViewIfNeeded();await capture('equipment-conflict');
     assert.equal(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')||'null')?.program||null),null);
     results.push({...test,passed:true,equipmentBlocked:true,rawRetained:true,fillMs});await context.close();continue;
@@ -94,7 +93,7 @@ try{for(const [i,test]of cases.entries()){
   await button('USE THIS PLAN').click();await page.waitForFunction(()=>JSON.parse(localStorage.getItem('lift-v2-state'))?.profile.onboardingComplete);
   await page.reload({waitUntil:'networkidle'});
   const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
-  assert.equal(saved.profile.trainingPreferences,test.text);assert.equal(saved.profile.trainingSplitChoice,'other');
+  assert.equal(saved.profile.trainingPreferences,expectedText);assert.equal(saved.profile.trainingSplitChoice,'other');
   assert.equal(saved.program.days.length,test.days);
   const expected=buildProgram(saved.profile);
   assert.deepEqual(saved.program.days.map(sessionStructureKey),expected.days.map(sessionStructureKey));

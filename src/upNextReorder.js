@@ -1,11 +1,11 @@
 import {refreshWorkoutWarmup} from './domain.js';
-import {canRemoveUpNext,hasMeaningfulExerciseProgress} from './upNextRemoval.js';
+import {canRemoveUpNext,hasLoggedExerciseProgress} from './upNextRemoval.js';
 
 export function canMoveCurrentToUpNext(workout,id) {
   const index=workout?.exerciseIndex ?? -1;
   const current=workout?.exercises?.[index],next=workout?.exercises?.[index+1];
   return Boolean(current?.id===id && next && !current.supersetId && !next.supersetId &&
-    !hasMeaningfulExerciseProgress(workout,id) && !hasMeaningfulExerciseProgress(workout,next.id));
+    !hasLoggedExerciseProgress(workout,id) && !hasLoggedExerciseProgress(workout,next.id));
 }
 
 export function moveCurrentToUpNext(state,{sessionId,currentId,nextId}) {

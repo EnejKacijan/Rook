@@ -45,7 +45,7 @@ it('set totals follow the live queue and exact removal/Undo; logged work remains
  expect(canRemoveUpNext(next.activeWorkout,entry.id)).toBe(true);const removal=removeUpNext(next,entry.id);
  expect(workoutSetSummary(removal.state.activeWorkout)).toEqual(before);
  expect(undoUpNextRemoval(removal.state,removal.undo).activeWorkout.exercises).toEqual(next.activeWorkout.exercises);
- entry.sets[0].touched=true;expect(canRemoveUpNext(next.activeWorkout,entry.id)).toBe(false);
+ entry.sets[0].touched=true;expect(canRemoveUpNext(next.activeWorkout,entry.id)).toBe(true);entry.sets[0].completed=true;expect(canRemoveUpNext(next.activeWorkout,entry.id)).toBe(false);
  expect(canRemoveUpNext(next.activeWorkout,next.activeWorkout.exercises[0].id)).toBe(false);
 });
 it('Do now parks the unfinished current exercise without losing its sets, rest or identity',()=>{

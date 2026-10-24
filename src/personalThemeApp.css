@@ -3,17 +3,28 @@ html[data-personal-theme] .button.primary:not(:disabled):active { background:var
 html[data-personal-theme] .button.secondary { background:var(--rook-surface);color:var(--rook-text);border-color:var(--rook-control-border); }
 html[data-personal-theme] .brand { color:var(--rook-accent-text); }
 :root .seasonal-theme-notice { bottom:calc(var(--bottom-nav-total-height, 56px) + 8px); }
-/* Seasonal decoration contract. A merged season sets --rook-season-decor (an
-   image, per appearance) for its own data-season and nothing else. It is a
-   band in the empty top padding of the four main tabs, just below the safe
-   area and above the first row of controls, so it never covers text or a
-   control. Never in a workout, sheet or form. Static: no motion to reduce. */
-:root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) {
-  background-image: var(--rook-season-decor, none);
+/* Theme character on the four main tabs, back to front: a season's static
+   band in the empty top padding (--rook-season-decor) and the palette's wash
+   (--rook-atmosphere). The theme model resolves every text color against the
+   strongest point of that wash, so it can never weaken contrast.
+   Never in a workout, sheet or form. All layers are backgrounds: they take no
+   touches and are invisible to screen readers. */
+:root[data-personal-theme] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) {
+  background-image: var(--rook-season-decor, none), var(--rook-atmosphere, none);
   background-repeat: no-repeat;
-  background-position: right 0 top env(safe-area-inset-top, 0px);
-  background-size: var(--rook-season-decor-size, 360px 24px);
+  background-position: right 0 top env(safe-area-inset-top, 0px), 0 0;
+  background-size: var(--rook-season-decor-size, 360px 24px), 100% 260px;
+}
+/* A season may perch one small motif on the top edge of Today's main action.
+   It sits in the button's empty right corner, clear of its centered label at
+   every width, inside the 20px gap above the button (the start region clips
+   its overflow for its collapse animation), and never takes the tap. */
+:root[data-season] .today-start-button { position: relative; overflow: visible; }
+:root[data-season] .today-start-button::after {
+  content: ""; position: absolute; z-index: 1; top: -20px; right: 16px; width: 44px; height: 44px;
+  background: var(--rook-season-perch, none) no-repeat center / contain; pointer-events: none;
 }
 @media (forced-colors: active) {
-  :root[data-season] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) { background-image: none; }
+  :root[data-personal-theme] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) { background-image: none; }
+  :root[data-season] .today-start-button::after { display: none; }
 }

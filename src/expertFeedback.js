@@ -114,7 +114,7 @@ function allowedEquipment(item, profile = {}, location = null) {
   if (location === 'Commercial gym' || profile.environment === 'Commercial gym') return true;
   const available = new Set(['bodyweight']); const selected = new Set(profile.equipment || []);
   if (selected.has('barbell/rack/bench')) ['barbell', 'rack', 'bench'].forEach(value => available.add(value));
-  for (const value of ['dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands']) if (selected.has(value)) available.add(value);
+  for (const value of ['dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands', 'secure band anchor']) if (selected.has(value)) available.add(value);
   return (item.equipment || []).every(value => available.has(value));
 }
 function muscleGroup(item) {

@@ -1,0 +1,5 @@
+:root .appearance-screen > .appearance-credits { margin-top:18px; padding-top:0; }
+.appearance-credits-disclosure > summary { display:flex; align-items:center; justify-content:space-between; gap:12px; min-height:44px; padding:8px 0; font-size:14px; color:var(--rook-secondary); cursor:pointer; list-style:none; }
+.appearance-credits-disclosure > summary::-webkit-details-marker { display:none; }
+.appearance-credits-disclosure > summary:focus-visible { outline:2px solid var(--rook-accent); outline-offset:3px; }
+.appearance-credits-disclosure .rook-disclosure-content > div { padding-bottom:12px; }

@@ -127,7 +127,7 @@
   color: #1b1a19;
   box-shadow: 0 14px 32px rgba(27, 26, 25, .13);
   overflow-y: auto;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   -webkit-overflow-scrolling: touch;
 }
 .age-range-options.opens-above { top: auto; bottom: calc(100% + 5px); }
@@ -263,7 +263,7 @@
 
 @media (max-height: 760px) {
   .onboarding.onboarding-priorities { height: 100dvh; min-height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
-  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain none; }
   .onboarding-preferences .onboarding-content { padding-top: 12px !important; padding-bottom: 8px !important; }
   .onboarding-preferences .onboarding-content > p { margin-block: 8px; font-size: 12px; }
   .onboarding-preferences h1 { font-size: 27px !important; }
@@ -375,7 +375,7 @@
   .onboarding-priorities .priority-selection-summary { margin-top: 6px; padding-block: 8px; }
   .onboarding-priorities .physique-review-entry { min-height: 48px; margin-top: 6px; padding-block: 6px; }
   .onboarding.onboarding-priorities { height: 100dvh; min-height: 100dvh; max-height: 100dvh; overflow: hidden !important; }
-  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+  .onboarding-priorities .onboarding-content { min-height: 0; overflow-y: auto; overscroll-behavior: contain none; }
 }
 
 @media (max-height: 640px) {
@@ -389,7 +389,7 @@
 
 /* Step 6: keep the complete choice set compact without shrinking tap targets. */
 .onboarding.onboarding-priorities { height:100dvh;min-height:100dvh;max-height:100dvh;overflow:hidden !important; }
-.onboarding.onboarding-priorities .onboarding-content { padding-top:16px !important;padding-bottom:16px;min-height:0;overflow-y:auto;overscroll-behavior:contain; }
+.onboarding.onboarding-priorities .onboarding-content { padding-top:16px !important;padding-bottom:16px;min-height:0;overflow-y:auto;overscroll-behavior:contain none; }
 .onboarding-priorities .physique-review-entry { min-height:48px;margin-top:6px;padding-block:6px; }
 .onboarding-priorities .priority-choice-groups { margin-top:10px;gap:9px; }
 .onboarding-priorities .priority-choice-group .option-list { margin-top:5px !important;gap:8px; }

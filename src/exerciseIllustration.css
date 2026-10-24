@@ -11,6 +11,7 @@
     inset: 0;
     padding: inherit;
     pointer-events: none;
+    opacity: var(--exercise-illustration-ready, 0);
     background: var(--rook-illustration-ink, var(--rook-accent-text, #176b49));
     -webkit-mask-image: var(--exercise-illustration-source);
     mask-image: var(--exercise-illustration-source);

@@ -1,0 +1,32 @@
+Local review — 24 October 2026
+
+ChatGPT consultation, Chat mode:
+https://chatgpt.com/c/6adc0eff-f73c-83ed-8604-25266836435e
+
+Decision: one weight carry rule for Use previous values and ordinary repeated
+planned sessions. Editing 15 / 15 / 12.5 to 17.5 in the first set gives
+17.5 / 17.5 / 12.5. Do not shift a distinct backoff weight by a delta.
+
+Implementation:
+- Extracted the existing logger carry behavior into workoutWeightChanges.js.
+  It advances through one contiguous group of equal old loads or blank defaults.
+- Stops at a different load, manual load entry, pending raw load edit, completed
+  or advanced set, or partially completed side. Editing a logged source only
+  corrects that source. Counts, effort, history and prescription stay unchanged.
+- History adoption has weightEntryMode=history; actual manual entries have
+  mode=manual and explicit provenance. Old manual/history records from the
+  previous Use implementation remain compatible. Same-valued manual re-entry
+  now persists intent instead of being discarded as a numeric no-op.
+- Native bodyweight history null remains distinguishable from an unknown blank.
+  Existing unit conversion and absolute assistance amounts remain intact.
+- One durable write publishes the load edit and its carry. Failed writes leave
+  saved state unchanged and the next step can be retried safely.
+- When other sets change, a brief Updated N sets / Undo message appears. Undo
+  restores only owned load/provenance fields, preserving unrelated later work.
+  Subsequent load edits, completion, navigation or session changes expire it.
+
+Verification: 433 tests across 15 files passed; production build passed.
+Browser: both Use-values and normal repeated workout produced
+17.5 / 17.5 / 12.5 after one plus. Actual browser Undo restored 15 / 15 / 12.5.
+Screenshots in artifacts/plan-workout-review/weight-carry-*.png.
+Local only: no push, no deployment.

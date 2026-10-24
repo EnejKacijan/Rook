@@ -169,17 +169,8 @@ export function previousWorkingSetValues(exercise, prior) {
   return values;
 }
 
-export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
-  const active = state.activeWorkout;
-  if (!active) return state;
-  const exercise = active.exercises.find(e => e.id === exerciseId);
-  const set = exercise?.sets.find(s => s.id === setId);
-  const prior = exercise && freestylePreviousSets(state, exercise)[ordinal];
-  const values = previousWorkingSetValues(exercise, prior);
-  if (!previousValuesSetEligible(set) || !Object.keys(values).length) return state;
-  const next = structuredClone(state);
-  const target = next.activeWorkout.exercises.find(e => e.id === exerciseId).sets.find(s => s.id === setId);
-  Object.assign(target, { ...values, rir: null, touched: true });
+export function withPreviousWorkingSetValues(set, values) {
+  const target = { ...set, ...values, rir: null, touched: true };
   if (values.sides) {
     target.sides = Object.fromEntries(['left','right'].map(side =>
       [side, { ...set.sides?.[side], ...values.sides[side] }]));
@@ -189,13 +180,27 @@ export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
         target.sideRepsEntryMode = { ...target.sideRepsEntryMode, [side]: 'manual' };
   }
   if (Object.hasOwn(values, 'weight')) {
-    Object.assign(target, {weightEntryMode:'manual', weightProvenance:'history'});
+    Object.assign(target, {weightEntryMode:'history', weightProvenance:'history'});
     delete target.weightSourceSetId;
   }
   if (Object.hasOwn(values, 'reps')) {
     target.repsEntryMode = 'manual';
     delete target.repsSourceSetId;
   }
+  return target;
+}
+
+export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
+  const active = state.activeWorkout;
+  if (!active) return state;
+  const exercise = active.exercises.find(e => e.id === exerciseId);
+  const set = exercise?.sets.find(s => s.id === setId);
+  const prior = exercise && freestylePreviousSets(state, exercise)[ordinal];
+  const values = previousWorkingSetValues(exercise, prior);
+  if (!previousValuesSetEligible(set) || !Object.keys(values).length) return state;
+  const next = structuredClone(state);
+  const target = next.activeWorkout.exercises.find(e => e.id === exerciseId);
+  target.sets = target.sets.map(item => item.id === setId ? withPreviousWorkingSetValues(item, values) : item);
   return next;
 }
 

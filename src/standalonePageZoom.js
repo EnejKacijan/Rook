@@ -1,4 +1,5 @@
 import { rookPlatform } from './platform.js';
+import { bindStepperTouch } from './stepperTouch.js';
 
 // This is a device preference, not training data or an account entitlement.
 export const PAGE_ZOOM_PREFERENCE = 'rook-allow-page-zoom';
@@ -48,7 +49,7 @@ export function bindStandalonePageZoom(win = globalThis.window, platform = rookP
   const doc = win?.document, html = doc?.documentElement;
   if (!html) return () => {};
   const previous = html.getAttribute('data-rook-page-zoom');
-  let listening = false, origin = null;
+  let listening = false, origin = null, releaseStepperTouch = null;
   const element = target => target?.nodeType === 1 ? target : target?.parentElement;
   const start = event => {
     if (event.touches.length === 1 || !origin) origin = element(event.target);
@@ -87,7 +88,12 @@ export function bindStandalonePageZoom(win = globalThis.window, platform = rookP
     listening = false; cancel();
   };
   const update = () => {
-    const locked = standalonePageZoomMode(win, platform) === 'locked';
+    const mode = standalonePageZoomMode(win, platform);
+    const locked = mode === 'locked';
+    // Repeated +/- taps are actions even when the user allows page pinch.
+    // Ordinary tabs and native containers keep their existing input behavior.
+    if (mode !== 'browser' && !releaseStepperTouch) releaseStepperTouch = bindStepperTouch(doc);
+    else if (mode === 'browser' && releaseStepperTouch) { releaseStepperTouch(); releaseStepperTouch = null; }
     if (locked) html.setAttribute('data-rook-page-zoom', 'locked');
     else html.removeAttribute('data-rook-page-zoom');
     if (locked && !listening) {
@@ -100,6 +106,7 @@ export function bindStandalonePageZoom(win = globalThis.window, platform = rookP
   update();
   return () => {
     releasePreference(); detach();
+    releaseStepperTouch?.();
     if (previous === null) html.removeAttribute('data-rook-page-zoom');
     else html.setAttribute('data-rook-page-zoom', previous);
   };

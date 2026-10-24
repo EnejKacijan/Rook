@@ -18,9 +18,9 @@ const normalized = value => String(value || '').normalize('NFKD').replace(/\p{M}
 function equipmentFor(profile = {}, location = null) {
   const selected = new Set(profile.equipment || []); const result = new Set(['bodyweight']);
   if (selected.has('full gym') || (!selected.size && (location === 'Commercial gym' || profile.environment === 'Commercial gym')))
-    return ['barbell', 'rack', 'bench', 'dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands', 'bodyweight'];
+    return ['barbell', 'rack', 'bench', 'dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands', 'secure band anchor', 'bodyweight'];
   if (selected.has('barbell/rack/bench')) ['barbell', 'rack', 'bench'].forEach(value => result.add(value));
-  for (const value of ['dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands']) if (selected.has(value)) result.add(value);
+  for (const value of ['dumbbells', 'cables', 'machines', 'pull-up bar', 'resistance bands', 'secure band anchor']) if (selected.has(value)) result.add(value);
   return [...result];
 }
 

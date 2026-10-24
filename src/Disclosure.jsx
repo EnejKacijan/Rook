@@ -3,15 +3,16 @@ import './disclosure.css';
 
 // Keep the last expanded render through collapse, including lazy picker data.
 // Animate the outer measured height, not nested fractional grid tracks.
-export function Disclosure({open, children, id, className = '', revealOnOpen = false, collapsed}) {
+export function Disclosure({open, children, id, className = '', revealOnOpen = false, collapsed, keepMounted = false, onRest}) {
   const [retained,setRetained]=useState(open?children:null);
   const root=useRef(null),content=useRef(null),compact=useRef(null),initialized=useRef(false);
   const hasCompact=Boolean(collapsed);
-  useLayoutEffect(()=>{if(open)setRetained(children);},[open,children]);
+  const completion=useRef(onRest);completion.current=onRest;
+  useLayoutEffect(()=>{if(open&&!keepMounted)setRetained(children);},[open,children,keepMounted]);
   useLayoutEffect(()=>{
     const node=root.current,inner=content.current,media=window.matchMedia?.('(prefers-reduced-motion: reduce)');
     let geometry,fade,incoming,target=-1,disposed=false;
-    const settle=()=>{if(disposed)return;geometry?.cancel();fade?.cancel();incoming?.cancel();geometry=null;node.style.height=open?'auto':`${Math.max(0,target)}px`;node.style.opacity=open||hasCompact?'1':'.7';if(!open)setRetained(null);
+    const settle=()=>{if(disposed)return;geometry?.cancel();fade?.cancel();incoming?.cancel();geometry=null;node.style.height=open?'auto':`${Math.max(0,target)}px`;node.style.opacity=open||hasCompact?'1':'.7';if(!open&&!keepMounted)setRetained(null);completion.current?.(open);
       if(open && revealOnOpen) requestAnimationFrame(()=>{if(!disposed)revealDisclosure(node);});
     };
     const run=()=>{
@@ -36,9 +37,9 @@ export function Disclosure({open, children, id, className = '', revealOnOpen = f
       const height=node.getBoundingClientRect().height,opacity=getComputedStyle(node).opacity;
       geometry?.cancel();fade?.cancel();incoming?.cancel();node.style.height=`${height}px`;node.style.opacity=opacity;
     };
-  },[open,revealOnOpen,hasCompact]);
+  },[open,revealOnOpen,hasCompact,keepMounted]);
   return <div ref={root} id={id} className={`rook-disclosure${open?' is-open':''}${hasCompact?' has-compact-content':''}${className?` ${className}`:''}`} aria-hidden={!open&&!hasCompact} inert={!open&&!hasCompact?'':undefined}>
-    <div ref={content} className="rook-disclosure-content" aria-hidden={!open&&hasCompact||undefined} inert={!open&&hasCompact?'':undefined}>{open?children:retained}</div>
+    <div ref={content} className="rook-disclosure-content" aria-hidden={!open&&hasCompact||undefined} inert={!open&&hasCompact?'':undefined}>{open||keepMounted?children:retained}</div>
     {!open&&collapsed&&<div ref={compact} className="rook-disclosure-compact">{collapsed}</div>}
   </div>;
 }

@@ -2,6 +2,8 @@ import React, { act, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { FirstRunNavigation, FirstRunStepMotion } from './FirstRunNavigation.jsx';
+import {FirstRunWelcome} from './FirstRunWelcome.jsx';
+import {acknowledgeFirstRunWelcome,FIRST_RUN_WELCOME_KEY} from './firstRunWelcome.js';
 import { EntryLanding, BringPlanLanding, FirstRunSignIn, Onboarding, ImportPlan, ScratchPlan, RestoreBackupSheet, FirstRunFreestyleConfirm, SheetHeader, PlanEditor, ModalLayer, Profile } from './App.jsx';
 import { SavedWorkouts } from './SavedWorkouts.jsx';
 import { blankState } from './domain.js';
@@ -13,11 +15,12 @@ vi.mock('./backup.js', () => backup);
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 let host, root, state, animations, standalone, reduced;
 function FirstRunHeader(props) { return <SheetHeader {...props} firstRunBack />; }
-function Harness() {
-  const [mode, setMode] = useState('landing');
+function Harness({welcome=false}) {
+  const [mode, setMode] = useState(welcome?'welcome':'landing');
   useSemanticSwipeBack();
   return <FirstRunNavigation mode={mode} parents={{import:"bring",scratch:"bring"}}>{route => {
     const close = () => setMode(current => current === route ? (['import','scratch'].includes(route) ? 'bring' : 'landing') : current);
+    if(route==='welcome')return <FirstRunWelcome onContinue={()=>{acknowledgeFirstRunWelcome();setMode('landing');}}/>;
     if (route === 'bring') return <BringPlanLanding back={close} importPlan={()=>setMode('import')} startFromScratch={()=>setMode('scratch')}/>;
     if (route === 'personalize') return <Onboarding update={() => {}} exit={close}/>;
     if (route === 'import') return <ImportPlan state={state} update={() => {}} close={close} initial/>;
@@ -25,7 +28,7 @@ function Harness() {
     if (route === 'restore') return <RestoreBackupSheet state={state} update={() => {}} close={close} firstRun/>;
     if (route === 'create-workout') return <SavedWorkouts state={state} update={() => {}} close={close} Header={FirstRunHeader} Editor={PlanEditor} Modal={ModalLayer} createNew firstRun/>;
     if (route === 'freestyle-confirm') return <FirstRunFreestyleConfirm back={close} start={()=>true}/>;
-    return <EntryLanding personalize={() => setMode('personalize')} bringPlan={() => setMode('bring')} restoreBackup={() => setMode('restore')} ownWorkouts={() => setMode('create-workout')} trainFreestyle={() => setMode('freestyle-confirm')}/>;
+    return <EntryLanding personalize={() => setMode('personalize')} bringPlan={() => setMode('bring')} restoreBackup={() => setMode('restore')} ownWorkouts={() => setMode('create-workout')} trainFreestyle={() => setMode('freestyle-confirm')} backToIntro={welcome?()=>setMode('welcome'):undefined}/>;
   }}</FirstRunNavigation>;
 }
 function AccountEntryHarness() {
@@ -41,6 +44,7 @@ function AccountEntryHarness() {
   }}</FirstRunNavigation>;
 }
 beforeEach(() => {
+  localStorage.removeItem('rook.first-run-welcome-page.v1');localStorage.removeItem(FIRST_RUN_WELCOME_KEY);
   vi.useFakeTimers(); vi.stubGlobal('requestAnimationFrame', cb => setTimeout(cb, 0)); vi.stubGlobal('cancelAnimationFrame', clearTimeout); standalone = true; reduced = false; state = blankState(); animations = [];
   vi.stubGlobal('matchMedia', query => ({ matches: query.includes('standalone') ? standalone : reduced, addEventListener() {}, removeEventListener() {} }));
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
@@ -63,22 +67,56 @@ function edit(node, value) { act(() => { Object.getOwnPropertyDescriptor(node in
 function touch(type, x, y = 200, target = page().querySelector('main')) {
   const event = new Event(type, { bubbles: true, cancelable: true });
   Object.defineProperty(event, 'touches', { value: type === 'touchend' ? [] : [{ identifier: 1, clientX: x, clientY: y }] });
+  Object.defineProperty(event, 'changedTouches', { value: [{ identifier:1,clientX:x,clientY:y }] });
   act(() => target.dispatchEvent(event));
 }
 function swipe(start = 4, end = 200, dy = 0) { touch('touchstart', start); touch('touchmove', end, 200 + dy); touch('touchend', end, 200 + dy); settle(); }
 
 it('Sign in and Restore use the same two-level Back and interactive edge hierarchy', () => {
   act(() => root.render(<AccountEntryHarness/>));
-  click('Sign in / Create account'); settle(); expect(page().dataset.firstRunPage).toBe('sign-in');
+  click('Sign in'); settle(); expect(page().dataset.firstRunPage).toBe('sign-in');
   const iconPath = page().querySelector('.first-run-back-button svg path')?.getAttribute('d');
   click('Restore from backup'); settle(); expect(page().dataset.firstRunPage).toBe('restore');
   expect(page().querySelector('.first-run-back-button svg path')?.getAttribute('d')).toBe(iconPath);
   swipe(); expect(page().dataset.firstRunPage).toBe('sign-in');
   swipe(); expect(page().dataset.firstRunPage).toBe('landing');
-  expect(page().textContent).toContain('A plan that fits your week.');
+  expect(page().textContent).toContain('Choose your starting point.');
 });
 
-for (const [name, route, back] of [['BUILD MY PLAN', 'personalize', 'Back to plan options'], ['Bring my plan', 'bring', 'Back to start'], ['Import a plan', 'import', 'Back to start'], ['Enter it myself', 'scratch', 'Back to start'], ['Restore', 'restore', 'Back to start'], ['Create workout', 'create-workout', 'Back to start'], ['Freestyle', 'freestyle-confirm', 'Back to start']]) {
+it('connects the two intro demos directly to the real action landing and returns child routes there',()=>{
+  act(()=>root.render(<Harness key="welcome" welcome/>));
+  expect(page().dataset.firstRunPage).toBe('welcome');
+  expect(page().querySelectorAll('.welcome-dots i')).toHaveLength(3);
+  click('Next introduction page');
+  expect(page().querySelector('.welcome-slide[data-active]').getAttribute('aria-label')).toBe('2 of 3');
+  click('Next introduction page');settle();
+  expect(page().dataset.firstRunPage).toBe('landing');
+  expect(page().querySelector('.welcome-dots').getAttribute('aria-label')).toBe('Page 3 of 3');
+  expect(localStorage.getItem(FIRST_RUN_WELCOME_KEY)).toBe('seen');
+  click('Build my plan');settle();click('Back to plan options');settle();
+  expect(page().dataset.firstRunPage).toBe('landing');
+  click('Back to intro');settle();
+  expect(page().dataset.firstRunPage).toBe('welcome');
+  expect(page().querySelector('.welcome-slide[data-active]').getAttribute('aria-label')).toBe('2 of 3');
+  click('Next introduction page');settle();
+  click('Bring my plan');settle();click('Back to start');settle();
+  expect(page().dataset.firstRunPage).toBe('landing');
+});
+
+it('keeps the final panel reversible by a swipe over each route and by the standalone edge gesture',()=>{
+  act(()=>root.render(<Harness key="reversible-welcome" welcome/>));
+  click('Skip intro');settle();
+  for(const label of ['Bring my plan','Create workout','Freestyle']){
+    const target=button(label);
+    touch('touchstart',100,200,target);touch('touchmove',270,205,target);touch('touchend',270,205,target);settle();
+    expect(page().dataset.firstRunPage).toBe('welcome');
+    expect(page().querySelector('.welcome-slide[data-active]').getAttribute('aria-label')).toBe('2 of 3');
+    click('Next introduction page');settle();expect(page().dataset.firstRunPage).toBe('landing');
+  }
+  swipe();expect(page().dataset.firstRunPage).toBe('welcome');
+});
+
+for (const [name, route, back] of [['Build my plan', 'personalize', 'Back to plan options'], ['Bring my plan', 'bring', 'Back to start'], ['Import a plan', 'import', 'Back to start'], ['Enter it myself', 'scratch', 'Back to start'], ['Restore backup', 'restore', 'Back to start'], ['Create workout', 'create-workout', 'Back to start'], ['Freestyle', 'freestyle-confirm', 'Back to start']]) {
   it(`${route}: enters immediately, uses an opaque inaccessible page stack, restores exact Landing scroll and focus`, () => {
     prepare(name); const parent = ['import','scratch'].includes(route) ? 'bring' : 'landing';
     const trigger = button(name); trigger.focus(); document.documentElement.scrollTop = 173;
@@ -114,7 +152,7 @@ it('nested edge Back reveals Bring my plan first, then Landing; never skips a le
   click('Import a plan'); settle();
   touch('touchstart', 4); touch('touchmove', 100);
   expect(document.querySelector('[data-swipe-parent]').textContent).toContain('Add the program you already follow.');
-  expect(document.querySelector('[data-swipe-parent]').textContent).not.toContain('A plan that fits your week.');
+  expect(document.querySelector('[data-swipe-parent]').textContent).not.toContain('Choose your starting point.');
   touch('touchend', 200); settle();
   expect(page().dataset.firstRunPage).toBe('bring');
   swipe(); expect(page().dataset.firstRunPage).toBe('landing');
@@ -154,7 +192,7 @@ it('retains native browser history policy and has no Landing forward/back target
   standalone = false; click('Enter it myself'); settle(); swipe(); expect(page().dataset.firstRunPage).toBe('scratch');
 });
 it('does not reuse a touch that dismisses the age picker as page Back', () => {
-  click('BUILD MY PLAN'); settle(); click('Age range');
+  click('Build my plan'); settle(); click('Age range');
   const screen = page().querySelector('main');
   const event = new Event('pointerdown', { bubbles: true }); Object.defineProperty(event, 'pointerType', { value: 'touch' });
   act(() => screen.dispatchEvent(event));
@@ -162,7 +200,7 @@ it('does not reuse a touch that dismisses the age picker as page Back', () => {
   swipe(); expect(page().dataset.firstRunPage).toBe('landing');
 });
 it('pointer travel does not move age-option focus; keyboard arrows and selection still work', () => {
-  click('BUILD MY PLAN'); settle(); click('Age range'); settle();
+  click('Build my plan'); settle(); click('Age range'); settle();
   const options = [...page().querySelectorAll('[role="option"]')];
   expect(document.activeElement).toBe(options[0]);
   const pointerMove = new Event('pointermove', { bubbles: true });
@@ -178,7 +216,7 @@ it('pointer travel does not move age-option focus; keyboard arrows and selection
   expect(button('Age range').textContent).toContain(options[1].textContent);
 });
 it('consumes the step swipe marker so a later button Back to Landing still animates', () => {
-  click('BUILD MY PLAN'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
+  click('Build my plan'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
   swipe(); expect(page().textContent).toContain('Set the right starting point.');
   expect(page().querySelector('main').dataset.swipeBackCommitted).toBeUndefined();
   click('Back to plan options'); expect(page().dataset.firstRunPage).toBe('landing');
@@ -210,7 +248,7 @@ it('uses the same opaque physical stack for questionnaire button push/pop', () =
   expect(animations[0].node.dataset.swipeParent).toBe('true'); expect(animations[0].frames[1].transform).toBe('translate3d(390px,0,0)');
 });
 it('previews the previous question during a physical Back drag and commits without a second entrance', () => {
-  click('BUILD MY PLAN'); settle();
+  click('Build my plan'); settle();
   edit(page().querySelector('input'), 'Alex');
   click('Age range'); click('18–29'); click('CONTINUE'); settle();
   const screen = page().querySelector('main'), content = screen.querySelector('.onboarding-content');
@@ -237,7 +275,7 @@ it('previews the previous question during a physical Back drag and commits witho
   expect(document.querySelector('[data-swipe-parent]')).not.toBeNull();
 });
 it('cancels a partial question Back without remounting content, losing scroll or replaying an entrance', () => {
-  click('BUILD MY PLAN'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
+  click('Build my plan'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
   const screen = page().querySelector('main'), content = screen.querySelector('.onboarding-content');
   screen.scrollTop = 70; content.scrollTop = 35; animations = [];
   swipe(4, 28);
@@ -267,7 +305,7 @@ it('uses full-page motion at every later question and keeps the existing Forward
   }
 });
 it('keeps later-question Back immediate under reduced motion and disabled in a normal browser tab', () => {
-  click('BUILD MY PLAN'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
+  click('Build my plan'); settle(); click('Age range'); click('18–29'); click('CONTINUE'); settle();
   standalone = false; swipe(); expect(page().querySelector('.onboarding-goal')).not.toBeNull();
   standalone = true; reduced = true; animations = []; swipe();
   expect(page().querySelector('.onboarding-personal')).not.toBeNull();

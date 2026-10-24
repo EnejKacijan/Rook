@@ -44,6 +44,16 @@ describe.each(SEASONAL_THEMES.map(season => [season.name, season]))('%s', (_, se
       expect(decorated, `${appearance} decoration`).toBe(true);
     }
   });
+  it('perches a motif in both appearances or in neither', () => {
+    const perched = ['light', 'dark'].map(appearance => {
+      let found = false;
+      root.walkRules(rule => {
+        if (rule.selector.includes(`[data-appearance="${appearance}"]`)) rule.walkDecls('--rook-season-perch', decl => { found ||= /^url\("data:image\/svg\+xml,/.test(decl.value); });
+      });
+      return found;
+    });
+    expect(perched[0], 'light and dark perch').toBe(perched[1]);
+  });
   it('is static and self-contained: no motion and no network assets', () => {
     root.walkDecls(decl => {
       expect(decl.prop, decl.prop).not.toMatch(/^(animation|transition)/);

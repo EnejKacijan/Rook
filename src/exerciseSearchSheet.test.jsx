@@ -63,7 +63,8 @@ it('keeps the real Freestyle search mounted/focused across many/few/zero/clear a
   await act(async()=>{await new Promise(resolve=>setTimeout(resolve,80));});
   const panel = host.querySelector('main'), input = panel.querySelector('input');
   act(() => input.focus());
-  for (const [query,count] of [['pis',6], ['pist',2], ['zzzznomatch',0], ['',null], ['pist',2]]) {
+  // Typo-tolerant search also returns similar spellings for "pist".
+  for (const [query,count] of [['pis',6], ['pist',5], ['zzzznomatch',0], ['',null], ['pist',5]]) {
     type(input,query);
     expect(panel.querySelector('input')).toBe(input); expect(document.activeElement).toBe(input);
     expect(panel.classList.contains('exercise-search-sheet')).toBe(true);
@@ -78,7 +79,7 @@ it('keeps the real Freestyle search mounted/focused across many/few/zero/clear a
   render(<div className="modal-layer"><FreestyleExercisePicker state={state} update={update} close={close} Header={Header}/></div>);
   type(input,'pist');
   expect(panel.querySelector('.queue-add-button').disabled).toBe(true);
-  expect(panel.querySelectorAll('.queue-search-row')).toHaveLength(2);
+  expect(panel.querySelectorAll('.queue-search-row')).toHaveLength(5);
 });
 
 it('tracks viewport height AND pan at any scale and releases only owned styles/listeners on leaving search', () => {

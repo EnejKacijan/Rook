@@ -27,6 +27,9 @@
 .entry-v2 .entry-primary-action > .button.primary { margin: 0; background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); }
 .entry-v2 .entry-primary-note { margin: 10px 0 0; text-align: center; color: var(--rook-muted); font-size: 12px; line-height: 1.4; }
 .entry-v2 .entry-secondary-routes { margin-top: 40px; }
+.entry-intro-final { touch-action:pan-y pinch-zoom; }
+.entry-v2 .entry-back-to-intro { align-self:flex-start; display:inline-flex; align-items:center; gap:6px; min-height:44px; margin:14px 0 0 -8px; padding:8px; border:0; background:transparent; color:var(--rook-secondary); font-size:13px; }
+.entry-back-to-intro .rook-navigation-chevron { width:16px; height:16px; }
 .entry-v2 .entry-secondary-routes > h2 { margin-bottom: 6px; }
 .entry-v2 .entry-action-row {
   display: flex; align-items: center; gap: 12px; width: 100%; min-height: 44px;
@@ -78,3 +81,44 @@
 }
 @media (min-width: 501px) { .entry-v2 { min-height: calc(100dvh - 40px); padding: 34px 40px; } }
 @media (prefers-reduced-motion: reduce) { .entry-v2 * { transition: none !important; animation: none !important; } }
+
+/* The real starting choices are the final introduction panel. Share its
+   gutters, visual/story rhythm, progress and bottom action rather than opening
+   an unrelated oversized marketing page. All content stays in normal flow. */
+:root .entry-v2.welcome-landing {
+  gap:12px; padding:calc(16px + var(--welcome-safe-top,env(safe-area-inset-top))) 24px calc(16px + var(--welcome-safe-bottom,env(safe-area-inset-bottom)));
+  min-height:100dvh; overflow:visible;
+}
+.entry-v2.welcome-landing .entry-top .brand { font-size:16px; letter-spacing:.15em; }
+.entry-v2.welcome-landing .entry-top .welcome-quiet { font-size:14px; padding:8px 10px; margin-right:-10px; }
+.welcome-landing-carousel { flex:0 0 auto; }
+.entry-v2.welcome-landing .welcome-start-card {
+  display:grid; gap:0; margin:0; padding:0; border:0;
+  background:transparent; box-shadow:none;
+}
+.entry-v2.welcome-landing .welcome-start-card h2 { margin:0 0 6px; font-size:12px; letter-spacing:0; text-transform:none; color:var(--rook-secondary); }
+.entry-v2.welcome-landing .entry-action-row { min-height:64px; padding:10px 0; border:0; border-bottom:1px solid var(--rook-border); border-radius:0; background:transparent; }
+.entry-v2.welcome-landing .entry-action-row:last-child { border-bottom:0; }
+.entry-v2.welcome-landing .entry-action-row .entry-action-chevron { width:24px; height:24px; padding:3px; color:var(--rook-secondary); flex-basis:24px; }
+.entry-v2.welcome-landing .entry-action-row:active { background:var(--rook-surface-muted); }
+.entry-v2.welcome-landing .entry-action-copy strong { font-size:16px; }
+.entry-v2.welcome-landing .entry-action-copy small { font-size:13px; }
+.entry-v2.welcome-landing .entry-content { grid-area:1 / 1; margin:0; }
+.entry-v2.welcome-landing .entry-content h1 { font-size:clamp(32px,8.5vw,39px); line-height:1.04; letter-spacing:-.04em; max-width:none; }
+.entry-v2.welcome-landing .entry-content > p { margin-top:8px; font-size:16px; line-height:1.5; min-height:0; }
+.welcome-landing .welcome-progress { margin-top:12px; }
+.entry-v2.welcome-landing .entry-primary-action { margin:0; padding:0; }
+.entry-v2.welcome-landing .entry-primary-action > .button { min-height:56px; font-size:15px; letter-spacing:.02em; display:flex; align-items:center; justify-content:center; gap:10px; }
+.entry-pro-badge { padding:3px 6px; border:1px solid currentColor; border-radius:5px; font-size:10px; line-height:1.1; letter-spacing:.06em; }
+.entry-v2.welcome-landing .entry-primary-note { margin:8px 0 0; font-size:12px; line-height:1.5; }
+.entry-v2.welcome-landing .welcome-actions > p { margin-top:0; }
+.entry-v2.welcome-landing .entry-account-actions { flex:0 0 auto; }
+.welcome-pro-host { display:contents; }
+.welcome-screen .entry-explore-pro { display:block; width:100%; color:var(--rook-accent-text); font-size:13px; }
+@media (max-width:359px) {
+  :root .entry-v2.welcome-landing { padding-inline:16px; gap:12px; }
+}
+@media (max-height:740px) {
+  :root .entry-v2.welcome-landing { gap:8px; }
+}
+@media (min-width:501px) { :root .entry-v2.welcome-landing { min-height:calc(100dvh - 40px); } }

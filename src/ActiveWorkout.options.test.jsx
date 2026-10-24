@@ -93,5 +93,5 @@ it('restart clears the removal Undo and tombstones',()=>{
 it('the row fallback respects last-item and protected-instance boundaries',()=>{
  const s=fixture(),workout=s.activeWorkout,last=workout.exercises.at(-1),render=()=>act(()=>root.render(<UpNextExerciseOptions workout={workout} request={{sessionId:workout.id,exerciseId:last.id}} close={()=>{}}/>));render();
  expect(button('Move down').disabled).toBe(true);expect(button('Move up').disabled).toBe(false);
- last.sets[0].touched=true;render();expect(button('Move up')).toBeUndefined();expect(button('Remove from this workout')).toBeUndefined();
+ last.sets[0].completed=true;render();expect(button('Move up')).toBeUndefined();expect(button('Remove from this workout')).toBeUndefined();
 });

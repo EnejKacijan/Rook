@@ -1,4 +1,9 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
+import { CustomWeeklyStructureEditor } from './CustomWeeklyStructureEditor.jsx';
+import { customWorkoutDraft, customWorkoutText, customWorkoutsComplete } from './customWeeklyWorkouts.js';
 import {IllustrationCredits} from './IllustrationCredits.jsx';
+import {ProfileHelp} from './ProfileHelp.jsx';
+import {ProfileInformation} from './ProfileInformation.jsx';
 import { physiqueReviewFailureCopy, physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {CompletedSessionOverview} from './CompletedSessionOverview.jsx';
 import {ExercisePrSheet} from './ExercisePrSheet.jsx';
@@ -13,6 +18,8 @@ import { handleExternalLinkClick } from './externalLink.js';
 import { PersonalThemesProvider, usePersonalThemes } from './PersonalThemesContext.jsx';
 import { ThemeNewBadge } from './ThemeNewBadge.jsx';
 import { useInitialThemeDiscovery } from './useThemeDiscovery.js';
+import {FirstRunWelcome,WelcomeProgress,WELCOME_TOTAL_PAGES,useWelcomeGestures} from './FirstRunWelcome.jsx';
+import {acknowledgeFirstRunWelcome,initialFirstRunEntry} from './firstRunWelcome.js';
 import { personalThemeFromProfile, personalThemeSummary } from './personalThemes.js';
 import { TemporaryPlanSheet } from './TemporaryPlanSheet.jsx';
 import { temporaryPlanScheduleUntouched, temporaryPlanStatus } from './temporaryPlan.js';
@@ -20,21 +27,28 @@ import {WorkoutPreparation} from './WorkoutPreparation.jsx';
 import {ReorderHandle} from './ReorderHandle.jsx';
 import {OverflowIcon} from './OverflowIcon.jsx';
 import {useTrainingReorder} from './useTrainingReorder.js';
+import {ScrollBoundary} from './ScrollBoundary.jsx';
 import {UpNextReorderPreview} from './UpNextReorderPreview.jsx';
 import {upNextReorderGroups,reorderUpNext,upNextMoveRequest,canMoveCurrentToUpNext,moveCurrentToUpNext} from './upNextReorder.js';
 import {useDurableAction} from './useDurableAction.js';
+import {useWorkoutWeightChanges} from './useWorkoutWeightChanges.js';
+import {useExerciseRecordFeedback} from './useExerciseRecordFeedback.js';
+import {ExerciseRecordBadge} from './ExerciseRecordBadge.jsx';
+import {exerciseRecordPresentation} from './exerciseRecords.js';
 import { OptionalActivityEditor } from './OptionalActivityEditor.jsx';
 import { OptionalActivityDetails } from './OptionalActivityDetails.jsx';
 import { ConditioningSheet, TodayOptionalActivities } from './ConditioningSheet.jsx';
 import { isConditioning, optionalActivitySummary, optionalActivityDurationLabel } from './optionalActivity.js';
 import {SavedWorkouts} from './SavedWorkouts.jsx';
+import {createCoachDayContext,coachDayStarter,coachDayLabel,resolveCoachDayContext,coachActionMatchesDay} from './coachDayContext.js';
+import {CoachWorkoutReuseSheet} from './CoachWorkoutReuseSheet.jsx';
 import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
-import { canRemoveUpNext, hasMeaningfulExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
+import { canRemoveUpNext, hasMeaningfulExerciseProgress, hasLoggedExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
-import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation} from './coachConversations.js';
+import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft} from './coachConversations.js';
 import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -93,6 +107,7 @@ import { coachAvailabilityCopy } from './coachAvailability.js';
 import { resolveAccountStartup } from './accountStartup.js';
 import { clearAllProfileSlotArchives, recoverInterruptedProfileSwitch } from './accountProfileSlots.js';
 import { AccountSyncLock, AccountSyncPanel } from './AccountSyncPanel.jsx';
+import {ProfileAccountEntry} from './ProfileAccountEntry.jsx';
 import { AccountAccessOptions } from './AccountAccessOptions.jsx';
 import { ACCOUNT_SYNC_LEDGER_KEY, recordAccountSyncDeleteIntent } from './accountSyncOutbox.js';
 import { getFirebaseSyncClient } from './firebaseSyncClient.js';
@@ -148,6 +163,10 @@ import { Disclosure } from './Disclosure.jsx';
 import { groupPlanVersions } from './planHistoryGroups.js';
 import { SessionFeedbackPrompt, SessionFeedbackDisplay } from './SessionFeedback.jsx';
 import { nextWorkoutAdvice } from './nextWorkoutAdvice.js';
+import {progressionPresentation} from './progressionPresentation.js';
+import {ProgressionExplanation} from './ProgressionExplanation.jsx';
+import {progressionApplyTargets,prepareProgressionApply} from './progressionApply.js';
+import {canUndoWorkoutWeightChange,undoWorkoutWeightChange} from './workoutWeightChanges.js';
 import {ProgressionTipsPreference} from './ProgressionTipsPreference.jsx';
 import {progressionTipsEnabled, setProgressionTipsEnabled} from './progressionTipsPreference.js';
 import { completedProgressWorkouts, selectProgressionRows, progressionSummary } from './progressionOverview.js';
@@ -201,7 +220,7 @@ import { useSelectionAcknowledgement, useScheduleContinueReveal } from "./useOnb
 import { useStepSwipeForward } from "./useStepSwipeForward.js";
 import {
   E1RM_FORMULA,
-  activeExercisePr,
+  activeExercisePrDetails,
   exercisePerformance,
   weeklyPerformanceReview,
 } from "./performanceInsights.js";
@@ -294,7 +313,7 @@ import {
   exerciseLoadRequirement,
   exerciseMeasure,
   exerciseMatchesQuery,
-  rankExerciseSearch,
+  searchExercises,
   displayEstimatedOneRepMax,
   exerciseName,
   exerciseNote,
@@ -1212,9 +1231,15 @@ export function splitRecommendationCopy(daysPerWeek) {
   const days = Math.max(2, Math.min(6, Number(daysPerWeek) || 3));
   return `Best fit for your goal, experience and ${days}-day schedule`;
 }
+function SplitPresetNote({ split }) {
+  return split === 'arnold'
+    ? <p className="split-preset-note">Pairs chest with back, and shoulders with arms.</p> : null;
+}
 function TrainingPreferencesStep({
   answers,
   setAnswers,
+  customWorkouts,
+  changeCustomWorkout,
   splitChoice,
   splitError,
   chooseSplit,
@@ -1235,14 +1260,6 @@ function TrainingPreferencesStep({
   supplementalLimitStatus,
 }) {
   const restrictionInputRef = useRef(null);
-  const splitInputRef = useRef(null);
-  useLayoutEffect(() => {
-    const input = splitInputRef.current;
-    if (!input || !specificSplitOpen) return;
-    // Same bounded auto-grow pattern as the adjacent restrictions field.
-    input.style.height = '0px';
-    input.style.height = `${Math.min(144, Math.max(66, input.scrollHeight + 2))}px`;
-  }, [answers.trainingPreferences, specificSplitOpen, splitChoice]);
   const [slowCheck, setSlowCheck] = useState(false);
   const [restrictionsOpen, setRestrictionsOpen] = useState(false);
   const restrictionText = String(answers.avoid || "").trim();
@@ -1325,26 +1342,11 @@ function TrainingPreferencesStep({
               />
             ))}
           </div>
-        {splitChoice === "other" && (<>
-          <textarea
-            ref={splitInputRef}
-            rows={2}
-            aria-label="Other preferred split"
-            aria-invalid={Boolean(splitError)}
-            aria-describedby={splitError ? "custom-split-error" : undefined}
-            className="text-answer split-other-answer"
-            maxLength={160}
-            value={answers.trainingPreferences}
-            onChange={(event) =>
-              setAnswers((current) => ({
-                ...current,
-                trainingPreferences: event.target.value,
-              }))
-            }
-            placeholder="List your workout focuses in order (e.g. Push / Pull / Legs)"
-          />
-          {splitError && <p id="custom-split-error" className="custom-split-error" role="alert">{splitError}</p>}
-        </>)}
+          <SplitPresetNote split={splitChoice} />
+        {splitChoice === "other" && (
+          <CustomWeeklyStructureEditor workouts={customWorkouts} frequency={answers.daysPerWeek}
+            onChange={changeCustomWorkout} error={splitError} />
+        )}
         </Disclosure>
       </section>
       <section className="onboarding-question-group restriction-preference">
@@ -1551,7 +1553,7 @@ function FirstRunSheetHeader(props) {
 }
 function MyWorkoutsLink({ onClick }) {
   return <ExerciseNavigationButton className="text-button today-my-workouts" onClick={onClick}>
-    <span>Saved workouts</span><NavigationChevron className="inline-navigation-chevron" />
+    <span>Choose a workout</span><NavigationChevron className="inline-navigation-chevron" />
   </ExerciseNavigationButton>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
@@ -2352,6 +2354,7 @@ const EQUIPMENT_LABELS = {
   machines: "Machines",
   "pull-up bar": "Pull-up bar",
   "resistance bands": "Resistance bands",
+  "secure band anchor": "Secure band anchor",
   "bodyweight only": "Bodyweight only",
 };
 export function setupSelectionValid(answers = {}) {
@@ -2715,29 +2718,35 @@ function EntryActionRow({ title, description, onClick }) {
     <NavigationChevron className="entry-action-chevron" />
   </ExerciseNavigationButton>;
 }
-export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPlan, restoreBackup, signIn, signedIn, returnToSavedProfile }) {
-  const personalThemes = usePersonalThemes();
+export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPlan, restoreBackup, signIn, signedIn, returnToSavedProfile, backToIntro, inWelcomePager=false }) {
   const [recoveryBusy, setRecoveryBusy] = useState(false);
   const [recoveryError, setRecoveryError] = useState('');
-  return <main className="onboarding entry-screen entry-v2">
-    <header className="entry-top">
+  const introGestures=useWelcomeGestures(delta=>{if(delta<0)backToIntro?.();},{buttonSwipes:true});
+  return <main className={`onboarding entry-screen entry-v2 welcome-screen welcome-landing${backToIntro&&!inWelcomePager?' entry-intro-final':''}`} aria-labelledby="entry-title" {...(backToIntro&&!inWelcomePager?introGestures:{})}>
+    <header className="entry-top welcome-header">
       <div className="brand">ROOK</div>
-      <button type="button" className="restore-backup-action" onClick={signIn || restoreBackup}>{signIn ? signedIn ? 'Account' : 'Sign in / Create account' : 'Restore'}</button>
     </header>
-    <section className="entry-content" aria-labelledby="entry-title">
-      <h1 id="entry-title">A plan that fits your week.</h1>
-      <p>Tell ROOK your goal, schedule and equipment. It builds the plan around them.</p>
-      <div className="entry-primary-action">
-        <Button onClick={personalize}>BUILD MY PLAN</Button>
-        <p className="entry-primary-note">A few questions · No account needed</p>
+    <section className="welcome-carousel welcome-landing-carousel" role="region" aria-roledescription={backToIntro&&!inWelcomePager?'carousel':undefined} aria-label={backToIntro&&!inWelcomePager?'ROOK introduction':'Ways to start'} tabIndex={0}>
+      <div className="welcome-story entry-content">
+        <h1 id="entry-title">Choose your <br/>starting point.</h1>
+        <p>Your workouts, your plan, your progress.</p>
       </div>
     </section>
-    <nav className="entry-secondary-routes" aria-labelledby="entry-other-title">
-      <h2 className="entry-micro-label" id="entry-other-title">OTHER WAYS TO START</h2>
-      <EntryActionRow title="Bring my plan" description="Import it, or enter it yourself." onClick={bringPlan}/>
-      <EntryActionRow title="Create workout" description="Build a workout to repeat anytime." onClick={ownWorkouts}/>
-      <EntryActionRow title="Freestyle" description="Start now and add exercises as you go." onClick={trainFreestyle}/>
+    <div className="entry-primary-action">
+      <Button aria-label="Build my plan" onClick={personalize}><span>Build my plan</span></Button>
+      <p className="entry-primary-note">A few questions to make it yours.</p>
+    </div>
+    <nav className="entry-secondary-routes welcome-start-card" aria-labelledby="entry-other-title">
+      <h2 className="entry-micro-label" id="entry-other-title">Other ways to start</h2>
+      <EntryActionRow title="Bring my plan" description="Import or enter your own plan." onClick={bringPlan}/>
+      <EntryActionRow title="Create workout" description="Build a workout to repeat." onClick={ownWorkouts}/>
+      <EntryActionRow title="Freestyle" description="Start now. Add exercises as you go." onClick={trainFreestyle}/>
     </nav>
+    <footer className="welcome-actions">
+      <p>No account needed to start.</p>
+      {backToIntro&&<WelcomeProgress page={WELCOME_TOTAL_PAGES-1} onPrevious={backToIntro} previousLabel="Back to intro"/>}
+      <div>{signIn&&<button type="button" className="welcome-quiet" onClick={signIn}>{signedIn?'Account':'Sign in'}</button>}<button type="button" className="welcome-quiet restore-backup-action" onClick={restoreBackup}>Restore backup</button></div>
+    </footer>
     {returnToSavedProfile && <div className="entry-account-actions">
         {returnToSavedProfile && <button className="restore-backup-action" disabled={recoveryBusy} onClick={async () => {
           if (recoveryBusy) return;
@@ -2833,7 +2842,7 @@ export function BringPlanLanding({ back, importPlan, startFromScratch }) {
     </nav>
   </main>;
 }
-export function Onboarding({ state = null, update, exit, onPlanAccepted, initialUnits = state?.profile?.units || 'kg' }) {
+export function Onboarding({ state = null, update, exit, onPlanAccepted, onRequestPlanUse, initialUnits = state?.profile?.units || 'kg' }) {
   const personalThemes = usePersonalThemes();
   const [step, setStep] = useState(0);
   const currentStateRef = useRef(state);
@@ -2874,6 +2883,9 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
   const [generatedPreview, setGeneratedPreview] = useState(null);
   const [equipmentSetupExpanded, setEquipmentSetupExpanded] = useState(false);
   const [answers, setAnswers] = useState(() => createPlanBuilderDraft({...state?.profile, units: initialUnits}));
+  const [customWorkouts, setCustomWorkouts] = useState(() => customWorkoutDraft(
+    answers.trainingSplitChoice === 'other' ? answers.trainingPreferences : '', answers.daysPerWeek,
+  ));
   const reviewedSteps = useRef(new Set());
   const [anyDayWorks, setAnyDayWorks] = useState(() => state?.profile?.availableDays?.length === 7);
   const manualAvailableDaysRef = useRef([]);
@@ -3063,8 +3075,10 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
     });
   }, [step]);
   useEffect(() => {
+    // Legacy first_plan_viewed is saved-data evidence on startup. An editable,
+    // uncommitted preview must not create a false missing-data recovery state.
     if (generatedPreview)
-      trackFunnelEventOnce("first_plan_viewed", {
+      trackFunnelEventOnce("plan_preview_viewed", {
         path: "personalized",
         planType: generatedPreview.program.templateId || "personalized",
       });
@@ -3147,7 +3161,10 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
     setAnswers((current) => ({ ...current, availableDays: [...WEEKDAYS] }));
   };
   const chooseFrequency = (option) => {
-    // A changed day count can make a custom week invalid, not disposable.
+    // Retain every focus in the draft, including rows outside this frequency.
+    // A changed frequency gets a fresh calendar assignment in the plan preview.
+    const nextWorkouts = option === answers.daysPerWeek ? customWorkouts : customWorkouts.map(row => ({ ...row, weekday: null }));
+    setCustomWorkouts(nextWorkouts);
     if (splitChoice !== "other") {
       setSplitChoice(null);
       setSpecificSplitOpen(false);
@@ -3156,7 +3173,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
       ...current,
       daysPerWeek: option,
       trainingSplitChoice: splitChoice === "other" ? "other" : null,
-      trainingPreferences: splitChoice === "other" ? current.trainingPreferences : "",
+      trainingPreferences: splitChoice === "other" ? customWorkoutText(nextWorkouts, option) : "",
     }));
   };
   const chooseSplit = (option) => {
@@ -3166,8 +3183,15 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
     setAnswers((current) => ({
       ...current,
       trainingSplitChoice: option.id,
-      trainingPreferences: option.id === "other" && current.trainingSplitChoice === "other" ? current.trainingPreferences : option.value ?? "",
+      trainingPreferences: option.id === "other"
+        ? (current.trainingSplitChoice === "other" ? current.trainingPreferences : customWorkoutText(customWorkouts, current.daysPerWeek))
+        : option.value ?? "",
     }));
+  };
+  const changeCustomWorkout = (index, focus) => {
+    const next = customWorkouts.map((row, rowIndex) => rowIndex === index ? { ...row, focus } : row);
+    setCustomWorkouts(next);
+    setAnswers(current => ({ ...current, trainingPreferences: customWorkoutText(next, current.daysPerWeek) }));
   };
   const chooseEnvironment = (option) => {
     document.activeElement?.blur();
@@ -3234,10 +3258,12 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
     stage.key === "preferences" &&
     analyzedSafety &&
     trainingSafetyBlocks(analyzedSafety.status);
-  const splitValidation = useMemo(() =>
-    stage.key === "preferences" ? customSplitValidation(onboardingGenerationProfile(answersWithSafety), analyzedSafety) : { valid: true },
-    [stage.key, answersWithSafety, analyzedSafety],
-  );
+  const customWeekComplete = customWorkoutsComplete(customWorkouts, answers.daysPerWeek);
+  const splitValidation = useMemo(() => {
+    if (stage.key !== 'preferences') return { valid: true };
+    if (splitChoice === 'other' && !customWeekComplete) return { valid: false };
+    return customSplitValidation(onboardingGenerationProfile(answersWithSafety), analyzedSafety);
+  }, [stage.key, splitChoice, customWeekComplete, answersWithSafety, analyzedSafety]);
   const splitInvalid = !splitValidation.valid;
   const splitError = splitInvalid && answers.trainingPreferences.trim() ? splitValidation.message : null;
   const valid =
@@ -3403,20 +3429,19 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
   const acceptGenerated = async program => {
     if (generationRef.current) return;
     generationRef.current = true;
-    setBusy(true);
-    setGenerationStage("saving");
-    await afterVisibleFrame();
-    trackFunnelEvent("onboarding_completed", {
-      path: "personalized",
-      source: generatedPreview.source,
-      totalSteps: stages.length,
-      daysPerWeek: program.days.length,
-    });
     try {
+      // The host supplies the existing access gate. Generation and editing
+      // never request access, and a declined request leaves this draft mounted.
+      if (onRequestPlanUse && await onRequestPlanUse({program}) !== true) return;
+      setBusy(true);
+      setGenerationStage("saving");
+      await afterVisibleFrame();
       const current = currentStateRef.current || blankState();
       if (state && (current.profile.id !== generatedPreview.profileId || (current.program?.id || null) !== generatedPreview.programId || (current.program?.version || null) !== generatedPreview.programVersion)) throw new Error('Your training context changed. Reopen the plan builder to review it.');
       const next = activatePlanBuilder(current, {...program, rotationStartDate: firstScheduledDate(program)}, generatedPreview.profile, generatedPreview.source, saveState);
       update(() => next, { planVersion: false, persistedState: next });
+      trackFunnelEventOnce("first_plan_viewed", {path:"personalized",planType:program.templateId || "personalized"});
+      trackFunnelEvent("onboarding_completed", {path:"personalized",source:generatedPreview.source,totalSteps:stages.length,daysPerWeek:program.days.length});
       onPlanAccepted?.();
     } catch (error) { setNotice(error.message); }
     finally { setBusy(false); generationRef.current = false; }
@@ -4071,19 +4096,10 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
                   />
                 ))}
               </div>
+              <SplitPresetNote split={splitChoice} />
               {splitChoice === "other" && (
-                <textarea
-                  aria-label="Other preferred split"
-                  className="text-answer split-other-answer"
-                  value={answers.trainingPreferences}
-                  onChange={(event) =>
-                    setAnswers((current) => ({
-                      ...current,
-                      trainingPreferences: event.target.value,
-                    }))
-                  }
-                  placeholder="Write your preferred split or training style"
-                />
+                <CustomWeeklyStructureEditor workouts={customWorkouts} frequency={answers.daysPerWeek}
+                  onChange={changeCustomWorkout} error={splitError} />
               )}
             </section>
             <section className="onboarding-question-group">
@@ -4218,6 +4234,8 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, initial
           <TrainingPreferencesStep
             answers={answers}
             setAnswers={setAnswers}
+            customWorkouts={customWorkouts}
+            changeCustomWorkout={changeCustomWorkout}
             splitChoice={splitChoice}
             splitError={splitError}
             chooseSplit={chooseSplit}
@@ -4754,7 +4772,7 @@ export function ActiveOptionalSession({ state, update, setPage }) {
     </main>
   );
 }
-export function NoPlanToday({state,update,setPage,setDetail}) {
+export function NoPlanToday({state,update,setPage,setDetail,campaignSlot=null}) {
   const [calendarOpen,setCalendarOpen]=useState(false);
   const calendarBackground=useRef(null);
   const [now,setNow]=useState(Date.now());
@@ -4788,6 +4806,7 @@ export function NoPlanToday({state,update,setPage,setDetail}) {
         : <button type="button" className="list-row no-plan-plan-action" onClick={()=>setDetail('change-plan')}><span className="no-plan-plan-copy"><span>Want a structured plan?</span>{' '}<strong>Create or import one</strong></span><NavigationChevron/></button>}
     </>}
     <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly/>
+    {today&&!active&&!optional&&campaignSlot}
     <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} />
     {!today&&!state.workouts.some(workout=>workout.completedAt&&workoutPerformedDate(workout)===selectedIso)&&<p className="no-plan-no-history">No workouts logged on this date.</p>}
   </main>;
@@ -4800,6 +4819,7 @@ export function Today({
   planReady,
   dismissPlanReady,
   onCombineWorkouts,
+  campaignSlot = null,
 }) {
   const active = state.activeWorkout;
   const activeOptional = state.activeOptionalSession;
@@ -5070,7 +5090,7 @@ export function Today({
           <Eyebrow>PLANNED WORKOUT</Eyebrow>
           <div className="list-row"><span><strong>{plannedOccurrence.workout.name}</strong>
             <small>{plannedOccurrence.moved ? `Moved from ${displayDate(localDate(plannedOccurrence.originalDate))}` : 'Scheduled'} · Not started</small>
-            <small>{pluralize(plannedOccurrence.workout.exercises.length, 'exercise')} · ~{roundedEstimate(plannedOccurrence.workout.estimatedMinutes)} min</small>
+            <small>{pluralize(plannedOccurrence.workout.exercises.length, 'exercise')} · About {roundedEstimate(plannedOccurrence.workout.estimatedMinutes)} min</small>
           </span></div>
         </section>}
         {active.source === 'freestyle' && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
@@ -5159,8 +5179,7 @@ export function Today({
                   <strong>{upcomingTitle.primary}</strong>
                   {upcomingTitle.detail && <small className="rest-up-next-descriptor">{upcomingTitle.detail}</small>}
                   <span className="rest-up-next-summary">
-                    {pluralize(upcoming.workout.exercises.length, "exercise")} · ~
-                    {roundedEstimate(upcoming.workout.estimatedMinutes)} min
+                    {pluralize(upcoming.workout.exercises.length, "exercise")} · About {roundedEstimate(upcoming.workout.estimatedMinutes)} min
                   </span>
                 </span>
                 <NavigationChevron className="rest-up-next-chevron"/>
@@ -5177,6 +5196,7 @@ export function Today({
               <span>Train anyway</span><NavigationChevron className="inline-navigation-chevron" />
             </ExerciseNavigationButton>
           </div>
+          {isToday && !trackedActive && campaignSlot}
           {completedOptional.length > 0 && <section className="rest-day-activity-history" aria-label="Today's completed activities">
             <Eyebrow>TODAY</Eyebrow>
             <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
@@ -5610,7 +5630,7 @@ export function Today({
   };
   const duration = completed
     ? completed.durationSeconds ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min elapsed` : 'Duration not recorded'
-    : `~${roundedEstimate(estimatePersonalWorkoutMinutes(state, template))} min`;
+    : `About ${roundedEstimate(estimatePersonalWorkoutMinutes(state, template))} min`;
   return (
     <main className={`screen today-screen${trackedActive ? " viewing-other-workout" : ""}`}>
       {calendar()}
@@ -5752,6 +5772,7 @@ export function Today({
         <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly representedWorkoutId={completed?.id} />
       </section>
       {combineHint}
+      {viewingToday && !trackedActive && !todayEditMode && campaignSlot}
       {!fullyCompleted && <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
         <div className="today-exercise-edit-header">
           <div className="today-exercise-list-heading">
@@ -5890,6 +5911,7 @@ export function Stepper({
   integer = false,
   alignToStep = false,
   allowIncrementFromEmpty = false,
+  commitUnchanged = false,
   deferred = false,
   required = false,
   workoutField,
@@ -5901,6 +5923,7 @@ export function Stepper({
   const committedDraft = useRef(null);
   const draftRef = useRef(null);
   const currentValue = useRef(value);
+  const rawEdited = useRef(false);
   currentValue.current = value;
   const shownValue = draft ?? value ?? "";
   const empty = shownValue === "";
@@ -5919,7 +5942,15 @@ export function Stepper({
       : Math.max(min, Number((parsed + direction * step).toFixed(2)))) : parsed;
     if (direction && draftRef.current !== null) { draftRef.current = String(next); setDraft(String(next)); }
     committedDraft.current = String(direction ? next : raw);
-    if (next !== normalizeStepperValue(currentValue.current ?? "", {min, integer})) { currentValue.current = next; onChange(next); }
+    if (next !== normalizeStepperValue(currentValue.current ?? "", {min, integer}) || commitUnchanged && rawEdited.current) {
+      const previous=currentValue.current;currentValue.current=next;
+      if(onChange(next)===false){
+        currentValue.current=previous;committedDraft.current=null;
+        if(direction&&draftRef.current!==null){draftRef.current=String(raw??'');setDraft(draftRef.current);}
+        return false;
+      }
+    }
+    rawEdited.current=false;
     return true;
   };
   // Leaving an edit is navigation, not an attempt to log a set. Abandon an
@@ -5927,23 +5958,26 @@ export function Stepper({
   const settleDraft = () => {
     if (draftRef.current !== null) {
       const parsed = normalizeStepperValue(draftRef.current, { min, integer });
-      if (parsed !== undefined && !(required && parsed === null)) commit(draftRef.current);
+      if (parsed !== undefined && !(required && parsed === null) && !commit(draftRef.current)) return false;
     }
     draftRef.current = null;
     committedDraft.current = null;
+    rawEdited.current = false;
     setDraft(null);
+    return true;
   };
   useEffect(() => {
     if (!deferred) return;
     const input = inputRef.current;
     const listener = event => {
-      if (event.detail?.validation === 'navigation') settleDraft();
+      if (event.detail?.validation === 'navigation') { if (!settleDraft()) event.preventDefault(); }
       else if (draftRef.current !== null && !commit(draftRef.current)) event.preventDefault();
     };
-    const snapshot = event => { event.detail.snapshot={draft:draftRef.current,committed:committedDraft.current,value:currentValue.current}; };
+    const snapshot = event => { event.detail.snapshot={draft:draftRef.current,committed:committedDraft.current,value:currentValue.current,edited:rawEdited.current}; };
     const restore = event => {
       const saved=event.detail?.snapshot;
       draftRef.current=saved?.draft??null;committedDraft.current=saved?.committed??null;
+      rawEdited.current=Boolean(saved?.edited);
       setDraft(draftRef.current);
     };
     input.addEventListener('rook-commit-draft', listener);
@@ -5987,10 +6021,12 @@ export function Stepper({
         value={shownValue}
         disabled={disabled}
         onFocus={() => { if (draftRef.current === null) { committedDraft.current = null; draftRef.current = String(value ?? ''); setDraft(draftRef.current); } }}
+        onInput={() => { if(commitUnchanged)rawEdited.current=true; }}
         onChange={(event) => {
           const nextDraft = event.target.value;
           if (!validStepperDraft(nextDraft, { integer })) return;
           committedDraft.current = null;
+          rawEdited.current = true;
           draftRef.current = nextDraft;
           setDraft(nextDraft);
           if (!deferred) commit(nextDraft);
@@ -6084,6 +6120,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const [recentlyCompletedSetId, setRecentlyCompletedSetId] = useState(null);
   const [restCompleteVisible, setRestCompleteVisible] = useState(false);
   const screenRef = useRef(null);
+  const weightChanges=useWorkoutWeightChanges(state,update,screenRef);
+  const recordFeedback=useExerciseRecordFeedback(state,exerciseSupportsEstimatedOneRepMax);
   useEffect(() => {
     if (!setToReveal || confirmation) return;
     // The shared sheet has now released body lock/inert ownership. Wait for its
@@ -6110,6 +6148,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   }, [setToReveal, confirmation, active?.id, active?.exerciseIndex]);
   const [rirSet, setRirSet] = useState(null);
   const preserveWorkoutDraftsRef = useRef(false);
+  const previousValuesController = useRef(null);
   const draftResolverRef = useRef(null);
   const [inputValidation, setInputValidation] = useState(null);
 
@@ -6131,7 +6170,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       }))) invalid ||= input;
     }});
     if (invalid) {
-      setInputValidation({setId:completingRow.dataset.setId,message:'Enter a value before logging this set.'});
+      if (completingRow) setInputValidation({setId:completingRow.dataset.setId,message:'Enter a value before logging this set.'});
       invalid.focus({preventScroll:true});
       return false;
     }
@@ -6358,8 +6397,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       </main>
     );
   const exercise = currentExercise;
-  if (active.source === 'freestyle' && !exercise) return <main ref={screenRef} data-active-workout="true" className="screen workout-screen freestyle-workout">
-    <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center"><strong>Freestyle workout</strong><small>{formatWorkoutElapsedDuration(Math.floor((now - active.startedAt) / 1000))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button><button type="button" className="workout-options-trigger" aria-label="Workout options" onClick={()=>openWorkoutOptions()}><OverflowIcon/></button></span></header>
+  if (active.source === 'freestyle' && !exercise) return <main ref={screenRef} data-active-workout="true" data-plan-extra={active.planWorkoutOrigin?'true':undefined} className="screen workout-screen freestyle-workout">
+    <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center">{active.planWorkoutOrigin&&<small className="workout-extra-label">Extra workout</small>}<strong>{active.name||'Freestyle workout'}</strong><small>{formatWorkoutElapsedDuration(Math.floor((now - active.startedAt) / 1000))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button><button type="button" className="workout-options-trigger" aria-label="Workout options" onClick={()=>openWorkoutOptions()}><OverflowIcon/></button></span></header>
     <section className="freestyle-empty"><h1>No exercises yet</h1><p>Add the first exercise when you’re ready. Your plan won’t change.</p><FreestyleActions setDetail={setDetail} /></section>
   </main>;
   const exerciseIllustration = activeArtwork.source;
@@ -6370,9 +6409,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const prior = previousExercise(state.workouts, exercise.exerciseId);
   const elapsed = Math.floor((now - active.startedAt) / 1000);
   const item = exerciseCatalog[exercise.exerciseId];
-  const performancePr = activeExercisePr(state.workouts, exercise, {
+  const performancePr = exerciseRecordPresentation(activeExercisePrDetails(state.workouts, exercise, {
     e1rmEligible: exerciseSupportsEstimatedOneRepMax(exercise),
-  });
+  }),state.profile.units);
   const increment =
     state.profile.increments[item?.equipment?.[0]] ?? exercise.defaultIncrement;
   const sessionExercise = active.source === 'freestyle' || isSessionAddedExercise(exercise);
@@ -6382,12 +6421,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     state.profile,
   );
   const remainingSets = exercise.sets.filter((set) => !set.completed);
+  const progressionCopy=progressionPresentation(recommendation,exercise,state.profile.units);
+  const progressionTargets=progressionApplyTargets(exercise,recommendation);
   const recommendationApplied = Boolean(
     recommendation?.weight &&
-    remainingSets.length &&
-    remainingSets.every(
-      (set) => Number(set.weight) === Number(recommendation.weight),
-    ),
+    !progressionTargets.length && remainingSets.some(set=>set.weightProvenance==='progression'&&Number(set.weight)===Number(recommendation.weight)),
   );
   const unit = weightUnit(state.profile.units);
   const summary = workoutSetSummary(active);
@@ -6451,44 +6489,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       if (field === 'rir') set.rirEntryMode = 'manual';
       set.touched = true;
     });
-  const updateWeight = (index, value) =>
-    mutate((workout) => {
-      const sets = workout.exercises[workout.exerciseIndex].sets;
-      const target = sets[index];
-      if (!target) return;
-      const empty = (weight) =>
-        weight === null || weight === undefined || weight === "";
-      const same = (a, b) =>
-        (empty(a) && empty(b)) ||
-        (!empty(a) && !empty(b) && Number(a) === Number(b));
-      const normalizedValue =
-        loadRequirement === "optional" && Number(value) === 0 ? null : value;
-      let previousOldWeight = target.weight;
-      target.weight = normalizedValue;
-      target.touched = true;
-      target.weightEntryMode = "manual";
-      target.weightProvenance = Number(normalizedValue) > 0 ? "explicit" : null;
-      delete target.weightSourceSetId;
-      for (let setIndex = index + 1; setIndex < sets.length; setIndex++) {
-        const set = sets[setIndex];
-        const previous = sets[setIndex - 1];
-        const oldWeight = set.weight;
-        const linked =
-          set.weightEntryMode === "auto" &&
-          set.weightSourceSetId === previous.id;
-        const legacyLinked =
-          !set.weightEntryMode &&
-          !set.weightSourceSetId &&
-          same(oldWeight, previousOldWeight);
-        if (!set.completed && (loggingModeOf(workout.exercises[workout.exerciseIndex]) !== 'per_side' || set.weightEntryMode !== 'manual') && (empty(oldWeight) || linked || legacyLinked)) {
-          set.weight = previous.weight;
-          set.weightEntryMode = "auto";
-          set.weightSourceSetId = previous.id;
-          set.weightProvenance = previous.weightProvenance || null;
-        }
-        previousOldWeight = oldWeight;
-      }
-    });
+  const updateWeight = (index, value) => weightChanges.change(exercise.id,exercise.sets[index]?.id,value);
   const updateReps = (index, value) =>
     mutate((workout) => {
       const sets = workout.exercises[workout.exerciseIndex].sets;
@@ -6544,7 +6545,26 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       return;
     }
     setInputValidation(null);
-    mutate((workout) => {
+    // A record acknowledgement may follow only an accepted, durable set log.
+    // Keep the existing sequencing, superset and rest logic in this operation.
+    const commitLog = operation => {
+      const before=queueAction.latest.current,exerciseId=current?.id,setId=set?.id;
+      try {
+        const result=queueAction.commit(latest=>{
+          const workout=latest.activeWorkout;
+          if(workout?.id!==active.id||workout.exercises[workout.exerciseIndex]?.id!==exerciseId)return latest;
+          const original=workout.exercises[workout.exerciseIndex].sets.find(item=>item.id===setId);
+          if(!original)return latest;
+          const next=clone(latest);operation(next.activeWorkout);
+          const changed=next.activeWorkout.exercises.find(item=>item.id===exerciseId)?.sets.find(item=>item.id===setId);
+          if(!changed||Boolean(changed.completed)===Boolean(original.completed))return latest;
+          next.activeWorkout.updatedAt=Date.now();return next;
+        });
+        setCombinedSaveError('');
+        if(result.changed)recordFeedback.logged(before,result.state,exerciseId,setId);
+      } catch(error) {setCombinedSaveError(error.message);}
+    };
+    commitLog((workout) => {
       const current = workout.exercises[workout.exerciseIndex];
       const currentExerciseIndex = workout.exerciseIndex;
       const group = supersetMeta(workout.exercises, currentExerciseIndex);
@@ -6967,15 +6987,22 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     `warmup-check-row${completed ? " completed" : key === currentWarmupStepId ? " current" : ""}`;
   const warmupSummary = warmupStatus.outcome === 'complete' ? 'Warm-up complete'
     : warmupStatus.outcome === 'skipped' ? 'Warm-up skipped'
-    : warmupStatus.done ? `Warm-up · ${warmupStatus.done}/${warmupStatus.total} done`
-    : `Warm-up${warmup?.estimatedMinutes != null ? ` · ~${warmup.estimatedMinutes} min` : ''}`;
-  const warmupSubtitle = warmupOpen ? `${warmupStatus.done} of ${warmupStatus.total} complete`
+    : warmupStatus.done && !warmupOpen ? `Warm-up · ${warmupStatus.done}/${warmupStatus.total} done`
+    : `Warm-up${warmup?.estimatedMinutes != null ? ` · About ${warmup.estimatedMinutes} min` : ''}`;
+  const warmupSubtitle = warmupOpen ? null
     : warmupStatus.outcome === 'partial' ? 'Remaining steps skipped'
     : warmupStatus.outcome === 'pending' && warmupExerciseName ? `For ${warmupExerciseName}` : null;
+  // Only routine generated guidance is optional. Imported/custom execution
+  // instructions and the existing safety message remain in the checklist.
+  const optionalWarmupGuidance = item => !item.custom &&
+    (!item.provenance || item.provenance === 'generated-materialized') &&
+    active.warmup?.generatorVersion === 3 && !active.warmup.source && (!active.warmupPlan || active.warmupPlan.mode === 'auto');
+  const warmupTips = (warmup?.general || []).filter(item => item.guidance && optionalWarmupGuidance(item));
   return (
     <main
       ref={screenRef}
       data-active-workout="true"
+      data-plan-extra={active.planWorkoutOrigin?'true':undefined}
       aria-busy={finishing || undefined}
       onClickCapture={commitBeforeAction}
       onPointerDownCapture={event=>{draftResolverRef.current=event.target.closest('button[data-workout-replaces],button[data-workout-complete]');}}
@@ -6985,6 +7012,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       // A cancellation decision must not commit or erase a raw numeric draft.
       // Retain the mounted inputs; the next ordinary logger action still commits them.
       onBlurCapture={event=>{
+        if (!event.target.matches?.('[data-workout-draft]')) return;
         const action=event.relatedTarget?.closest?.('button[data-workout-replaces],button[data-workout-complete]')||draftResolverRef.current;
         draftResolverRef.current=null;
         // Preserve the resolver's raw snapshot through native blur. The click
@@ -7014,6 +7042,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           ‹
         </button>
         <div className="workout-header-center">
+          {active.planWorkoutOrigin&&<small className="workout-extra-label">Extra workout</small>}
           <strong title={active.name}>{active.name}</strong>
           <small aria-live="polite">
             {summary.completed} / {pluralize(totalSets, active.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')} ·{" "}
@@ -7056,6 +7085,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               <button
                 type="button"
                 className="workout-warmup-toggle"
+                aria-label={warmupOpen ? `${warmupSummary}, ${warmupStatus.done} of ${warmupStatus.total} warm-up steps complete` : undefined}
                 aria-expanded={warmupOpen}
                 aria-controls={`warmup-${warmup.id}`}
                 onClick={() => setWarmupOpen(value => !value)}
@@ -7064,6 +7094,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   <strong>{warmupStatus.outcome === 'complete' && <i className="warmup-summary-check" aria-hidden="true">✓</i>}{warmupSummary}</strong>
                   {warmupSubtitle && <small>{warmupSubtitle}</small>}
                 </span>
+                {warmupOpen && <small className="warmup-inline-progress" aria-hidden="true">{warmupStatus.done}/{warmupStatus.total}</small>}
                 <i className="disclosure-chevron" aria-hidden="true" />
               </button>
               {!warmupOpen && warmupStatus.outcome === 'pending' && !warmupStatus.all && <button
@@ -7074,9 +7105,10 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <Disclosure open={warmupOpen} id={`warmup-${warmup.id}`}>
               <div className="warmup-details">
                 {active.warmup?.safetyMessage && <p className="warmup-safety" role="status">{active.warmup.safetyMessage}</p>}
+                {warmup.instructions?.map((text,index)=><p className="warmup-general-guidance" key={`instruction-${index}`}>{text}</p>)}
                   {warmup.general.length > 0 && (
                     <div className="warmup-checklist-section">
-                      <small className="warmup-section-label">GENERAL</small>
+                      {(warmup.general.length > 1 || warmup.movementPreparation.length > 0) && <small className="warmup-section-label">General</small>}
                       {warmup.general.map((item) => (
                         <button
                           type="button"
@@ -7093,7 +7125,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                           <i aria-hidden="true">✓</i>
                         </button>
                       ))}
-                      {warmup.general.filter(item => item.guidance).map(item => (
+                      {warmup.general.filter(item => item.guidance && !optionalWarmupGuidance(item)).map(item => (
                         <p className="warmup-general-guidance" key={`guidance-${item.id}`}>
                           {item.guidance}
                         </p>
@@ -7102,7 +7134,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   )}
                   {warmup.movementPreparation.length > 0 && (
                     <div className="warmup-checklist-section">
-                      <small className="warmup-section-label">PREPARATION</small>
+                      <small className="warmup-section-label">Preparation</small>
                       {warmup.movementPreparation.map((item) => (
                         <button
                           type="button"
@@ -7124,7 +7156,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   {warmup.rampUpSets.map((entry) => (
                     <div className="warmup-ramp" key={entry.exerciseInstanceId || entry.exerciseId}>
                       <small className="warmup-section-label">
-                        {entry.exerciseName} · RAMP-UP
+                        {warmup.rampUpSets.length === 1 && entry.exerciseId === exercise.exerciseId &&
+                          (entry.exerciseInstanceId ? entry.exerciseInstanceId === exercise.id : entry.exerciseIndex === active.exerciseIndex) &&
+                          entry.exerciseName === exerciseName(exercise) ? 'Warm-up sets' : `${entry.exerciseName} · Warm-up sets`}
                       </small>
                       {entry.sets.map((set) => (
                         <button
@@ -7143,14 +7177,15 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                       ))}
                     </div>
                   ))}
-                  {warmup.rampUpSets.length > 0 && (
-                    <small className="warmup-count-note">
-                      Ramp-up sets don’t count toward working sets.
-                    </small>
-                  )}
+                  {(warmupTips.length > 0 || warmup.rampUpSets.length > 0) && <AnimatedDetails className="warmup-tips" key={warmup.id}>
+                    <summary>Warm-up tips</summary>
+                    <p>Tap each step when done.</p>
+                    {warmupTips.map(item => <p className="warmup-general-guidance" key={item.id}>{item.guidance}</p>)}
+                    {warmup.rampUpSets.length > 0 && <p className="warmup-count-note">Warm-up sets don’t count toward working sets.</p>}
+                  </AnimatedDetails>}
                   <button
                     type="button"
-                    className={`button warmup-exit ${warmupStatus.all ? "primary warmup-finish" : "secondary"}`}
+                    className={`warmup-exit ${warmupStatus.all ? "button primary warmup-finish" : "text-button"}`}
                     onClick={exitWarmup}
                   >
                     {warmupStatus.action}
@@ -7188,7 +7223,18 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               aria-label="Exercise options"
               aria-description={exercisePersonalNote(exercise) ? "Note added. Edit note in this menu." : "Includes Add note."}
               title="Exercise options"
-              onClick={() => setDetail({ options: exercise, onMoveCurrent: moveCurrentExercise, onRemoveCurrent: removeActiveExercise })}
+              data-workout-options
+              onPointerDown={event => event.preventDefault()}
+              onClick={event => {
+                preserveWorkoutDraftsRef.current = true;
+                focusNavigationTarget(event.currentTarget);
+                const controller = previousValuesController.current;
+                setDetail({ options: exercise, onMoveCurrent: moveCurrentExercise, onRemoveCurrent: removeActiveExercise,
+                  draftGuard: preserveWorkoutDraftsRef,
+                  onShowPreviousValues: controller?.available() ? () => {
+                    if (previousValuesController.current?.identity === controller.identity) previousValuesController.current.open();
+                  } : null });
+              }}
             >
               <OverflowIcon/>
             </button>
@@ -7224,7 +7270,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
               {exerciseName(exercise)}
             </h1>
             <p className="exercise-meta">
-              {exercise.prescriptionSource==='saved-template'?<>Saved workout · {targetLabel(exercise,state.profile.rirEnabled)}</>:sessionExercise ? `${active.source==='freestyle'?'Freestyle · ':''}Choose your sets and reps` : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
+              {exercise.prescriptionSource==='saved-template'?<>{active.planWorkoutOrigin?.requestId===exercise.queueAdditionId?'Plan targets':'Saved workout'} · {targetLabel(exercise,state.profile.rirEnabled)}</>:sessionExercise ? `${active.source==='freestyle'?'Freestyle · ':''}Choose your sets and reps` : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
             </p>
             {(!sessionExercise || !prior) && <small className="exercise-history-meta">
               {prior
@@ -7235,17 +7281,12 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 : "First session"}
             </small>}
             {performancePr && (
-              <span role="status" aria-live="polite">
-                <ExerciseNavigationButton
+                <ExerciseRecordBadge
                   id={`active-exercise-pr-${exercise.id}`}
-                  className="active-performance-pr-trigger"
-                  aria-label={`View ${performancePr.e1rmPr ? "estimated 1RM" : performancePr.weightPr ? "weight" : "rep"} personal record`}
-                  aria-haspopup="dialog"
+                  presentation={performancePr}
+                  celebration={recordFeedback.pulse?.exerciseId===exercise.id&&recordFeedback.pulse.signature===performancePr.signature?recordFeedback.pulse.key:null}
                   onClick={() => setDetail({ exercisePr: { sessionId: active.id, exerciseInstanceId: exercise.id }, returnFocusId: `active-exercise-pr-${exercise.id}` })}
-                >
-                  <span className="active-performance-pr">{performancePr.label}<span aria-hidden="true">ⓘ</span></span>
-                </ExerciseNavigationButton>
-              </span>
+                />
             )}
             {exerciseNotePresentation(exercise,state.program).cue && (
               <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
@@ -7271,10 +7312,10 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           </div>
         </div>
       </section>
-      {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} setDetail={setDetail} screenRef={screenRef} />}
+      {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} screenRef={screenRef} controllerRef={previousValuesController} Modal={ModalLayer} Header={SheetHeader} />}
       {progressionTipsEnabled(state.profile) && recommendation && (
         <section
-          className={`recommendation ${recommendation.type} ${recommendationApplied ? "applied" : ""}`}
+          className={`recommendation ${recommendation.type} guidance-${progressionCopy.tone} ${recommendationApplied ? "applied" : ""}`}
           role={recommendationApplied ? "status" : undefined}
         >
           <div className="progression-tip-copy">
@@ -7282,7 +7323,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <strong>
               {recommendationApplied
                 ? "Applied to this workout"
-                : recommendation.title}
+                : progressionCopy.heading}
             </strong>
             <button type="button" className="progression-tip-options" data-workout-options
               aria-label="Progression tip options" aria-haspopup="dialog"
@@ -7294,47 +7335,41 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 setTipsOptions({profileId: state.profile.id, sessionId: active.id});
               }}><OverflowIcon/></button>
             </div>
-            <p>
-              {recommendation.weight
-                ? recommendationApplied
-                  ? `${displayWeight(recommendation.weight, state.profile.units)} ${unit} is set for today’s remaining sets.`
-                  : `Next: ${displayWeight(recommendation.weight, state.profile.units)} ${unit}. ${recommendation.detail}`
-                : recommendation.detail}
-            </p>
+            <p className="progression-action">{recommendationApplied?`${displayWeight(recommendation.weight,state.profile.units)} ${unit} is set for the selected working sets.`:progressionCopy.action}</p>
+            <ProgressionExplanation key={`${active.id}:${exercise.id}:${recommendation.title}`} presentation={progressionCopy}/>
           </div>
-          {recommendation.weight && !recommendationApplied && (
+          {progressionTargets.length>0 && !recommendationApplied && (
+            <div className="progression-apply-action">
             <Button
               className="compact"
-              data-workout-replaces={JSON.stringify({sets:remainingSets.map(set=>set.id),fields:['weight']})}
+              aria-label={`Use ${displayWeight(recommendation.weight,state.profile.units)} ${unit} for ${progressionTargets.length} remaining ${progressionTargets.length===1?'set':'sets'}`}
+              data-workout-replaces={JSON.stringify({sets:progressionTargets.map(set=>set.id),fields:['weight']})}
               onClick={event => {
                 const scope=workoutDraftScope(event.currentTarget);
-                flushSync(() => {
-                  mutate((workout) => {
-                    const sets = workout.exercises[workout.exerciseIndex].sets;
-                    let previous = null;
-                    sets.forEach((set) => {
-                      if (set.completed) {
-                        previous = set;
-                        return;
-                      }
-                      set.weight = recommendation.weight;
-                      set.touched = true;
-                      set.weightEntryMode =
-                        previous && !previous.completed ? "auto" : "manual";
-                      if (set.weightEntryMode === "auto")
-                        set.weightSourceSetId = previous.id;
-                      else delete set.weightSourceSetId;
-                      previous = set;
-                    });
+                try {
+                  let change;
+                  const result=queueAction.commit(current=>{
+                    change=prepareProgressionApply(current,{sessionId:active.id,exerciseId:exercise.id,advice:recommendation,units:state.profile.units});
+                    return change.state;
                   });
+                  setCombinedSaveError('');
                   for (const input of screenRef.current?.querySelectorAll('[data-workout-draft]') || []) {
                     if (ownsWorkoutDraft(input,scope)) input.dispatchEvent(new CustomEvent('rook-restore-draft'));
                   }
-                });
+                  if(result.changed){
+                    const record=change.record;
+                    upNextUndo.show({message:`Updated ${change.count} ${change.count===1?'set':'sets'}`,valid:()=>canUndoWorkoutWeightChange(queueAction.latest.current,record),undo:()=>{
+                      try {return queueAction.commit(current=>undoWorkoutWeightChange(current,record)).changed;}
+                      catch(error){setCombinedSaveError(error.message);return false;}
+                    }});
+                  }
+                }catch(error){setCombinedSaveError(error.message);}
               }}
             >
               USE
             </Button>
+            <small>{progressionTargets.length} {progressionTargets.length===1?'set':'sets'}</small>
+            </div>
           )}
         </section>
       )}
@@ -7432,6 +7467,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 </span>
               ) : (
                 <Stepper deferred className="logger-load" workoutField="weight"
+                  commitUnchanged
                   required={loadRequirement === "required"}
                   label={`${loadInputLabel} in ${unit} for ${entryUnit} ${index + 1}`}
                   idleLabel={addedBodyweightLoad ? Number(set.weight || 0) === 0 ? 'BW' : `${Number(set.weight) > 0 ? '+' : ''}${displayWeight(set.weight, state.profile.units)}` : undefined}
@@ -7440,13 +7476,13 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   value={displayWeight(set.weight, state.profile.units)}
                   step={displayWeight(increment, state.profile.units)}
                   alignToStep
-                  allowIncrementFromEmpty={loadRequirement === "optional"}
+                  allowIncrementFromEmpty
                   emptyLabel={
                     addedBodyweightLoad
                       ? "Bodyweight"
                       : loadRequirement === "optional"
                         ? "Optional"
-                        : "Enter weight"
+                        : "Weight"
                   }
                   onChange={(value) =>
                     updateWeight(index, storedWeight(value, state.profile.units))
@@ -7467,6 +7503,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   step={timed ? 5 : 1}
                   min={1}
                   integer
+                  allowIncrementFromEmpty={!timed}
                   onChange={(value) => updateReps(index, value)}
                 />
               )}
@@ -7572,7 +7609,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         <section className="up-next">
           <Eyebrow>UP NEXT</Eyebrow>
           <span id="up-next-reorder-help" className="visually-hidden">Drag the right handle, tap it for exercise actions, or use Alt and arrow keys to move.</span>
-          <div ref={upNextQueueRef} className={`up-next-queue${queueReorder.view?' is-reordering':''}`}>
+          <ScrollBoundary ref={upNextQueueRef} className={`up-next-queue${queueReorder.view?' is-reordering':''}`}>
           {upNextBlocks.map((block) => {
             const group=block.entries.length===1&&queueGroups.find(item=>item.ids.includes(block.entries[0].id));
             const rowActions=block.entries.length===1&&canRemoveUpNext(active,block.entries[0].id);
@@ -7598,7 +7635,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                     ? `SUPERSET · A1 ${exerciseName(block.entries[0])} · A2 ${exerciseName(block.entries[1])}`
                     : exerciseName(block.entries[0])}
                 </strong>
-                {block.entries.some(entry=>hasMeaningfulExerciseProgress(active,entry.id))&&<small className="up-next-note">Started · saved progress</small>}
+                {block.entries.some(entry=>hasLoggedExerciseProgress(active,entry.id))&&<small className="up-next-note">Started · saved progress</small>}
               </span>
               <small className="up-next-prescription">
                 {block.entries.length === 2
@@ -7623,13 +7660,15 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             </ExerciseNavigationButton>
             </SwipeActionRow>
           );})}
-          </div>
+          </ScrollBoundary>
         </section>
       )}
       {queueReorder.view&&<UpNextReorderPreview view={queueReorder.view} listRef={upNextQueueRef} previewRef={queueReorder.previewRef}/>}
       <FreestyleActions setDetail={setDetail} hideAdd={active.source==='freestyle' && !nextExercise && !summary.completed && !canonicalSupersetStep} />
       </div></WorkoutMotion>
       {upNextUndo.surface}
+      {weightChanges.surface}
+      {weightChanges.error&&<p role="alert">{weightChanges.error}</p>}
       {queueError&&<p role="alert">{queueError}</p>}
       <WorkoutConfirmation
         confirmation={confirmation}
@@ -8365,7 +8404,7 @@ function ExportSheet({ request, state, close }) {
         />
       )}
       <Eyebrow className="export-preview-label">PREVIEW</Eyebrow>
-      <pre className="export-preview">{artifact.text}</pre>
+      <ScrollBoundary as="pre" className="export-preview">{artifact.text.split(/(RIR \d+(?:\.\d+)?)/g).map((part,index) => index % 2 ? <span className="export-effort" key={index}>{part}</span> : part)}</ScrollBoundary>
       <SheetActionFooter className="export-action-footer">
       <div className="export-actions">
         {shareAvailable && <Button onClick={share}>SHARE</Button>}
@@ -8413,10 +8452,10 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
                   </span>
                 </span>
               </button>
-              <div
+              <Disclosure
                 id={disclosureId}
                 className="session-log-details"
-                aria-hidden={!expanded}
+                open={expanded}
               >
                 <div>
                   {exercise.sets.map((set, setIndex) => {
@@ -8439,7 +8478,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
                   })}
                   {(exercise.personalNote || exercise.sets.some(s=>s.rawImport?.version===2)&&exercise.notes) && <p className="sheet-footnote">{[...new Set([exercise.personalNote,exercise.sets.some(s=>s.rawImport?.version===2)?exercise.notes:null].filter(Boolean))].join('\n')}</p>}
                 </div>
-              </div>
+              </Disclosure>
             </div>
           );
         })
@@ -8506,7 +8545,7 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
         </ModalLayer>, document.body,
       );
 }
-export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,onCombineWorkouts}) {
+export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,onCombineWorkouts,onAskCoach}) {
   const today=useCalendarDay();
   const {commit}=useDurableAction(state,update);
   const [noticeError,setNoticeError]=useState('');
@@ -8565,7 +8604,9 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
     {hasWorkout && state.program && <button className="list-row" disabled={blocked} onClick={()=>setDetail('edit-plan')}><span>Edit in plan<small>Changes the recurring plan</small></span></button>}
     {date===isoDay() && !hasWorkout && !occurrences.length && !blocked && <button className="list-row" onClick={()=>setDetail({restTraining:date})}>Rest-day activities</button>}
     {(hasWorkout || records.length>0) && date===isoDay() && !blocked && <button className="list-row" onClick={()=>setDetail({todayFreestyle:{date}})}>Start freestyle workout</button>}
+    {(hasWorkout || records.length>0) && date===isoDay() && !blocked && <button className="list-row" onClick={()=>setDetail('saved-workouts')}>Choose a workout<NavigationChevron/></button>}
     {deleteRecords.length>0 && <button className="list-row danger-text today-delete-action" data-day-action="delete" onClick={event=>chooseRecord('delete',event)}>{deleteRecords.length===1?'Delete workout':'Delete a workout'}</button>}
+    {onAskCoach&&<button type="button" className="list-row today-ask-coach" onClick={()=>onAskCoach(date)}><span><strong>Ask Coach</strong><small>Need something else?</small></span><NavigationChevron/></button>}
     </>}
     {deleting && <CompletedWorkoutDeletion workoutId={deleting} state={state} update={update} close={close} cancel={()=>setDeleting(null)} backgroundRef={panel} returnFocusRef={trigger}/>}
   </main>;
@@ -9056,7 +9097,7 @@ function OptionalWorkoutActionCard({ action, result, onAccept, onViewToday }) {
       <p>{action.explanation}</p>
       <div className="optional-workout-meta">
         <strong>{pluralize(action.exerciseIds.length, "exercise")}</strong>
-        <span>~{roundedEstimate(action.minutes)} min</span>
+        <span>About {roundedEstimate(action.minutes)} min</span>
       </div>
       <Eyebrow>COACH SUGGESTS</Eyebrow>
       <div className="optional-workout-list">
@@ -9393,7 +9434,7 @@ function AdaptActionCard({
                 </span>
               </button>
               {checked && !locked && <button className="text-button" aria-label={`Edit targets for ${nameFor(id)}`} aria-expanded={editingId === id} onClick={() => setEditingId(editingId === id ? null : id)}>{editingId === id ? 'Done' : 'Edit'}</button>}
-              {checked && !locked && editingId === id && <AdjustmentTargetsEditor exercise={materialize(id)} name={nameFor(id)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={editTargets}/>}
+              {checked && !locked && <Disclosure open={editingId===id} className="adjustment-target-disclosure"><AdjustmentTargetsEditor exercise={materialize(id)} name={nameFor(id)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={editTargets}/></Disclosure>}
               </div>
             );
           })}
@@ -9607,6 +9648,7 @@ export function contextualCoachPrompts(state, now = Date.now()) {
 export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' }, entryIntent, onEntryHandled }) {
   const personalThemes = usePersonalThemes();
   const [message, setMessage] = useState(state.coachDraft || "");
+  const [dayContext,setDayContext]=useState(null);
   const [sendingId, setSendingId] = useState(null);
   const sending = Boolean(sendingId && sendingId === state.activeCoachConversationId);
   const sendingRef = useRef(null);
@@ -9617,6 +9659,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const [historyId, setHistoryId] = useState(null);
   const conversationFromHistory = historyId !== null;
   const [newChatConfirm, setNewChatConfirm] = useState(false);
+  const [askChatIntent,setAskChatIntent]=useState(null);
   const [conversationError, setConversationError] = useState('');
   const [copyFeedback, setCopyFeedback] = useState(null);
   const copyTimersRef = useRef(new Map());
@@ -9642,14 +9685,9 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const enterRef = useRef(enterConversation);
   enterRef.current = enterConversation;
   useLayoutEffect(() => {
-    enterRef.current();
-    // Entry/foreground boundaries only: resolving a workflow never rolls over
-    // the conversation while its owner is still reading or reviewing it.
-    const foreground = () => { if (document.visibilityState === 'visible') enterRef.current(); };
-    const restored = event => { if (event.persisted) foreground(); };
-    document.addEventListener('visibilitychange', foreground);
-    window.addEventListener('pageshow', restored);
-    return () => {document.removeEventListener('visibilitychange', foreground);window.removeEventListener('pageshow', restored);};
+    // A deliberate tab entry may advance a completed conversation's day.
+    // Refresh/foreground while reading must never replace this visit's chat.
+    if(entryIntent?.kind!=='ask')enterRef.current();
   }, []);
   const conversationBackRef = useRef(null);
   const closeHistory = () => { captureCoachNavigation(true); setMenuOpen(false); setHistoryId(null); };
@@ -9736,7 +9774,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       onCopy: () => copyMessage(key, value),
     };
   };
-  const transcriptScroll = useCoachScroll(scrollRef, transcriptRef, displayedId, scrollMemory);
+  const transcriptScroll = useCoachScroll(scrollRef, transcriptRef, displayedId, scrollMemory, !state.conversations.some(entry => (entry.conversationId || "legacy") === displayedId));
   const pending = pendingCoachWorkflows(state);
   const pendingIds = new Set(pending.map(entry => entry.id));
   const currentMessages = state.conversations.filter(
@@ -9863,6 +9901,8 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     // Do not re-run the daily resolver on each send (including after midnight).
     const before = liveState.current.activeCoachConversationId ? liveState.current : enterConversation();
     if (!before) return;
+    const requestContext=retryEntry?.requestContext||dayContext;
+    if(requestContext){try{resolveCoachDayContext(before,requestContext);}catch(e){setConversationError(e.message);return;}}
     const conversationId = before.activeCoachConversationId;
     const entryId = retryEntry?.id || uid('msg');
     const requestId = uid('coach-request');
@@ -9874,9 +9914,9 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       if (!entry || entry.conversationId !== conversationId || entry.reply
         || entry.coachWorkflowStatus === 'cancelled') return;
       delete entry.requestError;
-    } else next.conversations.push({id:entryId,conversationId,user:value,reply:null,createdAt:Date.now()});
+    } else next.conversations.push({id:entryId,conversationId,user:value,reply:null,createdAt:Date.now(),...(requestContext?{requestContext:structuredClone(requestContext)}:{})});
     next.conversations.find(item => item.id === entryId).coachRequestId = requestId;
-    touchCoachConversation(next, conversationId);
+    touchCoachConversation(next, conversationId, Date.now(), {user:true});
     if (!saveState(next)) {setConversationError('Couldn’t save your message. Try again.');return;}
     liveState.current = next;
     // Publish the pending entry before even an immediate local reply can merge
@@ -9888,7 +9928,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     if (!preserveDraft) setMessage('');
     transcriptScroll.latest();
     try {
-      const reply = await AIService.coach(before, text, {selection:combineSelection,requireRemoteSuccess:true});
+      const reply = await AIService.coach(before, text, {selection:combineSelection,requireRemoteSuccess:true,...(requestContext?{requestContext}:{})});
       const commit = createCoachReplyCommit(identity, reply, saveState);
       flushSync(() => update(commit.update, commit.options));
       if (commit.result.state) liveState.current = commit.result.state;
@@ -9896,7 +9936,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
         if (copyMountedRef.current) setConversationError('Couldn’t save the reply. Retry this message.');
         throw Object.assign(new Error('Reply persistence failed'), {code:'local-persistence'});
       }
-      if (commit.result.applied && copyMountedRef.current) availability.success?.();
+      if (commit.result.applied && copyMountedRef.current){availability.success?.();if(requestContext)setDayContext(null);}
     } catch (error) {
       let applied = false;
       flushSync(() => update(current => {
@@ -9923,7 +9963,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     void send(COMBINE_WORKOUTS_PROMPT,{preserveDraft:true,combineSelection:{step:'sources'}});
   };
   useEffect(()=>{
-    if(!entryIntent||handledEntry.current===entryIntent.id||!coachAvailable||menuOpen||conversationFromHistory)return;
+    if(!entryIntent||entryIntent.kind==='ask'||handledEntry.current===entryIntent.id||!coachAvailable||menuOpen||conversationFromHistory)return;
     // Start after the destination mounts. Consume the transient intent before
     // sending, and cancel the frame if navigation or availability changes.
     const frame=requestAnimationFrame(()=>{
@@ -9938,13 +9978,35 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     });
     return ()=>cancelAnimationFrame(frame);
   },[entryIntent,coachAvailable,menuOpen,conversationFromHistory]);
+  useEffect(()=>{
+    if(entryIntent?.kind!=='ask'||handledEntry.current===entryIntent.id||menuOpen||conversationFromHistory)return;
+    const frame=requestAnimationFrame(()=>{
+      handledEntry.current=entryIntent.id;
+      try{
+        resolveCoachDayContext(liveState.current,entryIntent);
+        if(sendingRef.current){setConversationError('Wait for the current Coach reply before starting another chat.');}
+        else if(pendingCoachWorkflows(liveState.current).length||hasCoachDraft(liveState.current)||message.trim()){
+          setAskChatIntent(entryIntent);setNewChatConfirm(true);
+        }else startContextualChat(entryIntent);
+      }catch(e){setConversationError(e.message);}
+      onEntryHandled?.(entryIntent.id);
+    });
+    return()=>cancelAnimationFrame(frame);
+  },[entryIntent,menuOpen,conversationFromHistory]);
+  useEffect(()=>{if(dayContext&&dayContext.profileId!==state.profile.id)setDayContext(null);},[state.profile.id,dayContext]);
   const applyEntryAction = (entry, reviewedAction) => {
+    const scoped=liveState.current.conversations.find(item=>item.id===entry.id);
+    if(scoped?.requestContext){
+      try{if(!coachActionMatchesDay(reviewedAction||scoped.reply?.action,resolveCoachDayContext(liveState.current,scoped.requestContext)))throw Error('The selected workout changed. Ask Coach again from that day before applying this proposal.');}
+      catch(e){setConversationError(e.message);return false;}
+    }
     if (reviewedAction?.type === 'combine-workouts') {
       if (state.conversations.find(e=>e.id===entry.id)?.actionResult?.status==='applied') return;
       const next=applyCombinedProposal(state,reviewedAction.proposal,value=>{
         const stored=value.conversations.find(e=>e.id===entry.id);
         if(!stored)return false;
         stored.actionResult={status:'applied',appliedAt:Date.now(),scope:'combined-occurrences',workoutId:value.todayAdaptation.id,revision:value.todayAdaptation.revision||0};
+        touchCoachConversation(value, entry.conversationId, Date.now(), {user:true});
         return saveState(value);
       });
       update(()=>next,{planVersion:false,persistedState:next});
@@ -9955,6 +10017,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       if (!stored?.reply?.action || stored.actionResult?.status === "applied")
         return current;
       const acceptedAction = reviewedAction || stored.reply.action;
+      touchCoachConversation(current, stored.conversationId || current.activeCoachConversationId, Date.now(), {user:true});
       const undoSnapshot =
         acceptedAction.type === "adapt-today"
           ? {
@@ -10150,11 +10213,21 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     send(prompt, { preserveDraft: true });
   };
   const startNewConversation = (cancelPending = false) => {
-    if (!enterConversation({manual:true,cancelPending})) return;
-    setMessage('');setMenuOpen(false);setHistoryId(null);setNewChatConfirm(false);
+    if(askChatIntent){startContextualChat(askChatIntent,cancelPending);return;}
+    if (!enterConversation({manual:true,cancelPending,discardDraft:cancelPending})) return;
+    setDayContext(null);setMessage('');setMenuOpen(false);setHistoryId(null);setNewChatConfirm(false);
+  };
+  const startContextualChat=(context,cancelPending=false)=>{
+    try{resolveCoachDayContext(liveState.current,context);}catch(e){setConversationError(e.message);return;}
+    const next=enterConversation({manual:true,cancelPending,discardDraft:cancelPending});
+    if(!next)return;
+    const starter=coachDayStarter(context);
+    setDayContext(context);setMessage(starter);setAskChatIntent(null);setNewChatConfirm(false);setHistoryId(null);setMenuOpen(false);
+    update(current=>({...current,coachDraft:starter}),{planVersion:false});
+    requestAnimationFrame(()=>composerRef.current?.focus({preventScroll:true}));
   };
   const newConversation = () => {
-    if (pendingCoachWorkflows(liveState.current).length) setNewChatConfirm(true);
+    if (pendingCoachWorkflows(liveState.current).length || hasCoachDraft(liveState.current) || message.trim()) setNewChatConfirm(true);
     else startNewConversation();
   };
   const openConversation = id => { captureCoachNavigation(false); setMenuOpen(false);setHistoryId(id); };
@@ -10172,6 +10245,11 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             {hasConversation && <strong>{conversationFromHistory ? "Chat history" : "Conversation"}</strong>}
             </div>
           </div>
+          <div className="coach-header-actions">
+          <button type="button" className="coach-new-trigger" aria-label="New chat" title="New chat" onClick={newConversation}>
+            <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m14 5 5 5M5 19l4.5-1L20 7.5a2.1 2.1 0 0 0-3-3L6.5 15 5 19ZM4 4h6M4 4v6"/></svg>
+            <span>NEW CHAT</span>
+          </button>
           <button
             className="coach-history-trigger"
             aria-label="Chat history"
@@ -10186,6 +10264,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             </svg>
             <span>HISTORY</span>
           </button>
+          </div>
         </header>
       <div className="coach-scroll" ref={scrollRef} tabIndex={0} aria-label="Coach conversation" data-scroll-mode={transcriptScroll.mode}>
         <div className="coach-transcript" ref={transcriptRef}>
@@ -10202,7 +10281,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             {availabilityCopy?.signIn && <button type="button" className="text-button" onClick={() => setPage('profile')}>Account &amp; Sync</button>}
           </div>
         )}
-        {import.meta.env.DEV && new URLSearchParams(location.search).get('coachDebug') === '1' && <details className="coach-runtime-diagnostics"><summary>Coach diagnostics · local only</summary><p>State: {availability.state} · reason: {availability.reason || 'ready'} · auth: {availability.auth || 'ready'} · network: {online ? 'online' : 'offline'}</p>{availability.lastFailure && <p>Last failure: {availability.lastFailure.reason} · {new Date(availability.lastFailure.at).toLocaleTimeString()}</p>}</details>}
+        {import.meta.env.DEV && new URLSearchParams(location.search).get('coachDebug') === '1' && <AnimatedDetails className="coach-runtime-diagnostics"><summary>Coach diagnostics · local only</summary><p>State: {availability.state} · reason: {availability.reason || 'ready'} · auth: {availability.auth || 'ready'} · network: {online ? 'online' : 'offline'}</p>{availability.lastFailure && <p>Last failure: {availability.lastFailure.reason} · {new Date(availability.lastFailure.at).toLocaleTimeString()}</p>}</AnimatedDetails>}
         {!hasConversation && (
           <>
             <aside className="coach-empty" role="note">
@@ -10238,16 +10317,17 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
               {entry.reply ? (
                 <>
                   {!conversationFromHistory && entry===latestMessage && entry.reply.missedChoices?.map(choice=><button className="list-row" key={choice.id} data-coach-anchor={`${entry.id}:missed:${choice.id}`} onClick={()=>setDetail({flexibleWeek:{sessionId:choice.id}})}>{choice.label}</button>)}
-                  {!conversationFromHistory && pendingIds.has(entry.id) && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} busy={sending||!coachAvailable} selection={entry.combineSelection || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return current;},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
+                  {!conversationFromHistory && pendingIds.has(entry.id) && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} busy={sending||!coachAvailable} selection={entry.combineSelection || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
                   {!conversationFromHistory && entry===latestMessage && entry.coachWorkflowStatus !== 'cancelled' && !entry.combineReviewCancelled && combineRecovery && <CoachCombineRecovery request={combineRecovery} state={state} busy={sending} canRetry={coachAvailable} onReview={target=>setDetail({editPlan:{reviewExerciseIds:[target.exerciseEntryId]}})} onConfirmMatch={target=>confirmSourceMatch(entry,target)} onRetry={selection=>send('Prepare the combined workout again.',{preserveDraft:true,combineSelection:selection})} />}
                   {conversationFromHistory && entry.reply.action && <p className="coach-history-action">{entry.reply.action.type === 'combine-workouts' ? 'Combined workout' : 'Coach adjustment'} · {entry.actionResult?.status || (entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled ? 'Cancelled' : 'Not applied')}</p>}
-                  {!conversationFromHistory && entry.reply.action && entry.coachWorkflowStatus !== 'cancelled' && (
+                  {!conversationFromHistory && entry.reply.action?.type==='reuse-existing-workout' && entry.coachWorkflowStatus!=='cancelled' && (entry.actionResult?<p>Extra workout started. Your scheduled plan is unchanged.</p>:<div className="coach-reuse-choices">{entry.reply.action.choices.map((choice,index)=><button type="button" className="list-row" key={index} onClick={()=>setDetail({coachWorkoutReuse:choice.reference,coachEntryId:entry.id})}><span><strong>{choice.name}</strong><small>{choice.label}</small></span><span aria-hidden="true">›</span></button>)}</div>)}
+                  {!conversationFromHistory && entry.reply.action && entry.reply.action.type!=='reuse-existing-workout' && entry.coachWorkflowStatus !== 'cancelled' && (
                     <ActionCard
                       action={entry.reply.action}
                       result={entry.actionResult}
                       reviewDraft={entry.reply.action.type === 'combine-workouts' ? entry.combineReview : entry.actionReview}
-                      onReviewChange={(draft)=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored&&!stored.actionResult)stored[stored.reply.action.type==='combine-workouts'?'combineReview':'actionReview']=draft;return current;},{planVersion:false})}
-                      onReviewCancelled={(cancelled)=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored&&!stored.actionResult)stored[stored.reply.action.type==='combine-workouts'?'combineReviewCancelled':'coachReviewCancelled']=cancelled;return current;},{planVersion:false})}
+                      onReviewChange={(draft)=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored&&!stored.actionResult)stored[stored.reply.action.type==='combine-workouts'?'combineReview':'actionReview']=draft;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})}
+                      onReviewCancelled={(cancelled)=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored&&!stored.actionResult)stored[stored.reply.action.type==='combine-workouts'?'combineReviewCancelled':'coachReviewCancelled']=cancelled;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})}
                       state={state}
                       onAccept={(accepted) => applyEntryAction(entry, accepted)}
                       onUndo={() => undoEntryAction(entry)}
@@ -10281,6 +10361,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
           send(message);
         }}
       >
+        {dayContext&&<div className="coach-day-context"><span>{coachDayLabel(dayContext.date)} · {dayContext.unresolved?'Schedule needs review':dayContext.workoutName||'Schedule'}</span><button type="button" aria-label={`Remove context for ${coachDayLabel(dayContext.date)}`} onClick={()=>setDayContext(null)}>×</button></div>}
         <textarea
           ref={composerRef}
           rows="1"
@@ -10292,7 +10373,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             setMessage(draft);
             update((current) => {
               current.coachDraft = draft;
-              return touchCoachConversation(current, current.activeCoachConversationId);
+              return touchCoachConversation(current, current.activeCoachConversationId, Date.now(), {user:true});
             });
           }}
           onKeyDown={(event) => {
@@ -10409,12 +10490,14 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
           </div>
         </section>
       )}
-      {newChatConfirm && createPortal(<ModalLayer backgroundRef={coachRef} close={()=>{setNewChatConfirm(false);setConversationError('');}}>{requestClose=><section className="screen detail-screen coach-new-confirm" role="dialog" aria-modal="true" aria-labelledby="coach-new-title">
+      {newChatConfirm && createPortal(<ModalLayer backgroundRef={coachRef} close={()=>{setNewChatConfirm(false);setAskChatIntent(null);setConversationError('');if(!liveState.current.activeCoachConversationId)enterConversation();}}>{requestClose=><section className="screen detail-screen coach-new-confirm" role="dialog" aria-modal="true" aria-labelledby="coach-new-title">
         <SheetHeader title="New chat" onBack={requestClose} backLabel="Continue current"/>
-        <h1 id="coach-new-title">Start a new chat?</h1>
-        <p>Your current Coach adjustment is still in progress.</p>
+        <h1 id="coach-new-title">Start a new Coach chat?</h1>
+        {pendingCoachWorkflows(state).length > 0 && <p>Your pending review will close without being applied.</p>}
+        {(hasCoachDraft(state) || message.trim()) && <p>Your unsent draft will be discarded.</p>}
+        <p>Your chat history will stay. Applied workout changes stay in place.</p>
         {conversationError && <p role="alert" className="offline-banner">{conversationError}</p>}
-        <div className="coach-new-actions"><Button variant="secondary" data-sheet-initial-focus onClick={requestClose}>Continue current</Button><Button onClick={()=>startNewConversation(true)}>Start new chat</Button></div>
+        <div className="coach-new-actions"><Button variant="secondary" data-sheet-initial-focus onClick={requestClose}>Keep current chat</Button><Button onClick={()=>startNewConversation(true)}>Start new chat</Button></div>
       </section>}</ModalLayer>,document.body)}
     </main>
   );
@@ -10861,10 +10944,9 @@ function WeightHistory({ state, setDetail, close, saved }) {
           ))}
         </section>
       )}
-      <section className="weight-history-list">
+      {trend.entries.length > 0 && <section className="weight-history-list">
         <Eyebrow>CHECK-INS</Eyebrow>
-        {trend.entries.length ? (
-          [...trend.entries].reverse().map((entry) => (
+        {[...trend.entries].reverse().map((entry) => (
             <button
               type="button"
               className="list-row"
@@ -10877,11 +10959,8 @@ function WeightHistory({ state, setDetail, close, saved }) {
               </span>
               <NavigationChevron className="navigation-chevron"/>
             </button>
-          ))
-        ) : (
-          <p className="muted">No weight check-ins yet.</p>
-        )}
-      </section>
+          ))}
+      </section>}
     </main>
   );
 }
@@ -10909,7 +10988,7 @@ function LoggedExercises({state,setDetail,close,initial={}}) {
   const [query,setQuery]=useState(initial.query||'');const ref=useRef(null);
   useLayoutEffect(()=>{if(ref.current)ref.current.scrollTop=initial.scroll||0;},[]);
   const rows=loggedExercises(state.workouts).map(row=>({...row,id:row.exercise.exerciseId,name:exerciseName(row.exercise),aliases:exerciseCatalog[row.exercise.exerciseId]?.aliases||[]}));
-  const filtered=rankExerciseSearch(rows.filter(row=>exerciseMatchesQuery(row,query)),query);
+  const filtered=searchExercises(rows,query);
   return <main ref={ref} className="screen detail-screen logged-exercises-sheet"><SheetHeader title="Logged exercises" onClose={close}/><SearchInput aria-label="Search logged exercises" placeholder="Search logged exercises" value={query} onChange={e=>setQuery(e.target.value)} onClear={()=>setQuery('')}/><div>{filtered.map(row=><LoggedExerciseRow key={row.exercise.exerciseId} row={row} state={state} onClick={()=>setDetail({exercise:row.exercise,returnToLogged:{query,scroll:ref.current?.scrollTop||0}})}/>)}</div>{!filtered.length&&<p role="status">{query?`No logged exercises match “${query}”.`:'No exercises logged yet'}</p>}</main>;
 }
 function ProgressionRow({row,units,onClick}) {
@@ -10922,7 +11001,7 @@ function ProgressionRow({row,units,onClick}) {
   >
     <span>
       <strong>{exerciseName(exercise)}</strong>
-      <small>{result.title}</small>
+      <small>{progressionPresentation(result,exercise,units).heading}</small>
       {result.type==='progress'&&result.weight?<small className="progression-next">Next: {displayWeight(result.weight,units)} {weightUnit(units)}</small>:null}
     </span>
     <NavigationChevron className="navigation-chevron"/>
@@ -11321,11 +11400,10 @@ export function latestLoggedWeightSet(history = []) {
 }
 export function adaptationDurationLabel(requestedMinutes, estimatedMinutes) {
   const requested = Number(requestedMinutes);
-  const estimate = roundedEstimate(estimatedMinutes);
-  if (!Number.isFinite(requested) || requested <= 0) return `~${estimate} min`;
-  return Number(estimatedMinutes) <= requested
-    ? `~${estimate} min · ${requested} min goal`
-    : `Estimated ~${estimate} min · ${requested} min goal`;
+  const estimate = `About ${roundedEstimate(estimatedMinutes)} min`;
+  return Number.isFinite(requested) && requested > 0
+    ? `${estimate} · Goal: ${requested} min`
+    : estimate;
 }
 export function profileTrainingRows(profile) {
   const equipment = (profile?.equipment || [])
@@ -11473,10 +11551,13 @@ function PersonalizationSummary({ profile, program }) {
       {adaptationNote && (
         <p className="split-adaptation-note">{adaptationNote}</p>
       )}
+      {program.generationGuidance?.length>0 && <AnimatedDetails className="plan-generation-notes">
+        <summary>Plan notes</summary><ul>{program.generationGuidance.map(note=><li key={note.code}>{note.message}</li>)}</ul>
+      </AnimatedDetails>}
     </section>
   );
 }
-export function Profile({ state, update, setDetail, setPage, onLogout, accountSync }) {
+export function Profile({ state, update, setDetail, setPage, onLogout, accountSync, membershipSlot=null }) {
   const personalThemes = usePersonalThemes();
   const temporaryPeriod = temporaryPlanStatus(state);
   const [area, setArea] = useState(null);
@@ -11487,6 +11568,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
   const tabRetap = useRef(false);
   useActiveTabRetap(profileRef, () => {
     if (!area) return false;
+    if (area === 'account' && profileRef.current?.querySelector('[aria-busy="true"]')) return true;
     navigationMotion.current?.(); stopPageNavigation(profileRef.current);
     outgoingPage.current = null; previousArea.current = null;
     restoreDataParent.current?.(); restoreDataParent.current = null;
@@ -11506,6 +11588,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
     setArea(next);
   };
   const backToProfile = () => {
+    if (area === 'account' && profileRef.current?.querySelector('[aria-busy="true"]')) return;
     captureProfilePage();
     if (area === 'diagnostics') { restoreDataParent.current?.(); restoreDataParent.current = null; setArea('data'); }
     else setArea(null);
@@ -11586,15 +11669,16 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
   const frequency = state.program ? `${pluralize(state.program.days.length, "day")}/week` : '';
   const block = state.program?.trainingBlock;
   const programSummary = state.program ? `${frequency}${block ? ` · ${block.completed ? "Block complete" : `Week ${block.currentWeek || 1} of ${block.totalWeeks || 1}`}` : !imported && goalContext ? ` · ${goalContext}` : ""}` : trainingStyleFor(state)==='own-workouts'?'Choose a saved workout whenever you train':'Train freestyle whenever you like';
-  const areaTitle = {program:"Program",training:"Training setup",preferences:"Workout preferences",display:"Display",data:"Data & backup",diagnostics:"Storage diagnostics"}[area];
+  const areaTitle = {account:"Account & sync",program:"Program",training:"Training setup",preferences:"Workout preferences",display:"Display",data:"Data & backup",diagnostics:"Storage diagnostics",help:"Help"}[area];
   return (
-    <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape'){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}`}>
+    <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape' && !event.defaultPrevented && !event.target.closest('[role="dialog"],.modal-layer')){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}${area === 'account' ? ' profile-account-screen' : ''}`}>
       {area && <div className="profile-subpage-header"><SheetHeader title={areaTitle} onBack={backToProfile} backLabel={area === 'diagnostics' ? 'Back to Data & backup' : 'Back to Profile'} /></div>}
       {area === 'diagnostics' && <StorageDiagnostics/>}
       <header className="profile-program">
         {!area && <>
         <Eyebrow>PROFILE</Eyebrow>
         <h1>Training profile</h1>
+        <ProfileAccountEntry name={p.name} sync={accountSync} onClick={event=>openArea('account',event)}/>
         </>}
         {!area ? <ExerciseNavigationButton data-profile-area="program" className="profile-current-program profile-program-entry" onClick={event=>openArea('program',event)} aria-label={`${state.program?'Current program':'Training setup'}: ${programTitle}, ${programSummary}`}>
           <span><Eyebrow>CURRENT TRAINING</Eyebrow><h2>{programTitle}</h2><p>{programSummary}</p></span><NavigationChevron/>
@@ -11607,6 +11691,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           </p>
         </div>}
       </header>
+      {!area && membershipSlot}
       {area === 'training' && (
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
@@ -11630,20 +11715,21 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
       )}
       {!area && <section className="profile-manage" aria-label="Settings"><Eyebrow>SETTINGS</Eyebrow>
         {[
-          ['training','Training setup','Schedule, gyms, restrictions, priorities and custom exercises'],
+          ['training','Training setup','Schedule, equipment and restrictions'],
           ['preferences','Workout preferences','Training style, logging and increments'],
           ['display','Display',`${personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations ${p.showExerciseImages === false ? 'off' : 'on'}`],
-          ['data','Data & backup','Import, export, backup, restore and local data'],
-        ].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><strong>{title}</strong>{id === 'display' && personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}<small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
+          ['data','Data & backup','Backups and workout history'],
+          ['help','Help','Sign-in, backups and workout basics'],
+        ].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><span className="theme-title"><strong>{title}</strong>{id === 'display' && personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}</span><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
       </section>}
-      {!area && <AccountSyncPanel sync={accountSync} Modal={ModalLayer} backgroundRef={profileRef} />}
+      {area === 'help' && <ProfileHelp/>}
+      {area === 'account' && <AccountSyncPanel sync={accountSync} displayName={p.name} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
-        <ExerciseNavigationButton className="list-row profile-group-end" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Reusable workouts, ready when you train</small></span><NavigationChevron/></ExerciseNavigationButton>
+        <ExerciseNavigationButton className="list-row profile-group-end" onClick={()=>setDetail('saved-workouts')}><span><strong>Workouts</strong><small>{state.program?'Your plan and saved workouts':'Your reusable workouts'}</small></span><NavigationChevron/></ExerciseNavigationButton>
         <section className="planning-setup profile-settings-list">
-          <Eyebrow>TRAINING</Eyebrow>
-          <p className="planning-setup-copy">
-            {state.program?'Used by Coach and future plan changes. Your current program is edited separately.':'Used by Coach and any plan you choose to create later.'}
-          </p>
+          <div className="profile-section-heading"><Eyebrow>TRAINING</Eyebrow><ProfileInformation label="About training setup" title="Training setup" Modal={ModalLayer} backgroundRef={profileRef}>
+            <p>{state.program?'These settings guide Coach and future plans. Edit your current program in Profile → Program → Edit plan.':'These settings guide Coach and any plan you choose to create later.'}</p>
+          </ProfileInformation></div>
           {training.map(([label, value]) => (
             <InfoRow
               key={label}
@@ -11713,8 +11799,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
       </section>}
       {area === 'program' && !state.program && <section className="program-actions profile-settings-list"><Eyebrow>YOUR TRAINING</Eyebrow><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('saved-workouts')}><span><strong>Saved workouts</strong><small>Create workouts to repeat anytime</small></span><NavigationChevron/></ExerciseNavigationButton><ExerciseNavigationButton className="list-row" onClick={()=>setDetail('change-plan')}><span><strong>Create or import a plan</strong><small>Optional structured training</small></span><NavigationChevron/></ExerciseNavigationButton></section>}
       {area === 'program' && state.program && <section className="program-actions profile-settings-list">
-        <Eyebrow>PROGRAM</Eyebrow>
-        {<button className="list-row" onClick={() => setDetail('temporary-plan')}><span><strong>Temporary plan</strong><small>{temporaryPeriod?.status === 'active' || temporaryPeriod?.status === 'upcoming' ? `${temporaryPeriod.startDate} – ${temporaryPeriod.endDate}` : 'Different days or equipment for 2–4 weeks · Review first'}</small></span><NavigationChevron/></button>}
+        {<button className="list-row" onClick={() => setDetail('temporary-plan')}><span><strong>Temporary plan</strong><small>{temporaryPeriod?.status === 'active' || temporaryPeriod?.status === 'upcoming' ? `${temporaryPeriod.startDate} – ${temporaryPeriod.endDate}` : 'Change days or equipment for 2–4 weeks'}</small></span><NavigationChevron/></button>}
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("training-block")}>
           <span>
             <strong>Training block</strong>
@@ -11727,7 +11812,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           <NavigationChevron/>
         </ExerciseNavigationButton>
         <ExerciseNavigationButton className="list-row" disabled={Boolean(state.activeWorkout)} onClick={() => setDetail("edit-plan")}>
-          <span><strong>Edit plan</strong><small>{state.activeWorkout ? "Finish your active workout first." : "Names, exercises, sets, reps and weights"}</small></span>
+          <span><strong>Edit plan</strong><small>{state.activeWorkout ? "Finish your active workout first." : "Exercises, sets and targets"}</small></span>
           {!state.activeWorkout && <NavigationChevron/>}
         </ExerciseNavigationButton>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("plan-history")}>
@@ -11745,7 +11830,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         >
           <span>
             <strong>Export workout plan</strong>
-            <small>Share, copy or download the full plan</small>
+            <small>Share, copy or download</small>
           </span>
           <NavigationChevron/>
         </ExerciseNavigationButton>
@@ -11759,9 +11844,8 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <ExerciseNavigationButton className="list-row" disabled={Boolean(state.activeWorkout||state.activeOptionalSession)} onClick={()=>setDetail('stop-plan')}><span><strong>Stop following this plan</strong><small>Keep workout history and saved workouts</small></span><NavigationChevron/></ExerciseNavigationButton>
       </section>}
       {area === 'preferences' && <section className="profile-settings-list">
-        <Eyebrow>SETTINGS</Eyebrow>
         <fieldset className="profile-training-style"><legend>Training style</legend>{[['plan','Follow a plan'],['own-workouts','Use saved workouts'],['freestyle','Freestyle']].map(([style,label])=><ExerciseNavigationButton key={style} className="list-row" type="button" aria-pressed={preferredStyle===style} onClick={()=>{if(style==='plan'&&!state.program){setDetail('change-plan');return;}update(current=>{current.profile.preferredTrainingStyle=style;return current;});}}><span><strong>{label}</strong>{style==='plan'&&!state.program&&<small>Create or import a plan</small>}</span><span aria-hidden="true">{preferredStyle===style?'✓':''}</span></ExerciseNavigationButton>)}<small className="profile-training-style-note">{preferredStyle==='plan'?'Your current plan guides Today.':preferredStyle==='own-workouts'?`Start from your saved workouts.${state.program?' Your current plan won’t be changed.':''}`:`Start each session from scratch.${state.program?' Your current plan won’t be changed.':''}`}</small></fieldset>
-        <ProgressionTipsPreference state={state} update={update}/>
+        <ProgressionTipsPreference state={state} update={update} information={<ProfileInformation label="About progression guidance" title="Progression guidance" Modal={ModalLayer} backgroundRef={profileRef}><p>Basic shows quick next steps for each exercise. Off hides workout suggestions. Your logs and Progress stay unchanged.</p></ProfileInformation>}/>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("logging")}>
           <span>
             <strong>Logging & increments</strong>
@@ -11779,11 +11863,10 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         </ExerciseNavigationButton>
       </section>}
       {area === 'display' && <section className="profile-settings-list">
-        <Eyebrow>APPEARANCE</Eyebrow>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("appearance")}>
           <span>
-            <strong>Appearance</strong>
-            {personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}
+            <span className="theme-title"><strong>Appearance</strong>
+            {personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}</span>
             <small>
               {personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations{" "}
               {p.showExerciseImages === false ? "off" : "on"}
@@ -11798,18 +11881,18 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("import-workout-history")}>
           <span>
             <strong>Import workout history</strong>
-            <small>Hevy, Strong or other CSV / XLSX · Parsed on this device</small>
+            <small>Hevy, Strong or CSV / XLSX</small>
           </span>
           <NavigationChevron/>
         </ExerciseNavigationButton>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("export-workout-history")}>
-          <span><strong>Export workout history</strong><small>CSV or JSON · Your training records</small></span>
+          <span><strong>Export workout history</strong><small>CSV or JSON</small></span>
           <NavigationChevron/>
         </ExerciseNavigationButton>
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("backup-rook")}>
           <span>
             <strong>Back up ROOK</strong>
-            <small>Create a complete local recovery file</small>
+            <small>Save a complete recovery file</small>
           </span>
           <NavigationChevron/>
         </ExerciseNavigationButton>
@@ -11824,9 +11907,9 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
       <section className="profile-troubleshooting profile-settings-list">
         <Eyebrow>TROUBLESHOOTING</Eyebrow>
         <ExerciseNavigationButton type="button" data-profile-area="diagnostics" className="list-row" onClick={event => openArea('diagnostics', event)}>
-          <span><strong>Storage diagnostics</strong><small>Technical information for troubleshooting</small></span><NavigationChevron/>
+          <span><strong>Storage diagnostics</strong><small>Check local storage status</small></span><NavigationChevron/>
         </ExerciseNavigationButton>
-        <p className="storage-local-copy-warning">Local copies can be lost with device or browser data. Keep a ROOK backup file somewhere safe.</p>
+        <p className="storage-local-copy-warning">Clearing browser data can erase local workouts. Keep a backup outside this device.</p>
       </section>
       <button className="list-row profile-separated-action profile-delete-action profile-group-end" onClick={onLogout}>
         <span><strong className="danger-text">Delete local data</strong><small>Erase ROOK data from this device</small></span><NavigationChevron/>
@@ -12060,16 +12143,13 @@ function TrainingRestrictions({ state, update, close, reviewPlan }) {
         onClose={close}
         closeLabel="Close training restrictions"
       />
-      <Eyebrow>TRAINING RESTRICTIONS</Eyebrow>
       <h1>Set clear training limits.</h1>
       <p>
-        Add current pain, recent surgery, movements you avoid, or limits a
-        clinician gave you. Rook uses these as safety constraints. It does not
-        diagnose conditions or change your plan automatically.
+        Describe current pain, recent surgery, movements to avoid or clinician limits.
+        ROOK uses these as safety constraints and does not diagnose conditions.
       </p>
       <p className="restriction-plan-notice">
-        If a restriction conflicts with your plan, Rook can prepare similar
-        options or removals for review. Nothing changes until you apply it.
+        Suggested plan changes need your review and approval before they apply.
       </p>
       <textarea
         aria-label="Restrictions or clinician limits"
@@ -12412,18 +12492,9 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
         onClose={close}
         closeLabel={`Close ${preferencesOnly ? "coaching preferences" : "training priorities"}`}
       />
-      <Eyebrow>
-        {preferencesOnly ? "COACHING PREFERENCES" : "TRAINING PRIORITIES"}
-      </Eyebrow>
-      <h1>
-        {preferencesOnly
-          ? "What would you like Coach to emphasize?"
-          : "What would you like to emphasize?"}
-      </h1>
+      <h1>Choose your priorities</h1>
       <p>
-        {preferencesOnly
-          ? "Choose up to two areas. These guide Coach recommendations and future Rook-generated programs. Your current plan won’t change automatically."
-          : state.program ? "Choose up to two areas. These guide Coach and future program rebuilds. Your current plan won’t change unless you explicitly adjust or rebuild it." : "Choose up to two areas. These guide Coach and any plan you choose to build later."}
+        {state.program ? "Choose up to two areas for Coach and future ROOK plans. Your current plan stays unchanged." : "Choose up to two areas for Coach and future ROOK plans."}
       </p>
       <span id="priority-limit-reason" className="visually-hidden">
         Maximum of two priorities selected. Deselect one to choose another.
@@ -12917,6 +12988,8 @@ export function PlanEditor({
     panel?.scrollIntoView({ block: 'start', behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
   };
   const resolveImportIssue = (issue, value) => {
+    if(issue.requiresSourceEdit && value!==null)return;
+    if(issue.field==='rest'&&value!==null&&(!Number.isInteger(Number(value.value))||Number(value.value)<1||Number(value.value)>3600)){resolveImportIssue(issue,null);return;}
     let dependentDecisions=[];
     if(issue.field==='prescription'&&value){
       const ex=program.days.find(d=>d.id===issue.dayId)?.exercises.find(e=>e.id===issue.exerciseId);
@@ -12934,6 +13007,7 @@ export function PlanEditor({
     if (value === null) {
       setResolvedImportIssues(current => ({...current,[issue.id]:false}));
       if(issue.id.startsWith('hybrid-'))setProgram(current=>({...current,importMetadata:{...current.importMetadata,pendingHybrid:[...new Set([...(current.importMetadata?.pendingHybrid||[]),issue.id])]}}));
+      if(issue.sourceFidelity)setProgram(current=>{const next=clone(current);setSourceDecisionPending(next,issue,true);return next;});
       return;
     }
     const restoredOptional=issue.field==='optional'&&value.value==='include'?excludedImportExercises.current.get(issue.exerciseId):null;
@@ -12951,6 +13025,9 @@ export function PlanEditor({
       }
       if (issue.field === 'day' && day) day.weekday = value.value;
       if (issue.field === 'rir' && exercise) exercise.targetRir = value.value === '' ? null : Number(value.value);
+      if (issue.field === 'rest' && exercise) {
+        for(const member of day.exercises.filter(e=>e.id===exercise.id||exercise.supersetId&&e.supersetId===exercise.supersetId))member.restSeconds=Number(value.value);
+      }
       if (issue.field === 'loggingMode' && exercise) exercise.loggingMode = value.value;
       if (issue.field === 'advanced' && exercise) {
         // Re-selecting a method/target replaces this decision rather than adding
@@ -12981,6 +13058,7 @@ export function PlanEditor({
         exercise.repMin = value.repMin; exercise.repMax = value.repMax;
         exercise.sets = Array.from({length: value.sets}, (_, index) => ({ ...exercise.sets[Math.min(index,exercise.sets.length-1)], id: exercise.sets[index]?.id || `${exercise.id}-review-set-${index}`, reps: value.repMin, completed: false }));
         }
+        if(exercise.importedLastSetMethod)exercise.sets.forEach((set,index)=>{set.setType=index===exercise.sets.length-1?exercise.importedLastSetMethod:'standard';if(index!==exercise.sets.length-1)delete set.segments;});
       }
       if (issue.field === 'alternative' && exercise && value.option) {
         const option=value.option,match=matchImportedExerciseName(option.name),item=exerciseCatalog[match.exerciseId];
@@ -13000,6 +13078,7 @@ export function PlanEditor({
       }
       if (['instruction','alternative'].includes(issue.field) && exercise) exercise.notes = [exercise.notes,issue.source].filter(Boolean).join('\n');
       applyHybridDecision(next,issue,value,{excluded:excludedImportExercises.current,resolved:resolvedImportIssues,issues:sourceReview?.issues||[]});
+      setSourceDecisionPending(next,issue,false);
       if(next.importMetadata?.pendingHybrid)next.importMetadata.pendingHybrid=[...new Set([...next.importMetadata.pendingHybrid,...dependentDecisions.filter(item=>item.id.startsWith('hybrid-')).map(item=>item.id)])];
       return next;
     });
@@ -13093,45 +13172,17 @@ export function PlanEditor({
   const commitReorderRef = useRef(null);
   const suppressReorderClickUntil = useRef(0);
   const [reorderView, setReorderView] = useState(null);
-  // Opt in only for generated acceptance previews. Mode and live gesture are
-  // separate: dropping a card never leaves the mode or applies this draft.
-  const [previewReordering, setPreviewReordering] = useState(false);
   const cancelReorderRef = useRef(null);
-  const reorderEntryRef = useRef(null);
-  const previewFooterAnchorRef = useRef(null);
-  const previewRestoreFocusRef = useRef(false);
-  const explicitPreview = generatedAcceptance && mode === 'review';
-  const reorderMode = explicitPreview && previewReordering;
-  const SummaryElement = reorderMode || mode === 'edit' || mode === 'scratch' ? 'div' : 'button';
-  const finishPreviewReorder = () => {
-    cancelReorderRef.current?.();
-    // Restoring an expanded editor adds height above the existing footer.
-    // Keep a currently visible footer in place using its current scroll owner;
-    // header Back must not jump down to a footer that is off screen.
-    const footer = reorderRootRef.current?.parentElement?.querySelector('.sheet-action-footer');
-    if (footer) {
-      let scroller = footer.parentElement;
-      while (scroller && !(scroller.scrollHeight > scroller.clientHeight && /auto|scroll/.test(getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
-      scroller ||= document.scrollingElement;
-      const bounds = footer.getBoundingClientRect();
-      if (scroller && bounds.top >= 0 && bounds.top < window.innerHeight)
-        previewFooterAnchorRef.current = { footer, scroller, top: bounds.top };
-    }
-    previewRestoreFocusRef.current = true;
-    setPreviewReordering(false);
-  };
-  useLayoutEffect(() => {
-    const anchor = previewFooterAnchorRef.current;
-    previewFooterAnchorRef.current = null;
-    if (!reorderMode && anchor?.footer.isConnected)
-      anchor.scroller.scrollTop += anchor.footer.getBoundingClientRect().top - anchor.top;
-    if (!reorderMode && previewRestoreFocusRef.current) {
-      previewRestoreFocusRef.current = false;
-      focusNavigationTarget(reorderEntryRef.current);
-    }
-  }, [reorderMode]);
+  const generatedReview = generatedAcceptance && mode === 'review';
+  const SummaryElement = mode === 'edit' || mode === 'scratch' ? 'div' : 'button';
   const backFromPreview = () => {
-    if (reorderMode) finishPreviewReorder();
+    // A live drag is temporary. Back cancels it before leaving this draft;
+    // a completed move stays in the draft until the explicit save transaction.
+    if (reorderGestureRef.current) {
+      const handle = reorderGestureRef.current.activator;
+      cancelReorderRef.current?.();
+      if (handle?.isConnected) focusNavigationTarget(handle);
+    }
     else onCancel?.();
   };
   useImperativeHandle(previewNavigationRef, () => ({ back: backFromPreview }));
@@ -13183,7 +13234,6 @@ export function PlanEditor({
     setPairingExerciseId(null);
     setExpandedWarmupDayId(null);
     setCollapsedDayIds([]);
-    setPreviewReordering(false);
   }, [resetKey]);
   useEffect(() => {
     if (reviewTargetId) setExpandedExerciseId(reviewTargetId);
@@ -13228,7 +13278,7 @@ export function PlanEditor({
   }) : [];
   const allowSupersets = planEditorAllowsSupersets(mode);
   const supportsReorder = mode === "edit" || importReview || mode === "review" || scratch;
-  const allowReorder = supportsReorder && (!explicitPreview || reorderMode);
+  const allowReorder = supportsReorder;
   const allowAddExercises = supportsReorder;
   const orderedProgramDays = useMemo(
     () => sourceReview ? program.days : chronologicalProgramDays(program.days),
@@ -13374,18 +13424,18 @@ export function PlanEditor({
     return bindTrainingReorder(reorderRootRef.current, {
       reorderGestureRef,reorderFrameRef,reorderPreviewRef,cancelReorderRef,
       suppressReorderClickUntil,commitReorderRef,setReorderView,
-      beforeStart:gesture=>{flushSync(()=>[...pendingNumberCommits.current].forEach(commit=>commit()));if(gesture.kind!=='workout'&&!explicitPreview)flushSync(()=>{setExpandedExerciseId(null);setExercisePickerId(null);});},
+      beforeStart:gesture=>{flushSync(()=>[...pendingNumberCommits.current].forEach(commit=>commit()));if(gesture.kind!=='workout'&&!generatedReview)flushSync(()=>{setExpandedExerciseId(null);setExercisePickerId(null);});},
       getCandidate:({kind,dayId,exerciseId,sourceIndex})=>{
         const day=programRef.current.days.find(item=>item.id===dayId);
         if(!day)return null;
         const block=buildExerciseReorderBlocks(day.exercises)[sourceIndex];
         if(kind==='exercise'&&(!block||block.locked||!block.exercises.some(e=>e.id===exerciseId)))return null;
         return {label:kind==='workout'?workoutDisplayParts(day,day.weekday).primary:exerciseName(block.exercises[0]),
-          meta:kind==='workout'?day.exercises.length+' exercises · ~'+roundedEstimate(day.estimatedMinutes)+' min':
+          meta:kind==='workout'?day.exercises.length+' exercises · About '+roundedEstimate(day.estimatedMinutes)+' min':
             block.exercises.length===2?'Superset · '+block.exercises.map(exerciseName).join(' + '):exerciseSummary(block.exercises[0])};
       },
     });
-  }, [allowReorder, resolutionOpen, active, explicitPreview]);
+  }, [allowReorder, resolutionOpen, active, generatedReview]);
   const mutateExercise = (dayId, exerciseId, mutate) => {
     setDirty(true);
     setProgram((current) => {
@@ -13997,6 +14047,8 @@ export function PlanEditor({
       exerciseMatchesQuery(item, sourceName),
     );
     if (direct.length) return direct.slice(0, 3);
+    const spellingMatches=searchExercises(choices,sourceName);
+    if(spellingMatches.length)return spellingMatches.slice(0,3);
     return compatibleReplacementCandidates(
       exercise,
       profile,
@@ -14057,8 +14109,7 @@ export function PlanEditor({
         (!scratch && !workoutOnly || day.exercises.length >= 1),
     );
   const saveProgram = (event) => {
-    if (catalogNeeded) return;
-    if (reorderMode) { finishPreviewReorder(); return; }
+    if (catalogNeeded || reorderGestureRef.current) return;
     if(importApplySafetyIssues.length)return;
     if(importReview&&(Date.now()<matchHandoffUntil.current||event?.detail>1))return;
     // Keyboard/programmatic activation need not blur the field first.
@@ -14105,7 +14156,7 @@ export function PlanEditor({
     candidates={(dayId,exercise,query)=>{
       const day=program.days.find(item=>item.id===dayId);
       const available=allEditorItems.filter(createPlanEditorExerciseFilter(profile)).filter(item=>!day.exercises.some(other=>other.id!==exercise.id&&other.exerciseId===item.id));
-      return query.trim()?rankExerciseSearch(available.filter(item=>exerciseMatchesQuery(item,query)),query):likelyImportedMatches(exercise,available);
+      return query.trim()?searchExercises(available,query):likelyImportedMatches(exercise,available);
     }}
     onDone={choice=>{if(choice?.fromMatch)matchHandoffUntil.current=Date.now()+350;setResolutionOpen(false);setExpandedExerciseId(null);requestAnimationFrame(()=>headingRef?.current?.scrollIntoView({block:'start'}));}}
     onBack={onCancel}
@@ -14146,7 +14197,7 @@ export function PlanEditor({
         <SettingSwitch
           label={scratch ? 'Recommended warm-ups' : 'Include recommended warm-ups'}
           checked={program.includeRecommendedWarmups !== false}
-          disabled={reorderMode}
+          disabled={Boolean(reorderView)}
           onChange={setWarmups}
         />
         <small>
@@ -14169,7 +14220,7 @@ export function PlanEditor({
       </section>}
       <section
         ref={reorderRootRef}
-        className={`import-preview plan-editor${explicitPreview ? ' generated-reorder-preview' : ''}${reorderMode ? ' is-preview-reorder' : ''}${generatedAcceptance && profile.showExerciseImages !== false ? " has-review-illustrations" : ""}${importReview ? " is-import-review" : ""}${importReview && unresolved === 0 && namesValid ? " has-ready-sticky-action" : ""}${reorderView ? " is-reordering" : ""}${reorderView?.kind === 'workout' ? ' is-week-reordering' : ''}`}
+        className={`import-preview plan-editor${generatedReview ? ' generated-reorder-preview' : ''}${generatedAcceptance && profile.showExerciseImages !== false ? " has-review-illustrations" : ""}${importReview ? " is-import-review" : ""}${importReview && unresolved === 0 && namesValid ? " has-ready-sticky-action" : ""}${reorderView ? " is-reordering" : ""}${reorderView?.kind === 'workout' ? ' is-week-reordering' : ''}`}
         data-workout-only={workoutOnly || undefined}
       >
         {!scratch && !workoutOnly && <div className="import-plan-meta">
@@ -14182,16 +14233,11 @@ export function PlanEditor({
                 : displayProgramName(program)}
             </h2>
           )}
-          {explicitPreview ? <div className="plan-preview-mode-row">
-            <small>{`${pluralize(program.days.length, "day")}/week`}</small>
-            {reorderMode ? <span className="plan-preview-mode-status" role="status">Reordering</span> :
-              <button ref={reorderEntryRef} type="button" className="text-button" disabled={saving}
-                aria-pressed={false} onClick={() => setPreviewReordering(true)}>Reorder</button>}
-          </div> : <small>{`${pluralize(program.days.length, "day")}/week`}</small>}
+          <small>{`${pluralize(program.days.length, "day")}/week`}</small>
         </div>}
         {allowReorder && (
-          <p className={scratch || explicitPreview ? 'visually-hidden' : 'plan-reorder-help'} id="plan-reorder-help">
-            {workoutOnly ? "Drag a handle to reorder exercises." : explicitPreview ? "Drag a handle to reorder workouts or exercises. Use Alt and arrow keys, or Tab to the move actions." : "Drag a handle to reorder workouts or exercises."}
+          <p className={scratch ? 'visually-hidden' : 'plan-reorder-help'} id="plan-reorder-help">
+            {workoutOnly ? "Drag a handle to reorder exercises." : generatedReview ? <>Drag handles to reorder.<span className="visually-hidden"> Use Alt and arrow keys, or Tab to the move actions.</span></> : "Drag a handle to reorder workouts or exercises."}
           </p>
         )}
         {importReview && (
@@ -14406,7 +14452,7 @@ export function PlanEditor({
               <div className="plan-workout-reorder-bar">
 
                 <span className="plan-workout-day-label">{day.weekday ? day.weekday.toUpperCase() : 'DAY NEEDED'}</span>
-                <span className="plan-workout-compact-summary">{dayTitleParts.primary} · {pluralize(exerciseCount, "exercise")}{Number(day.estimatedMinutes) > 0 ? ` · ~${roundedEstimate(day.estimatedMinutes)} min` : ''}</span>
+                <span className="plan-workout-compact-summary">{dayTitleParts.primary} · {pluralize(exerciseCount, "exercise")}{Number(day.estimatedMinutes) > 0 ? ` · About ${roundedEstimate(day.estimatedMinutes)} min` : ''}</span>
                 {scratch && <button type="button" className="plan-workout-overflow" data-no-reorder aria-label={`Workout options for ${day.weekday} ${dayTitleParts.primary}`}
                   aria-haspopup="dialog" onClick={event => {
                     workoutActionsTriggerRef.current = event.currentTarget;
@@ -14575,14 +14621,13 @@ export function PlanEditor({
                     !candidate.supersetId &&
                     candidate.sets.length === exercise.sets.length,
                 );
-                const availableExercises = pickerOpen ? rankExerciseSearch(catalog.filter(
+                const availableExercises = pickerOpen ? searchExercises(catalog.filter(
                   (item) =>
                     !day.exercises.some(
                       (other) =>
                         other.id !== exercise.id &&
                         other.exerciseId === item.id,
-                    ) &&
-                    exerciseMatchesQuery(item, exerciseQuery),
+                    ),
                 ), exerciseQuery) : [];
                 const likelyMatches = pickerOpen && needsReview
                   ? likelyImportedMatches(exercise, availableExercises)
@@ -14595,7 +14640,7 @@ export function PlanEditor({
                   : availableExercises.filter(
                       (item) => !likelyMatchIds.has(item.id),
                     );
-                const similarExercises = pickerOpen && preview ? rankExerciseSearch(compatibleReplacementCandidates(
+                const similarExercises = pickerOpen && preview ? searchExercises(compatibleReplacementCandidates(
                   exercise,
                   profile,
                   day.exercises.map((item) => item.exerciseId),
@@ -14605,7 +14650,7 @@ export function PlanEditor({
                       (other) =>
                         other.id !== exercise.id &&
                         other.exerciseId === item.id,
-                    ) && exerciseMatchesQuery(item, exerciseQuery),
+                    ),
                 ), exerciseQuery) : [];
                 const pickerExercises = preview
                   ? similarExercises
@@ -14613,7 +14658,7 @@ export function PlanEditor({
                 const pendingMatch = exercise.matchStatus === 'confirmed-match' ? editorCatalog[exercise.exerciseId] : null;
                 return (
                   <SwipeActionRow as="article"
-                    enabled={directEditor && active && !reorderView && !reorderMode && !expanded && (scratch || day.exercises.length>1)}
+                    enabled={directEditor && active && !reorderView && !expanded && (scratch || day.exercises.length>1)}
                     beforeRemove={()=>{flushSync(()=>[...pendingNumberCommits.current].forEach(commit=>commit()));return true;}}
                     onRemove={()=>removeExercise(day.id,exercise.id)}
                     removeLabel={`Remove exercise: ${exerciseName(exercise)}`}
@@ -14633,10 +14678,10 @@ export function PlanEditor({
                   >
                     <div className={allowReorder && !reorderBlock?.locked ? "plan-editor-card-header" : "plan-editor-card-header is-static"}>
                     <SummaryElement
-                      type={reorderMode || directEditor ? undefined : 'button'}
+                      type={directEditor ? undefined : 'button'}
                       className="plan-editor-summary"
-                      aria-expanded={reorderMode ? undefined : expanded}
-                      aria-label={reorderMode ? undefined : `${expanded ? "Collapse" : needsReview ? "Review" : "Edit"} ${exerciseName(exercise)}`}
+                      aria-expanded={expanded}
+                      aria-label={`${expanded ? "Collapse" : needsReview ? "Review" : "Edit"} ${exerciseName(exercise)}`}
                       aria-describedby={[
                         allowReorder ? "plan-reorder-help" : null,
                         needsReview ? `import-review-status-${exercise.id}` : null,
@@ -14657,13 +14702,12 @@ export function PlanEditor({
                         );
                       }}
                       onClick={() => {
-                        if (reorderMode) return;
                         setExpandedExerciseId(expanded ? null : exercise.id);
                         setExercisePickerId(null);
                         setExerciseQuery("");
                       }}
                     >
-                      {generatedAcceptance && !reorderMode && <PlanReviewIllustration exercise={exercise} catalog={exerciseCatalog} resolveArt={exerciseArt} enabled={profile.showExerciseImages !== false} name={exerciseName(exercise)} />}
+                      {generatedAcceptance && <PlanReviewIllustration exercise={exercise} catalog={exerciseCatalog} resolveArt={exerciseArt} enabled={profile.showExerciseImages !== false} name={exerciseName(exercise)} />}
                       <span className="plan-editor-heading">
                         <strong>
                           {pairRole && (
@@ -14681,7 +14725,7 @@ export function PlanEditor({
                           </small>
                         )}
                       </span>
-                      {!reorderMode && <EditorSummaryAction direct={directEditor} expanded={expanded} name={exerciseName(exercise)} needsReview={needsReview}>
+                      <EditorSummaryAction direct={directEditor} expanded={expanded} name={exerciseName(exercise)} needsReview={needsReview}>
                         <b>
                           {expanded
                             ? "CLOSE"
@@ -14692,13 +14736,13 @@ export function PlanEditor({
                               : "EDIT"}
                         </b>
                         <i aria-hidden="true" />
-                      </EditorSummaryAction>}
+                      </EditorSummaryAction>
                     </SummaryElement>
                     {allowReorder && !reorderBlock?.locked && (
                       <ReorderHandle
                         type="button"
                         className="plan-exercise-drag-handle"
-                        aria-label={explicitPreview ? `Move ${exerciseName(exercise)} in ${day.weekday} ${dayTitleParts.primary}${pair ? ' superset' : ''}` : `Move ${exerciseName(exercise)}`}
+                        aria-label={generatedReview ? `Move ${exerciseName(exercise)} in ${day.weekday} ${dayTitleParts.primary}${pair ? ' superset' : ''}` : `Move ${exerciseName(exercise)}`}
                         aria-describedby="plan-reorder-help"
                         aria-keyshortcuts="Alt+ArrowUp Alt+ArrowDown"
                         data-reorder-kind="exercise"
@@ -15371,10 +15415,10 @@ export function PlanEditor({
             ? "import-ready-sticky-action"
             : ""
         }
-        disabled={saving || (!reorderMode && (importApplySafetyIssues.length>0 || Boolean(openDurationReview) || unresolved > 0 || !namesValid || pendingSourceReviews > 0 || (sourceReview && (program.days.some(day=>!WEEKDAYS.includes(day.weekday)) || new Set(program.days.map(day=>day.weekday)).size!==program.days.length))))}
-        onClick={reorderMode ? finishPreviewReorder : saveProgram}
+        disabled={saving || Boolean(reorderView) || importApplySafetyIssues.length>0 || Boolean(openDurationReview) || unresolved > 0 || !namesValid || pendingSourceReviews > 0 || (sourceReview && (program.days.some(day=>!WEEKDAYS.includes(day.weekday)) || new Set(program.days.map(day=>day.weekday)).size!==program.days.length))}
+        onClick={saveProgram}
       >
-        {saving ? "SAVING…" : reorderMode ? 'Done reordering' : copy.action}
+        {saving ? "SAVING…" : copy.action}
       </Button>
       {showCancel && <Button
         variant="quiet"
@@ -15747,7 +15791,7 @@ export function ImportPlan({
   useEffect(() => () => importAbortRef.current?.abort(), []);
   useEffect(() => {
     if (initial && preview)
-      trackFunnelEventOnce("first_plan_viewed", {
+      trackFunnelEventOnce("plan_preview_viewed", {
         path: "import",
         planType: "imported",
       });
@@ -15836,12 +15880,14 @@ export function ImportPlan({
       setError(reason.message || 'Your plan could not be saved. Your current plan is unchanged.');
       return;
     }
-    if (initial)
+    if (initial) {
+      trackFunnelEventOnce("first_plan_viewed", {path:"import",planType:"imported"});
       trackFunnelEvent("onboarding_completed", {
         path: "import",
         source: "ai-import",
         daysPerWeek: program.days.length,
       });
+    }
     close();
     onPlanAccepted?.();
   };
@@ -15933,7 +15979,7 @@ export function RestDayActionSheet({ date, kind, state, update, close, setPage, 
   const childHeader = props => <SheetHeader {...props} onBack={props.onBack || back} backLabel={props.onBack ? props.backLabel : `Back to ${kind === 'optional' ? 'optional activity' : 'Train anyway'}`} />;
   if (view === 'cardio' || view === 'mobility') return <RestTrainingSheet date={date} state={state} update={update} close={close} setPage={setPage} setDetail={setDetail} initialMode={view} onBack={back} />;
   if (view === 'conditioning') return <ConditioningSheet date={date} state={state} update={update} close={close} setPage={setPage} Header={childHeader} />;
-  if (view === 'saved') return <SavedWorkouts state={state} update={update} close={close} dialogLabel="Saved workouts" Header={childHeader} Editor={PlanEditor} Modal={ModalLayer} onStarted={() => { close(); setPage('workout'); }} />;
+  if (view === 'saved') return <SavedWorkouts state={state} update={update} close={close} dialogLabel="Choose a workout" Header={childHeader} Editor={PlanEditor} Modal={ModalLayer} onStarted={() => { close(); setPage('workout'); }} />;
   if (view === 'freestyle') return <main className="sheet today-actions-sheet" role="dialog" aria-modal="true" aria-label="Freestyle workout">
     <SheetHeader title="Freestyle workout" onClose={close} onBack={back} backLabel="Back to Train anyway" />
     <FreestyleEntry state={state} update={update} setPage={page => { close(); setPage(page); }} setDetail={setDetail} date={date} hideHistory />
@@ -15956,7 +16002,7 @@ export function RestDayActionSheet({ date, kind, state, update, close, setPage, 
         </section>
       </> : <>
         {option('Start freestyle workout', unavailable ? date !== isoDay() ? 'Workouts can only be started for today.' : 'Resume or finish your active session first.' : 'Start empty. Add exercises as you go.', 'freestyle', Boolean(unavailable))}
-        {option('Saved workouts', 'Start one of your saved workouts.', 'saved')}
+        {option('Choose a workout', state.program?.days?.length?'From your plan or saved workouts.':'Start one of your saved workouts.', 'saved')}
       </>}
     </div>
   </main>;
@@ -16141,12 +16187,7 @@ function ProfileDetails({ state, update, close }) {
         onClose={close}
         closeLabel="Close profile details"
       />
-      <Eyebrow>ABOUT YOU</Eyebrow>
-      <h1>Complete your profile</h1>
-      <p>
-        These details give Coach useful context. You can leave any of them
-        blank.
-      </p>
+      <p>Optional details for Coach.</p>
       <div className="personal-fields">
         <label>
           <span>
@@ -16330,8 +16371,7 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
           <Eyebrow>PLANNING PREFERENCE</Eyebrow>
           <h1>When can you train?</h1>
           <p>
-            Days you’re generally available to train. This won’t move workouts
-            in your current program.
+            Your usual training days. Existing workouts won’t move.
           </p>
           <section className="profile-setting-options schedule-days">
             <div className="option-list day-options">
@@ -16361,8 +16401,8 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
           <h1>{setupTitle}</h1>
           <p>
             {focus === "equipment"
-              ? "Used for exercise recommendations and future plan changes. This won’t replace exercises in your current program."
-              : "Used by Coach and future plan changes. This won’t change your current program."}
+              ? "Used for recommendations and future plans. Existing exercises won’t change."
+              : "Used for future plans. Your current plan stays unchanged."}
           </p>
           <section className="profile-setting-options setup-environment">
             <div className="option-list">
@@ -16777,11 +16817,8 @@ export function BackupSheet({ state, update, close, onBackupCreated }) {
   return (
     <main className="screen detail-screen data-backup-screen">
       <SheetHeader title="Back up ROOK" onClose={close} />
-      <Eyebrow>BACK UP ROOK</Eyebrow>
-      <h1>Keep a recovery copy of your training.</h1>
-      <p>
-        Your backup is created on this device. ROOK does not upload it.
-      </p>
+      <h1>Back up your training</h1>
+      <p>Created on this device. Nothing is uploaded.</p>
       <section className="backup-includes" aria-label="Backup contents">
         <Eyebrow>INCLUDES</Eyebrow>
         <ul>
@@ -17766,10 +17803,10 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
       {!query && mapping.match?.tier === 'B' && <section className="history-import-suggestion" aria-label="Suggested match"><Eyebrow>SUGGESTED MATCH</Eyebrow><strong>{historicalExerciseLabel(state,mapping.match.suggestedExerciseId)}</strong><Button disabled={busy} variant="secondary" onClick={() => resolve({type:'match',exerciseId:mapping.match.suggestedExerciseId})}>USE MATCH</Button><Button variant="quiet" disabled={busy} onClick={() => mappingScreenRef.current?.querySelector('input[type="search"]')?.focus()}>CHOOSE ANOTHER</Button></section>}
       <Button disabled={busy} variant="quiet" onClick={() => resolve({type:'custom'})}>KEEP ORIGINAL</Button>
       <SearchInput onClear={() => setQuery("")} className="text-answer" type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search exercises" aria-label="Search exercises" />
-      {!query && mapping.match?.tier === 'C' && mapping.match.candidates?.some(item=>item.score>=.4) && <div className="history-import-match-list"><Eyebrow>POSSIBLE MATCHES · CHECK VARIANT</Eyebrow>{mapping.match.candidates.filter(item=>item.score>=.4).map(item=><button disabled={busy} key={item.exerciseId} className="list-row" onClick={()=>resolve({type:'match',exerciseId:item.exerciseId})}><span><strong>{item.name}</strong><small>{item.conflicts.length?'Different variant · review carefully':'Confirm the source setup'}</small></span><NavigationChevron/></button>)}</div>}
-      <div className="history-import-match-list">{choices.map((item) => (
+      {!query && mapping.match?.tier === 'C' && mapping.match.candidates?.some(item=>item.score>=.4) && <ScrollBoundary className="history-import-match-list"><Eyebrow>POSSIBLE MATCHES · CHECK VARIANT</Eyebrow>{mapping.match.candidates.filter(item=>item.score>=.4).map(item=><button disabled={busy} key={item.exerciseId} className="list-row" onClick={()=>resolve({type:'match',exerciseId:item.exerciseId})}><span><strong>{item.name}</strong><small>{item.conflicts.length?'Different variant · review carefully':'Confirm the source setup'}</small></span><NavigationChevron/></button>)}</ScrollBoundary>}
+      <ScrollBoundary className="history-import-match-list">{choices.map((item) => (
         <button disabled={busy} key={item.id} className="list-row" onClick={() => resolve({ type: "match", exerciseId: item.id })}><span><strong>{item.name}</strong>{item.custom && <small>Your custom exercise</small>}</span><NavigationChevron/></button>
-      ))}</div>
+      ))}</ScrollBoundary>
       {!query && <div className="history-import-special-actions"><button disabled={busy} className="choice-row" onClick={() => resolve({ type: "ignore" })}><span><strong>Ignore this exercise</strong><small>Its rows will not be imported.</small></span></button></div>}
     </main>
   );
@@ -17780,7 +17817,7 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
         <Eyebrow>{HISTORICAL_IMPORT_SOURCES[source].label.toUpperCase()}</Eyebrow><h1>Choose history file</h1>
         <p>ROOK parses and validates the file locally. Selecting it does not change History.</p>
         {source === "strong" && <p>If the export does not state its units, ROOK will ask before reading results.</p>}
-        {source === "generic" && <details className="history-import-format"><summary>Generic CSV format</summary><code>{GENERIC_HISTORY_CSV_HEADER}</code><small>One completed set per row. Use kg or lb in weight_unit.</small></details>}
+        {source === "generic" && <AnimatedDetails className="history-import-format"><summary>Generic CSV format</summary><code>{GENERIC_HISTORY_CSV_HEADER}</code><small>One completed set per row. Use kg or lb in weight_unit.</small></AnimatedDetails>}
         {source==='hevy'&&<p>Select Workouts, Measurements, or both. Every selected file is checked before a single save.</p>}
         <input ref={fileRef} type="file" multiple accept=".csv,.tsv,.txt,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onChange={chooseFile} />
         {error && <p className="backup-status is-error" role="alert">{error}</p>}
@@ -17791,29 +17828,29 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
         <Eyebrow>DRY RUN · NOTHING SAVED</Eyebrow><h1>Review import</h1><p>{preview.fileName} · {preview.sourceLabel}<br />{dateRange}</p>
         <p>{preview.fileInfo.weightUnits.length?`Source weight: ${preview.fileInfo.weightUnits.join(' / ')}`:'No source weight values'}{preview.fileInfo.distanceUnits.length?` · Distance: ${preview.fileInfo.distanceUnits.join(' / ')}`:''}</p>
         <Button variant="quiet" onClick={()=>{setError('');setStep('setup');}}>COLUMN / UNIT SETTINGS</Button>
-        {preview.warnings.length>0&&<details className="history-import-format"><summary>Source compatibility notes ({preview.warnings.length})</summary><ul className="history-import-warnings">{preview.warnings.map(w=><li key={w}>{w}</li>)}</ul></details>}
-        <details className="history-import-format"><summary>Preview factual history (first 3 workouts)</summary>{preview.workouts.slice(0,3).map(workout=><section key={workout.id}><h3>{workout.name||'Untitled source workout'} · {workout.canonicalPlanDate}</h3>{workout.sessionNote&&<p>{workout.sessionNote}</p>}{workout.exercises.map(ex=><div key={ex.id}><strong>{ex.sourceSupersetId?`Group ${ex.sourceSupersetId} · `:''}{ex.sourceName}</strong>{ex.notes&&<p>{ex.notes}</p>}{ex.sets.slice(0,20).map(set=><small key={set.id}>{historySetDescriptor(ex,set)}{set.rawImport.weight!=null?` · ${set.rawImport.weight} ${set.rawImport.weightUnit}`:''}</small>)}</div>)}</section>)}</details>
+        {preview.warnings.length>0&&<AnimatedDetails className="history-import-format"><summary>Source compatibility notes ({preview.warnings.length})</summary><ul className="history-import-warnings">{preview.warnings.map(w=><li key={w}>{w}</li>)}</ul></AnimatedDetails>}
+        <AnimatedDetails className="history-import-format"><summary>Preview factual history (first 3 workouts)</summary>{preview.workouts.slice(0,3).map(workout=><section key={workout.id}><h3>{workout.name||'Untitled source workout'} · {workout.canonicalPlanDate}</h3>{workout.sessionNote&&<p>{workout.sessionNote}</p>}{workout.exercises.map(ex=><div key={ex.id}><strong>{ex.sourceSupersetId?`Group ${ex.sourceSupersetId} · `:''}{ex.sourceName}</strong>{ex.notes&&<p>{ex.notes}</p>}{ex.sets.slice(0,20).map(set=><small key={set.id}>{historySetDescriptor(ex,set)}{set.rawImport.weight!=null?` · ${set.rawImport.weight} ${set.rawImport.weightUnit}`:''}</small>)}</div>)}</section>)}</AnimatedDetails>
         <dl className="history-import-summary-grid"><div><dt>Workouts</dt><dd>{formatCount(preview.summary.workouts)}</dd></div><div><dt>Sets</dt><dd>{formatCount(preview.summary.sets)}</dd></div><div><dt>Matched</dt><dd>{formatCount(preview.summary.matchedExercises-preview.summary.customExercises)}</dd></div><div><dt>Original names</dt><dd>{formatCount(preview.summary.customExercises)}</dd></div><div><dt>Exact duplicates</dt><dd>{formatCount(preview.summary.exactDuplicates)}</dd></div><div><dt>Invalid rows</dt><dd>{formatCount(preview.summary.invalidRows)}</dd></div></dl>
         {preview.summary.customExercises>0&&<><p>Some exercises keep their original names. Linking them to the ROOK library is optional.</p><Button variant="secondary" disabled={busy} onClick={reviewMatches}>Review exercise matches · Optional</Button>{busy&&<small role="status">{importProgress}</small>}</>}
         {preview.summary.reviewExercises>0&&<section className="history-import-review-section"><Eyebrow>SAVED MAPPING NEEDS ATTENTION</Eyebrow>{preview.exerciseMappings.filter(item=>!item.exerciseId&&!item.ignored&&item.match?.requiresReview).map(mappingRow)}</section>}
-        <details className="history-import-format history-import-resolved"><summary>Matched ({formatCount(preview.summary.matchedExercises-preview.summary.customExercises)})</summary>{preview.exerciseMappings.filter(item=>item.exerciseId&&!item.exerciseId.startsWith('custom-')||item.ignored).map(mappingRow)}</details>
-        {preview.summary.customExercises>0&&<details className="history-import-format history-import-custom"><summary>Original names ({formatCount(preview.summary.customExercises)})</summary><p>Original names and results are preserved. ROOK illustrations and catalog guidance may be unavailable.</p>{preview.exerciseMappings.filter(item=>item.exerciseId?.startsWith('custom-')&&!item.ignored).map(mappingRow)}</details>}
+        <AnimatedDetails className="history-import-format history-import-resolved"><summary>Matched ({formatCount(preview.summary.matchedExercises-preview.summary.customExercises)})</summary>{preview.exerciseMappings.filter(item=>item.exerciseId&&!item.exerciseId.startsWith('custom-')||item.ignored).map(mappingRow)}</AnimatedDetails>
+        {preview.summary.customExercises>0&&<AnimatedDetails className="history-import-format history-import-custom"><summary>Original names ({formatCount(preview.summary.customExercises)})</summary><p>Original names and results are preserved. ROOK illustrations and catalog guidance may be unavailable.</p>{preview.exerciseMappings.filter(item=>item.exerciseId?.startsWith('custom-')&&!item.ignored).map(mappingRow)}</AnimatedDetails>}
         {preview.exerciseMappings.some(item=>item.needsLoadKind)&&<p>Unconfirmed source loads are preserved and excluded from load/PR metrics. You can optionally clarify them below.</p>}
         {preview.measurements?.length>0&&<section className="history-import-review-section">
           <Eyebrow>MEASUREMENTS</Eyebrow>
           <p>{formatCount(preview.summary.measurements)} entries · {formatCount(preview.summary.measurementWeights)} recorded weights · {formatCount(preview.summary.measurementDuplicates)} exact duplicates</p>
           <p>Body weight uses existing ROOK check-ins. Body fat and circumference values are preserved as source data, not shown in Progress graphs. Backups and JSON history exports retain them.</p>
           {preview.preservedMeasurementFields.length>0&&<p>Source-only fields: {preview.preservedMeasurementFields.map(field=>field.replaceAll('_',' ')).join(', ')}</p>}
-          <details><summary>Review measurement values (first 20)</summary>{preview.measurements.slice(0,20).map((record,i)=><p key={`${record.id}-${i}`}><strong>{record.localDate}</strong><small>{Object.entries(record.values).filter(([,v])=>v.value!=null).map(([field,v])=>`${field.replaceAll('_',' ')}: ${v.value} ${v.unit||''}`).join(' · ')}</small></p>)}</details>
+          <AnimatedDetails><summary>Review measurement values (first 20)</summary>{preview.measurements.slice(0,20).map((record,i)=><p key={`${record.id}-${i}`}><strong>{record.localDate}</strong><small>{Object.entries(record.values).filter(([,v])=>v.value!=null).map(([field,v])=>`${field.replaceAll('_',' ')}: ${v.value} ${v.unit||''}`).join(' · ')}</small></p>)}</AnimatedDetails>
           {preview.summary.measurementConflicts>0&&<label className="remember-import-match"><input type="checkbox" checked={keepExistingMeasurements} onChange={event=>setKeepExistingMeasurements(event.target.checked)}/><span><strong>Keep existing body-weight check-ins</strong><small>{preview.summary.measurementConflicts} conflicting source entries will be preserved separately as source data. Local check-ins will not change.</small></span></label>}
         </section>}
-        <details className="history-import-format"><summary>Source load meanings (optional)</summary>{preview.exerciseMappings.filter(item=>item.needsLoadKind&&!item.ignored).map(item=><label className="history-import-load-choice" key={item.sourceKey}>Source load meaning · {item.sourceName}<select disabled={busy} value={item.loadKind||'unknown'} onChange={e=>resolve({type:'load',loadKind:e.target.value},item.sourceKey,false)}><option value="external">External load</option><option value="added">Added to bodyweight</option><option value="assisted">Assistance amount</option><option value="bodyweight">Recorded bodyweight (not added load)</option><option value="none">Source value is not an external training load</option><option value="unknown">Keep source value · exclude from load/PR metrics</option></select></label>)}</details>
+        <AnimatedDetails className="history-import-format"><summary>Source load meanings (optional)</summary>{preview.exerciseMappings.filter(item=>item.needsLoadKind&&!item.ignored).map(item=><label className="history-import-load-choice" key={item.sourceKey}>Source load meaning · {item.sourceName}<select disabled={busy} value={item.loadKind||'unknown'} onChange={e=>resolve({type:'load',loadKind:e.target.value},item.sourceKey,false)}><option value="external">External load</option><option value="added">Added to bodyweight</option><option value="assisted">Assistance amount</option><option value="bodyweight">Recorded bodyweight (not added load)</option><option value="none">Source value is not an external training load</option><option value="unknown">Keep source value · exclude from load/PR metrics</option></select></label>)}</AnimatedDetails>
         {(preview.summary.exactDuplicates > 0 || preview.summary.ambiguousDuplicates > 0) && <section className="history-import-review-section history-import-duplicates"><Eyebrow>DUPLICATES</Eyebrow>{preview.summary.exactDuplicates > 0 && <p><strong>{formatCount(preview.summary.exactDuplicates)} already in ROOK</strong><small>Exact duplicates will be skipped.</small></p>}{preview.summary.ambiguousDuplicates > 0 && <><p><strong>{formatCount(preview.summary.ambiguousDuplicates)} possible {preview.summary.ambiguousDuplicates === 1 ? "duplicate" : "duplicates"}</strong><small>Matching session identity, but different data. Existing history is never overwritten.</small></p><div role="radiogroup" aria-label="Possible duplicate action"><button className={ambiguousAction === "skip" ? "is-selected" : ""} onClick={() => setAmbiguousAction("skip")}>KEEP EXISTING</button><button className={ambiguousAction === "import" ? "is-selected" : ""} onClick={() => setAmbiguousAction("import")}>IMPORT THIS TOO</button></div></>}</section>}
         {preview.summary.invalidRows > 0 && <section className="history-import-review-section history-import-invalid"><button className="history-import-invalid-toggle" onClick={() => setShowInvalid((value) => !value)}><span><strong>{pluralize(preview.summary.invalidRows, "invalid row")}</strong><small>Import blocked. Correct these rows or column settings; no rows will be silently skipped.</small></span><b>{showInvalid ? "HIDE" : "VIEW"}</b></button>{showInvalid && preview.invalidRows.slice(0, 20).map((item,i) => <p key={`${item.line}-${i}`}>{item.reason}</p>)}</section>}
         {error && <p className="backup-status is-error" role="alert">{error}</p>}
         <small className="history-import-atomic-note">If saving fails, existing ROOK history stays unchanged.</small>
         {preview.summary.groupingDecisions>0&&<label className="remember-import-match"><input type="checkbox" checked={dateOnlyGroupingConfirmed} onChange={e=>setDateOnlyGroupingConfirmed(e.target.checked)}/><span><strong>Confirm date-only session grouping</strong><small>This file has no start time or workout ID for {preview.summary.groupingDecisions} session groups. I checked the preview: each date/name group is one workout. For separate same-day sessions, map a start time or workout ID first.</small></span></label>}
-        {importMetrics&&<details className="history-import-format"><summary>Local processing time</summary><small>{Math.round(importMetrics.visiblePreviewMs)} ms to visible preview · {importMetrics.fileRead?.calls||0} file reads ({Math.round(importMetrics.fileRead?.milliseconds||0)} ms)</small>{Object.entries(importMetrics.stages||{}).map(([name,value])=><small key={name}>{name}: {Math.round(value.milliseconds)} ms · {value.inputs} inputs · {value.calls} calls</small>)}</details>}
+        {importMetrics&&<AnimatedDetails className="history-import-format"><summary>Local processing time</summary><small>{Math.round(importMetrics.visiblePreviewMs)} ms to visible preview · {importMetrics.fileRead?.calls||0} file reads ({Math.round(importMetrics.fileRead?.milliseconds||0)} ms)</small>{Object.entries(importMetrics.stages||{}).map(([name,value])=><small key={name}>{name}: {Math.round(value.milliseconds)} ms · {value.inputs} inputs · {value.calls} calls</small>)}</AnimatedDetails>}
         <SheetActionFooter><Button disabled={busy || preview.summary.invalidRows > 0 || preview.summary.loadDecisions > 0 || preview.summary.reviewExercises > 0 || (preview.summary.measurementConflicts>0&&!keepExistingMeasurements) || (preview.summary.groupingDecisions>0&&!dateOnlyGroupingConfirmed) || (preview.summary.ambiguousDuplicates > 0 && !ambiguousAction)} onClick={apply}>{preview.summary.measurements>0?'IMPORT DATA':`IMPORT ${formatCount(importableCount)} ${importableCount === 1 ? 'WORKOUT' : 'WORKOUTS'}`}</Button></SheetActionFooter>
       </>}
     </main>
@@ -18148,7 +18185,7 @@ function GymProfilesSheet({ state, update, close }) {
         <SheetHeader title="Gym profiles" onClose={close} />
         <Eyebrow>TRAINING</Eyebrow>
         <h1>Your training environments</h1>
-        <p>Save the equipment available where you train. Your program and history stay separate.</p>
+        <p>Save each gym’s equipment. Your plan stays unchanged.</p>
         <section className="gym-profile-list" aria-label="Saved gym profiles">
           {gyms.map((gym) => (
             <button className="gym-profile-row" key={gym.id} onClick={() => openEditor(gym)}>
@@ -18282,6 +18319,7 @@ const TODAY_EQUIPMENT_OPTIONS = [
   ["machines", "Machines"],
   ["pull-up bar", "Pull-up bar"],
   ["resistance bands", "Resistance bands"],
+  ["secure band anchor", "Secure band anchor"],
   ["bodyweight only", "Bodyweight only"],
 ];
 
@@ -18489,7 +18527,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           <Eyebrow>LESS TIME</Eyebrow>
           <h1>Time available</h1>
           <p>The target is an estimate. ROOK keeps the most important work first.</p>
-          <p className="adjust-time-context">Current workout: ~{roundedEstimate(estimatedOriginal)} min{timing.sampleCount ? ` · Based on ${timing.sampleCount} similar completed ${timing.sampleCount === 1 ? 'workout' : 'workouts'}` : ' · Estimated from exercises and rest'}</p>
+          <p className="adjust-time-context">Current workout: About {roundedEstimate(estimatedOriginal)} min{timing.sampleCount ? ` · Based on ${timing.sampleCount} similar completed ${timing.sampleCount === 1 ? 'workout' : 'workouts'}` : ' · Estimated from exercises and rest'}</p>
           <div className="adjust-chip-grid" role="group" aria-label="Time available">
             {timePresets.map((value) => <button key={value} aria-pressed={minutes === value} className={minutes === value ? "is-selected" : ""} onClick={() => setMinutes(value)}>{value} min</button>)}
             <button aria-pressed={minutes === "custom"} className={minutes === "custom" ? "is-selected" : ""} onClick={() => setMinutes("custom")}>Custom</button>
@@ -18505,6 +18543,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           <h1>Where are you training?</h1>
           <p>This choice is for today only. It does not change your default gym.</p>
           <section className="adjust-gym-picker" role="radiogroup" aria-label="Training location for this workout">
+            {state.gymProfiles?.length > 0 && <>
             <Eyebrow>USE SAVED GYM</Eyebrow>
             <div className="adjust-saved-gyms">
               {(state.gymProfiles || []).map((gym) => {
@@ -18512,6 +18551,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
                 return <label key={gym.id} className={`adjust-equipment-mode${selected ? " is-selected" : ""}`}><input type="radio" name="today-training-location" checked={selected} aria-label={`${gym.name}, saved gym`} onChange={() => { setEquipmentSelection({ gymProfileId: gym.id, custom: false, equipment: normalizeGymEquipment(gym.equipment) }); setError(""); }} /><span><strong>{gym.name}</strong><small>{gymEquipmentSummary(gym.equipment)}</small></span><i aria-hidden="true" /></label>;
               })}
             </div>
+            </>}
             <Eyebrow>CUSTOM FOR TODAY</Eyebrow>
             <label className={`adjust-equipment-mode adjust-custom-equipment${customEquipment ? " is-selected" : ""}`}><input type="radio" name="today-training-location" checked={customEquipment} aria-label="Choose equipment, custom for today" onChange={() => { setEquipmentSelection({ gymProfileId: null, custom: true, equipment: [...equipment] }); setError(""); }} />
               <span><strong>Choose equipment</strong><small>Make a one-off selection for this workout.</small></span><i aria-hidden="true" />
@@ -18555,13 +18595,13 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
         <>
           <Eyebrow>TODAY ONLY · {adjustmentModeLabel(proposal.mode)}</Eyebrow>
           <h1>{proposal.workout.name}</h1>
-          <p>{proposal.workout.exercises.length} exercises · Estimated ~{roundedEstimate(proposal.originalWorkout.estimatedMinutes || estimateSessionMinutes(proposal.originalWorkout.exercises))} min → ~{roundedEstimate(proposal.workout.estimatedMinutes)} min</p>
+          <p>{proposal.workout.exercises.length} exercises · Estimated time: <span style={{whiteSpace:'nowrap'}}>{roundedEstimate(proposal.originalWorkout.estimatedMinutes || estimateSessionMinutes(proposal.originalWorkout.exercises))} min</span> → <span style={{whiteSpace:'nowrap'}}>{roundedEstimate(proposal.workout.estimatedMinutes)} min</span></p>
           {proposal.mode === ADJUST_TODAY_MODES.equipment ? <dl className="adjust-equipment-delta"><div><dt>Current</dt><dd>{currentEquipmentContext.name ? `${currentEquipmentContext.name} · ` : ""}{gymEquipmentSummary(currentEquipmentContext.equipment)}</dd></div><div><dt>For this workout</dt><dd>{proposal.gymProfileName ? `${proposal.gymProfileName} · ` : ""}{gymEquipmentSummary(proposal.temporaryEquipment)}</dd></div></dl> : proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
           <section className="adjust-review-section">
             <Eyebrow>WORKOUT PREVIEW</Eyebrow>
             {proposal.workout.exercises.map((exercise) => <div className="adjust-keep-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><small>{pluralize(exercise.sets.length, "set")}{state.profile.rirEnabled && Number.isFinite(exercise.targetRir) ? ` · ${exercise.targetRir} RIR` : ""}</small>
               {!existing && <button className="text-button" aria-label={`Edit targets for ${exerciseName(exercise)}`} aria-expanded={editingTargetsId === exercise.id} onClick={() => setEditingTargetsId(editingTargetsId === exercise.id ? null : exercise.id)}>{editingTargetsId === exercise.id ? 'Done' : 'Edit targets'}</button>}
-              {!existing && editingTargetsId === exercise.id && <AdjustmentTargetsEditor exercise={exercise} name={exerciseName(exercise)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={target => setProposal(current => editTodayAdjustmentTargets(current, exercise.id, target, state))}/>}</div>)}
+              {!existing && <Disclosure open={editingTargetsId===exercise.id} className="adjustment-target-disclosure"><AdjustmentTargetsEditor exercise={exercise} name={exerciseName(exercise)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={target => setProposal(current => editTodayAdjustmentTargets(current, exercise.id, target, state))}/></Disclosure>}</div>)}
           </section>
           <section className="adjust-review-section">
             <Eyebrow>CHANGES</Eyebrow>
@@ -18591,6 +18631,7 @@ export function Detail({
   onPlanImported,
   onLogout,
   onCombineWorkouts,
+  onAskCoach,
 }) {
   const panelRef = useRef(null);
   const detailArtwork = useAvailableImage(state.profile.showExerciseImages !== false ? exerciseArt(detail?.exercise) : null);
@@ -18598,6 +18639,7 @@ export function Detail({
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
   if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} Illustration={ExerciseDetailIllustration} />;
+  if(detail?.coachWorkoutReuse)return <CoachWorkoutReuseSheet state={state} update={update} reference={detail.coachWorkoutReuse} entryId={detail.coachEntryId} Header={SheetHeader} close={close} setDetail={setDetail} onStarted={()=>{close();setPage('workout');}}/>;
   if(detail==='saved-workouts'||detail?.saveWorkoutTemplate||detail?.savedWorkout||detail?.createSavedWorkout){
     const source=detail?.saveWorkoutTemplate?(detail.saveWorkoutTemplate.workoutId?state.workouts.find(w=>w.id===detail.saveWorkoutTemplate.workoutId):state.activeWorkout):null;
     return <SavedWorkouts state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} source={source} initialTemplateId={detail?.savedWorkout} createNew={Boolean(detail?.createSavedWorkout)} onStarted={()=>{close();setPage('workout');}}/>;
@@ -18767,7 +18809,7 @@ export function Detail({
         request={detail.adjustToday}
       />
     );
-  if (detail?.todayActions) return <TodayActionsSheet state={state} update={update} close={close} setDetail={setDetail} onCombineWorkouts={onCombineWorkouts} {...detail.todayActions}/>;
+  if (detail?.todayActions) return <TodayActionsSheet state={state} update={update} close={close} setDetail={setDetail} onCombineWorkouts={onCombineWorkouts} onAskCoach={onAskCoach} {...detail.todayActions}/>;
   if (detail?.todayFreestyle) return <main className="sheet today-actions-sheet">
     <SheetHeader title="Freestyle workout" onClose={close}/>
     <FreestyleEntry state={state} update={update} setPage={page=>{close();setPage(page);}} setDetail={setDetail} date={detail.todayFreestyle.date} hideHistory/>
@@ -18914,6 +18956,8 @@ export function Detail({
         setDetail={setDetail}
         onMoveCurrent={detail.onMoveCurrent}
         onRemoveCurrent={detail.onRemoveCurrent}
+        onShowPreviousValues={detail.onShowPreviousValues}
+        draftGuard={detail.draftGuard}
       />
     );
   if (detail?.sessionLoggingSetup)
@@ -19084,12 +19128,9 @@ export function Detail({
       {progression && (
         <section className={`exercise-progression progression-${progression.type}`}>
           <Eyebrow>PROGRESSION</Eyebrow>
-          <strong>{progression.title}</strong>
-          <p>
-            {progression.type === "progress" && progression.weight
-              ? `Next: ${displayWeight(progression.weight, state.profile.units)} ${unit}. ${progression.detail}`
-              : progression.detail}
-          </p>
+          <strong>{progressionPresentation(progression,exercise,state.profile.units).heading}</strong>
+          <p>{progressionPresentation(progression,exercise,state.profile.units).action}</p>
+          <ProgressionExplanation presentation={progressionPresentation(progression,exercise,state.profile.units)}/>
         </section>
       )}
       <section className="exercise-performance-history">
@@ -19231,8 +19272,7 @@ function Logging({ state, update, close }) {
           onChange={(value) => setFlag("rampUpSetsEnabled", value)}
         />
         <p className="setting-help">
-          Ramp-up sets prepare the first heavy exercises and never count as
-          working volume.
+          Prep sets before heavy lifts; excluded from working sets.
         </p>
       </section>
       <section className="logging-group">
@@ -19400,7 +19440,7 @@ function Appearance({ state, update, close }) {
         </small>
         {appearanceError && <p role="alert">{appearanceError}</p>}
       </section>
-      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><strong>Choose a theme</strong>{personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}<small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
+      {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><span className="theme-title"><strong>Choose a theme</strong>{personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}</span><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
       <section className="logging-group">
         <Eyebrow>EXERCISES</Eyebrow>
         <SettingSwitch
@@ -19416,8 +19456,8 @@ function Appearance({ state, update, close }) {
         />
         <p className="setting-help">
           {showExerciseImages
-            ? 'Exercise images are shown while training and in exercise details.'
-            : 'Exercise images are hidden while training and in exercise details.'}
+            ? 'Shown in workouts and exercise details.'
+            : 'Hidden in workouts and exercise details.'}
         </p>
       </section>
       <IllustrationCredits />
@@ -19845,8 +19885,16 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
   );
 }
 
-function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMoveCurrent, onRemoveCurrent }) {
+function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMoveCurrent, onRemoveCurrent, onShowPreviousValues, draftGuard }) {
   const [error,setError]=useState(''),acting=useRef(false);
+  const showPreviousOnClose = useRef(false);
+  useLayoutEffect(() => {
+    if (draftGuard) draftGuard.current = true;
+    return () => {
+      if (draftGuard) draftGuard.current = false;
+      if (showPreviousOnClose.current) requestAnimationFrame(() => onShowPreviousValues?.());
+    };
+  }, [draftGuard, onShowPreviousValues]);
   const active = state.activeWorkout;
   const exerciseIndex = active?.exercises.findIndex(
     (item) => item.id === exercise.id,
@@ -19880,6 +19928,7 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
   const isCurrent=exerciseIndex===active?.exerciseIndex;
   const moveable=Boolean(onMoveCurrent)&&isCurrent&&canMoveCurrentToUpNext(active,current.id);
   const removable=Boolean(onRemoveCurrent)&&isCurrent&&canRemoveCurrentExercise(active,current.id);
+  const loggedWork=isCurrent&&hasLoggedExerciseProgress(active,current.id);
   const apply=action=>{if(acting.current)return;acting.current=true;try{
     if(action()===false)throw Error('Could not save the change. Nothing was changed. Try again.');
     close();
@@ -19892,14 +19941,16 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
     >
       <Eyebrow>EXERCISE</Eyebrow>
       <h2 id="active-exercise-options-title">Exercise options</h2>
+      {isCurrent && onShowPreviousValues && <button type="button" className="list-row" onClick={() => {showPreviousOnClose.current = true; close();}}>Use previous values</button>}
       {supportsPerSideLogging(current) && (
         <button className="choice-row" onClick={() => setDetail({sessionLoggingSetup:{sessionId:active.id,exerciseId:current.id}})}>
           <strong>Edit logging setup</strong>
           <small>Reps per side or total reps · this workout only.</small>
         </button>
       )}
-      {moveable&&<button type="button" className="list-row" onClick={()=>apply(()=>onMoveCurrent?.(current.id))}>Move to Up Next</button>}
-      {removable&&<button type="button" className="list-row danger-text" onClick={()=>apply(()=>onRemoveCurrent?.(current.id))}>Remove from this workout</button>}
+      {(moveable||loggedWork&&onMoveCurrent)&&<button type="button" className="list-row" disabled={!moveable} onClick={()=>apply(()=>onMoveCurrent?.(current.id))}>Move to Up Next</button>}
+      {(removable||loggedWork&&onRemoveCurrent)&&<button type="button" className="list-row danger-text" disabled={!removable} onClick={()=>apply(()=>onRemoveCurrent?.(current.id))}>Remove from this workout</button>}
+      {loggedWork&&(onMoveCurrent||onRemoveCurrent)&&<p>Move and remove are locked after work has been logged.</p>}
       <button type="button" className="list-row active-exercise-note-action"
         aria-label={personalNote ? "Edit note" : "Add note"}
         aria-describedby={personalNote ? notePreviewId : undefined}
@@ -20281,6 +20332,7 @@ function Replace({ exercise, state, update, close }) {
       active.exercises[index] = {
         ...stored,
         exerciseId: choice.id,
+        replacementOfExerciseId: stored.exerciseId,
         exerciseSource: customRecord ? "custom" : "catalog",
         ...(customRecord
           ? {
@@ -20315,11 +20367,7 @@ function Replace({ exercise, state, update, close }) {
     });
     close();
   };
-  const pickerChoices = rankExerciseSearch(allAllowed.filter(
-    (item) =>
-      !query.trim() ||
-      exerciseMatchesQuery(item, query),
-  ), query);
+  const pickerChoices = searchExercises(allAllowed,query);
   const choiceButton = (choice, allowAnyAllowed = false, priority = false) => (
     <button
       className="choice-row"
@@ -20474,15 +20522,23 @@ function Replace({ exercise, state, update, close }) {
   );
 }
 
-export default function App() {
-  return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup}/>}</StartupBoundary></PersonalThemesProvider>;
+export default function App({placements}={}) {
+  return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup} placements={placements}/>}</StartupBoundary></PersonalThemesProvider>;
 }
 const StableActiveWorkout = memo(ActiveWorkout);
-function HydratedApp({startup}) {
+function HydratedApp({startup,placements}) {
   useSemanticSwipeBack();
   const [state, update, persistenceFailed] = useLiftState(startup);
   const personalThemes = usePersonalThemes();
   const accountSync = useAccountSync({ state, update, persistenceFailed });
+  useLayoutEffect(() => {
+    personalThemes.setDiscoveryAudience({
+      eligible:Boolean(accountSync.enabled && accountSync.linked && !accountSync.locked && state.profile.onboardingComplete),
+      profileId:state.profile.id,
+      accountCreatedAt:accountSync.accountCreatedAt,
+    });
+  }, [personalThemes.setDiscoveryAudience, accountSync.enabled, accountSync.linked, accountSync.locked,
+    accountSync.accountCreatedAt, state.profile.id, state.profile.onboardingComplete]);
   useInitialThemeDiscovery({newProfile:startup.firstRunVerified && !state.profile.onboardingComplete,
     profileId:state.profile.id, complete:state.profile.onboardingComplete, acknowledge:personalThemes.acknowledgeInitialThemes});
   const liveCompletion = useRef(null);
@@ -20512,9 +20568,16 @@ function HydratedApp({startup}) {
     setDetail(null);
     setPage('coach');
   };
+  const openAskCoach=date=>{
+    setCoachEntry(createCoachDayContext(state,date));setDetail(null);setPage('coach');
+  };
   const [detailClosing, setDetailClosing] = useState(false);
   useEffect(() => { setDetailClosing(false); }, [detail]);
-  const [entryMode, setEntryMode] = useState(startup.firstRunVerified && startup.status==='ready'&&!state.profile.onboardingComplete?'personalize':null);
+  const [entryMode, setEntryMode] = useState(()=>{
+    if (import.meta.env.DEV && import.meta.env.MODE==='theme-preview' && startup.firstRunVerified && !state.profile.onboardingComplete && ['welcome','sign-in','restore'].includes(placements?.firstRunEntry)) return placements.firstRunEntry;
+    return initialFirstRunEntry(startup,state);
+  });
+  const [restoreEntryParent,setRestoreEntryParent]=useState(null);
   const [repairPreview, setRepairPreview] = useState(null);
   const [planReadyNotice, setPlanReadyNotice] = useState(null);
   const seasonalTransitionBlocked = Boolean(accountSync.locked || state.activeWorkout || state.activeOptionalSession || detail ||
@@ -20596,11 +20659,13 @@ function HydratedApp({startup}) {
   if (accountSync.locked) return <AccountSyncLock sync={accountSync} Modal={ModalLayer} />;
   if (!state.profile.onboardingComplete) {
     if (!startup.firstRunVerified) return <main className="fatal-error-screen startup-recovery" role="alert"><p className="eyebrow">ROOK</p><h1>We couldn’t safely open your training data.</h1><p>Your saved data has not been replaced. Reload ROOK to retry recovery.</p></main>;
-    const mode = entryMode || 'landing';
-    const firstRunParents = { import: 'bring', scratch: 'bring', ...(accountSync.enabled && { restore: 'sign-in' }) };
+    // The intro and its functional fourth page share one retained pager route.
+    const mode = entryMode === 'welcome' ? 'landing' : entryMode || 'landing';
+    const firstRunParents = { import: 'bring', scratch: 'bring', ...(accountSync.enabled && { restore: restoreEntryParent || 'sign-in' }) };
     const back = expected => setEntryMode(current => current === expected ? (firstRunParents[expected] || null) : current);
     const open = (next, from = 'landing') => {
       if (mode !== from) return;
+      if(next==='restore')setRestoreEntryParent(from==='sign-in'?'sign-in':'landing');
       if (!['restore', 'sign-in'].includes(next)) trackFunnelEvent('onboarding_started', { path: next === 'personalize' ? 'personalized' : next });
       setEntryMode(next);
     };
@@ -20618,12 +20683,14 @@ function HydratedApp({startup}) {
         if (route === 'scratch') return <ScratchPlan state={state} update={update} close={() => back('scratch')} onPlanAccepted={showGeneratedPlan} preserveDraftOnClose/>;
         if (route === 'restore') return <RestoreBackupSheet state={state} update={update} close={() => back('restore')}
           onRestored={() => { accountSync.detachFirstRunAccountAfterBackup(); setEntryMode(null); setPage('today'); }}
-          backLabel={accountSync.enabled ? 'Back to sign in' : 'Back to start'} firstRun/>;
+          backLabel={firstRunParents.restore==='sign-in' ? 'Back to sign in' : 'Back to start'} firstRun/>;
         if (route === 'create-workout') return <SavedWorkouts state={state} update={update} close={() => back('create-workout')} Header={FirstRunSheetHeader} Editor={PlanEditor} Modal={ModalLayer} createNew firstRun onSaved={showToday}/>;
         if (route === 'freestyle-confirm') return <FirstRunFreestyleConfirm back={() => back('freestyle-confirm')} start={beginFirstRunFreestyle}/>;
-        return <EntryLanding personalize={() => open('personalize')} ownWorkouts={() => open('create-workout')} trainFreestyle={() => open('freestyle-confirm')} bringPlan={() => open('bring')}
-          restoreBackup={() => open('restore')} signIn={accountSync.enabled ? () => open('sign-in') : null}
-          signedIn={accountSync.state === 'signed-in-new-account'} returnToSavedProfile={accountSync.separate ? accountSync.switchToSavedProfile : null}/>;
+        return <FirstRunWelcome Stepper={Stepper} startAtLanding={entryMode!=='welcome'} onContinue={acknowledgeFirstRunWelcome}
+          onSignIn={accountSync.enabled?()=>open('sign-in'):undefined} onRestore={()=>open('restore')}
+          renderLanding={pager=><EntryLanding {...pager} personalize={() => open('personalize')} ownWorkouts={() => open('create-workout')} trainFreestyle={() => open('freestyle-confirm')} bringPlan={() => open('bring')}
+            restoreBackup={() => open('restore')} signIn={accountSync.enabled ? () => open('sign-in') : null}
+            signedIn={accountSync.state === 'signed-in-new-account'} returnToSavedProfile={accountSync.separate ? accountSync.switchToSavedProfile : null}/>}/>;
       }}</FirstRunNavigation>
     </PersistenceHost>;
   }
@@ -20637,7 +20704,8 @@ function HydratedApp({startup}) {
         planReady={planReadyNotice}
         dismissPlanReady={() => setPlanReadyNotice(null)}
         onCombineWorkouts={openCombineWorkouts}
-      /> : <NoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail}/>)
+        campaignSlot={placements?.today}
+      /> : <NoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail} campaignSlot={placements?.today}/>)
     ) : page === "optional-session" ? (
       <ActiveOptionalSession state={state} update={update} setPage={setPage} />
     ) : page === "workout" ? (
@@ -20668,6 +20736,7 @@ function HydratedApp({startup}) {
         setDetail={setDetail}
         setPage={setPage}
         accountSync={accountSync}
+        membershipSlot={placements?.profile}
         onLogout={() => setDetail("logout-confirm")}
       />
     );
@@ -20705,6 +20774,7 @@ function HydratedApp({startup}) {
             onPlanAccepted={showGeneratedPlan}
             onPlanImported={showToday}
             onCombineWorkouts={openCombineWorkouts}
+            onAskCoach={openAskCoach}
             onLogout={async () => {
               // Only reached after the existing destructive confirmation.
               try {
@@ -20741,14 +20811,15 @@ function HydratedApp({startup}) {
   );
 }
 
-export function RookRoot() {
+export function RookRoot({placements}={}) {
   return (
     <RookErrorBoundary>
-      <App />
+      <App placements={placements}/>
     </RookErrorBoundary>
   );
 }
 import { resolvePartialPrescription } from './importPartialPrescription.js';
 import { applyHybridDecision } from './hybridImportReview.js';
+import { setSourceDecisionPending } from './importSourceFidelity.js';
 import { ImportInterpretationOffer } from './ImportInterpretationOffer.jsx';
 import { useSemanticSwipeBack } from './useSemanticSwipeBack.js';

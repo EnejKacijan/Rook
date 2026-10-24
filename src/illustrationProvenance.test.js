@@ -12,7 +12,7 @@ const root=fileURLToPath(new URL('../',import.meta.url));
 const manifest=JSON.parse(fs.readFileSync(new URL('../docs/visual-provenance.json',import.meta.url)));
 describe('evidence-backed illustration provenance',()=>{
   it('covers every maintained visual and detects changed bytes or inline geometry',()=>{
-    expect(execFileSync(process.execPath,['scripts/audit-visual-provenance.mjs'],{cwd:root,encoding:'utf8'})).toContain('784 records');
+    expect(execFileSync(process.execPath,['scripts/audit-visual-provenance.mjs'],{cwd:root,encoding:'utf8'})).toContain(`${manifest.assets.length} records`);
     expect(execFileSync(process.execPath,['scripts/compile-visual-provenance.mjs','--check'],{cwd:root,encoding:'utf8'})).toContain('331 runtime records');
   });
   it('does not confuse a generation master or unused legacy drawing with shipped art',()=>{

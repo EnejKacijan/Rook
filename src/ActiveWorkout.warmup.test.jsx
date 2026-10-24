@@ -112,8 +112,48 @@ it('shows the flexible cardio recommendation without changing checks or working 
   expect(rows()[0].textContent).toContain('5 min');
   expect(node('.warmup-general-guidance').textContent).toContain("Shorten this if you're already warm");
   expect(node('.warmup-general-guidance').closest('button')).toBeNull();
+  expect(node('.warmup-general-guidance').closest('details').open).toBe(false);
   expect(progress().done).toBe(0);
   expect(current.activeWorkout.exercises).toEqual(before);
+});
+
+it('keeps the expanded checklist concise while routine guidance stays available on demand',()=>{
+  mount();const before=structuredClone(current),save=vi.spyOn(Storage.prototype,'setItem');
+  tap('.workout-warmup-toggle');settle();
+  expect(node('.warmup-inline-progress').textContent).toBe(`0/${progress().total}`);
+  expect(node('.workout-warmup-toggle').getAttribute('aria-label')).toContain(`0 of ${progress().total} warm-up steps complete`);
+  expect([...host.querySelectorAll('.warmup-section-label')].map(item=>item.textContent.trim())).toEqual(['Warm-up sets']);
+  expect(node('.warmup-exit').classList.contains('text-button')).toBe(true);
+  const tips=node('.warmup-tips');expect(tips.open).toBe(false);expect(node('.warmup-count-note').closest('details')).toBe(tips);
+  tap('.warmup-tips summary');expect(tips.open).toBe(true);expect(tips.textContent).toContain('Tap each step when done.');
+  expect(tips.textContent).toContain("Shorten this if you're already warm");
+  tap('.warmup-tips summary');expect(tips.querySelector('summary').getAttribute('aria-expanded')).toBe('false');
+  expect(tips.querySelector('.rook-disclosure').hasAttribute('inert')).toBe(true);settle();
+  expect(tips.open).toBe(false);expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();
+});
+
+it.each(['custom','imported','user','legacy'])('%s instructions and safety messages stay visible outside optional tips',kind=>{
+  const state=fixture(),warmup=state.activeWorkout.warmup,general=warmup.stages[0].general[0];
+  warmup.safetyMessage='Keep the prescribed movement restriction.';
+  general.guidance='Use the specific setup and pause prescribed in this plan.';
+  if(kind==='custom'){warmup.source='custom';general.custom=true;}else if(kind==='legacy')warmup.generatorVersion=2;else general.provenance=kind;
+  mount(state);tap('.workout-warmup-toggle');settle();
+  expect(node('.warmup-safety').textContent).toBe(warmup.safetyMessage);expect(node('.warmup-safety').closest('details')).toBeNull();
+  expect(node('.warmup-general-guidance').textContent).toBe(general.guidance);expect(node('.warmup-general-guidance').closest('details')).toBeNull();
+});
+
+it('keeps exercise names when warm-up sets prepare multiple movements',()=>{
+  const state=fixture(),stage=state.activeWorkout.warmup.stages[0],second=state.activeWorkout.exercises[1];
+  const other=structuredClone(stage.rampUpSets[0]);Object.assign(other,{exerciseId:second.exerciseId,exerciseInstanceId:second.id,exerciseIndex:1,exerciseName:'Second movement'});
+  other.sets.forEach(set=>set.id+='-second');stage.rampUpSets.push(other);
+  mount(state);tap('.workout-warmup-toggle');settle();
+  expect([...host.querySelectorAll('.warmup-ramp .warmup-section-label')].map(item=>item.textContent.trim())).toEqual([`${stage.rampUpSets[0].exerciseName} · Warm-up sets`,'Second movement · Warm-up sets']);
+});
+
+it('keeps a distinct imported exercise label even for a single matching ramp group',()=>{
+  const state=fixture();state.activeWorkout.warmup.stages[0].rampUpSets[0].exerciseName='Specific setup from imported plan';
+  mount(state);tap('.workout-warmup-toggle');settle();
+  expect(node('.warmup-ramp .warmup-section-label').textContent.trim()).toBe('Specific setup from imported plan · Warm-up sets');
 });
 
 it('reload keeps an already-started automatic warm-up prescription and its progress intact',()=>{

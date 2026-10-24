@@ -56,14 +56,18 @@ it('opening A, leaving with Previous, and revisiting never locks its queue reord
  key(visitedId,'ArrowDown');
  expect(current.activeWorkout.exercises.map(e=>e.id).slice(0,3)).toEqual([currentId,nextId,visitedId]);
 });
-it('a persisted value on a visited exercise still blocks reordering after Previous',()=>{
+it('a prepared value on a visited exercise remains reorderable after Previous',()=>{
  const s=make();mount(s);const visitedId=s.activeWorkout.exercises[1].id;
  act(()=>host.querySelectorAll('.up-next-main')[0].click());act(()=>vi.advanceTimersByTime(1000));
  const increase=[...host.querySelectorAll('button')].find(item=>/Increase reps for set 1/i.test(item.getAttribute('aria-label')||''));
  expect(increase).toBeTruthy();act(()=>increase.click());
  expect(current.activeWorkout.exercises.find(entry=>entry.id===visitedId).sets[0].touched).toBe(true);
  act(()=>button('← PREVIOUS EXERCISE').click());act(()=>vi.advanceTimersByTime(1000));
- expect(handle(visitedId)).toBeNull();
+ expect(handle(visitedId)).not.toBeNull();
+ const prepared=structuredClone(current.activeWorkout.exercises.find(entry=>entry.id===visitedId));
+ key(visitedId,'ArrowDown');
+ expect(current.activeWorkout.exercises.find(entry=>entry.id===visitedId)).toEqual(prepared);
+ expect(current.activeWorkout.exercises[2].id).toBe(visitedId);
 });
 it('Next past an untouched exercise does not turn its visit into logged progress',()=>{
  const s=make();mount(s);const [firstId,visitedId]=s.activeWorkout.exercises.map(e=>e.id);

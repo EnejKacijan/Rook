@@ -1,16 +1,12 @@
 # Halloween theme
 
-Branch: `claude/seasonal-halloween` (on `claude/seasonal-core`, which is on
-`claude/theme-polish`). Review only until you decide to release it.
+Branch: `claude/seasonal-halloween` (on the shared visual layer `claude/theme-visual-v2-nlh3tv`). Review only until you decide to release it.
 
 **Character:** Ember · night. Charcoal-violet nights (`#121016` page, `#1c1822` cards) and smoky lilac paper in Light. A measured pumpkin orange carries actions and selection.
 
 **Accent shades (Fine-tune):** Pumpkin (default), Moonlight, Witch Violet, Potion, Ash. Amber and blood-red shades were left out: they would read like the warning and error colors.
 
-**Decoration:** A crescent moon, three small bats, a dotted web thread and a few stars. It is one static band in the empty top padding of Today,
-Coach, Progress and Profile, below the safe area and above every control. It never
-appears in an active workout, a sheet or a form, has no motion, and is hidden in
-forced-colors mode. The same band previews on the theme's tile in the picker.
+**Decoration:** Three static layers. A crescent moon, three small bats, a dotted web thread and a few stars in the empty top padding of Today, Coach, Progress and Profile; a violet night glow behind the top of those tabs; and a small pumpkin, outlined in the page color, perched in the empty right corner of Today's main action, clear of its label. None of it appears in an active workout, a sheet or a form; it has no motion, takes no touches, is invisible to screen readers and is hidden in forced-colors mode. The theme's tile in the picker shows the same band, glow and pumpkin.
 
 Warning, error, success, selected and disabled colors are the shared semantic roles,
 unchanged. `src/seasonalContract.test.js` checks contrast, scoping and color distance.

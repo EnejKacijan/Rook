@@ -1,7 +1,8 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
 import {NavigationChevron} from './NavigationChevron.jsx';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
-import { displayWeight, displayEstimatedOneRepMax, weightUnit, saveState, rankExerciseSearch } from './domain.js';
+import { displayWeight, displayEstimatedOneRepMax, weightUnit, saveState, searchExercises } from './domain.js';
 import { applyNextBlock, nextBlockReplacementChoices, proposeNextBlock, reviewTrainingBlock } from './blockReview.js';
 import { SearchInput } from './SearchInput.jsx';
 import { useSheetBack } from './useSheetBack.js';
@@ -43,7 +44,7 @@ export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
   const reviewBlocked=!!error && !persistenceFailed;
   const change=proposal?.changes.find(item=>item.id===replacementId);
   const source=change && state.program.days.find(d=>d.id===change.dayId)?.exercises.find(e=>e.id===change.id);
-  const candidates=source?rankExerciseSearch(nextBlockReplacementChoices(state,source).filter(item=>item.name.toLowerCase().includes(query.trim().toLowerCase())),query):[];
+  const candidates=source?searchExercises(nextBlockReplacementChoices(state,source),query):[];
   return <main ref={ref} className="screen detail-screen block-review-sheet">
     <Header title={step==='next'?(proposal?.repeat?'Repeat block':'Next block'):step==='replacement'?'Choose replacement':'Block review'} onClose={close} onBack={step!=='summary'||onBack?back:undefined}/>
     {step==='summary' && <>
@@ -71,7 +72,7 @@ export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
         {item.plateOptions && <p className="sheet-footnote">Exact load is not available with your configured plates. Closest: {[item.plateOptions.lower,item.plateOptions.upper].filter(v=>v!=null).join(' / ')} {item.plateOptions.unit}. The target is not silently rounded.</p>}
         {!reviewBlocked && <fieldset className="flexible-adjustment-choice"><legend>Next-block choice</legend>{[['keep','Keep current'],['recommendation','Use recommendation']].map(([value,label])=><label key={value}><input type="radio" name={`block-choice-${item.id}`} checked={choices[item.id]===value} onChange={()=>setChoices(c=>({...c,[item.id]:value}))}/>{label}</label>)}{item.kind==='replacement' && <button className="text-button" onClick={()=>{setReplacementId(item.id);setQuery('');setStep('replacement');}}>Choose another replacement</button>}{!['keep','recommendation'].includes(choices[item.id]) && <small>Selected: {nextBlockReplacementChoices(state,state.program.days.find(d=>d.id===item.dayId).exercises.find(e=>e.id===item.id)).find(c=>c.id===choices[item.id])?.name}</small>}</fieldset>}
       </section>)}
-      <details className="block-unchanged"><summary>Current program · {review.rows.length} exercises</summary>{state.program.days.map(day=><section key={day.id}><h2>{day.name}</h2>{day.exercises.map(exercise=><p key={exercise.id}>{review.rows.find(r=>r.id===exercise.id)?.name} · {exercise.sets.length} × {exercise.repMin}–{exercise.repMax}{exercise.targetRir!=null?` · ${exercise.targetRir} RIR`:''}</p>)}</section>)}</details>
+      <AnimatedDetails className="block-unchanged"><summary>Current program · {review.rows.length} exercises</summary>{state.program.days.map(day=><section key={day.id}><h2>{day.name}</h2>{day.exercises.map(exercise=><p key={exercise.id}>{review.rows.find(r=>r.id===exercise.id)?.name} · {exercise.sets.length} × {exercise.repMin}–{exercise.repMax}{exercise.targetRir!=null?` · ${exercise.targetRir} RIR`:''}</p>)}</section>)}</AnimatedDetails>
       <p className="sheet-footnote">Starting creates a new block and a Plan History version. Completed workouts stay unchanged. Unstarted temporary adjustments and schedule overrides are cleared; none are carried into the new block.</p></div>
       <SheetActionFooter className="flexible-week-footer">
         {active && <p role="status">Finish the active workout before starting the next block.</p>}

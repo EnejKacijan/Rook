@@ -426,7 +426,14 @@
    Light keep the normal light structure while using its warmer paper tone. */
 :root[data-appearance] { color: var(--rook-text); background: var(--rook-page); }
 :root[data-appearance] body { color: var(--rook-text); background: var(--rook-page); }
-:root[data-appearance] :is(.app-shell, .onboarding, .initial-import-screen, .coach-header, .coach-screen > .coach-history-surface) {
+/* On a full-width phone the document canvas is part of the app, including
+   safe areas and any exposed canvas during browser/keyboard transitions.
+   Keep the contrasting outer frame only on wider, inset desktop layouts. */
+@media (max-width: 500px) {
+  html:root[data-appearance],
+  html:root[data-appearance] body { background-color: var(--rook-bg); }
+}
+:root[data-appearance] :is(.app-shell, .onboarding, .initial-import-screen, .coach-screen > .coach-history-surface) {
   background: var(--rook-bg);
   color: var(--rook-text);
 }
@@ -593,7 +600,7 @@
 /* ── Shared dark-family structural layer ──────────────────────────────── */
 :root[data-appearance="dark"] { color: var(--rook-text); background: var(--rook-page); }
 :root[data-appearance="dark"] body { color: var(--rook-text); background: var(--rook-page); }
-:root[data-appearance="dark"] :is(.app-shell, .onboarding, .initial-import-screen, .coach-header, .coach-screen > .coach-history-surface) { background: var(--rook-bg); color: var(--rook-text); }
+:root[data-appearance="dark"] :is(.app-shell, .onboarding, .initial-import-screen, .coach-screen > .coach-history-surface) { background: var(--rook-bg); color: var(--rook-text); }
 :root[data-appearance="dark"] :is(.screen, .sheet, .modal-layer > .screen, .workout-confirm, .building-card) { background-color: var(--rook-bg); color: var(--rook-text); }
 :root[data-appearance="dark"] .progress-line { background: var(--rook-border); }
 :root[data-appearance="dark"] .progress-line > span { background: var(--rook-progress); }
@@ -829,7 +836,7 @@
 :root[data-appearance="dark"] .workout-screen .exercise-meta { color: var(--rook-text); }
 :root[data-appearance="dark"] .workout-screen .exercise-history-meta { color: var(--rook-muted); }
 :root[data-appearance="dark"] .workout-screen .exercise-options-button { color: var(--rook-muted); }
-:root[data-appearance="dark"] .workout-screen .exercise-options-button:focus-visible { background: var(--rook-accent-soft); color: var(--rook-accent-text); }
+:root[data-appearance="dark"] .workout-screen .exercise-options-button:focus-visible:not([data-rook-pointer-focus="true"]) { background: var(--rook-accent-soft); color: var(--rook-accent-text); }
 :root[data-appearance="dark"] .workout-screen .workout-options-trigger { color: var(--rook-muted); }
 :root[data-appearance="dark"] .workout-screen .workout-options-trigger:active { background: transparent; color: var(--rook-accent-text); }
 :root[data-appearance="dark"] .active-workout-options-sheet .button.workout-restart-danger { background: #873a34; color: #fff; border-color: #873a34; }
@@ -1065,7 +1072,8 @@
 :root[data-appearance="dark"] :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
 :root[data-appearance="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
 :root[data-appearance="dark"] .setting-switch input:focus-visible + i { outline-color: var(--rook-focus-ring-soft); }
-:root[data-appearance="dark"] :is(.complete-mark, .coach-screen .today-update-check) { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+:root[data-appearance="dark"] .coach-screen .today-update-check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+:root .complete-screen .complete-mark { background: color-mix(in srgb, var(--rook-accent) 12%, var(--rook-surface)); color: var(--rook-accent-text); border: 1px solid color-mix(in srgb, var(--rook-accent) 35%, var(--rook-border)); }
 :root[data-appearance="dark"] .coach-screen .adapt-review-list > button:disabled .adapt-check { background: var(--rook-disabled-surface); border-color: var(--rook-border); color: var(--rook-disabled-text); }
 :root[data-appearance="dark"] .coach-screen .action-card-applied { border-color: var(--rook-success-line); background: var(--rook-success-soft); }
 :root[data-appearance="dark"] .coach-screen .action-card-applied > small { color: var(--rook-secondary); }
@@ -1225,7 +1233,7 @@
 :root[data-appearance="light"][data-style="premium"] :is(
   .exercise-options-button,
   .exercise-note-button
-):focus-visible {
+):focus-visible:not([data-rook-pointer-focus="true"]) {
   background: var(--rook-accent-soft);
   color: var(--rook-accent-text);
 }
@@ -1254,7 +1262,7 @@
   background-clip: padding-box;
   color: var(--rook-text);
   isolation: isolate;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
   scroll-padding-top: 104px;
 }
 
@@ -1345,7 +1353,7 @@
   background-clip: padding-box;
   color: var(--rook-text);
   isolation: isolate;
-  overscroll-behavior: contain;
+  overscroll-behavior: contain none;
 }
 
 .plan-editor-sheet > .long-form-sheet-header {

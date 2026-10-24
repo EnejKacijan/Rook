@@ -16,17 +16,17 @@ export function MissedWorkoutSummary({state,onSelect,update}) {
  // group (or leaving Today) releases its animation instead of reviving old UI.
  return <Disclosure key={reminderKey} className="today-missed-disclosure" open={state.dismissedMissedReminderKey!==reminderKey}>
  <aside className={`today-missed-row${single?' is-single':''}`} aria-label="Missed-workout reminder">
-  <div className="today-missed-header">
-   <span className="eyebrow today-missed-label">{single?'MISSED WORKOUT':'MISSED WORKOUTS'}</span>
-   {feedback&&<button type="button" className="text-button missed-reminder-hide" aria-label={single?'Hide missed workout reminder':'Hide missed workouts reminder'} onClick={feedback.hide}>Hide</button>}
-  </div>
-  <p className="today-missed-description">Not completed. Choose what to do next.</p>
   <ExerciseNavigationButton type="button" className="today-missed-open"
    aria-label={single?`Recover ${first.workout.name}, missed ${dateLabel(first.scheduledDate,true).replaceAll(',','')}`:`View ${missed.length} missed workouts`}
    onClick={()=>onSelect(single?{sessionId:first.logicalSessionId}:{missed:true})}>
-   <span><strong>{single?first.workout.name:`Review ${missed.length} missed workouts`}</strong>
-    {single&&<time dateTime={first.scheduledDate}>Missed · {dateLabel(first.scheduledDate)}</time>}</span>
+   <span>
+    <span className="today-missed-label">{single?'Missed workout':`${missed.length} missed workouts`}</span>
+    <span className="today-missed-workout"><strong>{single?first.workout.name:'Review missed sessions'}</strong>
+     {single&&<><span aria-hidden="true"> · </span><time dateTime={first.scheduledDate}>{dateLabel(first.scheduledDate)}</time></>}
+    </span>
+   </span>
    <NavigationChevron className="today-missed-chevron"/>
   </ExerciseNavigationButton>
+  {feedback&&<button type="button" className="text-button missed-reminder-hide" aria-label={single?'Hide missed workout reminder':'Hide missed workouts reminder'} onClick={feedback.hide}>Hide</button>}
  </aside></Disclosure>;
 }

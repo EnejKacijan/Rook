@@ -15,14 +15,23 @@ const click = async element => { await act(async () => element.click()); };
 afterEach(() => { if (root) act(() => root.unmount()); host?.remove(); root = null; host = null; });
 
 describe('account status copy', () => {
-  it('groups identity, status, timestamp and the local-only photo explanation above the neutral sign-out row', () => {
+  it('keeps identity and status concise, with backup and photo details available from the info button', async () => {
     render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: true, email: 'long.account@example.com', lastSuccessAt: '2026-10-11T12:00:00Z' }}/>);
     const summary = document.querySelector('.account-sync-summary');
     expect(summary.querySelector('.account-sync-identity').textContent).toBe('long.account@example.com');
     expect(summary.querySelector('[role="status"]').textContent).toBe('Synced');
-    expect(summary.textContent).toContain('Last synced');
-    expect(summary.textContent).toContain('Your ROOK training data is backed up');
-    expect(summary.textContent).toContain('Workout photos stay on this device; cloud sync does not include them.');
+    expect(summary.textContent).not.toContain('Last successful sync');
+    expect(summary.textContent).not.toContain('Workout photos stay');
+    const info=document.querySelector('[aria-label="Sync information"]');
+    expect(info.getAttribute('aria-haspopup')).toBe('dialog');expect(info.getAttribute('aria-expanded')).toBe('false');
+    await click(info);
+    const dialog=document.querySelector('[role="dialog"]');
+    expect(dialog.textContent).toContain('Last successful sync');
+    expect(dialog.textContent).toContain('Your ROOK training data is backed up');
+    expect(dialog.textContent).toContain('Workout photos stay on this device; cloud sync does not include them.');
+    expect(info.getAttribute('aria-expanded')).toBe('true');
+    await click(document.querySelector('[aria-label="Close sync information"]'));
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
     const signOut = document.querySelector('.account-sync-sign-out');
     expect(signOut.parentElement).toBe(summary.parentElement);
     expect(signOut.querySelector('.rook-navigation-chevron')).toBeTruthy();
@@ -37,12 +46,16 @@ describe('account status copy', () => {
     expect(accountSyncStatus({ state: 'not-configured', category: 'rollout-off' })).toBe('Cloud backup is not available yet');
     expect(accountSyncStatus({ state: 'auth-unavailable' })).toBe('Account connection needs attention');
   });
-  it('does not imply an anonymous cloud copy is recoverable elsewhere or includes photos', () => {
+  it('keeps the anonymous recovery limitation visible while moving photo details into info', async () => {
     render(<AccountSyncPanel Modal={Modal} sync={{ state: 'synced', pendingCount: 0, linked: false, canSecure: true, secureWithGoogle: vi.fn() }}/>);
     expect(document.body.textContent).toContain('Cloud copy for this device');
-    expect(document.body.textContent).toContain('Workout photos stay on this device');
+    expect(document.querySelector('.account-sync-summary').textContent).toContain('You cannot restore it by signing in');
+    expect(document.body.textContent).not.toContain('Workout photos stay on this device');
     expect(document.body.textContent).toContain('Create account with Google');
     expect(document.body.textContent).toContain('Link this profile to Google');
+    await click(document.querySelector('[aria-label="Sync information"]'));
+    expect(document.body.textContent).toContain('Workout photos stay on this device');
+    expect(document.querySelector('[role="dialog"]').textContent).not.toContain('Your ROOK training data is backed up');
   });
 });
 
@@ -67,11 +80,20 @@ it('lets an established local profile connect Google while cloud backup is tempo
   await click(button('Create account with GoogleLink this profile to Google so you can restore it on another device. Your training data stays here.'));
   expect(secureWithGoogle).toHaveBeenCalledOnce();
   await act(async () => root.render(<AccountSyncPanel Modal={Modal} sync={{ ...snapshot, state: 'needs-attention', linked: true, canSecure: false, email: 'owner@example.com' }}/>));
-  expect(document.body.textContent).toContain('Google account connected. Cloud backup still needs to finish');
+  expect(document.body.textContent).toContain('Cloud backup still needs to finish');
   expect(document.body.textContent).toContain('Sync needs attention');
   await act(async () => root.render(<AccountSyncPanel Modal={Modal} sync={{ ...snapshot, state: 'synced', pendingCount: 0, linked: true, canSecure: false, email: 'owner@example.com' }}/>));
-  expect(document.body.textContent).toContain('Google account connected. Your ROOK training data is backed up.');
   expect(document.body.textContent).not.toContain('Create account with Google');
+  await click(document.querySelector('[aria-label="Sync information"]'));
+  expect(document.body.textContent).toContain('Google account connected. Your ROOK training data is backed up.');
+});
+
+it.each(['offline','needs-attention','auth-unavailable','not-configured','synced'])('keeps actionable %s limitations visible without opening info', state => {
+  render(<AccountSyncPanel Modal={Modal} sync={{state,linked:true,pendingCount:2,category:'rollout-off'}}/>);
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  expect(document.querySelector('.account-sync-summary').textContent).toContain(state==='not-configured'?'Keep a ROOK backup file':'Cloud backup still needs to finish');
+  if(state==='needs-attention')expect(document.body.textContent).toContain('Your saved data on this device is unchanged');
+  expect(document.body.textContent).not.toContain('Your ROOK training data is backed up');
 });
 
 describe('account sign-out choices', () => {

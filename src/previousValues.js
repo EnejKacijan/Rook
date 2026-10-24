@@ -1,7 +1,8 @@
 import {exerciseLoadRequirement,previousExercise} from './domain.js';
 import {preparedExercise} from './workoutSessionStart.js';
-import {copyFreestylePrevious,freestylePreviousSets,previousWorkingSetValues,previousValuesSetEligible} from './freestyleWorkout.js';
-import {loggingModeOf,unilateralSetReps} from './advancedLogging.js';
+import {copyFreestylePrevious,freestylePreviousSets,previousWorkingSetValues,previousValuesSetEligible,withPreviousWorkingSetValues} from './freestyleWorkout.js';
+import {loggingModeOf,unilateralSetReps,setTypeOf} from './advancedLogging.js';
+import {userEditedWeight} from './workoutWeightChanges.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const locate=(state,record)=>{
@@ -34,31 +35,86 @@ export function previousValuesMatch(set,prior,exercise) {
     (!prior.sides||equal(sideValues(set.sides),sideValues(prior.sides))));
 }
 
-export function preparePreviousValues(state,identity) {
+const setPatch=(before,after)=>[...new Set([...Object.keys(before),...Object.keys(after)])].filter(key=>
+  Object.hasOwn(before,key)!==Object.hasOwn(after,key)||!equal(before[key],after[key])
+).map(key=>({key,existed:Object.hasOwn(before,key),value:structuredClone(before[key])}));
+
+// Only future fields that still belong to the prescription/automatic defaults
+// are eligible. A manual empty entry is still an explicit user decision.
+export function previousValuesFutureChanges(state,identity,{protectedFields=[]}={}) {
+  const current=locate(state,identity);
+  if(!previousValuesSetEligible(current))return [];
+  const exercise=state.activeWorkout.exercises[state.activeWorkout.exerciseIndex];
+  const history=freestylePreviousSets(state,exercise),index=exercise.sets.findIndex(set=>set.id===identity.setId);
+  const changes=[];
+  let ordinal=identity.ordinal;
+  for(const set of exercise.sets.slice(index+1)){
+    if(setTypeOf(set)!=='standard'||set.segments?.length)continue;
+    ordinal++;
+    if(!previousValuesSetEligible(set))continue;
+    if(protectedFields.some(item=>item.setId===set.id))continue;
+    const values=previousWorkingSetValues(exercise,history[ordinal]);
+    const knownEntryMode=set.weightEntryMode||set.repsEntryMode||set.sideRepsEntryMode||set.rirEntryMode;
+    if(set.touched&&!knownEntryMode)continue;
+    if(userEditedWeight(set))delete values.weight;
+    if(set.repsEntryMode==='manual')delete values.reps;
+    if(values.sides){
+      values.sides=Object.fromEntries(Object.entries(values.sides).flatMap(([side,fields])=>{
+        if(set.sideRepsEntryMode?.[side]==='manual')return [];
+        // Future reuse never imports an effort score from a previous workout.
+        const {rir,...supported}=fields;
+        return Object.keys(supported).length?[[side,supported]]:[];
+      }));
+      if(!Object.keys(values.sides).length)delete values.sides;
+    }
+    if(!Object.keys(values).length)continue;
+    const after=withPreviousWorkingSetValues(set,values);
+    // Preserve today's effort; this action only pre-fills load and counts.
+    if(Object.hasOwn(set,'rir'))after.rir=set.rir;else delete after.rir;
+    if(['weight','reps','sides'].every(key=>equal(set[key]??null,after[key]??null)))continue;
+    changes.push({setId:set.id,ordinal,before:set,after,patch:setPatch(set,after)});
+  }
+  return changes;
+}
+
+export function preparePreviousValues(state,identity,{remaining=false,protectedFields=[],expectedHistory}={}) {
   const before=locate(state,identity);
   if(!before)return {state,record:null};
-  const next=copyFreestylePrevious(state,identity.exerciseId,identity.setId,identity.ordinal);
+  const exercise=state.activeWorkout.exercises[state.activeWorkout.exerciseIndex];
+  if(expectedHistory!==undefined&&expectedHistory!==JSON.stringify(freestylePreviousSets(state,exercise)))throw Error('Previous workout data changed. Review the values and try again.');
+  let next=copyFreestylePrevious(state,identity.exerciseId,identity.setId,identity.ordinal);
   if(next===state)return {state,record:null};
-  const after=locate(next,identity);
-  if(['weight','reps','rir','sides'].every(key=>equal(before[key]??null,after[key]??null)))return {state,record:null};
-  const patch=[...new Set([...Object.keys(before),...Object.keys(after)])].filter(key=>
-    Object.hasOwn(before,key)!==Object.hasOwn(after,key)||!equal(before[key],after[key])
-  ).map(key=>({key,existed:Object.hasOwn(before,key),value:structuredClone(before[key])}));
-  return {state:next,record:{...identity,units:state.profile.units,patch,after:structuredClone(after)}};
+  let after=locate(next,identity);
+  const currentChanged=!['weight','reps','rir','sides'].every(key=>equal(before[key]??null,after[key]??null));
+  const future=remaining?previousValuesFutureChanges(state,identity,{protectedFields}):[];
+  if(!currentChanged){next=state;after=before;}
+  if(!currentChanged&&!future.length)return {state,record:null};
+  if(future.length){
+    const replacements=new Map(future.map(change=>[change.setId,change.after]));
+    next={...next,activeWorkout:{...next.activeWorkout,exercises:next.activeWorkout.exercises.map(exercise=>exercise.id!==identity.exerciseId?exercise:{...exercise,sets:exercise.sets.map(set=>replacements.get(set.id)||set)})}};
+  }
+  const patch=currentChanged?setPatch(before,after):[];
+  return {state:next,record:{...identity,units:state.profile.units,patch,after:structuredClone(after),...(future.length?{future:future.map(({before,...change})=>structuredClone(change))}:{})}};
 }
 
 export function canUndoPreviousValues(state,record) {
   const set=record&&locate(state,record);
-  return Boolean(set&&!set.completed&&state.profile.units===record.units&&equal(set,record.after));
+  const exercise=state.activeWorkout?.exercises[state.activeWorkout.exerciseIndex];
+  return Boolean(set&&!set.completed&&state.profile.units===record.units&&equal(set,record.after)&&
+    (record.future||[]).every(change=>{
+      const current=exercise.sets.find(item=>item.id===change.setId);
+      return current&&!current.completed&&change.patch.every(({key})=>Object.hasOwn(current,key)===Object.hasOwn(change.after,key)&&equal(current[key],change.after[key]));
+    }));
 }
 
 export function undoPreviousValues(state,record) {
   if(!canUndoPreviousValues(state,record))return state;
   const active=state.activeWorkout;
   const exercises=active.exercises.map(exercise=>exercise.id!==record.exerciseId?exercise:{...exercise,sets:exercise.sets.map(set=>{
-    if(set.id!==record.setId)return set;
+    const patch=set.id===record.setId?record.patch:record.future?.find(change=>change.setId===set.id)?.patch;
+    if(!patch)return set;
     const restored={...set};
-    for(const {key,existed,value} of record.patch){if(existed)restored[key]=structuredClone(value);else delete restored[key];}
+    for(const {key,existed,value} of patch){if(existed)restored[key]=structuredClone(value);else delete restored[key];}
     return restored;
   })});
   return {...state,activeWorkout:{...active,exercises}};
@@ -69,7 +125,7 @@ export function prefillReplacementValues(state,exercise) {
   return {...exercise,sets:exercise.sets.map((set,index)=>{
     const values=previousValuesSetEligible(set)?previousWorkingSetValues(exercise,previous[index]):{};
     const next = {...set,...(values||{}),weight:load==='none'?null:values?.weight??null,
-      weightProvenance:values?.weight!=null?'history':null};
+      weightProvenance:load!=='none'&&values&&Object.hasOwn(values,'weight')?'history':null};
     if (values?.sides) next.reps = unilateralSetReps(next);
     return next;
   })};

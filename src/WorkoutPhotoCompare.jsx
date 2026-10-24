@@ -18,7 +18,7 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
   const pair = useMemo(() => chronologicalPhotoPair(selection), [selection]);
   const availableIds = entries.filter(entry => entry.metadataAvailable).map(entry => entry.id).join('|');
   const ready = canComparePhotos(selection, entries, availability);
-  const title = selection.length === 0 ? 'Choose a photo' : selection.length === 1 ? 'Choose another photo' : 'Two photos selected';
+  const title = selection.length === 0 ? 'Choose two photos' : selection.length === 1 ? 'Choose another photo' : 'Two photos selected';
 
   useLayoutEffect(() => {
     root.current.scrollTop = 0;

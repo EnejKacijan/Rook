@@ -1226,8 +1226,9 @@ describe("personalized training domain", () => {
       equipment: ["bodyweight only"],
     });
     expect(hasBalancedPullEquipment(bodyweight)).toBe(false);
+    expect(hasBalancedPullEquipment({ ...bodyweight, equipment: ['resistance bands'] })).toBe(false);
     for (const equipment of [
-      ["resistance bands"],
+      ["resistance bands", "secure band anchor"],
       ["dumbbells"],
       ["pull-up bar"],
       ["barbell/rack/bench"],
@@ -1692,9 +1693,10 @@ describe("personalized training domain", () => {
       status: "alias",
     });
     expect(matchImportedExerciseName("Single-Leg Hamstring Curl")).toEqual({
-      exerciseId: "standing-leg-curl",
-      status: "alias",
+      exerciseId: null,
+      status: "unresolved",
     });
+    expect(matchImportedExerciseName("Standing Leg Curl").exerciseId).toBe("standing-leg-curl");
     expect(matchImportedExerciseName("Adductor Machine")).toEqual({
       exerciseId: "hip-adduction-machine",
       status: "alias",
@@ -2644,6 +2646,7 @@ ogrevalni set 12kg
     };
     const reps = exercise.repMax;
     const exposure = (completed) => ({
+      completedAt:'2026-10-01T12:00:00Z',
       exercises: [
         {
           exerciseId: exercise.exerciseId,
@@ -2666,6 +2669,7 @@ ogrevalni set 12kg
     );
     const exercise = { ...source, defaultIncrement: 10 };
     const exposure = (weight) => ({
+      completedAt:'2026-10-01T12:00:00Z',
       exercises: [
         {
           exerciseId: exercise.exerciseId,
@@ -2694,6 +2698,7 @@ ogrevalni set 12kg
     const state = stateFor({ experience: "Intermediate" });
     const exercise = state.program.days[0].exercises[0];
     const exposure = (reps) => ({
+      completedAt:'2026-10-01T12:00:00Z',
       exercises: [
         {
           exerciseId: exercise.exerciseId,
@@ -3606,7 +3611,8 @@ ogrevalni set 12kg
       profile({ ...options, priorities: ["Balanced"] }),
     );
     const prioritized = buildProgram(
-      profile({ ...options, priorities: ["Chest", "Back"] }),
+      profile({ ...options, priorities: ["Chest", "Back"],
+        prioritySources:{manual:["Chest","Back"],physiqueConfirmed:[]} }),
     );
     const baseline = weeklyDirectVolume(balanced);
     const focused = weeklyDirectVolume(prioritized);
@@ -4654,7 +4660,7 @@ ogrevalni set 12kg
       availableDays: WEEKDAYS,
       sessionMinutes: 30,
       environment: "Home gym",
-      equipment: ["resistance bands", "bodyweight only"],
+      equipment: ["resistance bands", "secure band anchor", "bodyweight only"],
       ageRange: "60+",
     });
     const highPlan = buildProgram(highFrequency);
@@ -5011,7 +5017,7 @@ ogrevalni set 12kg
       }
     const bands = profile({
       environment: "Home gym",
-      equipment: ["resistance bands", "bodyweight only"],
+      equipment: ["resistance bands", "secure band anchor", "bodyweight only"],
     });
     const program = buildProgram(bands);
     const ids = program.days.flatMap((day) =>

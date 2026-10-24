@@ -1,3 +1,5 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
+import {ScrollBoundary} from './ScrollBoundary.jsx';
 import React, {useEffect, useState} from 'react';
 import {storageDiagnostics, inspectStorageProtection} from './localStateStorage.js';
 
@@ -58,9 +60,9 @@ export function StorageDiagnostics() {
     <p className="storage-diagnostics-privacy">Technical status only. No workout contents, Coach messages or personal data. Nothing is uploaded.</p>
     <button type="button" className="button secondary" disabled={copying} onClick={copy}>Copy diagnostics</button>
     {feedback && <p role="status" className="storage-diagnostics-feedback">{feedback}</p>}
-    <details className="storage-diagnostics" open={technical} onToggle={event => setTechnical(event.currentTarget.open)}>
+    <AnimatedDetails className="storage-diagnostics" open={technical} onOpenChange={setTechnical} keepMounted={false}>
       <summary>{technical ? 'Hide technical details' : 'Show technical details'}</summary>
-      {technical && <pre tabIndex="0" aria-label="Technical diagnostics">{JSON.stringify(value, null, 2)}</pre>}
-    </details>
+      {technical && <ScrollBoundary as="pre" tabIndex="0" aria-label="Technical diagnostics">{JSON.stringify(value, null, 2)}</ScrollBoundary>}
+    </AnimatedDetails>
   </section>;
 }

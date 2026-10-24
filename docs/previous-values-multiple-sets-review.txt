@@ -1,0 +1,32 @@
+Local review — 23 October 2026
+
+ChatGPT consultation (Chat mode selected before sending):
+https://chatgpt.com/c/6adb7864-eecc-83eb-a9a4-3f3d62a40905
+
+Recommendation: one explicit action reuses the matching historical working set
+for each remaining eligible set. Do not stamp the first set across the exercise.
+The compact action says "Use for N sets" and the acknowledgment reports N.
+
+Implemented locally:
+- Current-set reuse retains its existing explicit replacement behavior, including
+  resolving the current raw edit. The manual sheet describes that replacement.
+- Following ordinary unlogged sets use their own history ordinal. Completed,
+  advanced, manually entered fields and sets with pending drafts are protected.
+  Planned entry defaults can be replaced; the prescription stays unchanged.
+- Missing history stays missing. Partial fields, native bodyweight null/zero,
+  compatible side counts, timed seconds and canonical kg/lb conversions remain
+  distinct. Future effort scores and historical completion are not copied.
+- Adopted historical fields retain their history provenance, separate from
+  actual manual edits. The 24 October follow-up uses the same contiguous equal-
+  load carry rule for this history and normal start-prefill; see the carry review.
+- Previewed source history is checked again at commit, before the atomic write.
+- The existing 8-second Undo restores all affected set patches. Later unrelated
+  session changes are preserved. Following the existing logger contract, editing
+  or completing an affected set expires Undo rather than partially undoing a
+  later manual decision. Input events also detect re-entry of the same number.
+
+Verification: 156 tests in 7 files passed; production build passed. Browser at
+393px: explicit 3-set action produced 15x8 / 15x7 / 12.5x8, all still unlogged.
+Screenshots: artifacts/plan-workout-review/previous-sets-before.png and
+artifacts/plan-workout-review/previous-sets-after.png.
+No push or deployment.

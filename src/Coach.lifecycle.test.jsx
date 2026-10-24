@@ -3,7 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {it,expect,vi,beforeEach,afterEach} from 'vitest';
 import {Coach} from './App.jsx';
 import {createReturningUserFixture} from './demoFixture.js';
-import {saveState,serializeState,deserializeState} from './domain.js';
+import {saveState,serializeState,deserializeState,startWorkout} from './domain.js';
 import {AIService} from './aiService.js';
 import {useSemanticSwipeBack} from './useSemanticSwipeBack.js';
 import {pendingCoachWorkflows} from './coachConversations.js';
@@ -34,13 +34,37 @@ it('M History is read-only and Back/swipe restores the same current chat/draft',
   swipe(document.querySelector('.coach-history-surface'));expect(document.querySelector('.coach-history-surface')).toBeNull();expect(current.activeCoachConversationId).toBe(id);expect(document.querySelector('textarea').value).toBe('Draft answer');
 });
 it('manual New chat is blank and same-day tab remount/reload retains it',()=>{
-  mount(fixture());history();click('New chat');const id=current.activeCoachConversationId;expect(id).not.toBe('current');expect(document.querySelector('textarea').value).toBe('');
+  mount(fixture());history();click('New chat');click('Start new chat');const id=current.activeCoachConversationId;expect(id).not.toBe('current');expect(document.querySelector('textarea').value).toBe('');
   type('Fresh draft');act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe(id);expect(document.querySelector('textarea').value).toBe('Fresh draft');
   expect(deserializeState(serializeState(current)).coachDraft).toBe('Fresh draft');expect(current.conversations).toHaveLength(2);
 });
+it('offers New chat directly in the header and protects a draft until explicit confirmation, including offline',()=>{
+  vi.spyOn(navigator,'onLine','get').mockReturnValue(false);
+  mount(fixture());const before=structuredClone(current);
+  const direct=document.querySelector('.coach-header [aria-label="New chat"]');expect(direct).not.toBeNull();
+  act(()=>direct.click());expect(document.querySelector('.coach-new-confirm').textContent).toContain('unsent draft will be discarded');
+  click('Keep current chat');act(()=>vi.advanceTimersByTime(400));expect(current).toEqual(before);
+  expect(document.querySelector('textarea').value).toBe('Draft answer');
+  act(()=>direct.click());click('Start new chat');expect(current.activeCoachConversationId).not.toBe(before.activeCoachConversationId);
+  expect(current.coachDraft).toBe('');expect(current.conversations).toEqual(before.conversations);expect(AIService.coach).not.toHaveBeenCalled();
+});
+it('does not roll over an open conversation on foreground or BFCache restore after midnight',()=>{
+  const state=fixture();state.coachDraft='';mount(state);const id=current.activeCoachConversationId;
+  vi.setSystemTime(new Date('2026-09-19T12:00:00'));
+  const shown=new Event('pageshow');Object.defineProperty(shown,'persisted',{value:true});
+  act(()=>{document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(shown);});
+  expect(current.activeCoachConversationId).toBe(id);
+  act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe(id);
+});
+it('restores an older conversation during an active workout and keeps the workout untouched',()=>{
+  const state=fixture();state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();
+  state.activeWorkout=startWorkout(state,state.program.days[0]);const restored=deserializeState(serializeState(state)),active=structuredClone(restored.activeWorkout);
+  mount(restored);expect(current.activeCoachConversationId).toBe('current');expect(current.activeWorkout).toEqual(active);
+  act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe('current');
+});
 it('pending New chat asks first; Continue preserves choices and Start cancels only that workflow',()=>{
-  mount(fixture(true));act(()=>document.querySelector('input[type="checkbox"]').click());const original=structuredClone(current);history();click('New chat');expect(document.body.textContent).toContain('Your current Coach adjustment is still in progress.');
-  click('Continue current');act(()=>vi.advanceTimersByTime(400));expect(current).toEqual(original);click('New chat');click('Start new chat');
+  mount(fixture(true));act(()=>document.querySelector('input[type="checkbox"]').click());const original=structuredClone(current);history();click('New chat');expect(document.body.textContent).toContain('Your pending review will close without being applied.');
+  click('Keep current chat');act(()=>vi.advanceTimersByTime(400));expect(current).toEqual(original);click('New chat');click('Start new chat');
   expect(current.activeCoachConversationId).not.toBe('current');expect(current.conversations[1]).toMatchObject({coachWorkflowStatus:'cancelled',combineSelection:['upper']});expect(current.program).toEqual(original.program);expect(current.activeWorkout).toEqual(original.activeWorkout);
 });
 it('failed manual save retains pending confirmation, old transcript/draft and allows retry',()=>{
@@ -48,13 +72,14 @@ it('failed manual save retains pending confirmation, old transcript/draft and al
   saveState.mockReturnValue(true);click('Start new chat');expect(current.activeCoachConversationId).not.toBe(before.activeCoachConversationId);expect(document.querySelector('textarea').value).toBe('');
 });
 it('next-day entry failure keeps old state and retries without deleting history',()=>{
-  vi.setSystemTime(new Date('2026-09-19T12:00:00'));const state=fixture();state.conversations[1].createdAt=new Date('2026-09-18T12:00:00').getTime();saveState.mockReturnValue(false);mount(state);
+  vi.setSystemTime(new Date('2026-09-19T12:00:00'));const state=fixture();state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-18T12:00:00').getTime();saveState.mockReturnValue(false);mount(state);
   expect(current).toEqual(state);expect(document.querySelector('[role="alert"]').textContent).toContain('unchanged');saveState.mockReturnValue(true);click('Try again');expect(current.activeCoachConversationId).not.toBe('current');expect(current.conversations).toEqual(state.conversations);
 });
-it('resolution stays visible during the visit; next tab entry rolls over',async()=>{
+it('continuing an older chat today keeps it on tab return and rolls over on a later clean day',async()=>{
   const state=fixture(true);state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();mount(state);expect(current.activeCoachConversationId).toBe('current');history();click('New chat');click('Start new chat');
   const newId=current.activeCoachConversationId;vi.setSystemTime(new Date('2026-09-19T12:00:00'));type('Plain question');await act(async()=>button('Send message').click());expect(current.activeCoachConversationId).toBe(newId);expect(AIService.coach).toHaveBeenCalledOnce();
-  act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe(newId);
+  act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe(newId);
+  vi.setSystemTime(new Date('2026-09-20T12:00:00'));act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe(newId);
 });
 it('late reply after explicit cancellation cannot resurrect an archived workflow',async()=>{
   let resolve;AIService.coach.mockImplementation(()=>new Promise(r=>resolve=r));mount(fixture());type('Combine workouts');click('Send message');history();click('New chat');click('Start new chat');const fresh=current.activeCoachConversationId;
@@ -108,14 +133,15 @@ it('partial source selection survives tab remount and interrupted reply retries 
   AIService.coach.mockRejectedValueOnce(new Error('offline'));type('Question');await act(async()=>button('Send message').click());const count=current.conversations.length,id=current.conversations.at(-1).id;
   await act(async()=>button('Retry reply').click());expect(current.conversations).toHaveLength(count);expect(current.conversations.at(-1).id).toBe(id);expect(current.conversations.at(-1).reply.text).toBe('Complete answer.');
 });
-it('Adjust Today review selections survive remount, and Cancel resolves the review until it is reopened',()=>{
-  const state=fixture(),day=state.program.days[0];state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:30,label:'USE WORKOUT'}};
+it('Adjust Today review selections survive remount, and resolving a review keeps today’s conversation',()=>{
+  const state=fixture(),day=state.program.days[0];state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:30,label:'USE WORKOUT'}};
   mount(state);click('REVIEW CHANGES');const controls=[...document.querySelectorAll('.adapt-review-list button[aria-pressed]:not([disabled])')];act(()=>controls.at(-1).click());const chosen=current.conversations[1].actionReview.exerciseIds;
   act(()=>page(false));click('Coach');click('REVIEW CHANGES');expect([...document.querySelectorAll('.adapt-review-list button[aria-pressed="true"]')]).toHaveLength(chosen.length);
   click('CANCEL');expect(pendingCoachWorkflows(current)).toEqual([]);expect(current.conversations[1].coachReviewCancelled).toBe(true);
   expect(current.activeCoachConversationId).toBe('current');
   click('REVIEW CHANGES');expect(pendingCoachWorkflows(current)).toHaveLength(1);
-  click('CANCEL');act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe('current');
+  click('CANCEL');act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe('current');
+  vi.setSystemTime(new Date('2026-09-19T12:00:00'));act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe('current');
 });
 it('edits targets in the Coach draft, retains them across remount, and applies only to today',()=>{
   const state=fixture(),day=state.program.days[0];day.weekday='Fri';const original=structuredClone(state.program),exercise=day.exercises[0];

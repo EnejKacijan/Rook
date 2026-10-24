@@ -1,5 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, rankExerciseSearch, exerciseMatchesQuery } from './domain.js';
+import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, searchExercises } from './domain.js';
 import { matchImportCatalogName } from './importExerciseMatching.js';
 import { createPlanEditorExerciseFilter } from './exerciseEligibility.js';
 import { normalizeExerciseAlias } from './customExercises.js';
@@ -36,7 +36,7 @@ export function OptionalPlanMatches({program,profile,onMatch,onOriginal,onBack,o
     if(step===groups.length-1)onBack();else{setStep(step+1);setQuery('');setBrowse(false);}
   };
   if(currentStep.current!==step){currentStep.current=step;submitted.current=false;}
-  const choices=rankExerciseSearch(group.available.filter(item=>exerciseMatchesQuery(item,query)),query).slice(0,20);
+  const choices=searchExercises(group.available,query).slice(0,20);
   return <section ref={root} className="import-resolution" data-import-step-back="true" aria-label="Optional exercise matches">
     <header className="detail-header import-decision-header"><button className="icon-button" aria-label="Back" onClick={onBack}>‹</button><strong>Exercise matches · Optional</strong><span/></header>
     <div ref={scroll} className="import-decision-scroll" data-swipe-back-content><div className="import-decision-content">

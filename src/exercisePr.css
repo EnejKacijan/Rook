@@ -1,6 +1,6 @@
 .exercise-pr-sheet { display: flex; flex-direction: column; overflow: hidden; }
 .exercise-pr-sheet > :is(.detail-header, .sheet-header-chrome) { flex: 0 0 auto; }
-.exercise-pr-sheet > .sheet-scroll { min-height: 0; flex: 0 1 auto; overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 12px; }
+.exercise-pr-sheet > .sheet-scroll { min-height: 0; flex: 0 1 auto; overflow-y: auto; overscroll-behavior: contain none; scroll-padding-block: 12px; }
 .workout-screen .active-performance-pr-trigger {
   display: flex;
   align-items: center;
@@ -15,12 +15,24 @@
 .active-performance-pr-trigger .active-performance-pr {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  flex-wrap: wrap;
+  gap: 4px 6px;
   margin: 0;
+  padding: 6px 9px;
+  font-size: 12px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0;
+  line-height: 1.35;
+  transform-origin: left center;
 }
+.active-performance-pr > strong { font: inherit; font-weight: 700; }
+.active-performance-pr .active-record-gain { font-variant-numeric: tabular-nums; white-space: nowrap; }
+.active-record-info { margin-left: 6px; }
+.active-performance-pr .active-record-gain::before { content: '·'; margin-right: 6px; }
+.active-performance-pr.is-estimate .active-record-gain::before { content: none; }
 .exercise-pr-sheet .exercise-pr-value {
   margin: 8px 0;
-  font-size: 40px;
+  font-size: clamp(25px, 6.5vw, 36px);
   line-height: 1.1;
   color: var(--rook-text);
   font-variant-numeric: tabular-nums;
@@ -28,6 +40,7 @@
 }
 .exercise-pr-sheet .exercise-pr-value small { font-size: .45em; color: var(--rook-secondary); }
 :root .sheet.exercise-pr-sheet .exercise-pr-name { margin: 0 0 20px; font-weight: 600; color: var(--rook-text); }
+.exercise-pr-sheet .exercise-pr-value-label { margin: 0; color: var(--rook-secondary); font-size: 13px; }
 .exercise-pr-evidence { display: grid; gap: 12px; margin: 0; padding: 16px 0; border-block: 1px solid var(--rook-border); }
 .exercise-pr-evidence > div { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 4px 16px; }
 .exercise-pr-evidence dt { color: var(--rook-secondary); }

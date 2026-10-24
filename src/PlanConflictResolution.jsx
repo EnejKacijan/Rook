@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { compatibleReplacementCandidates, exerciseMatchesQuery, exerciseName, rankExerciseSearch } from './domain.js';
+import { compatibleReplacementCandidates, exerciseName, searchExercises } from './domain.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 export { planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './exerciseEligibility.js';
 import { SearchInput } from './SearchInput.jsx';
@@ -22,7 +22,7 @@ export function PlanConflictResolution({ exercise, day, profile, conflict, minim
   // Opening the sheet does not rank substitutions. Search reuses this result.
   const candidates = useMemo(() => open ? conflictReplacementCandidates(exercise, day, profile, conflict) : [], [open, exercise, day, profile, conflict]);
   const broaderCandidates = useMemo(() => open && broad ? allExercises.filter(item => planEditorExerciseAllowed(item, profile) && !day.exercises.some(other => other.exerciseId === item.id)) : [], [open, broad, allExercises, profile, day]);
-  const matches = rankExerciseSearch((broad ? broaderCandidates : candidates).filter(item => exerciseMatchesQuery(item, query)), query);
+  const matches = searchExercises(broad ? broaderCandidates : candidates,query);
   const effort = conflict.reason === 'effort';
   const canRemove = day.exercises.length > 1;
   return <div className="plan-conflict-resolution">

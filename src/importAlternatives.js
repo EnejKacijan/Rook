@@ -54,7 +54,7 @@ export function analyzeImportAlternatives(source) {
   if(nestedAlternative)return unsafe();
   if(!cuts.length){
     // Two targets with an unrecognised separator must not silently pick the first.
-    const targets=[...text.matchAll(rxPattern)];
+    const targets=[...text.matchAll(rxPattern)].filter(m=>!(m.index>0 && /^\s*(?:kg|lbs?)\s+dumbbells\b/i.test(text.slice(m.index+m[0].length)) && /\bdumbbell\b/i.test(text.slice(0,m.index)) && /^2\s*[x×]/.test(m[0])));
     const between=targets.length>1?text.slice(targets[0].index+targets[0][0].length,targets[1].index).replace(/(?<!\p{L})(?:kgs?|lbs?|rir|rpe|reps?|seconds?|sec)\b/giu,''):'';
     if(targets.length>1&&/[\p{L}]{2,}/u.test(between)&&!/\b(?:warm.?up|working|drop|rest.pause|set\s*\d|serij)\b/iu.test(text))return unsafe();
     return {detected:false,options:[]};

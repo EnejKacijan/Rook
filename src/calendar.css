@@ -123,11 +123,13 @@
 .today-workout-chooser .list-row { min-height: 64px; color: var(--rook-text); }
 .today-workout-chooser .list-row > span:first-child { white-space: normal; overflow-wrap: anywhere; }
 .today-workout-chooser .list-row small { color: var(--rook-secondary); line-height: 1.4; }
-.today-missed-row { display: grid; gap: 12px; margin-top: 16px; padding: 8px 0; border-bottom: 1px solid var(--rook-border); }
+.today-missed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:12px; margin-top:8px; padding:8px 0; }
+.today-screen > .today-missed-disclosure + .today-hero,
+.today-screen > .today-missed-disclosure + .missed-workout-feedback + .today-hero { margin-top:0; padding-top:12px; }
 /* Disclosure contains the row's margin, so avoid adding the paragraph's formerly
    collapsed bottom margin to it (including when the reminder is hidden). */
 .rest-day-state > p:has(+ .today-missed-disclosure) { margin-bottom: 0; }
-.rest-day-state > .today-missed-disclosure .today-missed-row { margin-top: 16px; border-bottom: 0; }
+.rest-day-state > .today-missed-disclosure .today-missed-row { margin-top:8px; }
 /* The row's own margin/padding live inside Disclosure's measured height.
    Keep the existing 16px/30px Up Next gaps, settling with that same collapse. */
 .rest-day-state > .today-missed-disclosure + .rest-up-next { transition: margin-top 200ms cubic-bezier(.2,0,0,1); }
@@ -135,15 +137,13 @@
 @media (prefers-reduced-motion: reduce) {
   .rest-day-state > .today-missed-disclosure + .rest-up-next { transition: none; }
 }
-.today-missed-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; }
-.today-missed-label { margin: 0; }
-:root[data-appearance] .today-missed-row .eyebrow.today-missed-label { color: var(--rook-accent-text); }
-.today-missed-row > .today-missed-description { margin: 0; color: var(--rook-secondary); font-size: 12px; line-height: 1.45; }
-.today-missed-header > .missed-reminder-hide { flex: 0 0 auto; min-width: 44px; min-height: 44px; padding: 8px 0; color: var(--rook-accent-text); font-size: 13px; }
-.today-missed-open { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-width: 0; min-height: 44px; padding: 8px 0; border: 0; background: transparent; color: var(--rook-text); text-align: left; }
-.today-missed-open > span:first-child { min-width: 0; }
-.today-missed-open strong { font-size: 13px; overflow-wrap: anywhere; }
-.today-missed-open time { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
+.today-missed-label { margin:0; color:var(--rook-secondary); font-size:14px; font-weight:500; line-height:1.4; }
+.today-missed-row > .missed-reminder-hide { min-width:44px; min-height:44px; padding:8px 0; color:var(--rook-secondary); font-size:14px; }
+.today-missed-open { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-width:0; min-height:44px; padding:4px 0; border:0; background:transparent; color:var(--rook-text); text-align:left; }
+.today-missed-open > span:first-child { display:grid; gap:2px; min-width:0; }
+.today-missed-workout { min-width:0; font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
+.today-missed-open strong { font-size:16px; line-height:1.4; overflow-wrap:anywhere; }
+.today-missed-open time { color:var(--rook-secondary); font-size:14px; line-height:1.4; }
 .today-missed-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 22px; }
 :root .missed-workout-feedback .missed-feedback-error { bottom: calc(var(--bottom-nav-total-height, 90px) + 12px); }
 .missed-workout-feedback .today-undo > span { min-width: 0; overflow-wrap: anywhere; }

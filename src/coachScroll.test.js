@@ -33,6 +33,29 @@ function scroll(top, delta) { if (delta) scroller.dispatchEvent(new WheelEvent('
 function grow(by = 100) { metrics.height += by; mutation(); resize(); }
 function read() { scroll(600, -120); expect(ui.mode).toBe(READING_HISTORY); }
 
+it('opens an overflowing empty introduction at the top and keeps it there after resizing', () => {
+  owner = bindCoachScroll(scroller, content, {memory, conversationId:'empty', empty:true, onChange: state => {ui=state;}});
+  expect(metrics.top).toBe(0);
+  metrics.viewport = 330; resize(); grow(200); frame();
+  expect(metrics.top).toBe(0);
+  expect(ui.showLatest).toBe(false);
+  // Sending the first message activates normal conversation following.
+  owner.latest(); frame(280); owner.dispose();
+  owner = bindCoachScroll(scroller, content, {memory, conversationId:'empty', onChange: state => {ui=state;}});
+  expect(metrics.top).toBe(metrics.height-metrics.viewport);
+  expect(ui.mode).toBe(FOLLOWING_LATEST);
+});
+
+it('allows reading lower empty-intro shortcuts without offering a jump to a nonexistent message', () => {
+  owner = bindCoachScroll(scroller, content, {memory, conversationId:'empty', empty:true, onChange: state => {ui=state;}});
+  scroll(1780, 120);
+  expect(metrics.top).toBe(1780);
+  expect(ui.mode).toBe(READING_HISTORY);
+  expect(ui.showLatest).toBe(false);
+  grow(200); frame();
+  expect(metrics.top).toBe(1780);
+});
+
 it('A/C explicit send/retry/jump uses distance-aware movement, then follows growth', () => {
   bind(); read(); owner.latest(); expect(ui.mode).toBe(FOLLOWING_LATEST);
   frame(110); expect(metrics.top).toBeGreaterThan(600); expect(metrics.top).toBeLessThan(1800);

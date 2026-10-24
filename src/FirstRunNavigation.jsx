@@ -4,8 +4,8 @@ import { registerPageBackMotion } from './swipePageMotion.js';
 import { focusNavigationTarget } from './navigationFocus.js';
 import './firstRunNavigation.css';
 
-const routes = ['landing', 'bring', 'sign-in', 'personalize', 'import', 'scratch', 'restore', 'create-workout', 'freestyle-confirm'];
-const returnSurface = '.entry-bring-plan,.entry-sign-in,.onboarding-personal,.import-plan-screen,.scratch-plan-screen,.restore-backup-screen,.saved-workouts,.first-run-freestyle-screen';
+const routes = ['welcome', 'landing', 'bring', 'sign-in', 'personalize', 'import', 'scratch', 'restore', 'create-workout', 'freestyle-confirm'];
+const returnSurface = '.entry-intro-final,.entry-bring-plan,.entry-sign-in,.onboarding-personal,.import-plan-screen,.scratch-plan-screen,.restore-backup-screen,.saved-workouts,.first-run-freestyle-screen';
 const visibleScreen = host => [...(host?.querySelectorAll('main') || [])].find(node => !node.closest('[hidden],[inert]'));
 
 // Retain visited form trees, not serialized drafts. getSnapshotBeforeUpdate reads
@@ -26,7 +26,7 @@ export class FirstRunNavigation extends React.Component {
       if (!surface.matches(returnSurface)) return null;
       this.clearMotion();
       const route = surface.closest('[data-first-run-page]')?.dataset.firstRunPage;
-      return firstRunBackMotion(surface, this.snapshots.get(this.props.parents?.[route] || 'landing'));
+      return firstRunBackMotion(surface, this.snapshots.get(route==='landing'?'welcome':this.props.parents?.[route] || 'landing'));
     });
   }
   getSnapshotBeforeUpdate(previous) {
@@ -51,7 +51,8 @@ export class FirstRunNavigation extends React.Component {
     const screen = visibleScreen(this.host.current);
     const scroller = document.scrollingElement || document.documentElement;
     scroller.scrollTop = this.scrolls.get(this.props.mode) || 0;
-    const back = this.props.mode === (this.props.parents?.[previous.mode] || 'landing');
+    const back = (previous.mode === 'landing' && this.props.mode === 'welcome') ||
+      (previous.mode !== 'welcome' && this.props.mode === (this.props.parents?.[previous.mode] || 'landing'));
     const target = back ? this.focus.get(this.props.mode) : screen?.querySelector('button[aria-label^="Back"],button[aria-label^="Close"]');
     focusNavigationTarget(target);
     if (!snapshot?.swipe) this.clearMotion = playFirstRunMotion(screen, snapshot?.outgoing, {

@@ -5,7 +5,8 @@ import {selectProgressionRows,progressionSummary} from './progressionOverview.js
 function historyWith(count) {
   const state=createReturningUserFixture(2);
   state.program=null;
-  state.workouts=[{...state.workouts[0],exercises:state.workouts[0].exercises.slice(0,count)}];
+  const distinct=[...new Map(state.workouts.flatMap(workout=>workout.exercises).map(exercise=>[exercise.exerciseId,exercise])).values()];
+  state.workouts=[{...state.workouts[0],exercises:distinct.slice(0,count)}];
   return state;
 }
 

@@ -34,7 +34,7 @@
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
 }
-.workout-photo-viewer-panel { overscroll-behavior: contain; }
+.workout-photo-viewer-panel { overscroll-behavior: contain none; }
 @media (prefers-reduced-motion: reduce) {
   .exercise-visual-layer[data-viewer-motion].is-closing::before { transition-duration: 0ms; }
 }

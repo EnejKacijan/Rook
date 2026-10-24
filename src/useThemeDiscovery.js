@@ -1,24 +1,35 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
-import { availableThemeReleases, readSeenThemeReleases, saveSeenThemeReleases, THEME_DISCOVERY_KEY } from './themeDiscovery.js';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { availableThemeReleases, initialSeenThemeReleases, readSeenThemeReleases, saveSeenThemeReleases, themeDiscoveryKey, THEME_DISCOVERY_KEY } from './themeDiscovery.js';
 import { nextThemeMidnightDelay } from './seasonalThemeLifecycle.js';
 import { subscribeNativeForeground } from './nativeLifecycle.js';
 
-export function useThemeDiscovery() {
-  const [seen, setSeen] = useState(readSeenThemeReleases);
-  const seenRef = useRef(seen); seenRef.current = seen;
+export function useThemeDiscovery({eligible = false, profileId, accountCreatedAt} = {}) {
+  const key = eligible ? themeDiscoveryKey(profileId) : null;
+  const [session, setSession] = useState({key:null, seen:new Set()});
+  const sessionRef = useRef(session); sessionRef.current = session;
   const [releases, setReleases] = useState(availableThemeReleases);
+  const ready = Boolean(key && session.key === key);
   useEffect(() => {
+    if (!key) {
+      const empty = {key:null, seen:new Set()}; sessionRef.current = empty; setSession(empty);
+      return;
+    }
+    const initial = {key, seen:initialSeenThemeReleases({profileId, accountCreatedAt})};
+    sessionRef.current = initial; setSession(initial); setReleases(availableThemeReleases());
     let timer;
     const refresh = () => {
       clearTimeout(timer);
       if (document.visibilityState !== 'hidden') {
         setReleases(availableThemeReleases());
-        const merged = new Set([...seenRef.current, ...readSeenThemeReleases()]);
-        if (merged.size !== seenRef.current.size) { seenRef.current = merged; setSeen(merged); }
+        const current = sessionRef.current;
+        if (current.key === key) {
+          const merged = new Set([...current.seen, ...readSeenThemeReleases(undefined, key)]);
+          if (merged.size !== current.seen.size) { const next = {key, seen:merged}; sessionRef.current = next; setSession(next); }
+        }
       }
       timer = setTimeout(refresh, nextThemeMidnightDelay());
     };
-    const storage = event => { if (event.key === null || event.key === THEME_DISCOVERY_KEY) refresh(); };
+    const storage = event => { if (event.key === null || event.key === key || event.key === THEME_DISCOVERY_KEY) refresh(); };
     window.addEventListener('focus', refresh);
     window.addEventListener('pageshow', refresh);
     window.addEventListener('storage', storage);
@@ -32,31 +43,34 @@ export function useThemeDiscovery() {
       window.removeEventListener('storage', storage);
       document.removeEventListener('visibilitychange', refresh);
     };
-  }, []);
+  }, [key, profileId, accountCreatedAt]);
   const markSeen = useCallback(ids => {
-    const next = new Set([...seenRef.current, ...readSeenThemeReleases(), ...ids]);
-    if (next.size === seenRef.current.size) return;
-    seenRef.current = next; setSeen(next); saveSeenThemeReleases(next);
-  }, []);
+    if (!key || sessionRef.current.key !== key) return false;
+    const current = sessionRef.current;
+    const seen = new Set([...current.seen, ...readSeenThemeReleases(undefined, key), ...ids]);
+    if (seen.size !== current.seen.size) {
+      const next = {key, seen}; sessionRef.current = next; setSession(next); saveSeenThemeReleases(seen, undefined, key);
+    }
+    return true;
+  }, [key, ready]);
   const acknowledgeInitialThemes = useCallback(() => markSeen(availableThemeReleases().map(item=>item.id)), [markSeen]);
   const openDiscovery = useCallback(() => {
+    if (!key || sessionRef.current.key !== key) return [];
     const current = availableThemeReleases();
-    const viewed = new Set([...seenRef.current, ...readSeenThemeReleases()]);
+    const viewed = new Set([...sessionRef.current.seen, ...readSeenThemeReleases(undefined, key)]);
     setReleases(current);
-    if (viewed.size !== seenRef.current.size) { seenRef.current = viewed; setSeen(viewed); }
+    if (viewed.size !== sessionRef.current.seen.size) { const next = {key, seen:viewed}; sessionRef.current = next; setSession(next); }
     return current.filter(item=>!viewed.has(item.id));
-  }, []);
-  const pending = releases.filter(item => !seen.has(item.id));
-  return { hasNewThemes:pending.length > 0, releases:pending, markSeen, acknowledgeInitialThemes, openDiscovery };
+  }, [key]);
+  const pending = ready ? releases.filter(item => !session.seen.has(item.id)) : [];
+  return { profileId, hasNewThemes:pending.length > 0, releases:pending, markSeen, acknowledgeInitialThemes, openDiscovery };
 }
 
-// Only a verified first setup may suppress its initial notices. A restored
-// profile has a different identity and must retain its discovery opportunities.
+// Wait for the signed-in discovery scope before acknowledging a fresh setup.
+// A restored identity is handled by account age rather than first-run state.
 export function useInitialThemeDiscovery({newProfile, profileId, complete, acknowledge}) {
   const initial = useRef(newProfile ? profileId : null);
-  useEffect(() => {
-    if (complete && initial.current && initial.current === profileId) {
-      initial.current = null; acknowledge();
-    }
+  useLayoutEffect(() => {
+    if (complete && initial.current && initial.current === profileId && acknowledge() !== false) initial.current = null;
   }, [complete, profileId, acknowledge]);
 }

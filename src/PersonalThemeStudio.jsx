@@ -1,3 +1,4 @@
+import {AnimatedDetails} from './AnimatedDetails.jsx';
 import React, { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { ThemeNewBadge } from './ThemeNewBadge.jsx';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
@@ -58,13 +59,13 @@ export function PersonalThemeStudio({ initial, systemDark = false, Header, close
     <p className="pro-theme-intro">Choose a palette. Make it yours.</p>
     <fieldset className="pro-theme-appearance"><legend>Appearance</legend><SegmentedControl label="Appearance" options={[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}]} value={draft.appearance} onChange={value=>update('appearance',value)}/></fieldset>
     <fieldset className="pro-theme-presets"><legend>Curated palettes</legend>{THEME_PRESETS.map(item => tile(item))}</fieldset>
-    {seasons.length > 0 && <fieldset className="pro-theme-seasonal"><legend>Seasonal</legend>{seasons.map(item => tile(item, seasonalWindowLabel(item)))}</fieldset>}
+    {seasons.length > 0 && <fieldset className="pro-theme-seasonal" aria-describedby={`${badgeId}-seasonal`}><legend>Seasonal</legend><p className="pro-theme-group-note" id={`${badgeId}-seasonal`}>Returns every year</p>{seasons.map(item => tile(item, seasonalWindowLabel(item)))}</fieldset>}
     {selectedPreset.seasonal && <p className="pro-theme-season-return">After this season, your saved {THEME_PRESETS.find(item=>item.id===draft.fallbackPalette)?.name || 'ROOK Green'} palette returns.</p>}
-    <details className="pro-theme-custom"><summary>{`Fine-tune ${selectedPreset.name}`}</summary>
+    <AnimatedDetails className="pro-theme-custom"><summary>{`Fine-tune ${selectedPreset.name}`}</summary>
       <fieldset className="pro-theme-accents"><legend>Accent shade <span>{model.accentName}</span></legend>{personalThemeShades(selectedPreset.id).map(item => <button type="button" key={item.id} aria-label={item.name} title={item.name} aria-pressed={draft.accent === item.id} onClick={() => update('accent', item.id)}><i aria-hidden="true" style={{ background: item[model.appearance], color: personalThemeModel(updatePersonalTheme(draft, { accent: item.id }), systemDark).tokens['--rook-on-accent-fill'] }}>{draft.accent === item.id ? '✓' : ''}</i></button>)}</fieldset>
       <fieldset className="pro-theme-bases"><legend>Background tone</legend>{THEME_BASES.map(item => <button type="button" key={item.id} aria-pressed={draft.base === item.id} onClick={() => update('base', item.id)}><span className="pro-theme-base-swatches" aria-hidden="true">{personalThemeSurfaces(selectedPreset.id, item.id, model.appearance).map((color, i) => <i key={i} style={{ background: color }} />)}</span><span>{item.name}</span><span className="pro-theme-base-check" aria-hidden="true">{draft.base === item.id ? '✓' : ''}</span></button>)}</fieldset>
       <div className="pro-theme-reset-row"><p role="status" aria-live="polite">{personalThemeSummary(draft)}{draft.appearance === 'system' ? ` · ${model.appearance === 'dark' ? 'Dark' : 'Light'} now` : ''}</p><button type="button" disabled={!colorsChanged} onClick={() => stage(resetPersonalThemePalette(draftRef.current))}>{`Reset ${selectedPreset.name}`}</button></div>
-    </details>
+    </AnimatedDetails>
     {error && <p role="alert">{error}</p>}
     <SheetActionFooter className="pro-theme-actions"><div className="pro-theme-action-row"><button type="button" className="button quiet" onClick={close}>Cancel</button><button type="button" className="button primary" disabled={!changed} onClick={() => { if (!changed || submitted.current) return; submitted.current = true; try { apply(normalizePersonalTheme(draftRef.current)); close(); } catch (failure) { submitted.current = false; setError(failure?.code === 'season-ended' ? 'This season has ended. Choose another palette.' : 'Couldn’t save this theme. Please try again.'); } }}>Apply theme</button></div></SheetActionFooter>
   </main>;

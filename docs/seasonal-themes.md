@@ -17,8 +17,8 @@ metadata is separate from theme Apply/Cancel and never changes a palette.
 
 | File | Purpose |
 |---|---|
-| `src/seasons/<id>.js` | Plain data, default export: name, character, release window, signature surfaces, five accent shades. No imports. |
-| `src/seasons/<id>.css` | Decoration only: sets `--rook-season-decor` (a 360×24 SVG band) under `:root[data-season="<id>"]` for Light and Dark. |
+| `src/seasons/<id>.js` | Plain data, default export: name, character, release window, signature surfaces, five accent shades, optional `atmosphere`. No imports. |
+| `src/seasons/<id>.css` | Decoration only, under `:root[data-season="<id>"]` for Light and Dark: `--rook-season-decor` (a 360×24 SVG band, required) and optionally `--rook-season-perch` (a 44×44 SVG motif). |
 | `docs/seasons/<id>.md` | What it looks like, release window, merge steps. |
 
 Optionally `src/seasons/<id>.test.js` for season-specific checks.
@@ -50,11 +50,21 @@ adds new files, any combination of seasons merges without conflicts, in any orde
   distinct and the write retries on a later safe event. It never loops on save failure
   or replaces a newer manual Apply. Reading preferences never writes.
 - **Decoration contract**: the root gets `data-season="<id>"` (staged with the preview,
-  released on Cancel). A static 360×24 band from `--rook-season-decor` sits in the empty
-  top padding of Today, Coach, Progress and Profile, just below the safe area and above
-  the first row of controls, so it never covers text or a control. Never in an active
-  workout, a sheet or a form, and hidden in forced-colors mode. There is no motion, so
-  reduced motion needs no special case.
+  released on Cancel). Three static layers, all backgrounds or empty pseudo-elements, so
+  they take no touches and screen readers never meet them:
+  - the band from `--rook-season-decor` in the empty top padding of Today, Coach,
+    Progress and Profile, just below the safe area and above the first row of controls;
+  - the palette wash (`atmosphere` in the season data, shared by year-round palettes):
+    a gradient at the top of the same four tabs. Its strongest point joins the surfaces
+    every text color is resolved against, so it can never weaken contrast;
+  - an optional 44×44 motif from `--rook-season-perch`, perched on the top edge of
+    Today's main action in its empty right corner, clear of the centered label at 320 px.
+  Never in an active workout, a sheet or a form, and hidden in forced-colors mode. There
+  is no motion, so reduced motion needs no special case. The theme picker shows the
+  same band, wash and motif on the season's tile.
+- **Labels**: the picker's Seasonal group carries one shared note, "Returns every year".
+  Tiles keep name, character and window. New and Back stay discovery marks only; there
+  is no scarcity label.
 - **Semantics stay fixed**: seasons cannot set warning, error, success, disabled or
   selected roles. `src/seasonalContract.test.js` checks every merged season: scoped
   rules only, both appearances decorated, no motion or network assets, only
@@ -64,20 +74,22 @@ adds new files, any combination of seasons merges without conflicts, in any orde
 ## Branches and dependencies
 
 ```
-codex/claude-theme-handoff-2026-10-19
-└── claude/theme-polish          year-round polish
-    └── claude/seasonal-core     shared infrastructure (this file)
-        ├── claude/seasonal-halloween
+main (year-round themes and Halloween released)
+└── claude/local-review-base         verified local fixes (readability, Coach, previous values)
+    └── claude/theme-visual-v2-nlh3tv  shared visual layer: washes, perch slot, tab icon, type floor
+        ├── claude/seasonal-halloween  Halloween refresh (already on main)
         ├── claude/seasonal-christmas
         ├── claude/seasonal-new-year
+        ├── claude/seasonal-winter
         ├── claude/seasonal-spring
         └── claude/seasonal-summer
-claude/seasonal-preview          review only: every season, all windows open. Never merge.
+claude/seasonal-preview              review only: every season, all windows open. Never merge.
 ```
 
-Each season branch contains only its own season on top of core. Merging one season
-brings `theme-polish` and `seasonal-core` with it if they are not merged yet, and never
-another season.
+`claude/theme-polish` and `claude/seasonal-core` are fully contained in `main`.
+Each season branch contains only its own season's files beyond the shared visual
+layer. Merging one season brings the shared layer with it if it is not merged yet,
+and never another season.
 
 ## Releasing one season
 

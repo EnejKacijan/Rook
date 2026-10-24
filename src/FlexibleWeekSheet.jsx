@@ -17,6 +17,10 @@ import { addCalendarDays, applyFlexibleWeek, flexibleSessions, flexibleSessionBy
 import {hasMoveWorkoutDestination,temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
 import {combinedAdjustment} from './combinedWorkoutLifecycle.js';
 import './flexibleWeekChooser.css';
+import {reviewScheduleRecovery,applyScheduleRecovery} from './scheduleRecovery.js';
+import {useDurableAction} from './useDurableAction.js';
+import {AnimatedDetails} from './AnimatedDetails.jsx';
+import {exerciseName} from './domain.js';
 
 const dateLabel = date => new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
 const profileWeekBaseline=(state,dates,sessions)=>dates.filter(date=>Array.isArray(state.profile?.availableDays) &&
@@ -32,6 +36,8 @@ export function missedSessionDestinations(state, sessionId, today=isoDay()) {
   return moveWorkoutDestinations(state,sessionId,today).filter(destination=>destination.available).map(destination=>destination.date);
 }
 export function FlexibleWeekSheet({ state, update, close, Header, request = {}, setDetail, onBack }) {
+  const recoveryAction=useDurableAction(state,update);
+  const [recovery,setRecovery]=useState(null);
   const feedback=useMissedWorkoutFeedback();
   const [useToday,setUseToday]=useState(null);
   const today = useCalendarDay(), sessions = useMemo(()=>flexibleSessions(state,today),[state,today]);
@@ -60,6 +66,8 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const canReviewSchedule = Boolean(availabilityPreview?.remainingSessions);
   const [proposal, setProposal] = useState(initialSwap?.status==='ready' ? initialSwap : null);
   const [error, setError] = useState('');
+  const openRecovery=id=>{try{setRecovery(reviewScheduleRecovery(state,id));setError('');setStep('repair');}catch(e){setError(e.message);}};
+  const repair=mode=>{try{recoveryAction.commit(current=>applyScheduleRecovery(current,recovery,mode));setRecovery(null);setError('');setSteps(['mode','existing']);}catch(e){setError(e.message);}};
   const [persistenceFailed, setPersistenceFailed] = useState(false);
   const [adaptationChoice, setAdaptationChoice] = useState('restore');
   const applied = useRef(false);
@@ -251,7 +259,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         <span>{entry.skipped?dateLabel(entry.originalDate):<>{dateLabel(entry.originalDate)} <span aria-label="to">→</span> {dateLabel(entry.scheduledDate)}</>}</span>
         {entry.skipped&&entry.scheduledDate!==entry.originalDate&&<small>Last scheduled {dateLabel(entry.scheduledDate)}</small>}
         {entry.issue && <small>{entry.issue}</small>}
-        {entry.issue && !canRestore && <small>{entry.originalDate<today||entry.scheduledDate<today ? 'This move cannot be restored to a past date. Past dates and workout history stay protected.' : restorePreview?.error || 'No safe schedule change is available for this occurrence.'}</small>}
+        {entry.issue && <button type="button" className="button secondary" onClick={()=>openRecovery(entry.id)}>Repair this move</button>}
       </article>)}{combinedSchedule&&<article>
         <small className="eyebrow">COMBINED</small><strong>{combinedSchedule.workout.name}</strong>
         {combinedSchedule.sourceSessions.map(source=><span key={source.logicalSessionId}>{source.name} · {dateLabel(source.originalDate)} → {dateLabel(combinedSchedule.date)}</span>)}
@@ -272,6 +280,15 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         {existingChangeCount>0&&<button className="text-button flexible-restore-action" disabled={!canRestore} onClick={openRestore}>Restore original schedule</button>}
         {existingChangeCount>0&&!canRestore&&<p className="sheet-footnote">{restorePreview?.error || 'Past, completed and active changes stay unchanged.'}</p>}
       </SheetActionFooter>
+    </>}
+    {['repair','repair-remove'].includes(step)&&recovery&&<>
+      <h1>{step==='repair-remove'?'Remove this outdated move?':'Repair this move'}</h1>
+      <p><strong>{recovery.workout?.workoutName||recovery.workout?.name||recovery.record.name}</strong></p>
+      <p>{dateLabel(recovery.record.originalDate)} → {dateLabel(recovery.record.scheduledDate)}</p>
+      {step==='repair'?<>
+        {recovery.workout?<><p>Keep the moved date using the current plan’s exercises and targets.</p><AnimatedDetails><summary>Review exercises · {recovery.workout.exercises.length}</summary><ul>{recovery.workout.exercises.map(e=><li key={e.id}>{exerciseName(e)} · {e.sets.length} sets · {e.repMin}{e.repMax!==e.repMin?`–${e.repMax}`:''}</li>)}</ul></AnimatedDetails></>:<p role="status">{recovery.reason}</p>}
+        <SheetActionFooter><button className="button primary" disabled={!recovery.workout} onClick={()=>repair('keep')}>KEEP MOVED DATE</button><button className="text-button" onClick={()=>setStep('repair-remove')}>Remove outdated move</button><button className="text-button" onClick={goBack}>Back to schedule</button></SheetActionFooter>
+      </>:<><p>Your recorded workouts stay unchanged. After removing this move:</p>{recovery.afterRemoval.length?<ul>{recovery.afterRemoval.map((item,index)=><li key={index}>{dateLabel(item.date)} · {item.name} · {item.status}</li>)}</ul>:<p>This workout has no remaining placement in the current schedule.</p>}<SheetActionFooter><button className="button primary" onClick={()=>repair('remove')}>REMOVE OUTDATED MOVE</button><button className="button quiet" onClick={goBack}>KEEP FOR REVIEW</button></SheetActionFooter></>}
     </>}
     {step==='restore-confirm'&&<>
       <h1>Restore original schedule?</h1>
@@ -392,7 +409,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         return <button className="list-row" key={other.logicalSessionId} onClick={()=>{setCombinePreview(p);setStep('combine-preview');}}>{other.name}<NavigationChevron/></button>;
       })}</div>
     </>}
-    {step==='combine-preview' && combinePreview && <><h1>Combined session preview</h1><p>{dateLabel(combinePreview.date)} · ~{Math.round(combinePreview.estimatedMinutes)} min</p>
+    {step==='combine-preview' && combinePreview && <><h1>Combined session preview</h1><p>{dateLabel(combinePreview.date)} · About {Math.round(combinePreview.estimatedMinutes)} min</p>
       <CoachCombineCard key={combinePreview.id} state={state} action={{proposal:combinePreview}} initialReviewing draftSchedule
         onAccept={({proposal:combined})=>{if(!changeResolution(resolutions,combined))throw new Error('The schedule changed. Review the workouts again.');}} onReviewCancelled={cancelled=>{if(cancelled)setStep('review');}}/>
     </>}

@@ -30,7 +30,7 @@ it('raw logger input commits through real Add opening then Do now; previous unfi
  act(()=>root.render(<Harness/>));type(host.querySelector('[aria-label="Weight in kg for set 1"]'),'82,5');click(button('+ ADD EXERCISE'));
  act(()=>vi.advanceTimersByTime(80));type(host.querySelector('input[type="search"]'),'plank');
  click(host.querySelector('[data-catalog-id="plank"] .queue-search-body'));click(button('Do now'));
- expect(current.activeWorkout.exercises[0].exerciseId).toBe('plank');expect(current.activeWorkout.exercises[1].sets[0].weight).toBe(82.5);expect(current.activeWorkout.exercises[1].sets[0].completed).toBe(false);expect(host.textContent).toContain('Started · saved progress');
+ expect(current.activeWorkout.exercises[0].exerciseId).toBe('plank');expect(current.activeWorkout.exercises[1].sets[0].weight).toBe(82.5);expect(current.activeWorkout.exercises[1].sets[0].completed).toBe(false);expect(host.textContent).not.toContain('Started · saved progress');
 });
 it('template save failure keeps review open, then successful retry saves once without changing the source',()=>{
  let initial=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank'),source=structuredClone(initial.activeWorkout);
@@ -42,7 +42,7 @@ it('template save failure keeps review open, then successful retry saves once wi
 it('saved workout preview requires explicit overlap confirmation, appends once, and safe batch Undo preserves prior work',()=>{
  let initial=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank');initial=saveWorkoutTemplate(initial,{...templateDraft(initial.activeWorkout,initial),name:'My saved workout'},{id:'saved'});
  mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
- click(host.querySelector('.saved-workout-list .list-row'));expect(current.activeWorkout.exercises).toHaveLength(1);expect(button('Add 1 exercises to Up Next').disabled).toBe(true);
+ click(host.querySelector('.saved-workout-list > .list-row'));expect(current.activeWorkout.exercises).toHaveLength(1);expect(button('Add 1 exercises to Up Next').disabled).toBe(true);
  click(host.querySelector('.saved-template-overlaps input'));
  const write=vi.spyOn(domain,'saveState').mockReturnValue(false);click(button('Add 1 exercises to Up Next'));expect(current.activeWorkout).toEqual(initial.activeWorkout);expect(host.textContent).toContain('Could not save');write.mockRestore();
  click(button('Add 1 exercises to Up Next'));expect(current.activeWorkout.exercises).toHaveLength(2);expect(button('Added to Up Next').disabled).toBe(true);
@@ -52,7 +52,7 @@ it('template editor preserves unset timed/per-set targets on no-op review, and C
  let initial=addFreestyleExercise(addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank'),'push-up');initial=saveWorkoutTemplate(initial,{...templateDraft(initial.activeWorkout,initial),name:'Untimed hold'},{id:'saved'});
  const original=structuredClone(initial.savedWorkoutTemplates[0]);
  mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
- click(host.querySelector('.saved-workout-list .list-row'));templateOption('Edit workout');
+ click(host.querySelector('.saved-workout-list > .list-row'));templateOption('Edit workout');
  expect(host.querySelector('.plan-warmup-preference')).toBeNull();expect(host.querySelector('.plan-workout-overflow')).toBeNull();expect(host.querySelector('.workout-name-field')).toBeNull();
  click(host.querySelector('[data-swipe-fallback]'));expect(host.querySelectorAll('.plan-editor-exercise')).toHaveLength(1);
  click(button('Cancel'));expect(current.savedWorkoutTemplates[0]).toEqual(original);
@@ -64,7 +64,7 @@ it('embedded saved browse, preview and editor keep the shared picker identity an
  mount(initial,(state,update)=><Detail detail={{freestylePicker:true}} state={state} update={update} setDetail={()=>{}} close={closed}/>);
  const header=host.querySelector('.detail-header'),search=host.querySelector('input[type=search]');
  click(button('Saved workouts'));expect(host.querySelectorAll('.detail-header')).toHaveLength(1);expect(header.querySelector('strong').textContent).toBe('Add exercise');
- click(host.querySelector('.saved-workout-list .list-row'));templateOption('Edit workout');
+ click(host.querySelector('.saved-workout-list > .list-row'));templateOption('Edit workout');
  expect(host.querySelector('.detail-header')).toBe(header);expect(host.querySelector('.plan-editor')).not.toBeNull();
  click(button('Cancel'));expect(current.savedWorkoutTemplates).toEqual(initial.savedWorkoutTemplates);expect(current.activeWorkout).toEqual(initial.activeWorkout);
  click(host.querySelector('.detail-header-back'));expect(host.querySelector('input[type=search]')).toBe(search);expect(button('Saved workouts')).toBeDefined();
@@ -72,14 +72,14 @@ it('embedded saved browse, preview and editor keep the shared picker identity an
 });
 
 function savedFixture(active=true){let s=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),'plank');s=saveWorkoutTemplate(s,{...templateDraft(s.activeWorkout,s),name:'Saved routine'},{id:'saved'});if(!active)s.activeWorkout=null;return s;}
-function mountSaved(initial){mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);click(host.querySelector('.saved-workout-list .list-row'));}
+function mountSaved(initial){mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);click(host.querySelector('.saved-workout-list > .list-row'));}
 it('uses workout, not template, in saved-workout browse, preview, actions and editor copy',()=>{
  const initial=savedFixture(false);
  mount(initial,(state,update)=><SavedWorkouts state={state} update={update} close={closed} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer}/>);
  const visibleCopy=()=>[document.body.textContent,...document.querySelectorAll('[aria-label],[title],[placeholder]')].map(item=>typeof item==='string'?item:[item.getAttribute('aria-label'),item.getAttribute('title'),item.getAttribute('placeholder')].filter(Boolean).join(' ')).join(' ');
  expect(visibleCopy()).toMatch(/saved workouts/i);
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
- click(host.querySelector('.saved-workout-list .list-row'));
+ click(host.querySelector('.saved-workout-list > .list-row'));
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);
  templateOption('Edit workout');
  expect(visibleCopy()).not.toMatch(/\btemplates?\b/i);

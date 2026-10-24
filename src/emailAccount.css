@@ -20,3 +20,6 @@
 .account-email-verification { margin-top: 12px; }
 .account-email-verification p { margin: 0 0 8px; color: var(--rook-muted); }
 .account-email-verification button { min-height: 44px; margin-right: 12px; }
+.account-add-password input[readonly] { color:var(--rook-secondary, var(--rook-muted)); }
+.account-add-password form > .button.quiet { margin-top:8px; }
+.account-password-added { margin-top:16px; color:var(--rook-secondary, var(--rook-muted)); }

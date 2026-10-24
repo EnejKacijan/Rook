@@ -6,10 +6,11 @@ export function removeImportedExercise(program,dayId,exerciseId,{issues=[],resol
  next.importMetadata ||= {};next.importMetadata.removedExercises ||= [];
  const remainingGroup=exercise.supersetId?day.exercises.filter(e=>e.id!==exerciseId&&e.supersetId===exercise.supersetId):[];
  const detached=remainingGroup.length===1?remainingGroup.map(e=>({id:e.id,supersetId:e.supersetId})):[];
- next.importMetadata.removedExercises.push({dayId,exercise,index,detached,followingIds:day.exercises.slice(index+1).map(e=>e.id),issueIds,resolved:Object.fromEntries(issueIds.map(id=>[id,resolved[id]||false])),pending:(next.importMetadata.pendingHybrid||[]).filter(id=>issueIds.includes(id))});
+ next.importMetadata.removedExercises.push({dayId,exercise,index,detached,followingIds:day.exercises.slice(index+1).map(e=>e.id),issueIds,resolved:Object.fromEntries(issueIds.map(id=>[id,resolved[id]||false])),pending:(next.importMetadata.pendingHybrid||[]).filter(id=>issueIds.includes(id)),pendingSource:(next.importMetadata.pendingSourceDecisions||[]).filter(id=>issueIds.includes(id))});
  day.exercises.splice(index,1);
  for(const link of detached)delete day.exercises.find(e=>e.id===link.id).supersetId;
  if(next.importMetadata.pendingHybrid)next.importMetadata.pendingHybrid=next.importMetadata.pendingHybrid.filter(id=>!issueIds.includes(id));
+ if(next.importMetadata.pendingSourceDecisions)next.importMetadata.pendingSourceDecisions=next.importMetadata.pendingSourceDecisions.filter(id=>!issueIds.includes(id));
  return next;
 }
 export function undoImportedExerciseRemoval(program,exerciseId) {
@@ -21,6 +22,7 @@ export function undoImportedExerciseRemoval(program,exerciseId) {
  if(record.exercise.supersetId&&day.exercises.filter(e=>e.supersetId===record.exercise.supersetId).length<2)delete record.exercise.supersetId;
  next.importMetadata.removedExercises=entries.filter(r=>r!==record);
  if(record.pending.length)next.importMetadata.pendingHybrid=[...new Set([...(next.importMetadata.pendingHybrid||[]),...record.pending])];
+ if(record.pendingSource?.length)next.importMetadata.pendingSourceDecisions=[...new Set([...(next.importMetadata.pendingSourceDecisions||[]),...record.pendingSource])];
  return next;
 }
 export function removedImportAnswers(program) {return Object.fromEntries((program.importMetadata?.removedExercises||[]).flatMap(r=>r.issueIds.map(id=>[id,{excluded:true,removed:true}])));}

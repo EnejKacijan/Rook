@@ -30,7 +30,8 @@ it('real Today shows two moved workouts with View/Hide, not Review; View preserv
   const view=vi.fn(),before=render(undefined,true,view);
   expect(summary().textContent).toContain('2 workouts moved');expect(summary().textContent).not.toContain('REVIEW');
   expect(summary().textContent).toContain('SCHEDULE CHANGES');expect(summary().textContent).toContain('Already applied to your schedule.');
-  expect(host.querySelector('.today-missed-row').textContent).toContain('Not completed. Choose what to do next.');
+  expect(host.querySelector('.today-missed-label').textContent).toMatch(/Missed workout|\d+ missed workouts/);
+  expect(host.querySelector('.today-missed-row').textContent).not.toContain('Not completed. Choose what to do next.');
   act(()=>[...summary().querySelectorAll('button')].find(b=>b.textContent==='View changes').click());
   expect(view).toHaveBeenCalledWith({flexibleWeek:{reviewExisting:true}});expect(current).toEqual(before);
 });

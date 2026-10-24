@@ -1,0 +1,94 @@
+ROOK — dodatni pregled kakovosti generatorja, 21. 10. 2026
+
+Obseg
+Uporabnik je zahteval tudi manjše smiselne izboljšave, ne samo odprave nujnih napak.
+Vse je lokalno v veji codex/visual-v2-local-preview-2026-10-20. Brez commita,
+pusha, mergea ali deploya. Že sprejeti plani se ne regenerirajo.
+
+Dejanski vzorci in neodvisna AI presoja
+42 sintetičnih nastavitev A–AP: 40 tedenskih programov, 129 treningov,
+dve zavrnitvi (petminutni Full Body in Full Body brez primerne vlečne opreme).
+ChatGPT v načinu Chat je pregledal celotne vaje, sete, ponovitve, RIR, počitke,
+opremo, rampe, ocenjene čase in tedensko pokritost. Poslani niso bili osebni podatki.
+Pogovor: https://chatgpt.com/c/6ad89111-1ed0-83ed-b006-47dee435db41
+Končni odgovor je shranjen v artifacts/custom-focus-ux/chatgpt-refinement-final.txt.
+Končna ocena: APPROVED za kakovost 40 dejansko generiranih programov v vzorcu,
+z izrecnimi kompaktnimi in individualnimi omejitvami. ChatGPT ne predlaga nadaljnjih
+sprememb brez dokazljive koristi, ker bi te lahko poslabšale obstoječe kompromise.
+Presoja vzorca ni strokovni certifikat ali dokaz popolnosti vseh možnih kombinacij.
+
+Izvedene izboljšave
+- Pred zavrnitvijo zahtevnega Full Body programa omejeno deterministično iskanje
+  primernih alternativ. Brez skrajševanja predpisanih počitkov, spremembe efforta,
+  tihih supersetov, opreme ali izbranih mišičnih skupin.
+- Usklajeni minimumi in omejitve pri moderate effort. Dodatni overhead press ni
+  obvezna šesta vaja pri 45-minutnem moderate programu. Varovalke preprečujejo
+  zamudno iskanje, če minimum izbranih serij že presega omejitev obsega.
+- Full Body prioritete se razporedijo tedensko. Lokalni bonus ne postane nemogoč
+  zaščiten minimum. Prenos serije se uporabi šele po preverjanju časa in obsega.
+- Pri AC sta prsi/hrbet prejela 10/10 neposrednih serij s prerazporeditvijo dodatkov;
+  osnovno delo nog, ramen, meč in trupa ostane. AM pri 30 minutah ostane 4/4 in
+  Plan notes poimensko pojasni omejitev obeh prioritet.
+- Prednost napravam pri primerljivem posteriornem delu; rotacija med iztegom kolka
+  in upogibom kolena. Mehke kazni za nepotrebno obremenitev križa, dve unilateralni
+  vaji za noge ter ponovitev iste zahtevne vaje na zaporedna dneva.
+- Zahtevnejše večsklepne vaje pred dodatki. OHP v parcialnem Push dnevu prej, če
+  prsi niso izrecna prioriteta. Različni vrstni redi ostajajo možni glede na cilj.
+- Parcialni Legs prerazporedi del posteriornih serij v leg extension; Chest & Back
+  dobi compound vertical pull namesto lat izolacije, kadar se to prilega času.
+- Straight-arm pulldown ohrani svoj stari shranjeni pattern zaradi združljivosti,
+  vendar ima natančnejši movementPattern lat-isolation in ne zapolni namenskega
+  mesta za compound vertical pull.
+- Čas se ne polni samodejno s petimi serijami nepomembnih dodatkov. Krajši program
+  pojasni omejitve. Število vaj, obseg, regeneracija in effort ostajajo omejitve.
+- Pravilno štetje obeh strani pri step-up in drugih unilateralnih vajah.
+- Lastna rampa za poznejši zahtevni hinge in težji prosti overhead press.
+- Athletic program ob ustreznem času in razpoložljivosti vključuje kratko power
+  delo pred močjo. Priprava skokov: tri lahke tehnične ponovitve z nadzorovanim
+  doskokom, brez izmišljenega odstotka telesne teže ali kg. Ločene rampe naloženih
+  vaj so ohranjene in vključene v oceno časa.
+- Nova izrecna izbira Secure band anchor za domače sidrane vaje z elastikami,
+  ohranjena pri ponovnem nalaganju. Običajen gym generator uporablja naprave.
+  Domača klop ne pomeni preacher postaje; brez ustrezne opreme je ne predlaga.
+- Plan notes jasno opredeli moč/kondicijo, dodatni čas za aerobno delo, odvisnost
+  zahtevnosti vaj s telesno težo od posameznika in negotovost časovnih ocen.
+
+Preverjanja
+624 različnih ciljnih/regresijskih testov v preverjenih sklopih je uspešnih:
+620 v celotnem izbranem sklopu, nato ponovljenih 242 po varovalkah prioritet in
+29 v razširjenem generatorRefinements. Dodatne štiri regresije dopolnijo prvotni
+sklop. Preverjeno je tudi ohranjanje sprejetih predpisov in sidrišča ob reloadu.
+Build uspe. git diff --check je čist.
+Poročila: artifacts/custom-focus-ux/refinement-verified-tests.log,
+refinement-priority-verified.log, refinement-final-constraints-tests.log,
+refinement-verified-build.log.
+
+To ne pomeni, da je celoten obstoječi nabor aplikacije zelen. Pri predhodnem
+celotnem pregledu je ostalo sedem nepovezanih napak v exerciseSearchSheet,
+illustrationProvenance, seasonalThemeLifecycle in Today.completionOwnership.
+Ta poseg jih ne prikazuje kot odpravljene.
+
+Dodatna matrika 72 nastavitev
+2/3/4/6 dni × 30/45/60 min × balanced/moderate/fewer-hard × full gym/dumbbells.
+60 veljavnih programov, 12 zavrnjenih najtesnejših 30-minutnih zahtev, brez
+generiranega neveljavnega programa. Zavrnitve ne dokazujejo globalnega minimuma
+časa: iskanje je omejeno, kar je v diagnostiki jasno predstavljeno kot best attempt.
+
+Predogled
+http://127.0.0.1:4401/artifacts/custom-focus-ux/quality-view.html?revision=after
+Izbor A–AP, primerjava pred/po, dejanske serije, rampe, čas in zložene opombe.
+Podatki: quality-refinement-final.json/.txt. Zadnja varovala so ponovno generirana
+v quality-refinement-confirmed; primerjava bistvenih rezultatov je brez razlik.
+
+Meje presoje
+Ocene časa in fractional stimulus so modeli, ne znanstveno natančne konstante.
+Telesna teža pri nekaterih uporabnikih zahteva težjo različico ali dodaten upor.
+AP (domače ročke, 2×45 minut, moderate effort) je sprejemljiv omejen program,
+z manj dela gluteusov in lateralnih deltov. Uvedba dodatnega RDL brez povečanja
+časa ali izrinjanja osnovnega dela ni bila potrjena kot boljša izvedljiva alternativa.
+Visoka frekvenca in dejansko športno delo zahtevata individualno spremljanje.
+Osnova za razmislek vključuje ACSM 2026, pregled časovno učinkovitega treninga
+in raziskave vrstnega reda vaj; te ne določajo univerzalnega idealnega plana.
+https://acsm.org/resistance-training-guidelines-update-2026/
+https://pubmed.ncbi.nlm.nih.gov/34125411/
+https://pubmed.ncbi.nlm.nih.gov/32077380/

@@ -10,6 +10,7 @@ export const CANONICAL_GYM_EQUIPMENT = Object.freeze([
   "machines",
   "pull-up bar",
   "resistance bands",
+  "secure band anchor",
   "bodyweight only",
 ]);
 

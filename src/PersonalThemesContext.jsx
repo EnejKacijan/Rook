@@ -2,6 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useLayoutEffe
 import { createPortal } from 'react-dom';
 import { PersonalThemeStudio } from './PersonalThemeStudio.jsx';
 import { DEFAULT_PERSONAL_THEME, normalizePersonalTheme, THEME_PRESETS } from './personalThemes.js';
+import { useThemeFavicon } from './themeFavicon.js';
 import { PERSONAL_THEME_PREFERENCE, readPersonalThemePreference, savePersonalThemePreference } from './personalThemePreference.js';
 import { nextThemeMidnightDelay, prepareSeasonalThemeSelection, resolveSeasonalTheme } from './seasonalThemeLifecycle.js';
 import { subscribeNativeForeground } from './nativeLifecycle.js';
@@ -16,11 +17,13 @@ const inactive = Object.freeze({ personalTheme: null, renderedPersonalTheme: nul
   hasNewThemes: false,
   themeNoticeReturning: false,
   acknowledgeInitialThemes: () => {},
+  setDiscoveryAudience: () => {},
   openThemes: () => {}, clearTheme: () => {}, setAppearance: () => {}, setSeasonalTransitionBlocked: () => {} });
 export const usePersonalThemes = () => useContext(ThemeContext) || inactive;
 
 export function PersonalThemesProvider({ children, Modal, Header }) {
-  const discovery = useThemeDiscovery();
+  const [discoveryAudience, setDiscoveryAudience] = useState(null);
+  const discovery = useThemeDiscovery(discoveryAudience || {});
   const discoveryRef = useRef(discovery); discoveryRef.current = discovery;
   const [personalTheme, setPersonalTheme] = useState(readPersonalThemePreference);
   const [renderedTheme, setRenderedTheme] = useState(personalTheme);
@@ -111,7 +114,7 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
     const theme = normalizePersonalTheme(rendered.current || initial || DEFAULT_PERSONAL_THEME);
     session.current = { closed: false };
     setPreviewTheme(theme);
-    setSurface({ initial: theme, id: ++id.current, newReleases:discoveryRef.current.openDiscovery() });
+    setSurface({ initial: theme, id: ++id.current, discoveryProfileId:discoveryRef.current.profileId, newReleases:discoveryRef.current.openDiscovery() });
   }, []);
   const endPreview = () => {
     if (session.current) session.current.closed = true;
@@ -146,18 +149,22 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
     setPersonalTheme(next);
     rendered.current = next; setRenderedTheme(next);
   }, []);
+  // The tab icon follows only the confirmed theme (Apply or a seasonal
+  // return), never a live preview in the studio.
+  useThemeFavicon(renderedTheme);
   const dismiss = () => { endPreview(); setSurface(null); };
   return <ThemeContext.Provider value={{ personalTheme:renderedTheme,
     hasNewThemes:discovery.hasNewThemes,
     themeNoticeReturning:discovery.hasNewThemes && discovery.releases.every(item=>item.returning),
     acknowledgeInitialThemes:discovery.acknowledgeInitialThemes,
+    setDiscoveryAudience,
     renderedPersonalTheme: previewTheme || renderedTheme, openThemes, clearTheme, setAppearance, setSeasonalTransitionBlocked }}>
     {children}
     {!blocked.current && !surface && notice.surface}
     {surface && createPortal(<Modal key={surface.id} close={dismiss} onCloseStart={endPreview}
       backgroundRef={background} returnFocusRef={focus} lockDocument={!background.current?.matches('.modal-layer')}>
       {close => <PersonalThemeStudio Header={Header} initial={surface.initial} systemDark={systemDark}
-        newReleases={surface.newReleases} onDiscoverySeen={discovery.markSeen}
+        newReleases={discoveryAudience?.eligible && surface.discoveryProfileId === discoveryAudience.profileId ? surface.newReleases : []} onDiscoverySeen={discovery.markSeen}
         close={close} preview={preview} apply={apply} />}
     </Modal>, document.body)}
   </ThemeContext.Provider>;

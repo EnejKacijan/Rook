@@ -1,5 +1,5 @@
 /* One handle convention. Only its 44px column owns drag. */
-.plan-editor.is-reorder-scroll-scope { max-height:70dvh;overflow-y:auto;overscroll-behavior-y:contain;overflow-anchor:none; }
+.plan-editor.is-reorder-scroll-scope { max-height:70dvh;overflow-y:auto;overscroll-behavior-y:none;overflow-anchor:none; }
 :root[data-appearance] button.rook-reorder-handle {
   width:44px;min-width:44px;max-width:44px;height:44px;min-height:44px;flex:0 0 44px;
   margin:0;padding:0;border:0;background:transparent;box-shadow:none;border-radius:8px;
@@ -20,7 +20,7 @@
 .is-week-reordering .plan-workout-drag-surface { grid-column:2;grid-row:1 / 3; }
 :root .is-week-reordering :is(.plan-workout-day-label,.plan-workout-compact-summary) { grid-column:1; }
 :root .today-screen .today-exercise-edit-row { grid-template-columns:minmax(0,1fr) max-content 44px 44px;column-gap:8px; }
-.today-screen .exercise-preview.is-editing { max-height:70dvh;overflow-y:auto;overflow-x:clip;overscroll-behavior-y:contain;overflow-anchor:none; }
+.today-screen .exercise-preview.is-editing { max-height:70dvh;overflow-y:auto;overflow-x:clip;overscroll-behavior-y:none;overflow-anchor:none; }
 .today-exercise-edit-row > .rook-reorder-handle { order:4; }
 :root .today-reorder-preview { grid-template-columns:minmax(0,1fr) max-content 44px;padding:0 4px 0 10px;column-gap:10px; }
 .today-reorder-preview > i { order:3; }

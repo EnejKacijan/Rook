@@ -36,7 +36,7 @@ it('allows creating another saved workout after the former four-workout threshol
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
   await act(async () => root.render(<SavedWorkouts state={state} update={() => {}} close={() => {}}
     Header={() => null} Editor={editor} />));
-  const create = [...host.querySelectorAll('button')].find(button => button.textContent === '+ CREATE WORKOUT');
+  const create = [...host.querySelectorAll('button')].find(button => button.textContent === 'Create workout');
   await act(async () => create.click());
   expect(editor).toHaveBeenCalled(); expect(host.textContent).toContain('Workout editor');
   expect(document.querySelector('.rook-pro-paywall')).toBeNull();
@@ -44,8 +44,8 @@ it('allows creating another saved workout after the former four-workout threshol
 it('cannot opt into checkout or offline Pro preview through an environment setting', () => {
   const releaseSources = ['App.jsx', 'main.jsx', 'aiService.js', 'useCoachAvailability.js', 'SavedWorkouts.jsx', 'TemporaryPlanSheet.jsx', 'PersonalThemesContext.jsx'];
   for (const file of releaseSources) expect(readFileSync(`src/${file}`, 'utf8'))
-    .not.toMatch(/VITE_ROOK_PRO_ROLLOUT|LOCAL_PRO_REVIEW|ProReviewContext|proFreeExperience|subscriptionBilling|\.gate\(/);
-  for (const file of ['RookProPaywall.jsx', 'subscriptionBilling.js', 'subscriptionPolicy.js', 'storeProducts.js', 'proReviewMode.js'])
+    .not.toMatch(/VITE_ROOK_PRO_ROLLOUT|LOCAL_PRO_REVIEW|ProReviewContext|proFreeExperience|subscriptionBilling|WelcomeProJourney|ProFeatureExplorer|ProCampaignBanner|\.gate\(/);
+  for (const file of ['RookProPaywall.jsx', 'subscriptionBilling.js', 'subscriptionPolicy.js', 'storeProducts.js', 'proReviewMode.js','WelcomeProJourney.jsx','ProFeatureExplorer.jsx','ProCampaignBanner.jsx','proCampaign.js'])
     expect(existsSync(`src/${file}`)).toBe(false);
   expect(JSON.parse(readFileSync('package.json', 'utf8')).dependencies).not.toHaveProperty('@revenuecat/purchases-capacitor');
 });

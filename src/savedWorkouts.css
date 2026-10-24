@@ -1,5 +1,5 @@
 .saved-workouts{min-width:0;min-height:0;display:flex;flex-direction:column;gap:12px}
-.saved-workouts .saved-workout-preview,.saved-workout-list{min-height:0;overflow-y:auto;overscroll-behavior-y:contain}
+.saved-workouts .saved-workout-preview,.saved-workout-list{min-height:0;overflow-y:auto;overscroll-behavior-y:none}
 .saved-workouts h1,.saved-workouts strong,.saved-workouts p{overflow-wrap:anywhere}
 .saved-template-name{display:flex;flex-direction:column;gap:8px}
 .saved-template-name input{min-height:44px;width:100%;box-sizing:border-box;font-size:16px;border:1px solid var(--rook-border);border-radius:12px;padding:12px;background:var(--rook-surface-muted);color:var(--rook-text);appearance:none}
@@ -38,4 +38,30 @@
 .screen .plan-editor[data-workout-only]{margin-top:12px}
 .plan-editor[data-workout-only]>.plan-reorder-help{margin:0 0 12px}
 .plan-editor[data-workout-only]>.plan-edit-day-section{padding-top:4px}
-.saved-workout-create { width: 100%; min-height: 48px; margin: 12px 0 16px; }
+.saved-template-section-heading { display:flex; align-items:center; justify-content:space-between; gap:8px; margin-top:12px; }
+.saved-template-section-heading .saved-workout-create { flex:0 0 auto; min-height:44px; padding:8px 0 8px 8px; margin:0; font-size:13px; color:var(--rook-accent-text); }
+:root .saved-workouts .plan-template-list h2,:root .saved-workouts .saved-template-section-title { margin:12px 0 4px; font-size:14px; color:var(--rook-secondary); font-weight:650; }
+:root .saved-workouts .saved-template-section-heading .saved-template-section-title { margin:0; }
+.plan-template-list .list-row { width:100%; min-height:64px; }
+.plan-template-list .list-row small { display:block; margin-top:4px; font-size:13px; color:var(--rook-secondary); }
+.plan-template-actions { display:grid; gap:10px; padding:12px 0; }
+.plan-template-actions .plan-template-note { margin:0; font-size:13px; line-height:1.45; color:var(--rook-secondary); }
+.plan-template-actions .button,.plan-template-actions .text-button { min-height:48px; }
+.plan-start-sheet{display:flex;flex-direction:column;min-height:0;gap:16px}
+.plan-start-content{min-height:0;overflow-y:auto;overscroll-behavior:none}
+.plan-start-content{scrollbar-width:none}.plan-start-content::-webkit-scrollbar{display:none}
+/* The nested review owns the visible sheet chrome and focus. */
+.modal-layer:has(>.saved-workouts[data-plan-start-open="true"]){visibility:hidden}
+:root .plan-start-sheet h1{font-size:26px;line-height:1.15;margin:4px 0 10px;overflow-wrap:anywhere}
+.plan-start-description{font-size:14px;line-height:1.45;color:var(--rook-secondary)}
+.plan-start-source,.plan-start-changes>div{display:grid;gap:5px;padding:12px 0;overflow-wrap:anywhere}
+.plan-start-source span,.plan-start-changes span,.plan-start-exercises span{color:var(--rook-secondary);font-size:14px}
+.plan-start-field{display:grid;gap:8px;margin:16px 0;font-size:14px;color:var(--rook-secondary)}
+.plan-start-field select{width:100%;min-width:0;min-height:48px;font:inherit;font-size:16px;color:var(--rook-text);background:var(--rook-surface);border:1px solid var(--rook-border);border-radius:12px;padding:10px}
+.plan-start-changes{border-block:1px solid var(--rook-border);margin:16px 0}
+:root .plan-start-changes h2{font-size:14px;margin:14px 0 0;color:var(--rook-secondary)}
+.plan-start-exercises summary{min-height:44px;cursor:pointer;align-content:center;font-size:14px}
+.plan-start-exercises ol{padding-left:20px}.plan-start-exercises li{padding:8px 0}.plan-start-exercises li>*{display:block}
+.plan-start-actions{display:grid;gap:8px;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0px)}
+.plan-start-actions .button,.plan-start-actions .text-button{min-height:48px}
+.plan-start-actions small{font-size:13px;text-align:center;color:var(--rook-secondary);line-height:1.4}

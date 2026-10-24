@@ -6,7 +6,9 @@
   padding: 3px 8px 3px 12px;
   border-radius: 12px;
   gap: 8px;
-  touch-action: pan-y;
+  /* This small overlay owns left/right/down dismissal. Keep native scrolling
+     everywhere outside it; pan-y here would cancel downward touch tracking. */
+  touch-action: none;
   will-change: transform, opacity;
 }
 :root .rook-snackbar > button { flex-shrink: 0; min-height: 44px; }

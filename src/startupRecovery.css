@@ -1,8 +1,53 @@
-.startup-recovery{max-width:36rem;margin-inline:auto;min-height:100dvh;box-sizing:border-box;display:flex;flex-direction:column;justify-content:center;padding: max(28px,env(safe-area-inset-top)) 24px max(28px,env(safe-area-inset-bottom));gap:16px;background:var(--rook-bg);color:var(--rook-text)}
-.startup-recovery h1{font-size:clamp(28px,7vw,38px);line-height:1.12;margin:0;overflow-wrap:break-word}
-.startup-recovery p{line-height:1.5;margin:0}
-.startup-recovery-actions,.startup-confirm{display:flex;flex-direction:column;gap:12px}
-.startup-recovery .button{min-height:48px;white-space:normal}
+/* Recovery owns its layout. Generic fatal-error rules must not narrow its
+   buttons to 300px or add a second set of heading/paragraph margins. */
+.fatal-error-screen.startup-recovery {
+  width:100%; max-width:500px; margin:0 auto; min-height:100dvh;
+  box-sizing:border-box; display:flex; flex-direction:column; justify-content:flex-start;
+  padding:calc(32px + env(safe-area-inset-top)) 24px calc(24px + env(safe-area-inset-bottom));
+  gap:0; background:var(--rook-bg); color:var(--rook-text);
+}
+.fatal-error-screen.startup-recovery > .eyebrow {
+  margin:0 0 12px; font-size:11px; line-height:1.3; letter-spacing:.13em;
+}
+.fatal-error-screen.startup-recovery > h1 {
+  margin:0; font-size:clamp(28px,7.6vw,34px); font-weight:800;
+  line-height:1.12; letter-spacing:-.03em; overflow-wrap:break-word;
+}
+.fatal-error-screen.startup-recovery > p:not(.eyebrow) {
+  max-width:none; margin:16px 0 0; color:var(--rook-secondary); font-size:16px; line-height:1.5;
+}
+.startup-recovery-actions,.startup-confirm {
+  width:100%; min-width:0; display:flex; flex-direction:column; gap:12px; margin-top:28px;
+}
+.fatal-error-screen.startup-recovery .button {
+  width:100%; max-width:none; min-height:54px; padding:12px 16px;
+  font-size:14px; line-height:1.3; letter-spacing:.06em; white-space:normal;
+}
+.startup-recovery-actions > .email-account { margin-top:0; }
+.startup-confirm h2 { margin:0; font-size:22px; line-height:1.2; }
+.fatal-error-screen.startup-recovery .startup-confirm > p { max-width:none; margin:0; line-height:1.5; }
+@media (max-width:359px) { .fatal-error-screen.startup-recovery { padding-inline:16px; } }
+@media (min-width:501px) { .fatal-error-screen.startup-recovery { min-height:calc(100dvh - 40px); border-radius:32px; } }
+.fatal-error-screen.startup-recovery.startup-loading {
+  justify-content:center; align-items:center; text-align:center;
+}
+.fatal-error-screen.startup-recovery.startup-loading > .eyebrow { margin-bottom:20px; }
+.fatal-error-screen.startup-recovery.startup-loading > h1 {
+  font-size:18px; font-weight:600; line-height:1.333333; letter-spacing:0;
+}
+.startup-loading-spinner {
+  display:block; width:24px; height:24px; flex:0 0 24px; box-sizing:border-box;
+  margin:0 0 12px; border:2px solid color-mix(in srgb,var(--rook-text) 20%,transparent);
+  border-top-color:var(--rook-text); border-radius:50%; visibility:hidden;
+  /* Reserve the space immediately, reveal only if loading outlasts 150ms.
+     This never delays hydration or the transition into the app. */
+  animation:rook-startup-reveal 0s linear 150ms forwards,rook-startup-spin 1.2s linear 150ms infinite;
+}
+@keyframes rook-startup-reveal { to { visibility:visible; } }
+@keyframes rook-startup-spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion:reduce) {
+  .startup-loading-spinner { animation:rook-startup-reveal 0s linear 150ms forwards; }
+}
 .storage-diagnostics{margin-top:24px;font-size:13px;color:var(--rook-secondary);text-align:left}
 .storage-diagnostics summary{cursor:pointer;min-height:44px;display:flex;align-items:center;text-decoration:underline}
 .storage-diagnostics p{margin:8px 0}

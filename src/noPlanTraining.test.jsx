@@ -196,5 +196,5 @@ it('gives Coach no scheduled workout and offers saved-workout names as optional 
   expect(context.program).toBeNull();
   expect(context.todayStatus.type).toBe('open-training-day');
   expect(context.missedWorkouts).toEqual([]);
-  expect(context.savedWorkouts).toEqual([{id:'template-full-body',name:'Full Body',exerciseCount:1}]);
+  expect(context.savedWorkouts).toEqual([{id:'template-full-body',name:'Full Body',exerciseCount:1,prescription:state.savedWorkoutTemplates[0].exercises}]);
 });

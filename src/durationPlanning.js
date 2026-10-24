@@ -4,7 +4,7 @@ export const DURATION_PLANNING_VERSION = 1;
 const KNOWN_CONSTRAINTS = new Set(['beginner-weekly-volume-limit', 'weekly-volume-limit',
   'per-session-volume-limit', 'split-coverage', 'adjacent-day-recovery',
   'next-useful-increment-exceeds-time', 'eight-exercise-complexity-limit',
-  'no-missing-compatible-template-role', 'experience-or-effort-set-limit']);
+  'no-missing-compatible-template-role', 'experience-or-effort-set-limit', 'full-body-workload-limit']);
 
 // A discrete exercise/set need not land exactly on a clock target. Retain the
 // existing validation ceiling; aim within 20%, with a tighter compact minimum.
@@ -20,7 +20,7 @@ export function generatedSessionTiming(exercises = [], profile = {}, catalog = {
   if (!exercises.length) return { minutes: 0, workSeconds: 0, restSeconds: 0, setupSeconds: 0, warmupMinutes: 0, assumptions: [] };
   let workSeconds = 0;
   let restSeconds = 0;
-  const assumptions = new Set(['45 sec per rep-based set', '2 min between exercise setups']);
+  const assumptions = new Set(['rep target midpoint at 3 sec/rep plus 10 sec set setup, at least 45 sec', '2 min between exercise setups']);
   const paired = new Set();
   for (const exercise of exercises) {
     const item = catalog[exercise.exerciseId] || exercise.importedExercise || {};
@@ -29,12 +29,14 @@ export function generatedSessionTiming(exercises = [], profile = {}, catalog = {
     const timed = (exercise.measure || item.measure) === 'seconds';
     const low = Number(exercise.repMin);
     const high = Number(exercise.repMax ?? exercise.repMin);
-    const seconds = timed && low > 0 && high >= low ? (low + high) / 2 : 45;
+    const seconds = timed && low > 0 && high >= low ? (low + high) / 2
+      : low > 0 && high >= low ? Math.max(45,Math.ceil((low+high)/2*3+10)) : 45;
     if (sides === 2) assumptions.add('both sides counted for unilateral work');
     if (timed) assumptions.add('timed target or midpoint of its range');
     if (['distance', 'meters'].includes(exercise.measure || item.measure) || exercise.failureTarget)
       assumptions.add('open/untimed target uses a 45 sec estimate, not an invented prescription');
-    workSeconds += count * seconds * sides;
+    if (sides === 2) assumptions.add('15 sec to change sides per set');
+    workSeconds += count * (seconds * sides + (sides===2?15:0));
     const rest = value => value != null && value !== '' && Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : 90;
     const members = exercise.supersetId ? exercises.filter(row => row.supersetId === exercise.supersetId) : [];
     if (members.length === 2) {

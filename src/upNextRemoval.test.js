@@ -1,8 +1,8 @@
 import {it,expect} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
-import {startWorkout,serializeState,deserializeState,completeWorkout} from './domain.js';
+import {startWorkout,serializeState,deserializeState,completeWorkout,refreshWorkoutWarmup} from './domain.js';
 import {startFreestyleWorkout,addFreestyleExercise} from './freestyleWorkout.js';
-import {canRemoveUpNext,hasMeaningfulExerciseProgress,removeUpNext,undoUpNextRemoval,canRemoveCurrentExercise,removeCurrentExercise,canUndoCurrentExerciseRemoval,undoCurrentExerciseRemoval} from './upNextRemoval.js';
+import {canRemoveUpNext,hasMeaningfulExerciseProgress,hasLoggedExerciseProgress,removeUpNext,undoUpNextRemoval,canRemoveCurrentExercise,removeCurrentExercise,canUndoCurrentExerciseRemoval,undoCurrentExerciseRemoval} from './upNextRemoval.js';
 const make=()=>{const s=createReturningUserFixture(0);s.activeWorkout=startWorkout(s,s.program.days[0]);return s;};
 it.each([false,true])('removes only future work, preserving current values, timer, plan and persistence (RIR %s)',rir=>{
  const s=make();s.profile.rirEnabled=rir;const a=s.activeWorkout,id=a.exercises[1].id;
@@ -16,11 +16,11 @@ it.each([false,true])('removes only future work, preserving current values, time
  const restored=undoUpNextRemoval(r.state,r.undo);expect(restored.activeWorkout.exercises).toEqual(a.exercises);
  const reloaded=deserializeState(serializeState(r.state));expect(reloaded.activeWorkout.exercises.some(e=>e.id===id)).toBe(false);expect(reloaded.activeWorkout.id).toBe(a.id);
 });
-it.each(['completed','completedAt','touched','side','segment','current','superset','warmup'])('rejects meaningful or locked work: %s',kind=>{
+it.each(['completed','completedAt','side','segment','current','superset','warmup'])('rejects logged or locked work: %s',kind=>{
  const s=make(),a=s.activeWorkout,e=a.exercises[1];
  if(kind==='current')a.exerciseIndex=1;else if(kind==='superset')e.supersetId='pair';
  else if(kind==='side')e.sets[0].sides={left:{completed:true}};
- else if(kind==='segment')e.sets[0].segments=[{touched:true}];
+ else if(kind==='segment')e.sets[0].segments=[{completed:true}];
  else if(kind==='warmup')a.warmup={stages:[{exerciseInstanceId:e.id,completed:true}]};
  else e.sets[0][kind]=true;
  expect(canRemoveUpNext(a,e.id)).toBe(false);expect(removeUpNext(s,e.id)).toEqual({state:s,undo:null});
@@ -74,16 +74,32 @@ it('removes the untouched current session exercise, selects the next, reloads, a
  expect(restored.activeWorkout.removedUpNextExercises).toBeUndefined();
  expect(undoCurrentExerciseRemoval(restored,result.undo)).toBe(restored);
 });
-it.each(['touched','completed','side','segment','warmup','superset','last'])('protects current %s from session removal',kind=>{
+it.each(['completed','side','segment','warmup','superset','last'])('protects current %s from session removal',kind=>{
  const s=make(),active=s.activeWorkout,current=active.exercises[0];
- if(kind==='side')current.sets[0].sides={left:{reps:7}};
- else if(kind==='segment')current.sets[0].segments=[{reps:4}];
+ if(kind==='side')current.sets[0].sides={left:{reps:7,completed:true}};
+ else if(kind==='segment')current.sets[0].segments=[{reps:4,completed:true}];
  else if(kind==='warmup')active.warmup={stages:[{exerciseInstanceId:current.id,completed:true}]};
  else if(kind==='superset')current.supersetId='pair';
  else if(kind==='last')active.exercises=[current];
  else current.sets[0][kind]=true;
  expect(canRemoveCurrentExercise(active,current.id)).toBe(false);
  expect(removeCurrentExercise(s,current.id)).toEqual({state:s,undo:null});
+});
+it.each(['current','future'])('keeps %s prepared values, side/segment inputs and skipped warm-up through removal and Undo',position=>{
+ const s=make(),active=s.activeWorkout,e=active.exercises[position==='current'?0:1];
+ Object.assign(e.sets[0],{weight:20,reps:8,rir:2,touched:true,weightEntryMode:'history',
+  sides:{left:{reps:8},right:{reps:7}},segments:[{weight:15,reps:5,touched:true}]});
+ refreshWorkoutWarmup(active,s.profile,s.program);
+ const stage=active.warmup.stages.find(stage=>stage.exerciseInstanceId===e.id);
+ if(stage)stage.skipped=true;
+ const before=structuredClone(e),warmup=structuredClone(stage);
+ expect(hasMeaningfulExerciseProgress(active,e.id)).toBe(true);
+ expect(hasLoggedExerciseProgress(active,e.id)).toBe(false);
+ const removed=position==='current'?removeCurrentExercise(s,e.id):removeUpNext(s,e.id);
+ expect(removed.state.activeWorkout.exercises.some(entry=>entry.id===e.id)).toBe(false);
+ const restored=undoUpNextRemoval(removed.state,removed.undo);
+ expect(restored.activeWorkout.exercises.find(entry=>entry.id===e.id)).toEqual(before);
+ if(warmup)expect(restored.activeWorkout.warmup.stages.find(stage=>stage.id===warmup.id)).toEqual(warmup);
 });
 it('invalidates current-removal Undo if the selected exercise or queue changes',()=>{
  const s=make(),removed=removeCurrentExercise(s,s.activeWorkout.exercises[0].id);

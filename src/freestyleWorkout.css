@@ -22,18 +22,26 @@
 /* The set section already supplies its own top spacing. */
 .freestyle-previous { margin: 16px 0 0; }
 .freestyle-previous .text-button { font-size: 13px; min-height: 44px; }
-.freestyle-history-aid { border: 1px solid var(--rook-border); border-radius: 12px; padding: 0 12px 8px; }
-.freestyle-history-aid .freestyle-copy { border: 0; padding: 0; min-height: 56px; font-size: 12px; color: var(--rook-secondary); }
-.freestyle-history-aid .freestyle-copy strong { font-size: 14px; color: var(--rook-text); }
 .freestyle-actions .freestyle-cancel { margin-top: 8px; border-top: 1px solid var(--rook-border); padding-top: 12px; color: var(--rook-secondary); -webkit-text-fill-color: currentColor; }
-.freestyle-copy { display: flex; width: 100%; align-items: center; justify-content: space-between; text-align: left; gap: 12px; padding: 12px; background: transparent; border: 1px solid var(--rook-border); border-radius: 12px; color: var(--rook-text); min-height: 56px; }
-.freestyle-copy strong { display: block; margin-top: 4px; }
-.freestyle-copy > span:last-child { font-size: 11px; font-weight: 700; color: var(--rook-accent-text); }
-.freestyle-copy:disabled { opacity:1;cursor:default; }
-.freestyle-copy:disabled > span:last-child { color:var(--rook-muted);font-weight:400; }
-.freestyle-copy-applied { display:flex;align-items:center;justify-content:space-between;gap:8px;min-height:44px;color:var(--rook-secondary);font-size:12px; }
-.freestyle-copy-applied > span { min-width:0;overflow-wrap:anywhere; }
-.freestyle-copy-applied:focus { outline:none; }
-.freestyle-copy-applied .text-button { min-width:44px;min-height:44px;margin:0;flex-shrink:0;padding-inline:0; }
-.freestyle-copy-error { margin:8px 0 0;font-size:12px;color:var(--rook-error-text); }
+.freestyle-copy-error { margin:8px 0 0;font-size:14px;color:var(--rook-error-text); }
 .freestyle-workout .workout-options-trigger.unavailable { display: none; }
+
+/* History is already summarized in the exercise header. A reuse hint belongs
+   only to an added/replaced exercise and disappears after the user's choice. */
+.freestyle-previous:not(:has(.previous-values-offer,.training-limit-note,.freestyle-copy-error)) { margin:0; }
+.previous-values-offer { display:flex; align-items:center; gap:8px; padding:4px 0; }
+.previous-values-source { display:block; min-width:0; overflow-wrap:anywhere; }
+.previous-values-source small { display:block; color:var(--rook-secondary); font-size:12px; line-height:1.4; }
+.previous-values-source strong { display:block; margin-top:2px; font-size:14px; line-height:1.4; color:var(--rook-text); }
+.previous-values-offer > .previous-values-source { flex:1; }
+.previous-values-offer .freestyle-copy { width:auto; flex-shrink:0; min-height:44px; padding:8px; background:transparent; border:0; border-radius:8px; color:var(--rook-accent-text); font-size:14px; font-weight:700; white-space:nowrap; }
+.previous-values-hide { flex-shrink:0; width:44px; min-height:44px; border:0; background:transparent; color:var(--rook-secondary); font-size:24px; border-radius:8px; }
+.workout-screen .previous-values-undo { bottom:max(calc(env(safe-area-inset-bottom) + 8px),var(--snackbar-rest-inset,0px),var(--previous-values-keyboard-inset,0px)); }
+.previous-values-sheet .previous-values-source-card { padding:16px; background:var(--rook-surface); border:1px solid var(--rook-border); border-radius:14px; margin:20px 0; }
+.previous-values-sheet .previous-values-source-card strong { font-size:20px; }
+.previous-values-current h2 { font-size:16px; margin:0 0 12px; }
+.previous-values-current > div { display:flex; justify-content:space-between; gap:12px; padding:6px 0; font-size:14px; }
+.previous-values-current > div > span { color:var(--rook-secondary); }
+.previous-values-current > div > strong { overflow-wrap:anywhere; min-width:0; text-align:right; }
+.previous-values-sheet > p { color:var(--rook-secondary); font-size:14px; line-height:1.5; }
+.previous-values-sheet > .button { width:100%; margin-top:12px; }
