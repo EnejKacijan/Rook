@@ -21,8 +21,8 @@ function completionGuard(state, workoutId) {
 
 // The capability lives only in the current completion context, never in saved
 // state/history/backups. Capture before completeWorkout drops active-only data.
-export function completeWorkoutReversibly(state) {
-  const next = completeWorkout(copy(state));
+export function completeWorkoutReversibly(state,timing = null) {
+  const next = completeWorkout(copy(state),timing);
   const inserted = next.workouts.filter(workout => !state.workouts.some(prior => prior.id === workout.id));
   if (!state.activeWorkout || next.activeWorkout || inserted.length !== 1)
     return {state: next, reversal: null};

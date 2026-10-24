@@ -8,6 +8,7 @@ import {intentionalNoPlan} from './trainingStyle.js';
 import {normalizeTemporaryScheduleDismissal} from './temporarySchedulePresentation.js';
 import { assertTemporaryPlanState, temporaryOccurrenceWorkout, temporaryPlanBlockSkipRecords } from './temporaryPlan.js';
 import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplates} from './workoutTemplateSchema.js';
+import {workoutElapsedSeconds} from './workoutTiming.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
 import {normalizeCoachConversations} from './coachConversations.js';
 import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
@@ -9073,6 +9074,8 @@ export function startWorkout(state, template) {
     originalImportedWorkoutName: template.originalImportedWorkoutName,
     startedAt,
     updatedAt: startedAt,
+    lastMeaningfulWorkoutActivityAt:null,
+    excludedIdleMs:0,
     timeZoneAtStart:
       Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     utcOffsetMinutesAtStart: new Date(startedAt).getTimezoneOffset(),
@@ -9163,13 +9166,16 @@ export function restartActiveWorkout(state, restartedAt = Date.now()) {
   if (!activeWorkoutCanRestart(active)) return state;
   const snapshot = restartBaseline(active);
   // Restored instances must not coexist with removal tombstones or Undo data.
-  const {removedUpNextExercises, ...session}=active;
+  const {removedUpNextExercises,unreviewedIdleSince, ...session}=active;
   return {
     ...state,
     activeWorkout: {
       ...session,
       startedAt: restartedAt,
       updatedAt: restartedAt,
+      lastMeaningfulWorkoutActivityAt:null,
+      excludedIdleMs:0,
+      timingRecoveryIds:[],
       exerciseIndex: 0,
       rest: null,
       handledSupersetRestRounds: [],
@@ -9238,6 +9244,9 @@ export function resumeCompletedWorkout(
   active.id = replacementId;
   active.startedAt = resumedAt - elapsedSeconds * 1000;
   active.updatedAt = resumedAt;
+  active.lastMeaningfulWorkoutActivityAt=resumedAt;
+  active.excludedIdleMs=0;
+  delete active.unreviewedIdleSince;
   active.resumedAt = resumedAt;
   active.resumedFromCompletionId = completed.id;
   active.resumeOperationId = operationId;
@@ -9762,28 +9771,28 @@ export function normalizeSessionNote(value) {
   const note = String(value || "").trim();
   return note ? note.slice(0, SESSION_NOTE_MAX_LENGTH) : null;
 }
-export function completeWorkout(state) {
+export function completeWorkout(state, timing = null) {
   if (!state.activeWorkout) return state;
   if(isCombinedAdjustment(state.activeWorkout.adjustment) && !workoutSetSummary(state.activeWorkout).completed) return cancelCombinedWorkout(state);
   if (state.activeWorkout.source === 'freestyle' && !workoutSetSummary(state.activeWorkout).completed) return state;
   if(state.activeWorkout.exercises.some(hasUnspecifiedRepTarget)&&!workoutSetSummary(state.activeWorkout).completed)return {...state,activeWorkout:null};
-  const endedAt = Date.now();
+  const recordedAt=Date.now(),endedAt=timing?.endedAt??recordedAt;
+  if(timing&&(!Number.isFinite(endedAt)||endedAt<state.activeWorkout.startedAt||endedAt>recordedAt||!Number.isFinite(timing.durationSeconds)||timing.durationSeconds<1||timing.durationSeconds*1000>endedAt-state.activeWorkout.startedAt+1000))throw Error('Review the workout end and duration before finishing.');
   const summary = workoutSetSummary(state.activeWorkout);
   const endedEarly = summary.completed < summary.total;
   const completedActiveWorkout = structuredClone(state.activeWorkout);
   completedActiveWorkout.reusableStructure=reusableWorkoutStructure(state.activeWorkout);
   delete completedActiveWorkout.restartSnapshot;
+  delete completedActiveWorkout.unreviewedIdleSince;
   if (completedActiveWorkout.source === 'freestyle') completedActiveWorkout.exercises = completedActiveWorkout.exercises.filter(exercise => exercise.sets.some(set => set.completed));
   const session = {
     ...completedActiveWorkout,
     id: uid("workout"),
     endedAt,
-    durationSeconds: Math.max(
-      1,
-      Math.round((endedAt - state.activeWorkout.startedAt) / 1000),
-    ),
-    completedAt: new Date().toISOString(),
-    workoutDateKey: workoutPerformedDate({...completedActiveWorkout,completedAt:new Date().toISOString()}),
+    durationSeconds:timing?.durationSeconds??Math.max(1,workoutElapsedSeconds(state.activeWorkout,endedAt,Math.round)),
+    completedAt: new Date(endedAt).toISOString(),
+    ...(timing?{completionRecordedAt:new Date(recordedAt).toISOString(),timingReviewedAt:timing.timingReviewedAt}:{}),
+    workoutDateKey: workoutPerformedDate({...completedActiveWorkout,completedAt:new Date(endedAt).toISOString()}),
     status: endedEarly ? "ended-early" : "completed",
     endedEarly,
     plannedSetCount: summary.planned,

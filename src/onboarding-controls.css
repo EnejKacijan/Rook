@@ -295,7 +295,7 @@
 .physique-analysis p { max-width: 330px; }
 .photo-inputs { display: flex; flex-direction: column; gap: 9px; margin-top: 20px; }
 .photo-inputs label { min-height: 64px; padding: 11px 15px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 1px solid rgba(27, 26, 25, .11); border-radius: 15px; background: #fff; cursor: pointer; }
-.photo-inputs label.ready { border-color: color-mix(in srgb, var(--rook-success) 38%, transparent); background: var(--rook-success-soft); }
+.photo-inputs label.ready { border-color: color-mix(in srgb, var(--rook-accent-text) 38%, transparent); background: var(--rook-accent-soft); }
 .photo-inputs input { position: absolute; width: 1px; height: 1px; opacity: 0; pointer-events: none; }
 .photo-inputs span { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .photo-inputs strong { font-size: 14px; text-transform: capitalize; }

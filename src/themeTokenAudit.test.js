@@ -26,10 +26,11 @@ it('audited interactive accent primitives have no standalone brand-green declara
   expect(value,`${rule.selector} ${d.prop}`).not.toMatch(/#(?:1f6b4c|206b4c|4fbf87)|rgba?\(\s*31\s*,\s*107\s*,\s*76/i);
  }
 });
-it('intentional semantic success remains distinct from theme progress, and locked selection is not success',()=>{
- expect(declarations('.queue-add-swipe[data-swipe-armed]','background').map(d=>d.value)).toContain('var(--rook-success)');
- expect(declarations('.set-row.set-done .check','background').some(d=>d.value==='var(--rook-success)')).toBe(true);
- expect(declarations('.backup-status','color').map(d=>d.value)).toContain('var(--rook-success, #1f6b4c)');
+it('generic applied, completed and saved controls follow the theme, while semantic roles remain available',()=>{
+ expect(declarations('.queue-add-swipe[data-swipe-armed]','background').map(d=>d.value)).toContain('var(--rook-accent-fill)');
+ expect(declarations('.set-row.set-done .check','background').some(d=>d.value==='var(--rook-accent-fill)')).toBe(true);
+ expect(declarations('.backup-status','color').map(d=>d.value)).toContain('var(--rook-accent-text, #1f6b4c)');
+ for(const selector of ['.coach-screen .action-applied','.coach-screen .today-update-check','.warmup-complete-status','.recommendation.applied'])for(const prop of ['background','color','border-color'])for(const d of declarations(selector,prop))expect(d.value).not.toContain('--rook-success');
  for(const d of declarations('.adapt-review-list > button.selected .adapt-check','background'))expect(d.value).not.toContain('success');
  expect(readFileSync('docs/theme-token-audit.md','utf8')).toContain('BRAND IDENTITY');
 });

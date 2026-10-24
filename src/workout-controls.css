@@ -277,7 +277,7 @@
 .set-row .check:disabled { border-color: rgba(27, 26, 25, .08); background: #f1efeb; color: #aaa7a2; opacity: 1; cursor: not-allowed; }
 .set-row.set-ready .check:not(:disabled) { border-color: var(--rook-accent-text); background: #fff; color: var(--rook-accent-text); box-shadow: 0 0 0 2px var(--rook-accent-soft); }
 .set-row.set-done { background: transparent; border-color: transparent; }
-.set-row.set-done .check { border-color: var(--rook-success-line); background: var(--rook-success); color: var(--rook-on-success); box-shadow: none; }
+.set-row.set-done .check { border-color: var(--rook-accent-hairline); background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); box-shadow: none; }
 .set-row.set-done .set-index-label b { color: #77736f; font-weight: 700; }
 .set-row.set-completing::after { content: ''; position: absolute; z-index: 0; top: 0; bottom: 0; left: 0; width: 38%; pointer-events: none; background: var(--rook-set-wash, rgba(31,107,76,.075)); animation: rook-set-complete-wash var(--rook-motion-state-long, 240ms) var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1)) both; }
 .set-row.set-completing > * { position: relative; z-index: 1; }
@@ -320,8 +320,8 @@
   text-align: center;
 }
 .set-row.set-done .set-load-context {
-  background: color-mix(in srgb, var(--rook-success) 3.5%, transparent);
-  border-color: color-mix(in srgb, var(--rook-success) 10%, transparent);
+  background: color-mix(in srgb, var(--rook-accent-text) 3.5%, transparent);
+  border-color: color-mix(in srgb, var(--rook-accent-text) 10%, transparent);
 }
 .set-index-label { display: flex; min-width: 0; align-items: center; justify-content: center; }
 .set-index-label b { font-size: 12px; line-height: 1; }
@@ -679,8 +679,8 @@
   .extra-set-label { width: 34px; }
   .set-row.with-rir select { width: 54px; padding-left: 3px; padding-right: 2px; font-size: 10px; }
 }
-.recommendation.applied { background: var(--rook-success-soft, #f1f6f3); }
-.recommendation.applied::after { content: "✓"; color: var(--rook-success, var(--rook-accent-text, #1f6b4c)); font-size: 18px; font-weight: 800; }
+.recommendation.applied { background: var(--rook-accent-soft, #f1f6f3); }
+.recommendation.applied::after { content: "✓"; color: var(--rook-accent-text, var(--rook-accent-text, #1f6b4c)); font-size: 18px; font-weight: 800; }
 .export-sheet h1 {
   margin-top: 10px;
   overflow-wrap: anywhere;

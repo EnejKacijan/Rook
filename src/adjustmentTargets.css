@@ -7,7 +7,7 @@
 .adapt-review-toggle > span:last-child { min-width:0; display:grid; gap:4px; }
 .adapt-review-row > .text-button { min-height:44px; padding:8px; }
 .adapt-review-row > .adjustment-target-editor { grid-column:1/-1; }
-.coach-screen .adapt-review-row .selected .adapt-check { background:var(--rook-success,#1f6b4c); border-color:var(--rook-success,#1f6b4c); }
+.coach-screen .adapt-review-row .selected .adapt-check { background:var(--rook-accent-fill,#1f6b4c); border-color:var(--rook-accent-text,#1f6b4c); }
 .adjust-keep-row .text-button { min-height:44px; justify-self:start; }
 .adjust-keep-row .adjustment-target-editor { grid-column:1/-1; width:100%; }
 .adjust-time-context { font-weight:600; }

@@ -682,8 +682,8 @@
 
 /* Primary actions carry the theme accent. */
 :root[data-appearance="dark"] :is(.primary, .warmup-finish, .training-safety-actions button, .scratch-day-options button.selected, .coach-screen .today-update-check) { background: var(--rook-accent); color: var(--rook-on-accent); border-color: var(--rook-accent); }
-/* Completion is a success state, not a brand accent. */
-:root[data-appearance="dark"] .set-row.set-done .check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+/* Generic completion controls follow the selected theme. */
+:root[data-appearance="dark"] .set-row.set-done .check { background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); border-color: var(--rook-accent-text); }
 :root[data-appearance="dark"] :is(.dark, .option-list .selected-option, .onboarding-option.selected-option, .physique-suggestions button.selected) { background: var(--rook-selected); color: var(--rook-on-selected); border-color: var(--rook-selected-line); }
 :root[data-appearance="dark"] .onboarding-preferences .exercise-preference-options .onboarding-option.selected-option { background: var(--rook-accent-soft); color: var(--rook-accent-text); border-color: transparent; }
 :root[data-appearance="dark"] .onboarding-option.selected-option .option-card-copy small { color: var(--rook-on-selected); }
@@ -736,9 +736,9 @@
 :root[data-appearance="dark"] .coach-history-group button.active strong { color: var(--rook-accent-text); }
 :root[data-appearance="dark"] .physique-review-entry small { color: var(--rook-accent-text); }
 :root[data-appearance="dark"] :is(.recommendation strong, .recommendation p, .active-workout-notice strong, .plan-ready-notice strong) { color: var(--rook-accent-text); }
-/* Success-tinted surfaces. */
-:root[data-appearance="dark"] :is(.set-row.set-done, .warmup-ramp button.completed, .warmup-complete-status > span, .coach-screen .action-applied) { background: var(--rook-success-soft); color: var(--rook-success); border-color: var(--rook-success-line); }
-:root[data-appearance="dark"] :is(.warmup-complete-status, .warmup-ramp button.completed, .coach-screen .action-applied) { color: var(--rook-success); }
+/* Theme-tinted completion surfaces. */
+:root[data-appearance="dark"] :is(.set-row.set-done, .warmup-ramp button.completed, .warmup-complete-status > span, .coach-screen .action-applied) { background: var(--rook-accent-soft); color: var(--rook-accent-text); border-color: var(--rook-accent-hairline); }
+:root[data-appearance="dark"] :is(.warmup-complete-status, .warmup-ramp button.completed, .coach-screen .action-applied) { color: var(--rook-accent-text); }
 :root[data-appearance="dark"] .workout-screen .warmup-ramp button.warmup-check-row { background: transparent; color: var(--rook-text); border: 0; }
 :root[data-appearance="dark"] .workout-screen button.warmup-check-row.current { background: var(--rook-accent-soft); }
 :root[data-appearance="dark"] .workout-screen button.warmup-check-row.completed { background: transparent; color: var(--rook-secondary); }
@@ -829,7 +829,7 @@
 :root[data-appearance="dark"] .workout-screen .set-row.set-completing::after { background: var(--rook-set-wash); }
 :root[data-appearance="dark"] .workout-screen .set-row .check:disabled { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border-color: var(--rook-border); opacity: 1; }
 :root[data-appearance="dark"] .workout-screen .set-row.set-ready .check:not(:disabled) { background: var(--rook-surface); color: var(--rook-accent-text); border-color: var(--rook-accent-ring); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
-:root[data-appearance="dark"] .workout-screen .set-row.set-done .check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); box-shadow: none; }
+:root[data-appearance="dark"] .workout-screen .set-row.set-done .check { background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); border-color: var(--rook-accent-text); box-shadow: none; }
 :root[data-appearance="dark"] .workout-screen .set-row :is(.stepper input, select) { color: var(--rook-text); }
 :root[data-appearance="dark"] .workout-screen .stepper > :is(button, input) { background-color: transparent; }
 :root[data-appearance="dark"] .workout-screen .set-row.with-rir select { background: var(--rook-surface); color: var(--rook-text); border-color: var(--rook-control-border); }
@@ -855,7 +855,7 @@
 :root[data-appearance="light"][data-style="premium"] .workout-screen .set-row.set-completing::after { background: var(--rook-set-wash); }
 :root[data-appearance="light"][data-style="premium"] .workout-screen .set-row .check:disabled { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border-color: var(--rook-border); opacity: 1; }
 :root[data-appearance="light"][data-style="premium"] .workout-screen .set-row.set-ready .check:not(:disabled) { background: var(--rook-surface); color: var(--rook-accent-text); border-color: var(--rook-accent-ring); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
-:root[data-appearance="light"][data-style="premium"] .workout-screen .set-row.set-done .check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); box-shadow: none; }
+:root[data-appearance="light"][data-style="premium"] .workout-screen .set-row.set-done .check { background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); border-color: var(--rook-accent-text); box-shadow: none; }
 :root[data-appearance="light"][data-style="premium"] .workout-screen .set-index-label { color: var(--rook-secondary); }
 :root[data-appearance="light"][data-style="premium"] .workout-screen .set-row.set-active .set-index-label > b { color: var(--rook-accent-text); }
 :root[data-appearance="dark"] :is(.validation-error, .field-error, [role="alert"].error) { color: var(--rook-error-text) !important; }
@@ -991,7 +991,7 @@
 }
 :root[data-style="premium"] .workout-screen :is(.warmup-skip, .workout-exercise-actions .text-button):focus-visible { color: var(--rook-secondary); }
 :root[data-style="premium"] .workout-screen .set-row.set-done { background: transparent; border-color: transparent; }
-:root[data-style="premium"] .workout-screen .set-row.set-done .check { background: var(--rook-premium-accent-muted); border-color: var(--rook-premium-accent-muted); color: var(--rook-on-success); }
+:root[data-style="premium"] .workout-screen .set-row.set-done .check { background: var(--rook-premium-accent-muted); border-color: var(--rook-premium-accent-muted); color: var(--rook-on-accent-fill); }
 :root[data-style="premium"] .workout-screen .rest-timer { box-shadow: 0 7px 20px var(--rook-shadow); }
 :root[data-style="premium"] .workout-screen .rest-timer .button {
   background: var(--rook-timer-button);
@@ -1072,10 +1072,10 @@
 :root[data-appearance="dark"] :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
 :root[data-appearance="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
 :root[data-appearance="dark"] .setting-switch input:focus-visible + i { outline-color: var(--rook-focus-ring-soft); }
-:root[data-appearance="dark"] .coach-screen .today-update-check { background: var(--rook-success); color: var(--rook-on-success); border-color: var(--rook-success); }
+:root[data-appearance="dark"] .coach-screen .today-update-check { background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); border-color: var(--rook-accent-text); }
 :root .complete-screen .complete-mark { background: color-mix(in srgb, var(--rook-accent) 12%, var(--rook-surface)); color: var(--rook-accent-text); border: 1px solid color-mix(in srgb, var(--rook-accent) 35%, var(--rook-border)); }
 :root[data-appearance="dark"] .coach-screen .adapt-review-list > button:disabled .adapt-check { background: var(--rook-disabled-surface); border-color: var(--rook-border); color: var(--rook-disabled-text); }
-:root[data-appearance="dark"] .coach-screen .action-card-applied { border-color: var(--rook-success-line); background: var(--rook-success-soft); }
+:root[data-appearance="dark"] .coach-screen .action-card-applied { border-color: var(--rook-accent-hairline); background: var(--rook-accent-soft); }
 :root[data-appearance="dark"] .coach-screen .action-card-applied > small { color: var(--rook-secondary); }
 
 /* Premium must not inherit green-only accents from older component sheets. */

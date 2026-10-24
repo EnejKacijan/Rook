@@ -28,6 +28,7 @@ export function startFreestyleWorkout(state, now = Date.now()) {
     id: uid('active'), source: 'freestyle', name: 'Freestyle workout', workoutName: 'Freestyle workout',
     canonicalPlanDate: date, workoutDateKey: date, templateId: null, programDayId: null,
     sourcePlanSlotId: null, startedAt: now, updatedAt: now,
+    lastMeaningfulWorkoutActivityAt:null,excludedIdleMs:0,
     timeZoneAtStart: Intl.DateTimeFormat().resolvedOptions().timeZone || null,
     utcOffsetMinutesAtStart: new Date(now).getTimezoneOffset(),
     exerciseIndex: 0, rest: null, handledSupersetRestRounds: [], exercises: [],

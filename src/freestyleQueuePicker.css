@@ -73,7 +73,7 @@
 .queue-swipe-cue{position:absolute;inset:0;display:flex;align-items:center;padding:0 18px;background:var(--rook-surface-muted);color:var(--rook-secondary);visibility:hidden;pointer-events:none}
 .queue-swipe-cue svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round;transition:transform 90ms ease-out}
 .queue-add-swipe[data-swipe-adding] .queue-swipe-cue{visibility:visible}
-/* Semantic green stays green in Premium themes; decorative gold is not success. */
-.queue-add-swipe[data-swipe-armed] .queue-swipe-cue{background:var(--rook-success);color:var(--rook-on-success)}
+/* Generic action confirmations follow the selected theme. */
+.queue-add-swipe[data-swipe-armed] .queue-swipe-cue{background:var(--rook-accent-fill);color:var(--rook-on-accent-fill)}
 .queue-add-swipe[data-swipe-armed] .queue-swipe-cue svg{transform:scale(1.12)}
 @media(prefers-reduced-motion:reduce){.queue-swipe-cue svg{transition:none}}

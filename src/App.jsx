@@ -42,6 +42,8 @@ import { isConditioning, optionalActivitySummary, optionalActivityDurationLabel 
 import {SavedWorkouts} from './SavedWorkouts.jsx';
 import {createCoachDayContext,coachDayStarter,coachDayLabel,resolveCoachDayContext,coachActionMatchesDay} from './coachDayContext.js';
 import {CoachWorkoutReuseSheet} from './CoachWorkoutReuseSheet.jsx';
+import {markWorkoutActivity,workoutElapsedSeconds,workoutNeedsRecovery,reviewWorkoutTiming} from './workoutTiming.js';
+import {WorkoutRecoverySheet} from './WorkoutRecoverySheet.jsx';
 import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
@@ -676,7 +678,7 @@ export function useLiftState(startup) {
         // Transactions may attach their durable receipt while evaluating fn.
         // Normalizers must never mutate that receipt or a caller-owned result.
         const persistedReceipt = options.persistedState ? JSON.stringify(options.persistedState) : null;
-        const next = normalizeTrainingBlocksState(
+        let next = normalizeTrainingBlocksState(
           normalizeSubstitutionPreferencesState(
             normalizeCustomExercisesState(
               normalizeGymProfilesState(transition === draft && transition !== options.persistedState ? draft : clone(transition)),
@@ -707,6 +709,7 @@ export function useLiftState(startup) {
           }
         } else normalizePlanHistoryState(next);
         reconcileCombinedTermination(previous,next);
+        next=markWorkoutActivity(previous,next);
         if(isRepeatAdjustment(previous.activeWorkout?.adjustment) && !next.activeWorkout && next.todayAdaptation?.id===previous.activeWorkout.adjustment.id)next.todayAdaptation=null;
         if((combinedTransition(previous,next) || isRepeatAdjustment(previous.todayAdaptation) || isRepeatAdjustment(next.todayAdaptation)) && !options.persistedState) {
           if(!saveState(next)){setPersistenceFailed(true);return previous;}
@@ -4546,8 +4549,8 @@ export function activeWorkoutNoticeDetails(
   now = Date.now(),
 ) {
   const summary = workoutSetSummary(workout);
-  const elapsed = Math.max(0, Number(now) - Number(workout?.startedAt || now)) / 1000;
-  const progress = `${summary.completed} / ${pluralize(summary.total, workout.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')} · ${formatActiveWorkoutDuration(elapsed)}`;
+  const elapsed = workoutElapsedSeconds(workout,now);
+  const progress = `${summary.completed} / ${pluralize(summary.total, workout.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')} · ${workoutNeedsRecovery(workout,now)?'Duration needs review':formatActiveWorkoutDuration(elapsed)}`;
   const startedOnAnotherDate = Boolean(
     dateKey && dateKey !== isoDay(new Date(now)),
   );
@@ -5042,7 +5045,7 @@ export function Today({
   if (selectedActiveWorkout) {
     const sets = active.exercises.flatMap((exercise) => exercise.sets);
     const completedSets = sets.filter((set) => set.completed).length;
-    const elapsed = Math.max(0, now - Number(active.startedAt || now)) / 1000;
+    const elapsed = workoutElapsedSeconds(active,now);
     const plannedOccurrence = active.source === 'freestyle' ? flexibleOccurrenceForDate(state,selectedIso,recurringTemplate?.id) : null;
     const scheduledDate = linkedOccurrence?.scheduledDate || active.canonicalPlanDate;
     return (
@@ -5056,7 +5059,7 @@ export function Today({
             {active.source === 'freestyle' && sets.length === 0
               ? 'No exercises yet'
               : `${completedSets} / ${pluralize(sets.length, active.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')}`} ·{" "}
-            {formatActiveWorkoutDuration(elapsed)}
+            {workoutNeedsRecovery(active,now)?'Duration needs review':formatActiveWorkoutDuration(elapsed)}
           </p>
           <Button onClick={resumeActiveWorkout}>
             RESUME WORKOUT
@@ -6148,6 +6151,10 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   }, [setToReveal, confirmation, active?.id, active?.exerciseIndex]);
   const [rirSet, setRirSet] = useState(null);
   const preserveWorkoutDraftsRef = useRef(false);
+  const [dismissedTimingReview,setDismissedTimingReview]=useState(null);
+  const timingReview=reviewWorkoutTiming(state,now);
+  const showTimingReview=Boolean(timingReview&&dismissedTimingReview!==timingReview.key);
+  if(showTimingReview)preserveWorkoutDraftsRef.current=true;
   const previousValuesController = useRef(null);
   const draftResolverRef = useRef(null);
   const [inputValidation, setInputValidation] = useState(null);
@@ -6179,6 +6186,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const commitBeforeAction = event => {
     const button = event.target.closest('button,select');
     if (!button || button.closest('[role="dialog"], .progression-tips-undo') || button.hasAttribute('data-workout-options') || button.hasAttribute('data-workout-scroll')) return;
+    if(!['Back to Today','Workout options'].includes(button.getAttribute('aria-label'))&&workoutNeedsRecovery(active,Date.now())){event.preventDefault();event.stopPropagation();setDismissedTimingReview(null);setNow(Date.now());return;}
     draftResolverRef.current = button;
     try {
       const completingRow = button.hasAttribute('data-workout-complete') ? button.closest('.set-row') : null;
@@ -6376,6 +6384,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   );
   const currentExercise = active?.exercises?.[active.exerciseIndex] || null;
   const activeArtwork = useAvailableImage(state.profile.showExerciseImages !== false ? exerciseArt(currentExercise) : null);
+  const timingRecovery=showTimingReview&&createPortal(<ModalLayer backgroundRef={screenRef} close={()=>{setDismissedTimingReview(timingReview.key);preserveWorkoutDraftsRef.current=false;}}>{requestClose=><WorkoutRecoverySheet state={state} update={update} review={timingReview} Header={SheetHeader} close={requestClose} busy={finishing} finishError={combinedSaveError} onContinued={()=>{preserveWorkoutDraftsRef.current=false;setDismissedTimingReview(null);setNow(Date.now());}} onFinish={timing=>finishWorkout(timing)}/>}</ModalLayer>,document.body);
   const upcomingExercise = active?.exercises?.[active.exerciseIndex + 1] || null;
   useEffect(() => {
     if (state.profile.showExerciseImages === false) return;
@@ -6398,7 +6407,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     );
   const exercise = currentExercise;
   if (active.source === 'freestyle' && !exercise) return <main ref={screenRef} data-active-workout="true" data-plan-extra={active.planWorkoutOrigin?'true':undefined} className="screen workout-screen freestyle-workout">
-    <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center">{active.planWorkoutOrigin&&<small className="workout-extra-label">Extra workout</small>}<strong>{active.name||'Freestyle workout'}</strong><small>{formatWorkoutElapsedDuration(Math.floor((now - active.startedAt) / 1000))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button><button type="button" className="workout-options-trigger" aria-label="Workout options" onClick={()=>openWorkoutOptions()}><OverflowIcon/></button></span></header>
+    {timingRecovery}
+    <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center">{active.planWorkoutOrigin&&<small className="workout-extra-label">Extra workout</small>}<strong>{active.name||'Freestyle workout'}</strong><small>{workoutNeedsRecovery(active,now)?'Duration needs review':formatWorkoutElapsedDuration(workoutElapsedSeconds(active,now))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button><button type="button" className="workout-options-trigger" aria-label="Workout options" onClick={()=>openWorkoutOptions()}><OverflowIcon/></button></span></header>
     <section className="freestyle-empty"><h1>No exercises yet</h1><p>Add the first exercise when you’re ready. Your plan won’t change.</p><FreestyleActions setDetail={setDetail} /></section>
   </main>;
   const exerciseIllustration = activeArtwork.source;
@@ -6407,7 +6417,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     ? nextSupersetStep(active.exercises, superset.id)
     : null;
   const prior = previousExercise(state.workouts, exercise.exerciseId);
-  const elapsed = Math.floor((now - active.startedAt) / 1000);
+  const elapsed = workoutElapsedSeconds(active,now);
   const item = exerciseCatalog[exercise.exerciseId];
   const performancePr = exerciseRecordPresentation(activeExercisePrDetails(state.workouts, exercise, {
     e1rmEligible: exerciseSupportsEstimatedOneRepMax(exercise),
@@ -6712,7 +6722,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     );
     workoutActionUnlockTimerRef.current = setTimeout(unlock, workoutMotionDuration(screenRef.current, 'exercise'));
   };
-  const finishWorkout = () => {
+  const finishWorkout = (timing = null) => {
     if (workoutActionLockRef.current) return;
     workoutActionLockRef.current = true;
     flushSync(() => { setFinishing(true); setCombinedSaveError(''); });
@@ -6721,7 +6731,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       // publishing success; a failed write leaves this live session untouched.
       const before = removalStateRef.current;
       const combined = isCombinedAdjustment(before.activeWorkout?.adjustment);
-      const {state: next, reversal} = completeWorkoutReversibly(before);
+      const {state: next, reversal} = completeWorkoutReversibly(before,timing?.timingReviewedAt?timing:null);
       if (combined) persistCombinedState(before, next, saveState);
       else if (!saveState(next, {reason:'workout-complete'}))
         throw new Error('Could not save the workout. Your active workout is still here. Try Finish again.');
@@ -6733,10 +6743,12 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       update(() => next, {persistedState:next, ...(combined && {planVersion:false})});
       setConfirmation(null);
       setPage(completed ? 'complete' : 'today');
+      return true;
     } catch (error) {
       workoutActionLockRef.current = false;
       setFinishing(false);
       setCombinedSaveError(error.message);
+      return false;
     }
   };
   const requestNext = () => {
@@ -7005,10 +7017,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       data-plan-extra={active.planWorkoutOrigin?'true':undefined}
       aria-busy={finishing || undefined}
       onClickCapture={commitBeforeAction}
-      onPointerDownCapture={event=>{draftResolverRef.current=event.target.closest('button[data-workout-replaces],button[data-workout-complete]');}}
+      onPointerDownCapture={event=>{const control=event.target.closest('input,button,textarea,select');if(control&&!control.closest('[role="dialog"],[data-workout-options]')&&!['Back to Today','Workout options'].includes(control.getAttribute('aria-label'))&&workoutNeedsRecovery(active,Date.now())){event.preventDefault();event.stopPropagation();setDismissedTimingReview(null);setNow(Date.now());return;}draftResolverRef.current=event.target.closest('button[data-workout-replaces],button[data-workout-complete]');}}
+      onBeforeInputCapture={event=>{if(!event.target.closest('[role="dialog"]')&&workoutNeedsRecovery(active,Date.now())){event.preventDefault();event.stopPropagation();setDismissedTimingReview(null);setNow(Date.now());}}}
       onChangeCapture={()=>{if(inputValidation)setInputValidation(null);}}
       onPointerCancelCapture={()=>{draftResolverRef.current=null;}}
-      onKeyDownCapture={()=>{draftResolverRef.current=null;}}
+      onKeyDownCapture={event=>{draftResolverRef.current=null;if(event.key!=='Tab'&&event.key!=='Escape'&&!event.target.closest('[role="dialog"]')&&workoutNeedsRecovery(active,Date.now())){event.preventDefault();event.stopPropagation();setDismissedTimingReview(null);setNow(Date.now());}}}
       // A cancellation decision must not commit or erase a raw numeric draft.
       // Retain the mounted inputs; the next ordinary logger action still commits them.
       onBlurCapture={event=>{
@@ -7024,6 +7037,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       }}
       className={`screen workout-screen ${timerVisible ? "rest-timer-visible" : ""}${active.source === 'freestyle' ? ' freestyle-workout' : ''}`}
     >
+      {timingRecovery}
       {tipsOptions && createPortal(<ModalLayer backgroundRef={screenRef} close={() => {setTipsOptions(null); preserveWorkoutDraftsRef.current = false;}}>
         {requestClose => <WorkoutOptionsSheet className="progression-tips-options-sheet" titleId="progression-tips-options-title" close={requestClose}>
           <h2 id="progression-tips-options-title">Progression tips</h2>
@@ -7046,7 +7060,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           <strong title={active.name}>{active.name}</strong>
           <small aria-live="polite">
             {summary.completed} / {pluralize(totalSets, active.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')} ·{" "}
-            {formatWorkoutElapsedDuration(elapsed)}
+            {workoutNeedsRecovery(active,now)?'Duration needs review':formatWorkoutElapsedDuration(elapsed)}
           </small>
         </div>
         <span className="workout-header-actions">

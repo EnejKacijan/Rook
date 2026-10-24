@@ -164,12 +164,12 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
   opacity: 1;
 }
 .coach-screen .coach-input .coach-send > span { display: grid; place-items: center; min-width: 18px; min-height: 18px; }
-.coach-screen .action-card-applied { border-color: color-mix(in srgb, var(--rook-success) 20%, transparent); background: #fbfdfc; }
-.coach-screen .action-applied { margin-top: 18px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--rook-success) 18%, transparent); border-radius: 14px; background: var(--rook-success-soft); color: var(--rook-success); text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
+.coach-screen .action-card-applied { border-color: color-mix(in srgb, var(--rook-accent-text) 20%, transparent); background: var(--rook-surface); }
+.coach-screen .action-applied { margin-top: 18px; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--rook-accent-text) 18%, transparent); border-radius: 14px; background: var(--rook-accent-soft); color: var(--rook-accent-text); text-align: center; font-size: 12px; font-weight: 800; letter-spacing: .06em; }
 .coach-screen .action-card-applied > small { color: var(--rook-secondary); }
 .coach-screen .action-view-today { display: block; margin: 10px auto 0; min-height: 38px; }
 .coach-screen .today-update-confirmation { display: grid; grid-template-columns: 28px minmax(0, 1fr); align-items: start; gap: 10px; padding: 14px 15px; }
-.coach-screen .today-update-check { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--rook-success); color: var(--rook-on-success); font-size: 14px; font-weight: 800; }
+.coach-screen .today-update-check { width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center; background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); font-size: 14px; font-weight: 800; }
 .coach-screen .today-update-confirmation > .today-update-copy { min-width: 0; padding: 0; border: 0; display: grid; grid-template-columns: auto minmax(0, 1fr); }
 .coach-screen .today-update-copy h3 { grid-column: 1 / -1; margin: 1px 0 0; font-size: 16px; line-height: 1.25; }
 .coach-screen .today-update-copy > small { grid-column: 1 / -1; margin: 3px 0 0; color: var(--rook-secondary); text-align: left; font-size: 11px; line-height: 1.35; }

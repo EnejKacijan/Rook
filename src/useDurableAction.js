@@ -1,6 +1,7 @@
 import {useRef} from 'react';
 import {flushSync} from 'react-dom';
 import {saveState} from './domain.js';
+import {markWorkoutActivity} from './workoutTiming.js';
 
 // Publish only after the existing atomic state write succeeds. A synchronous
 // latest ref also protects consecutive taps before React publishes new props.
@@ -10,7 +11,7 @@ export function useDurableAction(state,update) {
     if(busy.current)throw Error('Please wait for the current change.');
     busy.current=true;
     try {
-      const before=latest.current,next=operation(before);
+      const before=latest.current,next=markWorkoutActivity(before,operation(before));
       if(next===before)return {changed:false,state:before};
       if(!saveState(next))throw Error('Could not save. Your previous data is unchanged. Try again.');
       latest.current=next;

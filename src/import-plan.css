@@ -134,7 +134,7 @@
 .scratch-workout-day .workout-name-field > input:focus { border-color: var(--rook-accent-text); outline: 3px solid var(--rook-focus-ring); }
 .scratch-day-status { min-height: 24px; margin: 0 1px 8px; display: flex; align-items: center; }
 .scratch-workout-day .scratch-day-status > small { color: #77736f; font-size: 10.5px; text-align: left; }
-.scratch-workout-day .scratch-day-status > small.ready { color: var(--rook-success); font-weight: 750; }
+.scratch-workout-day .scratch-day-status > small.ready { color: var(--rook-accent-text); font-weight: 750; }
 .scratch-workout-day .scratch-day-status > small.validation-error { color: #8b6440; }
 .scratch-workout-day.is-collapsed { padding-bottom: 12px; }
 .scratch-add-exercise { margin-top: 9px; }
@@ -338,7 +338,7 @@
 .bulk-match-review.is-complete { padding: 13px 15px; border-color: rgba(27,26,25,.1); background: #f6f5f2; }
 .plan-editor.has-ready-sticky-action + .bulk-match-review.is-complete { margin-top: 10px; }
 .bulk-match-review-complete { display: flex; align-items: center; gap: 9px; }
-.bulk-match-review-complete > i { width: 28px; height: 28px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--rook-success) 18%, transparent); border-radius: 9px; color: var(--rook-success); display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; }
+.bulk-match-review-complete > i { width: 28px; height: 28px; flex: 0 0 auto; border: 1px solid color-mix(in srgb, var(--rook-accent-text) 18%, transparent); border-radius: 9px; color: var(--rook-accent-text); display: grid; place-items: center; font-style: normal; font-size: 12px; font-weight: 800; }
 .bulk-match-review-complete > span { display: grid; gap: 3px; }
 .bulk-match-review-complete strong { color: #56534f; font-weight: 720; }
 @media (max-width: 374px) {
