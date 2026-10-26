@@ -160,6 +160,8 @@ function describeChanges(original, adjusted, mode) {
             ? "Replaced to match the equipment available today."
             : "Replaced because this exercise is unavailable today.",
       });
+    if (before.supersetId && !after.supersetId)
+      changes.push({kind:'unpaired',entryId:after.id,label:exerciseName(after),reason:'The remaining exercise is trained on its own.'});
     if (before.sets.length !== after.sets.length)
       changes.push({
         kind: "sets",
@@ -434,16 +436,64 @@ export function manualReplacementChoices(
   }), query).slice(0,80);
 }
 
+function refreshEditedAdjustment(proposal, state, editedEntryId) {
+  const edited = new Set(proposal.changes.filter(change => change.kind === 'manual' && change.entryId).map(change => change.entryId));
+  if (editedEntryId) edited.add(editedEntryId);
+  const manuallyRemoved = new Set(proposal.changes.filter(change => change.kind === 'removed' && change.reason === 'Removed for today.').map(change => change.entryId));
+  proposal.workout.estimatedMinutes = createWorkoutDurationEstimator(state, proposal.originalWorkout).estimate(proposal.workout);
+  proposal.changes = describeChanges(proposal.originalWorkout, proposal.workout, proposal.mode);
+  proposal.changes.forEach(change => { if (change.kind === 'removed' && manuallyRemoved.has(change.entryId)) change.reason = 'Removed for today.'; });
+  for (const entryId of edited) {
+    const exercise = proposal.workout.exercises.find(item => item.id === entryId);
+    const before = proposal.originalWorkout.exercises.find(item => item.id === entryId);
+    if (exercise && before && JSON.stringify(stableExerciseShape(before)) !== JSON.stringify(stableExerciseShape(exercise)))
+      proposal.changes.push({kind:'manual',entryId,label:exerciseName(exercise),reason:'Targets edited before applying.'});
+  }
+  proposal.meaningful = todayWorkoutFingerprint(proposal.originalWorkout) !== todayWorkoutFingerprint(proposal.workout);
+  return proposal;
+}
+
 export function editTodayAdjustmentTargets(proposal, entryId, target, state) {
-  if (!validAdjustmentPrescription(target)) return proposal;
+  if (!validAdjustmentPrescription(target) || !proposal.workout.exercises.some(exercise => exercise.id === entryId)) return proposal;
   const next = clone(proposal);
   next.workout.exercises = cleanAdjustmentSupersets(next.workout.exercises.map(exercise => exercise.id === entryId
     ? applyAdjustmentPrescription(exercise, target) : exercise));
-  next.workout.estimatedMinutes = createWorkoutDurationEstimator(state, next.originalWorkout).estimate(next.workout);
-  next.changes = describeChanges(next.originalWorkout, next.workout, next.mode);
-  next.changes.push({kind:'manual',entryId,label:exerciseName(next.workout.exercises.find(exercise => exercise.id === entryId)),reason:'Targets edited before applying.'});
-  next.meaningful = todayWorkoutFingerprint(next.originalWorkout) !== todayWorkoutFingerprint(next.workout);
-  return next;
+  return refreshEditedAdjustment(next, state, entryId);
+}
+
+// Removing from the review edits its draft only. Keep one exercise, and clear
+// only the removed entry's warmup/replacement links and any orphaned superset.
+export function removeTodayAdjustmentExercise(proposal, entryId, state) {
+  if (proposal.workout.exercises.length <= 1 || !proposal.workout.exercises.some(exercise => exercise.id === entryId)) return proposal;
+  const next = clone(proposal);
+  next.workout.exercises = cleanAdjustmentSupersets(next.workout.exercises.filter(exercise => exercise.id !== entryId));
+  sanitizeWarmups(next.workout, new Set([entryId]));
+  next.unresolved = next.unresolved.filter(item => item.entryId !== entryId);
+  next.changes.push({kind:'removed',entryId,reason:'Removed for today.'});
+  return refreshEditedAdjustment(next, state);
+}
+
+export function restoreTodayAdjustmentExercise(proposal, beforeRemoval, entryId, state) {
+  if (proposal.id !== beforeRemoval?.id || proposal.workout.exercises.some(exercise => exercise.id === entryId)) return proposal;
+  const originalIndex = beforeRemoval.workout.exercises.findIndex(exercise => exercise.id === entryId);
+  if (originalIndex < 0) return proposal;
+  const next = clone(proposal),restored = clone(beforeRemoval.workout.exercises[originalIndex]);
+  const following = new Set(beforeRemoval.workout.exercises.slice(originalIndex+1).map(exercise => exercise.id));
+  const nextIndex = next.workout.exercises.findIndex(exercise => following.has(exercise.id));
+  next.workout.exercises.splice(nextIndex < 0 ? next.workout.exercises.length : nextIndex,0,restored);
+  if (restored.supersetId) {
+    const partner = beforeRemoval.workout.exercises.find(exercise => exercise.id !== entryId && exercise.supersetId === restored.supersetId);
+    const currentPartner = next.workout.exercises.find(exercise => exercise.id === partner?.id);
+    if (currentPartner && !currentPartner.supersetId) currentPartner.supersetId = restored.supersetId;
+  }
+  next.workout.exercises = cleanAdjustmentSupersets(next.workout.exercises);
+  if (next.workout.warmupPlan?.mode === 'custom') {
+    const ramps = beforeRemoval.workout.warmupPlan?.rampUpSets?.filter(ramp => ramp.targetExerciseEntryId === entryId) || [];
+    next.workout.warmupPlan.rampUpSets = [...(next.workout.warmupPlan.rampUpSets || []),...clone(ramps)];
+  }
+  next.unresolved.push(...clone(beforeRemoval.unresolved.filter(item => item.entryId === entryId)));
+  const edited = beforeRemoval.changes.find(change => change.kind === 'manual' && change.entryId === entryId);
+  return refreshEditedAdjustment(next,state,edited?entryId:null);
 }
 
 export function resolveTodayAdjustment(

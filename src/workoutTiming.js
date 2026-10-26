@@ -60,3 +60,23 @@ export function reviewedWorkoutFinish(state,review,{endedAt,durationMinutes,now=
   if(!Number.isFinite(minutes)||minutes<=0||minutes*60000>end-Number(active.startedAt)+1000)throw Error('Enter a duration that fits between the workout start and end.');
   return {endedAt:end,durationSeconds:Math.max(1,Math.round(minutes*60)),timingReviewedAt:now};
 }
+
+// The ordinary Finish action uses saved activity evidence. An optional single
+// duration override moves the end forward when needed; there is no second
+// timestamp field for the user to keep in sync with that duration.
+export function finishIdleWorkout(state,review,{durationMinutes,now=Date.now()}={}){
+  const active=checkReview(state,review),start=Number(active.startedAt);
+  const manual=durationMinutes!==undefined;
+  const minutes=manual&&String(durationMinutes??'').trim()?Number(durationMinutes):NaN;
+  if(manual&&(!Number.isFinite(minutes)||minutes<=0))throw Error('Enter how many minutes you trained.');
+  if(!manual&&review.lastActivityAt===null)throw Error('Enter how many minutes you trained.');
+  const seconds=manual?Math.max(1,Math.round(minutes*60)):Math.max(1,review.suggestedDurationSeconds);
+  // Prior excluded gaps are already reflected in the estimate. Extend from
+  // the last activity by only the additional training time, never count those
+  // gaps again. A shorter manual estimate leaves the evidenced end intact.
+  const end=!manual?review.lastActivityAt:review.lastActivityAt===null
+    ?start+seconds*1000+Math.max(0,Number(active.excludedIdleMs)||0)
+    :review.lastActivityAt+Math.max(0,seconds-review.suggestedDurationSeconds)*1000;
+  if(end>now)throw Error('The duration cannot be longer than the time available since this workout started.');
+  return reviewedWorkoutFinish(state,review,{endedAt:end,durationMinutes:seconds/60,now});
+}

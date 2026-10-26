@@ -1,5 +1,6 @@
 import {NavigationChevron} from './NavigationChevron.jsx';
-import { useId, useLayoutEffect, useRef, useState } from 'react';
+import { useLayoutEffect, useRef, useState } from 'react';
+import {ProfileInformation} from './ProfileInformation.jsx';
 import { createPortal } from 'react-dom';
 import { focusNavigationTarget } from './navigationFocus.js';
 import './accountSync.css';
@@ -39,18 +40,14 @@ function AccountConfirmation({ Modal, title, description, cancelLabel, confirmLa
     </section>}</Modal>, document.body);
 }
 
-function AccountSyncInformation({sync, Modal, close, returnFocusRef, backgroundRef}) {
-  const titleId = useId();
+function AccountSyncInformation({sync}) {
   const current = sync?.state === 'synced' && sync.pendingCount === 0;
   const lastSync = sync?.lastSuccessAt ? new Date(sync.lastSuccessAt) : null;
-  return createPortal(<Modal close={close} returnFocusRef={returnFocusRef} backgroundRef={backgroundRef}>{requestClose =>
-    <section className="screen detail-screen account-confirm-sheet account-sync-information" role="dialog" aria-modal="true" aria-labelledby={titleId}>
-      <header className="sheet-header-chrome"><button type="button" className="sheet-close" aria-label="Close sync information" data-sheet-initial-focus onClick={requestClose}>×</button></header>
-      <h1 id={titleId}>Sync information</h1>
-      <p>{sync?.linked ? `${sync.providerName || 'Google'} account connected.${current ? ' Your ROOK training data is backed up.' : ''}` : 'Your training is saved on this device.'}</p>
-      <p className="account-info-last-sync">Last successful sync: {lastSync && Number.isFinite(lastSync.getTime()) ? lastSync.toLocaleString() : 'Time unavailable'}</p>
-      <p>Workout photos stay on this device; cloud sync does not include them.</p>
-    </section>}</Modal>, document.body);
+  return <>
+    <p>{sync?.linked ? `${sync.providerName || 'Google'} account connected.${current ? ' Your ROOK training data is backed up.' : ''}` : 'Your training is saved on this device.'}</p>
+    <p className="account-info-last-sync">Last successful sync: {lastSync && Number.isFinite(lastSync.getTime()) ? lastSync.toLocaleString() : 'Time unavailable'}</p>
+    <p>Workout photos stay on this device; cloud sync does not include them.</p>
+  </>;
 }
 
 export function accountSyncStatus(sync) {
@@ -70,8 +67,6 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [collision, setCollision] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
-  const [showInfo, setShowInfo] = useState(false);
-  const infoTrigger = useRef(null);
   const [addingPassword,setAddingPassword]=useState(false),[passwordAdded,setPasswordAdded]=useState(false);
   const passwordTrigger=useRef(null);
   const confirmTrigger = useRef(null);
@@ -100,9 +95,10 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
     <p className="account-sync-identity">{sync?.linked && sync?.email ? sync.email : sync?.state === 'synced' && sync.pendingCount === 0 ? 'Cloud copy for this device' : 'Your ROOK training data'}</p>
     <div className="account-sync-status-line">
       <p className="account-sync-status" role="status">{accountSyncStatus(sync)}</p>
-      <button type="button" className="account-sync-info-trigger" ref={infoTrigger} aria-label="Sync information" aria-haspopup="dialog" aria-expanded={showInfo} onClick={()=>setShowInfo(true)}>
-        <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><circle cx="12" cy="12" r="8.5"/><path d="M12 10.5v6M12 7.2v.5" strokeLinecap="round"/></svg>
-      </button>
+      <ProfileInformation label="Sync information" title="Sync information" closeLabel="Close sync information"
+        triggerClassName="account-sync-info-trigger" sheetClassName="account-sync-information" Modal={Modal} backgroundRef={backgroundRef || panelRef}>
+        <AccountSyncInformation sync={sync}/>
+      </ProfileInformation>
     </div>
     {sync?.state === 'not-configured' && <small>{sync.category === 'rollout-off' ? 'Cloud backup is not enabled in this build. Keep a ROOK backup file.' : 'Keep a ROOK backup file until cloud setup is complete.'}</small>}
     {sync?.state === 'needs-attention' && <small>Your saved data on this device is unchanged. Keep a ROOK backup file while this is reviewed.</small>}
@@ -117,7 +113,7 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
       onConfirm={()=>act(sync.confirmPasswordAccount,true)}
       onCancel={()=>{setAddingPassword(false);requestAnimationFrame(()=>passwordTrigger.current?.focus());}}/>}
     {passwordAdded&&<p className="account-password-added" role="status">You can now sign in with Google or email.</p>}
-    {sync?.state !== 'not-configured' && !sync?.linked && !collision && !sync?.providers?.some(id=>id!=='google.com') && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span><NavigationChevron/></button>}
+    {sync?.state !== 'not-configured' && !sync?.linked && !collision && !sync?.providers?.some(id=>id!=='google.com') && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span></button>}
     {sync?.state !== 'not-configured' && !sync?.linked && !collision && sync?.providers?.some(id=>id!=='google.com') && <>
       <AccountAccessOptions providers={sync.providers} busy={busy} disabled={!sync?.canSecure} registrationOnly
         onEmail={sync.registerWithEmail?details=>act(()=>sync.registerWithEmail(details),true):undefined}
@@ -129,10 +125,9 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
       <button type="button" className="button secondary" disabled={busy} onClick={() => { setCollision(false); setError(''); }}>KEEP THIS PROFILE</button>
       <button type="button" className="button quiet" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}>TRY A DIFFERENT GOOGLE ACCOUNT</button>
     </div>}
-    {sync?.linked && !sync?.locked && <button type="button" className="list-row account-sync-sign-out" ref={confirmTrigger} disabled={busy} onClick={() => setConfirmation('sign-out')}><span><strong>Sign out</strong><small>Your local data stays on this device</small></span><NavigationChevron/></button>}
-    {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with the account that owns it</small></span><NavigationChevron/></button>}
+    {sync?.linked && !sync?.locked && <button type="button" className="list-row account-sync-sign-out" ref={confirmTrigger} disabled={busy} onClick={() => setConfirmation('sign-out')}><span><strong>Sign out</strong><small>Your local data stays on this device</small></span></button>}
+    {sync?.separate && <button type="button" className="list-row" ref={savedTrigger} disabled={busy} onClick={() => setConfirmation('saved-profile')}><span><strong>Return to saved profile</strong><small>Sign in with the account that owns it</small></span></button>}
     {error && <p className="account-sync-error" role="alert">{error}</p>}
-    {showInfo && <AccountSyncInformation sync={sync} Modal={Modal} close={()=>setShowInfo(false)} returnFocusRef={infoTrigger} backgroundRef={backgroundRef || panelRef}/>}
     {confirmation && <AccountConfirmation Modal={Modal}
       title={confirmation === 'sign-out' ? 'Sign out?' : 'Return to saved profile?'}
       description={confirmation === 'sign-out'

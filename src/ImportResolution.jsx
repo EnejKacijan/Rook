@@ -111,9 +111,9 @@ export function ImportResolution({review, program, reviewProgram=program, exclud
         })}
         {group.items.filter(i=>i.issue&&!group.members.some(m=>m.id===i.issue.exerciseId)).map(item=>renderIssue(group,item))}
       </div>)}
-    </div>
-    <SheetActionFooter separate importViewport className={footerMatch?'import-match-footer':''}>
+    <SheetActionFooter importViewport className={footerMatch?'import-match-footer':''}>
       {footerMatch?customButton(current,footerMatch):blocked?<button className="button secondary" onClick={onBack}>EDIT NOTES</button>:<button className="button primary" disabled={!groupResolved(current)} onClick={()=>continueResolved()}>{nextIndex<0?'REVIEW PLAN':'CONTINUE'}</button>}
     </SheetActionFooter>
+    </div>
   </section>;
 }

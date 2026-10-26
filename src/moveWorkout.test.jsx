@@ -120,7 +120,7 @@ it('Rest-day entry → shared chooser → move today → Today → persisted rel
   return detail?.restTraining?<RestTrainingSheet date={isoDay()} state={state} update={update} close={close} setDetail={setDetail} setPage={()=>{}}/>:detail?.flexibleWeek?<FlexibleWeekSheet state={state} request={detail.flexibleWeek} Header={Header} update={update} close={close}/>:<Today state={state} update={update} setPage={()=>{}} setDetail={setDetail}/>;
  }
  mount(<Harness/>);act(()=>document.querySelector('.rest-training-option').click());expect(document.querySelector('h1').textContent).toBe('Choose a workout');
- act(()=>document.querySelector('[data-session-id]').click());act(()=>button('MOVE TO ANOTHER DAY').click());act(()=>document.querySelector('[data-move-date="2026-09-19"]').click());act(()=>button('APPLY MOVE').click());expect(document.body.textContent).toContain('Workout moved');act(()=>button('DONE').click());
+ act(()=>document.querySelector('[data-session-id]').click());act(()=>button('MOVE TO ANOTHER DAY').click());act(()=>document.querySelector('[data-move-date="2026-09-19"]').click());act(()=>button('MOVE WORKOUT').click());expect(document.querySelector('.flexible-week-sheet')).toBeNull();
  expect(button('START WORKOUT')).toBeDefined();expect(document.querySelector('.today-missed-summary')).toBeNull();
  const reloaded=deserializeState(localStorage.getItem(STORAGE_KEY));expect(plannedWorkoutForDate(reloaded,isoDay()).logicalSessionId).toBe(id);expect(missedFlexibleSessions(reloaded)).toEqual([]);expect(Object.keys(reloaded.flexibleWeek.sessions)).toEqual([id]);expect(reloaded.program).toEqual(initial.program);
 });

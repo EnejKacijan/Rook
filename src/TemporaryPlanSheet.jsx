@@ -41,8 +41,8 @@ export function TemporaryPlanSheet({ state, update, Header, close, persist = sav
   const feedback = error && <p className="temporary-plan-error" role="alert">{error}</p>;
   return <main className="screen detail-screen temporary-plan-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
     <Header title="Temporary plan" onClose={close} closeLabel="Close temporary plan" />
-    <span className="eyebrow">{proposal ? 'REVIEW BEFORE APPLYING' : 'TRAINING AROUND YOUR LIFE'}</span>
-    <h1 id={titleId}>{ending ? 'Return to your usual plan?' : currentPeriod ? 'Your temporary plan' : proposal ? 'A plan for the next few weeks' : 'A different few weeks.'}</h1>
+    <span className="eyebrow">{proposal ? 'TEMPORARY PLAN' : 'TRAINING AROUND YOUR LIFE'}</span>
+    <h1 id={titleId}>{ending ? 'Return to your usual plan?' : currentPeriod ? 'Your temporary plan' : proposal ? 'Your temporary plan' : 'A different few weeks.'}</h1>
     {currentPeriod ? <>
       <p>{dateLabel(period.startDate)} – {dateLabel(period.endDate)} · {period.days.length} days a week · {period.equipment.join(', ')}.</p>
       <p>{period.planChanged ? 'Your plan or training restrictions changed. Review the affected dates before making another adjustment.' : 'Your usual plan resumes after this period. Completed workouts stay as logged.'}</p>
@@ -50,7 +50,7 @@ export function TemporaryPlanSheet({ state, update, Header, close, persist = sav
       <SheetActionFooter>{feedback}{ending ? <><button className="button primary" disabled={busy} onClick={() => publish(true)}>END TEMPORARY PLAN</button><button className="button secondary" onClick={() => setEnding(false)}>KEEP TEMPORARY PLAN</button></> : <button className="button secondary" onClick={() => setEnding(true)}>END EARLY…</button>}</SheetActionFooter>
     </> : proposal ? <>
       <p>{dateLabel(proposal.request.startDate)} – {dateLabel(proposal.request.endDate)} · {weeks} weeks · {days.length} days a week.</p>
-      <p>{equipment.join(', ')}. Your usual plan resumes afterwards; history and your saved setup stay in place.</p>
+      <p>{equipment.join(', ')}. Your usual schedule resumes afterwards.</p>
       <div className="temporary-plan-changes" aria-label="Every proposed workout change">{proposal.changes.map(change => <article key={change.id}>
         <strong>{change.name}</strong><p>{dateLabel(change.originalDate)} → {change.skipped ? 'Rest day for this period' : `${dateLabel(change.toDate)} · ${change.workout.name}`}</p>
         {change.workout && <AnimatedDetails><summary>Review exercises ({change.workout.exercises.length})</summary><ul>{change.workout.exercises.map(exercise => <li key={exercise.id}>{exercise.name || exerciseCatalog[exercise.exerciseId]?.name} · {exercise.sets.length} sets · {exercise.repMin}–{exercise.repMax} {exercise.timed ? 'seconds' : 'reps'}</li>)}</ul></AnimatedDetails>}

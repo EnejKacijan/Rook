@@ -1,2 +1,11 @@
 .rook-navigation-chevron { display:block;width:18px;height:18px;flex:0 0 auto;pointer-events:none; }
 :where(.list-row) > .rook-navigation-chevron { color:var(--rook-secondary); }
+
+/* Navigation rows keep one trailing indicator; action and selection rows omit it. */
+button.rook-menu-navigation {
+  display:flex;flex-direction:row;align-items:center;justify-content:space-between;
+  gap:12px;min-height:48px;text-align:left;
+}
+.rook-menu-navigation > .rook-menu-copy { display:flex;flex:1;flex-direction:column;min-width:0;gap:4px; }
+.rook-menu-navigation > span:first-child { min-width:0;overflow-wrap:anywhere; }
+.rook-menu-navigation > .rook-navigation-chevron { color:var(--rook-secondary); }

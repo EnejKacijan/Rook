@@ -1,0 +1,9 @@
+.custom-exercise-recognition { min-width:0; padding:8px 12px; border:1px solid var(--rook-border); border-radius:12px; background:var(--rook-surface-muted); }
+.custom-exercise-recognition > summary { min-height:44px; color:var(--rook-secondary); font-size:13px; line-height:1.45; }
+.custom-exercise-recognition .rook-details-label { display:flex; flex-wrap:wrap; align-items:center; gap:4px 10px; }
+.custom-exercise-recognition summary small { color:var(--rook-accent-text); font-size:13px; }
+.custom-exercise-recognition dl { margin:8px 0; display:grid; gap:8px; font-size:13px; line-height:1.45; }
+.custom-exercise-recognition dl > div { display:grid; grid-template-columns:84px minmax(0,1fr); gap:8px; }
+.custom-exercise-recognition dt,.custom-equipment-recognized { color:var(--rook-secondary); }
+.custom-exercise-recognition dd { margin:0; color:var(--rook-text); overflow-wrap:anywhere; }
+.custom-equipment-recognized { font-size:13px; line-height:1.45; }

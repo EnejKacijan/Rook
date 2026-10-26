@@ -27,7 +27,7 @@ it('copies only to an empty draft day, preserving prescriptions, pair and custom
   await act(async()=>sheet.querySelector('[role="radio"]:not(:disabled)').click());
   expect(saved).not.toHaveBeenCalled();expect(JSON.stringify(source)).toBe(before);
   await act(async()=>button('COPY').click());
-  await act(async()=>button('SAVE CHANGES',host).click());
+  await act(async()=>button('SAVE TO WEEKLY PLAN',host).click());
   expect(saved).toHaveBeenCalledTimes(1);
   const plan=JSON.parse(JSON.stringify(saved.mock.calls[0][0])),copied=plan.days[1];
   expect(copied.exercises).toHaveLength(2);

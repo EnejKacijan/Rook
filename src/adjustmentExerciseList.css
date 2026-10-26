@@ -1,0 +1,19 @@
+.adjust-exercise-list{display:grid;gap:8px;min-width:0}
+:root .adjust-exercise-list .adjust-exercise-hint{margin:0 0 4px;font-size:13px;line-height:1.4;color:var(--rook-secondary)}
+.adjust-exercise-header{display:grid;grid-template-columns:minmax(0,1fr) 44px;align-items:center;padding-right:4px;min-width:0}
+:root .adjust-exercise-card .adjust-exercise-toggle{min-height:64px;min-width:0;padding:11px 8px 11px 13px;gap:8px}
+:root .adjust-exercise-card .plan-editor-heading>strong{white-space:normal;overflow-wrap:anywhere;font-size:15px;line-height:1.3}
+:root .adjust-exercise-card .plan-editor-heading>small{font-size:13px;line-height:1.35}
+:root .adjust-exercise-card .adjust-exercise-remove{display:grid;place-items:center;width:44px;min-height:44px;padding:0;border:0;background:transparent;color:var(--rook-secondary);border-radius:8px}
+:root .adjust-exercise-remove:focus-visible{outline:2px solid var(--rook-focus-ring);outline-offset:-3px}
+:root .adjust-exercise-remove:not(:disabled):active{background:var(--rook-accent-soft);color:var(--rook-text)}
+:root .adjust-exercise-fields{padding:0 12px 4px}
+:root .adjust-exercise-fields .adjustment-target-editor{grid-template-columns:repeat(6,minmax(0,1fr));padding:12px 0;gap:12px 10px}
+:root .adjust-exercise-fields .adjustment-target-editor label{grid-column:span 2}
+:root .adjust-exercise-fields .adjustment-target-editor label:nth-child(n+4){grid-column:span 3}
+:root .adjust-exercise-fields .adjustment-target-editor label:last-child:nth-child(4){grid-column:1/-1}
+.adjust-exercise-readonly{display:grid;gap:4px;padding:12px 13px;grid-column:1/-1}
+.adjust-exercise-readonly small{color:var(--rook-secondary)}
+.adjust-removal-feedback{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:8px 0;font-size:14px;color:var(--rook-secondary)}
+.adjust-removal-feedback>span{min-width:0;overflow-wrap:anywhere}
+.adjust-removal-feedback>button{flex:0 0 auto;min-height:44px}

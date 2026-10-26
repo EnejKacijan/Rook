@@ -73,3 +73,22 @@
 /* Expanded Edit Plan fills the contained viewport; it is not a sheet with a
    12px top clearance. Override that shared binder cap only in this presentation. */
 :root .edit-plan-page-layer > .has-anchored-plan-footer { max-height: 100% !important; }
+/* Only short, explicitly opted-in tasks pin a compact action while typing.
+   Long forms and space-constrained tasks keep the SAME footer in their scroller. */
+:root :is(.detail-screen, .sheet) .sheet-action-footer[data-keyboard-active] {
+  --sheet-action-padding: 8px;
+  --sheet-action-gap: 6px;
+}
+:root .sheet-action-footer[data-keyboard-active] [data-keyboard-secondary] { display: none; }
+:root :is(.detail-screen, .sheet) .sheet-action-footer[data-keyboard-active] > .button {
+  min-height: 48px;
+  padding-block: 10px;
+}
+:root :is(.detail-screen, .sheet) .sheet-action-footer[data-keyboard-layout="flow"] {
+  position: relative;
+  bottom: auto;
+}
+/* In-flow actions reserve no overlay footprint in the form's scroll owner. */
+:root :is(.detail-screen, .sheet):has(.sheet-action-footer[data-keyboard-layout="flow"]) {
+  scroll-padding-bottom: 12px;
+}

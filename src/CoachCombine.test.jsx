@@ -9,7 +9,6 @@ beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-12T12:00:0
 afterEach(()=>{act(()=>root.unmount());node.remove();vi.useRealTimers();delete globalThis.IS_REACT_ACT_ENVIRONMENT;});
 function render(onAccept){const state=combineExample(),proposal=buildCombinedProposal(state,{sourceIds:combineSources(state).filter(s=>s.status==='missed').map(s=>s.logicalSessionId),minutes:60}).proposal;
  act(()=>root.render(<CoachCombineCard state={state} action={{type:'combine-workouts',proposal}} onAccept={onAccept}/>));
- act(()=>[...node.querySelectorAll('button')].find(b=>b.textContent==='REVIEW COMBINED WORKOUT').click());
  return ()=>[...node.querySelectorAll('button')].find(b=>b.textContent==='USE THIS WORKOUT');
 }
 it('rapid Apply invokes the persistence callback once, even before parent publication',()=>{
@@ -21,19 +20,19 @@ it('failure keeps review recoverable and allows an explicit retry',()=>{
  act(()=>button().click());expect(accept).toHaveBeenCalledTimes(2);
 });
 it('Back exits review, restores trigger focus and never applies',()=>{
- const accept=vi.fn();render(accept);const back=node.querySelector('[aria-label="Back to combined workout proposal"]');
+ const accept=vi.fn();render(accept);act(()=>[...node.querySelectorAll('button')].find(b=>b.textContent==='Edit workout').click());const back=node.querySelector('[aria-label="Back to combined workout proposal"]');
  expect(document.activeElement).toBe(back);act(()=>back.click());expect(accept).not.toHaveBeenCalled();
- expect(document.activeElement.textContent).toBe('REVIEW COMBINED WORKOUT');
+ expect(document.activeElement.textContent).toBe('Edit workout');
 });
 it('revision shows factual changes and separate Apply; Cancel and Back never persist',()=>{
  let state=combineExample();const p=buildCombinedProposal(state,{sourceIds:combineSources(state).filter(s=>s.status==='missed').map(s=>s.logicalSessionId),minutes:45}).proposal;
  state=applyCombinedProposal(state,p,()=>true);const proposal=buildCombinedRevision(state,{base:state.todayAdaptation,minutes:75}).proposal,accept=vi.fn(),onReviewChange=vi.fn();
  act(()=>root.render(<CoachCombineCard state={state} action={{type:'combine-workouts',proposal}} onAccept={accept} onReviewChange={onReviewChange}/>));
  const button=text=>[...node.querySelectorAll('button')].find(b=>b.textContent===text);
- act(()=>button('REVIEW COMBINED WORKOUT').click());expect(node.querySelector('.combine-revision-summary').textContent).toContain('New total-time target: 75 min');
+ act(()=>button('Edit workout').click());expect(node.textContent).toContain('Target 75 min');expect(node.querySelector('.combined-provenance').textContent).toContain('Combined from');
  expect(button('USE UPDATED WORKOUT')).toBeDefined();expect(button('USE THIS WORKOUT')).toBeUndefined();
  act(()=>button('CANCEL').click());expect(accept).not.toHaveBeenCalled();expect(state.todayAdaptation.requestedMinutes).toBe(45);
- act(()=>button('REVIEW COMBINED WORKOUT').click());const removable=node.querySelector('.adapt-review-list button:not(:disabled)');
+ act(()=>button('Edit workout').click());const removable=node.querySelector('.adapt-review-list button:not(:disabled)');
  if(removable){act(()=>removable.click());expect(onReviewChange).toHaveBeenCalledOnce();}
  act(()=>{button('USE UPDATED WORKOUT').click();button('USE UPDATED WORKOUT').click();});expect(accept).toHaveBeenCalledOnce();
 });

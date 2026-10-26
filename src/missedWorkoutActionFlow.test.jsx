@@ -15,6 +15,7 @@ const Header=({title,onBack,onClose})=><header>{title}{onBack&&<button onClick={
 const button=text=>[...document.querySelectorAll('button')].find(node=>node.textContent===text);
 const render=node=>act(()=>root.render(node));
 const menu=state=>render(<TodayActionsSheet state={state} date="2026-10-02" hasWorkout update={update} close={close} setDetail={route}/>);
+const outsideCurrentPlan=()=>{const state=missedWorkoutActionFixture({outsidePlan:true});state.program.trainingBlock.startDate='2026-10-05';return state;};
 const moveSheet=(state,request={sessionId:id})=>render(<FlexibleWeekSheet state={state} request={request} Header={Header} update={update} close={close} setDetail={route}/>);
 beforeEach(()=>{
   vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-04T18:25:00'));localStorage.clear();globalThis.IS_REACT_ACT_ENVIRONMENT=true;
@@ -22,12 +23,12 @@ beforeEach(()=>{
 });
 afterEach(()=>{act(()=>root.unmount());document.body.innerHTML='';vi.useRealTimers();vi.restoreAllMocks();});
 
-it('reproduces the visible Missed / canonical null mismatch at the current plan start boundary',()=>{
+it('keeps opening-week choices actionable without inventing calendar occurrences or missed sessions',()=>{
   const state=missedWorkoutActionFixture({outsidePlan:true}),before=serializeState(state);
-  expect(flexibleOccurrenceForDate(state,'2026-10-02')).toMatchObject({status:'missed',logicalSessionId:id,originalDate:'2026-10-02'});
-  expect(flexibleSessionById(state,id)).toBeNull();expect(proposeWorkoutToday(state,{sessionId:id}).error).toBe('The schedule changed. Choose another workout.');
-  expect(moveWorkoutDestinations(state,id).every(d=>!d.available)).toBe(true);
-  menu(state);expect(button('Move to another day')).toBeUndefined();expect(button('Train this workout today')).toBeUndefined();
+  expect(flexibleOccurrenceForDate(state,'2026-10-02')).toBeNull();
+  expect(flexibleSessionById(state,id)).toMatchObject({firstPlanWeek:true,status:'planned'});expect(canUseWorkoutToday(state,{sessionId:id})).toBe(true);
+  expect(moveWorkoutDestinations(state,id).some(d=>d.available)).toBe(true);
+  menu(state);expect(button('Move to another day')).toBeDefined();expect(button('Use this workout today')).toBeDefined();expect(button('Train this workout today')).toBeUndefined();
   expect(serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();
 });
 it('Move opens the canonical destination picker directly, including next week, after a completed Sunday',()=>{
@@ -66,9 +67,9 @@ it('Train today keeps the existing extra-session contract, actual dates, origina
   expect(flexibleOccurrenceForDate(state,'2026-10-02')).toMatchObject({status:'completed',actualPerformedDate:'2026-10-04',originalScheduledDate:'2026-10-02'});
   expect(()=>applyWorkoutToday(state,proposal,{persist:()=>true})).toThrow(/changed/);
 });
-it('changing the plan start invalidates menu eligibility immediately without changing factual status',()=>{
+it('moving the plan start to a future week invalidates menu eligibility immediately',()=>{
   const state=missedWorkoutActionFixture();menu(state);expect(button('Move to another day')).toBeDefined();
-  menu({...state,program:{...state.program,trainingBlock:{...state.program.trainingBlock,startDate:'2026-10-04'}}});
+  menu({...state,program:{...state.program,trainingBlock:{...state.program.trainingBlock,startDate:'2026-10-05'}}});
   expect(button('Move to another day')).toBeUndefined();expect(button('Train this workout today')).toBeUndefined();
 });
 it('a changed plan revision quarantines old schedule links before advertising Move',()=>{
@@ -79,7 +80,7 @@ it('a changed plan revision quarantines old schedule links before advertising Mo
   expect(button('Move to another day')).toBeUndefined();expect(button('Train this workout today')).toBeUndefined();expect(update).not.toHaveBeenCalled();
 });
 it('a stale direct Move request recovers to current scheduling actions instead of a Train Today dead end',()=>{
-  moveSheet(missedWorkoutActionFixture({outsidePlan:true}),{sessionId:id,destination:true});
+  moveSheet(outsideCurrentPlan(),{sessionId:id,destination:true});
   expect(document.body.textContent).not.toContain('Use this workout today');expect(button('Review current schedule')).toBeDefined();
   act(()=>button('Review current schedule').click());expect(document.body.textContent).toContain('What changed?');expect(button('Review current schedule')).toBeUndefined();
   expect(update).not.toHaveBeenCalled();
@@ -99,8 +100,8 @@ it('date rollover recomputes open overflow eligibility even when historical sele
   expect(state.selectedDate).toBe('2026-10-02');expect(update).not.toHaveBeenCalled();
 });
 it('stale Train Today offers current schedule recovery and never unlocks/applies an invalid source',()=>{
-  render(<UseWorkoutTodaySheet state={missedWorkoutActionFixture({outsidePlan:true})} request={{sessionId:id}} Header={Header} update={update} close={close} setDetail={route}/>);
-  expect(button('APPLY')).toBeUndefined();act(()=>button('Review current schedule').click());expect(route).toHaveBeenCalledWith({flexibleWeek:{}});expect(update).not.toHaveBeenCalled();
+  render(<UseWorkoutTodaySheet state={outsideCurrentPlan()} request={{sessionId:id}} Header={Header} update={update} close={close} setDetail={route}/>);
+  expect(button('USE TODAY')).toBeUndefined();expect(button('SWAP WORKOUTS')).toBeUndefined();act(()=>button('Review current schedule').click());expect(route).toHaveBeenCalledWith({flexibleWeek:{}});expect(update).not.toHaveBeenCalled();
 });
 it('swap-only Train Today does not offer an empty displaced-date sheet',()=>{
   const state=missedWorkoutActionFixture({loggedToday:false}),base=state.program.days[0];

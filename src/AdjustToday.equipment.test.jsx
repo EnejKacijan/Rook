@@ -113,7 +113,7 @@ it('review shows current and target delta; Apply persists only one-workout adjus
   const s = fixture(), original = structuredClone(s); mount(s); check('Home'); await review();
   const delta = host.querySelector('.adjust-equipment-delta'); expect(delta.textContent).toContain('CurrentMain Gym · Full gym');
   expect(delta.textContent).toContain('For this workoutHome · Dumbbells, Barbell / rack / bench, Cables');
-  expect(host.textContent).toContain('WORKOUT PREVIEW');
+  expect(host.textContent).toContain('Edit workout');expect(host.querySelector('.adjust-exercise-card')).toBeNull();
   expect(host.textContent).not.toContain('KEEPING');
   expect(save).not.toHaveBeenCalled(); expect(update).not.toHaveBeenCalled();
   expect(button('USE THIS WORKOUT').disabled).toBe(false); click(button('USE THIS WORKOUT'));
@@ -122,10 +122,41 @@ it('review shows current and target delta; Apply persists only one-workout adjus
   expect(current.gymProfiles).toEqual(original.gymProfiles); expect(current.defaultGymProfileId).toBe('main');
   expect(current.activeWorkout).toBeNull(); expect(save).toHaveBeenCalledOnce(); expect(update).toHaveBeenCalledOnce(); expect(close).toHaveBeenCalledOnce();
 });
+
+const openWorkoutEditor=()=>click([...host.querySelectorAll('summary')].find(node=>node.textContent.startsWith('Edit workout')));
+const editInput=(node,value)=>{
+  act(()=>{node.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));});
+};
+it('uses compact expandable rows with visible removal, safe Undo and a single final confirmation',async()=>{
+  const s=fixture(),original=structuredClone(s);mount(s);check('Home');await review();openWorkoutEditor();
+  const initial=[...host.querySelectorAll('[data-adjust-entry-id]')].map(node=>node.dataset.adjustEntryId);
+  expect(host.textContent).not.toContain('Edit targets');expect(host.querySelectorAll('.adjust-exercise-remove')).toHaveLength(initial.length);
+  click(host.querySelector('.adjust-exercise-remove'));expect(host.querySelectorAll('.adjust-exercise-card')).toHaveLength(initial.length-1);expect(save).not.toHaveBeenCalled();
+  click(host.querySelector('.adjust-exercise-toggle'));const field=input('Sets for');editInput(field,'2');act(()=>field.blur());
+  click(button('Undo'));expect([...host.querySelectorAll('[data-adjust-entry-id]')].map(node=>node.dataset.adjustEntryId)).toEqual(initial);
+  expect(input('Sets for').value).toBe('2');expect(s).toEqual(original);
+  click(host.querySelector('.adjust-exercise-remove'));click(button('USE THIS WORKOUT'));
+  expect(save).toHaveBeenCalledOnce();expect(current.program).toEqual(original.program);expect(current.todayAdaptation.workout.exercises).toHaveLength(initial.length-1);
+});
+it('opens only one exercise and commits a pending target on Apply without using Enter as confirmation',async()=>{
+  mount();check('Home');await review();openWorkoutEditor();
+  click(host.querySelector('.adjust-exercise-toggle'));const first=input('Sets for');editInput(first,'2');
+  act(()=>first.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true})));expect(save).not.toHaveBeenCalled();expect(update).not.toHaveBeenCalled();
+  click(host.querySelectorAll('.adjust-exercise-toggle')[1]);expect(host.querySelectorAll('.adjust-exercise-toggle[aria-expanded="true"]')).toHaveLength(1);
+  const pending=input('Sets for'),name=pending.getAttribute('aria-label').slice('Sets for '.length);editInput(pending,'2');click(button('USE THIS WORKOUT'));
+  expect(save).toHaveBeenCalledOnce();expect(current.todayAdaptation.workout.exercises.find(exercise=>domain.exerciseName(exercise)===name).sets).toHaveLength(2);
+});
+it('keeps one exercise and retries the same removal after a failed save',async()=>{
+  const s=fixture(),original=structuredClone(s);mount(s);check('Home');await review();openWorkoutEditor();
+  while(host.querySelectorAll('.adjust-exercise-remove').length>1)click(host.querySelector('.adjust-exercise-remove'));
+  expect(host.querySelector('.adjust-exercise-remove').disabled).toBe(true);expect(host.textContent).toContain('Keep at least one exercise.');expect(save).not.toHaveBeenCalled();
+  save.mockReturnValueOnce(false);click(button('USE THIS WORKOUT'));expect(close).not.toHaveBeenCalled();expect(update).not.toHaveBeenCalled();expect(current.program).toEqual(original.program);
+  click(button('TRY AGAIN'));expect(close).toHaveBeenCalledOnce();expect(current.todayAdaptation.workout.exercises).toHaveLength(1);expect(current.program).toEqual(original.program);
+});
 it('different equipment that already fits the workout produces a truthful non-applicable review', async () => {
   const s = fixture(); s.program.days[0].exercises = s.program.days[0].exercises.filter(e => ['barbell-bench-press','barbell-row','cable-fly','lateral-raise'].includes(e.exerciseId));
-  mount(s); check('Home'); await review(); expect(host.textContent).toContain('All exercises already fit this equipment. No workout changes are needed.');
-  expect(button('USE THIS WORKOUT').disabled).toBe(true); expect(update).not.toHaveBeenCalled();
+  mount(s); check('Home'); await review(); expect(host.textContent).toContain('No workout changes needed.');
+  expect(button('USE THIS WORKOUT')).toBeUndefined();click(button('DONE'));expect(close).toHaveBeenCalledOnce();expect(update).not.toHaveBeenCalled();
 });
 it('a failed durable save keeps the original state and offers the existing explicit retry', async () => {
   mount(); check('Home'); await review(); save.mockReturnValueOnce(false); click(button('USE THIS WORKOUT'));

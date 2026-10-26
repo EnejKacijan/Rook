@@ -15,25 +15,25 @@ beforeEach(()=>{
 afterEach(()=>{act(()=>root.unmount());document.body.innerHTML='';vi.restoreAllMocks();vi.useRealTimers();});
 it('presents names and the real source slot with primary Swap, no unexplained date grid',()=>{
  render();expect(document.querySelector('h1').textContent).toBe(`Train ${source.workout.name} today?`);expect(document.body.textContent).toContain(`Today already has ${occupied.workout.name}.`);
- expect(document.body.textContent).toContain(`${source.workout.name} today`);expect(document.body.textContent).toContain(`${occupied.workout.name} moves to Fri, Sep 11, 2026`);
+ expect(document.body.textContent).toContain(`${source.workout.name} today`);expect(document.body.textContent).toContain(`${occupied.workout.name}Wed, Sep 9, 2026 → Fri, Sep 11, 2026`);
  expect(button('SWAP WORKOUTS').classList.contains('primary')).toBe(true);expect(document.querySelector('.flexible-week-dates')).toBeNull();expect(update).not.toHaveBeenCalled();
 });
 it('opens an explicit displaced-workout picker, omits invalid dates and returns focus on Back',()=>{
  render();act(()=>button('Choose another date').click());expect(document.querySelector('h1').textContent).toBe(`Move ${occupied.workout.name}`);expect(document.body.textContent).toContain('Choose a new date for this workout.');
  const dates=[...document.querySelectorAll('.flexible-week-dates button')];expect(dates.length).toBeGreaterThan(0);expect(dates.every(b=>b.querySelector('small'))).toBe(true);
  expect(dates.some(b=>b.textContent.includes('Fri, Sep 11'))).toBe(false);expect(proposeFlexibleWeek(state,{mode:'move',sessionId:occupied.logicalSessionId,toDate:'2026-09-11'}).error).toBeTruthy();
- expect(button('SWAP WORKOUTS')).toBeUndefined();expect(button('APPLY')).toBeUndefined();act(()=>button('Back').click());expect(document.activeElement).toBe(button('Choose another date'));expect(update).not.toHaveBeenCalled();
+ expect(button('SWAP WORKOUTS')).toBeUndefined();expect(button('USE TODAY')).toBeUndefined();act(()=>button('Back').click());expect(document.activeElement).toBe(button('Choose another date'));expect(update).not.toHaveBeenCalled();
 });
 it('applies one canonical swap and selects Today, preserving the permanent plan and history',()=>{
  render();act(()=>{button('SWAP WORKOUTS').click();button('SWAP WORKOUTS').click();});expect(update).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();
  const next=update.mock.calls[0][0]();expect(next.selectedDate).toBe('2026-09-09');expect(next.flexibleWeek.sessions[source.logicalSessionId].scheduledDate).toBe('2026-09-09');expect(next.flexibleWeek.sessions[occupied.logicalSessionId].scheduledDate).toBe('2026-09-11');expect(next.program).toEqual(state.program);expect(next.workouts).toEqual(state.workouts);
 });
 it('date selection reviews both moves without applying before confirmation',()=>{
- render();act(()=>button('Choose another date').click());act(()=>document.querySelector('.flexible-week-dates button').click());expect(button('APPLY')).toBeDefined();expect(update).not.toHaveBeenCalled();
- act(()=>button('APPLY').click());expect(update).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();
+ render();act(()=>button('Choose another date').click());act(()=>document.querySelector('.flexible-week-dates button').click());expect(button('USE TODAY')).toBeDefined();expect(update).not.toHaveBeenCalled();
+ act(()=>button('USE TODAY').click());expect(update).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();
 });
 it('no conflict leaves the existing safe Apply flow with no relocation step',()=>{
- vi.setSystemTime(new Date('2026-09-10T12:00:00'));render();expect(button('APPLY')).toBeDefined();expect(button('Choose another date')).toBeUndefined();expect(button('SWAP WORKOUTS')).toBeUndefined();expect(document.querySelector('.flexible-week-dates')).toBeNull();
+ vi.setSystemTime(new Date('2026-09-10T12:00:00'));render();expect(button('USE TODAY')).toBeDefined();expect(button('Choose another date')).toBeUndefined();expect(button('SWAP WORKOUTS')).toBeUndefined();expect(document.querySelector('.flexible-week-dates')).toBeNull();
 });
 it('a changed schedule removes the stale Swap action and Cancel never mutates',()=>{
  render();render({...state,weekScheduleOverrides:{'2026-09-07':{}}});expect(button('SWAP WORKOUTS')).toBeUndefined();expect(document.querySelector('[role=alert]').textContent).toContain('schedule changed');act(()=>button('CANCEL').click());expect(update).not.toHaveBeenCalled();expect(close).toHaveBeenCalledOnce();

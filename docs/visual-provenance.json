@@ -31873,39 +31873,6 @@
       ]
     },
     {
-      "assetId": "inline-accountsyncpanel-1",
-      "path": "src/AccountSyncPanel.jsx",
-      "selector": "inline_svg",
-      "exerciseIds": [],
-      "movementIds": [],
-      "usage": "inline_ui_renderer",
-      "provenanceType": "rook_original",
-      "creator": "ROOK JSX implementation",
-      "sourceUrl": null,
-      "license": null,
-      "attributionRequired": false,
-      "generatedAt": null,
-      "generationProvider": null,
-      "generationModel": null,
-      "previousDisplayedCredit": "None",
-      "previousStoredCredits": [],
-      "evidence": [
-        {
-          "type": "repository_inline_geometry",
-          "path": "src/AccountSyncPanel.jsx",
-          "line": 104,
-          "reviewedAt": "2026-10-24"
-        }
-      ],
-      "notes": [
-        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion."
-      ],
-      "sourceLine": 104,
-      "codeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
-      "lfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
-      "crlfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc"
-    },
-    {
       "assetId": "inline-firstrunwelcome-1",
       "path": "src/FirstRunWelcome.jsx",
       "selector": "inline_svg",
@@ -31972,8 +31939,8 @@
       "crlfCodeSha256": "09113ddc45d9b36d578e5dedc748cc1e83effa473327e2ad5440e074a90e8ad9"
     },
     {
-      "assetId": "inline-profileinformation-1",
-      "path": "src/ProfileInformation.jsx",
+      "assetId": "inline-adjustmentexerciselist-1",
+      "path": "src/AdjustmentExerciseList.jsx",
       "selector": "inline_svg",
       "exerciseIds": [],
       "movementIds": [],
@@ -31991,18 +31958,63 @@
       "evidence": [
         {
           "type": "repository_inline_geometry",
-          "path": "src/ProfileInformation.jsx",
-          "line": 9,
-          "reviewedAt": "2026-10-24"
+          "path": "src/AdjustmentExerciseList.jsx",
+          "line": 28,
+          "reviewedAt": "2026-10-26"
         }
       ],
       "notes": [
-        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion."
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion.",
+        "Reviewed the source-defined remove action icon used by the shared Adjust Today exercise list."
       ],
-      "sourceLine": 9,
-      "codeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
-      "lfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc",
-      "crlfCodeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc"
+      "sourceLine": 28,
+      "codeSha256": "294ef6ab1bd7c1e8a6606ebd6a0da91c65c5a5f564391ee65a8256961b304907",
+      "lfCodeSha256": "294ef6ab1bd7c1e8a6606ebd6a0da91c65c5a5f564391ee65a8256961b304907",
+      "crlfCodeSha256": "294ef6ab1bd7c1e8a6606ebd6a0da91c65c5a5f564391ee65a8256961b304907"
+    },
+    {
+      "assetId": "inline-informationicon-1",
+      "path": "src/InformationIcon.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/InformationIcon.jsx",
+          "line": 4,
+          "reviewedAt": "2026-10-26"
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "path": "src/AccountSyncPanel.jsx",
+          "codeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc"
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "path": "src/ProfileInformation.jsx",
+          "codeSha256": "343e246460309ec85dbfdf7998ba73b72de580463adf8b81059e281a50f9b5cc"
+        }
+      ],
+      "notes": [
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion.",
+        "Shared information icon replaces the duplicated AccountSyncPanel and ProfileInformation renderers; reviewed circle and information strokes in source."
+      ],
+      "sourceLine": 4,
+      "codeSha256": "2ad9286471750c753b1124bc2c6fe74565303ef2d61c72510a194eb86ed789ac",
+      "lfCodeSha256": "2ad9286471750c753b1124bc2c6fe74565303ef2d61c72510a194eb86ed789ac",
+      "crlfCodeSha256": "b8bfb0ce36e73586f89e6f49480f0234784df38237e1628be9efd0864b391ed8"
     }
   ]
 }

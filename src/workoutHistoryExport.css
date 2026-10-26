@@ -1,5 +1,5 @@
 .history-export-screen { padding-bottom:calc(28px + env(safe-area-inset-bottom)); }
-.history-export-screen > h1 { margin-top:12px; }
+.history-export-screen > .information-heading { margin-top:12px; }
 .history-export-screen > p { line-height:1.5; color:var(--rook-secondary); }
 .history-export-count { font-size:13px; }
 .history-export-screen fieldset { border:0;padding:0;margin:24px 0;min-width:0; }

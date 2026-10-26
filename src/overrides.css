@@ -57,7 +57,7 @@ body {
   --rook-sheet-enter-play-state: running;
   overflow: hidden;
   overscroll-behavior: none;
-  transition: background-color 160ms ease;
+  transition: background-color var(--rook-sheet-enter-duration, 180ms) ease-out;
 }
 /* The drag scrim is a temporary composited sibling, behind the panel. Keep the
    panel first: modal focus, viewport and header ownership all depend on it. */
@@ -100,8 +100,8 @@ body {
   from { background-color: rgba(27, 26, 25, 0); }
 }
 @keyframes rook-sheet-enter {
-  /* Keep the entire panel below the clipped modal boundary at frame zero.
-     Mount-time duration accounts for distance without exposing an intermediate pose. */
+  /* All bottom sheets start fully below the clipped modal boundary and share
+     the same duration; content height does not create a separate motion style. */
   from { transform: translate3d(0, calc(100% + 24px), 0); }
   to { transform: translate3d(0, 0, 0); }
 }
@@ -415,8 +415,10 @@ body {
 .exercise-e1rm-trend > div { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .exercise-e1rm-trend strong { color: var(--rook-text, #1b1a19); font-size: 13px; }
 .exercise-e1rm-trend small { color: var(--rook-muted, #8a8783); font-size: 10.5px; }
-.exercise-e1rm-trend svg { display: block; width: 100%; height: 136px; margin-top: 10px; overflow: visible; }
-.exercise-e1rm-trend .e1rm-heading { flex-wrap: wrap; gap: 4px 12px; }
+.exercise-e1rm-trend > svg { display: block; width: 100%; height: 136px; margin-top: 10px; overflow: visible; }
+.exercise-e1rm-trend .e1rm-heading { align-items:center; flex-wrap:wrap; gap:4px 12px; }
+.e1rm-heading .e1rm-title { display:inline-flex; align-items:center; min-width:0; }
+.e1rm-title .profile-info-trigger { margin:0; }
 .e1rm-axis line { stroke: var(--rook-border); stroke-width: 1; }
 .e1rm-axis text, .e1rm-axis-unit, .e1rm-date { fill: var(--rook-secondary); font-size: 10.5px; }
 .e1rm-point-value { fill: var(--rook-text); font-size: 10.5px; font-weight: 600; }
@@ -743,76 +745,11 @@ body {
 .setting-switch-with-accessory input:checked ~ .setting-switch-toggle i::after { transform: translateX(18px); }
 .setting-switch-with-accessory input:focus-visible ~ .setting-switch-toggle i { outline: 3px solid var(--rook-focus-ring-soft, rgba(31,107,76,.35)); outline-offset: 2px; }
 
-.help-popover {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  line-height: 1;
-}
-.help-popover-with-term { gap: 4px; }
-.help-popover-trigger {
-  width: 44px;
-  height: 44px;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  color: var(--rook-secondary, #6f6c68);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 4px;
-}
-.help-popover-with-term .help-popover-trigger { justify-content: flex-start; }
-.help-popover-mark {
-  width: 18px;
-  height: 18px;
-  border: 1px solid var(--rook-border-strong, var(--rook-control-border, rgba(27,26,25,.22)));
-  border-radius: 50%;
-  display: inline-grid;
-  place-items: center;
-  color: inherit;
-  font-size: 11px;
-  font-weight: 750;
-  line-height: 1;
-}
-.help-popover-mark::before {
-  content: "?";
-  transform: translate(.5px, .5px);
-}
-.help-popover-trigger:focus-visible { outline: none; }
-.help-popover-trigger:focus-visible .help-popover-mark {
-  outline: 2px solid var(--rook-focus-ring, var(--rook-accent, #1f6b4c));
-  outline-offset: 2px;
-}
-.help-popover-content {
-  position: fixed;
-  z-index: 80;
-  padding: 13px 14px 14px;
-  border: 1px solid var(--rook-border, rgba(27,26,25,.12));
-  border-radius: 13px;
-  background: var(--rook-surface-raised, #fff);
-  color: var(--rook-text, #1b1a19);
-  box-shadow: 0 10px 28px var(--rook-shadow, rgba(0,0,0,.14));
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 5px;
-  text-align: left;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: 0;
-  text-transform: none;
-}
-.help-popover-content > strong {
-  color: var(--rook-text, #1b1a19);
-  font-size: 12px;
-  font-weight: 750;
-  letter-spacing: .02em;
-}
-.help-popover-content > span { color: var(--rook-secondary, #6f6c68); }
+
+.help-popover { position:relative;display:inline-flex;align-items:center;justify-content:center;flex:0 0 auto;line-height:1; }
+.help-popover-with-term { gap:4px; }
+.help-popover-trigger { padding:0;display:inline-flex;align-items:center;justify-content:center;gap:4px; }
+.help-popover-with-term .help-popover-trigger { justify-content:flex-start; }
 .set-label-help {
   height: 28px;
   display: flex !important;
@@ -851,16 +788,6 @@ body {
   border-radius: 50%;
 }
 .set-label-help .help-popover-term { font-size: 9px; font-weight: 700; letter-spacing: .12em; }
-.set-label-help .help-popover-content,
-.set-label-help .help-popover-content > span {
-  color: var(--rook-text, #1b1a19);
-  text-align: left;
-  font-size: 12.5px;
-  font-weight: 500;
-  line-height: 1.45;
-  letter-spacing: 0;
-}
-.set-label-help .help-popover-content > span { color: var(--rook-secondary, #6f6c68); }
 .rest-duration-setting { min-height: 48px; padding: 6px 0; border-bottom: 1px solid rgba(27,26,25,.07); display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 18px; color: #1b1a19; font-size: 14px; }
 .rest-duration-setting select { width: auto; min-width: 9.875rem; max-width: 100%; flex-shrink: 0; box-sizing: border-box; min-height: 44px; height: auto; padding: 10px 34px 10px 13px; border: 1px solid rgba(27,26,25,.1); border-radius: 12px; background-color: #fff; color: #1b1a19; font: inherit; font-size: 16px; font-weight: 500; line-height: normal; }
 .rest-duration-setting.disabled { color: #a3a09b; }
@@ -1672,7 +1599,7 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .appearance-credits p + .eyebrow { margin-top: 18px; }
 .stepper.unset input { cursor: text; }
 .stepper.unset button { display: none; }
-.stepper.unset:focus-within { border-color: var(--rook-accent-text); box-shadow: 0 0 0 2px var(--rook-accent-soft); }
+.stepper.unset:focus-within { border-color: var(--rook-accent-text); box-shadow: inset 0 0 0 2px var(--rook-accent-soft); }
 .exercise-heading .text-button:disabled { color: #aaa7a2; cursor: not-allowed; }
 .superset-picker-layer { z-index: 40; }
 .superset-partner-sheet { max-height: min(82dvh, 720px); }
@@ -1794,10 +1721,6 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 .completed-workout-options-sheet > .list-row { min-height: 48px; }
 .completed-workout-options-sheet > .list-row > span { font: inherit; color: inherit; }
 .completed-workout-options-sheet > .list-row:disabled { opacity: 1; color: var(--rook-muted); }
-/* Transfer the existing scrim to the options layer, without stacking two scrims
-   or exposing Today during entry/exit. The shared panel motion stays unchanged. */
-:root[data-appearance] .modal-layer:has(> .completed-workout-detail[data-options-open]) { background: transparent; animation: none; transition: none; }
-:root[data-appearance] .modal-layer:has(> .completed-workout-options-sheet) { background: var(--rook-scrim, rgba(27,26,25,.35)) !important; animation: none; transition: none; }
 .completed-workout-summary { display: flex; flex-wrap: wrap; gap: 28px; margin-top: 22px; }
 .completed-workout-summary > span { display: flex; flex-direction: column; gap: 5px; }
 .completed-workout-summary strong { color: var(--rook-text); font-size: 20px; font-variant-numeric: tabular-nums; }

@@ -22,7 +22,7 @@ it('actual Adjust Today editor keeps Remove/Undo in the draft, Cancel preserves 
  const count=host.querySelectorAll('.plan-editor-exercise').length;expect(count).toBeGreaterThan(1);click(host.querySelector('[data-swipe-fallback]'));
  expect(host.querySelectorAll('.plan-editor-exercise')).toHaveLength(count-1);expect(current.todayAdaptation).toBeNull();expect(current.program).toEqual(plan);expect(current.activeWorkout).toBeNull();
  click(button('Cancel'));expect(current.todayAdaptation).toBeNull();click([...host.querySelectorAll('.choice-row')].find(b=>b.textContent.includes("Edit today's exercises")));expect(host.querySelectorAll('.plan-editor-exercise')).toHaveLength(count);
- click(host.querySelector('[data-swipe-fallback]'));click(button('APPLY'));expect(closed).toHaveBeenCalledOnce();expect(current.todayAdaptation.mode).toBe('manual');expect(current.todayAdaptation.workout.exercises).toHaveLength(count-1);expect(current.program).toEqual(plan);expect(current.activeWorkout).toBeNull();
+ click(host.querySelector('[data-swipe-fallback]'));click(button('SAVE FOR TODAY'));expect(closed).toHaveBeenCalledOnce();expect(current.todayAdaptation.mode).toBe('manual');expect(current.todayAdaptation.workout.exercises).toHaveLength(count-1);expect(current.program).toEqual(plan);expect(current.activeWorkout).toBeNull();
 });
 it('raw logger input commits through real Add opening then Do now; previous unfinished work is parked intact',()=>{
  let initial=startFreestyleWorkout(createReturningUserFixture(0));initial=addFreestyleExercise(initial,'barbell-bench-press');initial=addFreestyleExercise(initial,'plank');

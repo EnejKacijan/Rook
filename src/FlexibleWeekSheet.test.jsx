@@ -26,15 +26,15 @@ it('reviews valid moves as resolved and pinpoints a stale move with an action',(
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId;
  const moved=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:id,toDate:'2026-09-06'})).state;
  render(moved,{reviewExisting:true});
- expect(document.querySelector('h1').textContent).toBe('Temporary schedule');
- expect(document.body.textContent).toContain('All other workouts keep their dates.');
+ expect(document.querySelector('h1').textContent).toBe('Schedule changes');
+ expect(document.body.textContent).not.toContain('All other workouts keep their dates.');
  expect([...document.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===id).textContent).toContain('Mon, Aug 31');
  expect([...document.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===id).textContent).toContain('Sun, Sep 6');
  expect(button('REVIEW RESTORING ORIGINAL SCHEDULE')).toBeUndefined();
  const changed=structuredClone(moved);changed.program.days[0].name='Changed';render(changed,{reviewExisting:true,focusSessionId:id});
  expect(document.body.textContent).toContain('1 workout needs attention');
  expect([...document.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===id).textContent).toContain('NEEDS ATTENTION');
- expect(button('Restore original schedule').disabled).toBe(true);
+ expect(button('Restore 1 change')).toBeUndefined();
 });
 it('multiple missed summary opens a chooser without selecting the first identity',()=>{
  const state=fixture('2026-08-31'),select=vi.fn(),host=document.createElement('div');document.body.append(host);root=createRoot(host);
@@ -51,14 +51,14 @@ it.each([0,1])('summary handles %i missed without inventing another choice',coun
 it('failed direct move keeps the previous saved schedule and can be retried',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn();render(state,{sessionId:id},update);
  localStorage.setItem('lift-v2-state',JSON.stringify(state));const before=localStorage.getItem('lift-v2-state');act(()=>button('MOVE TO ANOTHER DAY').click());act(()=>document.querySelector('[data-move-date]').click());
- const write=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('full');});act(()=>button('APPLY MOVE').click());
+ const write=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw new Error('full');});act(()=>button('MOVE WORKOUT').click());
  expect(update).not.toHaveBeenCalled();expect(localStorage.getItem('lift-v2-state')).toBe(before);expect(document.querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
  write.mockRestore();act(()=>button('TRY AGAIN').click());expect(update).toHaveBeenCalledTimes(1);expect(update.mock.calls[0][1].persistedState).toBeDefined();
 });
 it('immediately persists only a missed occurrence skip, once, without review',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn(),close=vi.fn();render(state,{sessionId:id},update,close);
  act(()=>button('More options').click());act(()=>{button('Skip this session').click();button('Skip this session').click();});
- expect(update).toHaveBeenCalledTimes(1);expect(close).toHaveBeenCalledTimes(1);expect(document.body.textContent).not.toContain('Review your schedule');
+ expect(update).toHaveBeenCalledTimes(1);expect(close).toHaveBeenCalledTimes(1);expect(document.body.textContent).not.toContain('Your updated schedule');
  const next=update.mock.calls[0][0]();expect(next.program).toEqual(state.program);expect(next.workouts).toEqual(state.workouts);expect(next.profile).toEqual(state.profile);
  expect(missedFlexibleSessions(next).some(s=>s.logicalSessionId===id)).toBe(false);
  expect(flexibleSessions(next).filter(s=>s.logicalSessionId!==id).map(s=>[s.logicalSessionId,s.scheduledDate])).toEqual(flexibleSessions(state).filter(s=>s.logicalSessionId!==id).map(s=>[s.logicalSessionId,s.scheduledDate]));
@@ -90,12 +90,12 @@ it.each(['planned','active','completed'])('excludes today occupied by a %s worko
 it('commits a reviewed move once, preserving plan/history and resolving that missed identity',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn(),close=vi.fn();render(state,{sessionId:id},update,close);
  act(()=>button('MOVE TO ANOTHER DAY').click());act(()=>document.querySelector('[data-move-date]').click());expect(update).not.toHaveBeenCalled();
- act(()=>{button('APPLY MOVE').click();button('APPLY MOVE').click();});expect(update).toHaveBeenCalledTimes(1);expect(close).not.toHaveBeenCalled();expect(document.body.textContent).toContain('Workout moved');
+ act(()=>{button('MOVE WORKOUT').click();button('MOVE WORKOUT').click();});expect(update).toHaveBeenCalledTimes(1);expect(close).toHaveBeenCalledOnce();
  const next=update.mock.calls[0][0]();expect(next.program).toEqual(state.program);expect(next.workouts).toEqual(state.workouts);expect(missedFlexibleSessions(next).some(s=>s.logicalSessionId===id)).toBe(false);
 });
 it('Back pops review to destination to picker to root without applying changes',()=>{
  const state=fixture(),before=JSON.stringify(state);render(state);
- act(()=>button('Move a workout').click());act(()=>document.querySelector('.flexible-workout-list button').click());
+ act(()=>button('Move a workout').click());const upcoming=flexibleSessions(state).find(item=>item.status==='planned');act(()=>document.querySelector(`[data-session-id="${upcoming.logicalSessionId}"]`).click());
  const title=document.querySelector('h1').textContent;
  act(()=>document.querySelector('.flexible-week-dates button:not([disabled])').click());expect(document.querySelector('h1').textContent).toMatch(/^Move /);
  act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe(title);
@@ -117,15 +117,18 @@ it('keeps Adjust week inside the calendar week, reviews missing dates, and prese
   expect(document.querySelector('[role="status"]').textContent).toContain('4 of 5 workouts');
   expect(button('REVIEW SCHEDULE').disabled).toBe(false);
   act(()=>button('REVIEW SCHEDULE').click());
+  expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(1);
+  act(()=>document.querySelector('summary').click());
   expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(5);
-  expect(document.body.textContent).toContain('Needs a day');expect(button('USE THIS SCHEDULE').disabled).toBe(true);
+  expect(document.body.textContent).toContain('Needs a day');expect(button('APPLY SCHEDULE').disabled).toBe(true);
   expect(document.body.textContent).not.toContain('Mon, Oct 5');
-  const rows=[...document.querySelectorAll('[data-session-id]')].map(n=>n.dataset.sessionId);
+  const rows=[...document.querySelectorAll('[data-session-id]')].map(n=>n.dataset.sessionId).sort();
   act(()=>button('Back').click());expect(document.querySelectorAll('[aria-pressed="true"]')).toHaveLength(4);
   expect(document.body.textContent).toContain('Review to move later');
   act(()=>document.querySelector('[data-available-date="2026-10-04"]').click());
-  act(()=>button('REVIEW SCHEDULE').click());expect(button('USE THIS SCHEDULE').disabled).toBe(false);
-  expect([...document.querySelectorAll('[data-session-id]')].map(n=>n.dataset.sessionId)).toEqual(rows);
+  act(()=>button('REVIEW SCHEDULE').click());expect(button('APPLY SCHEDULE').disabled).toBe(false);
+  if(document.querySelector('summary'))act(()=>document.querySelector('summary').click());
+  expect([...document.querySelectorAll('[data-session-id]')].map(n=>n.dataset.sessionId).sort()).toEqual(rows);
   expect(document.body.textContent).toContain('Sun, Oct 4');
   act(()=>button('EDIT DAYS').click());expect(document.querySelector('[data-available-date="2026-10-04"]').getAttribute('aria-pressed')).toBe('true');
   expect(update).not.toHaveBeenCalled();expect(JSON.stringify(state)).toBe(original);
@@ -134,7 +137,7 @@ for(const count of [1,3]) it(`reviews ${count} remaining sessions within the ini
   vi.setSystemTime(new Date('2026-09-07T12:00:00'));const state=fixture();state.program.days=state.program.days.slice(0,count);render(state);act(()=>button('My available days changed').click());
   for(const selected of document.querySelectorAll('.flexible-week-dates button[aria-pressed="true"]'))act(()=>selected.click());
   for(const index of [0,2,4].slice(0,count))act(()=>document.querySelectorAll('.flexible-week-dates button')[index].click());
-  act(()=>button('REVIEW SCHEDULE').click());expect(document.querySelector('h1').textContent).toBe('Review your schedule');expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(count);
+  act(()=>button('REVIEW SCHEDULE').click());expect(document.querySelector('h1').textContent).toBe('Your updated schedule');expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(0);act(()=>document.querySelector('summary').click());expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(count);
 });
 it('the profile baseline can be reviewed without changing profile data',()=>{
  vi.setSystemTime(new Date('2026-09-07T12:00:00'));const state=fixture(),before=JSON.stringify(state.profile);render(state);act(()=>button('My available days changed').click());const date=document.querySelector('.flexible-week-dates button');
@@ -148,9 +151,9 @@ it('availability Apply publishes one reviewed proposal only after a successful w
  localStorage.setItem('lift-v2-state',JSON.stringify(state));render(state,{},update,close);
  act(()=>button('My available days changed').click());
  act(()=>document.querySelector('[data-available-date="2026-10-04"]').click());
- act(()=>button('REVIEW SCHEDULE').click());expect(button('USE THIS SCHEDULE').disabled).toBe(false);
+ act(()=>button('REVIEW SCHEDULE').click());expect(button('APPLY SCHEDULE').disabled).toBe(false);
  const before=localStorage.getItem('lift-v2-state'),write=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw Error('full');});
- act(()=>button('USE THIS SCHEDULE').click());expect(update).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
+ act(()=>button('APPLY SCHEDULE').click());expect(update).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
  expect(localStorage.getItem('lift-v2-state')).toBe(before);expect(document.querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
  write.mockRestore();act(()=>{button('TRY AGAIN').click();button('TRY AGAIN').click();});
  expect(update).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();
@@ -162,7 +165,7 @@ it('availability Apply rejects an externally changed schedule while preserving t
  act(()=>button('My available days changed').click());act(()=>document.querySelector('[data-available-date="2026-10-03"]').click());
  act(()=>button('REVIEW SCHEDULE').click());const text=document.querySelector('.flexible-week-review').textContent;
  const changed={...state,flexibleWeek:{...state.flexibleWeek,revision:2}};render(changed,{},update);
- act(()=>button('USE THIS SCHEDULE').click());expect(update).not.toHaveBeenCalled();
+ act(()=>button('APPLY SCHEDULE').click());expect(update).not.toHaveBeenCalled();
  expect(document.querySelector('[role="alert"]').textContent).toContain('Review the schedule again');
  expect(document.querySelector('.flexible-week-review').textContent).toBe(text);
 });
@@ -194,23 +197,23 @@ it('selecting a missed occurrence reveals only the recovery choices and keeps it
 it('Train Today on a free day reviews before applying and resolves the exact missed occurrence',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[1].logicalSessionId,update=vi.fn(),close=vi.fn(),before=JSON.stringify(state);
  render(state,{sessionId:id},update,close);act(()=>button('TRAIN TODAY').click());
- expect(document.querySelector('.use-workout-today-sheet')).not.toBeNull();expect(button('APPLY')).toBeDefined();expect(update).not.toHaveBeenCalled();expect(JSON.stringify(state)).toBe(before);
+ expect(document.querySelector('.use-workout-today-sheet')).not.toBeNull();expect(button('USE TODAY')).toBeDefined();expect(update).not.toHaveBeenCalled();expect(JSON.stringify(state)).toBe(before);
  act(()=>button('Back').click());expect(button('TRAIN TODAY')).toBe(document.activeElement);
- act(()=>button('TRAIN TODAY').click());act(()=>button('APPLY').click());expect(update).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();
+ act(()=>button('TRAIN TODAY').click());act(()=>button('USE TODAY').click());expect(update).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();
  const next=update.mock.calls[0][0]();expect(next.flexibleWeek.sessions[id].scheduledDate).toBe('2026-09-06');expect(next.program).toEqual(state.program);expect(next.workouts).toEqual(state.workouts);
 });
 it('Train Today reveals the occupied workout only after intent, preserving the displacement review',()=>{
  vi.setSystemTime(new Date('2026-09-09T12:00:00'));const state=fixture('2026-08-31'),source=missedFlexibleSessions(state)[0],occupied=flexibleSessions(state).find(s=>s.scheduledDate==='2026-09-09'),update=vi.fn(),before=JSON.stringify(state);
  render(state,{sessionId:source.logicalSessionId},update);expect(document.body.textContent).not.toContain('instead of');expect(document.querySelector('.flexible-week-dates')).toBeNull();
- act(()=>button('TRAIN TODAY').click());expect(document.querySelector('h1').textContent).toBe(`Train ${source.workout.name} today?`);expect(document.body.textContent).toContain(`Today already has ${occupied.workout.name}.`);expect(button('APPLY')).toBeUndefined();expect(document.querySelector('.flexible-week-dates')).toBeNull();
+ act(()=>button('TRAIN TODAY').click());expect(document.querySelector('h1').textContent).toBe(`Train ${source.workout.name} today?`);expect(document.body.textContent).toContain(`Today already has ${occupied.workout.name}.`);expect(button('USE TODAY')).toBeUndefined();expect(document.querySelector('.flexible-week-dates')).toBeNull();
  act(()=>button('Choose another date').click());expect(document.querySelector('h1').textContent).toBe(`Move ${occupied.workout.name}`);
- act(()=>document.querySelector('.flexible-week-dates button').click());expect(button('APPLY')).toBeDefined();expect(document.body.textContent).toContain('stays uncompleted');expect(update).not.toHaveBeenCalled();expect(JSON.stringify(state)).toBe(before);
+ act(()=>document.querySelector('.flexible-week-dates button').click());expect(button('USE TODAY')).toBeDefined();expect(document.querySelectorAll('.review-change-row')).toHaveLength(1);expect(update).not.toHaveBeenCalled();expect(JSON.stringify(state)).toBe(before);
  act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe(`Move ${occupied.workout.name}`);act(()=>button('Back').click());expect(button('SWAP WORKOUTS')).toBeDefined();act(()=>button('Back').click());expect(button('TRAIN TODAY')).toBeDefined();expect(document.querySelector('[data-move-date]')).toBeNull();
 });
 it('an active workout guard prevents advertising Train Today and cannot be bypassed',()=>{
  const state=startFreestyleWorkout(fixture('2026-08-31')),source=missedFlexibleSessions(state)[0],update=vi.fn();
  render(state,{sessionId:source.logicalSessionId},update);
- expect(button('TRAIN TODAY')).toBeUndefined();expect(button('APPLY')).toBeUndefined();expect(update).not.toHaveBeenCalled();expect(button('More options')).toBeDefined();
+ expect(button('TRAIN TODAY')).toBeUndefined();expect(button('USE TODAY')).toBeUndefined();expect(update).not.toHaveBeenCalled();expect(button('More options')).toBeDefined();
 });
 it('Move preserves the candidate date across review/Back without exposing unrelated actions',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn();render(state,{sessionId:id},update);
@@ -230,15 +233,15 @@ it.each(['TRAIN TODAY','MOVE TO ANOTHER DAY','More options'])('Close from %s dis
 });
 it('a missed move revalidates changed schedule on Apply and leaves the new schedule untouched',()=>{
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn();render(state,{sessionId:id},update);act(()=>button('MOVE TO ANOTHER DAY').click());act(()=>document.querySelector('[data-move-date]').click());
- const changed={...state,weekScheduleOverrides:{'2026-09-07':{}}},before=JSON.stringify(changed);render(changed,{sessionId:id},update);act(()=>button('APPLY MOVE').click());expect(document.querySelector('[role="alert"]').textContent).toContain('Review the schedule again');expect(update).not.toHaveBeenCalled();expect(JSON.stringify(changed)).toBe(before);
+ const changed={...state,weekScheduleOverrides:{'2026-09-07':{}}},before=JSON.stringify(changed);render(changed,{sessionId:id},update);act(()=>button('MOVE WORKOUT').click());expect(document.querySelector('[role="alert"]').textContent).toContain('Review the schedule again');expect(update).not.toHaveBeenCalled();expect(JSON.stringify(changed)).toBe(before);
 });
 it('Train Today revalidates changed schedule before exposing Apply again',()=>{
- const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn();render(state,{sessionId:id},update);act(()=>button('TRAIN TODAY').click());expect(button('APPLY')).toBeDefined();
- render({...state,weekScheduleOverrides:{'2026-09-07':{}}},{sessionId:id},update);expect(button('APPLY')).toBeUndefined();expect(document.querySelector('[role="alert"]').textContent).toContain('schedule changed');expect(update).not.toHaveBeenCalled();
+ const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId,update=vi.fn();render(state,{sessionId:id},update);act(()=>button('TRAIN TODAY').click());expect(button('USE TODAY')).toBeDefined();
+ render({...state,weekScheduleOverrides:{'2026-09-07':{}}},{sessionId:id},update);expect(button('USE TODAY')).toBeUndefined();expect(document.querySelector('[role="alert"]').textContent).toContain('schedule changed');expect(update).not.toHaveBeenCalled();
 });
 it('an externally resolved occurrence leaves recovery safely and Back reviews current scheduling actions',()=>{
  const state=fixture('2026-08-31'),source=missedFlexibleSessions(state)[0],update=vi.fn();render(state,{sessionId:source.logicalSessionId},update);
- const changed={...state,activeWorkout:startWorkout(state,source.workout)};render(changed,{sessionId:source.logicalSessionId},update);expect(document.querySelector('[role="status"]').textContent).toContain('no longer available');expect(button('APPLY')).toBeUndefined();
+ const changed={...state,activeWorkout:startWorkout(state,source.workout)};render(changed,{sessionId:source.logicalSessionId},update);expect(document.querySelector('[role="status"]').textContent).toContain('no longer available');expect(button('USE TODAY')).toBeUndefined();
  act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe('What changed?');expect(update).not.toHaveBeenCalled();
 });
 

@@ -65,11 +65,11 @@ function pointer(handle, type, y) {
   });
 }
 
-it('A/E/I: owns one form-bound action footer outside the body, with one concise heading', () => {
+it('A/E/I: keeps one form-bound action in the existing scroller so keyboard editing can take priority', () => {
   mount();
   const sheet = document.querySelector('.conditioning-sheet'), body = sheet.querySelector('.sheet-scroll'), footer = sheet.querySelector('footer');
-  expect(footer.parentElement).toBe(sheet); expect(body.contains(footer)).toBe(false);
-  expect(footer.dataset.separate).toBe('true'); expect(start().form).toBe(body.querySelector('form'));
+  expect(footer.parentElement).toBe(body); expect(body.contains(footer)).toBe(true);
+  expect(footer.hasAttribute('data-separate')).toBe(false); expect(start().form).toBe(body.querySelector('form'));
   expect(sheet.querySelectorAll('[type="submit"]')).toHaveLength(1); expect(start().disabled).toBe(false);
   expect(sheet.querySelector('.detail-header strong').textContent).toBe('Conditioning');
   expect(sheet.querySelector('h2')).toBeNull(); expect(body.querySelector('.eyebrow').textContent).toBe('OPTIONAL SESSION');

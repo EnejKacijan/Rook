@@ -22,7 +22,7 @@ const hide=()=>document.querySelector('.missed-reminder-hide');
 const status=()=>document.querySelector('.exercise-remove-undo');
 const undo=()=>status()?.querySelector('button');
 const saved=()=>deserializeState(localStorage.getItem(STORAGE_KEY));
-function recover(kind){click(document.querySelector('.today-missed-open'));const chooser=document.querySelector('[data-session-id]');if(chooser)click(chooser);if(kind==='skip'){click(button('More options'));click(button('Skip this session'));}else{click(button('MOVE TO ANOTHER DAY'));click(document.querySelector('[data-move-date]'));click(button('APPLY MOVE'));}}
+function recover(kind){click(document.querySelector('.today-missed-open'));const chooser=document.querySelector('[data-session-id]');if(chooser)click(chooser);if(kind==='skip'){click(button('More options'));click(button('Skip this session'));}else{click(button('MOVE TO ANOTHER DAY'));click(document.querySelector('[data-move-date]'));click(button('MOVE WORKOUT'));}}
 
 it.each([1,3])('shared header and separate accessible navigation with %i missed',count=>{
  draw(count);expect(document.querySelector('.today-missed-label').textContent).toBe(count===1?'Missed workout':`${count} missed workouts`);

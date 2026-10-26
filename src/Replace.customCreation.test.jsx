@@ -53,9 +53,30 @@ async function open(query = 'Lateral single-arm raise') {
 function create() {click(document.querySelector('[aria-label="Create custom exercise"]'));}
 async function dismiss() {click(editor().querySelector('[aria-label="Back"]')); await act(async () => {await vi.advanceTimersByTimeAsync(250);});}
 function fill({equipment = 'cables'} = {}) {
-  type(field('Exercise equipment'), equipment); type(field('Primary target muscle'), 'Back');
+  type(field('Exercise equipment'), equipment); type(field('Primary target muscle'), 'Back'); type(field('Exercise logging type'), 'weight_reps');
   type(field('Exercise movement'), 'horizontal-pull');
 }
+
+it('recognizes an initial family name, keeps the exact user name, and creates only the displayed custom definition',async()=>{
+ const before=mount();await open('single leg skater hops');create();const name=field('Exercise name');name.focus();name.setSelectionRange(3,3);
+ expect(field('Exercise equipment').value).toBe('bodyweight');expect(field('Primary target muscle').value).toBe('Quads');expect(field('Exercise logging type').value).toBe('reps');expect(field('Exercise side logging mode').value).toBe('normal');
+ click(editor().querySelector('.custom-exercise-recognition summary'));expect(field('Exercise name')).toBe(name);expect(name.value).toBe('single leg skater hops');expect(name.selectionStart).toBe(3);
+ click(button('CREATE EXERCISE',editor()));const record=current.customExercises.at(-1);
+ expect(record).toMatchObject({name:'single leg skater hops',equipment:['bodyweight'],primaryMuscle:'Quads',secondaryMuscles:['Hamstrings / glutes','Calves'],loggingType:'reps',loggingMode:'normal'});
+ expect(record.id).not.toBe('wg-skater-hop');expect(record).not.toHaveProperty('artId');expect(current.activeWorkout).toEqual(before.activeWorkout);expect(current.program).toEqual(before.program);expect(current.workouts).toEqual(before.workouts);
+});
+it('renaming retracts old suggestions while explicit manual corrections survive',async()=>{
+ mount();await open('single leg skater hops');create();type(field('Primary target muscle'),'Calves');
+ type(field('Exercise name'),'dumbbell skater hops');expect(field('Exercise equipment').value).toBe('dumbbells');expect(field('Exercise logging type').value).toBe('');expect(field('Primary target muscle').value).toBe('Calves');
+ click(button('CREATE EXERCISE',editor()));expect(editor().textContent).toContain('Select a logging type.');expect(saveState).not.toHaveBeenCalled();
+ type(field('Exercise logging type'),'weight_reps');click(button('CREATE EXERCISE',editor()));expect(current.customExercises.at(-1)).toMatchObject({equipment:['dumbbells'],primaryMuscle:'Calves',loggingType:'weight_reps'});
+});
+it('lets the user clear a suggested selector and preserves that deliberate unresolved choice',async()=>{
+ mount();await open('single leg skater hops');create();
+ expect([...field('Exercise equipment').options].some(option=>option.value==='')).toBe(true);
+ type(field('Exercise equipment'),'');type(field('Exercise logging type'),'');type(field('Exercise name'),'Skater Hops');
+ expect(field('Exercise equipment').value).toBe('');expect(field('Exercise logging type').value).toBe('');click(button('CREATE EXERCISE',editor()));expect(editor().textContent).toContain('Select equipment.');expect(saveState).not.toHaveBeenCalled();
+});
 const customRow = () => [...document.querySelectorAll('.replace-sheet .choice-row')].find(node => node.querySelector('strong')?.textContent === current.customExercises.at(-1)?.name);
 
 it.each(['lateral singl', 'zznonexistent movement'])('offers inline creation even with partial or empty results for %s', async query => {

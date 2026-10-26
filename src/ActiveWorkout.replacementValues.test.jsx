@@ -75,3 +75,9 @@ it('mode mismatch and entirely empty historical values keep context without a mi
  const s=fixture();s.activeWorkout.exercises[1].exerciseId='t-bar-row';s.workouts[0].exercises[0].loggingMode='per_side';mount(s);expect(host.textContent).toContain('Last 10 / 8');expect(use()).toBeNull();
  act(()=>mutate(state=>{state.workouts[0].exercises[0].loggingMode='normal';state.workouts[0].exercises[0].sets.forEach(set=>{set.reps=null;set.weight=null});return state;}));expect(use()).toBeNull();
 });
+
+it('replacing an exercise preserves the existing session rest deadline',async()=>{
+ const state=fixture();state.profile.restTimerEnabled=true;state.activeWorkout.rest={seconds:90,endsAt:Date.now()+60000};
+ const rest=structuredClone(state.activeWorkout.rest),plan=structuredClone(state.program),history=structuredClone(state.workouts);mount(state);await replace('T-Bar Row');
+ expect(entry().exerciseId).toBe('t-bar-row');expect(current.activeWorkout.rest).toEqual(rest);expect(current.program).toEqual(plan);expect(current.workouts).toEqual(history);
+});

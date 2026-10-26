@@ -1,3 +1,5 @@
+export const SHEET_MOTION_DURATION = 180;
+
 const preparedPanels = new WeakMap();
 const directMotions = new WeakMap();
 
@@ -48,7 +50,7 @@ export function createSheetDragMotion(getPanel, getLayer, {fadeDistance = 1} = {
     },
     track(distance){pending=distance;if(frame===null)frame=requestAnimationFrame(()=>{frame=null;const value=pending;pending=null;if(value!==null)paint(value);});},
     prepareClose(){clearTimeout(timer);flush();},
-    reset(duration=180,easing='ease-out'){
+    reset(duration=SHEET_MOTION_DURATION,easing='ease-out'){
       flush();if(!panel)return;
       // One release-boundary flush starts settling from the final tracked pose.
       panel.getBoundingClientRect();
@@ -74,9 +76,9 @@ export function fadeSheetBackdrop(layer,duration) {
   else if(layer)layer.style.backgroundColor='rgba(27, 26, 25, 0)';
 }
 
-// Full off-screen travel, with a bounded duration for compact through tall sheets.
-export function sheetEntryDuration(height) {
-  return Math.round(Math.min(240, Math.max(160, 120 + (height + 24) * 0.15)));
+// Every bottom sheet uses the same full-travel rhythm, regardless of content height.
+export function sheetEntryDuration() {
+  return SHEET_MOTION_DURATION;
 }
 
 export function prepareSheetEntry(panel) {
@@ -87,7 +89,7 @@ export function prepareSheetEntry(panel) {
   let entry = preparedPanels.get(panel);
   if (!entry) {
     panel.style.setProperty('--rook-sheet-enter-play-state', 'paused');
-    const duration = `${sheetEntryDuration(panel.getBoundingClientRect().height)}ms`;
+    const duration = `${sheetEntryDuration()}ms`;
     panel.style.setProperty('--rook-sheet-enter-duration', duration);
     panel.parentElement.style.setProperty('--rook-sheet-enter-duration', duration);
     entry = { started: false, frame: null };

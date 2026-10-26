@@ -95,14 +95,20 @@ it('small weight gains survive whole-unit display rounding and lb conversion',()
 it('an estimate-only improvement is identified and explained separately from a lifted weight best',()=>{
   const history=[{id:'prior',completedAt:'2026-10-04',exercises:[{exerciseId:'bench',sets:[{completed:true,weight:30,reps:5},{completed:true,weight:25,reps:8}]}]}];
   const exercise={exerciseId:'bench',name:'Bench',sets:[{completed:true,weight:27.5,reps:9}]};
-  act(()=>root.render(<ExercisePrSheet exercise={exercise} workouts={history} units="kg" e1rmEligible Header={()=>null} close={()=>{}}/>));
+  act(()=>root.render(<ExercisePrSheet exercise={exercise} workouts={history} units="kg" e1rmEligible Header={()=>null} Modal={ModalLayer} close={()=>{}}/>));
   expect(host.querySelector('.eyebrow').textContent).toBe('Strength estimate');
   expect(host.querySelector('.exercise-pr-value').textContent).toBe('35.8 kg');
   expect(host.querySelector('.exercise-pr-change').textContent).toBe('↑ 0.8 kg');
   expect(host.querySelector('.exercise-pr-evidence').textContent).toContain('27.5 kg × 9 reps');
   expect(host.querySelector('.exercise-pr-evidence').textContent).toContain('35 kg');
-  expect(host.textContent).toContain('not a tested maximum');
-  expect(host.textContent).toContain('RIR is not included');
+  expect(host.textContent).not.toContain('not a tested maximum');
+  click(host.querySelector('[aria-label="About this strength estimate"]'));
+  const information=document.querySelector('.profile-information-sheet');
+  expect(information.textContent).toContain('not a tested maximum');
+  expect(information.textContent).toContain('RIR is not included');
+  click(information.querySelector('[aria-label="Close Strength estimate"]'));
+  act(()=>vi.advanceTimersByTime(40));
+  expect(document.activeElement.getAttribute('aria-label')).toBe('About this strength estimate');
 });
 
 it('rep-only records do not promise an estimated maximum',()=>{

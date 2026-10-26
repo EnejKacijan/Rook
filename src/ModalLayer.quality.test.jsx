@@ -1,5 +1,6 @@
 import React, {act, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
+import {createPortal} from 'react-dom';
 import {afterEach, beforeEach, expect, it, vi} from 'vitest';
 import {ModalLayer, SheetHeader} from './App.jsx';
 import {PersonalThemesProvider, usePersonalThemes} from './PersonalThemesContext.jsx';
@@ -131,4 +132,26 @@ it('unmount cancels scheduled modal focus and dismissal rather than closing a re
   expect(close).not.toHaveBeenCalled(); expect(background.inert).toBe(false);
   expect(host.textContent).toBe('New destination'); expect(document.querySelector('.modal-layer')).toBeNull();
   background.remove();
+});
+
+it('nested sheets inherit the parent document lock and restore only their own background state',async()=>{
+  const app={current:null},parent={current:null},closed=vi.fn();
+  function Parent({close}) {
+    const[child,setChild]=useState(false);
+    return <main ref={parent} className="screen detail-screen"><SheetHeader title="Parent" onClose={close}/>
+      <button onClick={()=>setChild(true)}>Open child</button>
+      {child&&createPortal(<ModalLayer backgroundRef={parent} close={()=>setChild(false)}>{requestClose=><main className="screen detail-screen"><SheetHeader title="Child" onClose={requestClose}/></main>}</ModalLayer>,document.body)}
+    </main>;
+  }
+  await act(async()=>root.render(<><div ref={node=>{app.current=node;}} className="app-shell"/>
+    <ModalLayer backgroundRef={app} close={closed}><Parent/></ModalLayer></>));await tick();
+  parent.current.scrollTop=120;const originalParent=parent.current,body=document.body.style.cssText;
+  const trigger=[...host.querySelectorAll('button')].find(button=>button.textContent==='Open child');
+  act(()=>trigger.focus());window.scrollTo.mockClear();await click(trigger);
+  expect(document.body.style.cssText).toBe(body);expect(app.current.inert).toBe(true);expect(parent.current.inert).toBe(true);
+  await click(document.querySelector('[aria-label="Close Child"]'));await tick(32);
+  expect(closed).not.toHaveBeenCalled();expect(window.scrollTo).not.toHaveBeenCalled();
+  expect(parent.current).toBe(originalParent);expect(parent.current.scrollTop).toBe(120);
+  expect(parent.current.inert).toBe(false);expect(app.current.inert).toBe(true);expect(document.body.style.cssText).toBe(body);
+  expect(document.activeElement).toBe(trigger);
 });

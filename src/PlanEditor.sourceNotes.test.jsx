@@ -32,7 +32,7 @@ it('places notes below workouts and disclosure does not dirty or save the plan',
  await act(async()=>button('Original plan notes').click());
  expect(saved).not.toHaveBeenCalled();expect(dirty.mock.calls.every(([value])=>value===false)).toBe(true);
  expect(source).toEqual(before);
- await act(async()=>button('SAVE CHANGES').click());
+ await act(async()=>button('SAVE TO WEEKLY PLAN').click());
  expect(saved).toHaveBeenCalledOnce();
  expect(saved.mock.calls[0][0].importMetadata).toEqual(before.importMetadata);
  expect(source).toEqual(before);
@@ -44,9 +44,9 @@ it('keeps real pending decisions above workouts and notes cannot resolve them',a
  const decisions=host.querySelector('[aria-label="Import review"]'),plan=host.querySelector('.plan-editor');
  expect(decisions.compareDocumentPosition(plan)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
  expect(decisions.textContent).toContain('1 decision remaining');
- expect(button('SAVE CHANGES').disabled).toBe(true);
+ expect(button('SAVE TO WEEKLY PLAN').disabled).toBe(true);
  await act(async()=>button('Original plan notes').click());
  expect(decisions.querySelector('[aria-label="Reviewed RIR"]').value).toBe('__choose');
  expect(decisions.textContent).toContain('1 decision remaining');
- expect(button('SAVE CHANGES').disabled).toBe(true);expect(saved).not.toHaveBeenCalled();
+ expect(button('SAVE TO WEEKLY PLAN').disabled).toBe(true);expect(saved).not.toHaveBeenCalled();
 });

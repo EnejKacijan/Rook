@@ -34,7 +34,7 @@ describe('account status copy', () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
     const signOut = document.querySelector('.account-sync-sign-out');
     expect(signOut.parentElement).toBe(summary.parentElement);
-    expect(signOut.querySelector('.rook-navigation-chevron')).toBeTruthy();
+    expect(signOut.querySelector('.rook-navigation-chevron')).toBeNull();
     expect(signOut.textContent).toContain('Your local data stays on this device');
   });
   it('only says Synced when the acknowledged queue is empty', () => {

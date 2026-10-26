@@ -27,7 +27,8 @@
 }
 .active-performance-pr > strong { font: inherit; font-weight: 700; }
 .active-performance-pr .active-record-gain { font-variant-numeric: tabular-nums; white-space: nowrap; }
-.active-record-info { margin-left: 6px; }
+.active-record-info { display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle; }
+.active-record-info .rook-information-icon { width:14px;height:14px; }
 .active-performance-pr .active-record-gain::before { content: '·'; margin-right: 6px; }
 .active-performance-pr.is-estimate .active-record-gain::before { content: none; }
 .exercise-pr-sheet .exercise-pr-value {

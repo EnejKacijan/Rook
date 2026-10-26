@@ -600,6 +600,14 @@
 }
 
 .rest-timer { animation: rook-rest-timer-enter 200ms cubic-bezier(.2, 0, 0, 1) both; }
+/* Put the track beside the countdown, rather than centering it between the
+   REST label and the digits. Two shared rows also handle enlarged text. */
+.workout-screen .rest-timer { display:grid;grid-template-columns:max-content minmax(0,1fr) auto;column-gap:12px;row-gap:0;align-content:center; }
+.workout-screen .rest-timer > span { display:contents; }
+.workout-screen .rest-timer > span > .eyebrow { grid-column:1 / 3;grid-row:1;margin:0; }
+.workout-screen .rest-timer > span > strong { grid-column:1;grid-row:2; }
+.workout-screen .rest-timer > div { grid-column:2;grid-row:2;align-self:center;width:100%;min-width:0; }
+.workout-screen .rest-timer > .button { grid-column:3;grid-row:1 / 3;align-self:center; }
 .rest-timer > div > i { transition: width 1s linear; }
 .rest-timer.rest-complete { border-color: var(--rook-accent-hairline, rgba(31,107,76,.2)); }
 .rest-timer.rest-complete > span { min-width: max-content; }

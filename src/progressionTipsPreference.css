@@ -13,4 +13,8 @@
 }
 .progression-tip-options svg { width: 20px; height: 20px; }
 .progression-tip-options:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: -2px; }
-.progression-tips-options-sheet .progression-tips-hide { width: 100%; min-height: 48px; text-align: left; }
+.progression-tips-options-sheet .progression-settings-entry { width:100%;min-height:48px;text-align:left; }
+.progression-guidance-settings .profile-progression-tips { margin:16px 0; }
+.progression-guidance-settings .progression-settings-location { font-size:14px;line-height:1.5;color:var(--rook-secondary); }
+.progression-guidance-settings .progression-settings-return { margin-top:12px; }
+.active-workout-options-sheet .progression-settings-entry { display:flex;width:100%;min-height:48px;padding:12px 0;margin-bottom:8px;border:0;border-bottom:1px solid var(--rook-border);background:transparent;color:var(--rook-text);font:inherit;text-align:left; }

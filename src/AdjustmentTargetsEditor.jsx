@@ -3,7 +3,7 @@ import { PlanNumberInput } from './PlanNumberInput.jsx';
 import { exerciseCatalog } from './domain.js';
 import './adjustmentTargets.css';
 
-export function AdjustmentTargetsEditor({ exercise, name, rirEnabled, onChange, commits }) {
+export function AdjustmentTargetsEditor({ exercise, name, rirEnabled, onChange, commits, showScopeHint=true }) {
   const target = { exerciseId: exercise.exerciseId, sets: exercise.sets.length,
     repMin: exercise.repMin ?? null,
     repMax: exercise.repMax ?? exercise.repMin ?? null,
@@ -23,6 +23,6 @@ export function AdjustmentTargetsEditor({ exercise, name, rirEnabled, onChange, 
     ].map(([key,label,min,max]) => <label key={key}><span>{label}</span>
       <PlanNumberInput commits={commits} aria-label={`${label} for ${name}`} min={min} max={max}
         value={target[key]} onCommit={value => change(key,value)}/></label>)}
-    <small>Only this workout changes. The time estimate updates as you edit.</small>
+    {showScopeHint&&<small>Only this workout changes. The time estimate updates as you edit.</small>}
   </div>;
 }

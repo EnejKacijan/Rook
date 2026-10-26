@@ -78,8 +78,8 @@ it.each(['Back','CANCEL'])('Repeat %s returns to the parent without creating an 
  mount();const before=structuredClone(current);choose('Repeat today');expect(document.querySelector('.use-workout-today-sheet')).not.toBeNull();
  if(method==='Back')back();else{click(button('CANCEL'));settle();}parent();expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
 });
-it('Repeat APPLY retains the existing domain operation and closes the details stack',()=>{
- initial.program=null;mount();const history=structuredClone(current.workouts);choose('Repeat today');click(button('APPLY'));settle();
+it('Repeat confirmation retains the existing domain operation and closes the details stack',()=>{
+ initial.program=null;mount();const history=structuredClone(current.workouts);choose('Repeat today');click(button('REPEAT TODAY'));settle();
  expect(current.todayAdaptation.mode).toBe('repeat');expect(current.workouts).toEqual(history);expect(route).toBeNull();expect(closed).toHaveBeenCalledOnce();
 });
 it.each(['close','back','backdrop','escape','handle'])('options %s dismissal preserves the mounted detail, log, scroll, state and focus',method=>{

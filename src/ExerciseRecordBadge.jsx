@@ -1,6 +1,7 @@
 import React,{useLayoutEffect,useRef} from 'react';
 import {ExerciseNavigationButton} from './ExerciseNavigationButton.jsx';
 import './exercisePr.css';
+import {InformationIcon} from './InformationIcon.jsx';
 
 export function ExerciseRecordBadge({presentation,celebration, ...props}) {
   const ref=useRef(null);
@@ -15,6 +16,6 @@ export function ExerciseRecordBadge({presentation,celebration, ...props}) {
   if(!presentation)return null;
   return <span role="status" aria-live="polite"><ExerciseNavigationButton ref={ref} {...props}
     className="active-performance-pr-trigger" aria-label={`View ${presentation.label.toLowerCase()}, ${presentation.gain}`} aria-haspopup="dialog">
-    <span className={`active-performance-pr is-${presentation.kind}`}><strong>{presentation.label}</strong><span className="active-record-gain">{presentation.gain}<span className="active-record-info" aria-hidden="true">ⓘ</span></span></span>
+    <span className={`active-performance-pr is-${presentation.kind}`}><strong>{presentation.label}</strong><span className="active-record-gain">{presentation.gain}<span className="active-record-info" aria-hidden="true"><InformationIcon/></span></span></span>
   </ExerciseNavigationButton></span>;
 }

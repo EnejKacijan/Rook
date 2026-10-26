@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { displayEstimatedOneRepMax, estimatedOneRepMaxChangeLabel, weightUnit } from './domain.js';
 
-export function EstimatedOneRepMaxChart({ sessions, units }) {
+export function EstimatedOneRepMaxChart({ sessions, units, information }) {
   const ref = useRef(null);
   const [width, setWidth] = useState(280);
   const [selected, setSelected] = useState(null);
@@ -32,7 +32,7 @@ export function EstimatedOneRepMaxChart({ sessions, units }) {
   const axisLabels = axisValues.map(format);
   const active = points[selected];
   return <div className="exercise-e1rm-trend" ref={ref}>
-    <div className="e1rm-heading"><strong>Estimated 1RM history</strong><small>{sessions.length ? `Last ${sessions.length} session${sessions.length === 1 ? '' : 's'}` : ''}</small></div>
+    <div className="e1rm-heading"><span className="e1rm-title"><strong>Estimated 1RM history</strong>{information}</span><small>{sessions.length ? `Last ${sessions.length} session${sessions.length === 1 ? '' : 's'}` : ''}</small></div>
     {points.length ? <>
       <svg viewBox={`0 0 ${width} 136`} aria-label={`Estimated 1RM history. ${summary}. Points are in session order.`}>
         {axisValues.map((v, i) => <g key={i} className="e1rm-axis">

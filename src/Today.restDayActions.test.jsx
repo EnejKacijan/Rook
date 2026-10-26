@@ -73,10 +73,10 @@ it.each(['Light cardioEasy aerobic movement.', 'Mobility / recoveryGuided mobili
 });
 it('Train anyway does not start a workout; Freestyle retains its existing explicit start and Back', () => {
   mount(); open('Train anyway'); expect(dialog().getAttribute('aria-label')).toBe('Train anyway');
-  click(button('Start freestyle workoutStart empty. Add exercises as you go.')); advance(400);
+  click(button('Freestyle workoutStart empty. Add exercises as you go.')); advance(400);
   expect(current.activeWorkout).toBeNull(); expect(button('Start freestyle workout')).toBeDefined(); unchanged();
   click(dialog().querySelector('[aria-label="Back to Train anyway"]')); advance(400); unchanged();
-  click(button('Start freestyle workoutStart empty. Add exercises as you go.')); advance(400);
+  click(button('Freestyle workoutStart empty. Add exercises as you go.')); advance(400);
   click(button('Start freestyle workout')); advance(500);
   expect(current.activeWorkout.source).toBe('freestyle'); expect(current.activeWorkout.exercises).toEqual([]);
   expect(current.program).toEqual(initial.program); expect(current.profile).toEqual(initial.profile);
@@ -108,5 +108,5 @@ it('Up Next still selects its canonical scheduled date without starting training
 it('an active optional session keeps Resume and prevents a second Freestyle start', () => {
   initial.activeOptionalSession = { id: 'active', date: isoDay(), kind: 'Mobility', activity: 'Mobility', status: 'active', startedAt: Date.now(), elapsedSeconds: 0 };
   mount(); expect(host.querySelector('.active-optional-session-notice')).not.toBeNull(); open('Train anyway');
-  expect(button('Start freestyle workoutResume or finish your active session first.').disabled).toBe(true); unchanged();
+  expect(button('Freestyle workoutResume or finish your active session first.').disabled).toBe(true); unchanged();
 });

@@ -151,7 +151,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-screen .coach-input { position: static; flex: 0 0 auto; align-items: flex-end; margin: 0 -24px; padding: 6px 24px; border-top: 1px solid rgba(27, 26, 25, .08); background: rgba(246, 245, 242, .97); backdrop-filter: blur(14px); }
 .coach-screen .coach-input textarea { height: 54px; min-height: 54px; max-height: 124px; flex: 1; min-width: 0; padding: 15px 16px; overflow-y: hidden; resize: none; border: 1px solid rgba(27, 26, 25, .1); border-radius: 14px; outline: none; background: #fff; color: #1b1a19; box-shadow: 0 1px 4px rgba(27, 26, 25, .025); font: inherit; font-size: 16px; line-height: 22px; overflow-wrap: anywhere; }
 .coach-screen .coach-input textarea { overscroll-behavior-y: none; }
-.coach-screen .coach-input textarea:focus { border-color: var(--rook-accent-text); box-shadow: 0 0 0 3px var(--rook-accent-soft); }
+.coach-screen .coach-input textarea:focus { border-color: var(--rook-accent-text); box-shadow: inset 0 0 0 2px var(--rook-accent-soft); }
 .coach-screen .coach-input textarea:disabled { color: #8a8783; background: #f1f0ec; }
 .coach-screen .coach-input .button { width: 54px; height: 54px; min-height: 54px; max-height: 54px; flex: 0 0 54px; align-self: flex-end; padding: 0; border-radius: 14px; font-size: 19px; line-height: 1; letter-spacing: 0; }
 .coach-screen .coach-input .coach-send:disabled { opacity: 1; }

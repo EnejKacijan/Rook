@@ -46,6 +46,6 @@ export function OptionalPlanMatches({program,profile,onMatch,onOriginal,onBack,o
       {!browse&&candidate&&<section aria-label="Suggested match"><strong>{candidate.name}</strong><button className="button secondary" onClick={event=>select(candidate.id,event)}>USE MATCH</button></section>}
       {liveEntries.length>0&&<button className="button quiet" onClick={()=>{setBrowse(true);requestAnimationFrame(()=>input.current?.focus());}}>CHOOSE ANOTHER</button>}
       {browse&&liveEntries.length>0&&<><input ref={input} className="text-answer" type="search" aria-label="Search exercise matches" value={query} onChange={event=>setQuery(event.target.value)}/><div className="import-resolution-options">{choices.map(item=><button className="button secondary" key={item.id} onClick={event=>select(item.id,event)}>{item.name}</button>)}</div></>}
-    </div></div><SheetActionFooter separate importViewport><button className="button secondary" onClick={event=>select(null,event)}>{liveEntries.length?'KEEP ORIGINAL':'CONTINUE'}</button></SheetActionFooter>
+    </div><SheetActionFooter importViewport><button className="button secondary" onClick={event=>select(null,event)}>{liveEntries.length?'KEEP ORIGINAL':'CONTINUE'}</button></SheetActionFooter></div>
   </section>;
 }

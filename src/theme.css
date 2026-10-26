@@ -488,7 +488,7 @@
 }
 :root[data-appearance="light"][data-style="premium"] .coach-screen .coach-input textarea:focus {
   border-color: var(--rook-accent-ring);
-  box-shadow: 0 0 0 3px var(--rook-accent-glow);
+  box-shadow: inset 0 0 0 2px var(--rook-accent-glow);
 }
 
 /* ── Appearance settings chrome (theme-agnostic) ──────────────────────── */
@@ -1070,7 +1070,7 @@
 :root[data-appearance="dark"] :is(.coach-screen .optional-workout-list > div > span, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); }
 :root[data-appearance="dark"] :is(.restriction-spinner, .button-spinner, .building-spinner, .spinner) { border-color: var(--rook-accent-hairline); border-top-color: var(--rook-accent); }
 :root[data-appearance="dark"] :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
-:root[data-appearance="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: 0 0 0 2px var(--rook-accent-glow); }
+:root[data-appearance="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: inset 0 0 0 2px var(--rook-accent-glow); }
 :root[data-appearance="dark"] .setting-switch input:focus-visible + i { outline-color: var(--rook-focus-ring-soft); }
 :root[data-appearance="dark"] .coach-screen .today-update-check { background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); border-color: var(--rook-accent-text); }
 :root .complete-screen .complete-mark { background: color-mix(in srgb, var(--rook-accent) 12%, var(--rook-surface)); color: var(--rook-accent-text); border: 1px solid color-mix(in srgb, var(--rook-accent) 35%, var(--rook-border)); }
@@ -1244,7 +1244,7 @@
 
 :root[data-appearance="light"][data-style="premium"] .stepper.unset:focus-within {
   border-color: var(--rook-accent);
-  box-shadow: 0 0 0 2px var(--rook-accent-glow);
+  box-shadow: inset 0 0 0 2px var(--rook-accent-glow);
 }
 
 /* Modal screens size to their content and become scrollable only when the

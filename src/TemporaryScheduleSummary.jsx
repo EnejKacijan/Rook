@@ -1,39 +1,14 @@
-import {useState} from 'react';
-import {Disclosure} from './Disclosure.jsx';
-import {useDurableAction} from './useDurableAction.js';
-import {hideTemporaryScheduleSummary,temporaryScheduleSummaryHidden} from './temporarySchedulePresentation.js';
-import {isoDay,weekKey} from './domain.js';
-import {CalendarIcon} from './MonthCalendar.jsx';
+import {NavigationChevron} from './NavigationChevron.jsx';
 
-export function TemporaryScheduleSummary({state,review,update,onView}) {
-  const {commit}=useDurableAction(state,update);
-  const [error,setError]=useState('');
-  if(!review.items.length)return null;
-  const unresolved=review.unresolved.length,skipped=review.items.filter(item=>item.skipped).length;
-  const selectedWeek=weekKey(state.selectedDate || isoDay());
-  const otherWeek=review.unresolved.some(item=>weekKey(item.originalDate)!==selectedWeek);
-  const hide=()=>{
-    setError('');
-    try{commit(hideTemporaryScheduleSummary);}
-    catch{setError('Couldn’t save this preference. The summary is still visible. Try again.');}
-  };
-  return <Disclosure className="temporary-schedule-disclosure" open={!temporaryScheduleSummaryHidden(state,review)}>
-    <aside className={`flexible-week-missed temporary-schedule-summary${unresolved?' needs-attention':' is-informational'}`} aria-label={unresolved?'Schedule needs attention':'Applied schedule changes'}>
-      {unresolved ? <>
-        <span className="eyebrow temporary-schedule-label">SCHEDULE NEEDS ATTENTION</span>
-        <strong>{unresolved} {unresolved===1?'workout needs':'workouts need'} review</strong>
-        {otherWeek&&<small>Includes a change from another plan week.</small>}
-        <button type="button" className="text-button" onClick={onView}>REVIEW SCHEDULE</button>
-      </> : <>
-        <span className="eyebrow temporary-schedule-label"><CalendarIcon/>SCHEDULE CHANGES</span>
-        <strong className="temporary-schedule-count">{[review.moved.length && `${review.moved.length} ${review.moved.length===1?'workout':'workouts'} moved`,skipped && `${skipped} skipped`].filter(Boolean).join(' · ') || 'Schedule adjusted'}</strong>
-        <small className="temporary-schedule-explanation">Already applied to your schedule.</small>
-        <div className="temporary-schedule-actions">
-          <button type="button" className="text-button" onClick={onView}>View changes</button>
-          <button type="button" className="text-button" aria-label="Hide temporary schedule summary" onClick={hide}>Hide</button>
-        </div>
-        {error && <small role="alert">{error}</small>}
-      </>}
-    </aside>
-  </Disclosure>;
+export function TemporaryScheduleSummary({review,onView}) {
+  const count=review.unresolved.length;
+  // Successful changes already appear in the calendar and the Undo notice.
+  // Only work that still needs attention belongs above today's workout.
+  if(!count)return null;
+  return <aside className="temporary-schedule-summary needs-attention" aria-label="Schedule needs attention">
+    <button type="button" className="schedule-attention-open" onClick={onView}>
+      <span><strong>Review schedule</strong><small>{count} {count===1?'workout needs':'workouts need'} attention</small></span>
+      <NavigationChevron/>
+    </button>
+  </aside>;
 }

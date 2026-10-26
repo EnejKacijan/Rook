@@ -57,7 +57,7 @@ it('focused missing-prescription editor opens the target, preserves known source
  const input=expanded.querySelector('[aria-label="Reviewed Sets"]');
  act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'2');input.dispatchEvent(new Event('input',{bubbles:true}));});
  expect(dirty).toHaveBeenLastCalledWith(true);
- const button=[...host.querySelectorAll('button')].find(b=>b.textContent==='SAVE CHANGES');expect(button,host.textContent).toBeDefined();expect(button.disabled).toBe(false);
+ const button=[...host.querySelectorAll('button')].find(b=>b.textContent==='SAVE TO WEEKLY PLAN');expect(button,host.textContent).toBeDefined();expect(button.disabled).toBe(false);
  act(()=>button.click());expect(save).toHaveBeenCalledOnce();const saved=save.mock.calls[0][0],next=saved.days[1].exercises[0];
  expect(next).not.toHaveProperty('partialPrescription');expect(next.sets).toHaveLength(2);expect(next.repMin).toBe(exercise.repMin);expect(next.repMax).toBe(exercise.repMax);
  expect(saved.days[0].exercises).toEqual(before.days[0].exercises);expect(state.program).toEqual(before);
@@ -65,7 +65,7 @@ it('focused missing-prescription editor opens the target, preserves known source
 it('removing the specific unresolved exercise releases only its decision, and Undo restores the guard',()=>{
  const {state,exercise}=fixture(),save=vi.fn();
  act(()=>root.render(<PlanEditor source={state.program} profile={state.profile} exerciseState={state} mode="edit" reviewExerciseIds={[exercise.id]} sourceReview={combinedPrescriptionReview(state.program,[exercise.id])} onSave={save} onCancel={()=>{}}/>));
- const saveButton=()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='SAVE CHANGES');
+ const saveButton=()=>[...host.querySelectorAll('button')].find(b=>b.textContent==='SAVE TO WEEKLY PLAN');
  expect(saveButton().disabled).toBe(true);
  const remove=host.querySelector('.plan-editor-exercise.is-expanded .plan-exercise-remove');
  act(()=>remove.click());expect(saveButton().disabled).toBe(false);expect(save).not.toHaveBeenCalled();

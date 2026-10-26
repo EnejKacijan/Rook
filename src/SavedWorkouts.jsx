@@ -1,6 +1,7 @@
 import {NavigationChevron} from './NavigationChevron.jsx';
 import React,{useId,useRef,useState,useLayoutEffect,useEffect,useMemo} from 'react';
 import {createPortal} from 'react-dom';
+import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {SearchInput} from './SearchInput.jsx';
 import {OverflowIcon} from './OverflowIcon.jsx';
 import {DestructiveConfirmationSheet} from './DestructiveConfirmationSheet.jsx';
@@ -156,7 +157,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
       copyOverride={{eyebrow:selected?'SAVED WORKOUT':'CREATE WORKOUT',title:selected?'Edit workout':'Build your workout',body:'Choose exercises and set targets for your workout.',action:'REVIEW WORKOUT'}}
       onSave={program=>{editorDirty.current=true;setDraft({name:review.name,exercises:program.days[0].exercises});setEditing(false);setRenaming(true);}} onCancel={firstRun?leaveFirstRun:()=>setEditing(false)} onDirtyChange={firstRun?value=>{editorDirty.current=value;}:undefined}/>:review?<>
-      <div className="saved-workout-preview" data-exercise-search-scroll>
+      <div className="saved-workout-preview" data-sheet-form-scroll data-exercise-search-scroll>
       {(source||renaming||draft)?<label className="saved-template-name">Workout name<input maxLength={100} value={review.name} onChange={e=>setDraft({...review,name:e.target.value})}/></label>:<div className="saved-template-title"><h1>{review.name}</h1>{!planSelection&&<button ref={optionsTrigger} className="saved-template-options-trigger" type="button" aria-label="Saved workout options" aria-haspopup="dialog" aria-expanded={optionsOpen} onClick={()=>{optionsBackground.current=screen.current.closest('.screen')||screen.current;optionsAction.current=null;setOptionsOpen(true);}}><OverflowIcon/></button>}</div>}
       <p>{planSelection?`${planSelection.contextLabel} · `:''}{pluralize(review.exercises.length,'exercise')}{!planSelection&&' · Reuse these exercises and targets anytime.'}</p>
       {planSelection?.todayDraft&&<p className="plan-template-note">{planSelection.adjusted?'Adjusted for today':'Scheduled for today'}</p>}
@@ -171,7 +172,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
           <button key="extra" type="button" className={scheduled?.options.length?'text-button':'button primary'} aria-describedby={`${overlapDescriptionId}-extra`} disabled={Boolean(planError)||issues.length>0} onClick={planSelection.todayDraft&&planSelection.adjusted?()=>{setPlanSelection({...planSelection,todayDraft:null,scheduled:null,adjusted:false});setError('');}:startExtra}>{planSelection.todayDraft&&planSelection.adjusted?'Preview extra workout':'Start extra workout'}</button>
         </>}
         <button type="button" className="text-button" disabled={Boolean(planError)} onClick={copyPlan}>Save a copy</button>
-      </div>:(source||draft||renaming)?<>{source&&<p className="saved-template-copy-note">Saves the exercises and targets, not your logged results.</p>}<div className="saved-template-save-actions"><button className="text-button" type="button" onClick={edit}>Edit workout</button><button className="button primary" type="button" disabled={!review.name.trim()||!review.exercises.length} onClick={()=>save(review)}>{selected ? 'SAVE CHANGES' : 'SAVE WORKOUT'}</button></div></>:<>
+      </div>:(source||draft||renaming)?<>{source&&<p className="saved-template-copy-note">Saves the exercises and targets, not your logged results.</p>}<SheetActionFooter keyboardBehavior="pin-if-room" className="saved-template-save-actions"><button data-keyboard-secondary className="text-button" type="button" onClick={edit}>Edit workout</button><button className="button primary" type="button" disabled={!review.name.trim()||!review.exercises.length} onClick={()=>save(review)}>{selected ? 'SAVE CHANGES' : 'SAVE WORKOUT'}</button></SheetActionFooter></>:<>
         {issues.length>0&&<div role="status"><p>Review before using</p><ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></div>}
         {!applied&&overlaps.length>0&&<div className="saved-template-overlaps">
           <div id={overlapDescriptionId} className="saved-template-overlap-context">
@@ -201,8 +202,8 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     {planStart&&planSelection&&<PlanWorkoutStartSheet state={state} reference={planSelection.reference} snapshot={planStart} Modal={Modal} Header={Header} close={()=>{setPlanStart(null);setError('');}} confirm={startScheduled} startExtra={startExtra} error={error} backgroundRef={planStartBackground} returnFocusRef={planStartTrigger}/>}
     {optionsOpen&&createPortal(<Modal close={dismissOptions} backgroundRef={optionsBackground} returnFocusRef={optionsTrigger} lockDocument={false}>{requestClose=><main className="screen detail-screen saved-template-options" role="dialog" aria-modal="true" aria-label="Saved workout options">
       <Header title="Saved workout options" onBack={requestClose} backLabel="Back to saved workout" onClose={requestClose}/>
-      <button className="list-row" type="button" onClick={()=>chooseOption('rename',requestClose)}>Rename</button>
-      <button className="list-row" type="button" onClick={()=>chooseOption('edit',requestClose)}>Edit workout</button>
+      <button className="list-row" type="button" onClick={()=>chooseOption('rename',requestClose)}><span>Rename</span><NavigationChevron/></button>
+      <button className="list-row" type="button" onClick={()=>chooseOption('edit',requestClose)}><span>Edit workout</span><NavigationChevron/></button>
       <button className="list-row danger-text" type="button" onClick={()=>chooseOption('delete',requestClose)}>Delete saved workout</button>
     </main>}</Modal>,document.body)}
     {deleteConfirmation&&<DestructiveConfirmationSheet Modal={Modal} Header={Header}

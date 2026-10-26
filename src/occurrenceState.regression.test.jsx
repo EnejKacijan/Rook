@@ -56,11 +56,11 @@ it('C Repeat creates a fresh session with no completed actuals and unchanged Fri
 it('D a completion after review removes Apply and offers working History/Repeat recovery without stale mutation',()=>{
  const s=fixture(),item=flexibleOccurrenceForDate(s,s.selectedDate),request={sessionId:item.logicalSessionId},review=proposeWorkoutToday(s,request),update=vi.fn(),setDetail=vi.fn();
  const sheet=state=><UseWorkoutTodaySheet state={state} update={update} close={()=>{}} Header={Header} request={request} setDetail={setDetail}/>;
- mount(sheet(s));expect(button('APPLY')).toBeTruthy();const completed=finish(structuredClone(s)),history=structuredClone(completed.workouts);
+ mount(sheet(s));expect(button('USE TODAY')).toBeTruthy();const completed=finish(structuredClone(s)),history=structuredClone(completed.workouts);
  expect(()=>applyWorkoutToday(completed,review,{persist:()=>true})).toThrow(/changed/);
- act(()=>root.render(sheet(completed)));expect(button('APPLY')).toBeUndefined();expect(document.body.textContent).toContain('Performed');
+ act(()=>root.render(sheet(completed)));expect(button('USE TODAY')).toBeUndefined();expect(document.body.textContent).toContain('Performed');
  act(()=>button('View completed workout').click());expect(setDetail).toHaveBeenCalledWith({completedWorkout:completed.workouts[0].id});
- act(()=>button('Repeat today').click());expect(document.body.textContent).toContain('Start a new session');expect(button('APPLY')).toBeTruthy();expect(update).not.toHaveBeenCalled();expect(completed.workouts).toEqual(history);
+ act(()=>button('Repeat today').click());expect(document.body.textContent).toContain('Same exercises, fresh sets.');expect(button('REPEAT TODAY')).toBeTruthy();expect(update).not.toHaveBeenCalled();expect(completed.workouts).toEqual(history);
 });
 it('E same-named sessions in different weeks resolve only the explicit linked occurrence',()=>{
  let s=fixture();s.program.days.forEach(d=>d.name='UPPER B');s.selectedDate='2026-09-10';s=finish(s);s.selectedDate='2026-09-17';render(s);
@@ -107,13 +107,13 @@ it('combined reservations and valid resolutions share the same historical presen
 it('a stale request opened after completion immediately exposes the correct recovery record',()=>{
  const s=finish(fixture()),item=flexibleOccurrenceForDate(s,s.selectedDate),update=vi.fn();
  mount(<UseWorkoutTodaySheet state={s} update={update} close={()=>{}} Header={Header} request={{sessionId:item.logicalSessionId}} setDetail={()=>{}}/>);
- expect(button('View completed workout')).toBeTruthy();expect(button('Repeat today')).toBeTruthy();expect(button('APPLY')).toBeUndefined();expect(update).not.toHaveBeenCalled();
+ expect(button('View completed workout')).toBeTruthy();expect(button('Repeat today')).toBeTruthy();expect(button('USE TODAY')).toBeUndefined();expect(update).not.toHaveBeenCalled();
 });
 it('a legacy explicit link without a reliable performed date resolves without inventing one',()=>{
  const s=finish(fixture());Object.assign(s.workouts[0],{startedAt:null,completedAt:true,endedAt:null,workoutDateKey:null,canonicalPlanDate:null});
  render(s);expect(document.body.textContent).toContain('Completed workout');expect(button('View completed workout')).toBeTruthy();expect(button('Train today instead')).toBeUndefined();
  act(()=>root.render(<UseWorkoutTodaySheet state={s} update={()=>{}} close={()=>{}} Header={Header} request={{sessionId:s.workouts[0].logicalSessionId}} setDetail={()=>{}}/>));expect(document.body.textContent).toContain('Completed workout.');
- act(()=>button('Repeat today').click());expect(button('APPLY')).toBeTruthy();
+ act(()=>button('Repeat today').click());expect(button('REPEAT TODAY')).toBeTruthy();
 });
 it('the rest-day move chooser also rejects an explicitly resolved future occurrence',()=>{
  let s=fixture();s.selectedDate='2026-09-19';const item=flexibleOccurrenceForDate(s,s.selectedDate);s=finish(s);s.workouts[0].sourceOccurrenceId=item.logicalSessionId;delete s.workouts[0].logicalSessionId;delete s.workouts[0].programDayId;

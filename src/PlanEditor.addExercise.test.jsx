@@ -21,7 +21,7 @@ beforeEach(()=>{
  state=createReturningUserFixture(2);state.savedWorkoutTemplates=[];state.activeWorkout=null;
  source={id:'draft',name:'New workout',source:'manual',days:[{id:'day',weekday:'Mon',name:'New workout',workoutName:'New workout',exercises:[]}]};
  saved=vi.fn();host=document.createElement('main');host.className='screen detail-screen edit-plan-screen';document.body.append(host);root=createRoot(host);
- renderEditor=(props={})=>act(()=>root.render(<StrictMode><PlanEditor source={source} profile={state.profile} exerciseState={state} mode="edit" workoutOnly onSave={saved} onCancel={()=>{}} {...props}/></StrictMode>));
+ renderEditor=({key,...props}={})=>act(()=>root.render(<StrictMode><PlanEditor key={key} source={source} profile={state.profile} exerciseState={state} mode="edit" workoutOnly onSave={saved} onCancel={()=>{}} {...props}/></StrictMode>));
 });
 afterEach(()=>{act(()=>root?.unmount());host?.remove();HTMLElement.prototype.scrollIntoView=originalScroll;HTMLImageElement.prototype.decode=originalDecode;delete document.startViewTransition;vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 const click=e=>act(()=>e.click());
@@ -51,7 +51,7 @@ it('repeated click, pointerup and two queued result selections consume one picke
 });
 it('duplicate exclusion and append order survive reopening and review',()=>{
  renderEditor();add('Push-up');open();expect(option('Push-up')).toBeUndefined();click(option('Plank'));add('Ab Wheel Rollout');
- expect(rows()).toEqual(['Push-up','Plank','Ab Wheel Rollout']);click(button('SAVE CHANGES'));
+ expect(rows()).toEqual(['Push-up','Plank','Ab Wheel Rollout']);click(button('SAVE TO WEEKLY PLAN'));
  expect(saved).toHaveBeenCalledOnce();expect(saved.mock.calls[0][0].days[0].exercises.map(e=>e.exerciseId)).toEqual(['push-up','plank','ab-wheel-rollout']);
 });
 it('search clears and closes without waiting for keyboard blur or stealing edit focus',()=>{
@@ -85,7 +85,7 @@ it('query edits keep canonical equipment restrictions and do not mutate or persi
 it('picker Cancel preserves previously added local rows and Review returns them in order without storage work',()=>{
  renderEditor();add('Plank');add('Push-up');open();type('squat');click(button('CANCEL'));
  expect(rows()).toEqual(['Plank','Push-up']);expect(source.days[0].exercises).toEqual([]);expect(saved).not.toHaveBeenCalled();
- click(button('SAVE CHANGES'));expect(saved.mock.calls[0][0].days[0].exercises.map(e=>e.exerciseId)).toEqual(['plank','push-up']);
+ click(button('SAVE TO WEEKLY PLAN'));expect(saved.mock.calls[0][0].days[0].exercises.map(e=>e.exerciseId)).toEqual(['plank','push-up']);
 });
 it('an inactive editor rejects a result without closing or changing the draft',()=>{
  renderEditor({active:false});open();click(option('Plank'));expect(rows()).toEqual([]);expect(host.querySelector('.scratch-exercise-results')).not.toBeNull();expect(saved).not.toHaveBeenCalled();

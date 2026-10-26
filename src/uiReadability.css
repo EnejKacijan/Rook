@@ -323,3 +323,13 @@
   .warmup-complete-status small,.exercise-options-button,.plan-warmup-editor-group > header span) { font-size:12px; }
 :root :is(.coach-message header span,.coach-copy-error,.import-review-custom-trigger small,
   .history-import-invalid > p,.warmup-layer small,.warmup-complete-status small) { line-height:1.4; }
+
+/* Form focus stays inside the control, including at sheet/keyboard boundaries.
+   Keep the ring visible without needing scroll-container overflow to paint it. */
+:root :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"]),textarea,select):is(:focus,:focus-visible) {
+  outline-offset:-3px !important;
+}
+:root :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"]),textarea,select) {
+  min-width:0;
+  max-width:100%;
+}

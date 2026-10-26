@@ -69,7 +69,7 @@ it.each(['planned','freestyle'])('%s: acknowledges then crossfades one exercise 
   expect(current.activeWorkout.exerciseIndex).toBe(0); expect(animations).toHaveLength(0);
   advance(1);
   expect(current.activeWorkout.exerciseIndex).toBe(1); expect(current.activeWorkout.id).toBe(id);
-  expect(current.activeWorkout.exercises[0]).toEqual({...completed,startedAt:completed.startedAt||Date.now()}); expect(current.activeWorkout.rest).toBeNull();
+  expect(current.activeWorkout.exercises[0]).toEqual({...completed,startedAt:completed.startedAt||Date.now()}); expect(current.activeWorkout.rest).toEqual(state.activeWorkout.rest);
   expect(current.activeWorkout.exercises[1].startedAt).toBe(Date.now());
   expect(host.querySelector('.workout-header')).toBe(header);
   expect(animations).toHaveLength(2); expect(animations.every(a=>a.timing.duration===180)).toBe(true);

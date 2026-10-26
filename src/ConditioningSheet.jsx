@@ -40,11 +40,11 @@ export function ConditioningSheet({ date, state, update, close, setPage, Header 
         <button type="button" className="button secondary" onClick={() => { close(); setPage(state.activeWorkout ? 'workout' : 'optional-session'); }}>RETURN TO ACTIVE SESSION</button></>
         : date !== isoDay() ? <p role="status">Optional sessions can only be started for today.</p>
         : <OptionalActivityEditor formId={formId} showActions={false} submitDisabled={!valid || starting} kind="Conditioning" value={draft} onChange={patch => setDraft(current => ({ ...current, ...patch }))} onSubmit={start} error={error} />}
-    </div>
-    {canSetUp && <SheetActionFooter separate containViewport className="conditioning-action-footer">
-      <small className="sheet-footnote">Optional · does not complete a planned strength workout.</small>
+    {canSetUp && <SheetActionFooter containViewport className="conditioning-action-footer">
+      <small data-keyboard-secondary className="sheet-footnote">Optional · does not complete a planned strength workout.</small>
       <button type="submit" form={formId} disabled={!valid || starting} className="button primary">START SESSION</button>
     </SheetActionFooter>}
+    </div>
   </main>;
 }
 

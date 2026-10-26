@@ -122,3 +122,28 @@ it.each([true, false])('finishing a pair round preserves enabled timer behavior 
     : { seconds: 75, pending: true });
   expect(current.activeWorkout.exerciseIndex).toBe(0);
 });
+
+it.each([true,false])('a new superset round replaces previous rest only when its second member completes (%s auto)',autoStart=>{
+  const state=fixture({enabled:true,autoStart,member:0});
+  state.activeWorkout.exercises.push(structuredClone(state.program.days[0].exercises[2]));
+  state.activeWorkout.exercises.forEach(exercise=>Object.assign(exercise.sets[0],{completed:true,completedAt:Date.now()-10000}));
+  state.activeWorkout.rest=autoStart?{seconds:20,endsAt:Date.now()+15000}:{seconds:20,pending:true};
+  const previous=structuredClone(state.activeWorkout.rest);mount(state);
+  act(()=>host.querySelector('[aria-label="Log set 2"]').click());
+  expect(current.activeWorkout.exerciseIndex).toBe(1);expect(current.activeWorkout.rest).toEqual(previous);
+  act(()=>vi.advanceTimersByTime(1000));act(()=>host.querySelector('[aria-label="Log set 2"]').click());
+  expect(current.activeWorkout.rest).toEqual(autoStart?{seconds:75,endsAt:Date.now()+75000}:{seconds:75,pending:true});
+  expect(current.activeWorkout.exercises.slice(0,2).every(exercise=>exercise.sets.every(set=>set.completed))).toBe(true);
+});
+it('an expired previous rest cannot prevent the next completed superset round from starting its rest',()=>{
+  const state=fixture({enabled:true});state.activeWorkout.rest={seconds:75,endsAt:Date.now()-1000};mount(state);log();
+  expect(current.activeWorkout.rest).toEqual({seconds:75,endsAt:Date.now()+75000});
+});
+
+it.each([true,false])('the final superset round removes rest instead of offering another break (%s auto)',autoStart=>{
+ const state=fixture({enabled:true,autoStart,member:0});state.activeWorkout.exercises.forEach(exercise=>Object.assign(exercise.sets[0],{completed:true,completedAt:Date.now()-10000}));
+ state.activeWorkout.rest=autoStart?{seconds:75,endsAt:Date.now()+60000}:{seconds:75,pending:true};mount(state);
+ act(()=>host.querySelector('[aria-label="Log set 2"]').click());expect(current.activeWorkout.rest).not.toBeNull();
+ act(()=>vi.advanceTimersByTime(1000));act(()=>host.querySelector('[aria-label="Log set 2"]').click());
+ expect(current.activeWorkout.exercises.every(exercise=>exercise.sets.every(set=>set.completed))).toBe(true);expect(current.activeWorkout.rest).toBeNull();expect(host.querySelector('.rest-timer')).toBeNull();expect(hint()).toBeNull();
+});

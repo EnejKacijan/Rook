@@ -54,7 +54,7 @@ it('opens a newly added exercise with its previous weights and reps before Apply
   expect(field('Minimum reps for Cable Curl').value).toBe('8');expect(field('Maximum reps for Cable Curl').value).toBe('12');
   expect([...history.closest('article').querySelectorAll('.plan-editor-weights input')].map(node=>node.value)).toEqual(['14','16','']);
   expect(current).toEqual(before);expect(saveState).not.toHaveBeenCalled();
-  await click(button('APPLY'));
+  await click(button('SAVE FOR TODAY'));
   const prepared=adaptedTemplateForToday(current).exercises.find(row=>row.exerciseId==='cable-curl');
   expect(prepared.sets.map(set=>[set.weight,set.reps])).toEqual([[14,12],[16,10],[null,8]]);
   expect(prepared.replacementOfExerciseId).toBeUndefined();
@@ -68,14 +68,14 @@ it('opens an added exercise without history with blank weights and its own defau
   expect(button('Collapse Leg Extension')).toBeDefined();
   expect(host.querySelector('[aria-label="Last workout for Leg Extension"]').textContent).toContain('No previous logged sets');
   expect(field('Minimum reps for Leg Extension').value).toBe('10');
-  await click(button('APPLY'));
+  await click(button('SAVE FOR TODAY'));
   expect(current.todayAdaptation.workout.exercises.find(row=>row.exerciseId==='leg-extension').sets.every(set=>set.weight==null&&set.reps===10)).toBe(true);
 });
 it('does not seed newly added recurring-plan exercises from session history',async()=>{
   const state=fixture(),saved=vi.fn();
   await act(async()=>root.render(<PlanEditor source={state.program} profile={state.profile} exerciseState={state} mode="edit" workoutOnly onSave={saved} onCancel={()=>{}}/>));
   await add('Cable Curl');expect(host.querySelector('.plan-editor-last-session')).toBeNull();
-  await click(button('SAVE CHANGES'));
+  await click(button('SAVE TO WEEKLY PLAN'));
   const added=saved.mock.calls[0][0].days[0].exercises.find(row=>row.exerciseId==='cable-curl');
   expect(added.sets.every(set=>set.weight==null&&set.reps===10)).toBe(true);
 });
@@ -88,7 +88,7 @@ it('loads the new exercise history before Apply, then starts with those same val
   expect(history.textContent).toContain('14 kg · 12 reps');expect(history.textContent).toContain('16 kg · 10 reps');expect(history.textContent).not.toContain('53 kg');
   expect(field('Minimum reps for Cable Curl').value).toBe('8');expect(field('Maximum reps for Cable Curl').value).toBe('12');
   expect([...host.querySelectorAll('.plan-editor-weights input')].map(node=>node.value)).toEqual(['14','16','']);
-  expect(current).toEqual(before);await click(button('APPLY'));expect(closed).toHaveBeenCalledOnce();expect(saveState).toHaveBeenCalledOnce();
+  expect(current).toEqual(before);await click(button('SAVE FOR TODAY'));expect(closed).toHaveBeenCalledOnce();expect(saveState).toHaveBeenCalledOnce();
   const prepared=adaptedTemplateForToday(current).exercises[0];
   expect(prepared.sets.map(set=>set.id)).toEqual(ids);
   expect(prepared.sets.map(set=>[set.weight,set.reps])).toEqual([[14,12],[16,10],[null,8]]);
@@ -102,7 +102,7 @@ it('replacing again with an unlogged exercise clears the prior history and numbe
   expect(host.querySelector('.plan-editor-last-session').textContent).toContain('No previous logged sets');
   expect(field('Minimum reps for Leg Extension').value).toBe('10');expect(field('Maximum reps for Leg Extension').value).toBe('15');
   expect([...host.querySelectorAll('.plan-editor-weights input')].map(node=>node.value)).toEqual(['','','']);
-  await click(button('APPLY'));expect(current.todayAdaptation.workout.exercises[0].sets.every(set=>set.weight==null&&set.reps===10)).toBe(true);
+  await click(button('SAVE FOR TODAY'));expect(current.todayAdaptation.workout.exercises[0].sets.every(set=>set.weight==null&&set.reps===10)).toBe(true);
 });
 it('selecting the current exercise preserves edits already made to its draft',async()=>{
   await mount(fixture());await replace('Cable Curl');await input(host.querySelector('.plan-editor-weights input'),'21');
@@ -111,7 +111,7 @@ it('selecting the current exercise preserves edits already made to its draft',as
 it('clears the old open-target and starting-load metadata on the prepared replacement',async()=>{
   const state=fixture(),row=state.program.days[0].exercises[0];
   Object.assign(row,{repMin:null,repMax:null,failureTarget:'AMRAP',nextBlockStartingLoad:{weight:99}});
-  await mount(state);await replace('Cable Curl');await click(button('APPLY'));
+  await mount(state);await replace('Cable Curl');await click(button('SAVE FOR TODAY'));
   const prepared=current.todayAdaptation.workout.exercises[0];
   expect(prepared).toMatchObject({repMin:8,repMax:12});expect(prepared.failureTarget).toBeUndefined();expect(prepared.nextBlockStartingLoad).toBeUndefined();
 });
@@ -120,7 +120,7 @@ it('keeps history seeding scoped to today, leaving recurring plan edits unchange
   await act(async()=>root.render(<PlanEditor source={state.program} profile={state.profile} exerciseState={state} mode="edit" workoutOnly onSave={saved} onCancel={()=>{}}/>));
   await click(host.querySelector('.plan-editor-summary'));await replace('Cable Curl');
   expect(host.querySelector('.plan-editor-last-session')).toBeNull();expect(field('Minimum reps for Cable Curl').value).toBe('5');
-  await click(button('SAVE CHANGES'));expect(saved.mock.calls[0][0].days[0].exercises[0].sets.every(set=>set.weight==null&&set.reps===5)).toBe(true);
+  await click(button('SAVE TO WEEKLY PLAN'));expect(saved.mock.calls[0][0].days[0].exercises[0].sets.every(set=>set.weight==null&&set.reps===5)).toBe(true);
 });
 it.each(['pull-up','plank'])('does not carry external weights or old rep units into %s',id=>{
   const state=fixture(),row=state.program.days[0].exercises[0];

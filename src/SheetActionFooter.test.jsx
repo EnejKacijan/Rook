@@ -139,3 +139,56 @@ it('only hides an explicitly redundant browsing footer and removes its owned spa
   view.rerender(element(true));expect(footer.hidden).toBe(true);Object.assign(viewport,{height:844});act(()=>viewport.dispatchEvent(new Event('resize')));expect(footer.hidden).toBe(false);expect(panel.style.getPropertyValue('--sheet-action-height')).toBe('68px');expect(panel.classList.contains('has-sheet-action-footer')).toBe(true);
  }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
 });
+
+it('pins only an opted-in short task with room for its label and input, then flows without replacing the draft',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try{
+  const save=vi.fn(),view=render(<div className="modal-layer"><main className="detail-screen"><header className="detail-header"/><label>Name<input defaultValue="Keep this exact draft"/></label><SheetActionFooter keyboardBehavior="pin-if-room"><button onClick={save}>Save</button></SheetActionFooter></main></div>);
+  const panel=view.container.querySelector('main'),input=panel.querySelector('input'),footer=panel.querySelector('footer');
+  panel.getBoundingClientRect=()=>({top:0,bottom:viewport.height});panel.querySelector('header').getBoundingClientRect=()=>({bottom:64});
+  input.getBoundingClientRect=()=>({top:100,bottom:148,height:48});input.closest('label').getBoundingClientRect=()=>({top:76,bottom:148,height:72});footer.getBoundingClientRect=()=>({top:viewport.height-64,height:64});
+  act(()=>input.focus());input.setSelectionRange(6,6);
+  const resize=height=>{Object.assign(viewport,{height});act(()=>viewport.dispatchEvent(new Event('resize')));};
+  resize(400);expect(footer.dataset.keyboardLayout).toBe('pin');expect(save).not.toHaveBeenCalled();
+  resize(190);expect(footer.dataset.keyboardLayout).toBe('flow');expect(panel.querySelector('input')).toBe(input);expect(document.activeElement).toBe(input);expect(input.selectionStart).toBe(6);expect(input.value).toBe('Keep this exact draft');
+  resize(400);expect(footer.dataset.keyboardLayout).toBe('pin');
+  act(()=>footer.querySelector('button').focus());expect(footer.dataset.keyboardLayout).toBe('pin');expect(save).not.toHaveBeenCalled();
+  act(()=>input.focus());input.setSelectionRange(6,6);
+  resize(844);expect(footer.hasAttribute('data-keyboard-layout')).toBe(false);expect(footer.hasAttribute('data-keyboard-active')).toBe(false);expect(save).not.toHaveBeenCalled();
+  fireEvent.click(footer.querySelector('button'));expect(save).toHaveBeenCalledOnce();
+ }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
+
+it('long forms flow by default and reveal the field in their own scroller instead of chasing the submit button',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try{
+  const view=render(<div className="modal-layer"><main className="detail-screen"><header className="detail-header"/><div data-sheet-form-scroll><input defaultValue="Unsubmitted"/><SheetActionFooter><button disabled>Review</button></SheetActionFooter></div></main></div>);
+  const panel=view.container.querySelector('main'),scroller=panel.querySelector('[data-sheet-form-scroll]'),input=panel.querySelector('input'),footer=panel.querySelector('footer');
+  scroller.getBoundingClientRect=()=>({top:64,bottom:400});panel.querySelector('header').getBoundingClientRect=()=>({bottom:64});input.getBoundingClientRect=()=>({top:320,bottom:368,height:48});footer.getBoundingClientRect=()=>({top:900,height:64});
+  act(()=>input.focus());scroller.scrollTop=20;panel.scrollTop=0;Object.assign(viewport,{height:400});act(()=>viewport.dispatchEvent(new Event('resize')));
+  expect(footer.dataset.keyboardLayout).toBe('flow');expect(scroller.scrollTop).toBe(20);expect(panel.scrollTop).toBe(0);expect(footer.querySelector('button').disabled).toBe(true);expect(input.value).toBe('Unsubmitted');
+ }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
+
+it('gives a textarea and a growing field error priority over an opted-in pinned action',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try{
+  const view=render(<div className="modal-layer"><main className="sheet"><header className="sheet-header-chrome"/><label>Note<textarea style={{fontSize:16,lineHeight:'24px'}} aria-invalid="true" aria-describedby="note-error"/></label><p id="note-error" role="alert">Please review this note.</p><SheetActionFooter keyboardBehavior="pin-if-room"><button>Save</button></SheetActionFooter></main></div>);
+  const panel=view.container.querySelector('main'),input=panel.querySelector('textarea'),footer=panel.querySelector('footer');let errorHeight=20;
+  panel.getBoundingClientRect=()=>({top:0,bottom:viewport.height});panel.querySelector('header').getBoundingClientRect=()=>({bottom:64});
+  input.getBoundingClientRect=()=>({top:100,bottom:240,height:140});input.closest('label').getBoundingClientRect=()=>({height:164});panel.querySelector('[role="alert"]').getBoundingClientRect=()=>({height:errorHeight});footer.getBoundingClientRect=()=>({top:viewport.height-64,height:64});
+  act(()=>input.focus());Object.assign(viewport,{height:400});act(()=>viewport.dispatchEvent(new Event('resize')));expect(footer.dataset.keyboardLayout).toBe('pin');
+  errorHeight=130;Object.assign(viewport,{height:399});act(()=>viewport.dispatchEvent(new Event('resize')));expect(footer.dataset.keyboardLayout).toBe('flow');expect(panel.querySelector('[role="alert"]').textContent).toBe('Please review this note.');
+ }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});
+
+it('does not treat zoom alone or a nested sheet input as a reason to compact or pan its parent form',()=>{
+ const original=window.visualViewport,viewport=new EventTarget();Object.assign(viewport,{height:844,offsetTop:0,scale:1});Object.defineProperty(window,'visualViewport',{configurable:true,value:viewport});
+ try{
+  const view=render(<main className="detail-screen"><input aria-label="Parent"/><SheetActionFooter keyboardBehavior="pin-if-room"><button>Save</button></SheetActionFooter><section className="sheet"><input aria-label="Nested"/></section></main>);
+  const panel=view.container.firstChild,footer=panel.querySelector('footer');act(()=>panel.querySelector('input').focus());
+  Object.assign(viewport,{height:422,scale:2});act(()=>viewport.dispatchEvent(new Event('resize')));expect(footer.hasAttribute('data-keyboard-active')).toBe(false);
+  panel.scrollTop=55;act(()=>panel.querySelector('section input').focus());Object.assign(viewport,{height:300,scale:1});act(()=>viewport.dispatchEvent(new Event('resize')));
+  expect(footer.hasAttribute('data-keyboard-active')).toBe(false);expect(panel.scrollTop).toBe(55);
+ }finally{act(()=>root.unmount());root=null;Object.defineProperty(window,'visualViewport',{configurable:true,value:original});}
+});

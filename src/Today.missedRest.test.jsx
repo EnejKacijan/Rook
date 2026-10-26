@@ -67,7 +67,7 @@ it('same-name rows retain dates and canonical targeting after plan order changes
  const state=todayMissedRestFixture({count:3}),missed=missedFlexibleSessions(state);sheet(state,{missed:true});
  expect([...document.querySelectorAll('[data-session-id]')].map(b=>b.textContent)).toEqual(missed.map(s=>`UPPER BMissed · ${new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(new Date(s.scheduledDate+'T12:00:00'))}`));
  const target=missed[2],row=document.querySelector(`[data-session-id="${target.logicalSessionId}"]`);state.program.days.reverse();sheet({...state},{missed:true});expect(document.querySelector(`[data-session-id="${target.logicalSessionId}"]`)).toBe(row);
- click(row);expect(document.body.textContent).toContain('Missed · Fri, Sep 18');click(button('TRAIN TODAY'));expect(document.body.textContent).toContain('From Fri, Sep 18, 2026.');expect(update).not.toHaveBeenCalled();click(button('APPLY'));
+ click(row);expect(document.body.textContent).toContain('Missed · Fri, Sep 18');click(button('TRAIN TODAY'));expect(document.body.textContent).toContain('Fri, Sep 18, 2026 → Today');expect(update).not.toHaveBeenCalled();click(button('USE TODAY'));
  const next=update.mock.calls[0][0]();expect(missedFlexibleSessions(next).map(s=>s.logicalSessionId)).toEqual(missed.slice(0,2).map(s=>s.logicalSessionId));
 });
 it.each(['move','skip','complete'])('resolved missed occurrence leaves reminder and list: %s',kind=>{

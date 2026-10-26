@@ -15,15 +15,26 @@ const button=text=>[...document.querySelectorAll('button')].find(b=>b.textConten
 const click=text=>act(()=>button(text).click());
 const type=(label,value)=>act(()=>{const input=document.querySelector(`[aria-label="${label}"]`);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
 it('opens recovery without a write, leaves all sets intact, and does not allow an edit to erase the gap',()=>{
-  const before=mount();expect(document.querySelector('.workout-recovery-sheet h1').textContent).toBe('Still training?');expect(host.querySelector('.workout-header').textContent).toContain('Duration needs review');expect(saveState).not.toHaveBeenCalled();
+  const before=mount();expect(document.querySelector('.workout-recovery-sheet h1').textContent).toBe('Still training?');expect(host.querySelector('.workout-header').textContent).toContain('Finish or continue');expect(saveState).not.toHaveBeenCalled();
   const plus=host.querySelector('[aria-label="Increase Weight in kg for set 2"]');act(()=>plus.click());expect(current).toEqual(before);expect(saveState).not.toHaveBeenCalled();
   click('Continue workout');expect(current.activeWorkout.exercises).toEqual(before.activeWorkout.exercises);expect(current.activeWorkout.startedAt).toBe(before.activeWorkout.startedAt);expect(workoutElapsedSeconds(current.activeWorkout)).toBe(2400);expect(current.workouts).toEqual(before.workouts);expect(document.querySelector('.workout-recovery-sheet')).toBeNull();expect(saveState).toHaveBeenCalledOnce();
 });
-it('keeps the recovery inputs and session intact after a failed finish, then saves the reviewed duration on retry',()=>{
-  const before=mount();click('Review and finish');type('Workout end','2026-10-24T08:45:00');type('Reviewed workout duration in minutes','45');saveState.mockReturnValue(false);click('Finish workout');
-  expect(current.activeWorkout).toEqual(before.activeWorkout);expect(document.querySelector('[aria-label="Reviewed workout duration in minutes"]').value).toBe('45');expect(document.querySelector('.workout-recovery-sheet').textContent).toContain('Could not save');expect(page).not.toHaveBeenCalled();
-  saveState.mockReturnValue(true);click('Finish workout');expect(current.activeWorkout).toBeNull();expect(current.workouts.at(-1).durationSeconds).toBe(2700);expect(current.workouts.at(-1).completedAt).toBe(new Date('2026-10-24T08:45:00').toISOString());expect(page).toHaveBeenCalledWith('complete');
+it('finishes with one click and uses saved activity timing without opening a form',()=>{
+  const before=mount();expect(document.querySelector('.workout-recovery-sheet input')).toBeNull();click('Finish workout');
+  expect(current.activeWorkout).toBeNull();expect(current.workouts.at(-1).durationSeconds).toBe(2400);expect(current.workouts.at(-1).endedAt).toBe(before.activeWorkout.lastMeaningfulWorkoutActivityAt);expect(page).toHaveBeenCalledWith('complete');expect(saveState).toHaveBeenCalledOnce();
+});
+it('keeps the optional duration and session intact after a failed finish, then retries without a second timestamp field',()=>{
+  const before=mount();act(()=>document.querySelector('.workout-recovery-adjust summary').click());type('Workout duration in minutes','41');expect(document.querySelector('input[type="datetime-local"]')).toBeNull();saveState.mockReturnValue(false);click('Finish workout');
+  expect(current.activeWorkout).toEqual(before.activeWorkout);expect(document.querySelector('[aria-label="Workout duration in minutes"]').value).toBe('41');expect(document.querySelector('.workout-recovery-sheet').textContent).toContain('Could not save');expect(page).not.toHaveBeenCalled();
+  saveState.mockReturnValue(true);click('Finish workout');expect(current.activeWorkout).toBeNull();expect(current.workouts.at(-1).durationSeconds).toBe(2460);expect(current.workouts.at(-1).endedAt).toBe(before.activeWorkout.lastMeaningfulWorkoutActivityAt+60000);expect(page).toHaveBeenCalledWith('complete');
+});
+it('discards an invalid optional duration and its error when adjustment is closed',()=>{
+  mount();act(()=>document.querySelector('.workout-recovery-adjust summary').click());type('Workout duration in minutes','9999');click('Finish workout');expect(document.querySelector('.workout-recovery-sheet [role=alert]').textContent).toContain('time available');
+  act(()=>document.querySelector('.workout-recovery-adjust summary').click());expect(document.querySelector('.workout-recovery-sheet [role=alert]')).toBeNull();click('Finish workout');expect(current.workouts.at(-1).durationSeconds).toBe(2400);
 });
 it('requires an explicit trained duration for legacy sessions with no reliable activity evidence',()=>{
-  mount(true);click('Continue workout');expect(document.querySelector('.workout-recovery-sheet [role=alert]').textContent).toContain('time you already trained');type('Time already trained in minutes','35');click('Continue workout');expect(workoutElapsedSeconds(current.activeWorkout)).toBe(2100);
+  mount(true);click('Continue workout');expect(document.querySelector('.workout-recovery-sheet [role=alert]').textContent).toContain('time you already trained');type('Workout duration in minutes','35');click('Continue workout');expect(workoutElapsedSeconds(current.activeWorkout)).toBe(2100);
+});
+it('asks only legacy sessions for a duration before finishing, without inventing an overnight duration',()=>{
+  const before=mount(true);click('Finish workout');expect(current.activeWorkout).toEqual(before.activeWorkout);expect(document.querySelector('.workout-recovery-sheet [role=alert]').textContent).toContain('minutes you trained');type('Workout duration in minutes','35');click('Finish workout');expect(current.activeWorkout).toBeNull();expect(current.workouts.at(-1).durationSeconds).toBe(2100);expect(current.workouts.at(-1).workoutDateKey).toBe(before.activeWorkout.workoutDateKey);
 });

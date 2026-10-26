@@ -2,7 +2,7 @@ import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startWorkout,completeWorkout,serializeState,deserializeState,restartActiveWorkout} from './domain.js';
 import {completeWorkoutReversibly,continueWorkout} from './workoutCompletion.js';
-import {lastWorkoutActivity,workoutNeedsRecovery,workoutElapsedSeconds,markWorkoutActivity,reviewWorkoutTiming,continueIdleWorkout,reviewedWorkoutFinish,WORKOUT_IDLE_MS} from './workoutTiming.js';
+import {lastWorkoutActivity,workoutNeedsRecovery,workoutElapsedSeconds,markWorkoutActivity,reviewWorkoutTiming,continueIdleWorkout,reviewedWorkoutFinish,finishIdleWorkout,WORKOUT_IDLE_MS} from './workoutTiming.js';
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-24T12:00:00'));});afterEach(()=>vi.useRealTimers());
 function fixture(){const s=createReturningUserFixture(0);s.activeWorkout=startWorkout(s,s.program.days[0]);s.activeWorkout.startedAt=Date.now()-4*3600000;s.activeWorkout.lastMeaningfulWorkoutActivityAt=Date.now()-200*60000;const set=s.activeWorkout.exercises[0].sets[0];Object.assign(set,{completed:true,completedAt:s.activeWorkout.lastMeaningfulWorkoutActivityAt,weight:30,reps:8});return s;}
 it('requires two hours of inactivity, not a local-date change, and never creates a completion',()=>{
@@ -41,4 +41,33 @@ it('revalidates edits/profile/session and rejects impossible finish times',()=>{
 it('restart clears timing corrections and old idle evidence',()=>{
   const s=fixture();s.activeWorkout.excludedIdleMs=60000;s.activeWorkout.unreviewedIdleSince=s.activeWorkout.lastMeaningfulWorkoutActivityAt;
   const restarted=restartActiveWorkout(s);expect(restarted.activeWorkout.excludedIdleMs).toBe(0);expect(workoutNeedsRecovery(restarted.activeWorkout)).toBe(false);expect(lastWorkoutActivity(restarted.activeWorkout)).toBeNull();
+});
+it('finishes an idle workout directly at its last activity instead of the time it was reopened',()=>{
+  const s=fixture(),review=reviewWorkoutTiming(s),before=structuredClone(s);
+  const timing=finishIdleWorkout(s,review),done=completeWorkout(s,timing).workouts.at(-1);
+  expect(done.durationSeconds).toBe(2400);expect(done.endedAt).toBe(review.lastActivityAt);
+  expect(done.workoutDateKey).toBe(s.activeWorkout.workoutDateKey);expect(done.completionRecordedAt).toBe(new Date().toISOString());expect(s).toEqual(before);
+});
+it('accepts a single duration correction from 40 to 41 minutes and keeps the actual last activity unchanged',()=>{
+  const s=fixture(),review=reviewWorkoutTiming(s),timing=finishIdleWorkout(s,review,{durationMinutes:'41'});
+  expect(timing.durationSeconds).toBe(2460);expect(timing.endedAt).toBe(review.lastActivityAt+60000);
+  expect(lastWorkoutActivity(s.activeWorkout)).toBe(review.lastActivityAt);
+  const shorter=finishIdleWorkout(s,review,{durationMinutes:'35'});expect(shorter.durationSeconds).toBe(2100);expect(shorter.endedAt).toBe(review.lastActivityAt);
+});
+it('does not count a previously excluded gap again when adjusting an idle workout duration',()=>{
+  const s=fixture();s.activeWorkout.excludedIdleMs=10*60000;
+  const review=reviewWorkoutTiming(s);expect(review.suggestedDurationSeconds).toBe(1800);
+  const direct=finishIdleWorkout(s,review),longer=finishIdleWorkout(s,review,{durationMinutes:'31'}),shorter=finishIdleWorkout(s,review,{durationMinutes:'20'});
+  expect(direct.durationSeconds).toBe(1800);expect(direct.endedAt).toBe(review.lastActivityAt);
+  expect(longer.durationSeconds).toBe(1860);expect(longer.endedAt).toBe(review.lastActivityAt+60000);
+  expect(shorter.endedAt).toBe(review.lastActivityAt);expect(shorter.durationSeconds).toBe(1200);
+});
+it('requires only a duration for missing legacy timing and still rejects stale or future completion requests',()=>{
+  const s=fixture();s.activeWorkout.lastMeaningfulWorkoutActivityAt=null;delete s.activeWorkout.exercises[0].sets[0].completedAt;
+  const review=reviewWorkoutTiming(s);expect(()=>finishIdleWorkout(s,review)).toThrow('minutes you trained');
+  for(const value of ['',0,-1,'nope'])expect(()=>finishIdleWorkout(s,review,{durationMinutes:value})).toThrow('minutes you trained');
+  expect(()=>finishIdleWorkout(s,review,{durationMinutes:241})).toThrow('time available');
+  const timing=finishIdleWorkout(s,review,{durationMinutes:35});expect(timing.durationSeconds).toBe(2100);expect(timing.endedAt).toBe(s.activeWorkout.startedAt+35*60000);
+  const changed=structuredClone(s);changed.activeWorkout.exercises[0].sets[0].reps++;
+  expect(()=>finishIdleWorkout(changed,review,{durationMinutes:35})).toThrow('changed');
 });

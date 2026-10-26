@@ -3,8 +3,10 @@ import { SheetActionFooter } from './SheetActionFooter.jsx';
 import { completedExportWorkouts, createWorkoutHistoryExport, presentHistoryExport } from './workoutHistoryExport.js';
 import './workoutHistoryExport.css';
 import {SegmentedControl} from './SegmentedControl.jsx';
+import {ProfileInformation} from './ProfileInformation.jsx';
 
-export function WorkoutHistoryExport({state,close,SheetHeader,Button}) {
+export function WorkoutHistoryExport({state,close,SheetHeader,Button,Modal}) {
+  const screenRef=useRef(null);
   const [format,setFormat]=useState('csv'),[notes,setNotes]=useState(false),[busy,setBusy]=useState(false),[file,setFile]=useState(null),[message,setMessage]=useState(''),[error,setError]=useState(false);
   const mounted=useRef(true),lock=useRef(false);
   useEffect(()=>{mounted.current=true;return()=>{mounted.current=false;};},[]);
@@ -25,15 +27,21 @@ export function WorkoutHistoryExport({state,close,SheetHeader,Button}) {
     }catch{if(mounted.current){setError(true);setMessage('Couldn’t prepare or hand off this file. Please try again.');}}
     finally{lock.current=false;if(mounted.current)setBusy(false);}
   };
-  return <main className="screen detail-screen history-export-screen">
+  return <main ref={screenRef} className="screen detail-screen history-export-screen">
     <SheetHeader title="Export workout history" onClose={close}/>
-    <h1>Your training history.</h1>
+    <div className="information-heading"><h1>Your training history.</h1>
+      <ProfileInformation label="About history export" title="History export" Modal={Modal} backgroundRef={screenRef}>
+        <p>Weights use stored kg values. Photos are not included. Nothing is uploaded by ROOK.</p>
+        <p>CSV contains workout sets only. JSON also includes body-weight check-ins and preserved measurement-source records.</p>
+        <p>Use Back up ROOK for a complete recovery file.</p>
+      </ProfileInformation>
+    </div>
     <p>Generated on this device. CSV or JSON for your own records — not a recovery backup.</p>
     <p className="history-export-count">{count} completed {count===1?'workout':'workouts'}</p>
     <fieldset disabled={busy}><legend className="eyebrow">FORMAT</legend><SegmentedControl label="Format" options={[{value:'csv',label:'CSV'},{value:'json',label:'JSON'}]} value={format} disabled={busy} onChange={value=>{setFormat(value);reset();}}/></fieldset>
     <label className="history-export-notes"><span><strong>Include notes</strong><small>{notes?'Session and exercise notes will be included.':'Session and exercise notes are excluded.'}</small></span><input type="checkbox" checked={notes} disabled={busy} onChange={e=>{setNotes(e.target.checked);reset();}}/></label>
-    <p className="history-export-explanation">Weights use stored kg values. Photos are not included. Nothing is uploaded by ROOK.</p>
-    {!!(state.weightCheckins?.length||state.importedMeasurementSources?.length)&&<p>{format==='json'?'JSON also includes body-weight check-ins and preserved measurement-source records.':'CSV contains workout sets only. Choose JSON to include body-weight check-ins and preserved measurement-source records.'}</p>}
+    <p className="history-export-explanation">Weights in kg · Photos not included</p>
+    {!!(state.weightCheckins?.length||state.importedMeasurementSources?.length)&&<p>{format==='json'?'Workouts and measurements included.':'Workout sets only. Choose JSON to include measurements.'}</p>}
     {!count&&<p>No completed workouts yet. {format==='json'&&(state.weightCheckins?.length||state.importedMeasurementSources?.length)?'Your measurement data can still be exported.':'The workout list will be empty.'}</p>}
     <div aria-live="polite" className="history-export-status">{busy?<p><span className="restriction-spinner" aria-hidden="true"/> {file?'Opening share / download…':'Preparing your file…'}</p>:message&&<p role={error?'alert':undefined}>{message}</p>}</div>
     <SheetActionFooter><Button disabled={busy} onClick={run}>{busy?(file?'OPENING…':'PREPARING…'):file?'SHARE / DOWNLOAD':'PREPARE EXPORT'}</Button></SheetActionFooter>

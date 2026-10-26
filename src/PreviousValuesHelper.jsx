@@ -142,16 +142,16 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordi
   };
   const appliedCount=record?Number(record.patch.length>0)+(record.future?.length||0):0;
   const source=<span className="previous-values-source"><small>{copyCount>1?'Previous workout':`Previous workout · set ${ordinal+1}`}</small><strong>{copyCount>1?`Set ${ordinal+1} · `:''}{label}</strong></span>;
-  const useButton=(manual=false)=><button type="button" className={manual?'button primary previous-values-apply':'freestyle-copy'} data-workout-replaces={scope} disabled={matches&&!(manual&&manualHasDraft)}
+  const useButton=(manual=false,dismissManual)=><button type="button" className={manual?'button primary previous-values-apply':'freestyle-copy'} data-workout-replaces={scope} disabled={matches&&!(manual&&manualHasDraft)}
     onPointerDown={event=>{pendingDrafts.current={drafts:snapshot(),protectedFields:futureDraftFields()};if(!manual)event.preventDefault();}} onPointerCancel={()=>{pendingDrafts.current=null;}} onKeyDown={()=>{pendingDrafts.current={drafts:snapshot(),protectedFields:futureDraftFields()};}}
-    onClick={()=>{if(apply()&&manual)setManualOpen(false);}}>Use for {Math.max(1,copyCount)} {copyCount>1?'sets':'set'}</button>;
+    onClick={()=>{if(apply()&&manual)dismissManual();}}>Use for {Math.max(1,copyCount)} {copyCount>1?'sets':'set'}</button>;
   return <div ref={helper} className="freestyle-copy-helper">
     {showOffer&&<div className="previous-values-offer">{source}{useButton()}<button type="button" className="previous-values-hide" aria-label="Hide previous values for this exercise" data-workout-options onPointerDown={event=>event.preventDefault()} onClick={consume}>×</button></div>}
     {record&&undoable&&<Snackbar message={record.future?.length?`Previous values added to ${appliedCount} ${appliedCount===1?'set':'sets'}`:'Previous values applied'} onUndo={undo} undoScope={scope} autoDismiss={expiring} className="previous-values-undo" onDismiss={expire} onPause={()=>lifetime.current?.pause('interaction')} onResume={()=>lifetime.current?.resume('interaction')}/>}
     {error&&!manualOpen&&<p className="freestyle-copy-error" role="alert">{error}</p>}
     {manualOpen&&Modal&&Header&&createPortal(<Modal close={()=>setManualOpen(false)} backgroundRef={screenRef} returnFocusRef={manualTrigger}>
-      <section className="screen detail-screen previous-values-sheet" role="dialog" aria-modal="true" aria-labelledby="previous-values-title">
-        <Header title="Previous values" onClose={()=>setManualOpen(false)}/>
+      {requestClose => <section className="screen detail-screen previous-values-sheet" role="dialog" aria-modal="true" aria-labelledby="previous-values-title">
+        <Header title="Previous values" onClose={requestClose}/>
         <h1 id="previous-values-title">Use previous values</h1>
         <p>{exerciseName(exercise)} · Set {index+1}</p>
         <div className="previous-values-source-card">{source}</div>
@@ -161,8 +161,8 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordi
         })}</section>
         <p>Available previous values replace this set’s entries. Each following unlogged set uses its matching previous values; your manual entries stay unchanged.</p>
         {error&&<p className="form-error" role="alert">{error}</p>}
-        {useButton(true)}<button type="button" className="button quiet" onClick={()=>setManualOpen(false)}>Cancel</button>
-      </section>
+        {useButton(true,requestClose)}<button type="button" className="button quiet" onClick={requestClose}>Cancel</button>
+      </section>}
     </Modal>,document.body)}
   </div>;
 }
