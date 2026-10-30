@@ -46,7 +46,7 @@ export function WorkoutRecoverySheet({state, update, review, Header, close, onCo
     <Header title="Open workout" onClose={close}/>
     <div className="workout-recovery-content">
       <h1 id="workout-recovery-title">Still training?</h1>
-      <p>{last ? `Last activity: ${last}.` : 'How long did you train? We couldn’t recover your workout duration.'}</p>
+      <p>{last ? `Last activity: ${last}.` : 'We couldn’t recover your workout duration.'}</p>
       <p className="workout-recovery-summary">
         <span>{summary.completed} of {summary.total} sets logged.</span>
         {!missingTime && <span>Estimated duration · {Number((review.suggestedDurationSeconds / 60).toFixed(1))} min</span>}

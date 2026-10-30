@@ -165,24 +165,26 @@ export function normalizeAdvancedLoggingState(state) {
   return state;
 }
 
+// A missing load and an explicitly entered zero are different. Zero records
+// no external load, even when the chosen catalog exercise normally uses one.
+export function workingLoadCanComplete(value, loadRequirement = "required") {
+  if (loadRequirement === 'none') return true;
+  if (value == null || value === '') return loadRequirement !== 'required';
+  return (typeof value === 'number' || typeof value === 'string' && value.trim() !== '') &&
+    Number.isFinite(Number(value)) && Number(value) >= 0;
+}
+
 export function advancedSetCanComplete(exercise, set, loadRequirement = "required") {
   const reps = effectiveSetReps(exercise, set);
   const anySideLogged =
     loggingModeOf(exercise) === "per_side" &&
     (finitePositive(set?.sides?.left?.reps) || finitePositive(set?.sides?.right?.reps));
   if (!finitePositive(reps) && !anySideLogged) return false;
-  if (loadRequirement === "required" && !finitePositive(set?.weight)) return false;
-  if (
-    loadRequirement === "optional" &&
-    set?.weight !== null &&
-    set?.weight !== undefined &&
-    set?.weight !== "" &&
-    (!Number.isFinite(Number(set.weight)) || Number(set.weight) < 0)
-  ) return false;
+  if (!workingLoadCanComplete(set?.weight, loadRequirement)) return false;
   const segments = segmentKindForSet(set) ? set.segments || [] : [];
   return segments.every((segment) => {
     if (!finitePositive(segment.reps)) return false;
-    return loadRequirement !== "required" || finitePositive(segment.weight);
+    return workingLoadCanComplete(segment.weight, loadRequirement);
   });
 }
 

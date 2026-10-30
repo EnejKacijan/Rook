@@ -33,6 +33,21 @@ afterEach(async () => {
   vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers();
 });
 
+it.each([true, false])('a visually hidden content heading does not hide the only visible sheet title (hidden=%s)', async hidden => {
+  await act(async () => root.render(<ModalLayer close={() => {}}>
+    <main className="screen detail-screen">
+      <SheetHeader title="Export history" onClose={() => {}}/>
+      <h1 className={hidden ? 'visually-hidden' : undefined}>Export workout history</h1>
+      <p>Choose the export format.</p>
+    </main>
+  </ModalLayer>));
+  await tick();
+  const header=host.querySelector('.detail-header');
+  expect(header.querySelector('strong').textContent).toBe('Export history');
+  expect(header.classList.contains('is-collapsing-sheet-header')).toBe(!hidden);
+  expect(host.querySelector('h1').textContent).toBe('Export workout history');
+});
+
 async function nestedThemes() {
   const parentClose = vi.fn();
   function AppearanceContent({close}) {

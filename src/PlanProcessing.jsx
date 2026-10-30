@@ -40,7 +40,6 @@ export function PlanProcessing({stage='building',kind='program',onCancel,progres
   const message=complete?'Plan ready for review.':stage==='saving'?'Saving your plan…':importing?(stage==='checking'?'Preparing your plan for review…':'Reading your workout notes…'):stage==='checking'?'Validating your plan…':stage==='preparing'?'Preparing your plan…':'Creating your workout structure…';
   return <div ref={overlayRef} tabIndex={-1} className="building-overlay plan-processing" role="dialog" aria-modal="true" aria-busy={!complete} aria-labelledby="building-title" aria-describedby="building-detail">
     <div className="building-card">
-      <p className="eyebrow">{importing?'IMPORTING PLAN':'BUILDING PLAN'}</p>
       <h2 id="building-title">{importing?'Preparing your plan review.':'Preparing your training week.'}</h2>
       <p id="building-detail" role="status" aria-live="polite" aria-atomic="true">{message}{stalled&&!complete?' Still processing on this device. Your current plan is unchanged.':''}</p>
       <PlanProgressBar progress={progress} complete={complete}/>

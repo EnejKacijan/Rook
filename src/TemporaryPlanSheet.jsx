@@ -41,8 +41,7 @@ export function TemporaryPlanSheet({ state, update, Header, close, persist = sav
   const feedback = error && <p className="temporary-plan-error" role="alert">{error}</p>;
   return <main className="screen detail-screen temporary-plan-sheet" role="dialog" aria-modal="true" aria-labelledby={titleId}>
     <Header title="Temporary plan" onClose={close} closeLabel="Close temporary plan" />
-    <span className="eyebrow">{proposal ? 'TEMPORARY PLAN' : 'TRAINING AROUND YOUR LIFE'}</span>
-    <h1 id={titleId}>{ending ? 'Return to your usual plan?' : currentPeriod ? 'Your temporary plan' : proposal ? 'Your temporary plan' : 'A different few weeks.'}</h1>
+    <h1 id={titleId} className={!ending&&!currentPeriod&&!proposal?'visually-hidden':undefined}>{ending ? 'Return to your usual plan?' : currentPeriod ? 'Your temporary plan' : proposal ? 'Your temporary plan' : 'Temporary plan'}</h1>
     {currentPeriod ? <>
       <p>{dateLabel(period.startDate)} – {dateLabel(period.endDate)} · {period.days.length} days a week · {period.equipment.join(', ')}.</p>
       <p>{period.planChanged ? 'Your plan or training restrictions changed. Review the affected dates before making another adjustment.' : 'Your usual plan resumes after this period. Completed workouts stay as logged.'}</p>

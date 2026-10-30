@@ -33,7 +33,7 @@ function validSet(exercise,set,preserveUnknown=false) {
   // Use the same completion contract as active logging (including intentionally
   // partial unilateral sets), with strict serialized numeric validation above.
   return !set.completed||workingSetCanComplete(exercise,set)||preserveUnknown&&
-    (exerciseLoadRequirement(exercise)!=='required'||set.weight==null||set.weight>0);
+    (exerciseLoadRequirement(exercise)!=='required'||set.weight==null||set.weight>=0);
 }
 const actual=set=>({weight:set.weight??null,reps:set.reps??null,rir:set.rir??null,completed:Boolean(set.completed),setType:setTypeOf(set),sides:set.sides??null,segments:set.segments??null});
 export function correctionChanges(original,draft) {

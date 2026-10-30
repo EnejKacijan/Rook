@@ -227,7 +227,7 @@
 .import-review-summary i { color: var(--rook-accent-text); font-style: normal; font-weight: 800; }
 .plan-editor-summary { width: 100%; min-height: 70px; padding: 13px 14px 13px 15px; border: 0; background: transparent; color: #1b1a19; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; }
 .plan-editor-heading { min-width: 0; display: grid; gap: 5px; }
-.plan-editor-heading > strong { min-width: 0; overflow: hidden; text-overflow: ellipsis; font-size: 13px; white-space: nowrap; }
+.plan-editor-heading > strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; white-space: normal; }
 .plan-editor-heading > small { color: #77736f; font-size: 11px; text-align: left; }
 .plan-editor-exercise.is-superset { border-left: 3px solid color-mix(in srgb, var(--rook-accent) 46%, transparent); }
 .plan-editor-exercise.superset-a1 { margin-bottom: -5px; border-bottom-left-radius: 8px; }

@@ -1,0 +1,18 @@
+.improvements-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.improvements-heading > p { margin: 0; }
+.improvements-heading > span { color: var(--rook-secondary); font-size: .8125rem; line-height: 1.4; }
+.recent-improvements-group .improvement-row { gap: 12px; }
+.improvement-row > span:first-child { display: grid; gap: 5px; min-width: 0; }
+.improvement-row strong { overflow-wrap: anywhere; }
+.improvement-row small { color: var(--rook-secondary); font-size: .875rem; line-height: 1.45; }
+.improvement-row .improvement-delta { color: var(--rook-accent-text); font-weight: 650; }
+:root .improvements-view-all { border-bottom: 0; color: var(--rook-accent-text); font-size: .875rem; font-weight: 650; }
+.recent-improvements-section > .improvements-empty { margin: 12px 0 0; color: var(--rook-secondary); font-size: .875rem; line-height: 1.45; }
+.exercise-improvements-sheet .statistics-heading > p { color: var(--rook-secondary); font-size: .875rem; }
+.exercise-improvements-sheet .improvements-period { margin: 8px 0 14px; }
+.exercise-improvements-sheet .rook-search-field { display: block; margin: 0 0 18px; }
+.exercise-improvements-sheet input[type="search"] { width: 100%; min-height: 48px; padding: 12px 44px 12px 12px; border: 1px solid var(--rook-control-border); border-radius: 12px; background: var(--rook-surface); color: var(--rook-text); }
+:root .exercise-improvements-sheet .improvement-date-group { margin: 24px 0 0; }
+:root .exercise-improvements-sheet .improvement-date-group > h2 { margin: 0 0 14px; color: var(--rook-secondary); font-size: 1.25rem; line-height: 1.2; font-weight: 650; letter-spacing: -.015em; }
+.improvement-date-group .improvement-row { width: 100%; text-align: left; gap: 12px; border-color: var(--rook-border); }
+.exercise-improvements-sheet > .improvements-empty { margin: 20px 0 0; font-size: .875rem; line-height: 1.5; color: var(--rook-secondary); }

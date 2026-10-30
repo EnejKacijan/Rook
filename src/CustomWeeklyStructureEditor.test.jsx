@@ -37,7 +37,7 @@ it('supports multiple muscle selections per workout without text entry',()=>{
 });
 it('keeps saved focus semantics until explicitly replaced, retaining existing explicit muscles',()=>{
   mount('Day 1: Push & Chest\nDay 2: Pull\nDay 3: Legs');
-  expect(block(0).querySelector('.custom-workout-legacy').textContent).toContain('Push');
+  expect(block(0).querySelector('.custom-workout-copy').textContent).toContain('Push');
   expect(block(0).querySelector('[data-focus]')).toBeNull();
   click(block(0).querySelector('.custom-keep-focus'));expect(rows[0].focus).toBe('Push & Chest');
   open(0);click(block(0).querySelector('.custom-switch-focus'));expect(rows[0].focus).toBe('Chest');
@@ -47,7 +47,7 @@ it('keeps saved focus semantics until explicitly replaced, retaining existing ex
 });
 it('shows unrecognized saved input until a deliberate new muscle choice replaces it',()=>{
   mount('Day 1: Quantum\nDay 2: Back\nDay 3: Legs');
-  expect(block(0).querySelector('.custom-workout-legacy').textContent).toContain('Quantum');
+  expect(block(0).querySelector('.custom-workout-copy').textContent).toContain('Quantum');
   click(block(0).querySelector('.custom-switch-focus'));
   select(0,'chest');expect(rows[0].focus).toBe('Chest');
   expect(block(0).querySelector('.custom-workout-legacy')).toBeNull();

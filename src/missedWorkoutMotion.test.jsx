@@ -73,7 +73,7 @@ it('leaving Today during collapse cleans up; Undo off-route restores normally on
 it('a changed occurrence group never inherits stale height or an obsolete Undo',()=>{
  draw();const old=region();hide();const closing=geometry();change(()=>todayMissedRestFixture({count:1}));
  expect(closing.cancel).toHaveBeenCalled();expect(region()).not.toBe(old);act(()=>closing.onfinish());
- expect(region().style.height).toBe('auto');expect(host.querySelector('.today-missed-label').textContent).toBe('Missed workout');expect(host.querySelector('.exercise-remove-undo')).toBeNull();
+ expect(region().style.height).toBe('auto');expect(host.querySelector('.today-missed-label').textContent).toBe('1 missed workout');expect(host.querySelector('.exercise-remove-undo')).toBeNull();
 });
 it('reduced motion closes/restores immediately with identical presentation-only semantics',()=>{
  vi.stubGlobal('matchMedia',()=>({matches:true}));const before=draw();hide();

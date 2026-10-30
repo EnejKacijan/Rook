@@ -33,6 +33,7 @@ export function resolveCoachDayContext(state,context){
 export function coachActionMatchesDay(action,selectedDay){
   if(!action||!selectedDay)return true;
   if(selectedDay.unresolved)return false;
+  if(action.type==='combine-workouts')return action.proposal?.date===isoDay()&&action.proposal.sourceSessions?.some(source=>source.logicalSessionId===selectedDay.occurrenceId);
   if(action.type==='adapt-today')return action.targetDate===selectedDay.date&&action.programDayId===selectedDay.workout?.id;
   if(action.type==='add-today-workout')return selectedDay.date===isoDay()&&!selectedDay.workout&&action.targetDate===selectedDay.date;
   if(action.type==='week-schedule-change')return weekKey(selectedDay.date)===weekKey()&&Boolean(selectedDay.workout)&&action.changes.some(change=>change.programDayId===selectedDay.workout.id||change.workoutId===selectedDay.workout.id);

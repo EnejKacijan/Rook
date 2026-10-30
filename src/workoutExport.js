@@ -53,6 +53,8 @@ export function exportLoadLabel(exercise, value, units = "kg") {
   const load = positiveLoad(value);
   const context = loadContext(exercise);
   if (requirement === "none") return context;
+  if ((value === 0 || value === '0') && requirement === 'required')
+    return `0 ${weightUnit(units)}`;
   if (!load)
     return requirement === "required" ? "Load not logged" : context;
   const numeric = `${displayWeight(load, units)} ${weightUnit(units)}`;

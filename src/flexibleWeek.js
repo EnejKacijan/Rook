@@ -258,7 +258,9 @@ function moveSourceError(state, item, today) {
   if (state.activeOptionalSession?.date === item.scheduledDate) return 'An optional workout is active on that date. Finish or cancel it first.';
   return null;
 }
-const missedMoveIsBackward = (item, toDate, today) => item.status === 'missed' && (toDate < today || toDate < item.originalDate);
+// The current placement, not the original weekday, determines recovery. A
+// workout brought forward and then missed can still be trained today.
+const missedMoveIsBackward = (item, toDate, today) => item.status === 'missed' && toDate < today;
 // Shared Move chooser sources. Keep the canonical missed-backlog horizon, and
 // include upcoming occurrences throughout the existing rolling 14-day window.
 // Explicit old-calendar moves still use flexibleSessionById, not a revived backlog.
@@ -281,6 +283,11 @@ export function hasMoveWorkoutDestination(state, sessionId, today = isoDay()) {
     if(proposeFlexibleWeek(state,{mode:'move',sessionId,toDate:addCalendarDays(today,index)},today).status==='ready')return true;
   }
   return false;
+}
+export function swapWorkoutCandidates(state,sessionId,today=isoDay()) {
+  return [...flexibleSessions(state,today),...firstPlanWeekWorkouts(state,today)]
+    .filter(item=>proposeFlexibleWeek(state,{mode:'swap',sessionId,otherSessionId:item.logicalSessionId},today).status==='ready')
+    .sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)||a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 // The Adjust week entry opens the existing mode surface. Offer it only when
 // that surface has an eligible operation or a saved change to inspect/resolve.
@@ -350,8 +357,8 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
   if (scheduleError) return fail(scheduleError);
   const fingerprint = flexibleReviewFingerprint(state), end = addCalendarDays(today, 13);
   const all = flexibleSessions(state, today);
-  if(request.sessionId && !all.some(i=>i.logicalSessionId===request.sessionId)){
-    const explicit=flexibleSessionById(state,request.sessionId,today);if(explicit)all.push(explicit);
+  for(const id of [request.sessionId,...(request.mode==='swap'?[request.otherSessionId]:[])])if(id && !all.some(i=>i.logicalSessionId===id)){
+    const explicit=flexibleSessionById(state,id,today);if(explicit)all.push(explicit);
   }
   const byId = new Map(all.map(i => [i.logicalSessionId, i]));
   const changes = [];
@@ -369,15 +376,13 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
     }
   } else if (request.mode === 'swap') {
     const first = byId.get(request.sessionId), second = byId.get(request.otherSessionId);
-    const eligible = item => item && movable(item) && item.status !== 'optional' &&
+    const eligible = item => item && !moveSourceError(state,item,today) && item.status !== 'optional' &&
       item.scheduledDate >= weekKey(today) && item.scheduledDate <= end &&
-      item.originalDate >= (state.program.trainingBlock?.startDate || isoDay(state.program.createdAt || today)) &&
-      !state.program.trainingBlock?.completed && state.activeOptionalSession?.date !== item.scheduledDate &&
       !(state.todayAdaptation?.programDayId === item.workoutId && state.todayAdaptation.date === item.scheduledDate);
     if (!eligible(first) || !eligible(second) || first.logicalSessionId === second.logicalSessionId || first.scheduledDate === second.scheduledDate)
       return fail('Choose two uncompleted, unreserved sessions within this week and the next 14 days.');
     if (missedMoveIsBackward(first,second.scheduledDate,today) || missedMoveIsBackward(second,first.scheduledDate,today))
-      return fail('Move missed workouts forward to today or a later date, on or after their original scheduled date.');
+      return fail('Move missed workouts forward to today or a later date.');
     push(first, second.scheduledDate);
     push(second, first.scheduledDate);
   } else if (request.mode === 'skip' || request.mode === 'move') {
@@ -390,7 +395,6 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
       if (sourceError) return fail(sourceError);
       if (!validDate(request.toDate) || request.toDate < today || request.toDate > end) return fail('Choose a date within the next 14 days.');
       if (request.toDate === item.scheduledDate) return fail('This workout is already scheduled on that date.');
-      if (missedMoveIsBackward(item,request.toDate,today)) return fail('Choose a date on or after this missed workout’s original scheduled date.');
       if (request.availableDates && !request.availableDates.includes(request.toDate)) return fail('This date is not available.');
       if (state.activeOptionalSession?.date === request.toDate) return fail('An optional workout is active on that date. Finish or cancel it first.');
       const occupied = all.find(i => i.logicalSessionId !== item.logicalSessionId && i.scheduledDate === request.toDate && i.status !== 'skipped' && !(request.allowCompletedToday && request.toDate===today && i.status==='completed'));

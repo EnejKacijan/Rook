@@ -60,15 +60,19 @@ it('recurring change preview shows the canonical targets without mutating the pl
   expect(host.textContent).toContain('Weekly plan · Updates future workouts');expect(host.querySelector('.program-change-add small').textContent).toMatch(/sets.*sec/);
   expect(state).toEqual(before);expect(accept).not.toHaveBeenCalled();
 });
-it('combined revisions compare the final workout against both actual sources',()=>{
+it('initial combinations compare both sources, while revisions show changes from the accepted workout',()=>{
   vi.setSystemTime(new Date('2026-09-12T12:00:00'));let state=combineExample();
   const initial=buildCombinedProposal(state,{sourceIds:combineSources(state).filter(source=>source.status==='missed').map(source=>source.logicalSessionId),minutes:45}).proposal;
+  const initialRows=combinedReviewChanges(state,initial),all=state.program.days.flatMap(day=>day.exercises);
+  const omitted=all.filter(exercise=>!initial.workout.exercises.some(after=>after.exerciseId===exercise.exerciseId));
+  expect(omitted.length).toBeGreaterThan(0);
+  for(const exercise of omitted)expect(initialRows).toContainEqual(expect.objectContaining({id:exercise.exerciseId,detail:'Omitted today'}));
   state=applyCombinedProposal(state,initial,()=>true);
   const proposal=buildCombinedRevision(state,{base:state.todayAdaptation,minutes:60}).proposal,rows=combinedReviewChanges(state,proposal);
-  const all=state.program.days.flatMap(day=>day.exercises),omitted=all.filter(exercise=>!proposal.workout.exercises.some(after=>after.exerciseId===exercise.exerciseId));
-  expect(omitted.length).toBeGreaterThan(0);
-  for(const exercise of omitted)expect(rows).toContainEqual(expect.objectContaining({id:exercise.exerciseId,detail:'Omitted today'}));
-  const changed=rows.find(row=>row.detail.includes('→'));expect(changed.detail).toMatch(/\d+ → \d+ sets/);
+  const changed=proposal.workout.exercises.filter(after=>initial.workout.exercises.find(before=>before.id===after.id)?.sets.length!==after.sets.length);
+  expect(changed.length).toBeGreaterThan(0);
+  for(const exercise of changed){const before=initial.workout.exercises.find(item=>item.id===exercise.id);if(before)expect(rows).toContainEqual(expect.objectContaining({id:exercise.id,detail:`${before.sets.length} → ${exercise.sets.length} sets`}));}
+  expect(rows.some(row=>row.detail==='Omitted today')).toBe(false);expect(proposal.sourceSessions).toEqual(initial.sourceSessions);
 });
 it('combined review hides unchanged targets but exposes a changed rest prescription',()=>{
   vi.setSystemTime(new Date('2026-09-12T12:00:00'));const state=combineExample();

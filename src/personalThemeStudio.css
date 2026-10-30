@@ -37,7 +37,15 @@
 .pro-theme-preset-name { min-width:0;font-weight:650;overflow-wrap:anywhere; }
 .pro-theme-preset-note { grid-column:1 / -1;font-size:11px;line-height:1.3;color:var(--rook-secondary); }
 .pro-theme-season-window { font-variant-numeric:tabular-nums; }
+.seasonal-window-dates { display:inline-block;white-space:nowrap; }
 .pro-theme-choice-check { color:var(--rook-accent-text); }
+:root .pro-theme-studio .seasonal-theme-locked { opacity:1;cursor:default; }
+.seasonal-theme-lock { position:relative;display:block;width:14px;height:17px;color:var(--rook-secondary); }
+.seasonal-theme-lock::before { content:"";position:absolute;left:3px;top:0;width:8px;height:9px;border:1.5px solid currentColor;border-radius:5px 5px 0 0; }
+.seasonal-theme-lock::after { content:"";position:absolute;inset:7px 0 0;border:1.5px solid currentColor;border-radius:3px;background:var(--rook-surface); }
+:root .pro-theme-studio .seasonal-theme-access-note { margin:12px 0;font-size:var(--rook-type-meta,.875rem);line-height:1.45;color:var(--rook-secondary); }
+:root .pro-theme-studio .seasonal-theme-access-note > p { margin:0;font:inherit;color:inherit; }
+.seasonal-theme-access-note > button { display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 0;text-align:left; }
 .pro-theme-custom { border-top:1px solid var(--rook-border);margin-top:16px;padding-top:4px; }
 .pro-theme-custom > summary { min-height:44px;align-content:center;font-size:13px;color:var(--rook-accent-text);cursor:pointer; }
 .pro-theme-accents { display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px; }

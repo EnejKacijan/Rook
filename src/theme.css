@@ -1063,11 +1063,11 @@
 }
 
 /* Remap component-level legacy green so both dark families use their own accent. */
-:root[data-appearance="dark"] :is(.brand, .goal-plan-preview.has-selection > span, .goal-plan-preview.has-selection > strong, .building-card .eyebrow, .building-cancel, .coach-empty .eyebrow, .coach-history-header button:last-child, .coach-screen .adapt-duration-contract, .coach-screen .optional-workout-list > div > span, .setup-confirmation strong, .progression-next, .progression-row.progression-progress > span:first-child > small:first-of-type, .exercise-progression.progression-progress > strong, .training-safety-summary.constraints-active .eyebrow, .training-safety-summary > button, .complete-profile > .eyebrow, .change-plan-sheet .plan-choice i, .superset-next-step, .age-range-options > button > i, .select-all-check input:checked, .import-plan-paste, .coach-history-trigger:focus-visible) { color: var(--rook-accent-text) !important; }
+:root[data-appearance="dark"] :is(.brand, .goal-plan-preview.has-selection > span, .goal-plan-preview.has-selection > strong, .building-card .eyebrow, .building-cancel, .coach-empty .eyebrow, .coach-history-header button:last-child, .coach-screen .adapt-duration-contract, .coach-screen .optional-workout-list > div > span:first-child, .setup-confirmation strong, .progression-next, .progression-row.progression-progress > span:first-child > small:first-of-type, .exercise-progression.progression-progress > strong, .training-safety-summary.constraints-active .eyebrow, .training-safety-summary > button, .complete-profile > .eyebrow, .change-plan-sheet .plan-choice i, .superset-next-step, .age-range-options > button > i, .select-all-check input:checked, .import-plan-paste, .coach-history-trigger:focus-visible) { color: var(--rook-accent-text) !important; }
 :root[data-appearance="dark"] .setup-confirmation small { color: var(--rook-secondary); }
 :root[data-appearance="dark"] :is(.coach-empty, .complete-profile) { border-left-color: var(--rook-accent-hairline); }
 :root[data-appearance="dark"] .select-all-check input { accent-color: var(--rook-accent); }
-:root[data-appearance="dark"] :is(.coach-screen .optional-workout-list > div > span, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); }
+:root[data-appearance="dark"] :is(.coach-screen .optional-workout-list > div > span:first-child, .coach-screen .program-change > span i) { background: var(--rook-accent-soft); }
 :root[data-appearance="dark"] :is(.restriction-spinner, .button-spinner, .building-spinner, .spinner) { border-color: var(--rook-accent-hairline); border-top-color: var(--rook-accent); }
 :root[data-appearance="dark"] :is(.workout-confirm .primary, .warmup-finish, .training-safety-actions button:first-child) { background: var(--rook-accent); color: var(--rook-on-accent); }
 :root[data-appearance="dark"] .stepper.unset:focus-within { border-color: var(--rook-accent); box-shadow: inset 0 0 0 2px var(--rook-accent-glow); }
@@ -1143,7 +1143,7 @@
   .coach-screen .action-applied,
   .coach-screen .action-card-applied,
   .coach-screen .program-change > span i,
-  .coach-screen .optional-workout-list > div > span,
+  .coach-screen .optional-workout-list > div > span:first-child,
   .warmup-ramp button.completed,
   .warmup-complete-status > span
 ) {
@@ -1181,7 +1181,7 @@
   .bulk-match-review > button > i,
   .coach-history-header button:last-child,
   .coach-screen .adapt-duration-contract,
-  .coach-screen .optional-workout-list > div > span,
+  .coach-screen .optional-workout-list > div > span:first-child,
   .complete-profile > .eyebrow,
   .change-plan-sheet .plan-choice i,
   .superset-next-step,

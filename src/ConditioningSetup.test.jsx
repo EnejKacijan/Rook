@@ -73,7 +73,7 @@ it('A/E/I: keeps one form-bound action in the existing scroller so keyboard edit
   expect(sheet.querySelectorAll('[type="submit"]')).toHaveLength(1); expect(start().disabled).toBe(false);
   expect(sheet.querySelector('.detail-header strong').textContent).toBe('Conditioning');
   expect(sheet.querySelector('h2')).toBeNull(); expect(body.querySelector('.eyebrow').textContent).toBe('OPTIONAL SESSION');
-  expect(sheet.textContent.match(/does not complete a planned strength workout/g)).toHaveLength(1);
+  expect(sheet.textContent.match(/Does not complete a planned strength workout/g)).toHaveLength(1);
   click(radio('Intervals'));
   expect(sheet.querySelector('footer')).toBe(footer); expect(start().form).toBe(body.querySelector('form'));
   expect(body.querySelectorAll('.stepper-row')).toHaveLength(3);

@@ -83,11 +83,13 @@ it('allows cross-week destinations within 14 days and rejects past/out-of-window
  const next=move(s,item.logicalSessionId,'2026-09-22');expect(flexibleSessionById(next,item.logicalSessionId).originalDate).toBe('2026-09-18');
  for(const toDate of ['2026-09-17','2026-10-03'])expect(proposeFlexibleWeek(s,{mode:'move',sessionId:item.logicalSessionId,toDate}).status).toBe('conflict');
 });
-it('a previously advanced, now missed occurrence cannot move earlier than its original date',()=>{
+it('recovers a previously advanced, now missed occurrence today while keeping its original identity',()=>{
  vi.setSystemTime(new Date('2026-09-18T12:00:00'));let s=fixture();const future=flexibleSessions(s).find(i=>i.scheduledDate==='2026-09-21'),fri=friday(s);
  s=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'skip',sessionId:fri.logicalSessionId})).state;s=move(s,future.logicalSessionId,'2026-09-18');vi.setSystemTime(new Date('2026-09-19T12:00:00'));
- expect(ids(s)).toContain(future.logicalSessionId);expect(missedSessionDestinations(s,future.logicalSessionId)).not.toContain(isoDay());
- expect(proposeFlexibleWeek(s,{mode:'move',sessionId:future.logicalSessionId,toDate:isoDay()}).status).toBe('conflict');expect(proposeFlexibleWeek(s,{mode:'move',sessionId:future.logicalSessionId,toDate:'2026-09-22'}).status).toBe('ready');
+ expect(ids(s)).toContain(future.logicalSessionId);expect(missedSessionDestinations(s,future.logicalSessionId)).toContain(isoDay());
+ const recovered=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'move',sessionId:future.logicalSessionId,toDate:isoDay()}));expect(recovered.status).toBe('applied');
+ expect(flexibleSessionById(recovered.state,future.logicalSessionId)).toMatchObject({originalDate:'2026-09-21',scheduledDate:'2026-09-19'});expect(recovered.state.program).toEqual(s.program);expect(recovered.state.workouts).toEqual(s.workouts);
+ expect(proposeFlexibleWeek(s,{mode:'move',sessionId:future.logicalSessionId,toDate:'2026-09-22'}).status).toBe('ready');
 });
 it.each(['planned','active','completed'])('rejects an occupied %s destination without overwriting either occurrence',kind=>{
  const s=fixture(),source=friday(s),target=flexibleSessions(s).find(i=>i.scheduledDate==='2026-09-21'),before=serializeState(s);

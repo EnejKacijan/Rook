@@ -29,7 +29,7 @@ it('sole valid move makes the selected date rest, with secondary provenance and 
   expect(current).toEqual({...before,selectedDate:record.scheduledDate,selectedDay:'Sat'});expect(title()).not.toBe('Rest day');
   expect(current.flexibleWeek).toEqual(before.flexibleWeek);expect(current.workouts).toEqual(before.workouts);
 });
-it('a moved-in workout wins over the moved-away provenance',()=>{mount(move(move(initial()),'2026-10-02','2026-10-01'));expect(title()).not.toBe('Rest day');expect(host.querySelector('.today-moved-provenance')).toBeNull();expect(host.textContent).toContain('Moved from Friday, Oct 2');});
+it('a moved-in workout wins over the moved-away provenance',()=>{mount(move(move(initial()),'2026-10-02','2026-10-01'));expect(title()).not.toBe('Rest day');expect(host.querySelector('.today-moved-provenance')).toBeNull();expect(host.textContent).toContain('Moved from Fri, Oct 2');});
 it.each(['active','completed','ended'])('%s on the selected date retains its canonical session presentation',kind=>{
   let s=move(initial());const source=flexibleSessions(s).find(item=>item.originalDate==='2026-10-01');s.activeWorkout=startWorkout(s,source.workout);
   if(kind!=='active'){if(kind==='completed')s.activeWorkout.exercises.forEach(e=>e.sets.forEach(set=>Object.assign(set,{completed:true,reps:10})));s=completeWorkout(s);}

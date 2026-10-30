@@ -6,12 +6,31 @@
 .flexible-workout-group small { color: var(--rook-secondary); font-size: 12px; }
 .flexible-week-sheet .missed-session-choices .choice-row { min-height:60px; padding:10px 14px; gap:4px; margin-top:8px; }
 .flexible-week-sheet .missed-session-choices .choice-row small { color:var(--rook-secondary); font-size:12px; line-height:1.4; }
+.flexible-week-sheet > [data-recovery-action="combine"] { border-bottom:0; }
 .missed-recovery-actions { display:flex; flex-direction:column; gap:12px; margin-top:24px; }
 .missed-recovery-actions .button { margin:0; }
 .missed-recovery-actions .text-button { align-self:center; min-height:44px; }
 .missed-recovery-options { margin-top:24px; }
+.missed-combine-sources { border:0;padding:0;margin:20px 0;min-width:0; }
+.missed-combine-sources legend { position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%); }
+:root .missed-combine-sources h2 { font-size:13px;line-height:1.4;color:var(--rook-secondary);margin:20px 0 6px; }
+.missed-combine-sources label { display:flex;align-items:center;gap:12px;min-height:60px;padding:10px 0;border-bottom:1px solid var(--rook-border);cursor:pointer; }
+.missed-combine-sources input { flex:0 0 20px;width:20px;height:20px;margin:0;accent-color:var(--rook-accent); }
+.missed-combine-sources label:has(input:disabled) { opacity:.55; }
+.missed-combine-sources label > span { display:flex;flex-direction:column;gap:4px;min-width:0; }
+.missed-combine-sources strong { font-size:16px;line-height:1.4;overflow-wrap:anywhere; }
+.missed-combine-sources small { color:var(--rook-secondary);font-size:13px; }
+.missed-combine-time { display:flex;flex-direction:column;gap:8px;margin:20px 0; }
+.missed-combine-time select { width:100%;min-width:0;min-height:48px;padding:10px 12px;border:1px solid var(--rook-border);border-radius:12px;background:var(--rook-surface);color:var(--rook-text);font-size:16px;line-height:1.4; }
+.missed-combine-move { margin:16px 0;padding:12px 0;border-bottom:1px solid var(--rook-border); }
+.missed-combine-sheet h1 { overflow-wrap:anywhere; }
+.missed-combine-sheet .combine-card { padding:16px; }
+.missed-combine-sheet .combine-card > p { margin:0 0 12px;font-size:14px;line-height:1.5; }
+.missed-combine-sheet .combined-provenance { margin:12px 0; }
+.missed-combine-sheet .combine-card { --review-details-gap:8px; }
+.missed-recovery-actions .list-row { margin:0;min-height:48px;gap:12px; }
 .missed-recovery-options .list-row { min-height:52px; gap:12px; text-align:left; }
-.missed-recovery-options .list-row > span { flex-shrink:0; }
+.missed-recovery-options .list-row > span { min-width:0;overflow-wrap:anywhere; }
 .missed-recovery-today > .text-button { min-height:44px; }
 .missed-destination-sheet [data-move-date][aria-pressed="true"] { background:var(--rook-accent-soft); border-color:var(--rook-accent); }
 .flexible-resolution-actions { display:flex; flex-direction:column; align-items:stretch; gap:2px; margin-top:10px; }

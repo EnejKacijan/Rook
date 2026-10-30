@@ -4,8 +4,10 @@ import { aiAuthorizationHeaders } from './aiAuthorization.js';
 import { physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
-import {resolveCoachDayContext,coachActionMatchesDay} from './coachDayContext.js';
+import {resolveCoachDayContext,coachActionMatchesDay,coachDayStarter} from './coachDayContext.js';
 import {coachWorkoutReuseReply} from './coachWorkoutReuse.js';
+import {isCombineIntent,isCombineTopic,isCoachReadOnly,isCoachScheduleRequest,normalizeCoachMessage,coachActionWithinScope,isCoachCancellation,isCoachAcknowledgement} from './coachIntent.js';
+import {pendingCoachWorkflows,coachEntries} from './coachConversations.js';
 import {
   HOME_EQUIPMENT,
   PHYSIQUE_PRIORITY_OPTIONS,
@@ -353,6 +355,7 @@ export function detectCoachLanguage(value) {
   if (!text) return null;
   const explicit = explicitLanguageRequest(text);
   if (explicit) return explicit;
+  if(/\b(?:zdruz\w*|skombinir\w*|prestav\w*|premakn\w*|skrajs\w*|podaljs\w*|naredi|zamenj\w*|povej|razlozi|treninga|treninge|zamujen\w*|kolko|toti|tote|dans)\b/.test(normalizeCoachMessage(text)))return 'Slovenian';
   if (/\p{Script=Han}|\p{Script=Hiragana}|\p{Script=Katakana}/u.test(text))
     return "the same Chinese or Japanese language used by the user";
   if (/\p{Script=Hangul}/u.test(text)) return "Korean";
@@ -2051,14 +2054,29 @@ export const AIService = {
       state.conversations.filter(entry => (entry.conversationId || 'legacy') === state.activeCoachConversationId),
     );
     const selectedDay=combineOptions.requestContext?resolveCoachDayContext(state,combineOptions.requestContext):null;
-    const reuse=coachWorkoutReuseReply(state,message,{requestContext:combineOptions.requestContext,language:responseLanguage});
-    if(reuse)return reuse;
+    const starter=combineOptions.requestContext?coachDayStarter(combineOptions.requestContext):'';
+    const localMessage=starter&&message.startsWith(starter)?message.slice(starter.length):message;
+    const readOnly=isCoachReadOnly(localMessage);
+    const pending=pendingCoachWorkflows(state).filter(entry=>entry.reply);
+    if(isCoachCancellation(localMessage)&&pending.length)return {text:responseLanguage==='Slovenian'?'Predloga ne bom nadaljeval. Treningov nisem spreminjal.':'I won’t continue with the proposal. Your workouts are unchanged.',action:null,source:'coach-clarification',final:true,supersededEntryIds:pending.map(entry=>entry.id)};
+    if(isCoachAcknowledgement(localMessage)&&pending.length){
+      const request=pending.at(-1).reply.combineRequest;
+      const text=request?.step==='time'?(responseLanguage==='Slovenian'?'Koliko časa imaš za celoten trening? Izberi čas ali ga napiši.':'How much time do you have for the whole workout? Choose a time or type it.'):
+        request?.step==='sources'?(responseLanguage==='Slovenian'?'Izberi dva treninga na seznamu, nato nadaljuj.':'Choose two workouts from the list, then continue.'):
+        (responseLanguage==='Slovenian'?'Predlog je pripravljen. Potrdi ga na obstoječem pregledu, da se shrani.':'The proposal is ready. Confirm on the existing review to save it.');
+      return {text,action:null,source:'coach-clarification',final:true};
+    }
+    const latest=coachEntries(state).filter(entry=>entry.reply).at(-1);
+    if(isCoachAcknowledgement(localMessage)&&latest?.actionResult?.status==='applied')return {text:responseLanguage==='Slovenian'?'Sprememba je že potrjena. Ni je treba potrditi znova.':'The change is already applied. No need to confirm it again.',action:null,source:'deterministic',final:true};
+    if(selectedDay?.unresolved&&isCombineIntent(message))return {text:responseLanguage==='Slovenian'?'Izbrani trening se je spremenil. Ponovno izberi dan, da združim prava treninga.':'The selected workout changed. Choose the day again so I can combine the correct sessions.',action:null,source:'validated-fallback',final:true};
     const explicitDate=/\b\d{4}-\d{2}-\d{2}\b|\b\d{1,2}\s+(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}\b/i.test(message);
-    const combined=selectedDay||explicitDate?null:await coachCombineReply(state,message,{...combineOptions,language:responseLanguage,interpret:payload=>request('combine-intent',payload)});
+    const combined=await coachCombineReply(state,localMessage,{...combineOptions,language:responseLanguage,anchorSessionId:selectedDay?.occurrenceId||undefined,interpret:payload=>request('combine-intent',payload)});
     if(combined)return combined;
-    const missed=selectedDay||explicitDate?null:coachMissedReply(state,message);
+    const reuse=coachWorkoutReuseReply(state,localMessage,{requestContext:combineOptions.requestContext,language:responseLanguage});
+    if(reuse)return reuse;
+    const missed=readOnly?null:coachMissedReply(state,localMessage,isoDay(),{anchorSessionId:selectedDay?.occurrenceId,language:responseLanguage});
     if(missed)return missed;
-    const deterministic = selectedDay||explicitDate?{action:null,source:'offline',text:'Review the selected calendar day in Coach.'}:deterministicCoach(state, message);
+    const deterministic = readOnly||selectedDay||explicitDate?{action:null,source:'offline',text:responseLanguage==='Slovenian'?'Treningov nisem spreminjal. Povej, kaj želiš preveriti.':'Your workouts are unchanged. Tell me what you would like to review.'}:deterministicCoach(state, message);
     if (deterministic.final) return deterministic;
     try {
       // The UI has already checked configuration. A real send needs no probe
@@ -2070,6 +2088,7 @@ export const AIService = {
       const payload = {
         message,
         responseLanguage,
+        requestIntent:{readOnly,combine:isCombineTopic(localMessage),schedule:isCoachScheduleRequest(localMessage)},
         context: {...coachContext(state),...(selectedDay?{selectedDay}:{}),combineRevisionContext:combineRevisionContext(state),combineSessions:flexibleSessions(state).map(s=>({id:s.logicalSessionId,name:s.workout.name,date:s.scheduledDate,status:s.status}))},
         deterministicAnalysis:
           deterministic.source === "offline" ? null : deterministic,
@@ -2083,13 +2102,14 @@ export const AIService = {
       data.text = normalizeCoachText(data.text);
       const exactReuse=coachWorkoutReuseReply(state,message,{requestContext:combineOptions.requestContext,proposedAction:data.action,language:responseLanguage});
       if(exactReuse)return exactReuse;
-        if(selectedDay&&['combine-workouts','revise-combined-workout'].includes(data.action?.type))return {text:responseLanguage==='Slovenian'?'Za združevanje odpri možnost Combine two workouts, kjer lahko pregledaš oba točna treninga.':'Open Combine two workouts to select and review both exact sessions.',action:null,source:'validated-fallback'};
+      if(readOnly&&data.action)return {text:responseLanguage==='Slovenian'?'Treningov nisem spreminjal. Če želiš tudi konkreten predlog spremembe, povej kateri trening in kaj želiš spremeniti.':'Your workouts are unchanged. If you also want a change, tell me which workout and what to adjust.',action:null,source:'validated-fallback'};
       if(data.action?.type==='combine-workouts')return coachCombineReply(state,message,{
-        selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,
+        selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,anchorSessionId:selectedDay?.occurrenceId||undefined,
       });
       if(data.action?.type==='revise-combined-workout')return coachCombineReply(state,message,{revisionIntent:data.action,language:responseLanguage});
       const aiAction = validateAIAction(data.action, state);
       const fallbackAction = validateAIAction(deterministic.action, state);
+      if(!coachActionWithinScope(aiAction,localMessage))return {text:responseLanguage==='Slovenian'?'Predlog bi spremenil več, kot si prosil. Želiš spremembo samo tega treninga ali celotnega urnika? Ničesar nisem spreminjal.':'That proposal would change more than you asked for. Do you want to adjust this workout or the wider schedule? Nothing has been changed.',action:null,source:'validated-fallback'};
       if (!aiAction && fallbackAction?.type === "add-today-workout")
         return { ...deterministic, action: fallbackAction };
       if (data.action && !aiAction && !fallbackAction)
@@ -2108,7 +2128,13 @@ export const AIService = {
       const text =
         action?.type === "adapt-today"
           ? pendingAdaptationText(action, responseLanguage)
-          : data.text;
+          : action?.type==='week-schedule-change'
+            ? responseLanguage==='Slovenian'?`Pripravil sem spremembo ${action.changes.length===1?'tega termina':'izbranih terminov'} za pregled. Potrdi spodaj, da se shrani.`:'The selected dates are ready to review. Confirm below to save the change.'
+            : action?.type==='program-exercise-change'
+              ? responseLanguage==='Slovenian'?'Pripravil sem spremembe izbranih vaj v planu. Preglej jih pred potrditvijo.':'The exercise changes are ready to review before updating your plan.'
+              : action?.type==='add-today-workout'
+                ? responseLanguage==='Slovenian'?'Pripravil sem dodaten trening za danes. Preglej ga spodaj, preden ga dodaš.':'An extra workout is ready to review before adding it to today.'
+                : data.text;
       return { text, action, source: "ai" };
     } catch (error) {
       if (combineOptions.requireRemoteSuccess) throw error;

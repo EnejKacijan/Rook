@@ -79,7 +79,7 @@ export function ImportResolution({review, program, reviewProgram=program, exclud
       <StepProgress step={groups.filter((g,i)=>i<=step&&visitable(g)).length} total={groups.filter(visitable).length} hideSingle />
       {groups.map((group,index)=><div key={group.id} hidden={index!==step} data-active={index===step} data-review-group={group.id} className="import-decision-content">
         <span className="eyebrow">{group.members.length?'EXERCISE REVIEW':'WORKOUT REVIEW'}</span>
-        <h1 tabIndex={-1}>{group.title}</h1>
+        <h1 className="visually-hidden" tabIndex={-1}>{group.title}</h1>
         <p className="import-group-status" role="status">{program.days.find(d=>d.id===group.dayId)?.name}{groupResolved(group)?' · Resolved':' · Needs review'}</p>
         {group.members.length>0&&<div className="import-group-source"><span className="eyebrow">Source</span>{(group.sourceSpans.length?group.sourceSpans.map(s=>s.text):[...new Set(group.items.map(i=>i.issue?.source).filter(Boolean))].length?[...new Set(group.items.map(i=>i.issue?.source).filter(Boolean))]:[group.members[0].source.importedSourceName||group.title]).map((text,i)=><blockquote key={i}>{text}</blockquote>)}</div>}
         {(reviewProgram.days.find(d=>d.id===group.dayId)?.warmupPlan?.items||[]).filter(item=>group.sourceSpans.some(span=>span.text===item.sourceText)).map((item,i)=><p className="import-group-status" key={i}>{item.prescriptionText} · From source</p>)}

@@ -5,4 +5,5 @@
 .exercise-picker-placeholder { opacity:.35; font-size:18px; }
 .exercise-picker-label { display:block; min-width:0; overflow-wrap:anywhere; }
 .exercise-picker-label > strong,.exercise-picker-label > small { display:block; }
+.exercise-picker-label > strong { white-space:normal; overflow:visible; text-overflow:clip; }
 .exercise-picker-label > small { margin-top:3px; }

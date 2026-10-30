@@ -38,6 +38,6 @@ export function OptionalActivityEditor({ kind, value, onChange, onSubmit, editin
     {cardio && <div className="optional-control-field">{conditioning && <span className="rook-ui">Intensity</span>}<OptionalIntensityControl value={value.intensity} options={conditioning ? CONDITIONING_INTENSITIES : LIGHT_CARDIO_INTENSITIES} onChange={intensity => onChange({ intensity })} /></div>}
     {error && <p className="offline-banner" role="alert">{error}</p>}
     {showActions && <><button type="submit" disabled={submitDisabled} className="button primary">{editing ? 'SAVE ACTIVITY' : 'START SESSION'}</button>
-    {!editing && cardio && <small className="sheet-footnote">Optional · does not complete a planned strength workout.</small>}</>}
+    {!editing && cardio && <small className="sheet-footnote">Does not complete a planned strength workout.</small>}</>}
   </form>;
 }

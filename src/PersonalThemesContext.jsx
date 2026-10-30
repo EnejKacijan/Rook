@@ -8,6 +8,7 @@ import { nextThemeMidnightDelay, prepareSeasonalThemeSelection, resolveSeasonalT
 import { subscribeNativeForeground } from './nativeLifecycle.js';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
 import { useThemeDiscovery } from './useThemeDiscovery.js';
+import {seasonalAccessPolicy} from './seasonalThemeAccess.js';
 import './personalThemeApp.css';
 
 // Appearance is available to everyone in this release. It does not create or
@@ -21,7 +22,9 @@ const inactive = Object.freeze({ personalTheme: null, renderedPersonalTheme: nul
   openThemes: () => {}, clearTheme: () => {}, setAppearance: () => {}, setSeasonalTransitionBlocked: () => {} });
 export const usePersonalThemes = () => useContext(ThemeContext) || inactive;
 
-export function PersonalThemesProvider({ children, Modal, Header }) {
+const themeNow=()=>new Date();
+export function PersonalThemesProvider({ children, Modal, Header, seasonalAccess, onExploreSeasonalPro, now=themeNow }) {
+  const access=seasonalAccessPolicy(seasonalAccess);
   const [discoveryAudience, setDiscoveryAudience] = useState(null);
   const discovery = useThemeDiscovery(discoveryAudience || {});
   const discoveryRef = useRef(discovery); discoveryRef.current = discovery;
@@ -48,11 +51,11 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
     if (blocked.current || surfaceRef.current || document.visibilityState === 'hidden' ||
       document.activeElement?.matches('input,textarea,select,[contenteditable="true"]')) return;
     const saved = committed.current;
-    const next = resolveSeasonalTheme(saved);
+    const next = resolveSeasonalTheme(saved,now(),undefined,access);
     if (!equal(rendered.current, next)) {
       rendered.current = next;
       setRenderedTheme(next);
-      if (!equal(saved, next)) {
+      if (saved?.basePalette!==next?.basePalette&&!access.enabled) {
         const key = `${saved.basePalette}:${saved.seasonalValidUntil || 'legacy'}:${next.basePalette}`;
         if (announced.current !== key) {
           announced.current = key;
@@ -67,13 +70,13 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
       catch { /* No promise that the automatic change was persisted. */ }
     }
   };
-  useLayoutEffect(() => { refreshRef.current(); }, [personalTheme, surface, safetyRevision]);
+  useLayoutEffect(() => { refreshRef.current(); }, [personalTheme, surface, safetyRevision, access.enabled, access.status, now]);
   useEffect(() => {
     let timer, blurTimer;
     const refresh = () => {
       refreshRef.current();
       clearTimeout(timer);
-      timer = setTimeout(refresh, nextThemeMidnightDelay());
+      timer = setTimeout(refresh, nextThemeMidnightDelay(now()));
     };
     const visible = () => { if (document.visibilityState !== 'hidden') refresh(); };
     const blur = () => { clearTimeout(blurTimer); blurTimer = setTimeout(refresh, 0); };
@@ -97,7 +100,7 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
       document.removeEventListener('visibilitychange', visible);
       document.removeEventListener('focusout', blur);
     };
-  }, []);
+  }, [now]);
   const background = useRef(null), focus = useRef(null);
   const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches);
   useEffect(() => {
@@ -125,7 +128,7 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
   }, []);
   const apply = theme => {
     if (!session.current || session.current.closed) return;
-    const next = prepareSeasonalThemeSelection(theme);
+    const next = prepareSeasonalThemeSelection(theme,now(),undefined,access);
     // Persist before committing. A storage error leaves the draft reviewable.
     savePersonalThemePreference(next);
     committed.current = next;
@@ -165,6 +168,7 @@ export function PersonalThemesProvider({ children, Modal, Header }) {
       backgroundRef={background} returnFocusRef={focus} lockDocument={!background.current?.matches('.modal-layer')}>
       {close => <PersonalThemeStudio Header={Header} initial={surface.initial} systemDark={systemDark}
         newReleases={discoveryAudience?.eligible && surface.discoveryProfileId === discoveryAudience.profileId ? surface.newReleases : []} onDiscoverySeen={discovery.markSeen}
+        seasonalAccess={access} onExploreSeasonalPro={onExploreSeasonalPro} now={now}
         close={close} preview={preview} apply={apply} />}
     </Modal>, document.body)}
   </ThemeContext.Provider>;

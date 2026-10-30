@@ -26,8 +26,10 @@ it('mixed loads never produce a scalar recommendation and changed current set co
   expect(progressionFor(e,[w(undefined,[40,35,30]),w(undefined,[40,35,30],8)])).not.toHaveProperty('weight');
   expect(progressionFor({...e,sets:[{},{}]},top())).toBeNull();
 });
-it('zero never supplies a required working load, and stale weight fields cannot load a no-load variation',()=>{
-  expect(progressionFor(e,[w(undefined,[0,0,0]),w(undefined,[0,0,0],8)]).title).toBe('Log a working load first');
+it('explicit zero records no external load without suggesting an automatic increase, and stale loads cannot load a no-load variation',()=>{
+  expect(progressionFor(e,[w(undefined,[0,0,0]),w(undefined,[0,0,0],8)])).toMatchObject({title:'Keep your load pattern',type:'hold'});
+  expect(progressionFor(e,[w(undefined,[0,0,0]),w(undefined,[0,0,0],8)])).not.toHaveProperty('weight');
+  expect(progressionFor(e,[w(undefined,[null,null,null]),w(undefined,[null,null,null],8)]).title).toBe('Log a working load first');
   const noLoad={...e,exerciseId:'custom-unloaded',loadRequirement:'none'};
   const history=top().map(workout=>({...workout,exercises:workout.exercises.map(exercise=>({...exercise,...noLoad}))}));
   expect(progressionFor(noLoad,history).title).toBe('Ready for a harder variation');

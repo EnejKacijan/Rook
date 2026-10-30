@@ -60,10 +60,15 @@
 .active-workout-notice strong { min-width: 0; font-size: 14px; line-height: 1.25; overflow-wrap: anywhere; }
 .active-workout-notice small { color: #6f6c68; font-size: 11px; line-height: 1.3; }
 .active-workout-notice-progress { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.active-workout-notice-count { white-space:nowrap; }
+.active-strength-notice { display:flex;flex-wrap:wrap; }
+.active-strength-notice > span { flex:1 1 9rem; }
+.active-strength-notice > button { flex:0 0 auto;white-space:nowrap; }
 .active-workout-notice > button { min-width: 64px; min-height: 44px; padding: 0 7px; color: var(--rook-accent-text); font-size: 11px; font-weight: 800; letter-spacing: .08em; }
 .active-workout-start-lock { max-width: 330px; margin: 20px 0 0 !important; color: #6f6c68; font-size: 13px; line-height: 1.45; }
 .active-workout-notice + .rest-day-state { margin-top: 32px; }
 .today-screen > .active-workout-notice + .today-hero { margin-top: 12px; }
+.today-screen > .exercise-preview.is-compact { margin-top:0; }
 .plan-ready-notice { position: relative; margin-top: 16px; padding: 12px 42px 12px 13px; border: 1px solid color-mix(in srgb, var(--rook-accent) 16%, transparent); border-radius: 14px; background: var(--rook-accent-soft); }
 .plan-ready-notice > button { position: absolute; top: 3px; right: 4px; width: 36px; height: 36px; padding: 0; border: 0; background: transparent; color: var(--rook-secondary); font-size: 20px; line-height: 1; }
 .plan-ready-notice .eyebrow { color: var(--rook-accent-text); }
@@ -111,8 +116,11 @@
 .rest-up-next .rest-up-next-descriptor { display: block; margin-top: 4px; color: #6f6c68; font-size: 14px; font-weight: 600; line-height: 1.3; }
 .rest-up-next-summary { display: block; margin-top: 6px; color: var(--rook-secondary); font-size: 13px; }
 .rest-up-next-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 24px; }
-.today-my-workouts { display: inline-flex; align-items: center; gap: 6px; min-height: 44px; margin-top: 20px; color: var(--rook-secondary); }
-.today-my-workouts .inline-navigation-chevron { width: 15px; height: 15px; }
+.today-screen > .today-training-options { margin-top:16px; }
+.today-training-options > .list-row { min-height:48px;margin:0;padding:12px 0;gap:12px;font-size:14px;font-weight:500;line-height:1.4;color:var(--rook-secondary); }
+.today-training-options > .list-row:last-child { border-bottom:0; }
+.today-training-options > .list-row > .rook-navigation-chevron { flex:0 0 auto; }
+.today-screen > .today-optional-activities + .today-training-options { margin-top:0; }
 .rest-day-state > .freestyle-entry:has(.rest-freestyle-action) { margin-top: 28px; }
 .rest-day-state .rest-freestyle-action { min-height: 44px; min-width: 44px; padding: 8px 0; color: var(--rook-secondary); font-size: 13px; font-weight: 500; text-align: left; }
 .today-day-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
@@ -124,9 +132,9 @@
 .today-workout-chooser .list-row { min-height: 64px; color: var(--rook-text); }
 .today-workout-chooser .list-row > span:first-child { white-space: normal; overflow-wrap: anywhere; }
 .today-workout-chooser .list-row small { color: var(--rook-secondary); line-height: 1.4; }
-.today-missed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:12px; margin-top:8px; padding:8px 0; }
+.today-missed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:12px; margin-top:12px; padding:0; }
 .today-screen > .today-missed-disclosure + .today-hero,
-.today-screen > .today-missed-disclosure + .missed-workout-feedback + .today-hero { margin-top:0; padding-top:12px; }
+.today-screen > .today-missed-disclosure + .missed-workout-feedback + .today-hero { margin-top:0; padding-top:16px; }
 /* Disclosure contains the row's margin, so avoid adding the paragraph's formerly
    collapsed bottom margin to it (including when the reminder is hidden). */
 .rest-day-state > p:has(+ .today-missed-disclosure) { margin-bottom: 0; }
@@ -140,11 +148,9 @@
 }
 .today-missed-label { margin:0; color:var(--rook-secondary); font-size:14px; font-weight:500; line-height:1.4; }
 .today-missed-row > .missed-reminder-hide { min-width:44px; min-height:44px; padding:8px 0; color:var(--rook-secondary); font-size:14px; }
-.today-missed-open { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-width:0; min-height:44px; padding:4px 0; border:0; background:transparent; color:var(--rook-text); text-align:left; }
+.today-missed-open { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-width:0; min-height:48px; padding:0; border:0; background:transparent; color:var(--rook-text); text-align:left; }
 .today-missed-open > span:first-child { display:grid; gap:2px; min-width:0; }
-.today-missed-workout { min-width:0; font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
-.today-missed-open strong { font-size:16px; line-height:1.4; overflow-wrap:anywhere; }
-.today-missed-open time { color:var(--rook-secondary); font-size:14px; line-height:1.4; }
+.today-missed-label { overflow-wrap:anywhere; }
 .today-missed-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 22px; }
 :root .missed-workout-feedback .missed-feedback-error { bottom: calc(var(--bottom-nav-total-height, 90px) + 12px); }
 .missed-workout-feedback .today-undo > span { min-width: 0; overflow-wrap: anywhere; }

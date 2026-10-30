@@ -1,4 +1,7 @@
-.review-details{margin:16px 0;border-top:1px solid var(--rook-border);border-bottom:1px solid var(--rook-border)}
+.review-details{margin:var(--review-details-gap,16px) 0;border-top:1px solid var(--rook-border);border-bottom:1px solid var(--rook-border)}
+/* Adjacent disclosures share the preceding row's bottom separator. */
+.review-details:has(+ .review-details){margin-bottom:0}
+.review-details+.review-details{margin-top:0;border-top:0}
 .review-details>summary{min-height:44px;padding:10px 0;color:var(--rook-accent-text);font-size:14px;line-height:1.4;font-weight:600;text-transform:none;letter-spacing:normal}
 .review-details-body{padding:0 0 12px;min-width:0}
 .review-details .review-details-body>section{margin-top:0}

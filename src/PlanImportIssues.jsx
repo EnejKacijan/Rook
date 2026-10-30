@@ -20,7 +20,7 @@ export function PlanImportIssues({ review, resolved, program, onResolve, reviewR
     <span className="eyebrow">{pending.length||matchesPending?'READY TO REVIEW':'READY TO USE'}</span>
     <strong>{program.days.length} {program.days.length===1?'workout':'workouts'} · {exerciseCount} {exerciseCount===1?'exercise':'exercises'}</strong>
     <>
-      <p role="status">{summaryOnly&&!pending.length&&!matchesPending?'Source decisions complete.':`${importDecisionSummary(review,resolved)}.`}</p>
+      {(!summaryOnly||pending.length>0||matchesPending)&&<p role="status">{importDecisionSummary(review,resolved)}.</p>}
       {decisionGroups.map(group=><button key={group.id} className="text-button" onClick={()=>onChange(group.id)}>Edit {group.title.toLowerCase()}</button>)}
       {!summaryOnly&&pending.length>0&&<strong>NEEDS YOUR DECISION</strong>}
       {!summaryOnly&&<>

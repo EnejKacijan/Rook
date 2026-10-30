@@ -48,8 +48,8 @@ export function HistoryCorrectionEditor({workout,state,update,onDone,closeSheet,
   ].filter(Boolean).join(' · ');
   return <main ref={root} className="screen detail-screen history-correction-editor" onFocusCapture={()=>requestAnimationFrame(revealFocusedRow)}>
     <Header title={stage==='review'?'Review corrections':'Correct history'} onClose={()=>dirty?setDiscard('close'):closeSheet()} onBack={()=>stage==='review'?setStage('edit'):exit()}/>
-    <p className="eyebrow">{stage==='review'?'SAVE CHANGES?':'CORRECT HISTORY'}</p><h1 tabIndex={-1}>{workout.name}</h1>
-    <p>{stage==='review'?'This may update PRs and progression history.':'Correct what you logged. The original plan, dates and workout identity stay unchanged.'}</p>
+    <h1 tabIndex={-1}>{workout.name}</h1>
+    {!discard&&<p>{stage==='review'?'This may update PRs and progression history.':'Correct what you logged. The original plan, dates and workout identity stay unchanged.'}</p>}
     {discard?<section className="history-correction-confirm" role="alert"><h2>Discard changes?</h2><p>Your saved workout will stay unchanged.</p><button className="button primary" onClick={()=>setDiscard(null)}>KEEP EDITING</button><button className="button quiet danger-text" onClick={()=>{allowClose.current=true;discard==='close'?closeSheet():onDone();}}>DISCARD CHANGES</button></section>:<>
     {stage==='edit'?<>
       <label className="history-note">Session note<textarea aria-label="Session note" maxLength={500} rows={2} value={draft.workout.sessionNote||''} onChange={event=>change(w=>w.sessionNote=event.target.value)}/></label>

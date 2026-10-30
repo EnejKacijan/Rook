@@ -1,6 +1,6 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
 import {blankState,buildProgram,firstScheduledDate,serializeState,deserializeState,currentWeekSchedule,plannedWorkoutForDate,startWorkout,completeWorkout} from './domain.js';
-import {firstPlanWeekWorkouts,flexibleOccurrenceForDate,flexibleOccurrencesForDate,flexibleSessionById,flexibleSessions,missedFlexibleSessions,moveWorkoutCandidates,proposeFlexibleWeek,applyFlexibleWeek,temporaryScheduleReview} from './flexibleWeek.js';
+import {firstPlanWeekWorkouts,flexibleOccurrenceForDate,flexibleOccurrencesForDate,flexibleSessionById,flexibleSessions,missedFlexibleSessions,moveWorkoutCandidates,proposeFlexibleWeek,applyFlexibleWeek,temporaryScheduleReview,swapWorkoutCandidates} from './flexibleWeek.js';
 import {proposeWorkoutToday,applyWorkoutToday} from './useWorkoutToday.js';
 
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-10-25T12:00:00'));});
@@ -34,6 +34,15 @@ it('schedules the exact selected prescription on Sunday and survives strict relo
   expect(currentWeekSchedule(next).map(row=>row.scheduledDate)).toEqual(['2026-10-25']);
   expect(firstPlanWeekWorkouts(next).map(row=>row.originalDate)).toEqual(['2026-10-19','2026-10-21']);
   expect(missedFlexibleSessions(next)).toHaveLength(0);expect(temporaryScheduleReview(next).unresolved).toHaveLength(0);
+});
+it('an accepted opening-week workout remains swappable despite an original date before installation',()=>{
+  const state=fixture(),source=friday(state),scheduled=applyFlexibleWeek(state,move(state,source)).state;
+  const upcoming=flexibleSessions(scheduled).find(item=>item.scheduledDate==='2026-10-26');
+  expect(swapWorkoutCandidates(scheduled,upcoming.logicalSessionId).map(item=>item.logicalSessionId)).toContain(source.logicalSessionId);
+  const proposal=proposeFlexibleWeek(scheduled,{mode:'swap',sessionId:upcoming.logicalSessionId,otherSessionId:source.logicalSessionId});expect(proposal.status,proposal.error).toBe('ready');
+  const next=deserializeState(serializeState(applyFlexibleWeek(scheduled,proposal).state),{strict:true});
+  expect(flexibleSessionById(next,source.logicalSessionId)).toMatchObject({originalDate:'2026-10-23',scheduledDate:'2026-10-26'});
+  expect(flexibleSessionById(next,upcoming.logicalSessionId).scheduledDate).toBe('2026-10-25');expect(next.program).toEqual(scheduled.program);expect(next.workouts).toEqual(scheduled.workouts);
 });
 it('retains occurrence identity, week-one credit, and logged sets when starting and finishing',()=>{
   const state=fixture(),item=friday(state);let next=applyFlexibleWeek(state,move(state,item)).state;

@@ -302,6 +302,7 @@ describe("exercise load requirements", () => {
         ),
         item.id,
       ).toBe(requirement !== "required");
+      expect(workingSetCanComplete({exerciseId:item.id},{reps:8,weight:0}),item.id).toBe(true);
     }
   });
 });

@@ -22,6 +22,7 @@ import './activeLoggerTouch.css';
 import './standalonePageZoom.css';
 import './pressFeedback.css';
 import './uiReadability.css';
+import './typography.css';
 
 // Set the installed-PWA policy before the first interactive app render.
 const releasePageZoom = bindStandalonePageZoom();

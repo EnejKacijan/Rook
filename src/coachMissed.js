@@ -1,12 +1,13 @@
 import {isoDay,weekday,calendarDate} from './domain.js';
 import {missedFlexibleSessions,addCalendarDays} from './flexibleWeek.js';
+import {isCombineTopic,isCoachReadOnly} from './coachIntent.js';
 
 // This resolves source identity only; the existing schedule sheet owns dates,
 // conflicts and Apply. No language-model proposal can silently pick a source.
-export function coachMissedReply(state,message,today=isoDay()) {
+export function coachMissedReply(state,message,today=isoDay(),{anchorSessionId,language}={}) {
   const text=String(message).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-  if(!/missed|zamujen|izpust/.test(text)||/combin|condens|merg|zdruz/.test(text))return null;
-  const sl=/zamujen|izpust/.test(text);
+  if(!/missed|missal|missan|zamujen|izpust/.test(text)||isCombineTopic(message)||isCoachReadOnly(message))return null;
+  const sl=language==='Slovenian'||/missal|missan|zamujen|izpust/.test(text);
   const all=missedFlexibleSessions(state,today);
   let choices=all;
   const date=text.match(/\b\d{4}-\d{2}-\d{2}\b/)?.[0];
@@ -17,7 +18,7 @@ export function coachMissedReply(state,message,today=isoDay()) {
   else if(day)choices=all.filter(s=>weekday(calendarDate(s.scheduledDate))===day);
   else if(/\blast\b|zadnj/.test(text))choices=all.slice(-1);
   else if(/\bfirst\b|prv/.test(text))choices=all.slice(0,1);
-  else {const named=all.filter(s=>text.includes(s.workout.name.toLowerCase()));if(named.length)choices=named;}
+  else {const named=all.filter(s=>text.includes(s.workout.name.toLowerCase()));if(named.length)choices=named;else if(anchorSessionId)choices=all.filter(source=>source.logicalSessionId===anchorSessionId);}
   return {final:true,source:'missed-occurrence',action:null,
     text:choices.length>1?(sl?'Kateri zamujeni trening želiš prestaviti? Izberi datum in trening.':'Which missed workout do you want to reschedule? Choose the dated occurrence.'):
       choices.length?(sl?'Ta trening še ni opravljen. Izberi ga za pregled novega datuma.':'This occurrence is still uncompleted. Select it to choose a new date.'):

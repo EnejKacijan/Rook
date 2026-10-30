@@ -71,6 +71,36 @@ adds new files, any combination of seasons merges without conflicts, in any orde
   `--rook-season-*` properties, and every shade at least 0.075 OKLab from error and
   warning colors. The contrast report test covers all seasonal shades and tones.
 
+## Optional year-round access with Pro
+
+The current billing-free release keeps the existing season-only behavior and
+shows no Pro message or upgrade action. `PersonalThemesProvider` optionally
+accepts `seasonalAccess: { enabled: true, status: 'active' | 'free' | 'unknown' }`
+and `onExploreSeasonalPro`. The subscription owner supplies its already-verified
+status; Appearance never imports a billing SDK or persists an entitlement flag.
+`App`/`RookRoot` expose this integration through `themeOptions`. A real Pro
+rollout must supply this capability instead of gating the whole theme studio.
+
+When enabled, everyone can apply a released seasonal theme during its local
+window. Active Pro also permits the Seasonal archive and keeps the selected
+theme after the season. There is no per-theme Keep action, claim or permanent
+ownership. Cancelled-but-still-active and SDK-cached active subscriptions remain
+active; ROOK does not calculate its own subscription expiry or offline grace.
+
+Confirmed access loss outside the season uses the existing workout/input/editor
+safety blockers and preserves all custom shades and appearance choices. Unknown
+status holds an already-selected theme without authorizing a new off-season
+Apply. Restored access unlocks choices without automatically selecting anything.
+The saved `seasonalValidUntil` remains a free-window marker, not a subscription
+expiry: an explicit off-season Pro selection binds it to the next free season,
+so an entitlement that ends during that window does not remove a free theme.
+After an actual fallback, returning seasons never reapply automatically.
+
+Only shipped, released modules appear. The local synthetic preview at
+`artifacts/seasonal-access-preview/` injects ephemeral access/date scenarios and
+uses its own storage/database namespace. Its Pro information sheet cannot make
+purchases. It does not enable billing or change the normal app's default access.
+
 ## Branches and dependencies
 
 ```

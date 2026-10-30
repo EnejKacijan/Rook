@@ -16,3 +16,8 @@
 .history-export-status { font-size:14px;line-height:1.45; }
 .history-export-status .restriction-spinner { display:inline-block;width:16px;height:16px;vertical-align:middle; }
 .history-export-screen > .button { width:100%;margin-top:16px; }
+@media (max-width: 360px) {
+  .history-export-screen > .detail-header.has-trailing-action {
+    grid-template-columns: 44px minmax(0, 1fr) 44px 44px;
+  }
+}

@@ -118,7 +118,7 @@ it.each([false, true])('rapid date browsing commits each date/content directly, 
   const state = moveToTodayFixture('freestyle'); mount(state);
   const screen = host.querySelector('.today-screen'); screen.scrollTop = 160;
   for (const [day, date, heading] of [
-    ['Wed','2026-09-16','FUNKCIONALNI DAN'], ['Tue','2026-09-15','Rest day'],
+    ['Wed','2026-09-16','FUNKCIONALNI DAN'], ['Tue','2026-09-15','Planned rest day'],
     ['Fri','2026-09-18','UPPER B'], ['Sun','2026-09-20','Freestyle workout'], ['Mon','2026-09-14','NOGE A'],
   ]) {
     selectDay(day);
@@ -136,7 +136,7 @@ it.each([false, true])('rapid date browsing commits each date/content directly, 
 it.each(['none','planned','completed-planned','freestyle','active-planned'])('date switching preserves the %s Today presentation and all workout state', kind => {
   const state = moveToTodayFixture(kind); mount(state);
   const hero = host.querySelector('.active-workout-hero,.today-hero,.rest-day-state').textContent;
-  selectDay('Tue'); expect(host.querySelector('h1').textContent).toBe('Rest day');
+  selectDay('Tue'); expect(host.querySelector('h1').textContent).toBe('Planned rest day');
   selectDay('Sun');
   expect(host.querySelector('.active-workout-hero,.today-hero,.rest-day-state').textContent).toBe(hero);
   expect(current).toEqual(state); expect(animate).not.toHaveBeenCalled();

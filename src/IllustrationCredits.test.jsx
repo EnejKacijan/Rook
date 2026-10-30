@@ -21,7 +21,7 @@ describe('public illustration credits',()=>{
     expect(markup).toContain('exercise-detail-art');
     expect(markup).toContain('wg-bench-press.svg');
     expect(markup).not.toMatch(/Workout Guide|Bryl Lim|Everkinetic|AI-generated|appearance-credits|illustration-credit|Source:/);
-    expect(markup).toContain('HISTORY');
+    expect(markup).toContain('No history yet.');
   });
   it('retains required authorship and licensing in the existing global Appearance section',()=>{
     const state=blankState();

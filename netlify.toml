@@ -1,4 +1,7 @@
 [build]
+  # Review-only snapshot: retain this guard throughout the Claude visual audit.
+  # Local builds still work. Netlify Git builds must stop before publishing.
+  ignore = "exit 0"
   command = "npm run build"
   publish = "dist"
   functions = "netlify/functions"

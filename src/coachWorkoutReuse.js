@@ -4,6 +4,7 @@ import {planWorkoutChoices,resolvePlanWorkout} from './planWorkoutTemplates.js';
 import {templateDraft,templateUseIssues,instantiateTemplate} from './savedWorkouts.js';
 import {reusableExerciseDefinition} from './workoutTemplateSchema.js';
 import {startFreestyleWorkout} from './freestyleWorkout.js';
+import {isCombineTopic,isCoachReadOnly,isCoachScheduleRequest} from './coachIntent.js';
 
 const normalize=text=>String(text||'').normalize('NFD').replace(/\p{M}/gu,'').toLowerCase().replace(/[^\p{L}\p{N}]+/gu,' ').trim();
 const contains=(text,name)=>Boolean(name&&(` ${normalize(text)} `).includes(` ${normalize(name)} `));
@@ -20,10 +21,11 @@ export function coachReusableWorkouts(state,requestContext){
   return choices;
 }
 export function coachWorkoutReuseReply(state,message,{requestContext,proposedAction,language='English'}={}){
+  if(isCombineTopic(message)||isCoachReadOnly(message)||isCoachScheduleRequest(message))return null;
   const choices=coachReusableWorkouts(state,requestContext),text=normalize(message);
   if(!proposedAction&&/\b(resume|continue|undo|reopen|accident\p{L}*|pomot\p{L}*|nadalju\p{L}*|odpri|zakljuc\p{L}*)\b/u.test(text))return null;
   const matched=choices.filter(choice=>contains(message,choice.name)||contains(message,choice.name.split(/\s*[—–(]/u)[0]));
-  const own=/\b(same|my|saved|repeat|reuse|exact|isti|isto|enak|enaki|moj|moja|moje|mi|ponov\p{L}*)\b/u.test(text);
+  const own=/\b(same|my|saved|repeat|reuse|exact|isti|isto|enak|enaki|moj|moja|moje|ponov\p{L}*)\b/u.test(text)||matched.length>0&&/\b(start|do|train|run|give|naredi|zacni|sestavi|dodaj)\b/.test(text);
   const modifies=/\b(reduce|shorten|change|fewer|more sets|less sets|skrajs\p{L}*|spremeni|manj setov|vec setov)\b/u.test(text);
   const providerReuse=proposedAction?.type==='reuse-existing-workout';
   const providerNamed=proposedAction?.type==='add-today-workout'&&choices.some(choice=>contains(proposedAction.name,choice.name)||contains(proposedAction.name,choice.name.split(/\s*[—–(]/u)[0]));
@@ -34,7 +36,7 @@ export function coachWorkoutReuseReply(state,message,{requestContext,proposedAct
   if(!selected.length&&providerNamed)selected=choices.filter(choice=>contains(proposedAction.name,choice.name)||contains(proposedAction.name,choice.name.split(/\s*[—–(]/u)[0]));
   if(!selected.length)selected=choices;
   if(!selected.length)return {text:language==='Slovenian'?'Nimam tvoje shranjene predloge za ta trening. Odpri svoj plan ali shranjeni trening; ne bom si izmislil kopije.':'I couldn’t find your saved prescription. Open your plan or saved workout so I can reuse the original.',action:null,source:'deterministic'};
-  return {text:language==='Slovenian'?(selected.length===1?'Odpri svoj trening za pregled. Vaje, seti in cilji ostanejo taki, kot si jih nastavil.':'Kateri trening želiš ponoviti? Izberi izvirnik za pregled.'):(selected.length===1?'Review your own workout. Its exercises, sets and targets stay as you set them.':'Which workout do you mean? Choose the original to review.'),action:{type:'reuse-existing-workout',choices:selected},source:'deterministic',final:true};
+  return {text:language==='Slovenian'?(selected.length===1?'Vaje, seti in cilji ostanejo taki, kot si jih nastavil.':'Kateri trening želiš ponoviti? Izberi izvirnik za pregled.'):(selected.length===1?'Uses your workout’s existing exercises, sets and targets.':'Which workout do you mean? Choose the original to review.'),action:{type:'reuse-existing-workout',choices:selected},source:'deterministic',final:true};
 }
 export function resolveCoachWorkoutReuse(state,reference){
   if(reference?.profileId!==state.profile.id)throw Error('This workout belongs to another profile. Ask Coach again.');

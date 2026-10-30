@@ -15,6 +15,8 @@ export { resolvedTheme, resolvedAppearance, legacyThemePreference } from './useR
 import {bindTrainingReorder} from './trainingReorder.js';
 import { StandalonePageZoomPreference } from './StandalonePageZoomPreference.jsx';
 import { subscribeNativeForeground } from './nativeLifecycle.js';
+import {calendarTodaySelection,withCalendarSelection,selectCalendarToday,selectCalendarDate} from './calendarNavigation.js';
+import {useFollowTodayCalendar} from './useFollowTodayCalendar.js';
 import { presentNativeFile } from './platformFileActions.js';
 import { handleExternalLinkClick } from './externalLink.js';
 import { PersonalThemesProvider, usePersonalThemes } from './PersonalThemesContext.jsx';
@@ -50,9 +52,13 @@ import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
+import {ProfileTrainingStreak,CompletedWorkoutStreak,CompletedActivityStreak,RestDayStreak} from './TrainingStreak.jsx';
+import {exerciseImprovementHistory,improvementsForPeriod,latestImprovedExercises} from './exerciseImprovements.js';
+import {ExerciseImprovements,ImprovementRow} from './ExerciseImprovements.jsx';
+import {useLocalDay} from './useLocalDay.js';
 import { canRemoveUpNext, hasMeaningfulExerciseProgress, hasLoggedExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
-import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft} from './coachConversations.js';
+import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft,createCoachVisitTracker,persistCoachContinuation,coachConversationDayContext} from './coachConversations.js';
 import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -78,8 +84,9 @@ import { retapActiveTab, useActiveTabRetap, scrollTabRootToTop, tabNavigationBlo
 import { useBottomNavFeedback } from './useBottomNavFeedback.js';
 import { focusNavigationTarget } from './navigationFocus.js';
 import { combinedAdjustment, isCombinedAdjustment, combinedTransition, reconcileCombinedTermination, persistCombinedState } from './combinedWorkoutLifecycle.js';
-import { CoachCombineCard, CoachCombineChoices, CoachCombineRecovery, CombinedWorkoutNotice, CombinedProvenance, CombineWorkoutHint } from './CoachCombine.jsx';
+import { CoachCombineCard, CoachCombineChoices, CoachCombineRecovery, CombinedWorkoutNotice, CombinedProvenance } from './CoachCombine.jsx';
 import {combineWorkoutDiscovery,COMBINE_WORKOUTS_PROMPT} from './combineWorkoutDiscovery.js';
+import {missedCombineSources} from './missedWorkoutCombine.js';
 import {combinedWorkoutNoticeHidden,setCombinedWorkoutNoticeHidden} from './combinedWorkoutPresentation.js';
 import { combinedPrescriptionReview } from './combineExerciseReview.js';
 import { combineRecoveryForEntry } from './coachCombine.js';
@@ -185,7 +192,7 @@ import { useSheetBack } from './useSheetBack.js';
 import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
 import { MissedWorkoutFeedbackProvider } from './MissedWorkoutFeedback.jsx';
 import { flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek, flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
-import {hasMoveWorkoutDestination,hasTemporaryScheduleAction,moveWorkoutCandidates,firstPlanWeekWorkouts} from './flexibleWeek.js';
+import {hasMoveWorkoutDestination,hasTemporaryScheduleAction,moveWorkoutCandidates,firstPlanWeekWorkouts,swapWorkoutCandidates} from './flexibleWeek.js';
 import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import {
@@ -345,7 +352,6 @@ import {
   pluralize,
   previousExercise,
   profileIsUnder18,
-  recentExerciseProgress,
   refreshWorkoutWarmup,
   userSelectableReplacementCandidates,
   removeExerciseFromOccurrence,
@@ -469,6 +475,7 @@ import {
   loggingModeOf,
   segmentKindForSet,
   setTypeLabel,
+  workingLoadCanComplete,
 } from "./advancedLogging.js";
 import {
   requestRestNotificationPermission,
@@ -571,6 +578,7 @@ async function loadInitialLiftStateAttempt({ allowStartFresh = false } = {}) {
   } catch (error) { return { status: 'error', code:'normalization-error', stage:'normalization', error, recovery:localRecoverySummary(globalThis.localStorage,hydrateStoredState) }; }
 }
 export function useLiftState(startup) {
+  const calendarIntent=useRef({followToday:true,date:isoDay()});
   const alreadyPersistedState = useRef(null);
   const pendingDateSave = useRef(null);
   const pendingSyncDeletes = useRef([]);
@@ -580,14 +588,8 @@ export function useLiftState(startup) {
     const initial = startup.status === 'empty' ? blankState() : startup.state;
     if (startup.status === 'empty' && startup.firstRunProfileId)
       initial.profile.id = startup.firstRunProfileId;
-    if (initial.profile.onboardingComplete) {
-      const landingDate = initial.activeWorkout
-        ? initial.selectedDate || initial.activeWorkout.workoutDateKey || isoDay()
-        : isoDay();
-      initial.selectedDay = weekday(`${landingDate}T12:00:00`);
-      initial.selectedDate = landingDate;
-    }
-    return initial;
+    return initial.profile.onboardingComplete
+      ? withCalendarSelection(initial,calendarTodaySelection()) : initial;
   });
   const [persistenceFailed, setPersistenceFailed] = useState(false);
   const registerSavedDeletes = savedState => {
@@ -673,7 +675,9 @@ export function useLiftState(startup) {
   const update = useCallback((fn, options = {}) =>
       setState((previous) => {
         if (options.navigationDate) {
-          const {day,date} = options.navigationDate;
+          const {day,date,followToday=false,onlyIfFollowingToday=false} = options.navigationDate;
+          if(onlyIfFollowingToday && !calendarIntent.current.followToday)return previous;
+          calendarIntent.current={followToday,date};
           if (previous.selectedDate === date && previous.selectedDay === day) return previous;
           const next = {...previous, selectedDay:day, selectedDate:date};
           pendingDateSave.current = next;
@@ -726,9 +730,11 @@ export function useLiftState(startup) {
         if (options.syncDeletes?.length) pendingSyncDeletes.current.push(...options.syncDeletes);
         // Only skip the automatic write if normalization changed nothing.
         if (persistedReceipt && JSON.stringify(next) === persistedReceipt) alreadyPersistedState.current = next;
+        if(next.selectedDate!==previous.selectedDate)
+          calendarIntent.current={followToday:false,date:next.selectedDate};
         return next;
       }), []);
-  return [state, update, persistenceFailed];
+  return [state, update, persistenceFailed, calendarIntent];
 }
 
 class RookErrorBoundary extends Component {
@@ -1215,7 +1221,6 @@ function TrainingPriorityChoices({
   return (
     <div className="priority-choice-groups">
       <section className="priority-choice-group priority-balanced-choice">
-        <Eyebrow>BALANCED</Eyebrow>
         <div className="option-list priority-balanced-option">
           {option(BALANCED_TRAINING_PRIORITY)}
         </div>
@@ -1562,9 +1567,15 @@ function FirstRunSheetHeader(props) {
   return <SheetHeader {...props} firstRunBack />;
 }
 function MyWorkoutsLink({ onClick }) {
-  return <ExerciseNavigationButton className="text-button today-my-workouts" onClick={onClick}>
-    <span>Choose a workout</span><NavigationChevron className="inline-navigation-chevron" />
+  return <ExerciseNavigationButton className="list-row today-my-workouts" onClick={onClick}>
+    <span>Choose a workout</span><NavigationChevron/>
   </ExerciseNavigationButton>;
+}
+function TodayTrainingOptions({state,date,setDetail}) {
+  return <section className="today-training-options" aria-label="Other training options">
+    {canStartOptionalSession(state,date)&&<ExerciseNavigationButton className="list-row" onClick={()=>setDetail({conditioning:date})}><span>Add conditioning</span><NavigationChevron/></ExerciseNavigationButton>}
+    <MyWorkoutsLink onClick={()=>setDetail('saved-workouts')}/>
+  </section>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
   return (
@@ -2055,7 +2066,7 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
       const headerIndex = children.indexOf(header);
       largeTitle = children
         .slice(headerIndex + 1)
-        .find((child) => child.matches?.("h1, h2")) || null;
+        .find((child) => child.matches?.("h1, h2") && !child.matches(".visually-hidden, [hidden], [aria-hidden='true']")) || null;
     };
     const updateHeader = () => {
       findLargeTitle();
@@ -2414,7 +2425,7 @@ const EFFORT_GUIDANCE = {
   },
   Intermediate: {
     question: "How much work per exercise feels manageable?",
-    hint: "Reps in reserve (RIR) means clean reps you could still perform when a set ends. It controls set effort, not calorie burn or fat loss.",
+    hint: "Reps in reserve (RIR) is how many clean reps you could still do after a set.",
     options: [
       {
         label: "Balanced workload",
@@ -2543,12 +2554,8 @@ export function PhysiqueReview({ profile, onUse, onClose }) {
       <>
         <div className="physique-review-content">
           <Eyebrow>PHYSIQUE REVIEW</Eyebrow>
-          <h1>Possible areas you may want to prioritize.</h1>
-          <p>
-            Get an optional second opinion on areas you may want to emphasize.
-            Upload a few clear photos and Rook can suggest possible training
-            priorities.
-          </p>
+          <h1>Possible training priorities</h1>
+          <p>Upload clear photos for suggestions on training priorities.</p>
           <p className="photo-privacy">
             Optional online analysis: when you tap REVIEW PHOTOS, selected photos
             are sent through Rook's server to OpenAI, our AI provider, for a
@@ -2745,7 +2752,6 @@ export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPl
     <section className="welcome-carousel welcome-landing-carousel" role="region" aria-roledescription={backToIntro&&!inWelcomePager?'carousel':undefined} aria-label={backToIntro&&!inWelcomePager?'ROOK introduction':'Ways to start'} tabIndex={0}>
       <div className="welcome-story entry-content">
         <h1 id="entry-title">Choose your <br/>starting point.</h1>
-        <p>Your workouts, your plan, your progress.</p>
       </div>
     </section>
     <div className="entry-primary-action">
@@ -2799,10 +2805,9 @@ export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signInWi
   return <main className="onboarding entry-v2 entry-sign-in">
     <header className="entry-top"><FirstRunBackButton disabled={busy} onClick={emailOpen?()=>setEmailOpen(false):back} label={emailOpen?'Back to sign-in methods':'Back to start'} /></header>
     {!emailOpen&&<section className="entry-content">
-      <p className="entry-micro-label">ROOK ACCOUNT</p>
       <h1>Sign in or create account</h1>
       <p>{signedIn ? `Signed in${email ? ` as ${email}` : ''}. Continue with ROOK or restore a backup.`
-        : providers.includes('password')?'Sign in to restore your ROOK profile, or create an account if you’re new.'
+        : providers.includes('password')?'Sign in to restore your ROOK profile.'
         : `${providers.some(id=>id!=='google.com') ? 'Choose a sign-in method.' : 'Continue with Google.'} ROOK opens your existing profile, or creates an account if you are new.`}</p>
     </section>}
     <div className="entry-sign-in-providers">
@@ -2834,7 +2839,6 @@ export function FirstRunFreestyleConfirm({ back, start }) {
   return <main className="screen detail-screen first-run-freestyle-screen">
     <SheetHeader title="Freestyle" onBack={back} backLabel="Back to start" firstRunBack />
     <div className="first-run-freestyle-content">
-      <Eyebrow>FREESTYLE</Eyebrow>
       <h1>Start a freestyle workout?</h1>
       <p>Start blank and add exercises as you go.</p>
       {error && <p role="alert">{error}</p>}
@@ -3028,7 +3032,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
       label: "YOUR GOAL",
       question: "What are you training for?",
       helper:
-        "Choose the main outcome you want this plan to support. You can change this later.",
+        "Choose your main goal. You can change it later.",
       options: availableGoals,
     },
     {
@@ -3041,8 +3045,8 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
     {
       key: "schedule",
       label: "YOUR SCHEDULE",
-      question: "What does a realistic training week look like?",
-      helper: "Choose a routine you can consistently maintain.",
+      question: "What schedule can you maintain?",
+      hideHelper: true,
     },
     {
       key: "setup",
@@ -3055,7 +3059,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
       label: "TRAINING PRIORITIES",
       question: "What would you like to emphasize?",
       helper:
-        "Optional. Choose up to two areas to emphasize, or keep the plan balanced.",
+        "Optional: choose up to two areas, or stay balanced.",
       options: PRIORITIES,
       multi: true,
       optional: true,
@@ -3070,9 +3074,9 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
     },
     {
       key: "preferences",
-      label: "FINAL PREFERENCES",
+      label: "",
       question: "Review your plan preferences.",
-      helper: "Confirm your weekly structure, restrictions and exercise preference before building.",
+      hideHelper: true,
       options: [],
     },
   ];
@@ -3721,12 +3725,12 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
       </div>
       <StepProgress step={step+1} total={stages.length} />
       <div className="onboarding-content" key={stage.key} data-swipe-back-content>
-        <Eyebrow>{stage.label}</Eyebrow>
+        {!stage.personal && stage.label && <Eyebrow>{stage.label}</Eyebrow>}
         <h1>{stage.question}</h1>
         {!stage.hideHelper && (
           <p>
             {stage.personal
-              ? "Age helps ROOK choose a more appropriate starting workload and training setup. Your first name is optional."
+              ? "Age helps set your starting workload and training setup."
               : stage.helper ||
                 stage.optionalHint ||
                 (stage.optional
@@ -3852,10 +3856,6 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
                 placeholder="What should Coach call you?"
               />
             </label>
-            <p className="privacy-note">
-              Stored only in your local Rook profile. Your name never changes
-              exercise selection.
-            </p>
           </div>
         ) : stage.key === "schedule" ? (
           <div className="schedule-fields">
@@ -4179,8 +4179,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
             onClick={() => setPhysiqueOpen(true)}
           >
             <span>
-              <strong>Not sure what to prioritize?</strong>
-              <small>Get an optional physique review</small>
+              <strong>Optional physique review</strong>
             </span>
             <NavigationChevron/>
           </button>
@@ -4282,7 +4281,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
             aria-live="polite"
           >
             <span>HOW THIS AFFECTS YOUR PLAN</span>
-            <strong>{goalPlanPreview.title}</strong>
+            {!answers.goal && <strong>{goalPlanPreview.title}</strong>}
             <p>{goalPlanPreview.detail}</p>
           </section>
         )}
@@ -4556,14 +4555,14 @@ function TodayExerciseRow({
     </div>
   );
 }
-export function activeWorkoutNoticeDetails(
-  workout,
-  dateKey,
-  now = Date.now(),
-) {
+function activeWorkoutNoticeProgress(workout,now) {
   const summary = workoutSetSummary(workout);
   const elapsed = workoutElapsedSeconds(workout,now);
-  const progress = `${summary.completed} / ${pluralize(summary.total, workout.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')} · ${workoutNeedsRecovery(workout,now)?'Finish or continue':formatActiveWorkoutDuration(elapsed)}`;
+  return {count:`${summary.completed} / ${pluralize(summary.total, workout.exercises.every(e=>loggingUnit(e)==='round')?'round':'set')}`,
+    status:workoutNeedsRecovery(workout,now)?'Finish or continue':formatActiveWorkoutDuration(elapsed)};
+}
+export function activeWorkoutNoticeDetails(workout,dateKey,now = Date.now()) {
+  const {count,status}=activeWorkoutNoticeProgress(workout,now),progress=`${count} · ${status}`;
   const startedOnAnotherDate = Boolean(
     dateKey && dateKey !== isoDay(new Date(now)),
   );
@@ -4571,21 +4570,24 @@ export function activeWorkoutNoticeDetails(
     ? `${displayDate(localDate(dateKey))} · ${progress}`
     : progress;
 }
-function ActiveWorkoutNotice({ workout, dateKey, now, onResume }) {
-  const details = activeWorkoutNoticeDetails(workout, dateKey, now);
+function ActiveWorkoutNotice({ workout, dateKey, selectedDateKey, now, onResume }) {
+  const {count,status} = activeWorkoutNoticeProgress(workout, now);
+  const needsRecovery = workoutNeedsRecovery(workout, now);
+  const showStartDate = dateKey && (selectedDateKey ? selectedDateKey !== dateKey : dateKey !== isoDay(new Date(now)));
+  const startTime = new Date(workout.startedAt);
+  const started = showStartDate && new Intl.DateTimeFormat('en', { month:'short', day:'numeric' }).format(Number.isFinite(startTime.getTime()) ? startTime : localDate(dateKey));
   return (
-    <aside className="active-workout-notice" aria-label="Workout in progress">
+    <aside className="active-workout-notice active-strength-notice" aria-label="Workout in progress">
       <span>
-        <Eyebrow>WORKOUT IN PROGRESS</Eyebrow>
         <strong>{workout.name}</strong>
-        <small className="active-workout-notice-progress">{details}</small>
+        <small className="active-workout-notice-progress">{started && `Started ${started} · `}<span className="active-workout-notice-count">{count}</span> · {status}</small>
       </span>
       <button
         className="text-button"
-        aria-label={`Resume ${workout.name} workout`}
+        aria-label={needsRecovery ? `Review ${workout.name} session` : `Resume ${workout.name} workout`}
         onClick={onResume}
       >
-        RESUME
+        {needsRecovery ? 'REVIEW SESSION' : 'RESUME'}
       </button>
     </aside>
   );
@@ -4596,21 +4598,20 @@ function ActiveOptionalSessionNotice({ session, now, onResume }) {
   return (
     <aside
       className="active-workout-notice active-optional-session-notice"
-      aria-label="Optional session in progress"
+      aria-label={session.status === "paused" ? "Paused optional session" : "Active optional session"}
     >
       <span>
-        <Eyebrow>OPTIONAL SESSION</Eyebrow>
         <strong>{session.activity}</strong>
         <small className="active-workout-notice-progress">
-          {stateLabel} · {formatDuration(Math.floor(elapsed))}
+          {stateLabel && `${stateLabel} · `}{formatDuration(Math.floor(elapsed))}
         </small>
       </span>
       <button
         className="text-button"
-        aria-label={`Resume ${session.activity} optional session`}
+        aria-label={`Open ${session.activity} session`}
         onClick={onResume}
       >
-        RESUME
+        OPEN
       </button>
     </aside>
   );
@@ -4620,6 +4621,7 @@ export function ActiveOptionalSession({ state, update, setPage }) {
   const active = state.activeOptionalSession;
   const [now, setNow] = useState(Date.now());
   const [completedSummary, setCompletedSummary] = useState(null);
+  const priorOptionalSessions=useRef(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const { commit } = useDurableAction(state, update);
@@ -4671,6 +4673,7 @@ export function ActiveOptionalSession({ state, update, setPage }) {
               </div>
             )}
           </dl>
+          <CompletedActivityStreak state={state} session={completedSummary} priorOptionalSessions={priorOptionalSessions.current}/>
           <p>{isConditioning(completedSummary) ? 'Your strength plan is unchanged.' : 'Your planned rest day is unchanged.'}</p>
           <Button onClick={() => setPage("today")}>DONE</Button>
         </section>
@@ -4699,7 +4702,11 @@ export function ActiveOptionalSession({ state, update, setPage }) {
     const finishedAt = Date.now();
     completing.current = true;
     try {
-      const result = commit(current => current.activeOptionalSession?.id === active.id ? finishOptionalSession(current, finishedAt) : current);
+      const result = commit(current => {
+        if(current.activeOptionalSession?.id!==active.id)return current;
+        priorOptionalSessions.current=current.optionalSessions;
+        return finishOptionalSession(current,finishedAt);
+      });
       const completed = result.state.optionalSessions.find(item => item.id === active.id && item.status === 'completed');
       if (completed) { setCompletedSummary(completed); setSessionError(''); triggerHaptic('success'); }
     } catch (failure) { setSessionError(failure.message); }
@@ -4720,7 +4727,7 @@ export function ActiveOptionalSession({ state, update, setPage }) {
         <button className="text-button" onClick={finish}>Finish</button>
       </header>
       <section className="optional-session-body">
-        <Eyebrow>{isConditioning(active) ? 'OPTIONAL CONDITIONING' : 'OPTIONAL SESSION'}</Eyebrow>
+
         <h1>{active.activity}</h1>
         {intervals && <div className="conditioning-phase"><span>Round {timing.round} of {active.intervals.rounds}</span><strong>{timing.phase === 'Complete' ? 'INTERVALS COMPLETE' : timing.phase.toUpperCase()}</strong></div>}
         <strong className="optional-session-clock" aria-label={intervals ? `${timing.remainingSeconds} seconds remaining` : `${Math.floor(elapsed)} seconds elapsed`}>
@@ -4750,7 +4757,7 @@ export function ActiveOptionalSession({ state, update, setPage }) {
           )}
         </dl>
         <p className="optional-session-plan-note">
-          This optional activity does not replace or complete a strength workout.
+          Doesn’t replace or complete a planned strength workout.
         </p>
         {sessionError && <p role="alert">{sessionError}</p>}
         <div className="optional-session-actions">
@@ -4805,13 +4812,13 @@ export function NoPlanToday({state,update,setPage,setDetail,campaignSlot=null}) 
     return ()=>clearInterval(timer);
   },[active?.id,optional?.id]);
   const resume=()=>{
-    if (active && selectedIso!==activeDate) flushSync(()=>update(current=>{current.selectedDate=activeDate;current.selectedDay=weekday(activeDate);return current;}));
+    if (selectedIso!==isoDay()) flushSync(()=>selectCalendarToday(update));
     setPage(active?'workout':'optional-session');
   };
   return <main className="screen today-screen no-plan-today">
-    {calendarOpen&&createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso} header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>} onSelect={key=>{update(current=>{current.selectedDate=key;current.selectedDay=weekday(key);return current;});requestClose();}}/>}</ModalLayer>,document.body)}
+    {calendarOpen&&createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso} header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>} onSelect={key=>{selectCalendarDate(update,key);requestClose();}}/>}</ModalLayer>,document.body)}
     <div className="no-plan-today-heading"><div><Eyebrow>{displayDate(selectedDate)}</Eyebrow><h1>{today?'Today': 'Workouts logged'}</h1></div><button type="button" className="no-plan-calendar-action" aria-label="Browse workout dates" onClick={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}><CalendarIcon/><span>Calendar</span></button></div>
-    {active&&<ActiveWorkoutNotice workout={active} dateKey={activeDate} now={now} onResume={resume}/>}
+    {active&&<ActiveWorkoutNotice workout={active} dateKey={activeDate} selectedDateKey={selectedIso} now={now} onResume={resume}/>}
     {optional&&<ActiveOptionalSessionNotice session={optional} now={now} onResume={resume}/>}
     {today&&!active&&!optional&&<>
       {style==='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} primary noPlan hideHistory/>}
@@ -4819,7 +4826,7 @@ export function NoPlanToday({state,update,setPage,setDetail,campaignSlot=null}) 
       <button type="button" className={style==='own-workouts'&&!templates.length?'button primary no-plan-create-action':'text-button no-plan-create-action'} onClick={()=>setDetail({createSavedWorkout:true})}>+ CREATE WORKOUT</button>
       {style!=='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} noPlan hideHistory/>}
       {state.program ? <button type="button" className="text-button no-plan-plan-action" onClick={()=>update(current=>{current.profile.preferredTrainingStyle='plan';return current;})}>Return to your saved plan</button>
-        : <button type="button" className="list-row no-plan-plan-action" onClick={()=>setDetail('change-plan')}><span className="no-plan-plan-copy"><span>Want a structured plan?</span>{' '}<strong>Create or import one</strong></span><NavigationChevron/></button>}
+        : <button type="button" className="list-row no-plan-plan-action" onClick={()=>setDetail('change-plan')}><span className="no-plan-plan-copy"><strong>Create or import a plan</strong></span><NavigationChevron/></button>}
     </>}
     <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly/>
     {today&&!active&&!optional&&campaignSlot}
@@ -4834,7 +4841,6 @@ export function Today({
   setDetail,
   planReady,
   dismissPlanReady,
-  onCombineWorkouts,
   campaignSlot = null,
 }) {
   const active = state.activeWorkout;
@@ -4889,19 +4895,13 @@ export function Today({
     ? localDate(state.selectedDate)
     : weekDate(state.selectedDay || weekday());
   const [now, setNow] = useState(Date.now());
-  const lastCalendarDay = useRef(isoDay());
   useEffect(() => {
-    const refreshCalendar = () => {
-      const nextDay = isoDay(), previousDay = lastCalendarDay.current;
-      lastCalendarDay.current = nextDay;
-      setNow(Date.now());
-      if (nextDay !== previousDay && state.selectedDate === previousDay) update(current => ({ ...current, selectedDate: nextDay, selectedDay: weekday(nextDay) }));
-    };
+    const refreshCalendar = () => setNow(Date.now());
     const interval = setInterval(refreshCalendar, 30000);
     window.addEventListener('focus', refreshCalendar);
     document.addEventListener('visibilitychange', refreshCalendar);
     return () => { clearInterval(interval); window.removeEventListener('focus', refreshCalendar); document.removeEventListener('visibilitychange', refreshCalendar); };
-  }, [state.selectedDate, update]);
+  }, []);
   useEffect(() => {
     if (!trackedActive) return undefined;
     setNow(Date.now());
@@ -4926,9 +4926,6 @@ export function Today({
     state[key] !== scheduleState.current[key])) scheduleState.current = state;
   const scheduleReader = useMemo(()=>createTodayScheduleReader(state),[scheduleState.current,todayKey]);
   const viewingToday = selectedIso === isoDay();
-  const combineDiscovery=useMemo(()=>combineWorkoutDiscovery(state),[scheduleState.current,todayKey]);
-  const combineHint=viewingToday&&!todayEditMode&&onCombineWorkouts&&combineDiscovery.available&&combineDiscovery.hasMissed
-    ? <CombineWorkoutHint onStart={onCombineWorkouts}/> : null;
   useEffect(() => {
     todayReorderGesture.current?.cleanup?.();
     setTodayEditMode(false);
@@ -4985,8 +4982,7 @@ export function Today({
   const selectDate = (day, date) => {
     dismissPlanReady?.();
     const key=isoDay(date);
-    update(current=>{current.selectedDay=day;current.selectedDate=key;return current;},
-      {navigationDate:{day,date:key}});
+    selectCalendarDate(update,key);
   };
   const linkedOccurrence = useMemo(()=>active?.logicalSessionId
     ? flexibleSessions(state).find(item => item.logicalSessionId===active.logicalSessionId) || null
@@ -4994,10 +4990,10 @@ export function Today({
   const resumeActiveWorkout = () => {
     if (!active || resumeLock.current) return;
     resumeLock.current = true;
-    const actualDate = activeDateKey || isoDay();
+    const actualDate = isoDay();
     // setPage snapshots Today for edge Back. Commit its canonical date before
     // that snapshot, then navigate in this same event without an intervening paint.
-    if (selectedIso !== actualDate) flushSync(() => selectDate(weekday(actualDate), localDate(actualDate)));
+    if (selectedIso !== actualDate) flushSync(() => selectCalendarToday(update));
     setPage('workout');
   };
   const nextWeek = new Date();
@@ -5039,6 +5035,7 @@ export function Today({
     <ActiveWorkoutNotice
       workout={active}
       dateKey={activeDateKey}
+      selectedDateKey={selectedIso}
       now={now}
       onResume={resumeActiveWorkout}
     />
@@ -5076,10 +5073,7 @@ export function Today({
           </Button>
         </section>
         {active.source !== 'freestyle' && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
-        {active.source === 'freestyle' && active.exercises.length === 0 ? null : <section className="exercise-preview">
-          <div className="today-exercise-list-heading">
-            <Eyebrow>WORKOUT EXERCISES</Eyebrow>
-          </div>
+        {active.source === 'freestyle' && active.exercises.length === 0 ? null : <section className="exercise-preview is-compact" aria-label="Workout exercises">
           {active.exercises.map((exercise, index) => {
             const done = exercise.sets.filter((set) => set.completed).length;
             const current = index === active.exerciseIndex;
@@ -5158,13 +5152,12 @@ export function Today({
         {activeOptionalNotice}
         {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
         <section className="rest-day-state">
-          {dayHeader(movedAwayRest ? displayDate(selectedDate) : 'REST DAY')}
-          <h1>Rest day</h1>
-          <p>
-            {movedAwayRest ? "No workout scheduled for this day." : isHistoricalWeek
-              ? "No workout was planned on this date."
-              : "This is a planned recovery day."}
-          </p>
+          {dayHeader(displayDate(selectedDate))}
+          <h1>{movedAwayRest || isHistoricalWeek ? 'Rest day' : 'Planned rest day'}</h1>
+          {isToday&&<RestDayStreak state={state} date={selectedIso}/>}
+          {(movedAwayRest || isHistoricalWeek) && <p>{movedAwayRest
+            ? "No workout scheduled for this day."
+            : "No workout was planned on this date."}</p>}
           {movedAwayRest && <div className="today-moved-provenance" aria-label="Moved workouts">{movedAway.map(item=><div key={item.logicalSessionId}>
             <p>{item.workout.name} · {workoutVisibleStatus({status:'moved',destination:displayDate(localDate(item.scheduledDate))})}</p>
             <button type="button" className="text-button" onClick={()=>selectDate(weekday(item.scheduledDate),localDate(item.scheduledDate))}>View workout <span aria-hidden="true">›</span></button>
@@ -5215,7 +5208,6 @@ export function Today({
             <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
           </section>}
         </section>
-        {combineHint}
         {undoBanner}
       </main>
     );
@@ -5663,7 +5655,7 @@ export function Today({
         {dayHeader(displayDate(selectedDate))}
         {fullyCompleted ? <CompletedSessionOverview workout={completed} /> : <WorkoutTitle workout={session} day={selectedDay} />}
         <CombinedProvenance adjustment={session.adjustment || session.todayOnlyAdjustment} />
-        {session.flexibleWeekMoved && <small className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))} · <button type="button" className="text-button" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button></small>}
+        {session.flexibleWeekMoved && <small className="flexible-week-origin">Moved from {shortDisplayDate(session.originalScheduledDate)} · <button type="button" className="text-button" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button></small>}
         {session.trainingBlock && (
           <button type="button" onClick={() => setDetail("training-block")} aria-label="View training block" className={`today-block-week${session.trainingBlock.plannedDeload ? " is-deload" : ""}`}>
             <strong>Week {session.trainingBlock.blockWeekNumber} of {session.trainingBlock.totalWeeks}</strong>
@@ -5673,21 +5665,19 @@ export function Today({
           </button>
         )}
         {!fullyCompleted && <p>
-          {session.exercises.length} exercises · {duration}
+          {pluralize(session.exercises.length,'exercise')} · {duration}
           {completed
             ? ` · ${workoutVisibleStatus({workout:completed,summary:completedSummary})}`
             : occurrence?.status === 'missed'
               ? ` · ${workoutVisibleStatus({status:occurrence.status})}`
-              : prior
-                ? ` · last done ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(workoutPerformedDate(prior)))}`
-                : isFirstSession
+              : isFirstSession
                   ? " · first session"
                   : ""}
         </p>}
         {!completed && !isHistoricalWeek && trainingPaused && (
           <TrainingSafetySummary safety={todaySafety} />
         )}
-        {selectedIso!==isoDay() && (completed || occurrence) && scheduleReader.canUseToday(completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}})}>{completed?'Repeat today':'Train today instead'}</button>}
+        {selectedIso!==isoDay() && (completed || occurrence) && scheduleReader.canUseToday(completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}})}>{completed?'Repeat today':selectedIso>isoDay()?'Move to today':'Train today instead'}</button>}
         {isRepeatAdjustment(session.todayOnlyAdjustment) && <><p>Repeating workout from {session.todayOnlyAdjustment.sourceDate}. Original history is unchanged.</p><button className="text-button" onClick={()=>{try{const next=cancelRepeatedWorkout(state);update(()=>next,{planVersion:false,persistedState:next});}catch(e){setStartError(e.message);}}}>Cancel repeated workout</button></>}
         {completed ? (
           <div className={fullyCompleted ? "completion-actions" : undefined}>
@@ -5700,7 +5690,7 @@ export function Today({
           </div>
         ) : selectedIso < isoDay() ? null : trackedActive ? (
           <p id="other-active-workout-edit-lock" className="active-workout-start-lock">
-            Finish the active session before starting this workout.
+            Finish {active?.name || activeOptional?.activity || 'the open session'} to start this workout.
           </p>
         ) : trainingPaused ? (
           <Button
@@ -5784,19 +5774,14 @@ export function Today({
         )}
         <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly representedWorkoutId={completed?.id} />
       </section>
-      {combineHint}
       {viewingToday && !trackedActive && !todayEditMode && campaignSlot}
-      {!fullyCompleted && <section className={`exercise-preview${todayEditMode ? " is-editing" : ""}`}>
-        <div className="today-exercise-edit-header">
+      {!fullyCompleted && <section className={`exercise-preview${todayEditMode ? " is-editing" : completed ? "" : " is-compact"}`} aria-label="Workout exercises">
+        {(todayEditMode || completed) && <div className="today-exercise-edit-header">
           <div className="today-exercise-list-heading">
             <Eyebrow>
               {todayEditMode
                 ? "EDIT EXERCISES"
-                : completed
-                  ? "WORKOUT DETAILS"
-                  : viewingToday
-                    ? "TODAY'S EXERCISES"
-                    : "WORKOUT EXERCISES"}
+                : "WORKOUT DETAILS"}
             </Eyebrow>
           </div>
           {todayEditMode && (
@@ -5804,7 +5789,7 @@ export function Today({
               Drag to reorder. Tap × to remove.
             </small>
           )}
-        </div>
+        </div>}
         <span className="visually-hidden" role="status" aria-live="polite">
           {todayEditAnnouncement}
         </span>
@@ -5866,8 +5851,8 @@ export function Today({
           </div>
         )}
       </section>}
-      <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} />
-      <MyWorkoutsLink onClick={() => setDetail('saved-workouts')} />
+      <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
+      <TodayTrainingOptions state={state} date={selectedIso} setDetail={setDetail}/>
       {undoBanner}
     </main>
   );
@@ -6083,7 +6068,7 @@ function WorkoutConfirmation({ confirmation, cancel, keepTraining, continueActio
       aria-describedby="workout-confirm-detail"
     >
         <header className="sheet-header-chrome"><SheetHandleSlot/></header>
-        <Eyebrow>{next ? "INCOMPLETE EXERCISE" : "END SESSION"}</Eyebrow>
+        {next && <Eyebrow>INCOMPLETE EXERCISE</Eyebrow>}
         <h2 id="workout-confirm-title">
           {next
             ? `${setLabel} ${confirmation.incomplete === 1 ? "is" : "are"} still incomplete.`
@@ -6092,7 +6077,7 @@ function WorkoutConfirmation({ confirmation, cancel, keepTraining, continueActio
         <p id="workout-confirm-detail">
           {next
             ? `${confirmation.incomplete === 1 ? "The incomplete set won't" : "Incomplete sets won't"} be logged if you continue.`
-            : `${confirmation.completed} of ${pluralize(confirmation.planned, "set")} ${confirmation.completed === 1 ? "is" : "are"} complete. Only completed sets will be logged; incomplete set entries won’t count.`}
+            : `${confirmation.completed} of ${pluralize(confirmation.planned, "set")} complete. Only completed sets will be logged.`}
         </p>
         {confirmation.combined && <p>Both source sessions will become available again. Only your actual completed sets are saved.</p>}
         {error && <p role="alert">{error}</p>}
@@ -6531,7 +6516,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       segment[field] = value;
       segment.completed =
         Number(segment.reps) > 0 &&
-        (loadRequirement !== "required" || Number(segment.weight) > 0);
+        workingLoadCanComplete(segment.weight, loadRequirement);
     });
   const toggleSet = (index) => {
     const current = removalStateRef.current.activeWorkout?.exercises[removalStateRef.current.activeWorkout.exerciseIndex];
@@ -7728,7 +7713,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       {restEligible && restCompleteVisible && restLeft === 0 && !confirmation && (
         <aside className="rest-timer rest-complete" role="status">
           <span>
-            <Eyebrow>REST</Eyebrow>
             <strong>REST COMPLETE</strong>
           </span>
           <div>
@@ -7919,14 +7903,14 @@ export function PrivateWorkoutPhotoViewer({
                 onLoad={() => { if (offset === 1) setPhotoLoaded(true); }} onError={() => { paging.imageError(page.entry.id); if (offset === 1) setViewerError(true); }} />
                 : <div className="workout-photo-viewer-error" role={offset === 1 && page.error ? 'alert' : undefined}>
                   <strong>{page.error || viewerError && offset === 1 ? 'Photo unavailable' : 'Loading photo…'}</strong>
-                  {page.error && <p>This private photo couldn’t be displayed on this device.</p>}
+                  {page.error && <p>This photo couldn’t be displayed.</p>}
                 </div>}
             </div>{context(page.entry.workout, paging.index + offset - 1)}</>}
           </section>)}</div>
         </div> : viewerError || !photoUrl ? (
           <div className="workout-photo-viewer-error" role="alert">
             <strong>{loading ? 'Loading photo…' : 'Photo unavailable'}</strong>
-            <p>This private photo couldn’t be displayed on this device.</p>
+            <p>This photo couldn’t be displayed.</p>
           </div>
         ) : (
           <img
@@ -8101,8 +8085,7 @@ export function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) 
   return (
     <main className="screen detail-screen workout-photo-timeline-screen">
       <SheetHeader title="Workout photos" onClose={close} closeLabel="Close workout photos" />
-      <Eyebrow>PRIVATE TIMELINE</Eyebrow>
-      <h1>Your training, over time.</h1>
+      <h1 className="visually-hidden">Workout photos</h1>
       <p className="workout-photo-timeline-intro">
         Photos stay on this device. ROOK does not upload or analyze them.
       </p>
@@ -8132,7 +8115,7 @@ export function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) 
       ) : photos.status === "ready" ? (
         <section className="workout-photo-timeline-empty">
           <strong>No workout photos yet.</strong>
-          <p>If you ever save one after a workout, it will appear here. Photos are always optional.</p>
+          <p>Photos added after workouts appear here.</p>
         </section>
       ) : null}
       {selected && <WorkoutPhotoPager entries={entries} initialId={selected.id} Viewer={PrivateWorkoutPhotoViewer}
@@ -8256,11 +8239,10 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
   );
 
   return (
-    <section className="workout-photo-memory" aria-labelledby={`workout-photo-title-${workout.id}`}>
+    <section className="workout-photo-memory" aria-label="Workout photo">
       <div className="workout-photo-heading">
         <Eyebrow>WORKOUT PHOTO · OPTIONAL</Eyebrow>
         <p id={`workout-photo-title-${workout.id}`}>
-          Save a post-workout photo to look back on your progress over time.
           <small>Stored privately on this device.</small>
         </p>
       </div>
@@ -8391,7 +8373,7 @@ function ExportSheet({ request, state, close }) {
       />
       <Eyebrow className="export-plan-label">EXPORT PLAN</Eyebrow>
       <h1>{artifact.title}</h1>
-      <p className="export-plan-type">Weekly plan</p>
+
       <div className="export-helper">
         <p>A text version of your plan, generated privately on this device.</p>
         <small>Nothing is uploaded by ROOK.</small>
@@ -8557,6 +8539,7 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
   };
   const records=completedWorkoutsForDate(state.workouts,date);
   const missed=missedFlexibleSessions(state,today);
+  const combineMissed=missed.length>0&&!state.activeWorkout&&!state.activeOptionalSession&&!state.todayAdaptation&&missedCombineSources(state,today).length>=2;
   const scheduleChanges=temporaryScheduleReview(state,today);
   const hasScheduleChanges=Boolean(scheduleChanges.items.length||scheduleChanges.historical.length||combinedAdjustment(state));
   const occurrences=flexibleOccurrencesForDate(state,date);
@@ -8598,12 +8581,12 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
     {records.length>0 && canStartOptionalSession(state,date) && <button type="button" className="list-row" onClick={()=>{if(canStartOptionalSession(state,date))setDetail({conditioning:date});}}><span>Conditioning</span><NavigationChevron/></button>}
     {repeatRecords.length>0 && <button className="list-row" data-day-action="repeat" onClick={event=>chooseRecord('repeat',event)}><span>{repeatLabel}</span><NavigationChevron/></button>}
     {occurrence && <>
-      {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}><span>{occurrence.firstPlanWeek?'Use this workout today':occurrence.status==='missed'?'Train this workout today':'Train today instead'}</span><NavigationChevron/></button>}
+      {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}><span>{occurrence.firstPlanWeek?'Use this workout today':occurrence.status==='missed'?'Train this workout today':'Move to today'}</span><NavigationChevron/></button>}
       {canMove && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,destination:true}})}><span>Move to another day</span><NavigationChevron/></button>}
-      {flexibleSessions(state).some(other=>proposeFlexibleWeek(state,{mode:'swap',sessionId:occurrence.logicalSessionId,otherSessionId:other.logicalSessionId}).status==='ready') && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}><span>Swap with another workout</span><NavigationChevron/></button>}
+      {swapWorkoutCandidates(state,occurrence.logicalSessionId,today).length>0 && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}><span>Swap with another workout</span><NavigationChevron/></button>}
     </>}
     {missed.length>0 && <button className="list-row" onClick={()=>setDetail({flexibleWeek:missed.length===1?{sessionId:missed[0].logicalSessionId}:{missed:true}})}><span>Missed workouts</span><NavigationChevron/></button>}
-    {onCombineWorkouts&&combineWorkoutDiscovery(state,today).available&&<button type="button" className="list-row" onClick={onCombineWorkouts}><span>Combine two workouts<small>Review a combined workout for today in Coach</small></span><NavigationChevron/></button>}
+    {(combineMissed||onCombineWorkouts&&combineWorkoutDiscovery(state,today).available)&&<button type="button" className="list-row" onClick={combineMissed?()=>setDetail({flexibleWeek:{missed:true,combine:true}}):onCombineWorkouts}><span>Combine two workouts<small>{combineMissed?'Review a combined workout for today':'Review a combined workout for today in Coach'}</small></span><NavigationChevron/></button>}
     {hasScheduleChanges&&<button className="list-row" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true}})}><span>Schedule changes</span><NavigationChevron/></button>}
     {hasTemporaryScheduleAction(state,today) && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}><span>Adjust week</span><NavigationChevron/></button>}
     {hasWorkout && state.program && <button className="list-row" disabled={blocked} onClick={()=>setDetail('edit-plan')}><span>Edit in plan<small>Changes the recurring plan</small></span><NavigationChevron/></button>}
@@ -8905,10 +8888,11 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
           ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
           : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
+      <CompletedWorkoutStreak state={state} session={session} priorWorkouts={liveFinish?.priorWorkouts} live={liveEntry&&!motionCancelled} persistenceFailed={persistenceFailed}/>
       {!endedEarly && <WorkoutSessionLog
         exercises={visibleExercises}
         units={state.profile.units}
-        label="WORKOUT DETAILS"
+        label="EXERCISES"
       />}
       {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
         <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save for reuse</button>}
@@ -9481,7 +9465,7 @@ export function AdaptActionCard({
   );
 }
 function ActionCard(props) {
-  return props.action.type === "combine-workouts" ? <CoachCombineCard {...props} /> : props.action.type === "week-schedule-change" ? (
+  return props.action.type === "combine-workouts" ? <CoachCombineCard {...props} compact /> : props.action.type === "week-schedule-change" ? (
     <ScheduleActionCard {...props} />
   ) : props.action.type === "program-exercise-change" ? (
     <ProgramExerciseActionCard {...props} />
@@ -9636,10 +9620,10 @@ export function contextualCoachPrompts(state, now = Date.now()) {
   if(combineWorkoutDiscovery(state,key).available)prompts.splice(prompts.indexOf(shorten)+1,0,COMBINE_WORKOUTS_PROMPT);
   return prompts;
 }
-export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' }, entryIntent, onEntryHandled }) {
+export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' }, entryIntent, onEntryHandled, visitTracker }) {
   const personalThemes = usePersonalThemes();
   const [message, setMessage] = useState(state.coachDraft || "");
-  const [dayContext,setDayContext]=useState(null);
+  const [dayContext,setDayContext]=useState(()=>coachConversationDayContext(state));
   const [sendingId, setSendingId] = useState(null);
   const sending = Boolean(sendingId && sendingId === state.activeCoachConversationId);
   const sendingRef = useRef(null);
@@ -9651,6 +9635,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const conversationFromHistory = historyId !== null;
   const [newChatConfirm, setNewChatConfirm] = useState(false);
   const [askChatIntent,setAskChatIntent]=useState(null);
+  const [continueTarget,setContinueTarget]=useState(null);
   const [conversationError, setConversationError] = useState('');
   const [copyFeedback, setCopyFeedback] = useState(null);
   const copyTimersRef = useRef(new Map());
@@ -9663,11 +9648,14 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const enterConversation = (options = {}) => {
     try {
       const previous = liveState.current;
-      const next = persistCoachEntry(previous, options, saveState);
+      const next = persistCoachEntry(previous, {coldStart:visitTracker?.isColdStart(previous.profile.id)||false,...options}, saveState);
+      visitTracker?.entered(previous.profile.id);
       if (next !== previous) {
         liveState.current = next;
         update(() => next, {planVersion:false,persistedState:next});
-        if (next.activeCoachConversationId !== previous.activeCoachConversationId) setMessage(next.coachDraft || '');
+        if (next.activeCoachConversationId !== previous.activeCoachConversationId || options.manual || next.coachDraft !== previous.coachDraft)
+          setMessage(next.coachDraft || '');
+        setDayContext(coachConversationDayContext(next));
       }
       setConversationError('');
       return next;
@@ -9676,9 +9664,10 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const enterRef = useRef(enterConversation);
   enterRef.current = enterConversation;
   useLayoutEffect(() => {
-    // A deliberate tab entry may advance a completed conversation's day.
-    // Refresh/foreground while reading must never replace this visit's chat.
+    // The app owner distinguishes cold launch from warm tab remounts. Neither
+    // midnight nor foregrounding may replace a live conversation.
     if(entryIntent?.kind!=='ask')enterRef.current();
+    else visitTracker?.entered(state.profile.id);
   }, []);
   const conversationBackRef = useRef(null);
   const closeHistory = () => { captureCoachNavigation(true); setMenuOpen(false); setHistoryId(null); };
@@ -9775,7 +9764,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const combineRecovery = combineRecoveryForEntry(state,currentMessages);
   const confirmSourceMatch = (entry,target) => sourceMatchAction.commit(current=>{
     const stored=current.conversations.find(e=>e.id===entry.id);
-    if(!stored||current.activeCoachConversationId!==(entry.conversationId||'legacy')||current.conversations.filter(e=>(e.conversationId||'legacy')===current.activeCoachConversationId).at(-1)?.id!==entry.id||stored.coachWorkflowStatus==='cancelled'||stored.combineReviewCancelled||stored.coachReviewCancelled)throw Error('This Coach review is no longer current. Open your current conversation.');
+    if(!stored||stored.coachActionsArchived||current.activeCoachConversationId!==(entry.conversationId||'legacy')||current.conversations.filter(e=>(e.conversationId||'legacy')===current.activeCoachConversationId).at(-1)?.id!==entry.id||stored.coachWorkflowStatus==='cancelled'||stored.combineReviewCancelled||stored.coachReviewCancelled)throw Error('This Coach review is no longer current. Open your current conversation.');
     return prepareCombinedExerciseMatch(current,combineRecovery,target);
   });
   const threads = useMemo(() => {
@@ -9889,7 +9878,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const send = async (value, { preserveDraft = false, combineSelection, retryEntry } = {}) => {
     const text = value.trim();
     if (!text || sendingRef.current?.conversationId === liveState.current.activeCoachConversationId || !coachAvailable || historyId) return;
-    // Do not re-run the daily resolver on each send (including after midnight).
+    // Sending stays in the active chat; neither time nor dates change its owner.
     const before = liveState.current.activeCoachConversationId ? liveState.current : enterConversation();
     if (!before) return;
     const requestContext=retryEntry?.requestContext||dayContext;
@@ -9927,7 +9916,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
         if (copyMountedRef.current) setConversationError('Couldn’t save the reply. Retry this message.');
         throw Object.assign(new Error('Reply persistence failed'), {code:'local-persistence'});
       }
-      if (commit.result.applied && copyMountedRef.current){availability.success?.();if(requestContext)setDayContext(null);}
+      if (commit.result.applied && copyMountedRef.current)availability.success?.();
     } catch (error) {
       let applied = false;
       flushSync(() => update(current => {
@@ -9985,8 +9974,10 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     return()=>cancelAnimationFrame(frame);
   },[entryIntent,menuOpen,conversationFromHistory]);
   useEffect(()=>{if(dayContext&&dayContext.profileId!==state.profile.id)setDayContext(null);},[state.profile.id,dayContext]);
+  useEffect(()=>{if(dayContext&&combinedAdjustment(state)&&!state.coachConversationMeta?.[state.activeCoachConversationId]?.dayContext)setDayContext(null);},[state.todayAdaptation,state.activeCoachConversationId,state.coachConversationMeta,dayContext]);
   const applyEntryAction = (entry, reviewedAction) => {
     const scoped=liveState.current.conversations.find(item=>item.id===entry.id);
+    if(scoped?.coachActionsArchived){setConversationError('This suggestion is from chat history. Ask Coach for an updated suggestion.');return false;}
     if(scoped?.requestContext){
       try{if(!coachActionMatchesDay(reviewedAction||scoped.reply?.action,resolveCoachDayContext(liveState.current,scoped.requestContext)))throw Error('The selected workout changed. Ask Coach again from that day before applying this proposal.');}
       catch(e){setConversationError(e.message);return false;}
@@ -9997,15 +9988,17 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
         const stored=value.conversations.find(e=>e.id===entry.id);
         if(!stored)return false;
         stored.actionResult={status:'applied',appliedAt:Date.now(),scope:'combined-occurrences',workoutId:value.todayAdaptation.id,revision:value.todayAdaptation.revision||0};
+        if(value.coachConversationMeta?.[entry.conversationId])delete value.coachConversationMeta[entry.conversationId].dayContext;
         touchCoachConversation(value, entry.conversationId, Date.now(), {user:true});
         return saveState(value);
       });
       update(()=>next,{planVersion:false,persistedState:next});
+      setDayContext(null);
       return;
     }
     return update((current) => {
       const stored = current.conversations.find((item) => item.id === entry.id);
-      if (!stored?.reply?.action || stored.actionResult?.status === "applied")
+      if (!stored?.reply?.action || stored.coachActionsArchived || stored.actionResult?.status === "applied")
         return current;
       const acceptedAction = reviewedAction || stored.reply.action;
       touchCoachConversation(current, stored.conversationId || current.activeCoachConversationId, Date.now(), {user:true});
@@ -10157,7 +10150,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       const stored = current.conversations.find((item) => item.id === entry.id);
       const result = stored?.actionResult;
       if (
-        result?.status !== "applied" ||
+        stored?.coachActionsArchived || result?.status !== "applied" ||
         !result.undoSnapshot ||
         !result.appliedSnapshot
       )
@@ -10203,21 +10196,50 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     if(prompt===COMBINE_WORKOUTS_PROMPT){beginCombine();return;}
     send(prompt, { preserveDraft: true });
   };
+  const previousThread=threads.find(thread=>thread.id!==activeId);
+  const startContinuation=(target,cancelPending=false)=>{
+    try{
+      const previous=liveState.current;
+      const next=persistCoachContinuation(previous,target.id,{profileId:target.profileId,cancelPending,discardDraft:cancelPending},saveState);
+      visitTracker?.entered(previous.profile.id);liveState.current=next;
+      if(next!==previous)update(()=>next,{planVersion:false,persistedState:next});
+      setMessage(next.coachDraft||'');setDayContext(coachConversationDayContext(next));
+      setHistoryId(null);setMenuOpen(false);setNewChatConfirm(false);setContinueTarget(null);setAskChatIntent(null);setConversationError('');
+      requestAnimationFrame(()=>composerRef.current?.focus({preventScroll:true}));
+    }catch(error){setConversationError(error.message);}
+  };
+  const requestContinuation=id=>{
+    const current=liveState.current,target={id,profileId:current.profile.id};
+    if(id!==current.activeCoachConversationId&&(pendingCoachWorkflows(current).length||hasCoachDraft(current)||message.trim())){
+      setAskChatIntent(null);setContinueTarget(target);setNewChatConfirm(true);
+    }else startContinuation(target);
+  };
+  const removeDayContext=()=>{
+    try{
+      sourceMatchAction.commit(current=>{
+        const meta=current.coachConversationMeta?.[current.activeCoachConversationId];
+        if(!meta?.dayContext)return current;
+        const next=structuredClone(current);delete next.coachConversationMeta[current.activeCoachConversationId].dayContext;return next;
+      });
+      setDayContext(null);
+    }catch(error){setConversationError(error.message);}
+  };
   const startNewConversation = (cancelPending = false) => {
+    if(continueTarget){startContinuation(continueTarget,cancelPending);return;}
     if(askChatIntent){startContextualChat(askChatIntent,cancelPending);return;}
     if (!enterConversation({manual:true,cancelPending,discardDraft:cancelPending})) return;
     setDayContext(null);setMessage('');setMenuOpen(false);setHistoryId(null);setNewChatConfirm(false);
   };
   const startContextualChat=(context,cancelPending=false)=>{
     try{resolveCoachDayContext(liveState.current,context);}catch(e){setConversationError(e.message);return;}
-    const next=enterConversation({manual:true,cancelPending,discardDraft:cancelPending});
-    if(!next)return;
     const starter=coachDayStarter(context);
-    setDayContext(context);setMessage(starter);setAskChatIntent(null);setNewChatConfirm(false);setHistoryId(null);setMenuOpen(false);
-    update(current=>({...current,coachDraft:starter}),{planVersion:false});
+    const next=enterConversation({manual:true,cancelPending,discardDraft:cancelPending,initialDraft:starter,dayContext:context});
+    if(!next)return;
+    setDayContext(context);setMessage(starter);setAskChatIntent(null);setContinueTarget(null);setNewChatConfirm(false);setHistoryId(null);setMenuOpen(false);
     requestAnimationFrame(()=>composerRef.current?.focus({preventScroll:true}));
   };
   const newConversation = () => {
+    setContinueTarget(null);setAskChatIntent(null);
     if (pendingCoachWorkflows(liveState.current).length || hasCoachDraft(liveState.current) || message.trim()) setNewChatConfirm(true);
     else startNewConversation();
   };
@@ -10233,14 +10255,16 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             {conversationFromHistory && <button ref={conversationBackRef} type="button" className="coach-conversation-back" aria-label="Back to conversation history" onClick={openHistory}>‹</button>}
             <div>
             <Eyebrow>COACH</Eyebrow>
-            {hasConversation && <strong>{conversationFromHistory ? "Chat history" : "Conversation"}</strong>}
+            {hasConversation && conversationFromHistory && <strong>Chat history</strong>}
             </div>
           </div>
           <div className="coach-header-actions">
-          <button type="button" className="coach-new-trigger" aria-label="New chat" title="New chat" onClick={newConversation}>
+          {conversationFromHistory ? <button type="button" className="coach-new-trigger" aria-label="Continue chat" onClick={()=>requestContinuation(historyId)}>
+            <NavigationChevron/><span>CONTINUE</span>
+          </button> : <button type="button" className="coach-new-trigger" aria-label="New chat" title="New chat" onClick={newConversation}>
             <svg aria-hidden="true" viewBox="0 0 24 24"><path d="m14 5 5 5M5 19l4.5-1L20 7.5a2.1 2.1 0 0 0-3-3L6.5 15 5 19ZM4 4h6M4 4v6"/></svg>
             <span>NEW CHAT</span>
-          </button>
+          </button>}
           <button
             className="coach-history-trigger"
             aria-label="Chat history"
@@ -10260,11 +10284,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       <div className="coach-scroll" ref={scrollRef} tabIndex={0} aria-label="Coach conversation" data-scroll-mode={transcriptScroll.mode}>
         <div className="coach-transcript" ref={transcriptRef}>
         {conversationError && !newChatConfirm && <div className="offline-banner" role="alert">{conversationError} <button type="button" className="text-button" onClick={()=>enterConversation()}>Try again</button></div>}
-        {!hasConversation && (
-          <header className="coach-intro">
-            <h1>Your plan and real training data, in context.</h1>
-          </header>
-        )}
+        {!hasConversation && <h1 className="visually-hidden">Coach</h1>}
         {!coachAvailable && (
           <div className="offline-banner" role="status">
             <p>{availabilityCopy?.text}</p>
@@ -10275,6 +10295,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
         {import.meta.env.DEV && new URLSearchParams(location.search).get('coachDebug') === '1' && <AnimatedDetails className="coach-runtime-diagnostics"><summary>Coach diagnostics · local only</summary><p>State: {availability.state} · reason: {availability.reason || 'ready'} · auth: {availability.auth || 'ready'} · network: {online ? 'online' : 'offline'}</p>{availability.lastFailure && <p>Last failure: {availability.lastFailure.reason} · {new Date(availability.lastFailure.at).toLocaleTimeString()}</p>}</AnimatedDetails>}
         {!hasConversation && (
           <>
+            {previousThread&&<button type="button" className="text-button coach-continue-previous" onClick={()=>requestContinuation(previousThread.id)}>Continue previous chat<NavigationChevron/></button>}
             <aside className="coach-empty" role="note">
               <Eyebrow>WHAT COACH KNOWS</Eyebrow>
               <strong>{contextSummary.primary}</strong>
@@ -10307,12 +10328,13 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
               {(entry.reply || (sending && !conversationFromHistory && sendingRef.current?.entryId === entry.id)) && <CoachReply entryId={entry.id} text={entry.reply?.text} thinking={!entry.reply} copyAction={copyAction(entry.id, 'coach', entry.reply?.text)} />}
               {entry.reply ? (
                 <>
-                  {!conversationFromHistory && entry===latestMessage && entry.reply.missedChoices?.map(choice=><button className="list-row" key={choice.id} data-coach-anchor={`${entry.id}:missed:${choice.id}`} onClick={()=>setDetail({flexibleWeek:{sessionId:choice.id}})}><span>{choice.label}</span><NavigationChevron/></button>)}
-                  {!conversationFromHistory && pendingIds.has(entry.id) && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} busy={sending||!coachAvailable} selection={entry.combineSelection || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
-                  {!conversationFromHistory && entry===latestMessage && entry.coachWorkflowStatus !== 'cancelled' && !entry.combineReviewCancelled && combineRecovery && <CoachCombineRecovery request={combineRecovery} state={state} busy={sending} canRetry={coachAvailable} onReview={target=>setDetail({editPlan:{reviewExerciseIds:[target.exerciseEntryId]}})} onConfirmMatch={target=>confirmSourceMatch(entry,target)} onRetry={selection=>send('Prepare the combined workout again.',{preserveDraft:true,combineSelection:selection})} />}
-                  {conversationFromHistory && entry.reply.action && <p className="coach-history-action">{entry.reply.action.type === 'combine-workouts' ? 'Combined workout' : 'Coach adjustment'} · {entry.actionResult?.status || (entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled ? 'Cancelled' : 'Not applied')}</p>}
-                  {!conversationFromHistory && entry.reply.action?.type==='reuse-existing-workout' && entry.coachWorkflowStatus!=='cancelled' && (entry.actionResult?<p>Extra workout started. Your scheduled plan is unchanged.</p>:<div className="coach-reuse-choices">{entry.reply.action.choices.map((choice,index)=><button type="button" className="list-row" key={index} onClick={()=>setDetail({coachWorkoutReuse:choice.reference,coachEntryId:entry.id})}><span><strong>{choice.name}</strong><small>{choice.label}</small></span><NavigationChevron/></button>)}</div>)}
-                  {!conversationFromHistory && entry.reply.action && entry.reply.action.type!=='reuse-existing-workout' && entry.coachWorkflowStatus !== 'cancelled' && (
+                  {entry.supersededBy&&<p className="coach-history-action">Proposal replaced</p>}
+                  {!conversationFromHistory && !entry.coachActionsArchived && entry===latestMessage && entry.reply.missedChoices?.map(choice=><button className="list-row" key={choice.id} data-coach-anchor={`${entry.id}:missed:${choice.id}`} onClick={()=>setDetail({flexibleWeek:{sessionId:choice.id}})}><span>{choice.label}</span><NavigationChevron/></button>)}
+                  {!conversationFromHistory && !entry.coachActionsArchived && (pendingIds.has(entry.id)||entry.reply.combineRequest?.step==='review'&&entry.actionResult?.status==='applied') && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} state={state} result={entry.actionResult} onViewToday={()=>setPage('today')} onReview={request=>setDetail({flexibleWeek:{missed:true,combine:true,combineReview:request,coachOrigin:{entryId:entry.id,conversationId:entry.conversationId}}})} busy={sending||entry.reply.combineRequest.step!=='review'&&!coachAvailable} selection={entry.combineSelection || entry.reply.combineRequest.sourceIds || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
+                  {!conversationFromHistory && !entry.coachActionsArchived && entry===latestMessage && entry.coachWorkflowStatus !== 'cancelled' && !entry.combineReviewCancelled && combineRecovery && <CoachCombineRecovery request={combineRecovery} state={state} busy={sending} canRetry={coachAvailable} onReview={target=>setDetail({editPlan:{reviewExerciseIds:[target.exerciseEntryId]}})} onConfirmMatch={target=>confirmSourceMatch(entry,target)} onRetry={selection=>send('Prepare the combined workout again.',{preserveDraft:true,combineSelection:selection})} />}
+                  {(conversationFromHistory || entry.coachActionsArchived) && entry.reply.action && <p className="coach-history-action">{entry.reply.action.type === 'combine-workouts' ? 'Combined workout' : 'Coach adjustment'} · {entry.actionResult?.status || (entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled ? 'Cancelled' : 'Not applied')}{entry.coachActionsArchived?' · Read-only':''}</p>}
+                  {!conversationFromHistory && !entry.coachActionsArchived && entry.reply.action?.type==='reuse-existing-workout' && entry.coachWorkflowStatus!=='cancelled' && (entry.actionResult?<p>Extra workout started. Your scheduled plan is unchanged.</p>:<div className="coach-reuse-choices">{entry.reply.action.choices.map((choice,index)=><button type="button" className="list-row" key={index} onClick={()=>setDetail({coachWorkoutReuse:choice.reference,coachEntryId:entry.id})}><span><strong>{choice.name}</strong><small>{choice.label?.startsWith(`${choice.name} · `)?choice.label.slice(choice.name.length+3):choice.label===choice.name?null:choice.label}</small></span><NavigationChevron/></button>)}</div>)}
+                  {!conversationFromHistory && !entry.coachActionsArchived && entry.reply.action && entry.reply.action.type!=='reuse-existing-workout' && entry.coachWorkflowStatus !== 'cancelled' && (
                     <ActionCard
                       action={entry.reply.action}
                       result={entry.actionResult}
@@ -10322,7 +10344,11 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
                       state={state}
                       onAccept={(accepted) => applyEntryAction(entry, accepted)}
                       onUndo={() => undoEntryAction(entry)}
-                      onViewToday={() => setPage("today")}
+                      onViewToday={() => {
+                        const date=entry.actionResult?.targetDate || entry.reply.action.targetDate || entry.reply.action.proposal?.date;
+                        if(date){selectCalendarDate(update,date);setPage('today',{preserveDate:true});}
+                        else setPage('today');
+                      }}
                       onViewWorkout={() => setPage("workout")}
                     />
                   )}
@@ -10352,7 +10378,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
           send(message);
         }}
       >
-        {dayContext&&<div className="coach-day-context"><span>{coachDayLabel(dayContext.date)} · {dayContext.unresolved?'Schedule needs review':dayContext.workoutName||'Schedule'}</span><button type="button" aria-label={`Remove context for ${coachDayLabel(dayContext.date)}`} onClick={()=>setDayContext(null)}>×</button></div>}
+        {dayContext&&<div className="coach-day-context"><span>{coachDayLabel(dayContext.date)} · {dayContext.unresolved?'Schedule needs review':dayContext.workoutName||'Schedule'}</span><button type="button" aria-label={`Remove context for ${coachDayLabel(dayContext.date)}`} onClick={removeDayContext}>×</button></div>}
         <textarea
           ref={composerRef}
           rows="1"
@@ -10474,21 +10500,20 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             ) : (
               <div className="coach-history-empty">
                 <h3>No conversations yet</h3>
-                <p>Your Coach conversations will appear here.</p>
                 <Button onClick={newConversation}>START A CONVERSATION</Button>
               </div>
             )}
           </div>
         </section>
       )}
-      {newChatConfirm && createPortal(<ModalLayer backgroundRef={coachRef} close={()=>{setNewChatConfirm(false);setAskChatIntent(null);setConversationError('');if(!liveState.current.activeCoachConversationId)enterConversation();}}>{requestClose=><section className="screen detail-screen coach-new-confirm" role="dialog" aria-modal="true" aria-labelledby="coach-new-title">
-        <SheetHeader title="New chat" onBack={requestClose} backLabel="Continue current"/>
-        <h1 id="coach-new-title">Start a new Coach chat?</h1>
+      {newChatConfirm && createPortal(<ModalLayer backgroundRef={coachRef} close={()=>{setNewChatConfirm(false);setAskChatIntent(null);setContinueTarget(null);setConversationError('');if(!liveState.current.activeCoachConversationId)enterConversation({coldStart:false});else visitTracker?.entered(liveState.current.profile.id);}}>{requestClose=><section className="screen detail-screen coach-new-confirm" role="dialog" aria-modal="true" aria-labelledby="coach-new-title">
+        <SheetHeader title={continueTarget?'Continue chat':'New chat'} onBack={requestClose} backLabel="Continue current"/>
+        <h1 id="coach-new-title">{continueTarget?'Continue this chat?':'Start a new Coach chat?'}</h1>
         {pendingCoachWorkflows(state).length > 0 && <p>Your pending review will close without being applied.</p>}
         {(hasCoachDraft(state) || message.trim()) && <p>Your unsent draft will be discarded.</p>}
         <p>Your chat history will stay. Applied workout changes stay in place.</p>
         {conversationError && <p role="alert" className="offline-banner">{conversationError}</p>}
-        <div className="coach-new-actions"><Button variant="secondary" data-sheet-initial-focus onClick={requestClose}>Keep current chat</Button><Button onClick={()=>startNewConversation(true)}>Start new chat</Button></div>
+        <div className="coach-new-actions"><Button variant="secondary" data-sheet-initial-focus onClick={requestClose}>Keep current chat</Button><Button onClick={()=>startNewConversation(true)}>{continueTarget?'Continue chat':'Start new chat'}</Button></div>
       </section>}</ModalLayer>,document.body)}
     </main>
   );
@@ -10512,9 +10537,9 @@ function weightTrendEarlyState(trend) {
 
 function WeightTrendInformation({backgroundRef}) {
   return <ProfileInformation label="About weight trend" title="Weight trend" Modal={ModalLayer} backgroundRef={backgroundRef}>
-    <p>Trend weight uses weekly averages of your saved check-ins to smooth day-to-day changes. It is not a body-fat estimate.</p>
-    <p>The trend needs at least three check-ins across at least seven days and two calendar weeks.</p>
-    <p>Changes compare the latest weekly average with an earlier week, preferably about four weeks apart. The actual interval is shown with the result.</p>
+    <p>Trend weight uses weekly check-in averages to smooth daily changes. It does not estimate body fat.</p>
+    <p>Requires at least 3 check-ins spanning 7 days and 2 calendar weeks.</p>
+    <p>Changes compare the latest weekly average with an earlier week, ideally four weeks apart. The actual interval is shown.</p>
   </ProfileInformation>;
 }
 
@@ -10579,8 +10604,8 @@ function GoalProgress({
       title: "Strength progress",
       label: "EXERCISES PROGRESSING",
       value: improvements.length
-        ? `${improvements.length} improved recently`
-        : "Complete the same lift at least twice to compare strength",
+        ? `${improvements.length} improved this week`
+        : "No improvements logged this week yet",
       footer: "Compared only across compatible completed sessions.",
     },
     general_fitness: {
@@ -10611,7 +10636,7 @@ function GoalProgress({
         <div className="goal-progress-card">
           <h2>{content.title}</h2>
           <div className="goal-progress-metric">
-            <span>{content.label}</span>
+            {focus !== 'build_muscle' && <span>{content.label}</span>}
             <strong>{content.value}</strong>
             {content.breakdown && <small className="goal-progress-breakdown">{content.breakdown}</small>}
           </div>
@@ -10697,7 +10722,6 @@ function ProgressFocusSheet({ state, update, close }) {
   return (
     <main className="screen detail-screen progress-focus-sheet">
       <SheetHeader title="Progress focus" onClose={close} />
-      <Eyebrow>PROGRESS FOCUS</Eyebrow>
       <h1>What should Progress highlight?</h1>
       <p>This only changes Progress. Your workouts stay the same.</p>
       <div className="progress-focus-options" role="radiogroup">
@@ -10733,10 +10757,9 @@ function WeightOptInSheet({ update, setDetail, close }) {
   return (
     <main className="screen detail-screen weight-opt-in-sheet">
       <SheetHeader title="Weight check-ins" onClose={close} />
-      <Eyebrow>OPTIONAL · PRIVATE</Eyebrow>
       <h1>Weight check-ins</h1>
       <p>
-        Weight check-ins are optional and stay on this device. They show
+        Weight check-ins are optional. They’re saved on this device and included in account sync when enabled. They show
         body-weight change, not body fat. If you have an eating-disorder
         history, are pregnant, or weight tracking feels compulsive or
         distressing, use training progress instead.
@@ -10903,9 +10926,12 @@ function WeightHistory({ state, setDetail, close, saved }) {
       return `${x},${y}`;
     })
     .join(" ");
-  const summary = trend.ready
-    ? `Weight trend: ${bodyWeightFromKg(trend.latest.weightKg, unit).toFixed(1)} ${unit}, ${trend.changeKg < 0 ? "down" : trend.changeKg > 0 ? "up" : "unchanged by"} ${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trend.comparison.days} days.`
+  const changeSummary = trend.ready
+    ? `${trend.changeKg < 0 ? "Down" : trend.changeKg > 0 ? "Up" : "Unchanged by"} ${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trend.comparison.days} days.`
     : "Weight trend is still building.";
+  const summary = trend.ready
+    ? `Weight trend: ${bodyWeightFromKg(trend.latest.weightKg, unit).toFixed(1)} ${unit}, ${changeSummary[0].toLowerCase()}${changeSummary.slice(1)}`
+    : changeSummary;
   const weeklyAverages = trend.weeks.filter((week) => week.samples >= 2).reverse();
   return (
     <main ref={screenRef} className="screen detail-screen weight-history-sheet">
@@ -10913,12 +10939,12 @@ function WeightHistory({ state, setDetail, close, saved }) {
       {saved && <p className="weight-saved" role="status">Weight saved</p>}
       <section className="weight-history-overview">
         <div className="statistics-heading"><Eyebrow>WEIGHT TREND</Eyebrow><WeightTrendInformation backgroundRef={screenRef}/></div>
-        <h1>
+        <h1 className={trend.ready ? "bodyweight-primary-value" : undefined}>
           {trend.ready
             ? `${bodyWeightFromKg(trend.latest.weightKg, unit).toFixed(1)} ${unit}`
             : earlyTrend.title}
         </h1>
-        <p>{trend.ready ? summary.replace(/^Weight trend: /, "") : earlyTrend.body}</p>
+        <p>{trend.ready ? changeSummary : earlyTrend.body}</p>
         {trend.ready && trend.points.length >= 2 && (
           <svg
             className="weight-trend-chart"
@@ -10940,10 +10966,9 @@ function WeightHistory({ state, setDetail, close, saved }) {
           {weeklyAverages.map((week) => (
             <div className="weight-history-average-row" key={week.weekStart}>
               <span>
-                <strong>Weekly average</strong>
-                <small>
+                <strong>
                   Week of {new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(`${week.weekStart}T12:00:00`))}
-                </small>
+                </strong>
               </span>
               <strong>{bodyWeightFromKg(week.weightKg, unit).toFixed(1)} {unit}</strong>
             </div>
@@ -10988,7 +11013,7 @@ function LoggedExerciseRow({row,state,onClick,compact=false}) {
   const item=row.exercise,bodyweight=Boolean(exerciseCatalog[item.exerciseId]?.bodyweight||item.importedExercise?.bodyweight);
   const load=exerciseMeasure(item)==='seconds'||exerciseLoadRequirement(item)==='none'?null:highestSimpleLoggedLoad(item);
   const compactMeta=[row.date?new Intl.DateTimeFormat('en',{day:'numeric',month:'short'}).format(localDate(row.date)):'Date unavailable',load!==null?`${bodyweight?'Highest added load':'Highest load'} ${displayWeight(load,state.profile.units)} ${weightUnit(state.profile.units)}`:bodyweight?'Bodyweight':null].filter(Boolean).join(' · ');
-  return <ExerciseNavigationButton ref={rowRef} className="list-row logged-exercise-row" onClick={onClick} onPointerDown={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}} onFocus={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}}><span><strong>{exerciseName(item)}</strong>{compact?<small>{compactMeta}</small>:<><small>{row.date?`Latest logged session · ${new Intl.DateTimeFormat('en',{day:'numeric',month:'short',year:'numeric'}).format(localDate(row.date))}`:'Date unavailable'}</small>{load!==null?<small>{bodyweight?'Highest added load':'Highest logged load'} · {displayWeight(load,state.profile.units)} {weightUnit(state.profile.units)}</small>:bodyweight&&<small>Bodyweight</small>}</>}</span><NavigationChevron className="navigation-chevron"/></ExerciseNavigationButton>;
+  return <ExerciseNavigationButton ref={rowRef} className="list-row logged-exercise-row" onClick={onClick} onPointerDown={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}} onFocus={()=>{if(state.profile.showExerciseImages!==false)preloadExerciseArt(item,"high");}}><span><strong>{exerciseName(item)}</strong>{compact?<small>{compactMeta}</small>:<><small>{row.date?`Last logged: ${new Intl.DateTimeFormat('en',{day:'numeric',month:'short',year:'numeric'}).format(localDate(row.date))}`:'Date unavailable'}</small>{load!==null?<small>{bodyweight?'Highest added:':'Highest:'} {displayWeight(load,state.profile.units)} {weightUnit(state.profile.units)}</small>:bodyweight&&<small>Bodyweight</small>}</>}</span><NavigationChevron className="navigation-chevron"/></ExerciseNavigationButton>;
 }
 function LoggedExercises({state,setDetail,close,initial={}}) {
   const [query,setQuery]=useState(initial.query||'');const ref=useRef(null);
@@ -11042,6 +11067,7 @@ function ProgressionOverview({state,setDetail,close,initial={}}) {
 }
 export function Progress({ state, update, setDetail, setPage }) {
   const screenRef = useRef(null);
+  const progressDay=useLocalDay();
   const completedWorkouts = completedProgressWorkouts(state.workouts);
   const photos = useWorkoutPhotoCollection(state.workouts);
   const weeklyReview = weeklyPerformanceReview(state, new Date(), {
@@ -11052,25 +11078,18 @@ export function Progress({ state, update, setDetail, setPage }) {
   const weekComplete =
     consistency.planned > 0 &&
     consistency.completed === consistency.planned;
-  const unit = weightUnit(state.profile.units);
   const loggedRows = loggedExercises(state.workouts);
   const allProgressionRows = selectProgressionRows(state, completedWorkouts);
   const progressionRows = allProgressionRows.slice(0, 4);
-  const improvements = recentExerciseProgress(completedWorkouts);
-  const title =
-    completedWorkouts.length === 0
-      ? "Your progress starts here."
-      : completedWorkouts.length === 1
-        ? "Your first baseline is set."
-        : progressionRows.length
-          ? "Know where your training stands."
-          : "Your training is building a baseline.";
+  const improvementEvents=useMemo(()=>exerciseImprovementHistory(completedWorkouts),[state.workouts,progressDay]);
+  const improvements=latestImprovedExercises(improvementsForPeriod(improvementEvents,'week',progressDay));
   const intro =
     completedWorkouts.length === 0
       ? "Complete your first workout to start building training history."
-      : completedWorkouts.length === 1
-        ? "ROOK now has a starting point for your logged training."
-        : "See what is ready to progress, what to hold and what improved.";
+      : null;
+  const weeklySummary = weeklyReview.summary.filter(line => state.program
+    ? !/^\d+ of \d+ (?:planned )?sessions completed\.?$/i.test(line)
+    : !/planned|sessions completed|freestyle .*logged separately/i.test(line));
   const dateLabel = (value) => {
     const date = /^\d{4}-\d{2}-\d{2}$/.test(String(value || ""))
       ? localDate(value)
@@ -11088,7 +11107,7 @@ export function Progress({ state, update, setDetail, setPage }) {
             day: "numeric",
           }).format(date);
   };
-  const earlyData = !effectiveProgressFocus(state) && !progressionRows.length && !improvements.length;
+  const earlyData = !effectiveProgressFocus(state) && !progressionRows.length && !improvementEvents.length;
   const goalSection = (<GoalProgress
         state={state}
         progressionRows={allProgressionRows}
@@ -11136,29 +11155,13 @@ export function Progress({ state, update, setDetail, setPage }) {
         </button>
         <small className="workout-photo-entry-privacy">Stored privately on this device.</small>
       </section>);
-  const trainingSections = (<>{improvements.length > 0 ? (
+  const trainingSections = (<>{improvementEvents.length > 0 ? (
         <section className="progress-lower recent-improvements-section">
-          <Eyebrow>RECENT IMPROVEMENTS</Eyebrow>
-          <div className="recent-improvements-group">
-          {improvements.slice(0, 3).map((item) => (
-            <button
-              key={item.exerciseId}
-              className="list-row"
-              onClick={() => setDetail({ exercise: item.exercise })}
-            >
-              <span>
-                <strong>{exerciseName(item.exercise)}</strong>
-                <small>
-                  <span className="improvement-delta">{item.type === "weight"
-                    ? `+${displayWeight(item.deltaWeight, state.profile.units)} ${unit}`
-                    : `+${item.deltaReps} ${item.deltaReps === 1 ? "rep" : "reps"}`}</span>
-                  {item.type === "weight" ? ' since last session' : item.weight !== null ? ` at ${displayWeight(item.weight, state.profile.units)} ${unit}` : ''}
-                </small>
-              </span>
-              <NavigationChevron className="navigation-chevron"/>
-            </button>
-          ))}
-          </div>
+          <div className="improvements-heading"><Eyebrow>IMPROVEMENTS</Eyebrow><span>This week</span></div>
+          {improvements.length?<div className="recent-improvements-group">
+            {improvements.slice(0,3).map(item=><ImprovementRow key={item.id} item={item} units={state.profile.units} onClick={()=>setDetail({exercise:item.exercise})}/>)}
+          </div>:<p className="improvements-empty">No improvements logged this week yet.</p>}
+          <ExerciseNavigationButton className="list-row improvements-view-all" onClick={()=>setDetail({exerciseImprovements:{period:'all'}})}><span>View improvement history ({improvementEvents.length})</span><NavigationChevron/></ExerciseNavigationButton>
         </section>
       ) : completedWorkouts.length > 0 ? (
         <section className="progress-lower">
@@ -11193,9 +11196,8 @@ export function Progress({ state, update, setDetail, setPage }) {
       </section></>);
   return (
     <main ref={screenRef} className="screen progress-screen">
-      <Eyebrow>PROGRESS</Eyebrow>
-      <h1>{title}</h1>
-      <p className="progress-lede">{intro}</p>
+      <h1>Progress</h1>
+      {intro && <p className="progress-lede">{intro}</p>}
       <section className="weekly-review-section">
         <div className="weekly-review-heading">
           <Eyebrow>WEEKLY REVIEW</Eyebrow>
@@ -11259,9 +11261,9 @@ export function Progress({ state, update, setDetail, setPage }) {
               <div><dt>Skipped</dt><dd>{weeklyReview.skipped}</dd></div>
             )}
           </dl>
-          <div className="weekly-review-summary">
-            {(state.program?weeklyReview.summary:[`${weeklyReview.completed+weeklyReview.freestyleCompleted} ${weeklyReview.completed+weeklyReview.freestyleCompleted===1?'workout':'workouts'} completed this week.`, ...weeklyReview.summary.filter(line=>!/planned|sessions completed|freestyle .*logged separately/i.test(line))]).slice(0,4).map((line) => <p key={line}>{line}</p>)}
-          </div>
+          {weeklySummary.length > 0 && <div className="weekly-review-summary">
+            {weeklySummary.slice(0,4).map((line) => <p key={line}>{line}</p>)}
+          </div>}
         </div>
       </section>
       {earlyData ? <>{trainingSections}{progressionSection}{goalSection}{photoSection}</> : <>{goalSection}{progressionSection}{photoSection}{trainingSections}</>}
@@ -11403,7 +11405,7 @@ export function latestLoggedWeightSet(history = []) {
         set.weight !== undefined &&
         set.weight !== "" &&
         Number.isFinite(Number(set.weight)) &&
-        Number(set.weight) > 0,
+        Number(set.weight) >= 0,
     );
 }
 export function adaptationDurationLabel(requestedMinutes, estimatedMinutes) {
@@ -11546,7 +11548,6 @@ function PersonalizationSummary({ profile, program }) {
     >
       <div>
         <Eyebrow>BUILT FROM YOUR ANSWERS</Eyebrow>
-        <strong>Built to fit your week from day one.</strong>
       </div>
       <dl>
         {items.map(([label, value]) => (
@@ -11677,6 +11678,10 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
   const frequency = state.program ? `${pluralize(state.program.days.length, "day")}/week` : '';
   const block = state.program?.trainingBlock;
   const programSummary = state.program ? `${frequency}${block ? ` · ${block.completed ? "Block complete" : `Week ${block.currentWeek || 1} of ${block.totalWeeks || 1}`}` : !imported && goalContext ? ` · ${goalContext}` : ""}` : trainingStyleFor(state)==='own-workouts'?'Choose a saved workout whenever you train':'Train freestyle whenever you like';
+  const blockName = state.program?.trainingBlock?.name;
+  const trainingBlockSummary = state.program?.trainingBlock?.completed
+    ? `${blockName || 'Training block'} · Complete`
+    : blockName && !['Current block',state.program?.name,state.program && displayProgramName(state.program)].includes(blockName) ? blockName : null;
   const areaTitle = {account:"Account & sync",program:"Program",training:"Training setup",preferences:"Workout preferences",display:"Display",data:"Data & backup",diagnostics:"Storage diagnostics",help:"Help"}[area];
   return (
     <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape' && !event.defaultPrevented && !event.target.closest('[role="dialog"],.modal-layer')){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}${area === 'account' ? ' profile-account-screen' : ''}`}>
@@ -11684,7 +11689,6 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
       {area === 'diagnostics' && <StorageDiagnostics/>}
       <header className="profile-program">
         {!area && <>
-        <Eyebrow>PROFILE</Eyebrow>
         <h1>Training profile</h1>
         <ProfileAccountEntry name={p.name} sync={accountSync} onClick={event=>openArea('account',event)}/>
         </>}
@@ -11700,6 +11704,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         </div>}
       </header>
       {!area && membershipSlot}
+      {!area && <ProfileTrainingStreak state={state} Modal={ModalLayer} backgroundRef={profileRef}/>}
       {area === 'training' && (
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
@@ -11811,11 +11816,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <ExerciseNavigationButton className="list-row" onClick={() => setDetail("training-block")}>
           <span>
             <strong>Training block</strong>
-            <small>
-              {state.program.trainingBlock?.completed
-                ? `${state.program.trainingBlock.name} · Complete`
-                : `${state.program.trainingBlock?.name || "Current block"} · Week ${state.program.trainingBlock?.currentWeek || 1} of ${state.program.trainingBlock?.totalWeeks || 1}`}
-            </small>
+            {trainingBlockSummary && <small>{trainingBlockSummary}</small>}
           </span>
           <NavigationChevron/>
         </ExerciseNavigationButton>
@@ -12512,8 +12513,7 @@ function TrainingPriorities({ state, update, close, adjustPlan }) {
         onClick={() => setReviewOpen(true)}
       >
         <span>
-          <strong>{confirmed.length ? "Run another optional review" : "Not sure what to prioritize?"}</strong>
-          <small>Get an optional physique review</small>
+          <strong>{confirmed.length ? "Run another optional review" : "Optional physique review"}</strong>
         </span>
         <NavigationChevron/>
       </button>}
@@ -12735,7 +12735,6 @@ export function ScratchPlan({ state, update, close, onPlanAccepted, preserveDraf
         <strong>Start from scratch</strong>
         <span />
       </header>
-      <Eyebrow>MANUAL PLAN</Eyebrow>
       <h1>Create your own week.</h1>
       <p>Choose your training days, then build each workout yourself.</p>
       <label className="scratch-plan-name">
@@ -12952,6 +12951,7 @@ export function PlanEditor({
   scratchSessionRef,
   workoutOnly = false,
   todayPreparation = false,
+  compactHeading = false,
   copyOverride = null,
 }) {
   const withWarmupPreference = (value) => {
@@ -14079,14 +14079,14 @@ export function PlanEditor({
         ? {
             eyebrow: "WEEKLY PLAN",
             title: "Build your week.",
-            body: "Add exercises to each day, then adjust your sets and targets.",
+            body: "",
             action: "USE THIS PLAN",
           }
         : mode === "import"
           ? {
               eyebrow: "IMPORT PLAN",
               title: "Review your plan",
-              body: exerciseState?.program?'Replaces your weekly plan. Resolve the highlighted items before using it.':'Check your workouts and resolve the highlighted items.',
+              body: [exerciseState?.program?'Replaces your weekly plan.':'', pendingSourceReviews||unresolved?'Resolve the highlighted items before using it.':''].filter(Boolean).join(' '),
               action: "USE THIS PLAN",
             }
           : mode === "expert"
@@ -14189,11 +14189,11 @@ export function PlanEditor({
         <WorkoutActionsSheet day={program.days.find(day => day.id === workoutActionsDayId)} days={orderedProgramDays}
           collapsed={collapsedDayIds.includes(workoutActionsDayId)} onToggle={() => toggleDayDetails(workoutActionsDayId)} onCopy={copyDayExercises} />
       </ModalLayer>, document.body)}
-      {!scratch && <Eyebrow>{copy.eyebrow}</Eyebrow>}
-      <h1 ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
+      {!scratch && !compactHeading && copy.eyebrow && <Eyebrow>{copy.eyebrow}</Eyebrow>}
+      <h1 className={`plan-editor-title${todayPreparation || compactHeading ? ' visually-hidden' : ''}`} ref={headingRef} tabIndex={headingRef ? -1 : undefined}>
         {copy.title}
       </h1>
-      <p>{copy.body}</p>
+      {copy.body && <p>{copy.body}</p>}
       {scratch && planNameField}
       {mode === "review" && (
         <PersonalizationSummary profile={profile} program={program} />
@@ -14212,7 +14212,7 @@ export function PlanEditor({
       </div>}
       {!focusedSourceReview&&(sourceReview||mode === 'import') && <div ref={importReviewRef}><PlanImportIssues review={sourceReview} resolved={resolvedImportIssues} program={program} onResolve={resolveImportIssue} reviewRequest={importReviewRequest} summaryOnly={importReview} decisionGroups={importReview?importExerciseReviewGroups(sourceReview,importReviewSource.current,resolutionMatches):[]} onChange={id=>{setResolutionRevisit(id);setResolutionOpen(true);}} /></div>}
       {importReview&&(program.importMetadata?.removedExercises||[]).map(record=><div key={record.exercise.id} className="missed-skip-feedback" role="status">{record.exercise.originalImportedName||record.exercise.importedName} removed from plan <button className="text-button" onClick={()=>undoImportRemoval(record.exercise.id)}>Undo</button></div>)}
-      {importReview&&<section className="plan-import-matching-summary" aria-label="Exercise library links"><p>{totalExercises-originalImportCount-unresolved} linked · {originalImportCount} original names{unresolved?` · ${unresolved} source choices to resolve`:''}</p>{originalImportCount>0&&<><p>Some exercises keep their original names. Linking them to the ROOK library is optional.</p><button className="button secondary" onClick={()=>setOptionalMatchesOpen(true)}>Review exercise matches · Optional</button></>}</section>}
+      {importReview&&<section className="plan-import-matching-summary" aria-label="Exercise library links"><p>{totalExercises-originalImportCount-unresolved} linked · {originalImportCount} original {originalImportCount===1?'name':'names'}{unresolved?` · ${unresolved} source choices to resolve`:''}</p>{originalImportCount>0&&<><p>Unlinked exercises keep their original names. Matching is optional.</p><button className="button secondary" onClick={()=>setOptionalMatchesOpen(true)}>Review exercise matches · Optional</button></>}</section>}
       {importApplySafetyIssues.length>0&&<section className="plan-import-issues" role="alert"><span className="eyebrow">COMPATIBILITY TO RESOLVE</span>{importApplySafetyIssues.map(message=><p key={message}>{message}</p>)}<p>Edit the affected exercise below, or go back to clarify your setup. Source values have not been changed.</p></section>}
       {importReview && (trainingSafetyBlocks(importSafety.status) || importSafetyConflicts.length > 0) && <section className="plan-import-issues">
         <span className="eyebrow">TRAINING RESTRICTIONS</span>
@@ -14241,7 +14241,7 @@ export function PlanEditor({
           )}
           <small>{`${pluralize(program.days.length, "day")}/week`}</small>
         </div>}
-        {allowReorder && (
+        {allowReorder && (!workoutOnly || program.days.some(day => day.exercises.length > 1)) && (
           <p className={scratch ? 'visually-hidden' : 'plan-reorder-help'} id="plan-reorder-help">
             {workoutOnly ? "Drag a handle to reorder exercises." : generatedReview ? <>Drag handles to reorder.<span className="visually-hidden"> Use Alt and arrow keys, or Tab to the move actions.</span></> : "Drag a handle to reorder workouts or exercises."}
           </p>
@@ -15042,7 +15042,6 @@ export function PlanEditor({
                           <div className="import-review-compact-editor">
                             <span>
                               <small>PRESCRIPTION</small>
-                              <strong>{exerciseSummary(exercise).split(" · ").slice(0, 2).join(" · ")}</strong>
                             </span>
                             <button
                               type="button"
@@ -15912,7 +15911,7 @@ export function ImportPlan({
         <>
         <div className="import-plan-compose">
           <Eyebrow>FROM NOTES</Eyebrow>
-          <h1>Bring your existing workout into Rook.</h1>
+          <h1 className="visually-hidden">Import plan</h1>
           <p>
             Paste your workout notes. Rook will structure them for review before
             saving.
@@ -16085,9 +16084,6 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
         <>
           <Eyebrow>REST DAY</Eyebrow>
           <h2 id="rest-training-title">Choose today&apos;s activity</h2>
-          <p>
-            Keep recovery light, or reschedule a missed or upcoming workout.
-          </p>
           {moveWorkoutCandidates(state).length>0 && option(
             "MOVE A WORKOUT",
             "Choose a missed or upcoming planned session.",
@@ -16136,10 +16132,7 @@ export function RestTrainingSheet({ date, state, update, close, setPage, setDeta
         <>
           <Eyebrow>OPTIONAL SESSION</Eyebrow>
           <h2 id="rest-training-title">Mobility / recovery</h2>
-          <p>
-            A short, easy recovery session. It will not modify your strength
-            plan.
-          </p>
+          <p>Easy activity. Your strength plan stays unchanged.</p>
           <OptionalActivityEditor kind="Mobility"
             value={{ activity: "Mobility / recovery", durationSeconds: duration * 60, intensity: "Easy" }}
             onChange={patch => { if (patch.durationSeconds !== undefined) setDuration(patch.durationSeconds / 60); }}
@@ -16374,7 +16367,6 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
       <div className="profile-setting-scroll">
       {setting === "schedule" ? (
         <>
-          <Eyebrow>PLANNING PREFERENCE</Eyebrow>
           <h1>When can you train?</h1>
           <p>
             Your usual training days. Existing workouts won’t move.
@@ -16403,8 +16395,7 @@ function ProfileTrainingSetting({ state, update, close, setting, focus }) {
         </>
       ) : (
         <>
-          <Eyebrow>TRAINING SETUP</Eyebrow>
-          <h1>{setupTitle}</h1>
+          <h1 className="visually-hidden">{setupTitle}</h1>
           <p>
             {focus === "equipment"
               ? "Used for recommendations and future plans. Existing exercises won’t change."
@@ -16533,6 +16524,7 @@ function EditPlan({ state, update, close, reviewExerciseIds = [], fullscreen = f
           source={state.program}
           profile={state.profile}
           mode="edit"
+          compactHeading
           onDirtyChange={reportDirty}
           showCancel={!fullscreen}
           exerciseState={state}
@@ -16574,7 +16566,6 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
       <SheetHandleSlot/>
       <button className="sheet-close" aria-label="Close" onClick={close}>×</button>
     </header>
-    <Eyebrow>PROGRAM</Eyebrow>
     <h2 id="change-plan-title">{state.program ? 'Change plan' : 'Create a plan'}</h2>
     <p>{state.program ? 'Your workout history stays saved when you replace the current program.' : 'Add a structured program when you want one. Your workouts and history stay saved.'}</p>
     {blocked && <p className="offline-banner">Finish your active workout before changing plans.</p>}
@@ -16585,7 +16576,7 @@ function ChangePlanSheet({ state, update, close, setDetail, onPlanAccepted }) {
       <span><strong>{imported ? 'Import a different plan' : 'Bring my plan'}</strong><small>Import your current training plan into ROOK.</small></span><NavigationChevron/>
     </button>
     <button className="plan-choice" disabled={blocked} onClick={() => setMode('scratch')}>
-      <span><strong>Build my own program</strong><small>Create a weekly training schedule yourself.</small></span><NavigationChevron/>
+      <span><strong>Build my own program</strong></span><NavigationChevron/>
     </button>
   </main>;
 }
@@ -16814,7 +16805,7 @@ export function RestoreBackupSheet({ state, update, close, onRestored, firstRun 
   return (
     <main className="screen detail-screen data-backup-screen restore-backup-screen" aria-busy={busy || undefined}>
       <SheetHeader title="Restore backup" onBack={firstRun ? dismiss : undefined} backLabel={backLabel} backDisabled={busy} onClose={firstRun ? undefined : dismiss} closeDisabled={busy} firstRunBack={firstRun} />
-      <Eyebrow>{prepared ? "REVIEW BACKUP" : "RESTORE BACKUP"}</Eyebrow>
+      {prepared && <Eyebrow>REVIEW BACKUP</Eyebrow>}
       {prepared ? (
         <>
           <h1>ROOK backup</h1>
@@ -16887,8 +16878,7 @@ function LogoutConfirmSheet({ close, backUpFirst, logOut }) {
       aria-labelledby="logout-confirm-title"
       aria-describedby="logout-confirm-body"
     >
-      <SheetHeader title="Delete local data" onClose={close} />
-      <Eyebrow>LOCAL DATA</Eyebrow>
+      <SheetHeader title="" closeLabel="Cancel deleting local data" onClose={close} />
       <h2 id="logout-confirm-title">Delete local data?</h2>
       <p id="logout-confirm-body">
         This permanently removes your ROOK data from this device, including workout
@@ -16980,7 +16970,7 @@ function PlateSetupFields({ setup, onChange }) {
       <section className="plate-config-section">
         <div className="onboarding-group-heading">
           <strong>Bars</strong>
-          <small>Select the bar you are using</small>
+
         </div>
         <div className="plate-bar-list" role="radiogroup" aria-label="Available bars">
           {setup.bars.map((bar, index) => (
@@ -17290,7 +17280,7 @@ function TrainingBlockScreen({ state, update, close }) {
         <SheetHeader title="Edit training block" onBack={() => setView("overview")} onClose={close} />
         <Eyebrow>PERMANENT PLAN</Eyebrow>
         <h1>Edit block</h1>
-        <p>Keep progression simple. Editing the block updates the permanent plan and saves a Plan History version.</p>
+        <p>Editing this block updates your recurring plan and saves a version in Plan History.</p>
         <label className="training-block-name">
           <span>Block name</span>
           <input value={name} maxLength={80} onChange={(event) => setName(event.target.value)} />
@@ -17450,13 +17440,12 @@ function PlanHistoryScreen({ state, update, close }) {
   return (
     <main ref={screenRef} key="plan-history-list" className="screen detail-screen plan-history-screen">
       <SheetHeader title="Plan history" onClose={close} />
-      <div className="information-heading"><Eyebrow>PERMANENT PLAN</Eyebrow>
+      <div className="information-heading"><h1>Plan versions</h1>
         <ProfileInformation label="About plan history" title="Plan history" Modal={ModalLayer} backgroundRef={screenRef}>
           <p>Review meaningful changes to your recurring training plan. Workout History is separate.</p>
           <p>ROOK keeps the initial plan and the 40 most recent meaningful versions on this device.</p>
         </ProfileInformation>
       </div>
-      <h1>Plan versions</h1>
       <p>Changes to your recurring training plan.</p>
       {restored && <p className="plan-history-restored" role="status">Previous version restored. A new current version was saved.</p>}
       {versions.length ? (
@@ -17493,7 +17482,6 @@ function PlanHistoryScreen({ state, update, close }) {
       ) : (
         <section className="plan-history-empty" role="status">
           <strong>No plan versions yet</strong>
-          <p>Your first permanent plan will appear here.</p>
         </section>
       )}
     </main>
@@ -17712,8 +17700,7 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
       {step === "file" ? <>
         <div className="information-heading"><Eyebrow>{HISTORICAL_IMPORT_SOURCES[source].label.toUpperCase()}</Eyebrow>
           <ProfileInformation label="About history import" title="History import" Modal={ModalLayer} backgroundRef={screenRef}>
-            <p>ROOK parses and validates the file locally. Selecting it does not change History.</p>
-            <p>Every selected file is checked before anything is saved. Review the import before applying it.</p>
+            <p>ROOK validates files on this device. Nothing enters History until you review and confirm the import.</p>
           </ProfileInformation>
         </div><h1>Choose history file</h1>
         <p>Review before importing. Nothing is saved yet.</p>
@@ -17732,7 +17719,7 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
         {preview.warnings.length>0&&<AnimatedDetails className="history-import-format"><summary>Source compatibility notes ({preview.warnings.length})</summary><ul className="history-import-warnings">{preview.warnings.map(w=><li key={w}>{w}</li>)}</ul></AnimatedDetails>}
         <AnimatedDetails className="history-import-format"><summary>Preview factual history (first 3 workouts)</summary>{preview.workouts.slice(0,3).map(workout=><section key={workout.id}><h3>{workout.name||'Untitled source workout'} · {workout.canonicalPlanDate}</h3>{workout.sessionNote&&<p>{workout.sessionNote}</p>}{workout.exercises.map(ex=><div key={ex.id}><strong>{ex.sourceSupersetId?`Group ${ex.sourceSupersetId} · `:''}{ex.sourceName}</strong>{ex.notes&&<p>{ex.notes}</p>}{ex.sets.slice(0,20).map(set=><small key={set.id}>{historySetDescriptor(ex,set)}{set.rawImport.weight!=null?` · ${set.rawImport.weight} ${set.rawImport.weightUnit}`:''}</small>)}</div>)}</section>)}</AnimatedDetails>
         <dl className="history-import-summary-grid"><div><dt>Workouts</dt><dd>{formatCount(preview.summary.workouts)}</dd></div><div><dt>Sets</dt><dd>{formatCount(preview.summary.sets)}</dd></div><div><dt>Matched</dt><dd>{formatCount(preview.summary.matchedExercises-preview.summary.customExercises)}</dd></div><div><dt>Original names</dt><dd>{formatCount(preview.summary.customExercises)}</dd></div><div><dt>Exact duplicates</dt><dd>{formatCount(preview.summary.exactDuplicates)}</dd></div><div><dt>Invalid rows</dt><dd>{formatCount(preview.summary.invalidRows)}</dd></div></dl>
-        {preview.summary.customExercises>0&&<><p>Some exercises keep their original names. Linking them to the ROOK library is optional.</p><Button variant="secondary" disabled={busy} onClick={reviewMatches}>Review exercise matches · Optional</Button>{busy&&<small role="status">{importProgress}</small>}</>}
+        {preview.summary.customExercises>0&&<><p>Unlinked exercises keep their original names. Matching is optional.</p><Button variant="secondary" disabled={busy} onClick={reviewMatches}>Review exercise matches · Optional</Button>{busy&&<small role="status">{importProgress}</small>}</>}
         {preview.summary.reviewExercises>0&&<section className="history-import-review-section"><Eyebrow>SAVED MAPPING NEEDS ATTENTION</Eyebrow>{preview.exerciseMappings.filter(item=>!item.exerciseId&&!item.ignored&&item.match?.requiresReview).map(mappingRow)}</section>}
         <AnimatedDetails className="history-import-format history-import-resolved"><summary>Matched ({formatCount(preview.summary.matchedExercises-preview.summary.customExercises)})</summary>{preview.exerciseMappings.filter(item=>item.exerciseId&&!item.exerciseId.startsWith('custom-')||item.ignored).map(mappingRow)}</AnimatedDetails>
         {preview.summary.customExercises>0&&<AnimatedDetails className="history-import-format history-import-custom"><summary>Original names ({formatCount(preview.summary.customExercises)})</summary><p>Original names and results are preserved. ROOK illustrations and catalog guidance may be unavailable.</p>{preview.exerciseMappings.filter(item=>item.exerciseId?.startsWith('custom-')&&!item.ignored).map(mappingRow)}</AnimatedDetails>}
@@ -17869,9 +17856,8 @@ function CustomExercisesScreen({ state, update, close, createOnly = false, initi
     return (
       <main className="screen detail-screen custom-exercises-screen">
         <SheetHeader title="Custom exercises" onClose={close} />
-        <Eyebrow>YOUR LIBRARY</Eyebrow>
-        <h1>Exercises that fit your gym.</h1>
-        <p>Create equipment-specific movements once. They work in search, imports and compatible substitutions.</p>
+        <h1 className="visually-hidden">Custom exercises</h1>
+        <p>Use custom exercises in search, imports and compatible substitutions.</p>
         {activeExercises.length ? (
           <section className="custom-exercise-list">
             {activeExercises
@@ -17898,13 +17884,12 @@ function CustomExercisesScreen({ state, update, close, createOnly = false, initi
   return (
     <main ref={screenRef} className="screen detail-screen custom-exercise-editor">
       <SheetHeader title={editing ? "Edit exercise" : "New exercise"} onBack={createOnly ? close : () => setView("list")} />
-      <div className="information-heading"><Eyebrow>{editing ? "CUSTOM EXERCISE" : "ADD TO YOUR LIBRARY"}</Eyebrow>
+      <div className="information-heading"><h1>{editing ? editing.name : "Exercise details"}</h1>
         <ProfileInformation label="About custom exercises" title="Custom exercises" Modal={ModalLayer} backgroundRef={screenRef}>
-          <p>{editing ? 'Changes update this exercise in your library.' : 'Name your exercise. ROOK suggests details when it recognizes the movement; review them before saving.'}</p>
+          <p>{editing ? 'Changes update this exercise in your library.' : 'ROOK may suggest details. Review them before saving.'}</p>
           {createOnly && <p>{creationDescription || <>Saved to your exercise library, even if you later cancel plan changes. {createLabel === 'CREATE & ADD' ? 'Added to this workout’s draft; save plan changes when you’re ready.' : 'Return to the chooser to add it to your draft.'} Saved training restrictions still apply.</>}</p>}
         </ProfileInformation>
       </div>
-      <h1>{editing ? editing.name : "Make it recognizable."}</h1>
       <p>{editing ? 'Update the exercise details below.' : 'Review suggested details before saving.'}</p>
       {createOnly && <p>Saved to your library, even if you cancel other changes.</p>}
       <div className="custom-exercise-form">
@@ -18092,7 +18077,6 @@ function GymProfilesSheet({ state, update, close }) {
     return (
       <main className="screen detail-screen gym-profiles-screen">
         <SheetHeader title="Gym profiles" onClose={close} />
-        <Eyebrow>TRAINING</Eyebrow>
         <h1>Your training environments</h1>
         <p>Save each gym’s equipment. Your plan stays unchanged.</p>
         <section className="gym-profile-list" aria-label="Saved gym profiles">
@@ -18125,8 +18109,7 @@ function GymProfilesSheet({ state, update, close }) {
         onClose={close}
         onBack={back}
       />
-      <Eyebrow>{view === "create" ? "NEW TRAINING ENVIRONMENT" : "GYM PROFILE"}</Eyebrow>
-      <h1>{view === "create" ? "Add a gym" : editing?.name}</h1>
+      <h1 className={view === 'create' ? 'visually-hidden' : undefined}>{view === "create" ? "Add a gym" : editing?.name}</h1>
       <label className="gym-name-field">
         <span>Gym name</span>
         <input
@@ -18414,7 +18397,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           <Eyebrow>TODAY ONLY</Eyebrow>
           <h1>What changed today?</h1>
           <div className="adjust-option-list">
-            <button className="choice-row rook-menu-navigation" onClick={()=>setStep('manual-editor')}><span className="rook-menu-copy"><strong>Edit today's exercises</strong><small>Add, replace, reorder and edit targets · Apply for today only</small></span><NavigationChevron/></button>
+            <button className="choice-row rook-menu-navigation" onClick={()=>setStep('manual-editor')}><span className="rook-menu-copy"><strong>Edit today's exercises</strong><small>Add, replace, reorder and edit targets.</small></span><NavigationChevron/></button>
             {ADJUST_TODAY_OPTIONS.map(([value, label, detail]) => (
               <button className="choice-row rook-menu-navigation" key={value} onClick={() => chooseMode(value)}>
                 <span className="rook-menu-copy"><strong>{label}</strong><small>{detail}</small>
@@ -18454,9 +18437,9 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       )}
       {step === "equipment" && (
         <>
-          <Eyebrow>DIFFERENT EQUIPMENT</Eyebrow>
-          <h1>Where are you training?</h1>
-          <p>This choice is for today only. It does not change your default gym.</p>
+
+          <h1 className="workflow-title">What equipment is available?</h1>
+          <p>Today only. Your default gym stays unchanged.</p>
           <section className="adjust-gym-picker" role="radiogroup" aria-label="Training location for this workout">
             {state.gymProfiles?.length > 0 && <>
             <Eyebrow>USE SAVED GYM</Eyebrow>
@@ -18467,9 +18450,9 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
               })}
             </div>
             </>}
-            <Eyebrow>CUSTOM FOR TODAY</Eyebrow>
+
             <label className={`adjust-equipment-mode adjust-custom-equipment${customEquipment ? " is-selected" : ""}`}><input type="radio" name="today-training-location" checked={customEquipment} aria-label="Choose equipment, custom for today" onChange={() => { setEquipmentSelection({ gymProfileId: null, custom: true, equipment: [...equipment] }); setError(""); }} />
-              <span><strong>Choose equipment</strong><small>Make a one-off selection for this workout.</small></span><i aria-hidden="true" />
+              <span><strong>Choose equipment</strong></span><i aria-hidden="true" />
             </label>
           </section>
           {customEquipment && (
@@ -18487,8 +18470,8 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       )}
       {step === "energy" && (
         <>
-          <Eyebrow>LOW ENERGY</Eyebrow>
-          <h1>Keep the intent. Reduce the fatigue.</h1>
+
+          <h1>Lower-fatigue workout</h1>
           <p>ROOK will protect the main movements, trim lower-priority volume and keep effort conservative.</p>
           <div className="adjust-calm-note">This is a training-volume adjustment, not medical advice.</div>
           <Button aria-busy={busy || undefined} disabled={busy} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW LOWER-FATIGUE WORKOUT"}</Button>
@@ -18497,7 +18480,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       {step === "unavailable" && (
         <>
           <Eyebrow>SPECIFIC EXERCISE UNAVAILABLE</Eyebrow>
-          <h1>Choose affected exercises</h1>
+          <h1 className="workflow-title">Choose affected exercises</h1>
           <p>Select one or more. ROOK will look for compatible replacements.</p>
           <div className="adjust-check-list" role="group" aria-label="Unavailable exercises">
             {(original?.exercises || []).map((exercise) => { const selected = unavailableEntryIds.includes(exercise.id); return <button key={exercise.id} aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => setUnavailableEntryIds((current) => selected ? current.filter((id) => id !== exercise.id) : [...current, exercise.id])}><span>{exerciseName(exercise)}</span><i aria-hidden="true">{selected ? "✓" : ""}</i></button>; })}
@@ -18509,7 +18492,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       {step === "review" && proposal && !busy && (
         <>
           <Eyebrow>TODAY ONLY · {adjustmentModeLabel(proposal.mode)}</Eyebrow>
-          <h1>{proposal.workout.name}</h1>
+          <h1 className="workflow-title">{proposal.workout.name}</h1>
           <p>{proposal.workout.exercises.length} exercises · Estimated time: <span style={{whiteSpace:'nowrap'}}>{roundedEstimate(proposal.originalWorkout.estimatedMinutes || estimateSessionMinutes(proposal.originalWorkout.exercises))} min</span> → <span style={{whiteSpace:'nowrap'}}>{roundedEstimate(proposal.workout.estimatedMinutes)} min</span></p>
           {proposal.mode === ADJUST_TODAY_MODES.equipment ? <dl className="adjust-equipment-delta"><div><dt>Current</dt><dd>{currentEquipmentContext.name ? `${currentEquipmentContext.name} · ` : ""}{gymEquipmentSummary(currentEquipmentContext.equipment)}</dd></div><div><dt>For this workout</dt><dd>{proposal.gymProfileName ? `${proposal.gymProfileName} · ` : ""}{gymEquipmentSummary(proposal.temporaryEquipment)}</dd></div></dl> : proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
 
@@ -18521,7 +18504,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
             }) : <p className="adjust-calm-note">No workout changes needed.</p>}
             {proposal.unresolved.map((item) => <div className="adjust-unresolved" role="alert" key={item.entryId}><strong>{item.label} needs a replacement</strong><small>{item.reason}</small><button className="text-button" onClick={() => setManualEntryId(item.entryId)}>Choose replacement</button></div>)}
           </section>
-          <ReviewDetails title={`${existing?'Full workout':'Edit workout'} · ${proposal.workout.exercises.length} exercises`}>
+          <ReviewDetails title={existing?'Full workout':'Edit workout'}>
             {removedDraft&&<div className="adjust-removal-feedback"><span role="status">{removedDraft.name} removed for today.</span><button type="button" className="text-button" onClick={()=>{setProposal(current=>restoreTodayAdjustmentExercise(current,removedDraft.proposal,removedDraft.entryId,state));setRemovedDraft(null);}}>Undo</button></div>}
             <AdjustmentExerciseList exercises={proposal.workout.exercises} editingId={editingTargetsId} onToggle={setEditingTargetsId} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} readOnly={Boolean(existing)}
               onEdit={(entryId,target)=>setProposal(current=>editTodayAdjustmentTargets(current,entryId,target,state))}
@@ -18611,11 +18594,7 @@ export function Detail({
               {workout && (
                 <button
                   onClick={() => {
-                    update((current) => {
-                      current.selectedDay = day;
-                      current.selectedDate = isoDay(date);
-                      return current;
-                    });
+                    selectCalendarDate(update,isoDay(date));
                     close();
                   }}
                 >
@@ -18798,6 +18777,8 @@ export function Detail({
     return <LoggedExercises state={state} setDetail={setDetail} close={close} initial={detail.loggedExercises}/>;
   if (detail?.progressionOverview)
     return <ProgressionOverview state={state} setDetail={setDetail} close={close} initial={detail.progressionOverview}/>;
+  if (detail?.exerciseImprovements)
+    return <ExerciseImprovements state={state} setDetail={setDetail} close={close} initial={detail.exerciseImprovements} Header={SheetHeader} Modal={ModalLayer}/>;
   if (detail?.weightHistory)
     return (
       <WeightHistory
@@ -18959,8 +18940,8 @@ export function Detail({
       <SheetHeader
         title={exerciseName(exercise)}
         onClose={close}
-        onBack={detail.returnToPr?()=>setDetail({exercisePr:detail.returnToPr,returnFocusId:detail.returnFocusId}):detail.returnToProgression?()=>setDetail({progressionOverview:detail.returnToProgression}):detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
-        backLabel={detail.returnToPr?'Back to personal record':detail.returnToProgression?'Back to exercise progression':detail.returnToLogged?'Back to logged exercises':'Back'}
+        onBack={detail.returnToPr?()=>setDetail({exercisePr:detail.returnToPr,returnFocusId:detail.returnFocusId}):detail.returnToProgression?()=>setDetail({progressionOverview:detail.returnToProgression}):detail.returnToImprovements?()=>setDetail({exerciseImprovements:detail.returnToImprovements}):detail.returnToLogged?()=>setDetail({loggedExercises:detail.returnToLogged}):undefined}
+        backLabel={detail.returnToPr?'Back to personal record':detail.returnToProgression?'Back to exercise progression':detail.returnToImprovements?'Back to improvements':detail.returnToLogged?'Back to logged exercises':'Back'}
         closeLabel={`Close ${exerciseName(exercise)} details`}
       />
       <div className={`exercise-detail-overview${detailIllustration ? " has-illustration" : ""}`}>
@@ -18982,7 +18963,7 @@ export function Detail({
                       ? "CURRENT WORKING WEIGHT"
                       : "TRAINING HISTORY"}
               </Eyebrow>
-              <h1>
+              <h1 className="exercise-detail-value">
                 {timed
                   ? latestHold
                   : currentLoad}{" "}
@@ -19000,8 +18981,7 @@ export function Detail({
             </>
           ) : (
             <>
-              <Eyebrow>FIRST SESSION</Eyebrow>
-              <h1>No history yet.</h1>
+              <h1 className="exercise-detail-empty-title">No history yet.</h1>
               <p>
                 {loadRequirement === "required"
                   ? "Choose a comfortable starting load when you begin your first set."
@@ -19060,7 +19040,7 @@ export function Detail({
           <ProgressionExplanation presentation={progressionPresentation(progression,exercise,state.profile.units)}/>
         </section>
       )}
-      <section className="exercise-performance-history">
+      {history.length > 0 && <section className="exercise-performance-history">
         <Eyebrow>HISTORY</Eyebrow>
         {history.length ? (
           [...history].reverse().map((item, index) => {
@@ -19107,9 +19087,9 @@ export function Detail({
             );
           })
         ) : (
-          <p className="muted">Complete this exercise to start its history.</p>
+          null
         )}
-      </section>
+      </section>}
     </main>
   );
 }
@@ -19333,9 +19313,7 @@ function Appearance({ state, update, close }) {
   const themeHelp =
     appearancePreference === "system"
       ? `Follows your device appearance — ${systemDark ? "Dark" : "Light"} right now.`
-      : appearancePreference === "dark"
-        ? "Always use ROOK’s dark appearance."
-        : "Always use ROOK’s light appearance.";
+      : null;
   const setAppearance = (value) => {
     setAppearanceError('');
     if (value === appearancePreference) return;
@@ -19364,9 +19342,9 @@ function Appearance({ state, update, close }) {
         <Eyebrow>THEME</Eyebrow>
         <SegmentedControl label="Theme" options={[{value:'system',label:'System'},{value:'light',label:'Light'},{value:'dark',label:'Dark'}]}
           value={appearancePreference} onChange={setAppearance}/>
-        <small className="appearance-theme-help" aria-live="polite">
+        {themeHelp && <small className="appearance-theme-help" aria-live="polite">
           {themeHelp}
-        </small>
+        </small>}
         {appearanceError && <p role="alert">{appearanceError}</p>}
       </section>
       {<section className="logging-group appearance-palettes-group"><Eyebrow>PERSONAL THEMES</Eyebrow><button type="button" className="list-row" onClick={() => personalThemes.openThemes(personalThemeFromProfile(state.profile))}><span><span className="theme-title"><strong>Choose a theme</strong>{personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}</span><small>{personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(state.profile))}</small></span><NavigationChevron/></button></section>}
@@ -19675,7 +19653,7 @@ export function ActiveWorkoutOptions({ close, onRestart, onCancelWorkout, hasPen
   if(settings)return <ProgressionGuidanceSettings state={state} update={update} owner={settings} Sheet={WorkoutOptionsSheet} close={close}/>;
   return <WorkoutOptionsSheet className={`active-workout-options-sheet${confirming?' confirming-restart':''}`}
     titleId="active-workout-options-title" describedBy={confirming ? confirming==='cancel'?'cancel-workout-detail':'restart-workout-detail' : undefined} close={()=>{if(!submitting.current)close();}}>
-    {confirming==='cancel'&&<Eyebrow>END WORKOUT</Eyebrow>}
+
     <h2 id="active-workout-options-title">{confirming==='cancel'?'Cancel workout?':confirming?'Restart workout?':'Workout options'}</h2>
     {confirming==='cancel'?<>
       <p id="cancel-workout-detail">{completed ? `${completed} completed ${completed===1?'set':'sets'} and all changes from this session will be discarded.` : 'Your changes from this session will be discarded.'} This can’t be undone.</p>
@@ -19777,7 +19755,6 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
         <textarea
           aria-describedby={helperId}
           maxLength={EXERCISE_PERSONAL_NOTE_MAX_LENGTH}
-          placeholder="Add a personal reminder…"
           rows={3}
           value={draft}
           onChange={(event) =>
@@ -19870,7 +19847,6 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       titleId="active-exercise-options-title"
       close={close}
     >
-      <Eyebrow>EXERCISE</Eyebrow>
       <h2 id="active-exercise-options-title">Exercise options</h2>
       {isCurrent && onShowPreviousValues && <button type="button" className="list-row" onClick={() => {showPreviousOnClose.current = true; close();}}><span>Use previous values</span><NavigationChevron/></button>}
       {supportsPerSideLogging(current) && (
@@ -19881,7 +19857,7 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       )}
       {(moveable||loggedWork&&onMoveCurrent)&&<button type="button" className="list-row" disabled={!moveable} onClick={()=>apply(()=>onMoveCurrent?.(current.id))}>Move to Up Next</button>}
       {(removable||loggedWork&&onRemoveCurrent)&&<button type="button" className="list-row danger-text" disabled={!removable} onClick={()=>apply(()=>onRemoveCurrent?.(current.id))}>Remove from this workout</button>}
-      {loggedWork&&(onMoveCurrent||onRemoveCurrent)&&<p>Move and remove are locked after work has been logged.</p>}
+      {loggedWork&&(onMoveCurrent||onRemoveCurrent)&&<p>Moving, removing and superset changes are locked after logging a set.</p>}
       <button type="button" className="list-row active-exercise-note-action"
         aria-label={personalNote ? "Edit note" : "Add note"}
         aria-describedby={personalNote ? notePreviewId : undefined}
@@ -19917,13 +19893,13 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
           onClick={() => setDetail({ superset: current })}
         >
           <span className="rook-menu-copy"><strong>{pair ? "Manage superset" : "Create superset"}</strong>
-          <small>
+          {!(locked&&loggedWork&&(onMoveCurrent||onRemoveCurrent))&&<small>
             {locked
               ? "Locked because work has already been logged."
               : pair
                 ? "Review or remove the current exercise pair."
                 : "Pair this with an upcoming exercise."}
-          </small>
+          </small>}
         </span><NavigationChevron/></button>
       )}
     </WorkoutOptionsSheet>
@@ -20048,16 +20024,14 @@ function ActiveSuperset({ exercise, state, update, close }) {
         ×
       </button></header>
       <div className="sheet-scroll">
-        <Eyebrow>{pair ? "WORKOUT SUPERSET" : "CREATE SUPERSET"}</Eyebrow>
+        {!pair&&<Eyebrow>CREATE SUPERSET</Eyebrow>}
         <h2 id="active-superset-title">
           {pair ? "Manage this pair" : `Pair ${exerciseName(current || exercise)}`}
         </h2>
         {pair ? (
           <>
             <p>
-              {exerciseName(pair.members[0].exercise)} and {" "}
-              {exerciseName(pair.members[1].exercise)} alternate one set each,
-              then you rest.
+              {exerciseName(pair.members[0].exercise)} + {exerciseName(pair.members[1].exercise)}
             </p>
             <button
               className="choice-row active-superset-remove"
@@ -20074,10 +20048,6 @@ function ActiveSuperset({ exercise, state, update, close }) {
           </>
         ) : (
           <>
-            <p>
-              Choose an upcoming exercise. Rook will alternate one set of each,
-              then start your rest.
-            </p>
             {locked ? (
               <p className="offline-banner">
                 Superset changes are locked after work is logged.
@@ -20373,10 +20343,9 @@ function Replace({ exercise, state, update, close }) {
               onChange={(event) => {setQuery(event.target.value); setCreatedCustomId(null);}}
             />
             <div data-exercise-search-scroll>
-            <Eyebrow>CHOOSE ANOTHER EXERCISE</Eyebrow>
+
             <p>
-              Choose any exercise available with your equipment. Training
-              restrictions still apply.
+              Equipment and training restrictions apply.
             </p>
             <CustomExerciseFallback onCreate={() => {
               customTriggerRef.current = sheetRef.current.querySelector('[aria-label="Create custom exercise"]');
@@ -20398,13 +20367,12 @@ function Replace({ exercise, state, update, close }) {
           </>
         ) : (
           <>
-            <div className="information-heading"><Eyebrow>REPLACE EXERCISE</Eyebrow>
+            <div className="information-heading"><h2 id="replace-title">Replace {exerciseName(exercise)}</h2>
               <ProfileInformation label="About exercise replacements" title="Exercise replacements" Modal={ModalLayer} backgroundRef={sheetRef}>
                 <p>Candidates match the same movement purpose, target muscles, your equipment and restrictions.</p>
                 <p>The replacement applies to this workout. {gymContext.id && gymContext.name ? `Prefer my choice remembers it for future suggestions at ${gymContext.name}.` : 'Prefer my choice remembers it for future replacement suggestions.'}</p>
               </ProfileInformation>
             </div>
-            <h2 id="replace-title">Replace {exerciseName(exercise)}</h2>
             <p>For this workout only.</p>
             <Eyebrow>RECOMMENDED</Eyebrow>
             {!suggestionsReady ? <p role="status" aria-live="polite">Finding suitable exercises…</p> : choices.length
@@ -20432,12 +20400,12 @@ function Replace({ exercise, state, update, close }) {
               <i aria-hidden="true">{rememberPreference ? "✓" : ""}</i>
             </button>
             <div className="replacement-secondary">
-              <button
+              {!noMore && <button
                 onClick={more}
                 disabled={!suggestionsReady || loadingMore || noMore}
               >
                 {loadingMore ? "Checking…" : "More compatible options"}
-              </button>
+              </button>}
               <button disabled={!suggestionsReady} onClick={() => setPicker(true)}>
                 Search all exercises
               </button>
@@ -20453,13 +20421,13 @@ function Replace({ exercise, state, update, close }) {
   );
 }
 
-export default function App({placements}={}) {
-  return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup} placements={placements}/>}</StartupBoundary></PersonalThemesProvider>;
+export default function App({placements,themeOptions}={}) {
+  return <PersonalThemesProvider {...themeOptions} Modal={ModalLayer} Header={SheetHeader}><StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup} placements={placements}/>}</StartupBoundary></PersonalThemesProvider>;
 }
 const StableActiveWorkout = memo(ActiveWorkout);
 function HydratedApp({startup,placements}) {
   useSemanticSwipeBack();
-  const [state, update, persistenceFailed] = useLiftState(startup);
+  const [state, update, persistenceFailed, calendarIntent] = useLiftState(startup);
   const personalThemes = usePersonalThemes();
   const accountSync = useAccountSync({ state, update, persistenceFailed });
   useLayoutEffect(() => {
@@ -20481,18 +20449,21 @@ function HydratedApp({startup,placements}) {
   );
   const [page, setPageState] = useState("today");
   const [coachEntry,setCoachEntry]=useState(null);
+  const coachVisits=useRef(null);
+  if(!coachVisits.current)coachVisits.current=createCoachVisitTracker();
   const consumeCoachEntry=useCallback(id=>setCoachEntry(current=>current?.id===id?null:current),[]);
   const coachAvailability = useCoachAvailability({ profileId: state.profile.id, enabled: !accountSync.locked, visiting: page === 'coach' });
   const backgroundRef = useRef(null);
   const coachScrollMemory = useRef(new Map());
   const prepareTabTransition = useMainTabTransition(page, backgroundRef);
-  const setPage = useCallback(next => {
+  const setPage = useCallback((next,{preserveDate=false}={}) => {
+    if(next==='today' && !preserveDate)selectCalendarToday(update);
     if(next!=='coach')setCoachEntry(null);
     prepareTabTransition(next);
     if (next !== 'complete') liveCompletion.current = null;
     if(next==='workout')rememberSwipeParent(document.querySelector('.today-screen'),'workout');
     setPageState(next);
-  },[prepareTabTransition]);
+  },[prepareTabTransition,update]);
   const [detail, setDetail] = useState(null);
   const openCombineWorkouts=()=>{
     setCoachEntry({id:uid('combine-entry'),profileId:state.profile.id,planId:state.program?.id,date:isoDay()});
@@ -20511,6 +20482,10 @@ function HydratedApp({startup,placements}) {
   const [restoreEntryParent,setRestoreEntryParent]=useState(null);
   const [repairPreview, setRepairPreview] = useState(null);
   const [planReadyNotice, setPlanReadyNotice] = useState(null);
+  useFollowTodayCalendar({
+    enabled:state.profile.onboardingComplete && page==='today' && !detail && !repairPreview && !accountSync.locked,
+    intent:calendarIntent,update,
+  });
   const seasonalTransitionBlocked = Boolean(accountSync.locked || state.activeWorkout || state.activeOptionalSession || detail ||
     !state.profile.onboardingComplete || entryMode || repairPreview ||
     !['today', 'coach', 'progress', 'profile'].includes(page));
@@ -20634,7 +20609,6 @@ function HydratedApp({startup,placements}) {
         setDetail={setDetail}
         planReady={planReadyNotice}
         dismissPlanReady={() => setPlanReadyNotice(null)}
-        onCombineWorkouts={openCombineWorkouts}
         campaignSlot={placements?.today}
       /> : <NoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail} campaignSlot={placements?.today}/>)
     ) : page === "optional-session" ? (
@@ -20657,7 +20631,7 @@ function HydratedApp({startup,placements}) {
         persistenceFailed={persistenceFailed}
       />
     ) : page === "coach" ? (
-      <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} entryIntent={coachEntry} onEntryHandled={consumeCoachEntry} />
+      <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} entryIntent={coachEntry} onEntryHandled={consumeCoachEntry} visitTracker={coachVisits.current} />
     ) : page === "progress" ? (
       <Progress state={state} update={update} setDetail={setDetail} setPage={setPage} />
     ) : (
@@ -20683,7 +20657,10 @@ function HydratedApp({startup,placements}) {
         {(!detail || detailClosing) &&
           !repairPreview &&
           !["workout", "optional-session", "complete"].includes(page) && (
-          <BottomNav page={page} setPage={setPage} />
+          <BottomNav page={page} setPage={setPage} onActiveTabRetap={tab=>{
+            if(tab==='today')selectCalendarToday(update);
+            retapActiveTab(tab,backgroundRef.current);
+          }} />
         )}
       </div>
       {detail && (
@@ -20742,10 +20719,10 @@ function HydratedApp({startup,placements}) {
   );
 }
 
-export function RookRoot({placements}={}) {
+export function RookRoot({placements,themeOptions}={}) {
   return (
     <RookErrorBoundary>
-      <App placements={placements}/>
+      <App placements={placements} themeOptions={themeOptions}/>
     </RookErrorBoundary>
   );
 }

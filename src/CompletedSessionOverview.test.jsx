@@ -34,10 +34,10 @@ it.each([Complete,Today])('%s shows one completion hero, saved metrics and a rou
   const action=button('VIEW WORKOUT DETAILS'),list=host.querySelector('.complete-session-log,.exercise-preview');
   expect(hero.compareDocumentPosition(action)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   if(Screen===Today){
-    expect(list).toBeNull();expect([...host.querySelectorAll('.eyebrow')].some(n=>n.textContent==='WORKOUT DETAILS')).toBe(false);
+    expect(list).toBeNull();expect([...host.querySelectorAll('.eyebrow')].some(n=>n.textContent==='EXERCISES')).toBe(false);
   }else{
     expect(action.compareDocumentPosition(list)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-    expect(list.textContent).toContain('WORKOUT DETAILS');expect(list.querySelectorAll('button').length).toBeGreaterThanOrEqual(workout.exercises.length);
+    expect(list.textContent).toContain('EXERCISES');expect(list.querySelectorAll('button').length).toBeGreaterThanOrEqual(workout.exercises.length);
   }
   expect(host.textContent).not.toContain('WORKOUT COMPLETE · VIEW HISTORY');
   act(()=>action.click());expect(setDetail).toHaveBeenCalledWith({completedWorkout:workout.id});expect(update).not.toHaveBeenCalled();expect(state).toEqual(before);

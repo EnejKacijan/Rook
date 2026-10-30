@@ -18,8 +18,7 @@ const click=name=>act(()=>button(name).click());
 it('has one dominant CTA after the story, three secondary routes, and a shared account footer',()=>{
   expect(host.querySelector('h1').textContent).toBe('Choose your starting point.');
   const content=host.querySelector('.entry-content');
-  expect([...content.children].map(n=>n.className||n.tagName)).toEqual(['H1','P']);
-  expect(content.children[1].textContent).toBe('Your workouts, your plan, your progress.');
+  expect([...content.children].map(n=>n.className||n.tagName)).toEqual(['H1']);
   expect(host.querySelectorAll('.button.primary')).toHaveLength(1);
   expect([...host.querySelectorAll('.entry-secondary-routes strong')].map(n=>n.textContent)).toEqual(['Bring my plan','Create workout','Freestyle']);
   expect(button('Restore backup').closest('footer')).toBeTruthy();

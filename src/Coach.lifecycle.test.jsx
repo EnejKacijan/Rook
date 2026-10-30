@@ -6,7 +6,7 @@ import {createReturningUserFixture} from './demoFixture.js';
 import {saveState,serializeState,deserializeState,startWorkout} from './domain.js';
 import {AIService} from './aiService.js';
 import {useSemanticSwipeBack} from './useSemanticSwipeBack.js';
-import {pendingCoachWorkflows} from './coachConversations.js';
+import {pendingCoachWorkflows,createCoachVisitTracker} from './coachConversations.js';
 vi.mock('./domain.js',async original=>({...await original(),saveState:vi.fn(()=>true)}));
 vi.mock('./aiService.js',async original=>({...await original(),AIService:{...(await original()).AIService,coach:vi.fn()}}));
 let root,host,current,page;
@@ -21,7 +21,7 @@ beforeEach(()=>{
 });
 afterEach(()=>{act(()=>root.unmount());document.body.innerHTML='';vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});
 function fixture(pending=false){const state=createReturningUserFixture(0);state.activeCoachConversationId='current';state.coachDraft='Draft answer';state.conversations=[{id:'older',conversationId:'older',createdAt:new Date('2026-09-17T12:00:00').getTime(),user:'Yesterday question',reply:{text:'Yesterday answer'}},{id:'message',conversationId:'current',createdAt:Date.now(),user:'Current question',reply:pending?{text:'Which workouts?',combineRequest:{step:'sources',choices:[{id:'upper',label:'Upper A'},{id:'lower',label:'Lower B'}]}}:{text:'Current answer'}}];return state;}
-function mount(initial){function Harness(){useSemanticSwipeBack();const [state,setState]=useState(initial),[active,setActive]=useState(true);current=state;page=setActive;const update=fn=>setState(prev=>fn(structuredClone(prev)));return active?<Coach state={state} update={update} setPage={()=>setActive(false)} setDetail={()=>{}}/>:<button onClick={()=>setActive(true)}>Coach</button>;}act(()=>root.render(<Harness/>));act(()=>vi.advanceTimersByTime(1));}
+function mount(initial,visitTracker){function Harness(){useSemanticSwipeBack();const [state,setState]=useState(initial),[active,setActive]=useState(true);current=state;page=setActive;const update=fn=>setState(prev=>fn(structuredClone(prev)));return active?<Coach visitTracker={visitTracker} state={state} update={update} setPage={()=>setActive(false)} setDetail={()=>{}}/>:<button onClick={()=>setActive(true)}>Coach</button>;}act(()=>root.render(<Harness/>));act(()=>vi.advanceTimersByTime(1));}
 const button=name=>[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===name||b.textContent===name);
 const click=name=>act(()=>button(name).click());
 const type=value=>act(()=>{const input=document.querySelector('textarea');input.focus();Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
@@ -54,7 +54,7 @@ it('does not roll over an open conversation on foreground or BFCache restore aft
   const shown=new Event('pageshow');Object.defineProperty(shown,'persisted',{value:true});
   act(()=>{document.dispatchEvent(new Event('visibilitychange'));window.dispatchEvent(shown);});
   expect(current.activeCoachConversationId).toBe(id);
-  act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe(id);
+  act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe(id);
 });
 it('restores an older conversation during an active workout and keeps the workout untouched',()=>{
   const state=fixture();state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();
@@ -71,15 +71,15 @@ it('failed manual save retains pending confirmation, old transcript/draft and al
   mount(fixture(true));const before=structuredClone(current);history();click('New chat');saveState.mockReturnValue(false);click('Start new chat');expect(current).toEqual(before);expect(document.querySelector('.coach-new-confirm [role="alert"]').textContent).toContain('unchanged');
   saveState.mockReturnValue(true);click('Start new chat');expect(current.activeCoachConversationId).not.toBe(before.activeCoachConversationId);expect(document.querySelector('textarea').value).toBe('');
 });
-it('next-day entry failure keeps old state and retries without deleting history',()=>{
-  vi.setSystemTime(new Date('2026-09-19T12:00:00'));const state=fixture();state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-18T12:00:00').getTime();saveState.mockReturnValue(false);mount(state);
+it('cold entry failure keeps old state and retries without deleting history',()=>{
+  vi.setSystemTime(new Date('2026-09-19T12:00:00'));const state=fixture();state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-18T12:00:00').getTime();saveState.mockReturnValue(false);mount(state,createCoachVisitTracker());
   expect(current).toEqual(state);expect(document.querySelector('[role="alert"]').textContent).toContain('unchanged');saveState.mockReturnValue(true);click('Try again');expect(current.activeCoachConversationId).not.toBe('current');expect(current.conversations).toEqual(state.conversations);
 });
-it('continuing an older chat today keeps it on tab return and rolls over on a later clean day',async()=>{
+it('continuing an older chat stays on warm tab returns across later days',async()=>{
   const state=fixture(true);state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();mount(state);expect(current.activeCoachConversationId).toBe('current');history();click('New chat');click('Start new chat');
   const newId=current.activeCoachConversationId;vi.setSystemTime(new Date('2026-09-19T12:00:00'));type('Plain question');await act(async()=>button('Send message').click());expect(current.activeCoachConversationId).toBe(newId);expect(AIService.coach).toHaveBeenCalledOnce();
   act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe(newId);
-  vi.setSystemTime(new Date('2026-09-20T12:00:00'));act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe(newId);
+  vi.setSystemTime(new Date('2026-09-20T12:00:00'));act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe(newId);
 });
 it('late reply after explicit cancellation cannot resurrect an archived workflow',async()=>{
   let resolve;AIService.coach.mockImplementation(()=>new Promise(r=>resolve=r));mount(fixture());type('Combine workouts');click('Send message');history();click('New chat');click('Start new chat');const fresh=current.activeCoachConversationId;
@@ -141,7 +141,7 @@ it('Adjust Today review selections survive remount, and resolving a review keeps
   expect(current.activeCoachConversationId).toBe('current');
   click('EDIT WORKOUT');expect(pendingCoachWorkflows(current)).toHaveLength(1);
   click('CANCEL');act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe('current');
-  vi.setSystemTime(new Date('2026-09-19T12:00:00'));act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).not.toBe('current');
+  vi.setSystemTime(new Date('2026-09-19T12:00:00'));act(()=>page(false));click('Coach');expect(current.activeCoachConversationId).toBe('current');
 });
 it('edits targets in the Coach draft, retains them across remount, and applies only to today',()=>{
   const state=fixture(),day=state.program.days[0];day.weekday='Fri';const original=structuredClone(state.program),exercise=day.exercises[0];

@@ -32,8 +32,8 @@ export function ProgressionGuidanceSettings({state,update,owner,Sheet,close}) {
     <h2 ref={heading} tabIndex={-1} id={titleId}>Progression guidance</h2>
     {valid?<>
       <p>Applies to this workout and all future workouts.</p>
-      <ProgressionTipsPreference state={state} update={update} showHeading={false} helpText="Basic shows next-step suggestions. Off hides these cards. Your logs and Progress recommendations stay unchanged."/>
-      <p className="progression-settings-location">Also available in Profile → Workout preferences.</p>
+      <ProgressionTipsPreference state={state} update={update} showHeading={false} helpText="Basic shows next-step tips; Off hides them. Logs and Progress recommendations stay unchanged."/>
+      <p className="progression-settings-location">Saved in Profile → Workout preferences.</p>
     </>:<p role="alert">This workout has changed. Close settings and reopen them from the current workout.</p>}
     <button type="button" className="button secondary progression-settings-return" onClick={close}>Back to workout</button>
   </Sheet>;

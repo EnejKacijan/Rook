@@ -1,7 +1,7 @@
 import React, { useId, useRef, useState } from 'react';
 import { OptionalActivityEditor } from './OptionalActivityEditor.jsx';
 import { conditioningConfiguration, isConditioning, optionalActivitySummary } from './optionalActivity.js';
-import { isoDay, startOptionalSession } from './domain.js';
+import { isoDay, startOptionalSession, canStartOptionalSession } from './domain.js';
 import { useDurableAction } from './useDurableAction.js';
 import { ExerciseNavigationButton } from './ExerciseNavigationButton.jsx';
 import {SheetActionFooter} from './SheetActionFooter.jsx';
@@ -41,7 +41,7 @@ export function ConditioningSheet({ date, state, update, close, setPage, Header 
         : date !== isoDay() ? <p role="status">Optional sessions can only be started for today.</p>
         : <OptionalActivityEditor formId={formId} showActions={false} submitDisabled={!valid || starting} kind="Conditioning" value={draft} onChange={patch => setDraft(current => ({ ...current, ...patch }))} onSubmit={start} error={error} />}
     {canSetUp && <SheetActionFooter containViewport className="conditioning-action-footer">
-      <small data-keyboard-secondary className="sheet-footnote">Optional · does not complete a planned strength workout.</small>
+      <small data-keyboard-secondary className="sheet-footnote">Does not complete a planned strength workout.</small>
       <button type="submit" form={formId} disabled={!valid || starting} className="button primary">START SESSION</button>
     </SheetActionFooter>}
     </div>
@@ -50,8 +50,10 @@ export function ConditioningSheet({ date, state, update, close, setPage, Header 
 
 export function TodayOptionalActivities({ state, date, setDetail, recovery = false, historyOnly = false }) {
   const records = (state.optionalSessions || []).filter(item => item.date === date && item.status === 'completed' && (['Cardio', 'Mobility'].includes(item.kind) || item.kind === 'Conditioning' && item.intent === 'conditioning'));
+  const showActions=!historyOnly&&date===isoDay()&&canStartOptionalSession(state,date);
+  if(!showActions&&!records.length)return null;
   return <section className="today-optional-activities" aria-label="Optional activities">
-    {!historyOnly && date === isoDay() && <div className="today-optional-actions">
+    {showActions && <div className="today-optional-actions">
       {recovery && <button type="button" className="text-button" onClick={() => setDetail({ restTraining: date, optionalMode: 'cardio' })}>+ Light cardio</button>}
       <button type="button" className="text-button" onClick={() => setDetail({ conditioning: date })}>+ Conditioning</button>
     </div>}

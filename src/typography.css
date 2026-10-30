@@ -1,0 +1,346 @@
+/* Shared content roles, reviewed at phone widths. Text size is independent of
+   hit-area size: the logger and compact navigation retain their own geometry.
+   Important declarations bridge older screen rules until those are retired. */
+:root {
+  --rook-type-page:1.5rem;
+  --rook-type-sheet:1.25rem;
+  --rook-type-body:1rem;
+  --rook-type-meta:.875rem;
+  --rook-type-number:1.25rem;
+}
+
+/* Functional pages. The expressive three-page introduction keeps its display
+   scale; a screen being empty or fullscreen does not create a larger title. */
+:root :is(.screen,.onboarding,.startup-recovery,.account-sync-lock):not(.welcome-screen,.optional-session-screen) h1 {
+  font-size:var(--rook-type-page) !important;
+  line-height:1.166667 !important;
+  letter-spacing:-.02em;
+}
+:root .modal-layer :is(.detail-screen,.sheet) h1 {
+  font-size:var(--rook-type-sheet) !important;
+  line-height:1.2 !important;
+}
+:root .modal-layer :is(.plan-editor,.edit-plan-screen,.workout-preparation,
+  .custom-exercise-editor,.history-correction-editor,.training-block-screen,
+  .block-review-sheet,.temporary-plan-sheet,.completed-workout-detail,
+  .workout-recovery-sheet,.use-workout-today-sheet,.onboarding,
+  .priority-settings,.scratch-plan-screen,.import-plan-compose,
+  .gym-profile-editor,.export-sheet) h1 {
+  font-size:var(--rook-type-page) !important;
+  line-height:1.166667 !important;
+}
+:root .modal-layer .history-import-screen h1 {
+  font-size:var(--rook-type-page) !important;
+  line-height:1.166667 !important;
+}
+:root .modal-layer :is(.account-confirm-sheet,.logout-confirm-sheet,.stop-plan-sheet) h1 {
+  font-size:var(--rook-type-page) !important;
+  line-height:1.166667 !important;
+}
+:root .profile-information-sheet h1 {
+  font-size:var(--rook-type-sheet) !important;
+  line-height:1.2 !important;
+}
+:root .modal-layer h1:is(.plan-editor-title,.workflow-title) {
+  font-size:var(--rook-type-page) !important;
+  line-height:1.166667 !important;
+}
+:root .import-plan-meta h2 { font-size:var(--rook-type-sheet); line-height:1.2; }
+:root .startup-recovery.startup-loading h1 {
+  font-size:1.125rem !important;
+  line-height:1.333333 !important;
+  letter-spacing:0;
+}
+:root :is(.workout-options-sheet,.rest-training-sheet,.replace-sheet,
+  .active-superset-sheet,.change-plan-sheet,.plan-workout-actions-sheet) h2 {
+  font-size:var(--rook-type-sheet) !important;
+  line-height:1.2 !important;
+}
+:root :is(.workout-confirm,.destructive-confirmation-sheet) h2 {
+  font-size:var(--rook-type-page) !important;
+  line-height:1.166667 !important;
+}
+:root .history-correction-diff h2 {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.375 !important;
+}
+:root .previous-values-current h2 {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.375 !important;
+}
+:root .previous-values-current > div > strong {
+  font-size:var(--rook-type-number);
+  line-height:1.2;
+  font-variant-numeric:tabular-nums;
+}
+
+/* Metric displays are values, not page titles. */
+:root .modal-layer h1:is(.exercise-detail-value,.bodyweight-primary-value) {
+  font-size:2.125rem !important;
+  line-height:1.1 !important;
+  font-variant-numeric:tabular-nums;
+}
+:root .exercise-detail-empty-title {
+  font-size:var(--rook-type-sheet) !important;
+  line-height:1.2 !important;
+}
+:root .modal-layer h1.exercise-pr-value {
+  font-size:clamp(1.5rem,6.51vw,1.75rem) !important;
+  line-height:1.1 !important;
+  font-variant-numeric:tabular-nums;
+}
+:root :is(.exercise-performance-metrics dd,.complete-stats strong) {
+  font-size:var(--rook-type-number);
+  line-height:1.2;
+  font-variant-numeric:tabular-nums;
+}
+
+/* The exercise name supports the logging task. It shares the same role in
+   every logger mode, including the disposable introduction demo. */
+:root :is(.workout-screen .exercise-heading h1,.workout-screen .exercise-heading h2,
+  .welcome-log-example .welcome-exercise-name,
+  .welcome-today-hero .workout-title) {
+  font-size:var(--rook-type-sheet) !important;
+  line-height:1.2 !important;
+  letter-spacing:-.015em;
+}
+:root .welcome-screen .welcome-story h1 {
+  font-size:clamp(2rem,8.5vw,2.4375rem) !important;
+  line-height:1.04 !important;
+  letter-spacing:-.04em;
+}
+:root .workout-screen .sets :is(.set-row,.set-labels) {
+  --logger-number:max(20px,1.25rem);
+  --logger-label-size:.875rem;
+  --logger-label-line:1.428572;
+  --logger-label-track:.06em;
+}
+:root .workout-screen .sets .rir-trigger {
+  font-size:max(16px,1rem);
+  line-height:1.25;
+}
+:root .workout-screen .sets :is(.set-index-label,.extra-set-label) > b {
+  font-size:var(--rook-type-meta);
+  line-height:1.428572;
+}
+:root .flexible-workout-group h2 {
+  font-size:var(--rook-type-meta);
+  line-height:1.428572;
+}
+
+/* Reading text. Specific metadata roles below remain quieter than the body. */
+:root :is(.screen,.onboarding,.sheet,.startup-recovery) p {
+  font-size:var(--rook-type-body);
+  line-height:1.5;
+}
+:root :is(.profile-information-copy,.coach-message) p,
+:root .coach-message-body,
+:root .coach-user-message,
+:root .coach-user-line > p {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.5 !important;
+}
+:root small {
+  font-size:var(--rook-type-meta);
+  line-height:1.428572;
+}
+:root .screen small {
+  font-size:var(--rook-type-meta) !important;
+  line-height:1.428572 !important;
+}
+/* Extra-set metadata gets its own annotation line, preserving numeric width. */
+:root .workout-screen .sets .set-row:has(> .extra-set-label) {
+  position:relative;
+  padding-bottom:24px;
+}
+:root .workout-screen .sets .extra-set-label { position:static; }
+:root .workout-screen .sets .extra-set-label small {
+  position:absolute;
+  left:var(--logger-index);
+  bottom:2px;
+  width:max-content;
+  max-width:calc(100% - 44px);
+  padding:0 4px;
+  font-size:var(--rook-type-meta) !important;
+  line-height:1.428572 !important;
+}
+:root .eyebrow {
+  font-size:var(--rook-type-meta);
+  line-height:1.428572;
+  letter-spacing:.08em;
+}
+:root :is(.list-row,.choice-row,.option-card-copy,.profile-settings-list,
+  .today-exercises,.saved-workout-list,.picker-results,.optional-workout-list) strong {
+  font-size:var(--rook-type-body);
+  line-height:1.375;
+}
+:root .coach-screen .optional-workout-list strong { font-size:var(--rook-type-body); line-height:1.375; }
+:root .coach-screen .optional-workout-list small { font-size:var(--rook-type-meta); line-height:1.428572; }
+:root .workout-screen .up-next-title { font-size:var(--rook-type-body); line-height:1.375; }
+:root .workout-screen .up-next-prescription { font-size:var(--rook-type-meta); line-height:1.428572; }
+:root :is(.plan-workout-add,.saved-workout-create,.queue-picker-back,
+  .import-plan-paste,.building-cancel,.today-adjust-entry,.select-all-check,
+  .flexible-week-dates > button) {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.375 !important;
+}
+:root .privacy-note { font-size:var(--rook-type-meta) !important; line-height:1.428572 !important; }
+:root .workout-screen .sets .stepper-empty-label:not(.stepper-display-label),
+:root .workout-screen .rest-timer .eyebrow,
+:root .restore-summary dt,
+:root .plate-add-row label > span,
+:root .import-review-compact-editor strong {
+  font-size:var(--rook-type-meta) !important;
+  line-height:1.428572 !important;
+}
+:root .restore-summary dd,
+:root .coach-screen .combine-card .review-change-row > strong,
+:root .plan-workout-actions-body > .choice-row,
+:root .plan-copy-destinations strong,
+:root .session-feedback-choices > legend {
+  font-size:var(--rook-type-body);
+  line-height:1.375;
+}
+:root :is(.plate-add-row > button,.workout-photo-picker,
+  .session-feedback-options > button,.import-review-compact-editor > button) {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.25 !important;
+}
+:root .import-review-compact-editor { flex-wrap:wrap; }
+:root .import-review-compact-editor > span { flex:1 1 160px; }
+:root .import-review-compact-editor > button { min-height:44px; }
+:root .plate-add-row label > span { top:4px; }
+:root .plate-add-row input { height:60px; padding-block:26px 4px; }
+:root .coach-screen .optional-workout-meta :is(strong,span),
+:root .coach-message header strong,
+:root .pro-theme-preset-note,
+:root .plan-editor-summary-action b {
+  font-size:var(--rook-type-meta);
+  line-height:1.428572;
+}
+:root .pro-theme-custom :is(legend,summary),
+:root .pro-theme-bases button,
+:root .pro-theme-reset-row > button {
+  font-size:var(--rook-type-body);
+  line-height:1.375;
+}
+:root .pro-theme-reset-row > p { font-size:var(--rook-type-meta); line-height:1.428572; }
+:root .building-card h2 { font-size:var(--rook-type-page); line-height:1.166667; }
+:root .building-card .building-cancel { font-size:var(--rook-type-body); line-height:1.25; }
+:root .building-card > p:not(.eyebrow) { font-size:var(--rook-type-body); line-height:1.5; }
+:root .building-card .eyebrow { font-size:var(--rook-type-meta); line-height:1.428572; }
+:root :is(.coach-new-trigger,.coach-history-trigger) > span,
+:root .bottom-nav button > span:last-child {
+  font-size:.75rem;
+  line-height:1.333333;
+  letter-spacing:.04em;
+}
+:root :is(.list-row,.choice-row,.option-card-copy) small,
+:root :is(.setting-help,.setting-switch-copy > small,.exercise-history-meta,
+  .welcome-sample-guidance,.welcome-visual figcaption,.welcome-week-hint,
+  .welcome-today-meta,.welcome-example-heading,.entry-primary-note,
+  .entry-action-row small,.entry-micro-label,.welcome-actions > p,
+  .schedule-hint,.schedule-duration-note,.schedule-selection-count,
+  .photo-guidance,.photo-privacy,.physique-caution,.restriction-helper,
+  .warmup-safety,.warmup-layer small,.warmup-ramp > small,
+  .warmup-complete-status small,.sheet-footnote,.offline-banner,
+  .backup-status,.account-sync-error,.coach-copy-error,
+  .coach-save-error,.history-import-format small,.plate-unavailable-note,
+  .export-preview,.workout-photo-viewer-error p,.workout-photo-viewer-context > span,
+  .workout-photo-viewer-context small,.photo-compare-privacy) {
+  font-size:var(--rook-type-meta) !important;
+  line-height:1.428572 !important;
+}
+:root .workout-photo-viewer-error strong,
+:root .workout-photo-viewer-context strong,
+:root :is(.workout-photo-viewer-actions,.workout-photo-delete-confirm) > button {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.375 !important;
+}
+:root .workout-photo-delete-confirm > p { font-size:var(--rook-type-body); line-height:1.5; }
+:root :is(.personal-fields label,.weight-entry-form > label,.setting-switch-label,
+  .setting-switch-copy > strong,.toggle-row > span,.pro-theme-preset strong,
+  .pro-theme-preset-name,.increment-row > span) {
+  font-size:var(--rook-type-body);
+  line-height:1.375;
+}
+:root :is(.detail-header,.coach-header,.coach-history-header) > strong,
+:root .coach-history-header h2 {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.375 !important;
+}
+
+/* Labels can grow while their existing button boxes stay at least 44px. */
+:root .button {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.25 !important;
+}
+:root :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"]),textarea,select) {
+  font-size:max(16px,1rem) !important;
+}
+:root :is(.personalization-summary dt,.personalization-summary dd,
+  .workout-photo-heading small,.workout-photo-entry-privacy,
+  .exercise-performance-metrics dt,.e1rm-heading > small,
+  .exercise-pr-explanation,.active-performance-pr,.coach-message header span) {
+  font-size:var(--rook-type-meta) !important;
+  line-height:1.428572 !important;
+}
+:root .exercise-e1rm-trend svg text { font-size:var(--rook-type-meta); }
+
+/* Calendar initials and tab labels are compact navigation, not body copy. */
+:root :is(.week-pager-page,.week-strip) button small {
+  font-size:.75rem !important;
+  line-height:1 !important;
+}
+:root :is(.week-pager-page,.week-strip) button strong {
+  font-size:.875rem;
+  line-height:1.15;
+}
+
+/* A sticky close header must not overlap the confirmation question. */
+:root .account-confirm-sheet > .sheet-header-chrome { margin:0 0 12px; }
+@media(max-width:359px) {
+  :root .pro-theme-bases { grid-template-columns:repeat(2,minmax(0,1fr)); }
+}
+
+
+/* Numeric density follows available space, never individual value length.
+   Narrow loggers reflow instead of clipping decimals or shrinking hit areas. */
+:root .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) {
+ --logger-number:max(16px,1rem);
+ --logger-end-gap:4px;
+}
+:root .workout-screen .sets :is(.set-row,.set-labels).with-rir {
+ --logger-metric-gap:0px; --logger-rir-gap:4px;
+}
+@container logger-sets (max-width:348px) {
+ .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) { grid-template-columns:repeat(4,minmax(0,1fr)); column-gap:4px; }
+ .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-load,.set-load-context,.set-load-heading) { grid-column:1/3; grid-row:1; }
+ .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-reps,.set-reps-heading) { grid-column:3/5; grid-row:1; }
+ .workout-screen .sets .set-row:not(.no-load):not(.per-side) > :is(.set-index-label,.extra-set-label) { grid-column:1; grid-row:2; width:44px; justify-self:start; }
+ .workout-screen .sets .set-row:not(.no-load):not(.per-side) > .rir-trigger { grid-column:3; grid-row:2; width:44px; justify-self:end; }
+ .workout-screen .sets .set-row:not(.no-load):not(.per-side) > .check { grid-column:4; grid-row:2; width:44px; justify-self:end; }
+ .workout-screen .sets .set-labels:not(.no-load):not(.per-side) > :is(span:first-child,.set-done-heading) { display:none; }
+ .workout-screen .sets .set-labels:not(.no-load):not(.per-side) > .set-label-help { grid-column:3; grid-row:2; justify-self:end; width:44px; margin-top:12px; }
+}
+
+@container logger-sets (max-width:348px) {
+ :root .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) { --logger-number:max(20px,1.25rem); }
+}
+@container logger-sets (min-width:390px) {
+ :root .workout-screen .sets :is(.set-row,.set-labels):not(.no-load):not(.per-side) { --logger-number:max(20px,1.25rem); }
+}
+
+/* Longer decimal loads reflow the whole logger, keeping every set aligned. */
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) :is(.set-row,.set-labels):not(.no-load):not(.per-side) { grid-template-columns:repeat(4,minmax(0,1fr)); column-gap:4px; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-load,.set-load-context,.set-load-heading) { grid-column:1/3; grid-row:1; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) :is(.set-row,.set-labels):not(.no-load):not(.per-side) > :is(.logger-reps,.set-reps-heading) { grid-column:3/5; grid-row:1; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) .set-row:not(.no-load):not(.per-side) > :is(.set-index-label,.extra-set-label) { grid-column:1; grid-row:2; width:44px; justify-self:start; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) .set-row:not(.no-load):not(.per-side) > .rir-trigger { grid-column:3; grid-row:2; width:44px; justify-self:end; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) .set-row:not(.no-load):not(.per-side) > .check { grid-column:4; grid-row:2; width:44px; justify-self:end; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) .set-labels:not(.no-load):not(.per-side) > :is(span:first-child,.set-done-heading) { display:none; }
+ :root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) .set-labels:not(.no-load):not(.per-side) > .set-label-help { grid-column:3; grid-row:2; justify-self:end; width:44px; margin-top:12px; }
+:root .workout-screen .sets:has(.stepper[data-value-length]:not([data-value-length="0"],[data-value-length="1"],[data-value-length="2"],[data-value-length="3"],[data-value-length="4"],[data-value-length="5"])) :is(.set-row,.set-labels):not(.no-load):not(.per-side) { --logger-number:max(20px,1.25rem); }
+
+:root .workout-screen .up-next-title { display:block; -webkit-line-clamp:unset; overflow:visible; }
+:root .up-next .swipe-up-next-body.has-reorder-handle { padding-block:6px; }

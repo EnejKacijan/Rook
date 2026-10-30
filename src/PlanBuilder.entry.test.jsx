@@ -38,7 +38,7 @@ function mount(initial,entry='today',onRequestPlanUse){
   }
   act(()=>root.render(<Harness/>));
 }
-function openToday(){click('Create or import one');click('Build a personalized plan');}
+function openToday(){click('Create or import a plan');click('Build a personalized plan');}
 function selectMuscle(index,key){
   const block=host.querySelectorAll('.custom-workout-block')[index];
   const toggle=block.querySelector('.custom-workout-toggle');

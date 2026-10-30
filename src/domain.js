@@ -1,5 +1,6 @@
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
 import {progressionHistory} from './progressionHistory.js';
+import {importedSetComparable} from './historicalSetSemantics.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
 import {prepareTypoText,typoNameScore} from './exerciseSearchTypos.js';
 import { illustrationProvenanceForAsset } from './illustrationProvenance.js';
@@ -9132,9 +9133,9 @@ export function startWorkout(state, template) {
             completed: false,
             weight,
             weightProvenance:
-              loadRequirement === "none" ? null : hasUnspecifiedRepTarget(base) ? set.weightProvenance ?? null : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0 || loadRequirement === 'optional' && previousSet && previousSet.rawImport?.version !== 2 && Object.hasOwn(previousSet,'weight') && (previousSet.weight === null || previousSet.weight === 0)
+              loadRequirement === "none" ? null : hasUnspecifiedRepTarget(base) ? set.weightProvenance ?? null : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0 || previousSet?.weight === 0 && importedSetComparable(previousSet) || loadRequirement === 'optional' && previousSet && previousSet.rawImport?.version !== 2 && Object.hasOwn(previousSet,'weight') && previousSet.weight === null
                 ? "history"
-                : Number(weight) > 0
+                : weight != null && weight !== '' && Number.isFinite(Number(weight)) && Number(weight) >= 0
                   ? set.weightProvenance || "explicit-plan"
                   : null,
             reps: hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
@@ -9415,6 +9416,12 @@ export function progressionFor(exercise, history, profile = null) {
       !progressionContextMatches(latest.item, exercise)) return null;
   const requested=exercise.sets?.filter(set=>set.planned!==false&&!set.added&&progressionComparableSet(set));
   if(requested && requested.length!==latest.planned.length)return null;
+  if (loadRequirement === 'required' && latest.completed.some(set => set.weight === 0))
+    return {
+      type: 'hold',
+      title: 'Keep your load pattern',
+      detail: 'Your last session includes sets with no external load. Repeat the same variation and load pattern; no automatic weight increase is suggested from these sets.',
+    };
   if (loadRequirement === "optional" && !latest.hasLoad && !latest.hasNoLoad) return null;
   const structurallyComparable = observations.filter(
     (entry) => entry.complete && entry.planned.length === latest.planned.length &&
@@ -10198,8 +10205,9 @@ export function coachContext(state) {
       .map((entry) => ({
         user: entry.user,
         coach: entry.reply?.text || null,
-        action: entry.reply?.action || null,
-        actionResult: entry.actionResult || null,
+        action: entry.coachActionsArchived||entry.coachWorkflowStatus==='cancelled'||entry.coachReviewCancelled||entry.combineReviewCancelled ? null : entry.reply?.action || null,
+        actionResult: entry.coachActionsArchived ? {status:entry.actionResult?.status||'not-applied',historical:true} : entry.actionResult?.status==='applied'?entry.actionResult:
+          entry.coachWorkflowStatus==='cancelled'||entry.coachReviewCancelled||entry.combineReviewCancelled?{status:'cancelled'}:entry.actionResult || null,
         ...(entry.requestContext?{requestedDay:{date:entry.requestContext.date,occurrenceId:entry.requestContext.occurrenceId,unresolved:entry.requestContext.unresolved}}:{}),
       })),
   };

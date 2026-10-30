@@ -40,7 +40,7 @@ export function EmailAccountForm({onSubmit,onReset,onBack,busy=false,registratio
       <button type="submit" className="button primary" disabled={disabled}>{disabled?'PLEASE WAIT…':mode==='register'?'CREATE ACCOUNT':mode==='reset'?'SEND RESET LINK':'SIGN IN'}</button>
     </form>
     {mode==='sign-in'&&onReset&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('reset')}>Forgot password?</button>}
-    {mode==='sign-in'&&allowRegistration&&!registrationOnly&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('register')}>New to ROOK? Create an account</button>}
+    {mode==='sign-in'&&allowRegistration&&!registrationOnly&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('register')}>Create an account</button>}
     {mode!=='sign-in'&&!registrationOnly&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('sign-in')}>Back to sign in</button>}
   </section>;
 }

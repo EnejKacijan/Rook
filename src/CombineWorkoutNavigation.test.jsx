@@ -30,10 +30,10 @@ it('Today More options hands off to Coach with real storage and no repeated hydr
   pendingVisibleBeforeReply=host.querySelector('.conversation')?.textContent.includes('Combine two workouts');
   return coachCombineReply(state,text,options);
  });
- vi.setSystemTime(new Date('2026-10-16T12:00:00'));
+ vi.setSystemTime(new Date('2026-10-14T12:00:00'));
  let initial=combineExample();initial.profile.id='discovery-profile';initial.program.id='discovery-plan';
  initial.program.days[0].weekday='Wed';initial.program.days[1].weekday='Fri';initial.profile.availableDays=['Wed','Fri'];
- initial.program.trainingBlock.startDate=weekKey(isoDay());initial.selectedDate=isoDay();initial.selectedDay='Fri';
+ initial.program.trainingBlock.startDate=weekKey(isoDay());initial.selectedDate=isoDay();initial.selectedDay='Wed';
  initial=deserializeState(serializeState(initial));
  initial.activeCoachConversationId='current';initial.conversations=[];initial.coachDraft='Keep my draft';
  initial.coachConversationMeta={current:{id:'current',createdAt:Date.now(),lastActivityAt:Date.now(),localDateStarted:isoDay()}};
@@ -47,4 +47,16 @@ it('Today More options hands off to Coach with real storage and no repeated hydr
  expect(host.querySelector('.combine-choices input')).not.toBeNull();
  expect(loadState().coachDraft).toBe('Keep my draft');
  expect(loadState().todayAdaptation).toBeNull();
+});
+it('Today More options combines missed workouts locally with real storage and preserves the Coach conversation',async()=>{
+ const initial=combineExample();initial.selectedDate=isoDay();initial.selectedDay='Sat';initial.coachDraft='Keep my draft';
+ initial.activeCoachConversationId='current';initial.conversations=[];
+ initial.coachConversationMeta={current:{id:'current',createdAt:Date.now(),lastActivityAt:Date.now(),localDateStarted:isoDay()}};
+ expect(saveState(initial)).toBe(true);await act(async()=>root.render(<React.StrictMode><RookRoot/></React.StrictMode>));
+ await act(async()=>button('Today options').click());await act(async()=>button('Combine two workouts').click());
+ expect(host.querySelectorAll('.missed-combine-sources input:checked')).toHaveLength(2);expect(AIService.coach).not.toHaveBeenCalled();
+ await act(async()=>button('PREVIEW WORKOUT').click());expect(loadState().todayAdaptation).toBeNull();
+ await act(async()=>button('USE THIS WORKOUT').click());await act(async()=>vi.advanceTimersByTime(300));
+ expect(host.querySelector('.missed-combine-sheet')).toBeNull();expect(loadState().todayAdaptation.sourceSessions).toHaveLength(2);
+ expect(loadState().coachDraft).toBe('Keep my draft');expect(loadState().conversations).toEqual([]);expect(AIService.coach).not.toHaveBeenCalled();
 });

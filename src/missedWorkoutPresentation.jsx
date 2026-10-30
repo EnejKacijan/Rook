@@ -19,12 +19,7 @@ export function MissedWorkoutSummary({state,onSelect,update}) {
   <ExerciseNavigationButton type="button" className="today-missed-open"
    aria-label={single?`Recover ${first.workout.name}, missed ${dateLabel(first.scheduledDate,true).replaceAll(',','')}`:`View ${missed.length} missed workouts`}
    onClick={()=>onSelect(single?{sessionId:first.logicalSessionId}:{missed:true})}>
-   <span>
-    <span className="today-missed-label">{single?'Missed workout':`${missed.length} missed workouts`}</span>
-    <span className="today-missed-workout"><strong>{single?first.workout.name:'Review missed sessions'}</strong>
-     {single&&<><span aria-hidden="true"> · </span><time dateTime={first.scheduledDate}>{dateLabel(first.scheduledDate)}</time></>}
-    </span>
-   </span>
+   <span className="today-missed-label">{missed.length} missed {single?'workout':'workouts'}</span>
    <NavigationChevron className="today-missed-chevron"/>
   </ExerciseNavigationButton>
   {feedback&&<button type="button" className="text-button missed-reminder-hide" aria-label={single?'Hide missed workout reminder':'Hide missed workouts reminder'} onClick={feedback.hide}>Hide</button>}

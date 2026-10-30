@@ -56,7 +56,7 @@ export function StartupRecovery({loading=false,onRetry,restoreError=false,startu
     {loading&&<span className="startup-loading-spinner" aria-hidden="true"/>}
     <h1>{loading?'Opening your saved data…':missing&&!startup.recovery?'Your local ROOK data is no longer available.':restoreError?'ROOK couldn’t safely reopen your data.':'ROOK couldn’t load your local data.'}</h1>
     {!loading&&<>
-      <p>{startup.code==='delete-incomplete'?'Your requested deletion did not finish. Retry Start over to finish deleting, or import a backup.':startup.code==='restore-error'?'An interrupted restore could not be safely reopened. Retry before importing a backup or starting over.':missing?'ROOK was previously used here, but its main saved state is missing.':"Your saved data couldn’t be read safely. ROOK has not replaced it."}</p>
+      <p>{startup.code==='delete-incomplete'?'Your requested deletion did not finish. Retry Start over to finish deleting, or import a backup.':startup.code==='restore-error'?'A restore was interrupted. Try again before importing a backup or starting over.':missing?'ROOK was previously used here, but its main saved state is missing.':"Your saved data couldn’t be read safely. ROOK has not replaced it."}</p>
       {startup.recovery&&<p>We found a local backup from {new Date(startup.recovery.createdAt).toLocaleString()}. It may not include your latest changes. Workout photos are stored separately.</p>}
       {action==='restore'||action==='delete'?<section className="startup-confirm" aria-label="Confirm recovery action">
         <h2>{action==='restore'?'Restore this local backup?':'Start over?'}</h2>
@@ -84,7 +84,7 @@ export function StartupAccountRecovery({startup={},onRetry,onStartFresh,renderIm
   return <main className="fatal-error-screen startup-recovery" role="alert">
     <p className="eyebrow">ROOK ACCOUNT</p>
     <h1>{startup.cloudFound?'Your training data was found.':conflict?'Your saved account needs review.':'We couldn’t check your training data.'}</h1>
-    <p>{startup.cloudFound?'ROOK has not replaced the data on this device. Retry when your account and connection are available.':conflict?'ROOK kept the existing profile separate from this account. No data was replaced.':'ROOK has not treated an uncertain account or cloud result as a new profile.'}</p>
+    <p>{startup.cloudFound?'ROOK has not replaced the data on this device. Retry when your account and connection are available.':conflict?'ROOK kept the existing profile separate from this account. No data was replaced.':'Your account or cloud status is uncertain. No new profile was created.'}</p>
     <div className="startup-recovery-actions">
       <button type="button" className="button primary" onClick={onRetry}>TRY AGAIN</button>
       {startup.restoreCloud&&<button type="button" className="button secondary" disabled={busy} onClick={async()=>{

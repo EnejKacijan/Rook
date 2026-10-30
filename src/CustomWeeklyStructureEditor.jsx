@@ -49,8 +49,7 @@ export function CustomWeeklyStructureEditor({ workouts, frequency, onChange, err
                   {savedFocus ? (
                     <div className="custom-workout-legacy">
                       <strong>Saved focus</strong>
-                      <p>{summary}</p>
-                      <p>Keep this setup or switch to muscle groups. Already selected muscles are kept.</p>
+                      <p>Already selected muscles are kept.</p>
                       <div className="custom-workout-legacy-actions">
                         <button type="button" className="custom-switch-focus" onClick={() => onChange(index, replaceSavedWorkoutFocus(workout.focus))}>Choose muscle groups</button>
                         <button type="button" className="custom-keep-focus" onClick={() => setExpanded(null)}>Keep saved focus</button>

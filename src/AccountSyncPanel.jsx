@@ -64,6 +64,8 @@ export function accountSyncStatus(sync) {
 }
 
 export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
+  const accountIdentity = sync?.linked && sync?.email ? sync.email
+    : sync?.state === 'synced' && sync.pendingCount === 0 ? 'Cloud copy for this device' : null;
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
   const [collision, setCollision] = useState(false);
   const [confirmation, setConfirmation] = useState(null);
@@ -92,7 +94,7 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
   return <section ref={panelRef} className="account-sync-panel" aria-label="Account and sync" aria-busy={busy}>
     <div className="account-sync-summary">
     {typeof displayName === 'string' && displayName.trim() && <p className="account-sync-name">{displayName.trim()}</p>}
-    <p className="account-sync-identity">{sync?.linked && sync?.email ? sync.email : sync?.state === 'synced' && sync.pendingCount === 0 ? 'Cloud copy for this device' : 'Your ROOK training data'}</p>
+    {accountIdentity && <p className="account-sync-identity">{accountIdentity}</p>}
     <div className="account-sync-status-line">
       <p className="account-sync-status" role="status">{accountSyncStatus(sync)}</p>
       <ProfileInformation label="Sync information" title="Sync information" closeLabel="Close sync information"
@@ -118,7 +120,7 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
       <AccountAccessOptions providers={sync.providers} busy={busy} disabled={!sync?.canSecure} registrationOnly
         onEmail={sync.registerWithEmail?details=>act(()=>sync.registerWithEmail(details),true):undefined}
         onChoose={id=>act(id==='google.com'?sync.secureWithGoogle:()=>sync.secureWithProvider(id))}/>
-      <small className="account-sync-link-hint">Link this profile to an account so you can restore it on another device. Your training data stays here.</small>
+      <small className="account-sync-link-hint">Link this profile to an account to restore it on another device.</small>
     </>}
     {collision && <div className="account-sync-collision" role="status">
       <p>This account already has a ROOK profile. Your current training data is unchanged; ROOK will not merge the profiles automatically.</p>

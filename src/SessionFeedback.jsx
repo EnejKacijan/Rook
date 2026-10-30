@@ -5,7 +5,7 @@ import './sessionFeedback.css';
 
 export function SessionFeedbackChoices({value,onChange,completion=false}) {
   return <fieldset className="session-feedback-choices">
-    <legend>How did this session feel? <small>Optional</small></legend>
+    <legend>How did this session feel? {completion&&!sessionFeedbackLabel(value)&&<small>Optional</small>}</legend>
     <div className="session-feedback-options">{Object.entries(SESSION_FEEDBACK).map(([key,label])=><button type="button" key={key} aria-pressed={value===key} onClick={()=>onChange(key)}>{label}</button>)}</div>
     {(!completion || sessionFeedbackLabel(value)) && <button type="button" className="session-feedback-skip" onClick={()=>onChange('skipped')}>{completion ? 'Remove feedback' : 'Skip'}</button>}
   </fieldset>;

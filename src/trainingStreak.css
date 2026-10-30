@@ -1,0 +1,25 @@
+.training-streak-card { display:flex; align-items:center; flex-wrap:wrap; gap:6px; width:100%; min-width:0; margin:16px 0 22px; padding:8px; border:1px solid var(--rook-border); border-radius:16px; background:var(--rook-surface); color:var(--rook-text); }
+:root h2.training-streak-heading { flex:1 0 auto; margin:0; font-size:.875rem; line-height:1.4; font-weight:650; }
+.training-streak-stats { display:flex; align-items:baseline; flex:0 0 auto; flex-wrap:nowrap; gap:10px; margin:0; white-space:nowrap; }
+.training-streak-stats > p, .completion-streak strong { display: flex; align-items: baseline; gap: 7px; margin: 0; }
+:root .training-streak-stats > p { flex-wrap:nowrap; gap:4px; margin:0; }
+.training-streak-best { max-width: 100%; font-size: .875rem; line-height: 1.428572; color: var(--rook-secondary); overflow-wrap: anywhere; }
+.training-streak-best strong { color: var(--rook-text); font-weight: 650; margin-left: 4px; }
+:root .training-streak-card .streak-number { min-width:0; font-size:1rem; line-height:1.25; font-weight:700; }
+.streak-number { position: relative; display: inline-grid; min-width: 1ch; color: var(--rook-accent-text); font-size: 1.75rem; font-weight: 750; font-variant-numeric: tabular-nums; line-height: 1.15; }
+.streak-number-current, .streak-number-old { grid-area: 1 / 1; }
+.streak-number-old { opacity: 0; }
+.streak-number.is-gaining .streak-number-old { animation: streak-number-leave 300ms var(--rook-ease-standard, ease-out) both; }
+.streak-number.is-gaining .streak-number-current { animation: streak-number-arrive 300ms var(--rook-ease-standard, ease-out) both; }
+.completion-streak { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 18px 0; padding: 14px 16px; border: 1px solid color-mix(in srgb, var(--rook-accent) 35%, var(--rook-border)); border-radius: 16px; background: color-mix(in srgb, var(--rook-accent) 6%, var(--rook-surface)); }
+.completion-streak-label { display: block; margin-bottom: 5px; font-size: .8125rem; line-height: 1.4; color: var(--rook-secondary); }
+.completion-streak strong > span:last-child { font-size: .875rem; font-weight: 600; color: var(--rook-text); }
+.streak-gain-label { font-size: .8125rem; font-weight: 700; color: var(--rook-accent-text); white-space: nowrap; }
+.rest-day-state > .rest-streak-note { display: flex; align-items: center; gap: 8px; margin: 12px 0 18px; font-size: .8125rem; line-height: 1.4; color: var(--rook-secondary); }
+.rest-streak-mark { display: grid; place-items: center; flex: 0 0 24px; width: 24px; height: 24px; border-radius: 50%; color: var(--rook-accent-text); background: color-mix(in srgb, var(--rook-accent) 12%, var(--rook-surface)); }
+@keyframes streak-number-leave { from { transform: translateY(0); opacity: 1; } to { transform: translateY(-8px); opacity: 0; } }
+@keyframes streak-number-arrive { from { transform: translateY(8px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .streak-number.is-gaining .streak-number-old { display: none; }
+  .streak-number.is-gaining .streak-number-current { animation: none; }
+}

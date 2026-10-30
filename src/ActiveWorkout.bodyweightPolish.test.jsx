@@ -73,6 +73,21 @@ it('zero and optional empty retain null semantics; negative drafts do not invent
 it('assisted and weighted exercises retain their existing numeric presentation',()=>{
  mount({weight:35,id:'assisted-pull-up'});expect(label()).toBeUndefined();expect(input().value).toBe('35');expect(input().getAttribute('aria-describedby')).toBeNull();
 });
+it.each(['kg','lb'])('logs an explicitly typed zero for Hip Thrust in %s, supports undoing the check, and preserves it on reload',units=>{
+ mount({id:'hip-thrust',units});const el=input();expect(el.value).toBe('');type(el,'0');
+ const log=row().querySelector('[aria-label="Log set 1"]');
+ act(()=>log.dispatchEvent(new MouseEvent('pointerdown',{bubbles:true})));act(()=>el.blur());act(()=>log.click());
+ expect(sets()[0]).toMatchObject({weight:0,reps:9,completed:true,weightProvenance:'explicit'});
+ expect(host.querySelector('.workout-input-error')).toBeNull();
+ const restored=deserializeState(serializeState(current),{strict:true});expect(restored.activeWorkout.exercises[0].sets[0]).toMatchObject({weight:0,reps:9,completed:true});
+ act(()=>vi.advanceTimersByTime(800));
+ act(()=>row().querySelector('[aria-label="Undo logged set 1"]').click());expect(sets()[0]).toMatchObject({weight:0,completed:false});
+ act(()=>row().querySelector('[aria-label="Log set 1"]').click());expect(sets()[0].completed).toBe(true);
+});
+it('decreasing a required load reaches zero and increasing it uses the configured increment',()=>{
+ mount({id:'hip-thrust',weight:1,increment:1});act(()=>minus().click());expect(sets()[0].weight).toBe(0);expect(input().value).toBe('0');
+ act(()=>plus().click());expect(sets()[0].weight).toBe(1);expect(sets()[0].completed).toBe(false);
+});
 it('pound presentation and stepping keep the existing unit conversion',()=>{
  mount({weight:5,units:'lb'});expect(label()).toBe('+11.02');expect(input().value).toBe('11.02');act(()=>plus().click());expect(input().value).toBe('22.05');expect(label()).toBe('+22.05');expect(sets()[0].weight).toBe(10);
 });

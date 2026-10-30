@@ -64,7 +64,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 @media (max-width: 374px) { .coach-content-surface { --coach-gutter: 17px; } }
 :root .coach-content-surface > .coach-input { margin-inline: calc(-1 * var(--coach-gutter)); padding-inline: var(--coach-gutter); }
 .coach-header > .coach-header-context { flex-direction: row; align-items: center; gap: 8px; }
-.coach-header-context > div { display: flex; flex-direction: column; gap: 6px; }
+.coach-header-context > div { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
 .coach-conversation-back { flex: 0 0 44px; width: 44px; height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-text); font-size: 31px; line-height: 1; }
 .coach-screen > .coach-history-parent { visibility: hidden; pointer-events: none; animation: none; }
 .coach-header { position: relative; z-index: 19; flex: 0 0 auto; width: calc(100% + 48px); min-height: 48px; margin: 0 -24px; padding: 0 24px 10px; display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; background: transparent; }
@@ -81,6 +81,10 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-history-trigger > svg { width: 15px; height: 15px; flex: 0 0 15px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 .coach-history-trigger > span { flex: 0 0 auto; font-size: 9px; font-weight: 800; line-height: 1; letter-spacing: .1em; white-space: nowrap; }
 .coach-history-trigger:focus-visible { color: var(--rook-accent-text); }
+@media (max-width: 430px) {
+  .coach-header-actions .coach-history-trigger { min-width: 44px; padding: 0 4px; }
+  .coach-header-actions .coach-history-trigger > span { display: none; }
+}
 .coach-intro { margin-top: 14px; }
 .coach-intro h1 { font-size: 28px; max-width: 420px; }
 .coach-empty { margin-top: 16px; padding: 13px 15px; border: 1px solid rgba(27, 26, 25, .075); border-left: 2px solid color-mix(in srgb, var(--rook-accent) 42%, transparent); border-radius: 12px; background: rgba(255, 255, 255, .42); box-shadow: none; }
@@ -208,7 +212,8 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-screen .optional-workout-meta strong { color: #1b1a19; font-size: 12px; }
 .coach-screen .optional-workout-list { margin-top: 8px; padding: 0; border: 0; }
 .coach-screen .optional-workout-list > div { min-height: 38px; padding: 7px 0; border-bottom: 1px solid rgba(27, 26, 25, .06); display: flex; align-items: center; gap: 9px; }
-.coach-screen .optional-workout-list > div > span { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; background: var(--rook-accent-soft); color: var(--rook-accent-text); display: grid; place-items: center; font-size: 13px; }
+.coach-screen .optional-workout-list > div > span:first-child { width: 20px; height: 20px; flex: 0 0 20px; border-radius: 50%; background: var(--rook-accent-soft); color: var(--rook-accent-text); display: grid; place-items: center; font-size: 13px; }
+.coach-screen .optional-workout-list > div > span:last-child { flex:1; min-width:0; height:auto; width:auto; align-self:stretch; align-content:center; overflow-wrap:anywhere; }
 .coach-screen .optional-workout-list strong { font-size: 13px; }
 .coach-screen .resume-workout-action-card > .eyebrow { display: block; margin-bottom: 8px; }
 .coach-screen .resume-workout-action-card .button { margin-top: 18px; }
@@ -254,7 +259,7 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-day-context{flex:0 0 100%;display:flex;align-items:center;gap:8px;padding:4px 8px 4px 12px;border:1px solid var(--rook-border);border-radius:12px;background:var(--rook-surface);color:var(--rook-secondary);font-size:13px;line-height:1.4;min-width:0;box-sizing:border-box}
 .coach-day-context>span{min-width:0;flex:1;overflow-wrap:anywhere}
 .coach-day-context>button{flex:0 0 44px;width:44px;height:44px;background:transparent;border:0;color:var(--rook-secondary);font-size:22px}
-.today-actions-sheet>.today-ask-coach{margin-top:12px;border-bottom:0}
+.today-actions-sheet>.today-ask-coach{margin-top:0;border-bottom:0}
 .today-ask-coach strong{font-size:inherit;font-weight:600}
 .coach-reuse-choices .list-row small{display:block;color:var(--rook-secondary);font-size:13px;margin-top:4px}
 .coach-reuse-sheet .saved-workout-preview{flex:1}
@@ -263,3 +268,4 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-reuse-sheet .coach-reuse-set-targets{list-style:none;margin:0;padding:0;font-size:14px;color:var(--rook-secondary)}
 .coach-reuse-sheet .coach-reuse-set-targets>li{padding:4px 0;border:0}
 .coach-reuse-sheet .sheet-action-footer .plan-template-note{font-size:13px;color:var(--rook-secondary);text-align:center;margin:0 0 10px}
+.coach-continue-previous { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; margin:0 0 14px; padding:10px 0; text-align:left; }

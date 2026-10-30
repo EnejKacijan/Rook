@@ -6,7 +6,7 @@ export function coachRequestEntry(state, identity) {
   const entry = state.conversations?.find(item => item.id === identity.entryId
     && item.conversationId === identity.conversationId
     && item.coachRequestId === identity.requestId);
-  return entry && !entry.reply && entry.coachWorkflowStatus !== 'cancelled'
+  return entry && !entry.reply && !entry.coachActionsArchived && entry.coachWorkflowStatus !== 'cancelled'
     && !entry.coachReviewCancelled && !entry.combineReviewCancelled ? entry : null;
 }
 
@@ -14,6 +14,14 @@ export function applyCoachRequestResult(state, identity, result) {
   if (!coachRequestEntry(state, identity)) return state;
   const next = structuredClone(state);
   const entry = coachRequestEntry(next, identity);
+  for(const id of result.reply?.supersededEntryIds||[]){
+    const prior=next.conversations.find(item=>item.id===id&&item.conversationId===identity.conversationId);
+    if(prior&&prior.id!==entry.id&&prior.reply&&!prior.coachActionsArchived&&!['applied','undone','reverted','undo-conflict','cancelled'].includes(prior.actionResult?.status)){
+      prior.coachWorkflowStatus='cancelled';
+      prior.supersededBy=entry.id;
+      if(prior.reply.combineRequest||prior.reply.combineReviewRequired||prior.reply.action?.type==='combine-workouts')prior.combineReviewCancelled=true;
+    }
+  }
   if (result.requestError) entry.requestError = true;
   else { entry.reply = result.reply; delete entry.requestError; }
   delete entry.coachRequestId;

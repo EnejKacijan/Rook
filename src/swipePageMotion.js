@@ -1,6 +1,6 @@
 import { capturePageSurface, createPageBackMotion, createLivePageBackMotion } from './pageStackMotion.js';
 // Cache only lightweight navigation pages, never editor/component trees.
-let profileParent = null, workoutParent = null;
+let profileParent = null, workoutParent = null, workoutParentDay = null;
 const scopedRenderers = new WeakMap();
 export function registerPageBackMotion(host, renderer) {
   scopedRenderers.set(host, renderer);
@@ -11,7 +11,10 @@ function snapshotParent(surface, maxNodes = 200) {
   return capturePageSurface(surface);
 }
 export function rememberSwipeParent(surface, destination = 'profile') {
-  if(destination==='workout')workoutParent=snapshotParent(surface,1200);
+  if(destination==='workout'){
+    workoutParent=snapshotParent(surface,1200);
+    workoutParentDay=new Date().toDateString();
+  }
   else {
     const previous = profileParent, current = snapshotParent(surface);
     profileParent = current;
@@ -34,7 +37,7 @@ export function pageBackMotion(surface) {
   const editor = surface.closest('.edit-plan-page-layer');
   const workout=surface.hasAttribute('data-active-workout');
   if (!surface.matches('.profile-management-screen') && !editor && !workout) return null;
-  const snapshot = workout ? workoutParent : editor ? snapshotParent(document.querySelector('.profile-management-screen')) : profileParent;
+  const snapshot = workout ? (workoutParentDay===new Date().toDateString()?workoutParent:null) : editor ? snapshotParent(document.querySelector('.profile-management-screen')) : profileParent;
   if (!snapshot && !workout) return null;
   return createPageBackMotion(surface, snapshot);
 }

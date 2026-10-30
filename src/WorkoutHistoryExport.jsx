@@ -28,14 +28,13 @@ export function WorkoutHistoryExport({state,close,SheetHeader,Button,Modal}) {
     finally{lock.current=false;if(mounted.current)setBusy(false);}
   };
   return <main ref={screenRef} className="screen detail-screen history-export-screen">
-    <SheetHeader title="Export workout history" onClose={close}/>
-    <div className="information-heading"><h1>Your training history.</h1>
+    <SheetHeader title="Export history" closeLabel="Close export workout history" onClose={close} trailingAction={
       <ProfileInformation label="About history export" title="History export" Modal={Modal} backgroundRef={screenRef}>
         <p>Weights use stored kg values. Photos are not included. Nothing is uploaded by ROOK.</p>
         <p>CSV contains workout sets only. JSON also includes body-weight check-ins and preserved measurement-source records.</p>
         <p>Use Back up ROOK for a complete recovery file.</p>
-      </ProfileInformation>
-    </div>
+      </ProfileInformation>}/>
+    <h1 className="visually-hidden">Export workout history</h1>
     <p>Generated on this device. CSV or JSON for your own records — not a recovery backup.</p>
     <p className="history-export-count">{count} completed {count===1?'workout':'workouts'}</p>
     <fieldset disabled={busy}><legend className="eyebrow">FORMAT</legend><SegmentedControl label="Format" options={[{value:'csv',label:'CSV'},{value:'json',label:'JSON'}]} value={format} disabled={busy} onChange={value=>{setFormat(value);reset();}}/></fieldset>

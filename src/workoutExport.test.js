@@ -24,13 +24,13 @@ const exercise = (overrides = {}) => ({
 
 describe("workout text export", () => {
   afterEach(() => vi.useRealTimers());
-  it("never invents zero load for missing or zero required values", () => {
+  it("keeps missing load distinct from an explicitly recorded zero", () => {
     expect(exportLoadLabel(exercise(), null, "kg")).toBe("Load not logged");
-    expect(exportLoadLabel(exercise(), 0, "lb")).toBe("Load not logged");
+    expect(exportLoadLabel(exercise(), 0, "lb")).toBe("0 lb");
     expect(formatExportSet(exercise(), { reps: 8, weight: 0 }, { units: "kg" }))
+      .toContain("0 kg");
+    expect(formatExportSet(exercise(), { reps: 8, weight: null }, { units: "kg" }))
       .toContain("Load not specified");
-    expect(formatExportSet(exercise(), { reps: 8, weight: 0 }, { units: "kg" }))
-      .not.toMatch(/0 (kg|lb)/);
   });
 
   it("describes bodyweight, added weight, bands and timed work honestly", () => {

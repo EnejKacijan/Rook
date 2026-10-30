@@ -1,6 +1,19 @@
 import {afterEach,expect,it,vi} from 'vitest';
 import {pageBackMotion,rememberSwipeParent} from './swipePageMotion.js';
 afterEach(()=>{document.body.innerHTML='';vi.unstubAllGlobals();});
+it('does not paint yesterday’s cached Today under an overnight logger Back gesture',()=>{
+ vi.useFakeTimers();
+ try {
+  vi.setSystemTime(new Date('2026-10-27T23:59:00'));fixture();
+  document.body.innerHTML='<main class="today-screen">Yesterday calendar</main><main data-active-workout="true"><input value="53,"></main>';
+  const active=document.querySelector('[data-active-workout]');active.getAnimations=()=>[];active.getBoundingClientRect=()=>({left:0,top:0,width:390});
+  rememberSwipeParent(document.querySelector('.today-screen'),'workout');
+  vi.setSystemTime(new Date('2026-10-28T00:01:00'));
+  const motion=pageBackMotion(active);motion.render(195,100);
+  expect(document.querySelector('[data-swipe-parent]')?.textContent||'').not.toContain('Yesterday calendar');
+  expect(active.querySelector('input').value).toBe('53,');motion.clear();
+ } finally {vi.useRealTimers();}
+});
 function fixture(reduced=false){
  vi.stubGlobal('matchMedia',()=>({matches:reduced}));
  document.body.innerHTML='<main><div class="coach-content-surface" style="padding:17px"><textarea>Draft</textarea></div><section class="coach-history-surface coach-history-parent" inert aria-hidden="true"><div class="coach-history-scroll">History</div></section></main><nav>Tabs</nav>';

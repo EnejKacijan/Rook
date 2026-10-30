@@ -50,7 +50,7 @@ it('explains disabled move and removal after a set has actually been logged',()=
  const initial=make();initial.activeWorkout.exercises[0].sets[0].completed=true;
  mount(initial);open();expect(action('Move to Up Next').disabled).toBe(true);
  expect(action('Remove from this workout').disabled).toBe(true);
- expect(host.querySelector('.active-exercise-options-sheet').textContent).toContain('locked after work has been logged');
+ expect(host.querySelector('.active-exercise-options-sheet').textContent).toContain('locked after logging a set');
 });
 it.each(['planned','extra'])('%s prepared values remain movable and removable, with exact Undo',kind=>{
  const initial=make();if(kind==='extra'){initial.activeWorkout.source='freestyle';initial.activeWorkout.planWorkoutOrigin={programId:initial.program.id,dayId:initial.program.days[0].id};}

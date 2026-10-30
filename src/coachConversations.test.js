@@ -23,9 +23,9 @@ it('A/E/F same-day entry, tab return and persisted restart preserve stable ident
     expect(enter(state).activeCoachConversationId).toBe('old');expect(enter(state).coachDraft).toBe('Draft answer');
   }
 });
-it('B a new local day starts a fresh conversation when no work or draft needs continuity',()=>{
+it('B a cold launch starts fresh when no work or draft needs continuity',()=>{
   const before=fixture();before.todayAdaptation={id:'applied'};
-  const next=enter(before,day(19));expect(next.activeCoachConversationId).not.toBe('old');expect(next.coachDraft).toBe('');
+  const next=enter(before,day(19),{coldStart:true});expect(next.activeCoachConversationId).not.toBe('old');expect(next.coachDraft).toBe('');
   expect(next.conversations).toEqual(before.conversations);expect(next.activeWorkout).toEqual(before.activeWorkout);expect(next.todayAdaptation).toEqual(before.todayAdaptation);
   expect(next.coachConversationMeta.old.localDateStarted).toBe('2026-09-18');
 });
@@ -33,17 +33,18 @@ it.each([request,proposal,{text:'Adjust today',action:{type:'adapt-today'}},null
   const before=enter({...fixture([entry('pending',reply,{combineSelection:['upper'],combineReview:{id:'candidate'}})]),coachDraft:'Draft answer'});
   const next=enter(deserializeState(serializeState(before)),day(19));expect(next.activeCoachConversationId).toBe('old');expect(next.coachDraft).toBe('Draft answer');expect(next.conversations).toEqual(before.conversations);
 });
-it('D meaningful work on an older conversation counts as today, while a late reply alone does not',()=>{
+it('D resolved work stays on warm returns, and a new app session starts fresh regardless of message date',()=>{
   const state=enter(fixture([entry('question',request),entry('review',proposal)]),day(19));
   state.conversations[1].actionResult={status:'applied'};
   expect(pendingCoachWorkflows(state)).toEqual([]);expect(state.activeCoachConversationId).toBe('old');
-  expect(enter(state,day(19)).activeCoachConversationId).not.toBe('old');
+  expect(enter(state,day(19)).activeCoachConversationId).toBe('old');
   touchCoachConversation(state,'old',day(19).getTime(),{user:true});
   expect(enter(deserializeState(serializeState(state)),day(19)).activeCoachConversationId).toBe('old');
-  expect(enter(state,day(20)).activeCoachConversationId).not.toBe('old');
+  expect(enter(state,day(20)).activeCoachConversationId).toBe('old');
+  expect(enter(state,day(20),{coldStart:true}).activeCoachConversationId).not.toBe('old');
 });
-it('plain questions never block rollover; conflict is pending, undo-conflict already applied',()=>{
-  expect(enter(fixture([entry('q',{text:'How was your training?'})]),day(19)).activeCoachConversationId).not.toBe('old');
+it('plain questions do not block a clean cold launch; conflicts remain pending',()=>{
+  expect(enter(fixture([entry('q',{text:'How was your training?'})]),day(19),{coldStart:true}).activeCoachConversationId).not.toBe('old');
   expect(pendingCoachWorkflows(fixture([entry('q',proposal,{actionResult:{status:'conflict'}})]))).toHaveLength(1);
   expect(pendingCoachWorkflows(fixture([entry('q',proposal,{actionResult:{status:'undo-conflict'}})]))).toHaveLength(0);
 });
@@ -76,7 +77,8 @@ it('migrates user activity from dated messages without mistaking a later reply f
   expect(once.coachConversationMeta.old).toEqual({...before.coachConversationMeta.old,lastUserActivityAt:messageTime});
   expect(normalizeCoachConversations(once)).toEqual(once);
   expect(before).toEqual(snapshot);
-  expect(enter(once,day(19)).activeCoachConversationId).not.toBe('old');
+  expect(enter(once,day(19)).activeCoachConversationId).toBe('old');
+  expect(enter(once,day(19),{coldStart:true}).activeCoachConversationId).not.toBe('old');
   touchCoachConversation(once,'old',replyTime,{user:true});
   expect(enter(deserializeState(serializeState(once)),day(19)).activeCoachConversationId).toBe('old');
 });
@@ -86,17 +88,21 @@ it('legacy spanning dated messages stays one conversation; resolver uses timesta
   const legacy=normalizeCoachConversations(fixture([entry('a',undefined,{conversationId:null}),entry('b',undefined,{conversationId:null,createdAt:day(19).getTime()})]));
   expect(Object.keys(legacy.coachConversationMeta)).toEqual(['legacy']);
 });
-it('J local midnight creates exactly one new conversation, regardless of UTC date',()=>{
+it('J midnight preserves a warm chat; a cold launch starts one fresh chat',()=>{
   const start=new Date(2026,8,18,23,50),end=new Date(2026,8,19,0,10);
-  const first=enter(blankState(),start),next=enter(first,end);
+  const first=enter(blankState(),start);first.conversations.push({...entry('first'),conversationId:first.activeCoachConversationId});
+  const warm=enter(first,end);expect(warm.activeCoachConversationId).toBe(first.activeCoachConversationId);
   expect(first.coachConversationMeta[first.activeCoachConversationId].localDateStarted).toBe(isoDay(start));
-  expect(next.activeCoachConversationId).not.toBe(first.activeCoachConversationId);expect(enter(next,end).activeCoachConversationId).toBe(next.activeCoachConversationId);
+  const cold=enter(warm,end,{coldStart:true});expect(cold.activeCoachConversationId).not.toBe(first.activeCoachConversationId);
+  expect(enter(cold,end,{coldStart:true}).activeCoachConversationId).toBe(cold.activeCoachConversationId);
 });
-describe('K DST uses calendar days, never elapsed hours',()=>{
-  it.each([[2026,2,29],[2026,9,25]])('same day around clock changes %j', (year,month,date)=>{
+describe('K DST never invents a cold app session',()=>{
+  it.each([[2026,2,29],[2026,9,25]])('warm continuity around clock changes %j',(year,month,date)=>{
     const start=new Date(year,month,date,0,30),late=new Date(year,month,date,23,30),tomorrow=new Date(year,month,date+1,0,5);
-    const first=enter(blankState(),start);expect(enter(first,late).activeCoachConversationId).toBe(first.activeCoachConversationId);
-    const next=enter(first,tomorrow);expect(next.activeCoachConversationId).not.toBe(first.activeCoachConversationId);expect(enter(next,tomorrow).activeCoachConversationId).toBe(next.activeCoachConversationId);
+    const first=enter(blankState(),start);first.conversations.push({...entry('first'),conversationId:first.activeCoachConversationId});
+    expect(enter(first,late).activeCoachConversationId).toBe(first.activeCoachConversationId);
+    expect(enter(first,tomorrow).activeCoachConversationId).toBe(first.activeCoachConversationId);
+    expect(enter(first,tomorrow,{coldStart:true}).activeCoachConversationId).not.toBe(first.activeCoachConversationId);
   });
 });
 it('L no eager conversations during five days without Coach; empty visits do not fill History',()=>{
@@ -123,7 +129,7 @@ it('preserves a nonempty draft across a new day and requires explicit discard fo
 it.each(['activeWorkout','activeOptionalSession'])('keeps chat continuity during %s across midnight',key=>{
   const state=fixture();state[key]={id:'active-session'};
   expect(enter(state,day(19)).activeCoachConversationId).toBe('old');
-  state[key]=null;expect(enter(state,day(19)).activeCoachConversationId).not.toBe('old');
+  state[key]=null;expect(enter(state,day(19)).activeCoachConversationId).toBe('old');
 });
 it('repeated manual New chat on an already empty chat reuses the saved identity',()=>{
   const first=enter(blankState()),persist=vi.fn(()=>true);
@@ -151,7 +157,7 @@ it('declining a Combine revision retains the original unaccepted proposal; New c
   expect(pendingCoachWorkflows(cancelCoachWorkflows(state))).toEqual([]);
 });
 it('fresh transcript context retains app context but does not send old history',()=>{
-  const before=fixture(),next=enter(before,day(19));const a=coachContext(before),b=coachContext(next);
+  const before=fixture(),next=enter(before,day(19),{coldStart:true});const a=coachContext(before),b=coachContext(next);
   expect(b.conversationHistory).toEqual([]);expect({...b,conversationHistory:[]}).toEqual({...a,conversationHistory:[]});
 });
 it('real applied Combine reservations remain owned after cancelling its pending revision in New chat',()=>{

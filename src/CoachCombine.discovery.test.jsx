@@ -76,13 +76,12 @@ it('waits for Coach availability and does not replay an abandoned navigation',as
  expect(AIService.coach).not.toHaveBeenCalled();await render({entryIntent:null,availability:{state:'ready'}});
  expect(AIService.coach).not.toHaveBeenCalled();
 });
-it('Today hint appears only on the real date in an actionable missed context',async()=>{
- const state=fixture(),start=vi.fn(),props={state,update:()=>{},setPage:()=>{},setDetail:()=>{},onCombineWorkouts:start};
- await act(async()=>root.render(<Today {...props}/>));
- expect(host.textContent).toContain('Choose two available sessions and review one workout.');
- act(()=>button('Combine two workouts for todayChoose two available sessions and review one workout.').click());expect(start).toHaveBeenCalledOnce();
- await act(async()=>root.render(<Today {...props} state={{...state,selectedDate:'2026-09-09'}}/>));
- expect(host.querySelector('.combine-discovery-hint')).toBeNull();
+it.each(['2026-09-09','2026-09-12'])('keeps combining out of the Today main screen on %s, including missed-workout contexts',async date=>{
+ vi.setSystemTime(new Date(`${date}T12:00:00`));
+ const state={...fixture(),selectedDate:date};
+ await act(async()=>root.render(<Today state={state} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>));
+ expect(host.textContent).not.toContain('Combine two workouts');
+ expect(host.textContent).not.toContain('Choose two available sessions and review one workout.');
 });
 it('More options offers planned pairs without a missed-workout requirement and updates live',async()=>{
  vi.setSystemTime(new Date('2026-09-07T08:00:00'));const state=fixture(),start=vi.fn();
@@ -90,4 +89,10 @@ it('More options offers planned pairs without a missed-workout requirement and u
  await render(state);const row=[...host.querySelectorAll('button')].find(node=>node.textContent.startsWith('Combine two workouts'));
  expect(row).toBeDefined();act(()=>row.click());expect(start).toHaveBeenCalledOnce();
  await render({...state,activeWorkout:{id:'started'}});expect(host.textContent).not.toContain('Combine two workouts');
+});
+it('More options opens the same local missed recovery review, without requiring Coach or replacing its draft',async()=>{
+ const state=fixture(),start=vi.fn(),setDetail=vi.fn(),before=structuredClone(state);
+ await act(async()=>root.render(<TodayActionsSheet state={state} update={()=>{}} close={()=>{}} setDetail={setDetail} date={isoDay()} hasWorkout onCombineWorkouts={start}/>));
+ const row=[...host.querySelectorAll('button')].find(node=>node.textContent.startsWith('Combine two workouts'));expect(row).toBeDefined();
+ act(()=>row.click());expect(start).not.toHaveBeenCalled();expect(setDetail).toHaveBeenCalledWith({flexibleWeek:{missed:true,combine:true}});expect(state).toEqual(before);
 });

@@ -139,7 +139,7 @@ export const previousValuesSetEligible = set => Boolean(set && !set.completed &&
 export function previousWorkingSetValues(exercise, prior) {
   if (!prior) return {};
   const requirement = exerciseLoadRequirement(exercise);
-  const usableLoad = value => requirement !== 'none' && (positive(value) || requirement === 'optional' && value === 0);
+  const usableLoad = value => requirement !== 'none' && (positive(value) || value === 0);
   const values = {};
   const uncertainImportLoad = prior.rawImport?.version === 2 &&
     !['external','added','normal'].includes(prior.rawImport.loadKind);

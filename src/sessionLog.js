@@ -59,7 +59,7 @@ export function sessionLogSetParts(exercise, set, index, units) {
     parts.push("No load");
   } else {
     parts.push(
-      weight !== null && weight > 0
+      weight !== null && weight >= 0
         ? `${displayWeight(weight, units)} ${weightUnit(units)}`
         : "Weight not logged",
     );

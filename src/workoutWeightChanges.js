@@ -22,7 +22,7 @@ export function prepareWorkoutWeightChange(state,{sessionId,exerciseId,setId,val
   if(!source||exerciseLoadRequirement(exercise)==='none')return {state,record:null,propagated:0};
   if(value!==null&&(!Number.isFinite(value)||value<0))return {state,record:null,propagated:0};
   const normalized=exerciseLoadRequirement(exercise)==='optional'&&value===0?null:value;
-  const target={...source,weight:normalized,touched:true,weightEntryMode:'manual',weightProvenance:Number(normalized)>0?'explicit':null};
+  const target={...source,weight:normalized,touched:true,weightEntryMode:'manual',weightProvenance:normalized!==null?'explicit':null};
   delete target.weightSourceSetId;
   const sets=[...exercise.sets];sets[index]=target;
   const changed=[index];

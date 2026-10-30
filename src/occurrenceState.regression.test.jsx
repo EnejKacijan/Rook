@@ -119,5 +119,5 @@ it('the rest-day move chooser also rejects an explicitly resolved future occurre
  let s=fixture();s.selectedDate='2026-09-19';const item=flexibleOccurrenceForDate(s,s.selectedDate);s=finish(s);s.workouts[0].sourceOccurrenceId=item.logicalSessionId;delete s.workouts[0].logicalSessionId;delete s.workouts[0].programDayId;
  mount(<FlexibleWeekSheet state={s} Header={Header} request={{move:true}} update={()=>{}} close={()=>{}}/>);
  expect(document.querySelector(`[data-session-id="${item.logicalSessionId}"]`)).toBeNull();
- expect(document.body.textContent).toContain('Select a missed or upcoming workout to move.');
+ expect(document.querySelector('h1').textContent).toBe('Choose a workout');
 });

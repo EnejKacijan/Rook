@@ -14,7 +14,7 @@ import { buildCombinedProposal, combineFingerprint } from './combineWorkouts.js'
 import { CoachCombineCard } from './CoachCombine.jsx';
 import { isoDay, saveState, weekKey, weekday,calendarDate } from './domain.js';
 import { addCalendarDays, applyFlexibleWeek, flexibleSessions, flexibleSessionById, flexibleWeekConflict, flexibleReviewFingerprint, temporaryScheduleReview, proposeFlexibleWeek, missedFlexibleSessions, moveWorkoutCandidates, moveWorkoutDestinations, remainingPlanWeekDates } from './flexibleWeek.js';
-import {hasMoveWorkoutDestination,temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
+import {hasMoveWorkoutDestination,swapWorkoutCandidates,temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
 import {combinedAdjustment} from './combinedWorkoutLifecycle.js';
 import './flexibleWeekChooser.css';
 import {reviewScheduleRecovery,applyScheduleRecovery} from './scheduleRecovery.js';
@@ -22,6 +22,8 @@ import {useDurableAction} from './useDurableAction.js';
 import {AnimatedDetails} from './AnimatedDetails.jsx';
 import {exerciseName} from './domain.js';
 import {ReviewDetails} from './ReviewDetails.jsx';
+import {MissedWorkoutCombine} from './MissedWorkoutCombine.jsx';
+import {missedCombineSources} from './missedWorkoutCombine.js';
 
 const dateLabel = date => new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
 function ScheduleHistory({entries}) {
@@ -46,6 +48,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const [recovery,setRecovery]=useState(null);
   const feedback=useMissedWorkoutFeedback();
   const [useToday,setUseToday]=useState(null);
+  const [useCombine,setUseCombine]=useState(Boolean(request.combine));
   const today = useCalendarDay(), sessions = useMemo(()=>flexibleSessions(state,today),[state,today]);
   const remainingWeekDates = remainingPlanWeekDates(today);
   const missed = useMemo(()=>missedFlexibleSessions(state,today),[state,today]);
@@ -79,7 +82,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const applied = useRef(false);
   const screenRef = useRef(null);
   const returnAction = useRef(null);
-  const previousView = useRef({step,useToday});
+  const previousView = useRef({step,useToday,useCombine});
   const staleAvailabilityReview=()=>proposal?.availabilitySchedule && (proposal.today!==today || proposal.fingerprint!==flexibleReviewFingerprint(state) ||
     proposal.request.combinedProposal && proposal.request.combinedProposal.fingerprint!==combineFingerprint(state));
   const reorderRows=staleAvailabilityReview()?[]:flexibleReorderRows(proposal);
@@ -111,16 +114,16 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   };
   useSheetBack(screenRef, step, steps.at(-2), goBack);
   useLayoutEffect(() => {
-    const changed=previousView.current.step!==step || previousView.current.useToday!==useToday;
-    previousView.current={step,useToday};
+    const changed=previousView.current.step!==step || previousView.current.useToday!==useToday || previousView.current.useCombine!==useCombine;
+    previousView.current={step,useToday,useCombine};
     const screen=screenRef.current;
     if(!screen)return;
     screen.scrollTop=0;
     if(changed)focusNavigationTarget(step==='existing' && request.focusSessionId
       ? [...screen.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===request.focusSessionId)
-      : screen.querySelector(step==='recovery' && returnAction.current ? `[data-recovery-action="${returnAction.current}"]` : '.detail-header-back') || screen.querySelector('button'));
+      : screen.querySelector(returnAction.current ? `[data-recovery-action="${returnAction.current}"]` : '.detail-header-back') || screen.querySelector('button'));
     returnAction.current=null;
-  }, [step,useToday]);
+  }, [step,useToday,useCombine]);
   const item = useMemo(()=>sessionId ? flexibleSessionById(state,sessionId,today) : null,[state,sessionId,today]);
   const missedDestination = step==='destination' && item?.status==='missed';
   const firstWeekDestination=step==='destination'&&item?.firstPlanWeek;
@@ -137,6 +140,11 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const candidates = useMemo(()=>['mode','pick'].includes(step) ? moveWorkoutCandidates(state,today) : [],[state,today,step]);
   const canMove = useMemo(()=>item && ['recovery','more'].includes(step) && hasMoveWorkoutDestination(state,sessionId,today),[state,item,sessionId,today,step]);
   const canTrainToday = useMemo(()=>item && canUseWorkoutToday(state,{sessionId},today),[state,item,sessionId,today]);
+  const canCombineMissed = useMemo(()=>{
+    const sources=missedCombineSources(state,today);
+    return step==='missed'?missed.length>=2:item?.status==='missed' && sources.some(source=>source.logicalSessionId===sessionId) && sources.length>=2;
+  },[state,today,missed,item,sessionId,step]);
+  const combineMissed = <button type="button" className="list-row" data-recovery-action="combine" onClick={()=>setUseCombine(true)}><span>{missed.length===2?'Combine these workouts':'Combine two workouts'}</span><NavigationChevron/></button>;
   const existingReview = useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
   const eligibleMissed=useMemo(()=>missed.filter(item=>proposeFlexibleWeek(state,{mode:'skip',sessionId:item.logicalSessionId},today).status==='ready'),[state,today,missed]);
   const hasMissed = eligibleMissed.length > 0;
@@ -152,7 +160,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const historicalChangeCount=existingReview.historical.length;
   const skippedLabel=date=>weekKey(date)===weekKey(today)?'Skipped this week':'Skipped this occurrence';
   const openRestore=()=>{const next=proposeFlexibleWeek(state,{mode:'restore'},today);if(next.status!=='ready'){setError(next.error);return;}setProposal(next);setError('');setStep('restore-confirm');};
-  const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? sessions.filter(s=>proposeFlexibleWeek(state,{mode:'swap',sessionId,otherSessionId:s.logicalSessionId},today).status==='ready') : [],[state,today,item,step,sessions,sessionId]);
+  const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? swapWorkoutCandidates(state,sessionId,today) : [],[state,today,item,step,sessionId]);
   const simpleSwap = proposal?.request.mode === 'swap';
   const simpleMove = proposal?.request.mode === 'move' && !proposal.adaptationConflict;
   const firstWeekMove=simpleMove&&item?.firstPlanWeek&&item.logicalSessionId===proposal.request.sessionId;
@@ -226,6 +234,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     <button className="button secondary" onClick={reviewCurrentSchedule}>Review current schedule</button>
   </main>;
   if(useToday)return <UseWorkoutTodaySheet state={state} update={update} close={close} Header={Header} setDetail={setDetail} className={steps.includes('recovery')?'missed-recovery-today':''} request={{sessionId:useToday}} onBack={()=>{setUseToday(null);returnAction.current='train';setError('');}}/>;
+  if(useCombine)return <MissedWorkoutCombine state={state} update={update} close={close} Header={Header} sessionId={sessionId} setDetail={setDetail} initialRequest={request.combineReview} coachOrigin={request.coachOrigin} onApplied={()=>{applied.current=true;}} onBack={()=>{if(request.coachOrigin){close();return;}returnAction.current='combine';setUseCombine(false);}}/>;
   return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}${recoveryView?' content-fit-screen missed-recovery-sheet':''}${['skip-confirm','restore-confirm','existing','mode'].includes(step)?' content-fit-screen flexible-compact-sheet':''}`}>
     <Header title={step==='restore-confirm'?'Restore dates':step==='existing'?(existingChangeCount?'Schedule changes':'Past changes'):step==='more'?'More options':recoveryView?'Missed workout':firstWeekDestination?'Schedule workout':missedDestination?'Move workout':request.move ? 'Move a workout' : 'Adjust week'} onClose={close} onBack={step!=='done' && steps.length > 1 ? goBack : undefined} />
     {!recoveryView && !missedDestination && !['existing','restore-confirm'].includes(step) && <p className="eyebrow">{step==='pick'?'MOVE A WORKOUT':'TEMPORARY SCHEDULE'}</p>}
@@ -234,12 +243,14 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       <div className="missed-recovery-actions">
         {canTrainToday && <button className="button primary" data-recovery-action="train" onClick={()=>setUseToday(sessionId)}>TRAIN TODAY</button>}
         {canMove && <button className="button secondary" data-recovery-action="move" onClick={()=>setStep('destination')}>MOVE TO ANOTHER DAY</button>}
+        {canCombineMissed && combineMissed}
         <button className="text-button" data-recovery-action="more" onClick={()=>setStep('more')}>More options</button>
       </div>
     </>}
     {step==='more' && item && <>
       <h1>{item.workout.name}</h1><p>Missed · {dateLabel(item.scheduledDate)}</p>
       <div className="missed-recovery-options">
+        {canCombineMissed && combineMissed}
         {swapCandidates.length>0 && <button className="list-row" onClick={()=>openRecoveryOption('swap')}>Swap with another workout<NavigationChevron/></button>}
         {canAdjustWeek&&<button className="list-row" onClick={()=>openRecoveryOption('available')}>Adjust remaining week<NavigationChevron/></button>}
         <button className="list-row" onClick={skipMissed}>Skip this session</button>
@@ -247,13 +258,13 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     </>}
     {step === 'mode' && <>
       <h1>What changed?</h1>
-      <p>Make temporary changes. Keep your plan.</p>
+      <p>Your recurring plan stays unchanged.</p>
       {flexibleWeekConflict(state) && <p role="status">Your plan changed. Clear the old temporary schedule before adjusting again. Completed and active workouts stay fixed.</p>}
       <div className="adjust-option-list">
         {(existingChangeCount>0||historicalChangeCount>0) && <button className="choice-row rook-menu-navigation" onClick={()=>setStep('existing')}><span className="rook-menu-copy"><strong>{existingReview.unresolved.length ? 'Review temporary schedule' : existingChangeCount ? 'View current schedule' : 'View past schedule changes'}</strong><small>{existingReview.unresolved.length ? `${existingReview.unresolved.length} need attention` : existingChangeCount ? `${existingChangeCount} ${existingChangeCount===1?'change':'changes'}` : `${historicalChangeCount} past ${historicalChangeCount===1?'change':'changes'}`}</small></span><NavigationChevron/></button>}
         {hasMissed&&<button className="choice-row rook-menu-navigation" onClick={() => { if(eligibleMissed.length===1)selectSession(eligibleMissed[0]);else setStep('missed'); }}><span className="rook-menu-copy"><strong>I missed a workout</strong><small>Move or skip an unstarted session.</small></span><NavigationChevron/></button>}
         {canAdjustWeek&&<button className="choice-row rook-menu-navigation" onClick={() => setStep('available')}><span className="rook-menu-copy"><strong>My available days changed</strong><small>Rearrange workouts through this Sunday.</small></span><NavigationChevron/></button>}
-        {candidates.length>0 && <button className="choice-row rook-menu-navigation" onClick={() => setStep('pick')}><span className="rook-menu-copy"><strong>Move a workout</strong><small>Choose one session and another date.</small></span><NavigationChevron/></button>}
+        {candidates.length>0 && <button className="choice-row rook-menu-navigation" onClick={() => setStep('pick')}><span className="rook-menu-copy"><strong>Move a workout</strong></span><NavigationChevron/></button>}
       </div>
       {!hasMissed&&!canAdjustWeek&&!candidates.length&&!existingChangeCount&&!historicalChangeCount&&<p role="status">Your schedule is already set. No unstarted workouts can be changed right now.</p>}
     </>}
@@ -306,7 +317,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     {['pick', 'missed'].includes(step) && <>
       <h1>{step === 'missed' ? 'Choose a missed session' : 'Choose a workout'}</h1>
       {step === 'pick' ? <>
-        <p>{candidates.some(candidate=>candidate.firstPlanWeek)?"Choose a workout from this week’s plan or an upcoming session.":"Select a missed or upcoming workout to move."}</p>
+
         <div className="flexible-workout-list">{groupRescheduleCandidates(candidates).map(group=><section className="flexible-workout-group" key={group.label}>
           <h2>{group.label}</h2>
           {group.sessions.map(s=><button className="list-row" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={()=>selectSession(s)}>
@@ -314,11 +325,12 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
           </button>)}
         </section>)}</div>
       </> : <div className="adjust-option-list missed-session-choices">{eligibleMissed.map(s => <button className="choice-row rook-menu-navigation" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={() => selectSession(s)}><span className="rook-menu-copy"><strong>{s.workout.name}</strong><small>Missed · {dateLabel(s.scheduledDate)}</small>{s.moved&&<small>Originally scheduled for {dateLabel(s.originalDate)}</small>}</span><NavigationChevron/></button>)}</div>}
+      {step==='missed' && canCombineMissed && combineMissed}
       {step==='pick' ? !candidates.length && <p role="status">No missed or upcoming workouts can be moved.</p> : !missed.length && <p>No unstarted sessions need moving.</p>}
     </>}
     {step === 'swap' && item && <>
       <h1>Swap with another workout</h1><p>{item.workout.name} · {dateLabel(item.scheduledDate)}</p>
-      <div className="adjust-option-list">{swapCandidates.map(s=><button className="choice-row rook-menu-navigation" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={()=>review({mode:'swap',sessionId,otherSessionId:s.logicalSessionId})}><span className="rook-menu-copy"><strong>{s.workout.name}</strong><small>{dateLabel(s.scheduledDate)}</small></span><NavigationChevron/></button>)}</div>
+      <div className="adjust-option-list">{swapCandidates.map(s=><button className="choice-row rook-menu-navigation" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={()=>review({mode:'swap',sessionId,otherSessionId:s.logicalSessionId})}><span className="rook-menu-copy"><strong>{s.workout.name}</strong><small>{s.status==='missed'?'Missed · ':''}{dateLabel(s.scheduledDate)}</small></span><NavigationChevron/></button>)}</div>
       {!swapCandidates.length && <p>No eligible workouts to swap. Completed, active, skipped and reserved sessions stay fixed.</p>}
     </>}
     {step === 'destination' && item && <>
@@ -334,7 +346,8 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         const occupied = sessions.some(s => s.logicalSessionId !== sessionId && s.scheduledDate === d && s.status !== 'skipped');
         return <button key={d} data-move-date={d} disabled={!validDates.includes(d)} aria-label={`${dateLabel(d)}${occupied ? ', another workout scheduled' : ''}`} aria-describedby={d===today&&!todayDestination?.available?destinationReasonId:undefined} onClick={() => chooseDestination(d)}>{dateLabel(d)}</button>;
       })}</div></>}
-      {!missedDestination && !resolutionMove && !item.firstPlanWeek && <>{swapCandidates.length>0 && <button className="text-button" onClick={()=>setStep('swap')}>Swap with another workout</button>}
+      {!resolutionMove && swapCandidates.length>0 && <button className="text-button" onClick={()=>setStep('swap')}>Swap with another workout</button>}
+      {!missedDestination && !resolutionMove && !item.firstPlanWeek && <>
       {canAdjustWeek&&<button className="text-button" onClick={() => setStep('available')}>Adjust remaining week{item.originalDate>addCalendarDays(weekKey(today),6)?' (through this Sunday)':''}</button>}
       <button className="text-button" onClick={() => review({ mode: 'skip', sessionId })}>Skip this session</button></>}
     </>}
@@ -345,10 +358,10 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       <button className="button quiet" onClick={close}>CLOSE</button>
     </>}
     {step === 'available' && canAdjustWeek && <>
-      <h1>When can you train this week?</h1><p>Choose from today through Sunday for the workouts remaining in this plan week.</p>
+      <h1 className="workflow-title">When can you train this week?</h1>
       <p className="flexible-availability-note">Your profile availability stays unchanged.</p>
       <section>
-        <p className="eyebrow">REMAINING THIS WEEK</p>
+
         <div className="flexible-week-dates flexible-availability-dates">{remainingWeekDates.map(d => {
           const scheduled = sessions.find(s => s.scheduledDate === d && s.status !== 'skipped');
           return <button key={d} data-available-date={d} aria-label={dateLabel(d)} aria-pressed={available.includes(d)} className={available.includes(d) ? 'is-selected' : ''} disabled={sessions.some(s => ['active', 'completed'].includes(s.status) && s.scheduledDate === d)} onClick={() => {setWorkoutOrder(null);if(combinedProposal?.date===d && available.includes(d))setCombinedProposal(null);setAvailable(list => list.includes(d) ? list.filter(x => x !== d) : [...list, d]);}}><span>{dateLabel(d)}</span>{scheduled && <small>{scheduled.workout.name}</small>}</button>;

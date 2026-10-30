@@ -6,6 +6,9 @@
 .combined-notice-header>button{flex:none;min-width:44px;padding:8px 0;font-size:13px;color:var(--rook-accent-text)}
 .combine-card{min-width:0;overflow-wrap:anywhere}
 .combine-card>button{min-height:44px}
+.coach-screen .coach-review-action{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:52px;padding:12px 14px;border:1px solid var(--rook-border);border-radius:14px;background:var(--rook-surface);color:var(--rook-text);font-size:14px;font-weight:650;line-height:1.4;letter-spacing:0;text-align:left}
+.coach-review-action>span{min-width:0;overflow-wrap:anywhere}
+.coach-review-action>.rook-navigation-chevron{flex:0 0 auto;color:var(--rook-secondary)}
 .coach-screen .combine-card .combined-provenance{padding:0;border:0;margin-block:10px}
 .coach-screen .combine-card .combined-provenance small{margin:0;text-align:left}
 .coach-screen .combine-card .action-card-buttons{gap:8px}
@@ -22,7 +25,3 @@
 .combine-recovery p{margin-block:6px 12px;color:var(--rook-secondary)}
 .combine-recovery .button{white-space:normal;min-height:44px}
 .combine-match-alternative{display:block;margin-top:8px;min-height:44px}
-.combine-discovery-hint{margin-block:12px 24px;gap:12px}
-.combine-discovery-hint>span{min-width:0;display:grid;gap:4px;overflow-wrap:anywhere}
-.combine-discovery-hint strong{font-size:14px;font-weight:600;color:var(--rook-accent-text)}
-.combine-discovery-hint small{font-size:13px;line-height:1.4;color:var(--rook-secondary)}
