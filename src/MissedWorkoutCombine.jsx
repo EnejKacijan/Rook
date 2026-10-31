@@ -76,6 +76,6 @@ export function MissedWorkoutCombine({state,update,close,Header,onBack,sessionId
     {error&&<p role="alert">{error}</p>}
     {error&&sourceReview&&setDetail&&<button className="text-button" onClick={()=>setDetail('edit-plan')}>Review source workouts</button>}
     {error&&scheduleReview&&setDetail&&<button className="text-button" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true}})}>Review schedule changes</button>}
-    {!review&&!stale&&<SheetActionFooter>{!dateChoice&&sources.length>=2&&<button className="button primary" disabled={liveSelected.length!==2} onClick={()=>prepare()}>PREVIEW WORKOUT</button>}<button className="button quiet" onClick={onBack}>CANCEL</button></SheetActionFooter>}
+    {!review&&!stale&&<SheetActionFooter>{!dateChoice&&sources.length>=2&&<button className="button secondary review-step" disabled={liveSelected.length!==2} onClick={()=>prepare()}>PREVIEW WORKOUT</button>}<button className="button quiet" onClick={onBack}>CANCEL</button></SheetActionFooter>}
   </main>;
 }

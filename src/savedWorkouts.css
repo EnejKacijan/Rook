@@ -65,3 +65,5 @@
 .plan-start-actions{display:grid;gap:8px;flex-shrink:0;padding-bottom:env(safe-area-inset-bottom,0px)}
 .plan-start-actions .button,.plan-start-actions .text-button{min-height:48px}
 .plan-start-actions small{font-size:13px;text-align:center;color:var(--rook-secondary);line-height:1.4}
+.plan-template-actions .button { text-transform:uppercase; }
+:root .plan-start-actions .button { text-transform: uppercase; }

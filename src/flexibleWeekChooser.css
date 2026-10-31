@@ -72,3 +72,6 @@
 .flexible-reorder-grip > i { width:20px;height:16px;background:repeating-linear-gradient(to bottom,var(--rook-secondary) 0 1.5px,transparent 1.5px 6px);opacity:.72; }
 .flexible-reorder-list.is-reordering .flexible-reorder-body { transition:transform 180ms var(--rook-ease-standard); }
 @media(prefers-reduced-motion:reduce) { .flexible-reorder-list.is-reordering .flexible-reorder-body { transition:none; } }
+/* The combined review is already a sheet; the Coach card chrome would nest a card inside it. */
+:root[data-appearance] .missed-combine-sheet > .action-card.combine-card { margin:0; padding:0; border:0; border-radius:0; background:transparent; box-shadow:none; }
+:root[data-appearance] .missed-combine-sheet > .action-card.combine-card .action-card-buttons { margin-top:20px; }

@@ -74,3 +74,7 @@
 .profile-training-style legend { padding: 0 0 8px; color: var(--rook-secondary); font-size: 12px; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; }
 .profile-training-style .list-row { width: 100%; text-align: left; }
 .profile-training-style-note { display: block; margin: 8px 0 0; color: var(--rook-secondary); line-height: 1.4; }
+/* Wrap the account status at word boundaries. At 200% zoom (about 200 CSS px)
+   the decorative initials give their width to the text instead. */
+.profile-account-status { overflow-wrap: break-word; }
+@media (max-width: 299px) { .profile-screen .profile-account-entry > .profile-account-avatar { display: none; } }

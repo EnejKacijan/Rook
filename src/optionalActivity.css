@@ -74,3 +74,18 @@
 .optional-activity-actions > button { min-height: 48px; height: auto; white-space: normal; }
 :root .optional-activity-details .optional-activity-delete.text-button { color: var(--rook-error-text, #8c2f2a); }
 @media (prefers-reduced-motion: reduce) { .conditioning-sheet .optional-parameters { animation: none !important; } }
+/* Rest-day choices use the same compact neutral rows as Today's
+   Add conditioning / Choose a workout, instead of accent links. */
+:root[data-appearance] .today-screen .rest-day-actions > .text-button.rest-day-action {
+  min-height:48px;margin:0;padding:12px 0;font-size:14px;font-weight:500;line-height:1.4;
+  color:var(--rook-secondary);border-bottom:1px solid var(--rook-border);
+}
+:root[data-appearance] .today-screen .rest-day-actions > .text-button.rest-day-action:last-child { border-bottom:0; }
+/* Grid tracks default to min-content, so at 200% zoom the 190px stepper
+   pushed Type, Format and Intensity past the sheet edge. Let tracks shrink
+   and let the duration stepper drop under its label instead. */
+.optional-activity-editor, .optional-parameters, .optional-control-field { grid-template-columns: minmax(0, 1fr); min-width: 0; }
+.optional-activity-editor :is(.optional-field, .optional-field > select) { min-width: 0; max-width: 100%; }
+.optional-activity-editor .stepper-row { flex-wrap: wrap; }
+/* Type, Format, Duration and Intensity are sibling field labels: one style for all four. */
+:root[data-appearance] .optional-activity-editor :is(.optional-field, .optional-control-field, .optional-duration) > span:first-child { color: var(--rook-secondary); font-size: 14px; font-weight: 600; letter-spacing: normal; text-transform: none; }

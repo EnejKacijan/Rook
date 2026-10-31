@@ -291,7 +291,6 @@
 :root .week-strip button > strong { font-size:13px; line-height:1.1; }
 :root .week-navigation span { font-size:13px; }
 :root .today-block-week { font-size:13px; letter-spacing:.02em; }
-:root .today-adjust-entry { font-size:12px !important; }
 :root .nav-label { font-size:11px; letter-spacing:.09em; }
 :root .workout-screen .sets .set-labels { --logger-label-size:11px; --logger-label-track:.1em; }
 :root .plan-reorder-a11y button { font-size:11px; }
@@ -332,4 +331,14 @@
 :root :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"]),textarea,select) {
   min-width:0;
   max-width:100%;
+}
+/* Secondary text actions in sheets and on Today read at body size; 13px links
+   under a primary action were easy to miss and hard to hit. */
+:root[data-appearance] :is(.modal-layer, .today-screen, .import-resolution) .text-button:not(.compact, .missed-reminder-hide):not(.active-workout-notice *, .today-adjust-actions *) { font-size:15px; line-height:1.4; }
+/* Destructive photo action reads at the same size as its neighbouring text actions. */
+:root[data-appearance] .workout-photo-actions > .workout-photo-delete-inline { font-size:13px; letter-spacing:.06em; }
+/* At 200% zoom a phone is about 200 CSS px wide: four uppercase tab labels cannot
+   fit and broke mid-word ("PROGR ESS"). Keep the icons; each tab keeps its aria-label. */
+@media (max-width: 299px) {
+  :root .bottom-nav button > span:last-child { position:absolute; width:1px; height:1px; margin:-1px; padding:0; overflow:hidden; clip-path:inset(50%); white-space:nowrap; }
 }

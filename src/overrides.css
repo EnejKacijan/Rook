@@ -482,11 +482,10 @@ body {
 .today-start-button:active:not(:disabled) { transform: scale(.985); filter: brightness(.94); }
 .today-start-button:disabled[aria-busy="true"] { opacity: 1; }
 .today-hero .today-start-error { margin: 9px 2px 0; color: #9a3f32; font-size: 12px; }
-.today-adjust-actions { display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 11px; }
+.today-adjust-actions { display: flex; flex-direction: column; align-items: center; gap: 7px; margin-top: 8px; margin-bottom:12px; }
 .today-adjust-actions > small { color: var(--rook-secondary, #6f6c68); font-size: 11px; letter-spacing: .02em; }
 .today-adjust-actions > span { display: flex; justify-content: center; flex-wrap: wrap; gap: 4px 14px; }
-.today-adjust-actions .text-button { min-height: 34px; }
-.today-adjust-entry { font-size: 11px !important; font-weight: 750; letter-spacing: .08em; }
+.today-adjust-actions .text-button { min-height:44px; max-width:100%; padding:8px 12px; font-size:.875rem; font-weight:600; line-height:1.4; letter-spacing:normal; white-space:normal; text-transform:none; }
 @media (prefers-reduced-motion: reduce) {
   .restriction-spinner,.button-spinner { animation-duration: 1.5s; }
   .today-start-button { transition: none; }
@@ -2285,3 +2284,10 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 }
 .modal-layer > .sheet > .detail-header > strong { pointer-events: none; }
 .today-exercise-actions-sheet > .sheet-header-chrome { margin-top: -24px; }
+/* Import disclosures are divided rows, like the other review disclosures,
+   not a separate card for each one. Stacked rows share one divider. */
+:root .history-import-format { margin: 16px 0; padding: 4px 0; border: 0; border-block: 1px solid var(--rook-border, rgba(27,26,25,.1)); border-radius: 0; }
+:root .history-import-format:has(+ .history-import-format) { margin-bottom: 0; }
+:root .history-import-format + .history-import-format { margin-top: 0; border-top-color: transparent; }
+:root .history-import-format:has(+ .history-import-summary-grid) { border-bottom-color: transparent; }
+:root .history-import-format .history-import-mapping-row:last-child { border-bottom: 0; }

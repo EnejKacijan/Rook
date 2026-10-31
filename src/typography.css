@@ -179,7 +179,7 @@
 :root .workout-screen .up-next-title { font-size:var(--rook-type-body); line-height:1.375; }
 :root .workout-screen .up-next-prescription { font-size:var(--rook-type-meta); line-height:1.428572; }
 :root :is(.plan-workout-add,.saved-workout-create,.queue-picker-back,
-  .import-plan-paste,.building-cancel,.today-adjust-entry,.select-all-check,
+  .import-plan-paste,.building-cancel,.select-all-check,
   .flexible-week-dates > button) {
   font-size:var(--rook-type-body) !important;
   line-height:1.375 !important;

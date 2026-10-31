@@ -33,3 +33,6 @@
 .account-profile-choice .button { white-space: normal; overflow-wrap: anywhere; height: auto; padding-block: 12px; }
 .account-profile-choice > .detail-header { margin-bottom: 16px; }
 .account-profile-choice .account-sync-error { margin-top: 16px; color: var(--rook-error-text); }
+/* A row whose only content is its label must wrap; the shared trailing-value
+   rule (.list-row > span:last-child) would otherwise clip the description. */
+.account-sync-panel .list-row > span:first-child:last-child { white-space: normal; }

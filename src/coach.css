@@ -269,3 +269,23 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-reuse-sheet .coach-reuse-set-targets>li{padding:4px 0;border:0}
 .coach-reuse-sheet .sheet-action-footer .plan-template-note{font-size:13px;color:var(--rook-secondary);text-align:center;margin:0 0 10px}
 .coach-continue-previous { display:flex; align-items:center; justify-content:space-between; gap:12px; width:100%; margin:0 0 14px; padding:10px 0; text-align:left; }
+/* Applied Coach changes share one confirmation layout: soft check, title,
+   then View on the left and Undo on the right, both with full touch height. */
+:root[data-appearance] .coach-screen .today-update-check.today-update-check { width: 24px; height: 24px; margin-top: 0; border-color: transparent; background: var(--rook-accent-soft); color: var(--rook-accent-text); font-size: 13px; }
+:root .coach-screen .today-update-confirmation { grid-template-columns: 24px minmax(0, 1fr); gap: 8px; }
+:root .coach-screen .today-update-copy > :is(.action-view-today, .action-undo) { min-height: 44px; margin: 0 0 -10px; font-size: 14px; }
+:root .coach-screen .today-update-copy > .action-undo { margin-left: auto; color: var(--rook-secondary); }
+:root .coach-screen .action-card-applied:not(.today-update-confirmation) { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; }
+:root .coach-screen .action-card-applied:not(.today-update-confirmation) > :not(.text-button) { flex: 1 0 100%; }
+:root .coach-screen .action-card-applied:not(.today-update-confirmation) > .text-button { width: auto; min-height: 44px; margin: 2px 0 -10px; padding: 0; font-size: 14px; text-align: left; }
+:root .coach-screen .action-card-applied:not(.today-update-confirmation) > .text-button:not(.action-view-today) { margin-left: auto; color: var(--rook-secondary); }
+/* Stale proposals keep one reading edge. */
+:root .coach-screen .action-card-conflict > small { display: block; text-align: left; }
+:root .coach-screen .action-card-applied:not(.today-update-confirmation) > h3 { font-size: 16px; line-height: 1.25; }
+/* Two long labels side by side wrap to two lines on phones; stack them with
+   the action that applies the change first, as in the other review sheets. */
+:root .coach-screen .action-card-buttons { grid-template-columns: minmax(0, 1fr); }
+:root .coach-screen .action-card-buttons > .primary { order: -1; }
+/* View and Undo share a row and wrap only when the card is too narrow (large text). */
+:root .coach-screen .today-update-confirmation > .today-update-copy { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; }
+:root .coach-screen .today-update-copy > :is(h3, small) { flex: 1 0 100%; }

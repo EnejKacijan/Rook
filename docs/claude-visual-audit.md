@@ -2,13 +2,15 @@
 
 ## Starting point and boundaries
 
-Start from **`codex/claude-visual-audit-oct30`**, not `main`. This snapshot contains
-the actual current local application, including the compact weekly streak,
-count-only missed-workout reminder, compact Coach review navigation, typography,
-Coach quality and calendar changes. It is not the older `rook-visual-v2` theme
-bundle. Do not reset these changes to the published application.
+Start from the **latest remote commit of `codex/claude-visual-audit-oct30`**,
+not `main`. Read `docs/claude-consistency-audit.md` for the current whole-app
+consistency brief and its required coverage inventory. This refreshed snapshot
+already integrates visual audit round 2, the latest horizontal Today options,
+the smaller sentence-case Adjust today, nested-review divider fixes and the
+earlier application changes. No downloaded patch or local folder bridge is
+needed. Do not reapply older patches or reset to the published application.
 
-The user approved publishing this baseline to a separate GitHub branch solely
+The user approved publishing and refreshing this baseline on a separate GitHub branch solely
 to make it available to Claude Code on the web. No Desktop install or Remote
 Control connection is required. The repository is `EnejKacijan/Rook`.
 
@@ -58,7 +60,11 @@ Inspect:
 Retain accepted patterns: the profile weekly streak is a compact full-width
 row; Coach's combined-workout review entry is one neutral navigation row;
 missed-workout feedback is a single count with a separate Hide/Undo; Today has
-compact Add conditioning/Choose a workout rows under its exercises.
+quiet, centered Add conditioning/Choose a workout text actions under its
+exercises, with a vertical separator when they share a line and natural wrapping
+on narrow screens. These are the current starting patterns. The consistency
+audit may refine their presentation when the role-based comparison justifies it,
+while preserving functionality and avoiding unrelated redesigns.
 
 ## Run locally in the cloud workspace
 
@@ -101,10 +107,12 @@ inventory in `scripts/release-browser-manifest.mjs` and the existing `*qa.mjs`
 scripts to discover other states and flows. Do not claim coverage merely because
 a route or script exists.
 
-Approved synthetic reference screenshots are under
-`docs/visual-audit-reference/`. They show the last accepted Today, Profile,
-Coach entry and combined-review layouts. They contain no real account or
-personal workout data.
+Synthetic reference screenshots are under `docs/visual-audit-reference/`.
+The `consistency-*-oct31` images show the current Profile example and latest
+Today. Older images provide historical context. None is an exhaustive screen
+inventory or proof that any screen has been reviewed in this run. Capture the
+running application yourself, including every other screen and meaningful state.
+The references contain no real account or personal workout data.
 
 ## Verification and delivery
 

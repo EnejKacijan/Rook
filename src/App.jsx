@@ -5195,7 +5195,7 @@ export function Today({
           <div className="rest-day-actions">
             {isToday && <ExerciseNavigationButton className="text-button rest-day-action" aria-haspopup="dialog"
               onClick={() => setDetail({ restDayAction: { date: selectedIso, kind: 'optional' } })}>
-              <span><span aria-hidden="true">+ </span>Add optional activity</span>
+              <span><span aria-hidden="true">+ </span>Add optional activity</span><NavigationChevron className="inline-navigation-chevron" />
             </ExerciseNavigationButton>}
             <ExerciseNavigationButton className="text-button rest-day-action" aria-haspopup="dialog"
               onClick={() => setDetail({ restDayAction: { date: selectedIso, kind: 'training' } })}>
@@ -5682,7 +5682,8 @@ export function Today({
         {completed ? (
           <div className={fullyCompleted ? "completion-actions" : undefined}>
             <Button
-              variant={fullyCompleted ? "primary" : "secondary"}
+              variant="secondary"
+              className="review-step"
               onClick={() => setDetail({ completedWorkout: completed.id })}
             >
               VIEW WORKOUT DETAILS
@@ -5732,7 +5733,7 @@ export function Today({
                     <>
                       <small>Today only · Adjusted for today</small>
                       <span>
-                        <button type="button" className="text-button today-adjust-entry" onClick={()=>setDetail({adjustToday:{view:'mode'}})}>ADJUST TODAY</button>
+                        <button type="button" className="text-button today-adjust-entry" onClick={()=>setDetail({adjustToday:{view:'mode'}})}>Adjust today</button>
                         <button
                           type="button"
                           className="text-button"
@@ -5759,7 +5760,7 @@ export function Today({
                       className="text-button today-adjust-entry"
                       onClick={() => setDetail({ adjustToday: { view: "mode" } })}
                     >
-                      ADJUST TODAY
+                      Adjust today
                     </button>
                   )}
                 </div>
@@ -7020,7 +7021,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         </WorkoutOptionsSheet>}
       </ModalLayer>, document.body)}
       {rirSet !== null && createPortal(<ModalLayer close={() => setRirSet(null)} backgroundRef={screenRef}>{requestClose => <section className="screen detail-screen rir-sheet" role="dialog" aria-modal="true" aria-label={`RIR for set ${rirSet + 1}`}><SheetHeader title="Reps in reserve" onClose={requestClose} closeLabel="Close RIR"/><div className="rir-options">{[null,0,1,2,3,4].map(value => <button type="button" key={value ?? "unset"} aria-label={value == null ? "Not set" : `${value} RIR`} aria-pressed={(exercise.sets[rirSet]?.rir ?? null) === value} onClick={() => { updateSet(rirSet,"rir",value); requestClose(); }}><span>{value == null ? "Not set" : `${value} RIR`}</span><span className="rir-option-check" aria-hidden="true">{(exercise.sets[rirSet]?.rir ?? null) === value ? "✓" : ""}</span></button>)}</div></section>}</ModalLayer>, document.body)}
-      {!confirmation && combinedSaveError && <p role="alert">{combinedSaveError}</p>}
+      {!confirmation && combinedSaveError && <p className="workout-save-error" role="alert">{combinedSaveError}</p>}
       <p className="visually-hidden" role="status" aria-live="polite" aria-atomic="true">
         {exerciseNavigationAnnouncement}
       </p>
@@ -8880,7 +8881,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       </div>
       </>}
       {!endedEarly && <div className="completion-actions">
-        <Button variant="secondary" onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
+        <Button variant="secondary" className="review-step" onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
       </div>}
       {!persistenceFailed && recognition && <p id="completion-recognition" className="completion-recognition">
         <strong>{recognition.label}</strong>
@@ -14084,7 +14085,7 @@ export function PlanEditor({
           }
         : mode === "import"
           ? {
-              eyebrow: "IMPORT PLAN",
+              eyebrow: "",
               title: "Review your plan",
               body: [exerciseState?.program?'Replaces your weekly plan.':'', pendingSourceReviews||unresolved?'Resolve the highlighted items before using it.':''].filter(Boolean).join(' '),
               action: "USE THIS PLAN",
@@ -14212,7 +14213,7 @@ export function PlanEditor({
       </div>}
       {!focusedSourceReview&&(sourceReview||mode === 'import') && <div ref={importReviewRef}><PlanImportIssues review={sourceReview} resolved={resolvedImportIssues} program={program} onResolve={resolveImportIssue} reviewRequest={importReviewRequest} summaryOnly={importReview} decisionGroups={importReview?importExerciseReviewGroups(sourceReview,importReviewSource.current,resolutionMatches):[]} onChange={id=>{setResolutionRevisit(id);setResolutionOpen(true);}} /></div>}
       {importReview&&(program.importMetadata?.removedExercises||[]).map(record=><div key={record.exercise.id} className="missed-skip-feedback" role="status">{record.exercise.originalImportedName||record.exercise.importedName} removed from plan <button className="text-button" onClick={()=>undoImportRemoval(record.exercise.id)}>Undo</button></div>)}
-      {importReview&&<section className="plan-import-matching-summary" aria-label="Exercise library links"><p>{totalExercises-originalImportCount-unresolved} linked · {originalImportCount} original {originalImportCount===1?'name':'names'}{unresolved?` · ${unresolved} source choices to resolve`:''}</p>{originalImportCount>0&&<><p>Unlinked exercises keep their original names. Matching is optional.</p><button className="button secondary" onClick={()=>setOptionalMatchesOpen(true)}>Review exercise matches · Optional</button></>}</section>}
+      {importReview&&<section className="plan-import-matching-summary" aria-label="Exercise library links"><p>{totalExercises-originalImportCount-unresolved} linked · {originalImportCount} original {originalImportCount===1?'name':'names'}{unresolved?` · ${unresolved} source choices to resolve`:''}</p>{originalImportCount>0&&<><p>Unlinked exercises keep their original names. Matching is optional.</p><button className="button secondary review-step" onClick={()=>setOptionalMatchesOpen(true)}>Review exercise matches · Optional</button></>}</section>}
       {importApplySafetyIssues.length>0&&<section className="plan-import-issues" role="alert"><span className="eyebrow">COMPATIBILITY TO RESOLVE</span>{importApplySafetyIssues.map(message=><p key={message}>{message}</p>)}<p>Edit the affected exercise below, or go back to clarify your setup. Source values have not been changed.</p></section>}
       {importReview && (trainingSafetyBlocks(importSafety.status) || importSafetyConflicts.length > 0) && <section className="plan-import-issues">
         <span className="eyebrow">TRAINING RESTRICTIONS</span>
@@ -15415,8 +15416,9 @@ export function PlanEditor({
       {openDurationReview && <p role="status">Set the duration for {exerciseName(openDurationReview)} in Edit prescription, or choose a rep-based exercise.</p>}
       {importReview && pendingSourceReviews > 0 && <button type="button" className="button quiet import-review-remaining" onClick={revealImportReview}>{sourceDecisionSummary} · REVIEW</button>}
       <Button
+        variant={copy.reviewStep ? "secondary" : "primary"}
         className={
-          importReview && unresolved === 0 && namesValid
+          copy.reviewStep ? "review-step" : importReview && unresolved === 0 && namesValid
             ? "import-ready-sticky-action"
             : ""
         }
@@ -17526,6 +17528,8 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
   const [step, setStep] = useState("source");
   const [preview, setPreview] = useState(null);
   const [error, setError] = useState("");
+  // The error sits above the sticky action, often below the fold; show it after a failed step.
+  useEffect(() => { if (error) screenRef.current?.querySelector('[role="alert"]')?.scrollIntoView?.({ block: "center" }); }, [error]);
   const [result, setResult] = useState(null);
   const [mappingName, setMappingName] = useState(null);
   const [mappingQueue, setMappingQueue] = useState([]);
@@ -17669,7 +17673,7 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
     <HistoryImportSetup info={currentFile.info} options={fileOptions} onChange={setFileOptions} sheets={currentFile.sheets} sheetIndex={sheetIndex} sample={currentFile.sample}
       onSheet={async index=>{const job=clientRef.current;setFileSettings(current=>current.map((item,i)=>i===fileIndex?{sheetIndex:index,options:{source}}:item));setStep('parsing');try{const inspected=await request('inspect',{fileIndex,sheetIndex:index,options:{source}},job);if(alive.current&&clientRef.current===job)setFileSetup(current=>({...current,files:current.files.map((file,i)=>i===fileIndex?{...file,...inspected}:file)}));}catch(reason){if(reason.name!=='AbortError'&&alive.current&&clientRef.current===job)setError(reason.message);}finally{if(alive.current&&clientRef.current===job)setStep('setup');}}}/>
     {error&&<p className="backup-status is-error" role="alert">{error}</p>}
-    <SheetActionFooter><Button onClick={parseSetup}>REVIEW IMPORT</Button></SheetActionFooter>
+    <SheetActionFooter><Button variant="secondary" className="review-step" onClick={parseSetup}>REVIEW IMPORT</Button></SheetActionFooter>
   </main>;
   if (mapping) return (
     <main ref={mappingScreenRef} className="screen detail-screen history-import-screen history-import-mapping">
@@ -17719,7 +17723,7 @@ export function HistoricalWorkoutImportScreen({ state, update, close }) {
         {preview.warnings.length>0&&<AnimatedDetails className="history-import-format"><summary>Source compatibility notes ({preview.warnings.length})</summary><ul className="history-import-warnings">{preview.warnings.map(w=><li key={w}>{w}</li>)}</ul></AnimatedDetails>}
         <AnimatedDetails className="history-import-format"><summary>Preview factual history (first 3 workouts)</summary>{preview.workouts.slice(0,3).map(workout=><section key={workout.id}><h3>{workout.name||'Untitled source workout'} · {workout.canonicalPlanDate}</h3>{workout.sessionNote&&<p>{workout.sessionNote}</p>}{workout.exercises.map(ex=><div key={ex.id}><strong>{ex.sourceSupersetId?`Group ${ex.sourceSupersetId} · `:''}{ex.sourceName}</strong>{ex.notes&&<p>{ex.notes}</p>}{ex.sets.slice(0,20).map(set=><small key={set.id}>{historySetDescriptor(ex,set)}{set.rawImport.weight!=null?` · ${set.rawImport.weight} ${set.rawImport.weightUnit}`:''}</small>)}</div>)}</section>)}</AnimatedDetails>
         <dl className="history-import-summary-grid"><div><dt>Workouts</dt><dd>{formatCount(preview.summary.workouts)}</dd></div><div><dt>Sets</dt><dd>{formatCount(preview.summary.sets)}</dd></div><div><dt>Matched</dt><dd>{formatCount(preview.summary.matchedExercises-preview.summary.customExercises)}</dd></div><div><dt>Original names</dt><dd>{formatCount(preview.summary.customExercises)}</dd></div><div><dt>Exact duplicates</dt><dd>{formatCount(preview.summary.exactDuplicates)}</dd></div><div><dt>Invalid rows</dt><dd>{formatCount(preview.summary.invalidRows)}</dd></div></dl>
-        {preview.summary.customExercises>0&&<><p>Unlinked exercises keep their original names. Matching is optional.</p><Button variant="secondary" disabled={busy} onClick={reviewMatches}>Review exercise matches · Optional</Button>{busy&&<small role="status">{importProgress}</small>}</>}
+        {preview.summary.customExercises>0&&<><p>Unlinked exercises keep their original names. Matching is optional.</p><Button variant="secondary" className="review-step" disabled={busy} onClick={reviewMatches}>Review exercise matches · Optional</Button>{busy&&<small role="status">{importProgress}</small>}</>}
         {preview.summary.reviewExercises>0&&<section className="history-import-review-section"><Eyebrow>SAVED MAPPING NEEDS ATTENTION</Eyebrow>{preview.exerciseMappings.filter(item=>!item.exerciseId&&!item.ignored&&item.match?.requiresReview).map(mappingRow)}</section>}
         <AnimatedDetails className="history-import-format history-import-resolved"><summary>Matched ({formatCount(preview.summary.matchedExercises-preview.summary.customExercises)})</summary>{preview.exerciseMappings.filter(item=>item.exerciseId&&!item.exerciseId.startsWith('custom-')||item.ignored).map(mappingRow)}</AnimatedDetails>
         {preview.summary.customExercises>0&&<AnimatedDetails className="history-import-format history-import-custom"><summary>Original names ({formatCount(preview.summary.customExercises)})</summary><p>Original names and results are preserved. ROOK illustrations and catalog guidance may be unavailable.</p>{preview.exerciseMappings.filter(item=>item.exerciseId?.startsWith('custom-')&&!item.ignored).map(mappingRow)}</AnimatedDetails>}
@@ -18432,7 +18436,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           </div>
           {minutes === "custom" && <label className="adjust-custom-time"><span>Minutes</span><input aria-label="Available minutes" aria-describedby="adjust-time-validation" aria-invalid={Boolean(customMinutes && timeError)} type="number" min="15" max={Math.max(15,maximumShorterMinutes)} step="1" inputMode="numeric" value={customMinutes} onChange={(event) => setCustomMinutes(event.target.value)} /></label>}
           <p id="adjust-time-validation" className="adjust-time-validation" aria-live="polite">{timeError || `Choose 15–${maximumShorterMinutes} minutes.`}</p>
-          <Button aria-busy={busy || undefined} disabled={busy || Boolean(timeError)} onClick={generate}>{busy ? "ADJUSTING…" : `REVIEW ${chosenMinutes || ""}-MINUTE WORKOUT`}</Button>
+          <Button variant="secondary" className="review-step" aria-busy={busy || undefined} disabled={busy || Boolean(timeError)} onClick={generate}>{busy ? "ADJUSTING…" : `REVIEW ${chosenMinutes || ""}-MINUTE WORKOUT`}</Button>
         </>
       )}
       {step === "equipment" && (
@@ -18465,7 +18469,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
             </div>
           )}
           {customEquipment && !equipment.length && <p className="adjust-equipment-hint" role="status">Choose at least one equipment option.</p>}
-          <Button aria-busy={busy || undefined} disabled={busy || (!customEquipment && !selectedGym) || !meaningfulEquipmentChange} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW CHANGES"}</Button>
+          <Button variant="secondary" className="review-step" aria-busy={busy || undefined} disabled={busy || (!customEquipment && !selectedGym) || !meaningfulEquipmentChange} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW CHANGES"}</Button>
         </>
       )}
       {step === "energy" && (
@@ -18474,7 +18478,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           <h1>Lower-fatigue workout</h1>
           <p>ROOK will protect the main movements, trim lower-priority volume and keep effort conservative.</p>
           <div className="adjust-calm-note">This is a training-volume adjustment, not medical advice.</div>
-          <Button aria-busy={busy || undefined} disabled={busy} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW LOWER-FATIGUE WORKOUT"}</Button>
+          <Button variant="secondary" className="review-step" aria-busy={busy || undefined} disabled={busy} onClick={generate}>{busy ? "ADJUSTING…" : "REVIEW LOWER-FATIGUE WORKOUT"}</Button>
         </>
       )}
       {step === "unavailable" && (
@@ -18485,7 +18489,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           <div className="adjust-check-list" role="group" aria-label="Unavailable exercises">
             {(original?.exercises || []).map((exercise) => { const selected = unavailableEntryIds.includes(exercise.id); return <button key={exercise.id} aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => setUnavailableEntryIds((current) => selected ? current.filter((id) => id !== exercise.id) : [...current, exercise.id])}><span>{exerciseName(exercise)}</span><i aria-hidden="true">{selected ? "✓" : ""}</i></button>; })}
           </div>
-          <Button aria-busy={busy || undefined} disabled={busy || !unavailableEntryIds.length} onClick={generate}>{busy ? "ADJUSTING…" : "FIND REPLACEMENTS"}</Button>
+          <Button variant="secondary" className="review-step" aria-busy={busy || undefined} disabled={busy || !unavailableEntryIds.length} onClick={generate}>{busy ? "ADJUSTING…" : "FIND REPLACEMENTS"}</Button>
         </>
       )}
       {busy && <div className="adjust-loading" role="status"><i aria-hidden="true" /><strong>Adjusting today’s workout…</strong><small>Checking training intent and workout structure.</small></div>}

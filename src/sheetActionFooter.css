@@ -92,3 +92,11 @@
 :root :is(.detail-screen, .sheet):has(.sheet-action-footer[data-keyboard-layout="flow"]) {
   scroll-padding-bottom: 12px;
 }
+/* The footer draws the only hairline above the actions. A row or disclosure
+   that ends right above it drops its own bottom line instead of doubling it. */
+:root[data-appearance] :is(.detail-screen, .sheet) :is(details.rook-details, .list-row, .review-change-row, button.choice-row.rook-menu-navigation):is(
+  :has(+ .sheet-action-footer:not([hidden])),
+  :is(:has(+ .sheet-action-footer:not([hidden])) > :last-child)
+) {
+  border-bottom-color: transparent;
+}

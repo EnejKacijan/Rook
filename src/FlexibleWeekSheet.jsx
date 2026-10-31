@@ -237,7 +237,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   if(useCombine)return <MissedWorkoutCombine state={state} update={update} close={close} Header={Header} sessionId={sessionId} setDetail={setDetail} initialRequest={request.combineReview} coachOrigin={request.coachOrigin} onApplied={()=>{applied.current=true;}} onBack={()=>{if(request.coachOrigin){close();return;}returnAction.current='combine';setUseCombine(false);}}/>;
   return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}${recoveryView?' content-fit-screen missed-recovery-sheet':''}${['skip-confirm','restore-confirm','existing','mode'].includes(step)?' content-fit-screen flexible-compact-sheet':''}`}>
     <Header title={step==='restore-confirm'?'Restore dates':step==='existing'?(existingChangeCount?'Schedule changes':'Past changes'):step==='more'?'More options':recoveryView?'Missed workout':firstWeekDestination?'Schedule workout':missedDestination?'Move workout':request.move ? 'Move a workout' : 'Adjust week'} onClose={close} onBack={step!=='done' && steps.length > 1 ? goBack : undefined} />
-    {!recoveryView && !missedDestination && !['existing','restore-confirm'].includes(step) && <p className="eyebrow">{step==='pick'?'MOVE A WORKOUT':'TEMPORARY SCHEDULE'}</p>}
+    {!recoveryView && !missedDestination && !['existing','restore-confirm','review'].includes(step) && <p className="eyebrow">{step==='pick'?'MOVE A WORKOUT':'TEMPORARY SCHEDULE'}</p>}
     {step==='recovery' && item && <>
       <h1>{item.workout.name}</h1><p>Missed · {dateLabel(item.scheduledDate)}</p>
       <div className="missed-recovery-actions">
@@ -372,7 +372,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
           : `${availabilityPreview.remainingSessions} ${availabilityPreview.remainingSessions===1?'workout':'workouts'} · ${available.length} selected ${available.length===1?'day':'days'}`
         : availabilityPreview?.message || availabilityPreview?.error}</p>
       {availabilityPreview?.unresolvedCount>0 && <p className="flexible-availability-note">Review to move later, combine where possible, or skip a workout.</p>}
-      <button className="button primary" disabled={!canReviewSchedule} onClick={() => review({ mode: 'available' })}>REVIEW SCHEDULE</button>
+      <button className="button secondary review-step" disabled={!canReviewSchedule} onClick={() => review({ mode: 'available' })}>REVIEW SCHEDULE</button>
     </>}
     {step === 'availability-result' && availabilityResult && <>
       <h1>{availabilityResult.status === 'no-change' ? 'No workouts to rearrange' : 'Review these dates'}</h1>
@@ -381,8 +381,8 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       <button className="button quiet" onClick={close}>{availabilityResult.status === 'no-change' ? 'DONE' : 'CANCEL'}</button>
     </>}
     {step === 'review' && proposal && <>
-      <h1>{simpleSwap ? 'Swap workouts?' : simpleMove ? `${firstWeekMove?'Schedule':'Move'} ${proposal.changes[0].name}?` : proposal.request.mode==='skip'?`Skip ${proposal.changes[0]?.name || 'this workout'}?`:proposal.request.mode === 'restore' ? 'Restore the schedule?' : 'Your updated schedule'}</h1>
       <p className="review-scope">{proposal.availabilitySchedule?'This week':'One-time change'}</p>
+      <h1>{simpleSwap ? 'Swap workouts?' : simpleMove ? `${firstWeekMove?'Schedule':'Move'} ${proposal.changes[0].name}?` : proposal.request.mode==='skip'?`Skip ${proposal.changes[0]?.name || 'this workout'}?`:proposal.request.mode === 'restore' ? 'Restore the schedule?' : 'Your updated schedule'}</h1>
       <div className="flexible-week-review">{proposal.availabilitySchedule ? proposal.availabilitySchedule.filter(c=>c.fromDate!==c.toDate||c.skipped||c.combined||!c.toDate||c.resolution).map(c => <article key={c.logicalSessionId} data-session-id={c.logicalSessionId}>
         <strong>{c.name}</strong>
         <span className={!c.toDate&&!c.skipped?'flexible-needs-day':''}>{c.skipped?`${dateLabel(c.fromDate)} → Skipped`:c.combined?`Combined · ${dateLabel(c.toDate)}`:c.toDate?`${dateLabel(c.fromDate)} → ${dateLabel(c.toDate)}`:'Needs a day'}</span>

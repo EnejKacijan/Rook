@@ -405,3 +405,13 @@
   .onboarding-priorities .priority-choice-groups { margin-top:6px;gap:5px; }
   .onboarding-priorities .priority-choice-group .option-list { margin-top:3px !important; }
 }
+/* Profile details mixes a native select with the custom Sex picker. Give the
+   three fields one border token and one text size so they read as one form. */
+:root .personal-fields :is(input, select, .profile-sex-trigger) { border-color: var(--rook-control-border, rgba(27, 26, 25, .12)); }
+:root .personal-fields .profile-sex-trigger { font-size: 16px; }
+/* Unselected choices must not look chosen: BUILD MY PLAN stays disabled until one is picked. */
+:root[data-appearance] .onboarding-preferences .split-recommendation .onboarding-option:not(.selected-option) { border-color: var(--rook-control-border, var(--rook-border-strong)); background: var(--rook-surface); }
+/* Exercise preference follows the shared segmented control: the selected
+   segment is the raised surface, unselected segments sit on the track. */
+:root[data-appearance] .onboarding-preferences .exercise-preference-options .onboarding-option { background: transparent; color: var(--rook-secondary); }
+:root[data-appearance] .onboarding-preferences .exercise-preference-options .onboarding-option.selected-option.selected-option { background: var(--rook-surface); color: var(--rook-text); box-shadow: inset 0 0 0 1px var(--rook-selected-line, var(--rook-border)); }

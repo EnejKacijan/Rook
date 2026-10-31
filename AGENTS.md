@@ -1,10 +1,15 @@
 # ROOK visual-audit branch
 
 The user requested a comprehensive visual/layout audit of the whole application,
-not a theme redesign. Read `docs/claude-visual-audit.md` before beginning.
+not a theme redesign. Read `docs/claude-visual-audit.md` and
+`docs/claude-consistency-audit.md` before beginning. The consistency brief is
+the current scope: every screen and meaningful state, including all nested
+sheets, menus and dialogs. Reference images are examples, never the coverage list.
 
 This is a review-only snapshot on `codex/claude-visual-audit-oct30`. The initial
-snapshot push was explicitly approved. Further audit work must not be merged into
+snapshot push and the current consistency-handoff refresh were explicitly
+approved. Start from the latest remote commit of this branch; all integrated
+patches are already present. Further audit work must not be merged into
 `main`, released, deployed to Netlify, or published as a PR without a new explicit
 user request. Retain the `build.ignore` protection in `netlify.toml`. Do not run
 deploy commands, build hooks, or alter hosting/account settings.

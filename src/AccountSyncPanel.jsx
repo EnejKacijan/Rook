@@ -102,7 +102,7 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
         <AccountSyncInformation sync={sync}/>
       </ProfileInformation>
     </div>
-    {sync?.state === 'not-configured' && <small>{sync.category === 'rollout-off' ? 'Cloud backup is not enabled in this build. Keep a ROOK backup file.' : 'Keep a ROOK backup file until cloud setup is complete.'}</small>}
+    {sync?.state === 'not-configured' && <small>{sync.category === 'rollout-off' ? 'Keep a ROOK backup file for now.' : 'Keep a ROOK backup file until cloud setup is complete.'}</small>}
     {sync?.state === 'needs-attention' && <small>Your saved data on this device is unchanged. Keep a ROOK backup file while this is reviewed.</small>}
     {sync?.linked && !(sync?.state === 'synced' && sync.pendingCount === 0) && <small>Cloud backup still needs to finish; your data stays on this device.</small>}
     {!sync?.linked && sync?.state === 'synced' && <small>This cloud copy is not linked to Google or email. You cannot restore it by signing in until you link an account below.</small>}

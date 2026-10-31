@@ -936,3 +936,12 @@
   min-height: 40px;
   justify-self: start;
 }
+/* Two long uppercase labels wrapped at phone widths. Stack them like every
+   other sheet footer: the safe choice first, full width, one line each. */
+:root .workout-confirm .workout-confirm-actions { grid-template-columns: 1fr; }
+/* Warm-up rows read left to right in every plan editor, not only Edit plan. */
+:root .plan-warmup-card-header > span { align-items: flex-start; }
+:root .plan-warmup-card-header > span > * { text-align: left; }
+:root .plan-warmup-eyebrow { text-align: left; }
+/* A failed save reads as an error, not as stray body text above the header. */
+:root[data-appearance] .workout-screen > p.workout-save-error.workout-save-error { margin: 8px 8px 12px; padding: 10px 14px; border-radius: 12px; background: var(--rook-error-surface, #f8ecea); color: var(--rook-error-text, #8c2f2a); font-size: 14px; line-height: 1.45; }

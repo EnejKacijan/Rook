@@ -9,3 +9,5 @@
 .history-import-sample :is(th,td) { padding:7px; text-align:left; min-width:100px; font-size:11px; white-space:pre-wrap; }
 .history-import-load-choice { margin-block:12px; }
 .history-import-warnings { padding-left:18px; }
+/* Adjacent setup disclosures share one divider instead of two lines with a gap. */
+.history-import-setup details + details { margin-top:-16px; border-top-color:transparent; }

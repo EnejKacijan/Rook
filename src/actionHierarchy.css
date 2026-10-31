@@ -30,3 +30,29 @@
   background: var(--rook-destructive-fill);
   color: var(--rook-on-destructive);
 }
+/* A step that only opens a review never looks like the button that applies it.
+   Neutral outline, accent label and a navigation chevron; the commit stays filled. */
+:root[data-appearance] .button.review-step:not(:disabled) {
+  background: var(--rook-surface);
+  color: var(--rook-accent-text);
+  border-color: var(--rook-control-border, var(--rook-border-strong));
+}
+:root .button.review-step {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  box-shadow: none;
+}
+:root .button.review-step::after {
+  content: '›' / '';
+  flex: 0 0 auto;
+  font-size: 1.35em;
+  font-weight: 500;
+  line-height: 0;
+  letter-spacing: 0;
+  transform: translateY(-1px);
+}
+/* Sentence-case review labels keep normal tracking so they fit on one line. */
+:root :is(.plan-import-matching-summary, .history-import-screen) .button.review-step { letter-spacing: 0; }
+:root .button.use-today-date-choice { text-transform: uppercase; }

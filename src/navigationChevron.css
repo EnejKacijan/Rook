@@ -9,3 +9,16 @@ button.rook-menu-navigation {
 .rook-menu-navigation > .rook-menu-copy { display:flex;flex:1;flex-direction:column;min-width:0;gap:4px; }
 .rook-menu-navigation > span:first-child { min-width:0;overflow-wrap:anywhere; }
 .rook-menu-navigation > .rook-navigation-chevron { color:var(--rook-secondary); }
+
+/* Navigation choices are rows, not one card per option: the same flat, single
+   hairline treatment as Today options and Profile settings. Selection cards
+   (date chips, radio/checkbox choices) keep their own surfaces. */
+:root[data-appearance] button.choice-row.rook-menu-navigation.rook-menu-navigation {
+  width:100%;margin:0;min-height:56px;padding:14px 0;
+  border:0;border-bottom:1px solid var(--rook-border);border-radius:0;
+  background:transparent;box-shadow:none;color:var(--rook-text);
+}
+:root[data-appearance] button.choice-row.rook-menu-navigation small {
+  font-size:14px;line-height:1.4;color:var(--rook-secondary);
+}
+:root[data-appearance] .adjust-option-list { gap:0; }

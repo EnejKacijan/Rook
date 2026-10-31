@@ -10,6 +10,12 @@
 .review-applied-mark{display:inline-flex;align-items:center;justify-content:center;flex:0 0 24px;width:24px;height:24px;margin-right:8px;border-radius:50%;background:var(--rook-accent-soft);color:var(--rook-accent-text);font-size:15px;vertical-align:middle}
 .review-change-list{margin:12px 0}
 .review-change-row{display:grid;gap:4px;padding:12px 0;border-bottom:1px solid var(--rook-border);min-width:0;overflow-wrap:anywhere}
+/* An exercise row owns its separator; nested set details do not add another pair. */
+.review-change-row>.review-details{margin:0;border:0}
+.review-change-row>.review-details>summary{min-height:44px;padding:6px 0}
+.review-change-row>.review-details .review-details-body{padding-bottom:4px}
+.review-change-row>.review-details .review-details-body>p{margin:4px 0}
+.review-details-body>.review-change-list>.review-change-row:last-child{border-bottom:0}
 .review-change-row>span,.review-change-row>small{font-size:14px;line-height:1.4;color:var(--rook-secondary)}
 .review-change-row .review-change-name{color:var(--rook-text);font-weight:600}
 .action-card .review-details>summary{font-size:14px}

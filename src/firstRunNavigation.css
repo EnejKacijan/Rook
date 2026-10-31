@@ -36,3 +36,6 @@
 .first-run-freestyle-content h1 { margin: 12px 0 8px; }
 .first-run-freestyle-content p { color: var(--rook-secondary); line-height: 1.5; }
 .first-run-freestyle-content .button { margin-top: 24px; }
+/* The first questionnaire step shares one row between Back and the wordmark. */
+.onboarding-start-brand > .first-run-back-button { position: absolute; left: -12px; top: 50%; transform: translateY(-50%); }
+:root .onboarding-start-brand .brand { padding-left: 36px; }

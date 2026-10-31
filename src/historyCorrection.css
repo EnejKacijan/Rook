@@ -24,3 +24,5 @@
 .history-correction-confirm { margin: 24px 0; }
 .history-correction-editor input[type="checkbox"] { accent-color: var(--rook-accent); width: 18px; height: 18px; }
 .history-correction-editor { scroll-padding-bottom: calc(var(--history-footer-height, 126px) + 24px); }
+/* The change list follows its one-line consequence directly, without a blank band. */
+:root .history-correction-diff { margin-top: 8px; }
