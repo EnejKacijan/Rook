@@ -1,3 +1,5 @@
+import {privacyPreferences} from './privacyPreferences.js';
+
 export const FUNNEL_EVENTS = Object.freeze([
   'app_open',
   'coach_availability_changed',
@@ -36,6 +38,7 @@ function safeProperties(properties = {}) {
 export function readFunnelEvents() { return readJson(globalThis.localStorage, ANALYTICS_STORAGE_KEY, []); }
 
 export function trackFunnelEvent(name, properties = {}) {
+  if (!privacyPreferences().analytics) return false;
   if (!FUNNEL_EVENTS.includes(name)) return false;
   const event = { name, properties: safeProperties(properties), occurredAt: new Date().toISOString() };
   try {
@@ -46,6 +49,7 @@ export function trackFunnelEvent(name, properties = {}) {
 }
 
 export function trackFunnelEventOnce(name, properties = {}, scope = 'lifetime') {
+  if (!privacyPreferences().analytics) return false;
   const storage = scope === 'session' ? globalThis.sessionStorage : globalThis.localStorage; const key = scope === 'session' ? SESSION_ONCE_KEY : LIFETIME_ONCE_KEY;
   const recorded = readJson(storage, key, []); if (recorded.includes(name)) return false;
   if (!trackFunnelEvent(name, properties)) return false;

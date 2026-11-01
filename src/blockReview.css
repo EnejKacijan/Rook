@@ -4,8 +4,9 @@
 .block-review-hero > span, .block-outcomes small, .block-next-change > small { color: var(--rook-secondary); }
 .block-review-sheet h2.eyebrow { margin-top: 28px; }
 .block-review-next { margin-top: 28px; }
+.block-review-next > .button + .button { margin-top: 8px; }
 .block-outcomes article, .block-next-change { padding: 18px 0; border-bottom: 1px solid var(--rook-border); }
-.block-outcomes h2, .block-next-change h2, .block-unchanged h2 { font-size: 18px; margin: 0 0 8px; }
+.block-review-sheet :is(.block-outcomes, .block-next-change, .block-unchanged) h2 { font-size: 18px; margin: 0 0 8px; }
 .block-outcomes article > strong { font-size: 13px; }
 .block-outcomes p, .block-next-change p { margin: 8px 0; }
 .block-outcomes small, .block-next-change > small { display: block; line-height: 1.5; }

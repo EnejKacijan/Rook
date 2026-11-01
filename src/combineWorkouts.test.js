@@ -1,3 +1,4 @@
+import './fixtures/allowAiTestConsent.js';
 import {beforeEach,afterEach,describe,it,expect,vi} from 'vitest';
 vi.mock('./aiAuthorization.js',()=>({aiAuthorizationHeaders:async()=>({authorization:'Bearer synthetic-test-user'})}));
 import {blankState,buildProgram,deserializeState,serializeState,startWorkout,completeWorkout,adaptedTemplateForToday} from './domain.js';

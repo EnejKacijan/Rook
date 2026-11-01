@@ -3,6 +3,9 @@ import { isoDay, uid } from './domain.js';
 export const coachEntries = (state, id = state.activeCoachConversationId) =>
   (state.conversations || []).filter(entry => (entry.conversationId || 'legacy') === id);
 export const hasCoachDraft = state => Boolean(String(state.coachDraft || '').trim());
+// Older saved entries can carry only a cancellation receipt. That terminal
+// result has the same action boundary as an explicitly archived message.
+export const coachActionsReadOnly = entry => Boolean(entry?.coachActionsArchived || entry?.actionResult?.status === 'cancelled');
 // Owned by the mounted app, not persisted/synced or recreated by tab remounts.
 export function createCoachVisitTracker() {
   const entered=new Set();

@@ -1,3 +1,4 @@
+@import './consistency.css';
 /* Shared content roles, reviewed at phone widths. Text size is independent of
    hit-area size: the logger and compact navigation retain their own geometry.
    Important declarations bridge older screen rules until those are retired. */

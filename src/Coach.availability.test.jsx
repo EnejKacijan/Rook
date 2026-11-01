@@ -11,6 +11,7 @@ import { createReturningUserFixture } from './demoFixture.js';
 import { AIService } from './aiService.js';
 import { saveState } from './domain.js';
 import { ANALYTICS_STORAGE_KEY } from './analytics.js';
+import {savePrivacyPreference} from './privacyPreferences.js';
 let root, host, current, setVisit, initial;
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const settle = async () => act(async () => { for (let i = 0; i < 15; i++) await Promise.resolve(); });
@@ -18,6 +19,7 @@ const button = name => [...host.querySelectorAll('button')].find(b => b.textCont
 const click = name => act(async () => button(name).click());
 const type = text => act(() => { const input = host.querySelector('textarea'); Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set.call(input, text); input.dispatchEvent(new Event('input', { bubbles: true })); });
 beforeEach(() => {
+  savePrivacyPreference('analytics',true);
   vi.useFakeTimers(); vi.setSystemTime(new Date('2026-10-04T12:00:00')); auth.initial = 'ready';
   Object.defineProperty(navigator, 'onLine', { configurable: true, value: true });
   vi.stubGlobal('matchMedia', () => ({ matches: false, addEventListener() {}, removeEventListener() {} }));

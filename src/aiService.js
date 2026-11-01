@@ -1,6 +1,8 @@
 import {coachCombineReply,combineRevisionContext} from './coachCombine.js';
 import { buildProgram } from './domain.js';
 import { aiAuthorizationHeaders } from './aiAuthorization.js';
+import {requireAiConsent,privacyPreferences,privacyStorageKey} from './privacyPreferences.js';
+import {minimizeAiPayload} from './aiDataMinimization.js';
 import { physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
@@ -79,6 +81,12 @@ async function request(
   payload,
   { timeoutMs = AI_REQUEST_TIMEOUT_MS, signal = null } = {},
 ) {
+  const consentScope=privacyStorageKey();
+  try { await requireAiConsent({signal}); }
+  catch (error) {
+    if (signal?.aborted) throw new Error('Import cancelled. Your notes are still here.');
+    throw error;
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   const abortFromCaller = () => controller.abort();
@@ -99,10 +107,11 @@ async function request(
       }).then(resolve, reject).finally(() => controller.signal.removeEventListener('abort', aborted));
     });
     if (controller.signal.aborted) throw new DOMException('Aborted', 'AbortError');
+    if (consentScope!==privacyStorageKey() || !privacyPreferences().ai) throw Object.assign(new Error('AI data sharing was turned off or your profile changed. Your local training is unchanged.'), {code:'ai-consent-required'});
     const response = await fetch("/api/ai", {
       method: "POST",
       headers: { "content-type": "application/json", ...authorization },
-      body: JSON.stringify({ operation, payload }),
+      body: JSON.stringify({ operation, payload:minimizeAiPayload(payload) }),
       signal: controller.signal,
     });
     const body = await response.json().catch(() => ({}));
@@ -1797,6 +1806,7 @@ async function runPlanGeneration(
       };
     } catch (error) {
       failure = error;
+      if (error?.code === 'ai-consent-required') throw error;
       if (/took too long|not configured/i.test(error.message || ""))
         throw error;
     }

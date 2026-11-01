@@ -40,7 +40,7 @@ try{for(const width of (process.env.COMBINE_QA_ONE?[390]:[320,390]))for(const st
  await p.getByText('Combined workout applied',{exact:true}).waitFor();let applied=await read(p);
  assert.ok(applied.todayAdaptation);assert.equal(applied.workouts.length,0);assert.deepEqual(applied.program,baseline.program);
  assert.equal(flexibleSessions(applied,'2026-09-12').filter(s=>s.status==='reserved').length,2);
- await p.getByRole('button',{name:'View workout →',exact:true}).click();await p.getByRole('button',{name:'START WORKOUT',exact:true}).waitFor();
+ await p.getByRole('button',{name:'View workout',exact:true}).click();await p.getByRole('button',{name:'START WORKOUT',exact:true}).waitFor();
  assert.equal(await p.getByLabel('Reschedule missed session').count(),0);
  await p.reload();await p.getByRole('button',{name:'START WORKOUT',exact:true}).waitFor();
  assert.ok((await read(p)).todayAdaptation);await p.screenshot({path:`${out}/${width}-${style}-${appearance}-today.png`});

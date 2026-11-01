@@ -85,6 +85,14 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
   .coach-header-actions .coach-history-trigger { min-width: 44px; padding: 0 4px; }
   .coach-header-actions .coach-history-trigger > span { display: none; }
 }
+/* At very narrow widths (including zoom), keep the real 44px controls and
+   wrap the history header instead of painting Continue over the title. */
+@media (max-width: 299px) {
+  .coach-header { flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+  .coach-header > .coach-header-context { flex: 0 0 auto; max-width: 100%; }
+  .coach-header > .coach-header-actions { margin-top: 0; margin-left: auto; }
+  .coach-new-trigger > span { display: none; }
+}
 .coach-intro { margin-top: 14px; }
 .coach-intro h1 { font-size: 28px; max-width: 420px; }
 .coach-empty { margin-top: 16px; padding: 13px 15px; border: 1px solid rgba(27, 26, 25, .075); border-left: 2px solid color-mix(in srgb, var(--rook-accent) 42%, transparent); border-radius: 12px; background: rgba(255, 255, 255, .42); box-shadow: none; }
@@ -289,3 +297,6 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 /* View and Undo share a row and wrap only when the card is too narrow (large text). */
 :root .coach-screen .today-update-confirmation > .today-update-copy { display: flex; flex-wrap: wrap; align-items: center; column-gap: 16px; }
 :root .coach-screen .today-update-copy > :is(h3, small) { flex: 1 0 100%; }
+/* Navigation links in Coach results use the shared chevron, like Today's text navigation. */
+.coach-screen .action-view-today { display: flex; align-items: center; gap: 2px; width: fit-content; }
+.coach-screen .action-view-today > .inline-navigation-chevron { width: 15px; height: 15px; }

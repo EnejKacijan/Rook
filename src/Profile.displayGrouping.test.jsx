@@ -73,8 +73,8 @@ it('groups settings and Help while keeping contextual sections separate', async 
   expect(groups[0].querySelector('.eyebrow').textContent).toBe('SETTINGS');
   expect(host.querySelector('.profile-program-entry .eyebrow').textContent).toBe('CURRENT TRAINING');
   expect(groups.map(group => [...group.querySelectorAll('[data-profile-area]')].map(button => button.dataset.profileArea)))
-    .toEqual([['training', 'preferences', 'display', 'data', 'help']]);
-  expect(groups[0].querySelectorAll('.rook-navigation-chevron')).toHaveLength(5);
+    .toEqual([['training', 'preferences', 'display', 'data', 'help', 'legal']]);
+  expect(groups[0].querySelectorAll('.rook-navigation-chevron')).toHaveLength(6);
   expect(groups[0].textContent).toContain('Workout preferences');
   expect(host.querySelectorAll('[data-profile-area="display"]')).toHaveLength(1);
   expect(host.querySelectorAll('.profile-current-program[data-profile-area="program"]')).toHaveLength(1);
@@ -137,7 +137,7 @@ it.each(['no-plan','freestyle','saved-first','imported','manual','generated'])('
   else if(kind==='manual')state.program.source='manual';
   const before=structuredClone(state);await mount(state);
   expect([...host.querySelectorAll('.profile-manage [data-profile-area]')].map(button => button.dataset.profileArea))
-    .toEqual(['training', 'preferences', 'display', 'data', 'help']);
+    .toEqual(['training', 'preferences', 'display', 'data', 'help', 'legal']);
   const program=host.querySelector('.profile-program-entry');
   expect(program.querySelector('.eyebrow').textContent).toBe('CURRENT TRAINING');
   expect(program.querySelector('p').textContent).toBeTruthy();
@@ -148,13 +148,13 @@ it.each(['no-plan','freestyle','saved-first','imported','manual','generated'])('
 it.each([
   ['training', 'Training setup'], ['preferences', 'Workout preferences'],
   ['display', 'Display'], ['data', 'Data & backup'],
-  ['help', 'Help'],
+  ['help', 'Help'], ['legal', 'Privacy & legal'],
 ])('Settings row %s opens and returns through its existing destination without domain writes', async (area, heading) => {
   await mount(); const before = structuredClone(current);
   await open(area); expect(title()).toBe(heading);
   await click(host.querySelector('[aria-label="Back to Profile"]'));
   expect(host.querySelector('.profile-manage').getAttribute('aria-label')).toBe('Settings');
-  expect(host.querySelectorAll('.profile-manage [data-profile-area]')).toHaveLength(5);
+  expect(host.querySelectorAll('.profile-manage [data-profile-area]')).toHaveLength(6);
   expect(current).toEqual(before); expect(writes).not.toHaveBeenCalled(); expect(navigate).not.toHaveBeenCalled();
 });
 
@@ -168,7 +168,7 @@ it.each([true, false].flatMap(complete => [
   await mount(initial, {sync});
   expect(host.querySelectorAll('.complete-profile')).toHaveLength(complete ? 0 : 1);
   expect(host.querySelectorAll('.profile-manage')).toHaveLength(1);
-  expect(host.querySelector('.profile-manage').querySelectorAll('[data-profile-area]')).toHaveLength(5);
+  expect(host.querySelector('.profile-manage').querySelectorAll('[data-profile-area]')).toHaveLength(6);
   expect(host.querySelector('.account-sync-panel')).toBeNull();
   await open('account');
   const account = host.querySelector('.account-sync-panel');

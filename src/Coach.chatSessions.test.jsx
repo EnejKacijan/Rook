@@ -76,6 +76,17 @@ it('Continue previous chat reopens text explicitly without sending or replaying 
   mount(fixture());click('Continue previous chat');expect(current.activeCoachConversationId).toBe('old');expect(host.querySelector('.conversation').textContent).toContain('Earlier answer.');
   expect(host.querySelector('textarea').value).toBe('');expect(current.conversations[0].coachActionsArchived).toBe(true);expect(AIService.coach).not.toHaveBeenCalled();
 });
+it.each(['adapt-today','reuse-existing-workout'])('a legacy cancelled %s receipt stays read-only in the current chat, even without an archive flag',type=>{
+  const before=fixture(),day=before.program.days[0];before.coachDraft='Keep this unsent question';
+  before.conversations[0].reply.action={type,programDayId:day.id,targetDate:isoDay(),exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:40,choices:[{name:day.name,label:day.name,reference:{}}]};
+  before.conversations[0].actionResult={status:'cancelled'};
+  const record=structuredClone(before.conversations[0]);mount(before);
+  expect(current.activeCoachConversationId).toBe('old');expect(host.querySelector('textarea').value).toBe(before.coachDraft);
+  expect(host.querySelector('.action-card, .coach-reuse-choices')).toBeNull();
+  expect(host.querySelector('.coach-history-action')?.textContent).toContain('cancelled');
+  expect(host.querySelector('.coach-history-action')?.textContent).toContain('Read-only');
+  expect(current.conversations[0]).toEqual(record);expect(AIService.coach).not.toHaveBeenCalled();
+});
 it('history continuation keeps old proposals inert and only a newly generated proposal can be applied',async()=>{
   const before=fixture(),day=before.program.days[0];day.weekday='Tue';day.exercises[0].sets=day.exercises[0].sets.slice(0,2);
   const action={type:'adapt-today',programDayId:day.id,targetDate:isoDay(),exerciseIds:day.exercises.map(e=>e.exerciseId),setTargets:[{exerciseId:day.exercises[0].exerciseId,sets:1}],minutes:40,label:'USE WORKOUT'};

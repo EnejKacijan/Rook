@@ -1,4 +1,14 @@
-# ROOK visual-audit branch
+# ROOK review branch
+
+## Current task after the 1 November handoff
+
+The next task is the focused weekend streak reminder in
+`docs/claude-streak-reminder.md`. Read that brief and
+`docs/claude-review-snapshot-nov1.md` first. The older whole-app audit briefs
+below are reference context, not a request to redo the entire audit instead of
+implementing this feature. The user explicitly authorized the 1 November
+review-snapshot push on this branch, without Netlify. Any subsequent reminder
+implementation stays local to the review environment unless separately approved.
 
 The user requested a comprehensive visual/layout audit of the whole application,
 not a theme redesign. Read `docs/claude-visual-audit.md` and

@@ -15,7 +15,7 @@ beforeEach(()=>{
 afterEach(()=>{act(()=>root.unmount());document.body.innerHTML='';vi.restoreAllMocks();vi.useRealTimers();});
 it('presents names and the real source slot with primary Swap, no unexplained date grid',()=>{
  render();expect(document.querySelector('h1').textContent).toBe(`Train ${source.workout.name} today?`);expect(document.body.textContent).toContain(`Today already has ${occupied.workout.name}.`);
- expect(document.body.textContent).toContain(`${source.workout.name} today`);expect(document.body.textContent).toContain(`${occupied.workout.name}Wed, Sep 9, 2026 → Fri, Sep 11, 2026`);
+ expect(document.body.textContent).toContain(`${source.workout.name} today`);expect(document.body.textContent).toContain(`${occupied.workout.name}Wed, Sep 9 → Fri, Sep 11`);
  expect(button('SWAP WORKOUTS').classList.contains('primary')).toBe(true);expect(document.querySelector('.flexible-week-dates')).toBeNull();expect(update).not.toHaveBeenCalled();
 });
 it('opens an explicit displaced-workout picker, omits invalid dates and returns focus on Back',()=>{

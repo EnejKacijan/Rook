@@ -14,6 +14,13 @@ afterEach(()=>{act(()=>root.unmount());document.body.innerHTML='';vi.useRealTime
 const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent===text);
 const click=element=>act(()=>element.click());
 const draw=state=>act(()=>root.render(<Today state={state} update={update} setPage={()=>{}} setDetail={detail}/>));
+const expectWeeklyReminderBefore=day=>{
+ const screen=document.querySelector('.today-screen'),reminder=document.querySelector('.today-missed-disclosure');
+ expect(reminder.parentElement).toBe(screen);
+ expect(screen.querySelector('.week-selector').compareDocumentPosition(reminder)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(reminder.compareDocumentPosition(day)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+ expect(day.querySelector('.today-missed-row')).toBeNull();
+};
 const overflow=state=>act(()=>root.render(<TodayActionsSheet state={state} date={isoDay()} hasWorkout={false} update={update} setDetail={detail} close={()=>{}}/>));
 const Header=({onBack})=>onBack?<button onClick={onBack}>Back</button>:null;
 const sheet=(state,request)=>act(()=>root.render(<FlexibleWeekSheet state={state} request={request} update={update} setDetail={detail} close={()=>{}} Header={Header}/>));
@@ -26,7 +33,8 @@ it.each([0,1,2,3])('rest hierarchy and routing with %i missed occurrences',count
  expect(Boolean(summary)).toBe(count>0);
  expect(document.querySelectorAll('.today-missed-row')).toHaveLength(count>0?1:0);
  expect(document.querySelectorAll('.missed-reminder-hide')).toHaveLength(count>0?1:0);
- if(count){expect(rest.contains(summary)).toBe(true);expect(rest.querySelector('h1').compareDocumentPosition(summary)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(summary.compareDocumentPosition(rest.querySelector('.rest-up-next'))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true}});}
+ if(count){expectWeeklyReminderBefore(rest);click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true}});}
+ else expect(document.querySelector('.today-missed-disclosure')).toBeNull();
  expect(rest.querySelector('.rest-up-next-row').tagName).toBe('BUTTON');expect(rest.querySelector('.rest-freestyle-action')).toBeNull();expect(rest.querySelector('.rest-day-actions').textContent).toBe('+ Add optional activityTrain anyway');
  expect(serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();
 });
@@ -67,7 +75,7 @@ it('same-name rows retain dates and canonical targeting after plan order changes
  const state=todayMissedRestFixture({count:3}),missed=missedFlexibleSessions(state);sheet(state,{missed:true});
  expect([...document.querySelectorAll('[data-session-id]')].map(b=>b.textContent)).toEqual(missed.map(s=>`UPPER BMissed · ${new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric'}).format(new Date(s.scheduledDate+'T12:00:00'))}`));
  const target=missed[2],row=document.querySelector(`[data-session-id="${target.logicalSessionId}"]`);state.program.days.reverse();sheet({...state},{missed:true});expect(document.querySelector(`[data-session-id="${target.logicalSessionId}"]`)).toBe(row);
- click(row);expect(document.body.textContent).toContain('Missed · Fri, Sep 18');click(button('TRAIN TODAY'));expect(document.body.textContent).toContain('Fri, Sep 18, 2026 → Today');expect(update).not.toHaveBeenCalled();click(button('USE TODAY'));
+ click(row);expect(document.body.textContent).toContain('Missed · Fri, Sep 18');click(button('TRAIN TODAY'));expect(document.body.textContent).toContain('Fri, Sep 18 → Today');expect(update).not.toHaveBeenCalled();click(button('USE TODAY'));
  const next=update.mock.calls[0][0]();expect(missedFlexibleSessions(next).map(s=>s.logicalSessionId)).toEqual(missed.slice(0,2).map(s=>s.logicalSessionId));
 });
 it.each(['move','skip','complete'])('resolved missed occurrence leaves reminder and list: %s',kind=>{
@@ -77,7 +85,7 @@ it.each(['move','skip','complete'])('resolved missed occurrence leaves reminder 
  const remaining=missedFlexibleSessions(state);expect(remaining).toHaveLength(1);expect(remaining[0].logicalSessionId).not.toBe(target.logicalSessionId);draw(deserializeState(serializeState(state)));click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:{sessionId:remaining[0].logicalSessionId}});
 });
 it('planned Today retains its hero and active Today suppresses the reminder while preserving overflow access',()=>{
- vi.setSystemTime(new Date('2026-09-18T12:00:00'));let state=todayMissedRestFixture({count:2});draw(state);expect(document.querySelector('.rest-day-state')).toBeNull();expect(document.querySelectorAll('.today-missed-row')).toHaveLength(1);expect(button('START WORKOUT')).toBeDefined();
+ vi.setSystemTime(new Date('2026-09-18T12:00:00'));let state=todayMissedRestFixture({count:2});draw(state);expect(document.querySelector('.rest-day-state')).toBeNull();expect(document.querySelectorAll('.today-missed-row')).toHaveLength(1);expectWeeklyReminderBefore(document.querySelector('.today-hero'));expect(button('START WORKOUT')).toBeDefined();
  state=todayMissedRestFixture({count:2,active:true});draw(state);expect(button('RESUME WORKOUT')).toBeDefined();expect(document.querySelector('.today-missed-row')).toBeNull();overflow(state);expect(button('Rest-day activities')).toBeUndefined();click(button('Missed workouts'));sheet(state,{sessionId:missedFlexibleSessions(state)[0].logicalSessionId});expect(button('Use this workout today')).toBeUndefined();expect(canUseWorkoutToday(state,{sessionId:missedFlexibleSessions(state)[0].logicalSessionId})).toBe(false);
 });
 it('rest overflow preserves the full optional-activity menu without an ambiguous standalone CTA',()=>{

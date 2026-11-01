@@ -83,9 +83,8 @@
   .today-screen .plan-ready-notice + .today-hero { padding-top: 18px; }
 }
 
-/* With no intervening notice, the shared section margin is the only gap
-   below the calendar, matching the existing Rest day header position. */
-.today-screen > .week-selector + .today-hero { padding-top: 0; }
+/* The same day-header gap applies to training and rest when there is no notice. */
+.today-screen > .week-selector + :is(.today-hero, .rest-day-state) { margin-top:24px; padding-top:0; }
 
 /* Dot color communicates workout state; selection is communicated by the day card. */
 .week-strip button {
@@ -138,18 +137,15 @@
 .today-workout-chooser .list-row > span:first-child { white-space: normal; overflow-wrap: anywhere; }
 .today-workout-chooser .list-row small { color: var(--rook-secondary); line-height: 1.4; }
 .today-missed-row { display:grid; grid-template-columns:minmax(0,1fr) auto; align-items:center; column-gap:12px; margin-top:12px; padding:0; }
-.today-screen > .today-missed-disclosure + .today-hero,
-.today-screen > .today-missed-disclosure + .missed-workout-feedback + .today-hero { margin-top:0; padding-top:16px; }
-/* Disclosure contains the row's margin, so avoid adding the paragraph's formerly
-   collapsed bottom margin to it (including when the reminder is hidden). */
-.rest-day-state > p:has(+ .today-missed-disclosure) { margin-bottom: 0; }
-.rest-day-state > .today-missed-disclosure .today-missed-row { margin-top:8px; }
-/* The row's own margin/padding live inside Disclosure's measured height.
-   Keep the existing 16px/30px Up Next gaps, settling with that same collapse. */
-.rest-day-state > .today-missed-disclosure + .rest-up-next { transition: margin-top 200ms cubic-bezier(.2,0,0,1); }
-.rest-day-state > .today-missed-disclosure.is-open + .rest-up-next { margin-top: 16px; }
+/* The weekly reminder has one owner above both kinds of day content. Its own
+   spacing collapses with Disclosure; the header returns to the ordinary gap. */
+.today-screen > .today-missed-disclosure + :is(.today-hero, .rest-day-state),
+.today-screen > .today-missed-disclosure + .missed-workout-feedback + :is(.today-hero, .rest-day-state) { margin-top:0; padding-top:24px; transition:padding-top 200ms cubic-bezier(.2,0,0,1); }
+.today-screen > .today-missed-disclosure.is-open + :is(.today-hero, .rest-day-state),
+.today-screen > .today-missed-disclosure.is-open + .missed-workout-feedback + :is(.today-hero, .rest-day-state) { padding-top:16px; }
 @media (prefers-reduced-motion: reduce) {
-  .rest-day-state > .today-missed-disclosure + .rest-up-next { transition: none; }
+  .today-screen > .today-missed-disclosure + :is(.today-hero, .rest-day-state),
+  .today-screen > .today-missed-disclosure + .missed-workout-feedback + :is(.today-hero, .rest-day-state) { transition:none; }
 }
 .today-missed-label { margin:0; color:var(--rook-secondary); font-size:14px; font-weight:500; line-height:1.4; }
 .today-missed-row > .missed-reminder-hide { min-width:44px; min-height:44px; padding:8px 0; color:var(--rook-secondary); font-size:14px; }

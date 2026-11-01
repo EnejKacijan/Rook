@@ -15,7 +15,7 @@ export function WorkoutRecoverySheet({state, update, review, Header, close, onCo
     String(Number((Math.max(1, review.suggestedDurationSeconds) / 60).toFixed(2))));
   const missingTime = review.lastActivityAt === null;
   const summary = workoutSetSummary(state.activeWorkout);
-  const last = missingTime ? null : new Date(review.lastActivityAt).toLocaleString(undefined, {
+  const last = missingTime ? null : new Date(review.lastActivityAt).toLocaleString('en', {
     month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
   });
   const clearError = () => { setError(''); onClearError?.(); };

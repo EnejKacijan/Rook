@@ -1,0 +1,40 @@
+.weekly-session-progress > span {
+  flex: 1;
+  min-width: 0;
+  height: 5px;
+  position: relative;
+  overflow: hidden;
+  border-radius: 999px;
+  /* Keep every planned segment discernible on the elevated review card. */
+  background: var(--rook-border);
+}
+.weekly-session-progress > span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--rook-progress);
+  transform: scaleX(0);
+  transform-origin: left center;
+}
+.weekly-session-progress > span[data-state="complete"]::after { transform: scaleX(1); }
+.weekly-session-progress > span.is-newly-completed::after {
+  animation: weekly-session-fill 320ms cubic-bezier(.2, 0, 0, 1) var(--weekly-fill-delay, 0ms) backwards;
+}
+.progress-screen .weekly-session-active {
+  display: block;
+  margin-top: 4px;
+  color: var(--rook-secondary);
+  text-align: left;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.weekly-review-card .weekly-session-active + .weekly-session-progress { margin-top: 10px; }
+@keyframes weekly-session-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@media (prefers-reduced-motion: reduce) {
+  .weekly-session-progress > span::after { animation: none; }
+}
+@media (forced-colors: active) {
+  .weekly-session-progress > span { background: Canvas; outline: 1px solid GrayText; }
+  .weekly-session-progress > span[data-state="complete"]::after { background: Highlight; }
+}

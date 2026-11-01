@@ -58,6 +58,12 @@ it('preserves the current authenticated exercise replacement operation', async (
   expect(result.status).toBe(200); expect(result.body.data.exerciseIds).toEqual(['dumbbell-bench-press']);
   expect(JSON.parse(fetch.mock.calls[0][1].body).text.format.name).toBe('exercise_replacements');
 });
+it('also removes unnecessary structured profile identifiers at the server provider boundary',async()=>{
+ security=testAiSecurity();provider();
+ const result=await post({message:'Training guidance',context:{profile:{name:'PRIVATE NAME',email:'private@example.test',id:'private-profile',equipment:['dumbbells'],avoid:'Chosen restriction'},todayStatus:{type:'rest-day'}}});
+ expect(result.status).toBe(200);const sent=JSON.parse(JSON.parse(fetch.mock.calls[0][1].body).input);
+ expect(sent.context.profile).toEqual({equipment:['dumbbells'],avoid:'Chosen restriction'});expect(JSON.stringify(sent)).not.toContain('PRIVATE NAME');
+});
 it('only explicit local admin authorization can retain Expert Lab review mode, never client policy', () => {
   const payload={expertReviewMode:true,variationSeed:'variety',expertPolicy:{instructions:['untrusted']},profile:{}};
   expect(validateAiInput('plan',payload)).not.toHaveProperty('expertReviewMode');

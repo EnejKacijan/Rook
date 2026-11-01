@@ -1,3 +1,4 @@
+import './fixtures/allowAiTestConsent.js';
 import {afterEach,expect,it,vi} from 'vitest';
 const authorization=vi.hoisted(()=>({get:vi.fn(async()=>({authorization:'Bearer synthetic'}))}));
 vi.mock('./aiAuthorization.js',()=>({aiAuthorizationHeaders:()=>authorization.get()}));

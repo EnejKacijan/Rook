@@ -6,6 +6,7 @@ import {Detail,EntryLanding,Onboarding,NoPlanToday,Profile} from './App.jsx';
 import * as domain from './domain.js';
 import {createReturningUserFixture} from './demoFixture.js';
 import {readFunnelEvents} from './analytics.js';
+import {savePrivacyPreference} from './privacyPreferences.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
 let host,root,persist,current,generate;
@@ -14,6 +15,7 @@ const click = label => {const target=typeof label==='string'?button(label):label
 const settle = async () => act(async()=>vi.advanceTimersByTimeAsync(450));
 const input = (node,value) => act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));});
 beforeEach(()=>{
+  savePrivacyPreference('analytics',true);
   vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-29T12:00:00'));
   vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));
   vi.spyOn(window,'scrollTo').mockImplementation(()=>{});
@@ -98,7 +100,7 @@ it('landing uses the same draft questionnaire without an example or persisted si
   expect(host.textContent).toContain('Set the right starting point.');expect(current).toEqual(before);expect(persist).not.toHaveBeenCalled();
 });
 it('requests Pro only on Use, retains a declined preview, and activates the same reviewed plan after access',async()=>{
-  localStorage.clear();sessionStorage.clear();
+  localStorage.clear();sessionStorage.clear();savePrivacyPreference('analytics',true);
   const state=fixture();Object.assign(state.profile,createReturningUserFixture(0).profile,{ageRange:'30–39',trainingSplitChoice:'recommended',onboardingComplete:true,preferredTrainingStyle:'freestyle'});
   const before=structuredClone(state),access=vi.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
   mount(state,'landing',access);click('Build my plan');await review(state.profile);click('Machines');click('BUILD MY PLAN');await settle();

@@ -35,21 +35,27 @@ export function weeklyTrainingStreak(state,now=new Date()) {
     if(qualifiesActivity(activity,now))
       qualifying.set(`activity:${activity.id||index}`,activity);
   let workoutsThisWeek=0;
+  const weekCounts=new Map();
   for(const workout of qualifying.values()) {
     const date=dayNumber(workoutPerformedDate(workout));
     if(date===null||date>today)continue;
-    const week=monday(date);weeks.add(week);
+    const week=monday(date);weeks.add(week);weekCounts.set(week,(weekCounts.get(week)||0)+1);
     if(week===currentWeek)workoutsThisWeek++;
   }
   let best=0,run=0,previous=null;
-  for(const week of [...weeks].sort((a,b)=>a-b)) {
+  const orderedWeeks=[...weeks].sort((a,b)=>a-b),firstWeek=orderedWeeks[0]??null;
+  for(const week of orderedWeeks) {
     run=previous!==null&&week-previous===7?run+1:1;best=Math.max(best,run);previous=week;
   }
   const earnedThisWeek=weeks.has(currentWeek);
   let current=0,tail=earnedThisWeek?currentWeek:currentWeek-7;
   while(weeks.has(tail)){current++;tail-=7;}
   return {current,best,earnedThisWeek,workoutsThisWeek,week:dayKey(currentWeek),
-    recentWeeks:Array.from({length:6},(_,index)=>{const week=currentWeek-(5-index)*7;return {week:dayKey(week),trained:weeks.has(week)};})};
+    recentWeeks:Array.from({length:6},(_,index)=>{
+      const week=currentWeek-(5-index)*7,trained=weeks.has(week);
+      return {week:dayKey(week),trained,count:weekCounts.get(week)||0,current:week===currentWeek,
+        status:trained?'counted':week===currentWeek?'open':firstWeek!==null&&week>=firstWeek?'missed':'no-history'};
+    })};
 }
 
 function newWeekGain(state,session,beforeState,now) {

@@ -5,7 +5,8 @@ import {workoutPerformedDate} from './workoutDates.js';
 import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {focusNavigationTarget} from './navigationFocus.js';
 import {useCalendarDay} from './useCalendarDay.js';
-const label=date=>new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).format(new Date(`${date}T12:00:00`));
+// Same date format as the other schedule reviews: the year appears only when it is not the current one.
+const label=date=>{const value=new Date(`${date}T12:00:00`);return new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric',...(value.getFullYear()!==new Date().getFullYear()?{year:'numeric'}:{})}).format(value);};
 export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetail,onBack,className=''}) {
   const today=useCalendarDay();
   const [reviewState,setReviewState]=useState(state),[repeatId,setRepeatId]=useState(null);

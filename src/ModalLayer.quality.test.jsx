@@ -48,6 +48,24 @@ it.each([true, false])('a visually hidden content heading does not hide the only
   expect(host.querySelector('h1').textContent).toBe('Export workout history');
 });
 
+it('reveals the compact recovery title only after its nested heading scrolls under the header',async()=>{
+  let titleTop=140;
+  vi.spyOn(HTMLElement.prototype,'getBoundingClientRect').mockImplementation(function(){
+    const top=this.id==='recovery-test-title'?titleTop:0;
+    return {left:0,right:390,top,bottom:top+60,width:390,height:60};
+  });
+  await act(async()=>root.render(<ModalLayer close={()=>{}}>{close=><main className="screen detail-screen workout-recovery-sheet">
+    <SheetHeader title="Open workout" onClose={close}/><div className="workout-recovery-content"><h1 id="recovery-test-title">Still training?</h1><p>Workout timing</p></div>
+  </main>}</ModalLayer>));await tick();
+  const header=host.querySelector('.detail-header');
+  expect(header.classList.contains('is-collapsing-sheet-header')).toBe(true);
+  expect(header.classList.contains('shows-compact-title')).toBe(false);
+  titleTop=20;act(()=>host.querySelector('.workout-recovery-content').dispatchEvent(new Event('scroll')));
+  expect(header.classList.contains('shows-compact-title')).toBe(true);
+  titleTop=140;act(()=>host.querySelector('.workout-recovery-content').dispatchEvent(new Event('scroll')));
+  expect(header.classList.contains('shows-compact-title')).toBe(false);
+});
+
 async function nestedThemes() {
   const parentClose = vi.fn();
   function AppearanceContent({close}) {

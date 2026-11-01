@@ -45,7 +45,7 @@ export function CoachCombineChoices({request,onSend,busy,selection,onSelectionCh
  const sl=request.language==='Slovenian';
  const setSelected=fn=>{const next=fn(selected);if(onSelectionChange)onSelectionChange(next);else setLocalSelection(next);};
  if(request.step==='review'){
-   if(result?.status==='applied')return <div className="action-card action-card-applied" role="status"><h3>{combinedAdjustment(state)?.id===result.workoutId?(sl?'Združen trening je pripravljen':'Combined workout ready'):(sl?'Pregled združenega treninga':'Combined workout')}</h3><button type="button" className="text-button action-view-today" onClick={onViewToday}>{sl?'Odpri Today →':'View Today →'}</button></div>;
+   if(result?.status==='applied')return <div className="action-card action-card-applied" role="status"><h3>{combinedAdjustment(state)?.id===result.workoutId?(sl?'Združen trening je pripravljen':'Combined workout ready'):(sl?'Pregled združenega treninga':'Combined workout')}</h3><button type="button" className="text-button action-view-today" onClick={onViewToday}><span>{sl?'Odpri Today':'View Today'}</span><NavigationChevron className="inline-navigation-chevron"/></button></div>;
    const stale=state&&(request.profileId!==state.profile.id||request.planId!==state.program?.id||request.fingerprint!==combineFingerprint(state));
    if(stale)return <p className="coach-history-action" role="status">{sl?'Treninga sta se spremenila. Zahtevaj nov pregled.':'The workouts changed. Ask for a fresh review.'}</p>;
    return <button type="button" className="coach-review-action" disabled={busy||!onReview} onClick={()=>onReview(request)}><span>{sl?'Preglej združen trening':'Review combined workout'}</span><NavigationChevron/></button>;
@@ -122,7 +122,7 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
    const history=state.workouts.find(w=>w.adjustment?.id===result.workoutId);
    return <div className="action-card action-card-applied" role="status"><h3><span className="review-applied-mark" aria-hidden="true">✓</span>{pending?'Combined workout ready':history?.combinedSourcesResolved?'Combined workout completed':history?'Combined workout finished early':'Combined workout cleared'}</h3>
      <small>{pending?'Finish the workout to complete both source sessions.':history?.combinedSourcesResolved?'Both source sessions completed.':'Source sessions released.'}</small>
-     <button className="text-button action-view-today" onClick={onViewToday}>{pending?'View workout →':'View Today →'}</button></div>;
+     <button className="text-button action-view-today" onClick={onViewToday}><span>{pending?'View workout':'View Today'}</span><NavigationChevron className="inline-navigation-chevron"/></button></div>;
  }
  const original=action.proposal,selected=new Set(proposal.workout.exercises.map(e=>e.id));
  const candidate=exercise=>{

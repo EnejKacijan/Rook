@@ -381,7 +381,7 @@ if (today !== "Sun") {
   assert.equal(stored.todayAdaptation.date, targetDate);
   assert.equal(stored.todayAdaptation.programDayId, saturday.id);
   assert.equal(stored.selectedDate, targetDate);
-  await page.getByRole("button", { name: "View workout →" }).click();
+  await page.getByRole("button", { name: "View workout" }).click();
   await page.getByRole("heading", { name: saturday.name }).waitFor();
   assert.match(
     await page.locator(".today-hero > p").textContent(),

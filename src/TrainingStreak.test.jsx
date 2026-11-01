@@ -24,23 +24,30 @@ beforeEach(()=>{
 afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear();vi.restoreAllMocks();vi.unstubAllGlobals();vi.useRealTimers();});
 const draw=ui=>act(()=>root.render(ui));
 const click=name=>act(()=>[...document.querySelectorAll('button')].find(button=>button.getAttribute('aria-label')===name||button.textContent.trim()===name).click());
+const openStreak=()=>act(async()=>host.querySelector('.training-streak-entry').click());
 const remount=ui=>{act(()=>root.unmount());root=createRoot(host);draw(ui);};
 
-it('adds a compact streak to the actual Profile hub, with its explanation behind the existing information sheet',()=>{
+it('opens the whole compact Profile streak row, with Best and weekly history inside the shared sheet',async()=>{
   const s=fixture();draw(<Profile state={s} update={()=>{}} setDetail={()=>{}} setPage={()=>{}}/>);
-  const card=host.querySelector('.training-streak-card');expect(card.querySelector('h2').textContent).toBe('Weekly streak');
-  expect(card.querySelector('.streak-number-current').textContent).toBe('3');expect(card.querySelector('.training-streak-best').textContent).toBe('Best 3');
+  const card=host.querySelector('.training-streak-card');expect(card.querySelector('.training-streak-heading').textContent).toBe('Weekly streak');
+  expect(card.querySelector('.streak-number-current').textContent).toBe('3');expect(card.textContent).not.toContain('Best');expect(card.textContent).toContain('weeks');
+  expect(card.querySelectorAll('button')).toHaveLength(1);expect(card.querySelector('.rook-information-icon')).toBeNull();expect(card.querySelector('.rook-navigation-chevron')).not.toBeNull();
+  expect(card.querySelector('button').getAttribute('aria-label')).toBe('Weekly streak: 3 weeks. View details');
   expect(card.textContent).not.toContain('Monday');expect(card.compareDocumentPosition(host.querySelector('.profile-manage'))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
-  click('About your weekly streak');expect(document.querySelector('[role="dialog"][data-sheet-motion="information"]')).not.toBeNull();
+  await openStreak();expect(document.querySelector('[role="dialog"][data-sheet-motion="information"]')).not.toBeNull();
+  expect(document.querySelector('.streak-detail-stats').textContent).toContain('Best3 weeks');expect(document.querySelectorAll('.streak-week')).toHaveLength(6);
+  expect(document.querySelector('.streak-detail-rule').textContent).toContain('Missing a planned workout won’t break your streak');
+  act(()=>document.querySelector('.streak-counting-details summary').click());expect(document.querySelector('.streak-counting-details').getAttribute('data-expanded')).toBe('true');
   expect(document.querySelector('[role="dialog"]').textContent).toContain('You don’t need to train or open ROOK every day');
   click('Close Your weekly streak');act(()=>vi.advanceTimersByTime(350));expect(document.querySelector('[role="dialog"]')).toBeNull();
   click('Workout preferencesTraining style, logging and increments');expect(host.querySelector('.training-streak-card')).toBeNull();
   expect(localStorage.getItem(STREAK_PRESENTATION_KEY)).toBeNull();
 });
-it('a new user sees a zero state, and showing Profile never awards or changes a workout',()=>{
+it('a new user sees a zero state, and showing Profile never awards or changes a workout',async()=>{
   const s=fixture([]),before=structuredClone(s);function Page(){const ref=useRef(null);return <ProfileTrainingStreak state={s} Modal={ModalLayer} backgroundRef={ref}/>;}
   draw(<Page/>);expect(host.textContent).not.toContain('Your first workout starts your streak.');expect(host.querySelector('.streak-number-current').textContent).toBe('0');
-  click('About your weekly streak');expect(document.querySelector('[role="dialog"]').textContent).toContain('Your first workout starts your streak.');expect(s).toEqual(before);
+  await openStreak();expect(document.querySelector('[role="dialog"]').textContent).toContain('Your first workout starts your streak.');expect(s).toEqual(before);
+  expect(document.querySelectorAll('.streak-week.is-no-history')).toHaveLength(5);expect(document.querySelectorAll('.streak-week.is-missed')).toHaveLength(0);expect(document.querySelectorAll('.streak-week.is-open')).toHaveLength(1);
 });
 it('a successful first completion rolls the actual counter once, including StrictMode and subsequent remount',()=>{
   const s=fixture(),session=s.workouts.at(-1),props={state:s,session,priorWorkouts:s.workouts.slice(0,-1),live:true};
@@ -64,11 +71,11 @@ it('a static/history entry and additional workouts never replay +1 week',()=>{
   s.workouts.push(log('2026-10-27','second'));draw(<CompletedWorkoutStreak state={s} session={s.workouts.at(-1)} priorWorkouts={s.workouts.slice(0,-1)} live/>);
   expect(host.querySelector('.completion-streak')).toBeNull();
 });
-it('a missed week rolls over on foreground without changing workout data',()=>{
+it('a missed week rolls over on foreground without changing workout data',async()=>{
   vi.setSystemTime(new Date('2026-11-01T23:59:00'));const s=fixture(['2026-10-12','2026-10-19']);
   draw(<ProfileTrainingStreak state={s} Modal={ModalLayer}/>);expect(host.querySelector('.streak-number-current').textContent).toBe('2');
   vi.setSystemTime(new Date('2026-11-02T00:00:00'));act(()=>window.dispatchEvent(new Event('focus')));
-  expect(host.querySelector('.streak-number-current').textContent).toBe('0');expect(host.querySelector('.training-streak-best').textContent).toBe('Best 2');expect(s.workouts).toHaveLength(2);
+  expect(host.querySelector('.streak-number-current').textContent).toBe('0');expect(host.textContent).not.toContain('Best');await openStreak();expect(document.querySelector('.streak-detail-stats').textContent).toContain('Best2 weeks');expect(s.workouts).toHaveLength(2);
 });
 it('rest acknowledgement stays static on the real current day, without awarding or rewarding an app visit',()=>{
   const s=fixture();draw(<RestDayStreak state={s} date="2026-10-27"/>);

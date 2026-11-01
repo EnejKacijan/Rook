@@ -6,6 +6,7 @@ import {proposeWorkoutToday,applyWorkoutToday} from './useWorkoutToday.js';
 import {combineSources,buildCombinedProposal,applyCombinedProposal} from './combineWorkouts.js';
 import {cancelCombinedWorkout} from './combinedWorkoutLifecycle.js';
 import {AIService} from './aiService.js';
+import {dismissMissedReminder,missedReminderKey} from './missedWorkoutActions.js';
 export function missedFixture(){const s=blankState();Object.assign(s.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:['Mon','Wed','Fri'],sessionMinutes:60,equipment:['full gym'],environment:'Commercial gym',priorities:['Balanced'],onboardingComplete:true});s.program=buildProgram(s.profile);s.program.trainingBlock.startDate='2026-09-14';s.program.createdAt='2026-09-14T12:00:00';s.selectedDate='2026-09-18';return deserializeState(s);}
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-18T12:00:00'));});
 afterEach(()=>vi.useRealTimers());
@@ -45,6 +46,30 @@ it('week closure removes backlog without skipping; explicit carry lives through 
  let s=missedFixture();const mon=ids(s)[0];s=move(s,mon,'2026-09-22');
  vi.setSystemTime(new Date('2026-09-23T12:00:00'));expect(ids(s)).toContain(mon);expect(missedFlexibleSessions(s).every(i=>i.scheduledDate>='2026-09-21')).toBe(true);
  vi.setSystemTime(new Date('2026-09-28T12:00:00'));expect(ids(s)).toEqual([]);expect(flexibleSessions(s).find(i=>i.logicalSessionId===mon).status).toBe('missed');expect(s.flexibleWeek.sessions[mon].skipped).toBe(false);expect(s.workouts).toEqual([]);
+});
+it.each(['2026-09-20','2026-10-25','2027-01-03'])('unmoved reminders expire at local Sunday midnight without rewriting history (%s)',sunday=>{
+ vi.setSystemTime(new Date(`${sunday}T23:59:59`));
+ const state=missedFixture(),start=weekKey(sunday);
+ state.program.trainingBlock.startDate=start;state.program.createdAt=`${start}T12:00:00`;state.program.rotationStartDate=start;
+ state.selectedDate=sunday;state.selectedDay='Sun';
+ const oldIds=ids(state),before=serializeState(state);
+ expect(oldIds).toHaveLength(3);
+ vi.setSystemTime(new Date(`${addCalendarDays(sunday,1)}T00:00:00`));
+ expect(ids(state)).toEqual([]);
+ expect(flexibleSessions(state).filter(item=>oldIds.includes(item.logicalSessionId)).map(item=>item.status)).toEqual(['missed','missed','missed']);
+ expect(serializeState(state)).toBe(before);
+ const reloaded=deserializeState(before);
+ expect(ids(reloaded)).toEqual([]);expect(reloaded.workouts).toEqual(state.workouts);
+});
+it('a previous-week Hide receipt cannot hide new missed occurrences even when their count is the same',()=>{
+ const state=dismissMissedReminder(missedFixture(),{persist:()=>true}),hidden=state.dismissedMissedReminderKey,oldIds=ids(state),before=serializeState(state);
+ expect(oldIds).toHaveLength(2);expect(missedReminderKey(state)).toBe(hidden);
+ vi.setSystemTime(new Date('2026-09-21T00:00:00'));
+ expect(ids(state)).toEqual([]);expect(serializeState(state)).toBe(before);
+ vi.setSystemTime(new Date('2026-09-25T12:00:00'));
+ const reloaded=deserializeState(before);
+ expect(ids(reloaded)).toHaveLength(2);expect(ids(reloaded).some(id=>oldIds.includes(id))).toBe(false);
+ expect(reloaded.dismissedMissedReminderKey).toBe(hidden);expect(missedReminderKey(reloaded)).not.toBe(hidden);
 });
 it('a completed block or replaced plan does not offer old obligations',()=>{
  const s=missedFixture();s.program.trainingBlock.completed=true;expect(ids(s)).toEqual([]);

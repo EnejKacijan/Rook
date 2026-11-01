@@ -5,6 +5,10 @@ import { CustomWeeklyStructureEditor } from './CustomWeeklyStructureEditor.jsx';
 import { customWorkoutDraft, customWorkoutText, customWorkoutsComplete } from './customWeeklyWorkouts.js';
 import {IllustrationCredits} from './IllustrationCredits.jsx';
 import {ProfileHelp} from './ProfileHelp.jsx';
+import {LegalLinks} from './LegalLinks.jsx';
+import {PrivacyLegal} from './PrivacyLegal.jsx';
+import {AIDataConsent} from './AIDataConsent.jsx';
+import {initializePrivacyDefaults} from './privacyPreferences.js';
 import {ProfileInformation} from './ProfileInformation.jsx';
 import { physiqueReviewFailureCopy, physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {CompletedSessionOverview} from './CompletedSessionOverview.jsx';
@@ -58,7 +62,7 @@ import {ExerciseImprovements,ImprovementRow} from './ExerciseImprovements.jsx';
 import {useLocalDay} from './useLocalDay.js';
 import { canRemoveUpNext, hasMeaningfulExerciseProgress, hasLoggedExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
-import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft,createCoachVisitTracker,persistCoachContinuation,coachConversationDayContext} from './coachConversations.js';
+import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft,createCoachVisitTracker,persistCoachContinuation,coachConversationDayContext,coachActionsReadOnly} from './coachConversations.js';
 import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -162,6 +166,7 @@ import { ImportResolution } from './ImportResolution.jsx';
 import { useImportNotesPaste } from './useImportNotesPaste.js';
 import { StepProgress } from './StepProgress.jsx';
 import { SessionProgress, sessionDurationValueText } from './SessionProgress.jsx';
+import {WeeklySessionProgress, weeklySessionInProgress, weeklyCompletionIds} from './WeeklySessionProgress.jsx';
 import { exerciseNotePresentation } from './exerciseNotePresentation.js';
 import { ExerciseNavigationButton } from './ExerciseNavigationButton.jsx';
 import { workoutVisibleStatus } from './workoutStatusPresentation.js';
@@ -2060,19 +2065,37 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
     );
     if (!header) return undefined;
 
-    let largeTitle = null;
+    let largeTitle = null, nestedTitle = false;
+    // The opening heading may sit in a heading row with its info control or
+    // in the sheet's own scroll region. Either way it is the large title, so
+    // the chrome title must not repeat it while it is visible.
+    const titleWrappers = ".information-heading, .sheet-scroll, .profile-setting-scroll, .workout-recovery-content";
+    const isTitle = (child) => child.matches?.("h1, h2") && !child.matches(".visually-hidden, [hidden], [aria-hidden='true']");
     const findLargeTitle = () => {
       const children = Array.from(panel.children);
       const headerIndex = children.indexOf(header);
-      largeTitle = children
-        .slice(headerIndex + 1)
-        .find((child) => child.matches?.("h1, h2") && !child.matches(".visually-hidden, [hidden], [aria-hidden='true']")) || null;
+      largeTitle = null; nestedTitle = false;
+      for (const child of children.slice(headerIndex + 1)) {
+        if (isTitle(child)) { largeTitle = child; return; }
+        if (!child.matches?.(titleWrappers)) continue;
+        const nested = Array.from(child.children).flatMap((item) => item.matches?.(".information-heading") ? Array.from(item.children) : [item]).find(isTitle);
+        if (nested) { largeTitle = nested; nestedTitle = true; return; }
+      }
     };
     const updateHeader = () => {
       findLargeTitle();
       const scrollable = panel.scrollHeight > panel.clientHeight + 2;
       const scrollTop = Math.max(0, panel.scrollTop);
       const collapsing = Boolean(largeTitle);
+      if (nestedTitle) {
+        const passed = largeTitle.getBoundingClientRect().top + 4 <= header.getBoundingClientRect().bottom;
+        header.classList.toggle("is-scrollable-sheet-header", scrollable);
+        header.classList.toggle("is-static-sheet-header", !scrollable);
+        header.classList.add("is-collapsing-sheet-header");
+        header.classList.toggle("has-scrolled-content", passed);
+        header.classList.toggle("shows-compact-title", passed);
+        return;
+      }
       const revealAt = collapsing && scrollable
         ? Math.max(12, largeTitle.offsetTop - header.offsetHeight + 4)
         : Number.POSITIVE_INFINITY;
@@ -2106,14 +2129,14 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
       ? new ResizeObserver(scheduleHeader)
       : null;
     resizeObserver?.observe(panel);
-    panel.addEventListener("scroll", updateHeader, { passive: true });
+    panel.addEventListener("scroll", updateHeader, { passive: true, capture: true });
     window.addEventListener("resize", updateHeader);
     return () => {
       cancelAnimationFrame(frame);
       cancelAnimationFrame(headerFrame);
       mutationObserver.disconnect();
       resizeObserver?.disconnect();
-      panel.removeEventListener("scroll", updateHeader);
+      panel.removeEventListener("scroll", updateHeader, { capture: true });
       window.removeEventListener("resize", updateHeader);
     };
   }, [children, panelRevision]);
@@ -2768,6 +2791,7 @@ export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPl
       <p>No account needed to start.</p>
       {backToIntro&&<WelcomeProgress page={WELCOME_TOTAL_PAGES-1} onPrevious={backToIntro} previousLabel="Back to intro"/>}
       <div>{signIn&&<button type="button" className="welcome-quiet" onClick={signIn}>{signedIn?'Account':'Sign in'}</button>}<button type="button" className="welcome-quiet restore-backup-action" onClick={restoreBackup}>Restore backup</button></div>
+      <LegalLinks/>
     </footer>
     {returnToSavedProfile && <div className="entry-account-actions">
         {returnToSavedProfile && <button className="restore-backup-action" disabled={recoveryBusy} onClick={async () => {
@@ -5008,7 +5032,7 @@ export function Today({
   const missedReminder = selectedIso === isoDay() && !trackedActive && <MissedWorkoutSummary state={state} update={update} onSelect={request=>setDetail({flexibleWeek:request})}/>;
   const scheduleReview = useMemo(() => temporaryScheduleReview(state), [scheduleState.current,todayKey]);
   const temporaryPeriod = temporaryPlanStatus(state);
-  const calendar = (showMissed = true) => (
+  const calendar = () => (
     <>
       {calendarOpen && createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso}
         header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>}
@@ -5020,7 +5044,7 @@ export function Today({
       {combinedAdjustment(state) && <CombinedWorkoutNotice state={state} update={update} />}
       {temporaryPeriod && temporaryPeriod.status !== 'ended' && <button className="list-row temporary-plan-notice" onClick={() => setDetail('temporary-plan')}><span><strong>{temporaryPeriod.planChanged ? 'Review temporary plan' : 'Temporary plan'}</strong><small>{temporaryPeriod.startDate} – {temporaryPeriod.endDate} · {temporaryPeriod.days.length} days a week · {temporaryPeriod.equipment.join(', ')}</small></span><NavigationChevron/></button>}
       <TemporaryScheduleSummary review={scheduleReview} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
-      {showMissed && missedReminder}
+      {missedReminder}
       {planReady && (
         <PlanReadyNotice
           workoutToday={workoutToday}
@@ -5147,7 +5171,7 @@ export function Today({
       !(state.activeOptionalSession?.date===selectedIso);
     return (
       <main className={`screen today-screen${trackedActive ? " viewing-other-workout" : ""}`}>
-        {calendar(false)}
+        {calendar()}
         {activeNotice}
         {activeOptionalNotice}
         {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
@@ -5162,7 +5186,6 @@ export function Today({
             <p>{item.workout.name} · {workoutVisibleStatus({status:'moved',destination:displayDate(localDate(item.scheduledDate))})}</p>
             <button type="button" className="text-button" onClick={()=>selectDate(weekday(item.scheduledDate),localDate(item.scheduledDate))}>View workout <span aria-hidden="true">›</span></button>
           </div>)}</div>}
-          {missedReminder}
           <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso}
             historyOnly />
           {upcoming && (
@@ -8393,7 +8416,7 @@ function ExportSheet({ request, state, close }) {
       <SheetActionFooter className="export-action-footer">
       <div className="export-actions">
         {shareAvailable && <Button onClick={share}>SHARE</Button>}
-        <Button variant={shareAvailable ? "secondary" : "dark"} onClick={copy}>
+        <Button variant={shareAvailable ? "secondary" : undefined} onClick={copy}>
           COPY
         </Button>
         <Button variant="quiet" onClick={download}>DOWNLOAD .TXT</Button>
@@ -8988,7 +9011,7 @@ export function ProgramExerciseActionCard({
         <h3>Plan changed</h3>
         <p>This proposal is out of date. Ask Coach to prepare it again.</p>
         <button className="text-button action-view-today" onClick={onViewToday}>
-          View program →
+          <span>View program</span><NavigationChevron className="inline-navigation-chevron"/>
         </button>
       </div>
     );
@@ -8997,7 +9020,7 @@ export function ProgramExerciseActionCard({
       <div className="action-card action-card-applied">
         <h3><span className="review-applied-mark" aria-hidden="true">✓</span>Plan updated</h3>
         <button className="text-button action-view-today" onClick={onViewToday}>
-          View program →
+          <span>View program</span><NavigationChevron className="inline-navigation-chevron"/>
         </button>
         {result.undoSnapshot && (
           <button className="text-button" onClick={onUndo}>
@@ -9293,7 +9316,7 @@ export function AdaptActionCard({
         <h3>Changes undone</h3>
         <small>Your previous workout structure is restored.</small>
         <button className="text-button action-view-today" onClick={onViewToday}>
-          View workout →
+          <span>View workout</span><NavigationChevron className="inline-navigation-chevron"/>
         </button>
       </div>
     );
@@ -9313,7 +9336,7 @@ export function AdaptActionCard({
             className="text-button action-view-today"
             onClick={onViewToday}
           >
-            View workout →
+            <span>View workout</span><NavigationChevron className="inline-navigation-chevron"/>
           </button>
           {result.undoSnapshot && (
             <button className="text-button action-undo" onClick={onUndo}>
@@ -9765,7 +9788,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const combineRecovery = combineRecoveryForEntry(state,currentMessages);
   const confirmSourceMatch = (entry,target) => sourceMatchAction.commit(current=>{
     const stored=current.conversations.find(e=>e.id===entry.id);
-    if(!stored||stored.coachActionsArchived||current.activeCoachConversationId!==(entry.conversationId||'legacy')||current.conversations.filter(e=>(e.conversationId||'legacy')===current.activeCoachConversationId).at(-1)?.id!==entry.id||stored.coachWorkflowStatus==='cancelled'||stored.combineReviewCancelled||stored.coachReviewCancelled)throw Error('This Coach review is no longer current. Open your current conversation.');
+    if(!stored||coachActionsReadOnly(stored)||current.activeCoachConversationId!==(entry.conversationId||'legacy')||current.conversations.filter(e=>(e.conversationId||'legacy')===current.activeCoachConversationId).at(-1)?.id!==entry.id||stored.coachWorkflowStatus==='cancelled'||stored.combineReviewCancelled||stored.coachReviewCancelled)throw Error('This Coach review is no longer current. Open your current conversation.');
     return prepareCombinedExerciseMatch(current,combineRecovery,target);
   });
   const threads = useMemo(() => {
@@ -9978,7 +10001,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   useEffect(()=>{if(dayContext&&combinedAdjustment(state)&&!state.coachConversationMeta?.[state.activeCoachConversationId]?.dayContext)setDayContext(null);},[state.todayAdaptation,state.activeCoachConversationId,state.coachConversationMeta,dayContext]);
   const applyEntryAction = (entry, reviewedAction) => {
     const scoped=liveState.current.conversations.find(item=>item.id===entry.id);
-    if(scoped?.coachActionsArchived){setConversationError('This suggestion is from chat history. Ask Coach for an updated suggestion.');return false;}
+    if(coachActionsReadOnly(scoped)){setConversationError('This suggestion is from chat history. Ask Coach for an updated suggestion.');return false;}
     if(scoped?.requestContext){
       try{if(!coachActionMatchesDay(reviewedAction||scoped.reply?.action,resolveCoachDayContext(liveState.current,scoped.requestContext)))throw Error('The selected workout changed. Ask Coach again from that day before applying this proposal.');}
       catch(e){setConversationError(e.message);return false;}
@@ -9999,7 +10022,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     }
     return update((current) => {
       const stored = current.conversations.find((item) => item.id === entry.id);
-      if (!stored?.reply?.action || stored.coachActionsArchived || stored.actionResult?.status === "applied")
+      if (!stored?.reply?.action || coachActionsReadOnly(stored) || stored.actionResult?.status === "applied")
         return current;
       const acceptedAction = reviewedAction || stored.reply.action;
       touchCoachConversation(current, stored.conversationId || current.activeCoachConversationId, Date.now(), {user:true});
@@ -10330,12 +10353,12 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
               {entry.reply ? (
                 <>
                   {entry.supersededBy&&<p className="coach-history-action">Proposal replaced</p>}
-                  {!conversationFromHistory && !entry.coachActionsArchived && entry===latestMessage && entry.reply.missedChoices?.map(choice=><button className="list-row" key={choice.id} data-coach-anchor={`${entry.id}:missed:${choice.id}`} onClick={()=>setDetail({flexibleWeek:{sessionId:choice.id}})}><span>{choice.label}</span><NavigationChevron/></button>)}
-                  {!conversationFromHistory && !entry.coachActionsArchived && (pendingIds.has(entry.id)||entry.reply.combineRequest?.step==='review'&&entry.actionResult?.status==='applied') && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} state={state} result={entry.actionResult} onViewToday={()=>setPage('today')} onReview={request=>setDetail({flexibleWeek:{missed:true,combine:true,combineReview:request,coachOrigin:{entryId:entry.id,conversationId:entry.conversationId}}})} busy={sending||entry.reply.combineRequest.step!=='review'&&!coachAvailable} selection={entry.combineSelection || entry.reply.combineRequest.sourceIds || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
-                  {!conversationFromHistory && !entry.coachActionsArchived && entry===latestMessage && entry.coachWorkflowStatus !== 'cancelled' && !entry.combineReviewCancelled && combineRecovery && <CoachCombineRecovery request={combineRecovery} state={state} busy={sending} canRetry={coachAvailable} onReview={target=>setDetail({editPlan:{reviewExerciseIds:[target.exerciseEntryId]}})} onConfirmMatch={target=>confirmSourceMatch(entry,target)} onRetry={selection=>send('Prepare the combined workout again.',{preserveDraft:true,combineSelection:selection})} />}
-                  {(conversationFromHistory || entry.coachActionsArchived) && entry.reply.action && <p className="coach-history-action">{entry.reply.action.type === 'combine-workouts' ? 'Combined workout' : 'Coach adjustment'} · {entry.actionResult?.status || (entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled ? 'Cancelled' : 'Not applied')}{entry.coachActionsArchived?' · Read-only':''}</p>}
-                  {!conversationFromHistory && !entry.coachActionsArchived && entry.reply.action?.type==='reuse-existing-workout' && entry.coachWorkflowStatus!=='cancelled' && (entry.actionResult?<p>Extra workout started. Your scheduled plan is unchanged.</p>:<div className="coach-reuse-choices">{entry.reply.action.choices.map((choice,index)=><button type="button" className="list-row" key={index} onClick={()=>setDetail({coachWorkoutReuse:choice.reference,coachEntryId:entry.id})}><span><strong>{choice.name}</strong><small>{choice.label?.startsWith(`${choice.name} · `)?choice.label.slice(choice.name.length+3):choice.label===choice.name?null:choice.label}</small></span><NavigationChevron/></button>)}</div>)}
-                  {!conversationFromHistory && !entry.coachActionsArchived && entry.reply.action && entry.reply.action.type!=='reuse-existing-workout' && entry.coachWorkflowStatus !== 'cancelled' && (
+                  {!conversationFromHistory && !coachActionsReadOnly(entry) && entry===latestMessage && entry.reply.missedChoices?.map(choice=><button className="list-row" key={choice.id} data-coach-anchor={`${entry.id}:missed:${choice.id}`} onClick={()=>setDetail({flexibleWeek:{sessionId:choice.id}})}><span>{choice.label}</span><NavigationChevron/></button>)}
+                  {!conversationFromHistory && !coachActionsReadOnly(entry) && (pendingIds.has(entry.id)||entry.reply.combineRequest?.step==='review'&&entry.actionResult?.status==='applied') && entry.reply.combineRequest && <CoachCombineChoices key={entry.id} request={entry.reply.combineRequest} state={state} result={entry.actionResult} onViewToday={()=>setPage('today')} onReview={request=>setDetail({flexibleWeek:{missed:true,combine:true,combineReview:request,coachOrigin:{entryId:entry.id,conversationId:entry.conversationId}}})} busy={sending||entry.reply.combineRequest.step!=='review'&&!coachAvailable} selection={entry.combineSelection || entry.reply.combineRequest.sourceIds || []} onSelectionChange={selection=>update(current=>{const stored=current.conversations.find(e=>e.id===entry.id);if(stored)stored.combineSelection=selection;return touchCoachConversation(current,current.activeCoachConversationId,Date.now(),{user:true});},{planVersion:false})} onSend={(text,selection)=>send(text,{preserveDraft:true,combineSelection:selection})} />}
+                  {!conversationFromHistory && !coachActionsReadOnly(entry) && entry===latestMessage && entry.coachWorkflowStatus !== 'cancelled' && !entry.combineReviewCancelled && combineRecovery && <CoachCombineRecovery request={combineRecovery} state={state} busy={sending} canRetry={coachAvailable} onReview={target=>setDetail({editPlan:{reviewExerciseIds:[target.exerciseEntryId]}})} onConfirmMatch={target=>confirmSourceMatch(entry,target)} onRetry={selection=>send('Prepare the combined workout again.',{preserveDraft:true,combineSelection:selection})} />}
+                  {(conversationFromHistory || coachActionsReadOnly(entry)) && entry.reply.action && <p className="coach-history-action">{entry.reply.action.type === 'combine-workouts' ? 'Combined workout' : 'Coach adjustment'} · {entry.actionResult?.status || (entry.coachWorkflowStatus === 'cancelled' || entry.coachReviewCancelled || entry.combineReviewCancelled ? 'Cancelled' : 'Not applied')}{coachActionsReadOnly(entry)?' · Read-only':''}</p>}
+                  {!conversationFromHistory && !coachActionsReadOnly(entry) && entry.reply.action?.type==='reuse-existing-workout' && entry.coachWorkflowStatus!=='cancelled' && (entry.actionResult?<p>Extra workout started. Your scheduled plan is unchanged.</p>:<div className="coach-reuse-choices">{entry.reply.action.choices.map((choice,index)=><button type="button" className="list-row" key={index} onClick={()=>setDetail({coachWorkoutReuse:choice.reference,coachEntryId:entry.id})}><span><strong>{choice.name}</strong><small>{choice.label?.startsWith(`${choice.name} · `)?choice.label.slice(choice.name.length+3):choice.label===choice.name?null:choice.label}</small></span><NavigationChevron/></button>)}</div>)}
+                  {!conversationFromHistory && !coachActionsReadOnly(entry) && entry.reply.action && entry.reply.action.type!=='reuse-existing-workout' && entry.coachWorkflowStatus !== 'cancelled' && (
                     <ActionCard
                       action={entry.reply.action}
                       result={entry.actionResult}
@@ -11229,11 +11252,10 @@ export function Progress({ state, update, setDetail, setPage }) {
                   </span>
                 )}
               </div>
-              <div className="consistency-bars">
-                {Array.from({ length: consistency.planned }, (_, index) => (
-                  <i className={index < consistency.completed ? "filled" : ""} key={index} />
-                ))}
-              </div>
+              <WeeklySessionProgress scope={`${state.profile.id}:${state.program.id}:${weeklyReview.start}`}
+                completed={consistency.completed} planned={consistency.planned}
+                completionIds={weeklyCompletionIds(completedWorkouts, weeklyReview.start, weeklyReview.end)}
+                active={weeklySessionInProgress(state, weeklyReview.start, weeklyReview.end)}/>
             </>
           ) : (
             <strong className="weekly-review-empty-title">No sessions planned.</strong>
@@ -11683,7 +11705,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
   const trainingBlockSummary = state.program?.trainingBlock?.completed
     ? `${blockName || 'Training block'} · Complete`
     : blockName && !['Current block',state.program?.name,state.program && displayProgramName(state.program)].includes(blockName) ? blockName : null;
-  const areaTitle = {account:"Account & sync",program:"Program",training:"Training setup",preferences:"Workout preferences",display:"Display",data:"Data & backup",diagnostics:"Storage diagnostics",help:"Help"}[area];
+  const areaTitle = {account:"Account & sync",program:"Program",training:"Training setup",preferences:"Workout preferences",display:"Display",data:"Data & backup",diagnostics:"Storage diagnostics",help:"Help",legal:"Privacy & legal"}[area];
   return (
     <main ref={profileRef} onKeyDown={event=>{if(area && event.key==='Escape' && !event.defaultPrevented && !event.target.closest('[role="dialog"],.modal-layer')){event.preventDefault();backToProfile();}}} className={`screen profile-screen${area ? ' profile-management-screen' : ' profile-hub'}${area === 'account' ? ' profile-account-screen' : ''}`}>
       {area && <div className="profile-subpage-header"><SheetHeader title={areaTitle} onBack={backToProfile} backLabel={area === 'diagnostics' ? 'Back to Data & backup' : 'Back to Profile'} /></div>}
@@ -11734,9 +11756,11 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
           ['display','Display',`${personalThemeSummary(personalThemes.personalTheme || personalThemeFromProfile(p))} · Illustrations ${p.showExerciseImages === false ? 'off' : 'on'}`],
           ['data','Data & backup','Backups and workout history'],
           ['help','Help','Sign-in, backups and workout basics'],
+          ['legal','Privacy & legal','Privacy choices, policies and data rights'],
         ].map(([id,title,summary])=><ExerciseNavigationButton data-profile-area={id} key={id} className="list-row" onClick={event=>openArea(id,event)}><span><span className="theme-title"><strong>{title}</strong>{id === 'display' && personalThemes.hasNewThemes && <ThemeNewBadge returning={personalThemes.themeNoticeReturning}/>}</span><small>{summary}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
       </section>}
       {area === 'help' && <ProfileHelp/>}
+      {area === 'legal' && <PrivacyLegal Switch={SettingSwitch} setDetail={setDetail} onDelete={onLogout}/>}
       {area === 'account' && <AccountSyncPanel sync={accountSync} displayName={p.name} Modal={ModalLayer} backgroundRef={profileRef} />}
       {area === 'training' && <>
         <ExerciseNavigationButton className="list-row profile-group-end" onClick={()=>setDetail('saved-workouts')}><span><strong>Workouts</strong><small>{state.program?'Your plan and saved workouts':'Your reusable workouts'}</small></span><NavigationChevron/></ExerciseNavigationButton>
@@ -18441,8 +18465,8 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       )}
       {step === "equipment" && (
         <>
-
-          <h1 className="workflow-title">What equipment is available?</h1>
+          <Eyebrow>DIFFERENT EQUIPMENT</Eyebrow>
+          <h1>What equipment is available?</h1>
           <p>Today only. Your default gym stays unchanged.</p>
           <section className="adjust-gym-picker" role="radiogroup" aria-label="Training location for this workout">
             {state.gymProfiles?.length > 0 && <>
@@ -18474,7 +18498,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       )}
       {step === "energy" && (
         <>
-
+          <Eyebrow>LOW ENERGY</Eyebrow>
           <h1>Lower-fatigue workout</h1>
           <p>ROOK will protect the main movements, trim lower-priority volume and keep effort conservative.</p>
           <div className="adjust-calm-note">This is a training-volume adjustment, not medical advice.</div>
@@ -18484,7 +18508,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
       {step === "unavailable" && (
         <>
           <Eyebrow>SPECIFIC EXERCISE UNAVAILABLE</Eyebrow>
-          <h1 className="workflow-title">Choose affected exercises</h1>
+          <h1>Choose affected exercises</h1>
           <p>Select one or more. ROOK will look for compatible replacements.</p>
           <div className="adjust-check-list" role="group" aria-label="Unavailable exercises">
             {(original?.exercises || []).map((exercise) => { const selected = unavailableEntryIds.includes(exercise.id); return <button key={exercise.id} aria-pressed={selected} className={selected ? "is-selected" : ""} onClick={() => setUnavailableEntryIds((current) => selected ? current.filter((id) => id !== exercise.id) : [...current, exercise.id])}><span>{exerciseName(exercise)}</span><i aria-hidden="true">{selected ? "✓" : ""}</i></button>; })}
@@ -20724,9 +20748,10 @@ function HydratedApp({startup,placements}) {
 }
 
 export function RookRoot({placements,themeOptions}={}) {
+  useEffect(initializePrivacyDefaults,[]);
   return (
     <RookErrorBoundary>
-      <App placements={placements} themeOptions={themeOptions}/>
+      <AIDataConsent Modal={ModalLayer} Header={SheetHeader}><App placements={placements} themeOptions={themeOptions}/></AIDataConsent>
     </RookErrorBoundary>
   );
 }

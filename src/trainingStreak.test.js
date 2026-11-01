@@ -20,6 +20,16 @@ it('rest/absent app visits keep the streak through the open week, then a fully m
   expect(weeklyTrainingStreak(s,new Date('2026-11-01T23:59:00'))).toMatchObject({current:2,best:2});
   expect(weeklyTrainingStreak(s,new Date('2026-11-02T00:00:00'))).toMatchObject({current:0,best:2});
 });
+it('missing one of three planned sessions still counts the week after a real completed workout',()=>{
+  const s=state(['2026-10-26']);s.program={days:[{weekday:'Mon'},{weekday:'Wed'},{weekday:'Fri'}]};
+  const streak=weeklyTrainingStreak(s);expect(streak).toMatchObject({current:1,best:1,earnedThisWeek:true});expect(streak.recentWeeks.at(-1)).toMatchObject({week:'2026-10-26',count:1,status:'counted',current:true});
+});
+it('distinguishes an open current week, a genuine historical gap and weeks before the first training log',()=>{
+  const s=state(['2026-09-28','2026-10-05','2026-10-19']);const streak=weeklyTrainingStreak(s);
+  expect(streak.recentWeeks.find(week=>week.week==='2026-09-21')).toMatchObject({count:0,status:'no-history'});
+  expect(streak.recentWeeks.find(week=>week.week==='2026-10-12')).toMatchObject({count:0,status:'missed'});
+  expect(streak.recentWeeks.at(-1)).toMatchObject({count:0,status:'open',current:true});expect(streak.current).toBe(1);expect(streak.best).toBe(2);
+});
 it('a return after a missed week starts at one and keeps the longer best streak',()=>{
   const s=state(['2026-09-28','2026-10-05','2026-10-12','2026-10-27']);
   expect(weeklyTrainingStreak(s)).toMatchObject({current:1,best:3});

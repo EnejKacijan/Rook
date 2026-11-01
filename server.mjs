@@ -16,6 +16,7 @@ import {
 import { buildProgrammingContext, validateRawPlan } from "./src/planQuality.js";
 import { runPlanQualityPipeline } from "./src/planPipeline.js";
 import { verifyTrainingSafetyAnalysis } from "./src/trainingSafety.js";
+import {minimizeAiPayload} from './src/aiDataMinimization.js';
 
 const port = Number(process.env.PORT || 4173);
 const host = process.env.HOST || "127.0.0.1";
@@ -712,6 +713,7 @@ function operationConfiguration(operation, payload = {}) {
 }
 
 async function callProvider(operation, payload) {
+  payload = minimizeAiPayload(payload);
   const context = aiContext.getStore();
   if (!context) throw new ApiError(503, 'ai-disabled', 'AI is temporarily unavailable.');
   const schema = operation==='interpret-import'?{name:'source_backed_import_fragments',schema:hybridInterpretationSchema}:schemas[operation];

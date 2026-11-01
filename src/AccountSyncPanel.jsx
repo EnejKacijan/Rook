@@ -7,6 +7,7 @@ import './accountSync.css';
 import { AccountAccessOptions } from './AccountAccessOptions.jsx';
 import {emailAccountError} from './emailAccountAuth.js';
 import {AddAccountPassword} from './AddAccountPassword.jsx';
+import {LegalLinks} from './LegalLinks.jsx';
 
 function EmailVerification({sync}){
   const [busy,setBusy]=useState(false),[message,setMessage]=useState('');const pending=useRef(false);
@@ -122,6 +123,7 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
         onChoose={id=>act(id==='google.com'?sync.secureWithGoogle:()=>sync.secureWithProvider(id))}/>
       <small className="account-sync-link-hint">Link this profile to an account to restore it on another device.</small>
     </>}
+    {sync?.state !== 'not-configured' && !sync?.linked && !sync?.providers?.some(id=>id!=='google.com') && <LegalLinks/>}
     {collision && <div className="account-sync-collision" role="status">
       <p>This account already has a ROOK profile. Your current training data is unchanged; ROOK will not merge the profiles automatically.</p>
       <button type="button" className="button secondary" disabled={busy} onClick={() => { setCollision(false); setError(''); }}>KEEP THIS PROFILE</button>

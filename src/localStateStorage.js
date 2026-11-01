@@ -4,6 +4,7 @@ import {assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {intentionalNoPlan} from './trainingStyle.js';
 import { FIRST_RUN_ACCOUNT_CLAIM_KEY } from './firstRunAccountClaim.js';
 import { isConditioning, conditioningConfiguration } from './optionalActivity.js';
+import {PRIVACY_KEY} from './privacyPreferences.js';
 
 // Application data lives only in PRIMARY and the bounded recovery checkpoint.
 // Metadata never contains names, exercises, notes, messages, or state payloads.
@@ -338,7 +339,9 @@ async function deleteLocalStateLocked({ storage = globalThis.localStorage, clear
   const intent = { version: 1, generation: (meta?.generation || 0) + 1, everInitialized: true, deletePending: true, explicitDeleteAt: stamp(), lastWriteReason: reason, build, appVersion: version };
   writeMeta(storage, intent);
   await clearPhotos?.();
-  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, ...LEGACY_EVIDENCE_KEYS]) storage.removeItem(key);
+  const privacyKeys=[PRIVACY_KEY];
+  for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key?.startsWith(`${PRIVACY_KEY}:`))privacyKeys.push(key);}
+  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, ...LEGACY_EVIDENCE_KEYS, ...privacyKeys]) storage.removeItem(key);
   await clearProfiles?.(storage);
   writeMeta(storage, { ...intent, everInitialized: false, deletePending: false });
   sessions.delete(storage);

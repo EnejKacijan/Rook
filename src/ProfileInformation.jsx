@@ -3,7 +3,7 @@ import {createPortal} from 'react-dom';
 import {InformationIcon} from './InformationIcon.jsx';
 import './profileInformation.css';
 
-export function ProfileInformation({label,title,children,Modal,backgroundRef,id,triggerClassName='',triggerContent,sheetClassName='',closeLabel}) {
+export function ProfileInformation({label,title,children,Modal,backgroundRef,id,triggerClassName='',triggerContent,triggerIcon=<InformationIcon/>,sheetClassName='',closeLabel}) {
   const [open,setOpen]=useState(false),trigger=useRef(null),generatedId=useId();
   const dialogId=id || `${generatedId}-information`,titleId=`${dialogId}-title`;
   // A sheet above an existing sheet inherits its document lock. Only its own
@@ -12,7 +12,7 @@ export function ProfileInformation({label,title,children,Modal,backgroundRef,id,
   return <>
     <button type="button" className={`profile-info-trigger${triggerClassName ? ` ${triggerClassName}` : ''}`} ref={trigger}
       aria-label={label} aria-haspopup="dialog" aria-expanded={open} aria-controls={open ? dialogId : undefined} onClick={()=>setOpen(true)}>
-      {triggerContent}<InformationIcon/>
+      {triggerContent}{triggerIcon}
     </button>
     {open && createPortal(<Modal close={()=>setOpen(false)} returnFocusRef={trigger} backgroundRef={backgroundRef} lockDocument={!nested}>{close =>
       <section id={dialogId} className={`screen detail-screen profile-information-sheet${sheetClassName ? ` ${sheetClassName}` : ''}`}

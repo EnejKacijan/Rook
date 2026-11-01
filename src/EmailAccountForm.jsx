@@ -1,6 +1,7 @@
 import {useId,useRef,useState} from 'react';
 import {emailAccountDetails,emailAccountError} from './emailAccountAuth.js';
 import './emailAccount.css';
+import {LegalLinks} from './LegalLinks.jsx';
 
 export function EmailAccountForm({onSubmit,onReset,onBack,busy=false,registrationOnly=false,allowRegistration=true,headingLevel=2,showBack=true}){
   const [mode,setMode]=useState(registrationOnly?'register':'sign-in');
@@ -39,6 +40,7 @@ export function EmailAccountForm({onSubmit,onReset,onBack,busy=false,registratio
       {message&&<p role="status">{message}</p>}
       <button type="submit" className="button primary" disabled={disabled}>{disabled?'PLEASE WAIT…':mode==='register'?'CREATE ACCOUNT':mode==='reset'?'SEND RESET LINK':'SIGN IN'}</button>
     </form>
+    <LegalLinks/>
     {mode==='sign-in'&&onReset&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('reset')}>Forgot password?</button>}
     {mode==='sign-in'&&allowRegistration&&!registrationOnly&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('register')}>Create an account</button>}
     {mode!=='sign-in'&&!registrationOnly&&<button type="button" className="email-account-link" disabled={disabled} onClick={()=>switchMode('sign-in')}>Back to sign in</button>}

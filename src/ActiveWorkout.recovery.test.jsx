@@ -15,7 +15,9 @@ const button=text=>[...document.querySelectorAll('button')].find(b=>b.textConten
 const click=text=>act(()=>button(text).click());
 const type=(label,value)=>act(()=>{const input=document.querySelector(`[aria-label="${label}"]`);Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
 it('opens recovery without a write, leaves all sets intact, and does not allow an edit to erase the gap',()=>{
+  const dateFormat=vi.spyOn(Date.prototype,'toLocaleString');
   const before=mount();expect(document.querySelector('.workout-recovery-sheet h1').textContent).toBe('Still training?');expect(host.querySelector('.workout-header').textContent).toContain('Finish or continue');expect(saveState).not.toHaveBeenCalled();
+  expect(dateFormat).toHaveBeenCalledWith('en',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
   const plus=host.querySelector('[aria-label="Increase Weight in kg for set 2"]');act(()=>plus.click());expect(current).toEqual(before);expect(saveState).not.toHaveBeenCalled();
   click('Continue workout');expect(current.activeWorkout.exercises).toEqual(before.activeWorkout.exercises);expect(current.activeWorkout.startedAt).toBe(before.activeWorkout.startedAt);expect(workoutElapsedSeconds(current.activeWorkout)).toBe(2400);expect(current.workouts).toEqual(before.workouts);expect(document.querySelector('.workout-recovery-sheet')).toBeNull();expect(saveState).toHaveBeenCalledOnce();
 });

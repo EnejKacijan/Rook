@@ -1,0 +1,106 @@
+/* Whole-app consistency rules (Oct 31 audit). Each rule names the role it
+   unifies; screen files keep their own geometry. */
+
+/* Overlay headers: an overlay that opens with its own large heading keeps the
+   chrome title hidden until that heading scrolls away, for every panel type. */
+.modal-layer > .sheet > .detail-header.is-collapsing-sheet-header > strong {
+  opacity: 0;
+  transform: translateY(2px);
+}
+.modal-layer > .sheet > .detail-header.is-collapsing-sheet-header.shows-compact-title > strong {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+/* Option menus (Today "More options", workout/exercise options, completed
+   workout options): every row is one destination or action, so titles share
+   the plain list-row weight and size; the subtitle carries the detail. */
+:root[data-appearance] .replace-sheet button.choice-row.rook-menu-navigation .rook-menu-copy > strong,
+:root[data-appearance] .today-actions-sheet > .today-ask-coach strong { font-size:var(--rook-type-body); font-weight:400; }
+:root[data-appearance] .replace-sheet button.choice-row.rook-menu-navigation small { font-weight:400; }
+:root[data-appearance] .replace-sheet .active-exercise-note-action { font-size:var(--rook-type-body); font-weight:400; color:var(--rook-text); }
+:root[data-appearance] .replace-sheet .active-exercise-note-action > .exercise-note-action-copy { color:inherit; }
+
+/* Profile hub: one surface. Account, current training, streak and the
+   profile prompt are rows on the page, divided by the same hairline as the
+   settings list, instead of an outlined card, a filled card and an accent
+   rule side by side. The avatar, the larger program title and the info
+   control keep the roles distinct. */
+:root[data-appearance] .profile-hub .profile-account-entry {
+  margin:12px 0 0; padding:12px 0; min-height:72px;
+  border:0; border-bottom:1px solid var(--rook-border); border-radius:0;
+  background:transparent;
+}
+:root[data-appearance] .profile-hub .profile-account-entry:focus-visible { outline-offset:2px; border-radius:8px; }
+:root[data-appearance] .profile-hub .profile-current-program.profile-program-entry { padding:16px 0 18px; }
+:root[data-appearance] .profile-hub .training-streak-card {
+  margin:0; padding:10px 0; min-height:56px;
+  border:0; border-bottom:1px solid var(--rook-border); border-radius:0;
+  background:transparent;
+}
+:root[data-appearance] .profile-hub .training-streak-heading { font-size:var(--rook-type-body); font-weight:600; }
+:root[data-appearance] .profile-hub .complete-profile { margin-top:22px; padding-left:0; border-left:0; }
+:root[data-appearance] .profile-hub .complete-profile > .eyebrow { color:var(--rook-secondary); }
+:root[data-appearance="dark"] .profile-hub .complete-profile { border-left:0; }
+
+/* Commit and cancel buttons: filled, outlined and footer buttons carry the
+   uppercase tracked label used by the rest of the app. These few were the
+   only sentence-case ones, often next to an uppercase sibling in the same
+   flow. The first-run welcome keeps its own intro voice. */
+:root :is(.coach-new-actions .button, .button.progression-settings-return,
+  .storage-diagnostics-screen > .button, .pro-theme-action-row .button,
+  .workout-restart-confirm-actions .button, .freestyle-entry > .button,
+  .use-workout-today-sheet > .button, .button.previous-values-apply,
+  .button.previous-values-apply ~ .button.quiet,
+  .sheet-action-footer > .button.bottom-back[aria-label="Cancel"]) {
+  text-transform:uppercase; letter-spacing:.08em;
+}
+:root :is(.pro-theme-action-row .button.quiet) { font-weight:600; }
+
+/* Selected choices: in light Standard the onboarding-style choice cards
+   (goal, schedule, days, priorities, availability) were always filled with
+   ink, while every other choice chip (temporary plan, block length, Adjust
+   today time) and the dark appearance use the selection tokens. With a
+   personal theme those tokens are an accent wash, so the two kinds of choice
+   looked different on the same theme. Both now read the same tokens: ink in
+   the default theme, accent wash in personal themes. The final preferences
+   review keeps its outlined summary style. */
+:root[data-appearance="light"][data-style="standard"] :is(.option-list .selected-option,
+  .onboarding-option.selected-option, .physique-suggestions button.selected):not(.onboarding-preferences *) {
+  background:var(--rook-selected); color:var(--rook-on-selected);
+  border-color:var(--rook-selected-line);
+}
+:root[data-appearance="light"][data-style="standard"] .onboarding-option.selected-option:not(.onboarding-preferences *) .option-card-copy small {
+  color:var(--rook-on-selected); opacity:.85;
+}
+:root[data-appearance] .replace-sheet .active-exercise-note-action > .rook-navigation-chevron { color:var(--rook-secondary); }
+
+/* Keyboard focus: a focused row must not sit under the bottom navigation. */
+html:has(.bottom-nav) {
+  scroll-padding-bottom: calc(var(--bottom-nav-total-height, 56px) + 16px);
+}
+
+/* Header icon actions keep the 44px touch target used by every other header
+   control; the icon stays aligned to the page edge. */
+:root .coach-header-actions .coach-history-trigger { min-width:44px; }
+
+/* Tab labels follow the text-size tokens but stop at 14px, as native tab bars
+   do; with larger text they broke mid-word ("PROGR ESS"). */
+:root .bottom-nav.bottom-nav button > span:last-child { font-size:min(.75rem, 14px); white-space:nowrap; }
+
+/* At 200% zoom (about 200 CSS px wide) the uppercase theme actions cannot sit
+   side by side; stack them, commit first, as other narrow footers do. */
+@media (max-width: 299px) {
+  :root .pro-theme-action-row { grid-template-columns:minmax(0,1fr); }
+  :root .pro-theme-action-row > .button.quiet { order:1; }
+}
+
+/* Open-workout recovery ("Still training?"). Its footer sits inside the
+   scrolling content, so the shared footer offsets pushed the help line under
+   the sheet edge, where it was cut off. The actions use the uppercase action
+   label of every other footer, and duration errors use the error colour of
+   other form errors. */
+:root .modal-layer > .workout-recovery-sheet.has-sheet-action-footer { padding-bottom:0; }
+:root .workout-recovery-content .sheet-action-footer { bottom:0; margin-bottom:0; }
+:root .workout-recovery-sheet .sheet-action-footer > .button { text-transform:uppercase; letter-spacing:.08em; }
+:root .workout-recovery-sheet :is(.workout-recovery-field [role="alert"], .workout-recovery-content > p[role="alert"]) { color:var(--rook-error-text); }
