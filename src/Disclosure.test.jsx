@@ -1,7 +1,8 @@
 import React, { act } from 'react';
 import { createRoot } from 'react-dom/client';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { Disclosure, revealDisclosure } from './Disclosure.jsx';
+import { Disclosure } from './Disclosure.jsx';
+import * as followModule from './disclosureFollow.js';
 let root,host,animations,originalAnimate;
 beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;host=document.createElement('div');document.body.append(host);root=createRoot(host);vi.stubGlobal('matchMedia',()=>({matches:false}));animations=[];originalAnimate=Element.prototype.animate;Element.prototype.animate=vi.fn(()=>{const animation={cancel:vi.fn(),onfinish:null};animations.push(animation);return animation;});vi.spyOn(Element.prototype,'getBoundingClientRect').mockImplementation(function(){return {height:this.classList.contains('rook-disclosure-content')||this.style.height==='auto'?100:parseFloat(this.style.height)||0};});});
 afterEach(()=>{act(()=>root.unmount());host.remove();Element.prototype.animate=originalAnimate;vi.restoreAllMocks();vi.unstubAllGlobals();});
@@ -27,11 +28,14 @@ it('reduced motion switches directly to the compact target without hiding its ac
   const show=open=>act(()=>root.render(<Disclosure open={open} collapsed={<button>Undo</button>}><button>Use values</button></Disclosure>));
   show(true);show(false);expect(host.textContent).toBe('Undo');expect(host.firstChild.style.height).toBe('44px');expect(animations).toHaveLength(0);
 });
-it('reveals options above a fixed footer without changing focus',()=>{
-  host.style.overflowY='auto';host.scrollBy=vi.fn();
-  const panel=document.createElement('div'),footer=document.createElement('div');footer.className='sheet-action-footer';host.append(panel,footer);
-  host.getBoundingClientRect=()=>({top:80,bottom:760});footer.getBoundingClientRect=()=>({top:650});panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});
-  revealDisclosure(panel);expect(host.scrollBy).toHaveBeenCalledWith({top:102,behavior:'smooth'});
-  host.scrollBy.mockClear();panel.getBoundingClientRect=()=>({top:200,bottom:400,height:200});revealDisclosure(panel);expect(host.scrollBy).not.toHaveBeenCalled();
-  vi.stubGlobal('matchMedia',()=>({matches:true}));panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});revealDisclosure(panel);expect(host.scrollBy).toHaveBeenCalledWith({top:102,behavior:'auto'});
+
+it('keeps user takeover when content resizes during the same opening',()=>{
+  let resize,options,height=100;
+  vi.stubGlobal('ResizeObserver',class{constructor(callback){resize=callback;}observe(){}disconnect(){}});
+  vi.spyOn(Element.prototype,'getBoundingClientRect').mockImplementation(function(){return{height:this.classList.contains('rook-disclosure-content')?height:parseFloat(this.style.height)||0};});
+  const follow=vi.spyOn(followModule,'followDisclosure').mockImplementation((node,next)=>{options=next;return{stop:vi.fn(),finish:vi.fn()};});
+  render(false);render(true);
+  expect(follow).toHaveBeenCalledOnce();
+  options.onTakeover();height=200;act(()=>resize());
+  expect(follow).toHaveBeenCalledOnce();
 });
