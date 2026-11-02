@@ -1,0 +1,47 @@
+/* Streak moments: one tall sheet, a flame and one clear action.
+   The flame keeps a fixed warm palette in every theme; the ember is the same
+   shape at low heat, so "at risk" and "counted" read as one story. */
+.streak-moment-sheet { --streak-flame-base:#e8572a; --streak-flame-tip:#ffb648; --streak-flame-core:#ffe08a;
+  display:flex; flex-direction:column; min-height:min(88dvh, 720px); }
+.streak-moment-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:8px 4px 24px; text-align:center; }
+.streak-moment-body > h1 { margin:6px 0 8px; font-size:1.75rem; line-height:1.2; }
+.streak-moment-eyebrow { margin:20px 0 0; color:var(--rook-accent-text); font-size:.8125rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.streak-moment-lead { max-width:30ch; margin:0; color:var(--rook-text); font-size:1rem; line-height:1.5; }
+.streak-moment-note { max-width:32ch; margin:14px 0 0; color:var(--rook-secondary); font-size:.875rem; line-height:1.5; }
+.streak-moment-count { font-variant-numeric:tabular-nums; }
+.streak-moment-number { font-size:3.5rem; line-height:1; font-weight:800; color:var(--rook-accent-text); }
+.streak-moment-actions { display:grid; gap:8px; padding:8px 0 calc(env(safe-area-inset-bottom, 0px) + 12px); }
+.streak-moment-actions > .button { width:100%; }
+.streak-moment-actions > .text-button { min-height:44px; color:var(--rook-secondary); }
+
+.streak-flame { position:relative; display:grid; place-items:center; width:132px; height:150px; }
+.streak-flame svg { position:relative; width:96px; height:120px; overflow:visible; }
+.streak-flame-glow { position:absolute; inset:8px; border-radius:50%; background:radial-gradient(circle at 50% 60%, color-mix(in srgb, #ffb648 38%, transparent), transparent 70%); }
+.streak-flame.is-ember .streak-flame-outer { opacity:.32; }
+.streak-flame.is-ember .streak-flame-inner { opacity:.9; }
+.streak-flame.is-ember .streak-flame-glow { opacity:.35; }
+.streak-flame-outer, .streak-flame-inner { transform-box:fill-box; transform-origin:50% 100%; }
+
+/* Ignite once: rise, a single flicker, a glow that settles. No loop. */
+.streak-flame.is-igniting svg { animation:streak-flame-rise 520ms var(--rook-ease-release, ease-out) both; }
+.streak-flame.is-igniting .streak-flame-inner { animation:streak-flame-flicker 700ms 380ms var(--rook-ease-standard, ease-out) both; }
+/* After lighting, the lit flame keeps a slow, small sway while its sheet is
+   open (the sheet lives seconds, closed by the user). The ember stays still. */
+.streak-flame.is-lit .streak-flame-outer { animation:streak-flame-sway 2.6s 900ms ease-in-out infinite alternate; }
+.streak-flame.is-lit.is-igniting .streak-flame-inner { animation:streak-flame-flicker 700ms 380ms var(--rook-ease-standard, ease-out) both, streak-flame-breathe 1.9s 1080ms ease-in-out infinite alternate; }
+.streak-flame.is-igniting .streak-flame-glow { animation:streak-flame-glow 900ms 200ms ease-out both; }
+.streak-moment-sheet.is-gain .streak-moment-number { display:inline-block; animation:streak-number-arrive 300ms 420ms var(--rook-ease-standard, ease-out) both; }
+@keyframes streak-flame-rise { from { opacity:0; transform:translateY(14px) scale(.55); } to { opacity:1; transform:none; } }
+@keyframes streak-flame-flicker { 0% { transform:scaleY(.7); } 45% { transform:scaleY(1.08); } 100% { transform:none; } }
+@keyframes streak-flame-sway { from { transform:skewX(-1.5deg) scaleY(1); } to { transform:skewX(1.5deg) scaleY(1.025); } }
+@keyframes streak-flame-breathe { from { transform:scaleY(1) translateX(0); } to { transform:scaleY(1.06) translateX(1px); } }
+@keyframes streak-flame-glow { from { opacity:0; transform:scale(.6); } 60% { opacity:1; } to { opacity:.8; transform:none; } }
+@media (prefers-reduced-motion: reduce) {
+  .streak-flame.is-igniting svg, .streak-flame.is-igniting .streak-flame-inner, .streak-flame.is-igniting .streak-flame-glow,
+  .streak-moment-sheet.is-gain .streak-moment-number, .streak-flame.is-lit .streak-flame-outer, .streak-flame.is-lit.is-igniting .streak-flame-inner { animation:none; }
+}
+@media (forced-colors:active) { .streak-flame-glow { display:none; } .streak-flame path { fill:CanvasText; } }
+.streak-moment-nowrap { white-space:nowrap; }
+/* The lit flame is the reward: noticeably larger than the ember. */
+.streak-flame.is-lit { width:176px; height:200px; }
+.streak-flame.is-lit svg { width:136px; height:170px; }

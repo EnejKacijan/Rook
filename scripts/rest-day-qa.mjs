@@ -185,7 +185,7 @@ for (const theme of ['light', 'dark', 'premium']) {
   await page.getByRole('button', { name: 'RESUME', exact: true }).click();
   await page.getByRole('button', { name: 'FINISH SESSION', exact: true }).click();
   await page.getByText('SESSION COMPLETE', { exact: true }).waitFor();
-  assert.equal(await page.getByText('Your planned rest day is unchanged.', { exact: true }).count(), 1);
+  assert.equal(await page.getByText('Your training plan is unchanged.', { exact: true }).count(), 1);
   await page.screenshot({ path: output('390-walking-complete-dark.png'), fullPage: false });
   await page.getByRole('button', { name: 'DONE', exact: true }).click();
   await page.getByRole('heading', { name: 'Rest day' }).waitFor();

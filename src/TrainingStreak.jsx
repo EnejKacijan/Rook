@@ -1,6 +1,7 @@
 import {useEffect,useMemo,useRef,useState} from 'react';
 import {useLocalDay,localCalendarDay} from './useLocalDay.js';
-import {weeklyTrainingStreak,claimStreakPresentation,completedWorkoutStreakGain,completedActivityStreakGain} from './trainingStreak.js';
+import {weeklyTrainingStreak,claimStreakPresentation,completedWorkoutStreakGain,completedActivityStreakGain,weekendStreakReminder,streakReminderHidden,setStreakReminderHidden} from './trainingStreak.js';
+import {StreakAtRiskMoment,StreakGainMoment} from './StreakMoments.jsx';
 import {ProfileInformation} from './ProfileInformation.jsx';
 import {NavigationChevron} from './NavigationChevron.jsx';
 import {AnimatedDetails} from './AnimatedDetails.jsx';
@@ -66,21 +67,24 @@ function TrainingStreakDetails({streak}) {
     </div></AnimatedDetails>
   </>;
 }
-export function CompletedWorkoutStreak({state,session,priorWorkouts,live=false,persistenceFailed=false}) {
+export function CompletedWorkoutStreak({state,session,priorWorkouts,live=false,persistenceFailed=false,Modal}) {
   const gain=completedWorkoutStreakGain(state,session,priorWorkouts);
-  return <StreakReward state={state} gain={gain} live={live} persistenceFailed={persistenceFailed}/>;
+  return <StreakReward state={state} gain={gain} live={live} persistenceFailed={persistenceFailed} Modal={Modal}/>;
 }
-export function CompletedActivityStreak({state,session,priorOptionalSessions}) {
+export function CompletedActivityStreak({state,session,priorOptionalSessions,Modal}) {
   const gain=completedActivityStreakGain(state,session,priorOptionalSessions);
-  return <StreakReward state={state} gain={gain} live/>;
+  return <StreakReward state={state} gain={gain} live Modal={Modal}/>;
 }
-function StreakReward({state,gain,live,persistenceFailed=false}) {
+function StreakReward({state,gain,live,persistenceFailed=false,Modal}) {
   const animate=useStreakMotion({enabled:Boolean(gain&&live&&!persistenceFailed),profileId:state.profile.id,kind:'gain',stamp:gain?.week});
+  // The big moment rides on the same once-per-week receipt as the counter roll.
+  const [moment,setMoment]=useState(false);
+  useEffect(()=>{if(animate&&Modal)setMoment(true);},[animate,Modal]);
   if(!gain||persistenceFailed)return null;
-  return <section className={`completion-streak${animate?' is-gaining':''}`} aria-label={`${gain.current}-week streak`}>
+  return <>{moment&&<StreakGainMoment Modal={Modal} gain={gain} onClose={()=>setMoment(false)}/>}<section className={`completion-streak${animate?' is-gaining':''}`} aria-label={`${gain.current}-week streak`}>
     <div><span className="completion-streak-label">Weekly streak</span><strong><StreakNumber value={gain.current} previous={gain.previous} animate={animate}/><span>{gain.current===1?'week':'weeks'}</span></strong></div>
     {animate&&<span className="streak-gain-label">{gain.previous===0?'Streak started':'+1 week'}</span>}
-  </section>;
+  </section></>;
 }
 export function RestDayStreak({state,date}) {
   const streak=useTrainingStreak(state);
@@ -88,4 +92,40 @@ export function RestDayStreak({state,date}) {
   if(!eligible)return null;
   return <p className="rest-streak-note"><span className="rest-streak-mark" aria-hidden="true">✓</span>
     <span>Rest day · {streak.current}-week streak secured</span></p>;
+}
+
+const REMINDER_EVENT='rook-streak-reminder-change';
+function useWeekendStreakReminder(state,date) {
+  const day=useLocalDay(),[,refresh]=useState(0);
+  useEffect(()=>{const update=()=>refresh(count=>count+1);window.addEventListener(REMINDER_EVENT,update);return()=>window.removeEventListener(REMINDER_EVENT,update);},[]);
+  const reminder=useMemo(()=>weekendStreakReminder(state,new Date(),date),
+    [state.workouts,state.optionalSessions,state.activeWorkout,state.activeOptionalSession,date,day]);
+  const profileId=state.profile?.id;
+  const hidden=Boolean(reminder)&&streakReminderHidden(profileId,reminder.week);
+  const setHidden=value=>{
+    if(!reminder)return;
+    setStreakReminderHidden(profileId,reminder.week,value);
+    window.dispatchEvent(new Event(REMINDER_EVENT));
+  };
+  return {reminder,hidden,setHidden};
+}
+// The weekend reminder lives only in its once-per-week sheet. After dismissal
+// Today has no persistent streak copy, extra row or Hide button.
+export function WeekendStreakReminder({state,date,Modal,momentAllowed=true}) {
+  const streak=useTrainingStreak(state),{reminder,hidden,setHidden}=useWeekendStreakReminder(state,date);
+  const profileId=state.profile?.id;
+  // Once per profile and week: the first Today visit of the weekend opens a
+  // tall sheet. Never over another sheet; a blocked store means no sheet.
+  const momentKey=reminder?`${profileId}:${reminder.week}`:null;
+  const [moment,setMoment]=useState(null),momentTried=useRef(null);
+  useEffect(()=>{
+    if(!reminder||hidden||!momentAllowed||!Modal){setMoment(null);return;}
+    const attempt=`${profileId}:${reminder.week}`;
+    if(momentTried.current===attempt||document.querySelector('.modal-layer'))return;
+    momentTried.current=attempt;
+    setMoment(claimStreakPresentation(profileId,'riskMoment',reminder.week)?attempt:null);
+  },[reminder,hidden,momentAllowed,Modal,profileId]);
+  if(!reminder||hidden||!momentAllowed||moment!==momentKey)return null;
+  return <StreakAtRiskMoment key={momentKey} Modal={Modal} reminder={reminder} best={streak.best}
+    onClose={muted=>{setMoment(null);if(muted)setHidden(true);}}/>;
 }

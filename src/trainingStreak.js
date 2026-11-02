@@ -78,14 +78,74 @@ export function completedActivityStreakGain(state,session,priorOptionalSessions,
 export const STREAK_PRESENTATION_KEY='rook-streak-presentation-v1';
 // Device-local, bounded presentation receipts only. These never award a streak
 // or enter workout state, cloud sync, backups, or completion-reversal guards.
+// gain: the weekly +1 roll; reminder: legacy inline reminder entrance;
+// riskMoment: the once-a-week weekend sheet; reminderHidden: the user hid
+// this week's reminders.
+const PRESENTATION_KINDS=['gain','reminder','riskMoment','reminderHidden'];
+// When a write fails, both Hide and Undo still express the user's choice for
+// this app session. A false override must win over an older stored Hide.
+const sessionReminderChoices=new Map();
+export function clearStreakReminderSession(){sessionReminderChoices.clear();}
+export function streakReminderHidden(profileId,week,storage=globalThis.localStorage){
+  const key=`${profileId}:${week}`;
+  return sessionReminderChoices.has(key)?sessionReminderChoices.get(key):streakPresentationSeen(profileId,'reminderHidden',week,storage);
+}
+function presentationRecords(storage) {
+  const parsed=JSON.parse(storage.getItem(STREAK_PRESENTATION_KEY)||'{}');
+  return Array.isArray(parsed.records)?parsed.records.filter(row=>row&&typeof row.profileId==='string'):[];
+}
+function writePresentation(profileId,kind,stamp,storage) {
+  const records=presentationRecords(storage),existing=records.find(row=>row.profileId===profileId);
+  const next=[...records.filter(row=>row.profileId!==profileId),{...existing,profileId,[kind]:stamp}].slice(-8);
+  storage.setItem(STREAK_PRESENTATION_KEY,JSON.stringify({records:next}));
+}
 export function claimStreakPresentation(profileId,kind,stamp,storage=globalThis.localStorage) {
-  if(!profileId||kind!=='gain'||dayNumber(stamp)===null)return false;
+  if(!profileId||!['gain','reminder','riskMoment'].includes(kind)||dayNumber(stamp)===null)return false;
   try {
-    const parsed=JSON.parse(storage.getItem(STREAK_PRESENTATION_KEY)||'{}');
-    const records=Array.isArray(parsed.records)?parsed.records.filter(row=>row&&typeof row.profileId==='string'):[];
-    const existing=records.find(row=>row.profileId===profileId);
-    if(existing?.[kind]===stamp)return false;
-    const next=[...records.filter(row=>row.profileId!==profileId),{...existing,profileId,[kind]:stamp}].slice(-8);
-    storage.setItem(STREAK_PRESENTATION_KEY,JSON.stringify({records:next}));return true;
+    if(presentationRecords(storage).find(row=>row.profileId===profileId)?.[kind]===stamp)return false;
+    writePresentation(profileId,kind,stamp,storage);return true;
   } catch {return false;}
+}
+export function streakPresentationSeen(profileId,kind,stamp,storage=globalThis.localStorage) {
+  if(!profileId||!PRESENTATION_KINDS.includes(kind)||dayNumber(stamp)===null)return false;
+  try {return presentationRecords(storage).find(row=>row.profileId===profileId)?.[kind]===stamp;}
+  catch {return false;}
+}
+// Returns false when storage refuses the write; callers keep their own
+// in-memory choice so a blocked store never brings the row straight back.
+export function setStreakReminderHidden(profileId,week,hidden,storage=globalThis.localStorage) {
+  if(!profileId||dayNumber(week)===null)return false;
+  const key=`${profileId}:${week}`;
+  try {
+    const existing=presentationRecords(storage).find(row=>row.profileId===profileId);
+    if(hidden)writePresentation(profileId,'reminderHidden',week,storage);
+    else if(existing?.reminderHidden===week)writePresentation(profileId,'reminderHidden',null,storage);
+    sessionReminderChoices.delete(key);
+    return true;
+  } catch {
+    sessionReminderChoices.delete(key);sessionReminderChoices.set(key,Boolean(hidden));
+    while(sessionReminderChoices.size>8)sessionReminderChoices.delete(sessionReminderChoices.keys().next().value);
+    return false;
+  }
+}
+
+// Saturday is the first reminder day: it leaves two real days to train or to
+// decide to rest, while Monday–Friday stays quiet. Only the actual local today
+// counts, never a browsed date, and only an already-running streak is at stake.
+export const STREAK_REMINDER_FIRST_WEEKDAY=6;
+export function weekendStreakReminder(state,now=new Date(),viewedDay=localDay(now)) {
+  const todayKey=localDay(now),today=dayNumber(todayKey);
+  if(viewedDay!==todayKey||today===null)return null;
+  const weekdayIndex=new Date(today*DAY_MS).getUTCDay();
+  if(weekdayIndex!==0&&weekdayIndex<STREAK_REMINDER_FIRST_WEEKDAY)return null;
+  const streak=weeklyTrainingStreak(state,now);
+  if(!streak.current||streak.earnedThisWeek)return null;
+  // A session already open this week owns Today's actions; finishing it is the
+  // user's call and may or may not count (no set logged, under a minute).
+  // An undatable open session is treated as this week's, so the row stays out of its way.
+  const currentWeek=monday(today),inThisWeek=day=>{const value=dayNumber(day);return value===null||monday(value)===currentWeek;};
+  if(state.activeWorkout&&inThisWeek(workoutPerformedDate(state.activeWorkout)||state.activeWorkout.workoutDateKey))return null;
+  const optional=state.activeOptionalSession;
+  if(optional&&inThisWeek(optional.date||workoutPerformedDate(optional)))return null;
+  return {current:streak.current,week:streak.week,lastDay:weekdayIndex===0};
 }

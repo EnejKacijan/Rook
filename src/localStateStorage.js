@@ -5,6 +5,7 @@ import {intentionalNoPlan} from './trainingStyle.js';
 import { FIRST_RUN_ACCOUNT_CLAIM_KEY } from './firstRunAccountClaim.js';
 import { isConditioning, conditioningConfiguration } from './optionalActivity.js';
 import {PRIVACY_KEY} from './privacyPreferences.js';
+import {STREAK_PRESENTATION_KEY,clearStreakReminderSession} from './trainingStreak.js';
 
 // Application data lives only in PRIMARY and the bounded recovery checkpoint.
 // Metadata never contains names, exercises, notes, messages, or state payloads.
@@ -341,7 +342,9 @@ async function deleteLocalStateLocked({ storage = globalThis.localStorage, clear
   await clearPhotos?.();
   const privacyKeys=[PRIVACY_KEY];
   for(let index=0;index<storage.length;index++){const key=storage.key(index);if(key?.startsWith(`${PRIVACY_KEY}:`))privacyKeys.push(key);}
-  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, ...LEGACY_EVIDENCE_KEYS, ...privacyKeys]) storage.removeItem(key);
+  // Streak celebration/reminder receipts are device-local presentation choices.
+  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, ...LEGACY_EVIDENCE_KEYS, ...privacyKeys, STREAK_PRESENTATION_KEY]) storage.removeItem(key);
+  clearStreakReminderSession();
   await clearProfiles?.(storage);
   writeMeta(storage, { ...intent, everInitialized: false, deletePending: false });
   sessions.delete(storage);

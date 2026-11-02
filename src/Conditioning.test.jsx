@@ -38,7 +38,7 @@ function mount(detailValue = null, activeScreen = false) {
 }
 const open = () => { click(button('+ Add optional activity')); advance(300); click(button('ConditioningOptional cardio / conditioning work.')); advance(300); };
 it('A/B: Rest day keeps recovery copy and groups Light cardio and Conditioning inside the chooser', () => {
-  mount(); expect(document.querySelector('.rest-day-state').textContent).toContain('Planned rest day');
+  mount(); expect(document.querySelector('.rest-day-state').textContent).toContain('Rest day');
   expect(document.querySelector('.today-optional-actions')).toBeNull();
   click(button('+ Add optional activity')); advance(300);
   click(button('Light cardioEasy aerobic movement.')); advance(300);

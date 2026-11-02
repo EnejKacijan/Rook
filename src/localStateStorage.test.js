@@ -1,4 +1,5 @@
 import { beforeEach, afterEach, it, expect, vi } from 'vitest';
+import {setStreakReminderHidden,streakReminderHidden} from './trainingStreak.js';
 import { blankState, serializeState, hydrateStoredState, readStartupState, saveState } from './domain.js';
 import { dataReliabilityFixture } from './dataReliability.fixture.js';
 import { PRIMARY_KEY as P, INSTALL_META_KEY as M, RECOVERY_KEY as B, JOURNAL_KEY as J, MAX_RECOVERY_CHARS, persistLocalState, readLocalState, readRecovery, restoreLocalCheckpoint, checkpointCurrentLocalState, deleteLocalState, storageDiagnostics, inspectStorageProtection, forgetStorageSession, withStorageTransaction } from './localStateStorage.js';
@@ -59,6 +60,14 @@ it('explicit local-data deletion also clears an unfinished verified first-run ac
   await deleteLocalState({storage});
   expect(storage.getItem(FIRST_RUN_ACCOUNT_CLAIM_KEY)).toBeNull();
   expect(readStartupState(storage)).toEqual({status:'empty'});
+});
+it('explicit local-data deletion also removes streak celebration and reminder receipts',async()=>{
+  const storage=new MemoryStorage([['rook-streak-presentation-v1',JSON.stringify({records:[{profileId:'p',gain:'2026-10-26',reminderHidden:'2026-10-26'}]})]]);
+  setStreakReminderHidden('session-choice','2026-10-26',true,{getItem:()=>null,setItem(){throw Error('quota');}});
+  expect(streakReminderHidden('session-choice','2026-10-26',storage)).toBe(true);
+  await deleteLocalState({storage});
+  expect(storage.getItem('rook-streak-presentation-v1')).toBeNull();
+  expect(streakReminderHidden('session-choice','2026-10-26',storage)).toBe(false);
 });
 it('recognizes pre-marker production usage evidence but permits untouched first-run visits',()=>{
   const storage=new MemoryStorage([['lift-funnel-events-v1',JSON.stringify([{name:'app_open',properties:{path:'new'}}])]]);

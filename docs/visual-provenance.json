@@ -6,7 +6,7 @@
     "licensed_third_party": 93,
     "rook_ai_generated": 662,
     "unknown": 11,
-    "rook_original": 23
+    "rook_original": 24
   },
   "exerciseReferenceSources": [
     {
@@ -32015,6 +32015,39 @@
       "codeSha256": "2ad9286471750c753b1124bc2c6fe74565303ef2d61c72510a194eb86ed789ac",
       "lfCodeSha256": "2ad9286471750c753b1124bc2c6fe74565303ef2d61c72510a194eb86ed789ac",
       "crlfCodeSha256": "b8bfb0ce36e73586f89e6f49480f0234784df38237e1628be9efd0864b391ed8"
+    },
+    {
+      "assetId": "inline-streakmoments-1",
+      "path": "src/StreakMoments.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/StreakMoments.jsx",
+          "line": 11,
+          "reviewedAt": "2026-11-01"
+        }
+      ],
+      "notes": [
+        "Source-defined streak flame: two hand-written paths with a linear gradient, decorative (aria-hidden). No downloaded image or copyright ownership assertion."
+      ],
+      "sourceLine": 11,
+      "codeSha256": "55b39112375bd11e601e731602342a02f16de34d516b5e0ccef66c8846b980ff",
+      "lfCodeSha256": "55b39112375bd11e601e731602342a02f16de34d516b5e0ccef66c8846b980ff",
+      "crlfCodeSha256": "1f54a182c116f5c36551c5fdc6b27d9a36a2c3fb75ec5731169820d37e35e0d6"
     }
   ]
 }

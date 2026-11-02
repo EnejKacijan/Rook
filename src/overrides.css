@@ -429,6 +429,20 @@ body {
 .exercise-e1rm-trend .e1rm-summary { margin: 7px 0 0; min-height: 16px; color: var(--rook-secondary); font-size: 11px; line-height: 1.45; }
 .exercise-e1rm-trend polyline { stroke: var(--rook-accent, #1f6b4c); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .exercise-e1rm-note { margin: 11px 0 0 !important; color: var(--rook-muted, #8a8783); font-size: 10.5px !important; line-height: 1.45; }
+/* The trend line draws once from the first session to the latest, then the
+   points settle in. Only on mount: selecting a point re-renders in place. */
+@media (prefers-reduced-motion: no-preference) {
+  .exercise-e1rm-trend polyline { animation: e1rm-line-draw 480ms var(--rook-ease-standard, cubic-bezier(.2,0,0,1)) var(--rook-motion-state-long, 240ms) both; }
+  .exercise-e1rm-trend :is(.e1rm-point, .e1rm-point-value) { animation: e1rm-point-in var(--rook-motion-state, 200ms) var(--rook-ease-standard, cubic-bezier(.2,0,0,1)) 520ms both; }
+}
+@keyframes e1rm-line-draw {
+  from { clip-path: inset(-4px 100% -4px -4px); }
+  to { clip-path: inset(-4px -4px -4px -4px); }
+}
+@keyframes e1rm-point-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 :root[data-appearance="dark"] .exercise-performance-history .list-row > span:last-child { color: var(--rook-secondary, #b7b1a5); }
 @media (max-width: 340px) {
   .weekly-review-card { padding: 15px; }

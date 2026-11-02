@@ -43,3 +43,6 @@
   .streak-number.is-gaining .streak-number-old { display: none; }
   .streak-number.is-gaining .streak-number-current { animation: none; }
 }
+/* Disclosure clips overflow for its height animation. Once a reminder row has
+   settled open (height:auto), let keyboard focus rings show in full. */
+.today-missed-disclosure.is-open[style*="height: auto"] { overflow:visible; }

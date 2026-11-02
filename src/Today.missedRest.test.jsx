@@ -28,7 +28,7 @@ const sheet=(state,request)=>act(()=>root.render(<FlexibleWeekSheet state={state
 it.each([0,1,2,3])('rest hierarchy and routing with %i missed occurrences',count=>{
  const state=todayMissedRestFixture({count}),before=serializeState(state);draw(state);
  const rest=document.querySelector('.rest-day-state'),summary=document.querySelector('.today-missed-row');
- expect(rest).not.toBeNull();expect(rest.textContent).toContain('Planned rest day');
+ expect(rest).not.toBeNull();expect(rest.textContent).toContain('Rest day');
  expect(document.body.textContent).not.toMatch(/View all|Oldest:|Train today instead|Choose exercises as you go/);
  expect(Boolean(summary)).toBe(count>0);
  expect(document.querySelectorAll('.today-missed-row')).toHaveLength(count>0?1:0);

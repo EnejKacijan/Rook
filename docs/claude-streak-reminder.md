@@ -1,5 +1,14 @@
 # Claude: vikend opomnik za tedenski streak
 
+## Zadnja produktna odločitev — 2. november 2026
+
+Uporabnik je po ogledu izrecno odstranil stalni vrstični opomnik na Today.
+Vikend opomnik se prikaže samo kot enkratni veliki bottom sheet. Po zaprtju ni
+dodatnega streak besedila ali Hide gumba, tudi ne znotraj vrstice missed workouts.
+Tam ostaneta samo običajni števec zamujenih treningov in njegov Hide/Undo.
+Veliki vikend list, tedensko skrivanje v listu in plamen ob zaključku ostanejo.
+Ta odločitev nadomesti spodnje prvotne predloge za vrstico oziroma združevanje.
+
 ## Naloga in izhodišče
 
 Delaj v `EnejKacijan/Rook`, na najnovejšem commitu veje

@@ -56,6 +56,18 @@ it('a successful first completion rolls the actual counter once, including Stric
   remount(<CompletedWorkoutStreak {...props}/>);expect(host.textContent).not.toContain('+1 week');expect(host.querySelector('.streak-number-current').textContent).toBe('3');
   expect(weeklyTrainingStreak(s).current).toBe(3);
 });
+it('with a sheet host, the first counted workout of a week lights the big flame once, then never again',async()=>{
+  const prior=fixture(['2026-10-12','2026-10-19']).workouts,s=fixture(),session=s.workouts.at(-1);
+  draw(<CompletedWorkoutStreak state={s} session={session} priorWorkouts={prior} live Modal={ModalLayer}/>);
+  await act(async()=>vi.runOnlyPendingTimers());
+  const sheet=document.querySelector('.streak-moment-sheet.is-gain');expect(sheet.textContent).toContain('+1 week');expect(sheet.textContent).toContain('3 weeks');
+  expect(sheet.querySelector('.streak-flame.is-lit.is-igniting')).not.toBeNull();
+  await act(async()=>[...sheet.querySelectorAll('button')].find(button=>button.textContent==='KEEP GOING').click());await act(async()=>vi.runAllTimers());
+  expect(document.querySelector('.streak-moment-sheet')).toBeNull();expect(host.querySelector('.completion-streak')).not.toBeNull();
+  remount(<CompletedWorkoutStreak state={s} session={session} priorWorkouts={prior} live Modal={ModalLayer}/>);await act(async()=>vi.runOnlyPendingTimers());
+  expect(document.querySelector('.streak-moment-sheet')).toBeNull();
+  saveState.mockReturnValue(true);draw(<CompletedWorkoutStreak state={s} session={session} priorWorkouts={prior} live persistenceFailed Modal={ModalLayer}/>);expect(document.querySelector('.streak-moment-sheet')).toBeNull();
+});
 it('a first streak celebrates its start instead of implying a previous week',()=>{
   const s=fixture(['2026-10-27']);draw(<CompletedWorkoutStreak state={s} session={s.workouts[0]} priorWorkouts={[]} live/>);
   expect(host.textContent).toContain('Streak started');expect(host.textContent).not.toContain('+1 week');expect(host.querySelector('.streak-number-old').textContent).toBe('0');

@@ -56,7 +56,7 @@ import {trainingStyleFor} from './trainingStyle.js';
 import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
-import {ProfileTrainingStreak,CompletedWorkoutStreak,CompletedActivityStreak,RestDayStreak} from './TrainingStreak.jsx';
+import {ProfileTrainingStreak,CompletedWorkoutStreak,CompletedActivityStreak,RestDayStreak,WeekendStreakReminder} from './TrainingStreak.jsx';
 import {exerciseImprovementHistory,improvementsForPeriod,latestImprovedExercises} from './exerciseImprovements.js';
 import {ExerciseImprovements,ImprovementRow} from './ExerciseImprovements.jsx';
 import {useLocalDay} from './useLocalDay.js';
@@ -4697,8 +4697,8 @@ export function ActiveOptionalSession({ state, update, setPage }) {
               </div>
             )}
           </dl>
-          <CompletedActivityStreak state={state} session={completedSummary} priorOptionalSessions={priorOptionalSessions.current}/>
-          <p>{isConditioning(completedSummary) ? 'Your strength plan is unchanged.' : 'Your planned rest day is unchanged.'}</p>
+          <CompletedActivityStreak state={state} session={completedSummary} priorOptionalSessions={priorOptionalSessions.current} Modal={ModalLayer}/>
+          <p>{isConditioning(completedSummary) ? 'Your strength plan is unchanged.' : 'Your training plan is unchanged.'}</p>
           <Button onClick={() => setPage("today")}>DONE</Button>
         </section>
       </main>
@@ -4844,6 +4844,7 @@ export function NoPlanToday({state,update,setPage,setDetail,campaignSlot=null}) 
     <div className="no-plan-today-heading"><div><Eyebrow>{displayDate(selectedDate)}</Eyebrow><h1>{today?'Today': 'Workouts logged'}</h1></div><button type="button" className="no-plan-calendar-action" aria-label="Browse workout dates" onClick={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}><CalendarIcon/><span>Calendar</span></button></div>
     {active&&<ActiveWorkoutNotice workout={active} dateKey={activeDate} selectedDateKey={selectedIso} now={now} onResume={resume}/>}
     {optional&&<ActiveOptionalSessionNotice session={optional} now={now} onResume={resume}/>}
+    <WeekendStreakReminder state={state} date={selectedIso} Modal={ModalLayer}/>
     {today&&!active&&!optional&&<>
       {style==='freestyle'&&<FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} primary noPlan hideHistory/>}
       {templates.length>0&&<section className="no-plan-my-workouts" aria-label="Saved workouts"><Eyebrow>SAVED WORKOUTS</Eyebrow><div className="no-plan-workout-list">{templates.map(template=><button type="button" className="list-row" key={template.id} aria-label={`${template.name}, ${pluralize(template.exercises.length,'exercise')}, open saved workout`} onClick={()=>setDetail({savedWorkout:template.id})}><span><strong>{template.name}</strong><small>{pluralize(template.exercises.length,'exercise')}</small></span><NavigationChevron/></button>)}</div></section>}
@@ -5045,6 +5046,7 @@ export function Today({
       {temporaryPeriod && temporaryPeriod.status !== 'ended' && <button className="list-row temporary-plan-notice" onClick={() => setDetail('temporary-plan')}><span><strong>{temporaryPeriod.planChanged ? 'Review temporary plan' : 'Temporary plan'}</strong><small>{temporaryPeriod.startDate} – {temporaryPeriod.endDate} · {temporaryPeriod.days.length} days a week · {temporaryPeriod.equipment.join(', ')}</small></span><NavigationChevron/></button>}
       <TemporaryScheduleSummary review={scheduleReview} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
       {missedReminder}
+      <WeekendStreakReminder state={state} date={selectedIso} Modal={ModalLayer} momentAllowed={!planReady}/>
       {planReady && (
         <PlanReadyNotice
           workoutToday={workoutToday}
@@ -5177,7 +5179,7 @@ export function Today({
         {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
         <section className="rest-day-state">
           {dayHeader(displayDate(selectedDate))}
-          <h1>{movedAwayRest || isHistoricalWeek ? 'Rest day' : 'Planned rest day'}</h1>
+          <h1>Rest day</h1>
           {isToday&&<RestDayStreak state={state} date={selectedIso}/>}
           {(movedAwayRest || isHistoricalWeek) && <p>{movedAwayRest
             ? "No workout scheduled for this day."
@@ -8912,7 +8914,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
           ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
           : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
-      <CompletedWorkoutStreak state={state} session={session} priorWorkouts={liveFinish?.priorWorkouts} live={liveEntry&&!motionCancelled} persistenceFailed={persistenceFailed}/>
+      <CompletedWorkoutStreak state={state} session={session} priorWorkouts={liveFinish?.priorWorkouts} live={liveEntry&&!motionCancelled} persistenceFailed={persistenceFailed} Modal={ModalLayer}/>
       {!endedEarly && <WorkoutSessionLog
         exercises={visibleExercises}
         units={state.profile.units}
