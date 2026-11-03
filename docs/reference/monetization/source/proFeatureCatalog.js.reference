@@ -1,0 +1,9 @@
+// Shared with the separate Pro review. Progression and workout history are
+// deliberately absent: those remain available without a subscription.
+export const PRO_FEATURES = Object.freeze([
+  { id: 'coach_limit', label: 'Coach', title: 'More Coach guidance', body: 'More guidance beyond built-in progression.' },
+  { id: 'generated_plan_apply', label: 'New plans', title: 'New ROOK-built plans', body: 'Fresh goals, schedule or equipment.' },
+  { id: 'temporary_plan', label: 'Busy weeks', title: 'Temporary plans for 2–4 weeks', body: 'Keep training through busy weeks.' },
+  { id: 'saved_workout_limit', label: 'Saved workouts', title: 'Unlimited saved workouts', body: 'Your favorite routines, ready to reuse.' },
+  { id: 'premium_style', label: 'Themes', title: 'Personal themes', body: 'A look that feels like you.' },
+].map(Object.freeze));

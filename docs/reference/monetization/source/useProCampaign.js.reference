@@ -1,0 +1,21 @@
+import React, { useEffect, useState } from 'react';
+import { resolveProCampaign } from './proCampaign.js';
+
+// Presentation expires with the verified snapshot; it never grants access.
+export function useProCampaign({ campaign, snapshot, active = false, preview = false, now: sampleNow }) {
+  const [clock, setClock] = useState(() => sampleNow ?? Date.now());
+  useEffect(() => {
+    if (sampleNow !== undefined) return;
+    const refresh = () => setClock(Date.now());
+    refresh();
+    const timer = setInterval(refresh, 15_000);
+    window.addEventListener('pageshow', refresh);
+    document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(timer); window.removeEventListener('pageshow', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [sampleNow]);
+  return resolveProCampaign(campaign, snapshot, { now: sampleNow ?? clock, access: active ? 'active' : 'free', preview });
+}
+
+export function campaignEndLabel(endsAt, detailed = false) {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', ...(detailed ? { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' } : {}), timeZone: 'Europe/Ljubljana' }).format(new Date(endsAt));
+}

@@ -332,11 +332,9 @@
   min-width:0;
   max-width:100%;
 }
-/* Secondary text actions in sheets and on Today read at body size; 13px links
-   under a primary action were easy to miss and hard to hit. */
-:root[data-appearance] :is(.modal-layer, .today-screen, .import-resolution) .text-button:not(.compact, .missed-reminder-hide):not(.active-workout-notice *, .today-adjust-actions *) { font-size:15px; line-height:1.4; }
-/* Destructive photo action reads at the same size as its neighbouring text actions. */
-:root[data-appearance] .workout-photo-actions > .workout-photo-delete-inline { font-size:13px; letter-spacing:.06em; }
+/* Secondary text actions share the button scale. Keep existing touch geometry
+   independent of the smaller label. Navigation rows retain the body scale. */
+:root[data-appearance] :is(.modal-layer, .today-screen, .import-resolution) .text-button:not(.compact, .missed-reminder-hide):not(.active-workout-notice *, .today-adjust-actions *, .rest-day-action) { font-size:var(--rook-type-action); line-height:1.4; }
 /* At 200% zoom a phone is about 200 CSS px wide: four uppercase tab labels cannot
    fit and broke mid-word ("PROGR ESS"). Keep the icons; each tab keeps its aria-label. */
 @media (max-width: 299px) {

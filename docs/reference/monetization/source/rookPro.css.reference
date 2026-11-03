@@ -1,0 +1,94 @@
+.rook-pro-paywall { padding-bottom: max(32px, env(safe-area-inset-bottom)); }
+.rook-pro-paywall > .detail-header { background: transparent; }
+.rook-pro-paywall .rook-pro-explore { min-height: 44px; padding: 8px 0; font-size: 14px; text-align: left; }
+/* Longer benefit copy still scrolls clear of the measured sticky purchase area.
+   The generic modal rule otherwise wins over SheetActionFooter's scroll padding. */
+:root .modal-layer > .rook-pro-paywall.has-sheet-action-footer { scroll-padding-bottom: calc(var(--sheet-action-height, 126px) + 24px); }
+:root .modal-layer > .screen.detail-screen.rook-pro-paywall > .detail-header { min-height: 72px; padding-top: 22px; margin-bottom: 6px; }
+.rook-pro-paywall .pro-review-disclosure { margin: 2px 0 6px; font-size: 11px; line-height: 1.3; }
+.rook-pro-paywall > .eyebrow { display: block; margin-top: 6px; }
+.screen.rook-pro-paywall h1 { margin: 6px 0; font-size: 26px; line-height: 1.16; }
+.rook-pro-paywall > p { max-width: 36rem; }
+.rook-pro-paywall .rook-pro-description { margin: 0; font-size: 13px; line-height: 1.4; }
+.rook-pro-included { margin-top: 20px; }
+.rook-pro-paywall .rook-pro-included h2 { margin: 0 0 10px; color: var(--rook-secondary); font-size: 11px; font-weight: 600; line-height: 1.4; letter-spacing: .06em; text-transform: uppercase; }
+.rook-pro-benefits { display: grid; gap: 12px; padding: 0; margin: 0; list-style: none; }
+.rook-pro-benefits li { display: flex; gap: 10px; align-items: flex-start; }
+.rook-pro-benefits li > span { flex: 0 0 auto; color: var(--rook-accent-text); font-size: 14px; line-height: 1.4; }
+.rook-pro-benefits li > div { min-width: 0; overflow-wrap: break-word; }
+/* Explicit component roles outrank the shared Dark strong { color: inherit }
+   rule. Context is a feature accent, independent of plan selection/success. */
+:root .rook-pro-benefits strong { display: block; color: var(--rook-text); font-size: 14px; font-weight: 650; line-height: 1.4; }
+:root .rook-pro-benefits .is-context-benefit strong { color: var(--rook-accent-text); font-weight: 700; }
+.rook-pro-benefits small { display: block; margin-top: 2px; color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
+.rook-pro-options { display: grid; gap: 8px; margin: 18px 0 0; border: 0; padding: 0; min-width: 0; }
+.rook-pro-options legend { font-size: 11px; font-weight: 600; margin-bottom: 8px; color: var(--rook-secondary); }
+.rook-pro-options label { min-height: 112px; width: 100%; padding: 12px; text-align: left; display: grid; grid-template-columns: 18px minmax(0,1fr); gap: 2px 8px; align-items: start; color: var(--rook-text); background: var(--rook-surface); border: 1px solid var(--rook-control-border,var(--rook-border)); border-radius: 12px; cursor: pointer; transition: border-color var(--rook-motion-state,200ms) var(--rook-ease-standard,ease), background-color var(--rook-motion-state,200ms) var(--rook-ease-standard,ease); }
+.rook-pro-options label.is-selected { border-color: var(--rook-accent-text); background: var(--rook-surface); background: color-mix(in srgb, var(--rook-accent-soft) 40%, var(--rook-surface)); }
+.rook-pro-options input { accent-color: var(--rook-accent-text); width: 16px; height: 16px; margin: 3px 0 0; }
+.rook-pro-option-copy { display: flex; flex-direction: column; gap: 4px; min-width: 0; font-size: 14px; line-height: 1.35; overflow-wrap: anywhere; }
+.rook-pro-option-heading { display: flex; align-items: baseline; justify-content: space-between; flex-wrap: wrap; gap: 4px 12px; }
+.rook-pro-value-badge { padding: 3px 7px; border-radius: 6px; background: var(--rook-accent-soft); color: var(--rook-accent-text); font-size: 10px; font-weight: 650; line-height: 1.3; letter-spacing: .04em; text-transform: uppercase; }
+/* The existing 20px ROOK summary scale, one step below section-heading 24px.
+   The actual charge still leads the 12px equivalent and savings. */
+.rook-pro-option-price { margin-top: 2px; font-size: 20px; line-height: 1.2; font-weight: 650; font-variant-numeric: tabular-nums; overflow-wrap: normal; }
+.is-selected .rook-pro-option-price { font-weight: 700; }
+.rook-pro-option-value { color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
+.rook-pro-option-value > span { display: inline-block; }
+.rook-pro-saving { color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
+.rook-pro-option-trial { color: var(--rook-text); font-size: 12px; line-height: 1.4; }
+.rook-pro-options label:has(input:focus-visible) { outline: 2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset: 3px; }
+.rook-pro-paywall .rook-pro-ownership { font-size: 11px; line-height: 1.4; color: var(--rook-secondary); }
+.rook-pro-paywall .rook-pro-legal { margin: 8px 0 16px; font-size: 11px; line-height: 1.5; color: var(--rook-secondary); }
+.rook-pro-secondary { display: flex; flex-wrap: wrap; gap: 0 20px; margin-top: 8px; }
+.rook-pro-secondary button, .rook-pro-secondary a { min-height: 44px; display: inline-flex; align-items: center; color: var(--rook-accent-text); font-size: 12px; }
+.rook-pro-secondary button { width: auto; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.rook-pro-secondary button:focus-visible, .rook-pro-secondary a:focus-visible { outline: 2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset: 3px; }
+:root .rook-pro-paywall .rook-pro-purchase-footer { --sheet-action-gap: 4px; --sheet-action-padding: 8px; margin-top: 8px; }
+:root .rook-pro-paywall .rook-pro-purchase-footer > .button { min-height: 48px; padding-block: 10px; line-height: 1.35; }
+.rook-pro-paywall .rook-pro-billing { font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; }
+.rook-pro-billing strong { color: var(--rook-text); font-size: 14px; font-weight: 600; }
+.rook-pro-paywall .rook-pro-renewal { text-align: center; font-size: 11px; line-height: 1.4; color: var(--rook-secondary); }
+.rook-pro-continue { text-transform: uppercase; }
+@media (prefers-reduced-motion: reduce) {
+  .rook-pro-options label { transition: none; }
+}
+.rook-pro-feedback { font-size: 12px; line-height: 1.45; color: var(--rook-text); overflow-wrap: anywhere; }
+.rook-pro-feedback[role="alert"] { color: var(--rook-danger-text,var(--rook-text)); }
+.rook-pro-unavailable { font-size: 13px; line-height: 1.5; }
+.coach-free-remaining { display: block; margin-top: 2px; color: var(--rook-muted); font-size: 11px; font-weight: 500; }
+.appearance-pro-lock { display: inline; font-size: 11px; font-weight: 600; color: var(--rook-accent-text); }
+.generated-plan-pro-note { display: block; margin: 0 0 8px; color: var(--rook-secondary); }
+.saved-workout-count { display: block; margin: 8px 0 2px; color: var(--rook-muted); }
+.saved-workout-limit-note { margin: 8px 0 12px; color: var(--rook-secondary); font-size: 13px; }
+/* The purchase contract is unchanged; typography and product proof lead. */
+.screen.rook-pro-paywall h1 { margin:12px 0; font-size:clamp(30px,8vw,40px); line-height:1.06; letter-spacing:-.04em; }
+.rook-pro-paywall .rook-pro-description { font-size:15px; line-height:1.5; color:var(--rook-secondary); }
+.rook-pro-paywall .rook-pro-explore { display:flex; align-items:center; justify-content:space-between; width:100%; margin:0 0 12px; font-size:14px; font-weight:650; color:var(--rook-accent-text); }
+.rook-pro-explore:after { content:'↗'; }
+.rook-pro-options { gap:10px; margin-top:12px; }
+.rook-pro-options legend { font-size:12px; margin-bottom:12px; }
+.rook-pro-options label { border-radius:16px; padding:16px 14px; min-height:98px; }
+.rook-pro-option-price { font-size:24px; letter-spacing:-.025em; }
+.rook-pro-option-heading strong { font-size:15px; }
+.rook-pro-option-value,.rook-pro-saving,.rook-pro-option-trial { font-size:13px; }
+.rook-pro-value-badge { font-size:10px; border-radius:5px; }
+.rook-pro-benefits { gap:15px; }
+.rook-pro-benefits small { font-size:13px; line-height:1.5; }
+.rook-pro-paywall .rook-pro-included h2 { font-size:12px; }
+.rook-pro-paywall .rook-pro-ownership,.rook-pro-paywall .rook-pro-legal,.rook-pro-paywall .rook-pro-renewal { font-size:12px; line-height:1.5; }
+.rook-pro-paywall .rook-pro-continue { text-transform:none; font-size:15px; }
+:root .rook-pro-paywall .rook-pro-purchase-footer { --sheet-action-gap:7px; --sheet-action-padding:12px; }
+/* Both billing choices remain visible before the purchase action on phones. */
+.rook-pro-paywall .pro-training-preview { padding:14px; margin:15px 0; }
+.rook-pro-paywall .pro-training-preview figcaption { margin-bottom:10px; }
+.rook-pro-paywall .pro-training-week { margin-top:10px; }
+.rook-pro-paywall .pro-training-week > div { padding:9px; gap:6px; }
+.rook-pro-paywall .rook-pro-options label { min-height:70px; padding:13px 12px; }
+.rook-pro-paywall .rook-pro-option-copy { display:grid; grid-template-columns:minmax(0,1fr) auto; gap:7px 10px; align-items:start; }
+.rook-pro-paywall .rook-pro-option-heading { grid-column:1; grid-row:1; align-items:flex-start; gap:6px; }
+.rook-pro-paywall .rook-pro-option-price { grid-column:2; grid-row:1; margin-top:0; font-size:22px; letter-spacing:-.025em; text-align:right; }
+.rook-pro-paywall .rook-pro-saving,.rook-pro-paywall .rook-pro-option-trial { grid-column:1/-1; }
+.rook-pro-paywall .rook-pro-value-badge { font-size:10px; }
+@media (max-width:350px) { .rook-pro-paywall .rook-pro-option-copy { grid-template-columns:minmax(0,1fr); } .rook-pro-paywall .rook-pro-option-price { grid-column:1; grid-row:auto; text-align:left; } }
+:root .screen.detail-screen.rook-pro-paywall.has-sheet-action-footer { padding-bottom:var(--rook-sheet-safe-bottom,20px); scroll-padding-bottom:calc(var(--sheet-action-height,128px) + 20px); }

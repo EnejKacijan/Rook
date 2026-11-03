@@ -1,0 +1,36 @@
+// Presentation only: never parse a localized label or modify a store product.
+export function paywallPlanPricing(key, price, monthlyPrice, locale = 'en') {
+  const formatted = price?.formattedPrice || '';
+  if (key !== 'annual') return { primary: `${formatted} / month`, summary: `${formatted}/month`, equivalent: null, saving: null, savingAmount: null };
+
+  let equivalent = null, currencyFormat = null;
+  if (Number.isFinite(price?.amount) && price.amount > 0 && typeof price.currency === 'string') {
+    try {
+      currencyFormat = new Intl.NumberFormat(locale, { style: 'currency', currency: price.currency });
+      equivalent = currencyFormat.format(price.amount / 12);
+    } catch { /* Unusable metadata keeps the actual store label, without a claim. */ }
+  }
+  let saving = null, savingAmount = null;
+  if (currencyFormat && price.currency === monthlyPrice?.currency && Number.isFinite(monthlyPrice?.amount) && monthlyPrice.amount > 0) {
+    // Compare regular paid periods in the currency's minor units. The trial is
+    // deliberately excluded. Never parse labels or convert between currencies.
+    const scale = 10 ** currencyFormat.resolvedOptions().maximumFractionDigits;
+    const annualUnits = Math.round(price.amount * scale);
+    const yearlyMonthlyUnits = Math.round(monthlyPrice.amount * scale) * 12;
+    const difference = yearlyMonthlyUnits - annualUnits;
+    if (Number.isSafeInteger(annualUnits) && annualUnits > 0 && Number.isSafeInteger(yearlyMonthlyUnits) && yearlyMonthlyUnits > 0 && difference > 0) {
+      const percent = Math.round(100 * difference / yearlyMonthlyUnits);
+      if (percent > 0 && percent < 100) {
+        saving = percent;
+        savingAmount = currencyFormat.format(difference / scale);
+      }
+    }
+  }
+  return {
+    primary: `${formatted} / year`,
+    summary: `${formatted}/year`,
+    equivalent: equivalent ? `${equivalent}/mo equivalent` : null,
+    saving,
+    savingAmount,
+  };
+}

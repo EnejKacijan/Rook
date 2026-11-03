@@ -1,0 +1,60 @@
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { resolveProCampaign } from './proCampaign.js';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
+import './proCurrentOffers.css';
+
+// This is opened explicitly by the user; closing a paywall never opens it.
+export function ProCurrentOffers({ Header, close, onDismiss, campaign = null, snapshot = null, active = false, preview = false, now: sampleNow, onSelectOffer }) {
+  const [now, setNow] = useState(() => sampleNow ?? Date.now());
+  const [changed, setChanged] = useState(false);
+  const [selected, setSelected] = useState(false);
+  const [selecting, setSelecting] = useState(false), [error, setError] = useState('');
+  const reviewInFlight = useRef(false);
+  const title = useRef(null), id = useId();
+  useEffect(() => { title.current?.focus({ preventScroll: true }); }, []);
+  useEffect(() => {
+    if (sampleNow !== undefined) { setNow(sampleNow); return; }
+    const refresh = () => setNow(Date.now());
+    const interval = setInterval(refresh, 15_000);
+    window.addEventListener('pageshow', refresh); document.addEventListener('visibilitychange', refresh);
+    return () => { clearInterval(interval); window.removeEventListener('pageshow', refresh); document.removeEventListener('visibilitychange', refresh); };
+  }, [sampleNow]);
+  const offer = resolveProCampaign(campaign, snapshot, { now, access: active ? 'active' : 'free', preview });
+  const select = async () => {
+    if (reviewInFlight.current) return;
+    const current = resolveProCampaign(campaign, snapshot, { now: sampleNow ?? Date.now(), access: active ? 'active' : 'free', preview });
+    if (current.status !== 'available') { setNow(sampleNow ?? Date.now()); setChanged(true); return; }
+    reviewInFlight.current = true; setSelecting(true); setError('');
+    try { await onSelectOffer?.(current); if (preview) setSelected(true); }
+    catch { setError('The offer could not be opened. Please try again.'); }
+    finally { reviewInFlight.current = false; setSelecting(false); }
+  };
+  const empty = {
+    active: ['You already have Pro.', 'Your current subscription stays unchanged.'],
+    unavailable: ['No seasonal offer right now.', 'You can still choose the regular monthly or annual plan.'],
+    expired: ['This offer has ended.', 'The regular monthly and annual plans are still available.'],
+    unknown: ["We can't verify this offer right now.", "You can still explore our regular plans."],
+    ineligible: ['This offer isn’t available for this account.', 'You can still choose the regular monthly or annual plan.'],
+  }[offer.status];
+  return <main className="screen detail-screen pro-current-offers" role="dialog" aria-modal="true" aria-labelledby={id}>
+    <Header title="ROOK Pro" onBack={close} backLabel="Back from current offers" onClose={onDismiss || close} closeLabel="Close current offers"/>
+    <span className="eyebrow">ROOK PRO{preview ? ' · Example campaign' : ''}</span>
+    <h1 id={id} ref={title} tabIndex={-1}>{offer.status === 'available' ? <>Make this year<br/><em>work for you.</em></> : empty[0]}</h1>
+    {offer.status === 'available' ? <>
+      <p className="pro-offer-lead">A plan for your next goal. Support for the weeks in between.</p><div className="pro-offer-price-card"><span className="pro-offer-event">{offer.title} · First-year price</span><p className="pro-offer-amount"><strong>{offer.intro.formattedPrice}</strong> for the first year</p>
+      <p className="pro-offer-renewal">Then {offer.renewal.formattedPrice}/year. Renews yearly until canceled.</p>
+      <p className="pro-offer-date">Ends {new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZoneName: 'short', timeZone: 'Europe/Ljubljana' }).format(new Date(offer.endsAt))}.</p>
+      <p className="pro-offer-no-trial">No free trial is included with this offer.</p></div><ul className="pro-offer-value"><li><b>Find your next step</b><span>ROOK Coach.</span></li><li><b>Train around real life</b><span>New plans · Short-term plans.</span></li><li><b>Make it yours</b><span>Unlimited saves · Personal themes.</span></li></ul>
+      {offer.firstTimeProOnly && <p className="pro-offer-eligibility">For your first ROOK Pro subscription.</p>}
+      {selected && <p className="pro-offer-selected" role="status">Preview complete. No payment or subscription was created.</p>}
+      {!onSelectOffer && <p role="status">Offer checkout is not available here yet.</p>}
+    </> : <p role="status">{empty[1]}</p>}
+    {error && <p role="alert">{error}</p>}
+    {changed && <p role="status">Offer details changed. Review the current options before continuing.</p>}
+    <button type="button" className={offer.status === 'available' ? 'text-button pro-offer-compare' : 'button primary'} onClick={close}>{offer.status === 'available' ? 'Back to plans' : active ? 'Back to Pro' : 'See regular plans'}</button>
+    {offer.status === 'available' && onSelectOffer && <SheetActionFooter className="pro-offer-footer">
+      <button className="button primary" type="button" aria-describedby={`${id}-purchase-terms`} disabled={selecting} onClick={select}>{selecting ? 'Opening offer…' : preview ? `Preview first year · ${offer.intro.formattedPrice}` : `Get your first year for ${offer.intro.formattedPrice}`}</button>
+      <p id={`${id}-purchase-terms`}>{offer.intro.formattedPrice} for the first year. Then {offer.renewal.formattedPrice}/year.<br/>Auto-renews until canceled. No free trial.</p>
+    </SheetActionFooter>}
+  </main>;
+}

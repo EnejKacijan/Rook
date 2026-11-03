@@ -1,0 +1,46 @@
+// Store metadata owns eligibility and entitlement. These values are presentation only.
+export const ANNUAL_TRIAL_DAYS = 7;
+export function subscriptionConfig(env = import.meta.env, platform = 'web') {
+  const suffix = platform === 'ios' ? 'IOS' : 'ANDROID';
+  return {
+    enabled: env.VITE_ROOK_PRO_ROLLOUT === 'true',
+    trialEnabled: env.VITE_ROOK_ANNUAL_TRIAL_ENABLED !== 'false',
+    apiKey: env[`VITE_ROOK_REVENUECAT_${suffix}_PUBLIC_KEY`] || '',
+    entitlementId: env.VITE_ROOK_PRO_ENTITLEMENT_ID || '',
+    offeringId: env.VITE_ROOK_PRO_OFFERING_ID || '',
+    annualId: env[`VITE_ROOK_ANNUAL_${suffix}_PRODUCT_ID`] || '',
+    monthlyId: env[`VITE_ROOK_MONTHLY_${suffix}_PRODUCT_ID`] || '',
+    annualTrialOptionId: env.VITE_ROOK_ANNUAL_ANDROID_TRIAL_OPTION_ID || '',
+  };
+}
+export function trialPresentation(plan, item) {
+  const eligible = Boolean(plan === 'annual' && item?.trialEligibility === 'eligible' && item?.trialDays === ANNUAL_TRIAL_DAYS && item?.product?.price?.formattedPrice);
+  return {
+    eligible,
+    copy: eligible ? `7 days free, then ${item.product.price.formattedPrice}/year` : null,
+    cta: eligible ? 'Start 7-day free trial' : `Continue with ${plan}`,
+    renewal: plan === 'annual' ? 'Renews yearly until canceled' : 'Renews monthly until canceled',
+    cancellation: item?.platform === 'ios'
+      ? 'Cancel at least 24 hours before the trial ends to avoid the yearly charge.'
+      : 'Cancel before renewal to avoid the yearly charge.',
+  };
+}
+const trusted = value => value === 'VERIFIED' || value === 'VERIFIED_ON_DEVICE';
+export function proEntitlement(customerInfo, entitlementId) {
+  if (!customerInfo?.entitlements || !trusted(customerInfo.entitlements.verification)) return { status: 'unknown' };
+  const info = customerInfo.entitlements.all?.[entitlementId];
+  if (info && !trusted(info.verification)) return { status: 'unknown' };
+  // Do not compare dates to the device clock or interpret willRenew as access.
+  return { status: info?.isActive === true ? 'active' : 'free',
+    periodType: info?.periodType || null, willRenew: info?.willRenew ?? null,
+    expirationDate: info?.expirationDate || null, productId: info?.productIdentifier || null,
+    originalPurchaseDate: info?.originalPurchaseDate || null,
+    managementUrl: customerInfo.managementURL || null };
+}
+export function subscriptionLifecycle(previous, current) {
+  if (previous?.status !== 'active' || previous.periodType !== 'TRIAL' || !previous.originalPurchaseDate
+      || current.originalPurchaseDate !== previous.originalPurchaseDate || current.productId !== previous.productId) return null;
+  if (current.status === 'active' && current.periodType === 'NORMAL') return 'trial_converted';
+  if (current.status === 'free' && current.periodType === 'TRIAL') return 'trial_expired_without_conversion';
+  return null;
+}

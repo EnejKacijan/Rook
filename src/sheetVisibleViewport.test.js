@@ -13,6 +13,14 @@ afterEach(() => { releases.reverse().forEach(release=>release()); layer.remove()
 const bind=(options)=>{const release=bindSheetVisibleViewport(panel,()=>{},options); releases.push(release);return release;};
 const resize=(height,offsetTop=0)=>{vi.stubGlobal('innerHeight',height); Object.assign(vv,{height,offsetTop}); window.dispatchEvent(new Event('resize')); vv.dispatchEvent(new Event('resize'));};
 
+it('holds the painted geometry while an accepted close and native keyboard dismissal overlap',()=>{
+  const changed=vi.fn(); releases.push(bindSheetVisibleViewport(panel,changed,{keyboardOnly:true}));
+  resize(480,24); const geometry=layer.style.cssText, panelGeometry=panel.style.cssText;
+  changed.mockClear(); panel.setAttribute('data-sheet-closing',''); resize(844);
+  expect(layer.style.cssText).toBe(geometry); expect(panel.style.cssText).toBe(panelGeometry);
+  expect(changed).not.toHaveBeenCalled();
+});
+
 it('keeps normal sheet geometry closed, bounds co-resized sheets, and restores exactly on close',()=>{
   layer.style.height='700px'; layer.style.top='3px'; panel.style.maxHeight='650px';
   bind({keyboardOnly:true}); expect(layer.style.height).toBe('700px');

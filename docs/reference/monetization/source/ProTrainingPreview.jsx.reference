@@ -1,0 +1,13 @@
+import React from 'react';
+import './proTrainingPreview.css';
+
+// A small product illustration, always synthetic and independent of user data.
+export function ProTrainingPreview({ context = 'generated_plan_apply' }) {
+  return <figure className="pro-training-preview">
+    <figcaption><span>SAMPLE PREVIEW</span><b>ROOK <i>PRO</i></b></figcaption>
+    {context === 'coach_limit' ? <><div className="pro-training-question">Can I train just three days this week?</div><div className="pro-training-answer"><b>Let’s make those days count.</b><span>Keep your main lifts. Build around your week.</span></div></>
+    : context === 'premium_style' ? <><strong>Your training. Your colors.</strong><div className="pro-training-swatches" aria-hidden="true"><span/><span/><span/><span/><span/></div></>
+    : context === 'saved_workout_limit' ? <><strong>Ready for any kind of day.</strong><div className="pro-training-library">{['Upper A','Lower A','Quick session','Travel','Weekend','+ More'].map(name=><span key={name}>{name}</span>)}</div></>
+    : <><div className="pro-training-plan"><strong>{context === 'temporary_plan' ? 'Away for 2 weeks?' : 'A busy week? You’ve got a plan.'}</strong><span>{context === 'temporary_plan' ? 'A short-term plan. Your main plan stays.' : 'Three days. The same goal.'}</span></div><div className="pro-training-week">{[['M','Upper'],['W','Lower'],['F','Full body']].map(([day,workout])=><div key={day}><span>{day}</span><b>{workout}</b><i aria-hidden="true">✓</i></div>)}</div></>}
+  </figure>;
+}

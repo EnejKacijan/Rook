@@ -1,3 +1,8 @@
+.profile-screen.profile-hub {
+  /* Rows already own their bottom padding. Reserve the measured navigation
+     footprint and only the 4px needed by the keyboard focus outline. */
+  padding-bottom: calc(var(--bottom-nav-total-height, 56px) + 4px);
+}
 .profile-screen .profile-program-entry {
   display: flex; align-items: center; justify-content: space-between; gap: 16px;
   width: 100%; min-height: 48px; padding: 0 0 20px; text-align: left;
@@ -47,12 +52,12 @@
 .profile-manage .list-row > span:first-child { min-width: 0; }
 .profile-manage .list-row small { line-height: 1.45; }
 .profile-manage .list-row { border-color: var(--rook-border); }
-.profile-manage .list-row:last-child { border-bottom: 0; }
 /* Flat groups own separators between rows. Headings/section spacing and the
-   bottom navigation already provide the boundary after the final row. */
-.profile-screen .profile-settings-list > .list-row:last-of-type,
+   bottom navigation already provide the boundary after the final row.
+   Match the last row across element types: links and buttons can be mixed. */
+.profile-screen :is(.profile-settings-list,.profile-manage) > .list-row:not(:has(~ .list-row)),
 .profile-screen .profile-group-end,
-.profile-training-style > .list-row:last-of-type { border-bottom: 0; }
+.profile-training-style > .list-row:not(:has(~ .list-row)) { border-bottom: 0; }
 .profile-program-entry > .rook-navigation-chevron { color: var(--rook-secondary); }
 .profile-screen :is(.profile-program-entry,.profile-management-back):focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 3px; }
 .profile-screen .profile-troubleshooting { margin-top: 24px; }

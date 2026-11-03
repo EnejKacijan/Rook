@@ -9,6 +9,7 @@
   --rook-type-meta:.8125rem;
   --rook-type-label:.75rem;
   --rook-type-action:.875rem;
+  --rook-type-utility:.8125rem;
   --rook-type-number:1.125rem;
 }
 
@@ -19,7 +20,7 @@ body { font-size:var(--rook-type-body); }
 
 /* Functional pages. The expressive three-page introduction keeps its display
    scale; a screen being empty or fullscreen does not create a larger title. */
-:root :is(.screen,.onboarding,.startup-recovery,.account-sync-lock):not(.welcome-screen,.optional-session-screen) h1 {
+:root :is(.screen,.onboarding,.startup-recovery,.account-sync-lock):not(.welcome-screen) h1 {
   font-size:var(--rook-type-page) !important;
   line-height:1.166667 !important;
   letter-spacing:-.02em;
@@ -64,7 +65,9 @@ body { font-size:var(--rook-type-body); }
   font-size:var(--rook-type-sheet) !important;
   line-height:1.2 !important;
 }
-:root :is(.workout-confirm,.destructive-confirmation-sheet) h2 {
+:root :is(.workout-confirm,.destructive-confirmation-sheet,
+  .history-correction-confirm,.logout-confirm-sheet,
+  .today-exercise-actions-sheet.confirming) h2 {
   font-size:var(--rook-type-page) !important;
   line-height:1.166667 !important;
 }
@@ -211,7 +214,7 @@ body { font-size:var(--rook-type-body); }
   font-size:var(--rook-type-body);
   line-height:1.375;
 }
-:root :is(.plate-add-row > button,.workout-photo-picker,
+:root :is(.plate-add-row > button,
   .session-feedback-options > button,.import-review-compact-editor > button) {
   font-size:var(--rook-type-body) !important;
   line-height:1.25 !important;
@@ -262,8 +265,7 @@ body { font-size:var(--rook-type-body); }
   line-height:1.428572 !important;
 }
 :root .workout-photo-viewer-error strong,
-:root .workout-photo-viewer-context strong,
-:root :is(.workout-photo-viewer-actions,.workout-photo-delete-confirm) > button {
+:root .workout-photo-viewer-context strong {
   font-size:var(--rook-type-body) !important;
   line-height:1.375 !important;
 }
@@ -319,6 +321,53 @@ body { font-size:var(--rook-type-body); }
   line-height:1.5 !important;
   font-weight:600;
   letter-spacing:.065em;
+}
+
+/* Secondary actions sit below the main button in the type hierarchy. A photo
+   picker is a label-backed control, but uses the same utility role as Delete. */
+:root :is(.text-button,.photo-comparison-change) {
+  font-size:var(--rook-type-action);
+  line-height:1.428572;
+}
+:root :is(.workout-photo-picker,.workout-photo-delete-inline,
+  .workout-photo-missing button,.workout-photo-viewer-actions > button,
+  .photo-comparison-change,.weight-history-add) {
+  min-height:44px;
+  font-size:var(--rook-type-utility) !important;
+  font-weight:600;
+  line-height:1.428572 !important;
+  letter-spacing:.025em;
+}
+:root .workout-photo-delete-confirm > button {
+  min-height:44px;
+  font-size:var(--rook-type-action) !important;
+  font-weight:600;
+  line-height:1.428572 !important;
+}
+/* Navigation rows keep the reading role; their hit areas are independent. */
+:root :is(.profile-help-item > summary,.plan-choice strong,
+  .plan-editor-heading > strong,.plan-editor-summary strong,
+  .exercise-picker-label > strong,.custom-weekly-structure > legend,
+  .privacy-ai-choice h3,.action-card-applied h3,.exercise-visual-viewer h2,
+  .coach-history-empty h3,.missed-combine-sources strong,
+  .flexible-reorder-body > strong,.adjust-equipment-mode strong,
+  .exercise-improvements-sheet .improvement-date-group > h2,
+  .logged-exercises-preview.is-empty h3) {
+  font-size:var(--rook-type-body) !important;
+  line-height:1.375;
+  font-weight:600;
+}
+:root :is(.month-calendar-toolbar h2,.optional-activity-details h2,
+  .email-account h2,
+  .previous-values-sheet .previous-values-source-card strong) {
+  font-size:var(--rook-type-sheet);
+  line-height:1.333333;
+}
+:root :is(.entry-bring-plan .entry-content > p,
+  .fatal-error-screen.startup-recovery > p:not(.eyebrow),
+  .profile-screen .profile-help-item .rook-disclosure-content > p) {
+  font-size:var(--rook-type-body);
+  line-height:1.5;
 }
 
 /* Calendar initials and tab labels are compact navigation, not body copy. */

@@ -1,0 +1,179 @@
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
+import { paywallPlanPricing } from './paywallPricing.js';
+import { trialPresentation } from './subscriptionPolicy.js';
+import { trackFunnelEvent } from './analytics.js';
+import { ProFeatureExplorer } from './ProFeatureExplorer.jsx';
+import { PRO_FEATURES } from './proFeatureCatalog.js';
+import { ProCurrentOffers } from './ProCurrentOffers.jsx';
+import { ProCampaignBanner } from './ProCampaignBanner.jsx';
+import { ProTrainingPreview } from './ProTrainingPreview.jsx';
+import './rookPro.css';
+
+const benefits = {
+  generated_plan_apply: 'A plan built around you',
+  premium_style: 'Make ROOK feel like yours',
+  saved_workout_limit: 'Keep your workouts ready',
+  coach_limit: 'A clearer next step',
+  temporary_plan: 'A plan for a different few weeks',
+};
+const descriptions = {
+  generated_plan_apply: 'Build your next plans around new goals, schedules and equipment.',
+  premium_style: 'Curated palettes, custom colors and Light, Dark or System.',
+  saved_workout_limit: 'Your four free saved-workout slots are full. Make room for more with Pro.',
+  coach_limit: 'Your free Coach replies are used up. Keep the conversation going with Pro.',
+  temporary_plan: 'Different training days or equipment for 2–4 weeks. Review every proposed change before applying it.',
+};
+const contextLabels = {
+  generated_plan_apply: 'YOUR TRAINING PLAN', premium_style: 'PERSONAL THEMES',
+  saved_workout_limit: 'MORE SAVED WORKOUTS', coach_limit: 'CONTINUE WITH COACH',
+  temporary_plan: 'TEMPORARY PLAN',
+};
+// One shared benefit list. The triggering feature leads; Coach leads the rest.
+// Pro has no saved-workout count cap (SavedWorkouts/saveWorkoutTemplate).
+// Coach still shares the AI backend's safety ceilings, so never promise unlimited.
+const included = PRO_FEATURES.map(({ id, title, body }) => [id, title, body]);
+
+// Presentation choices stay separate from products, eligibility and purchase logic.
+// No experiment is enrolled here; a future variant can reuse the same controls.
+export const PAYWALL_PRESENTATION = Object.freeze({ annualBadge: 'best-value', benefitsFirst: false });
+function PlanOffer({ label, pricing, trial, selected, presentation }) {
+  return <span className="rook-pro-option-copy">
+    <span className="rook-pro-option-heading"><strong>{label}</strong>{pricing.saving !== null && <small className="rook-pro-value-badge">{presentation.annualBadge === 'saving' ? `Save ${pricing.saving}%` : 'Best value'}</small>}</span>
+    <span className="rook-pro-option-price">{pricing.primary}</span>
+    {pricing.savingAmount && <span className="rook-pro-saving">Save {pricing.savingAmount}/year vs 12 monthly payments</span>}
+    {trial.eligible && selected && <span className="rook-pro-option-trial">7-day free trial</span>}
+  </span>;
+}
+
+export function RookProPaywall({ context, products, managementUrl, close, purchase, refresh, onUnlocked, Header,
+  source = 'store', track = trackFunnelEvent,
+  campaign = null, offerSnapshot = null, onReviewOffer, offerNow, initialView = 'plans',
+  presentation = PAYWALL_PRESENTATION,
+  privacyUrl = import.meta.env.VITE_ROOK_PRIVACY_URL, termsUrl = import.meta.env.VITE_ROOK_TERMS_URL,
+  locale = typeof document === 'undefined' ? 'en' : document.documentElement.lang || 'en' }) {
+  const [busy, setBusy] = useState('');
+  const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
+  const [restoredActive, setRestoredActive] = useState(false);
+  const [selected, setSelected] = useState('annual');
+  const [exploring, setExploring] = useState(false);
+  const [offersOpen, setOffersOpen] = useState(initialView === 'offers');
+  const offerTrigger = useRef(null);
+  const explorerTrigger = useRef(null), returningFromExplorer = useRef(false);
+  useEffect(() => {
+    if (!exploring && !offersOpen && returningFromExplorer.current) {
+      const target = returningFromExplorer.current === 'offers' ? offerTrigger : explorerTrigger;
+      returningFromExplorer.current = false;
+      target.current?.focus({ preventScroll: true });
+    }
+  }, [exploring, offersOpen]);
+  const inFlight = useRef(false);
+  const dismissed = useRef(false), handledUnlock = useRef(false);
+  useEffect(() => { dismissed.current = false; return () => { dismissed.current = true; }; }, []);
+  const shown = useRef(false);
+  useEffect(() => { if (!shown.current) { shown.current = true; track('paywall_shown', { context, source }); } }, [context, source, track]);
+  const optionId = useId();
+  const titleId = useId();
+  const orderedBenefits = [...included.filter(([key]) => key === context), ...included.filter(([key]) => key !== context)];
+  const options = [['annual', 'Annual', 'year'], ['monthly', 'Monthly', 'month']]
+    .map(([key, label, period]) => ({ key, label, period, item: products?.[key], trial: trialPresentation(key, products?.[key]), pricing: paywallPlanPricing(key, products?.[key]?.product?.price, products?.monthly?.product?.price, locale) }))
+    .filter(option => option.item?.product?.price?.formattedPrice);
+  const selectedOption = options.find(option => option.key === selected);
+  const includedBenefits = <section className="rook-pro-included" aria-label="What you get with Pro">
+    <h2>What you get with Pro</h2>
+    <ul className="rook-pro-benefits" aria-label="Included with ROOK Pro">
+      {orderedBenefits.map(([key, title, body]) => <li key={key} className={key === context ? 'is-context-benefit' : ''}><span aria-hidden="true">✓</span><div><strong>{title}</strong><small>{key === 'premium_style' && context === key ? 'Choose a palette, then fine-tune it with live preview.' : body}</small></div></li>)}
+    </ul>
+  </section>;
+  const dismiss = () => { dismissed.current = true; close(); };
+  const activate = async () => {
+    setRestoredActive(true);
+    setNotice('ROOK Pro is active on this account.');
+    if (!onUnlocked || handledUnlock.current) return;
+    handledUnlock.current = true;
+    try { await onUnlocked(); if (!dismissed.current) dismiss(); }
+    catch { if (!dismissed.current) setError('ROOK Pro is active, but your last action could not finish. Close this sheet and try it again.'); }
+  };
+  const buy = async item => {
+    if (inFlight.current || !item) return;
+    inFlight.current = true;
+    setBusy('purchase'); setError(''); setNotice('');
+    const properties = { context, source, planType: selected, productId: item.product.identifier };
+    if (selectedOption?.trial.eligible) track('trial_cta_tapped', properties);
+    track('purchase_started', properties);
+    try {
+      const result = await purchase(item);
+      if (dismissed.current) return;
+      if (source === 'preview' && result?.status === 'preview') setNotice('Preview only. No payment or subscription was created.');
+      else if (result?.status === 'active') { if (!result.alreadyEntitled) track('purchase_succeeded', properties); await activate(); }
+      else setNotice('Purchase pending. ROOK Pro will unlock after verification. You can check again with Restore purchases.');
+    } catch (failure) {
+      const cancelled = failure?.userCancelled === true || Number(failure?.code ?? failure?.errorCode) === 1;
+      track(cancelled ? 'purchase_cancelled' : 'purchase_failed', properties);
+      if (!dismissed.current && !cancelled) setError(failure?.message || 'Purchase could not be completed. Try again.');
+    } finally { inFlight.current = false; if (!dismissed.current) setBusy(''); }
+  };
+  const restore = async () => {
+    if (inFlight.current) return;
+    inFlight.current = true;
+    setBusy('restore'); setError(''); setNotice('');
+    try {
+      const result = await refresh();
+      if (dismissed.current) return;
+      setRestoredActive(result?.status === 'active');
+      if (result?.status === 'active') { track('restore_succeeded', { context, source }); await activate(); }
+      else setNotice(result?.status === 'free'
+          ? 'No active ROOK Pro purchase was found for this account.'
+          : 'Purchase status could not be verified. Try again.');
+    } catch { if (!dismissed.current) setError('Purchase status could not be checked. Try again.'); }
+    finally { inFlight.current = false; if (!dismissed.current) setBusy(''); }
+  };
+  if (offersOpen) return <ProCurrentOffers Header={Header} onDismiss={dismiss} campaign={campaign} snapshot={offerSnapshot} active={restoredActive}
+    preview={source === 'preview'} now={offerNow} onSelectOffer={onReviewOffer}
+    close={() => { returningFromExplorer.current = 'offers'; setOffersOpen(false); }}/>;
+  if (exploring) return <ProFeatureExplorer Header={Header} onDismiss={dismiss} dialog initialFeature={context} returnPlan={selected} active={restoredActive}
+    campaign={campaign} snapshot={offerSnapshot} preview={source === 'preview'} now={offerNow}
+    onViewOffers={() => { setExploring(false); setOffersOpen(true); }}
+    close={() => { returningFromExplorer.current = true; setExploring(false); }}
+    onViewPlans={() => { returningFromExplorer.current = true; setExploring(false); }}/>;
+  return <main className="screen detail-screen rook-pro-paywall" role="dialog" aria-modal="true" aria-labelledby={titleId}>
+    <Header title="ROOK Pro" onClose={dismiss} closeLabel="Close ROOK Pro" />
+    <span className="eyebrow">ROOK PRO · {contextLabels[context] || 'ROOK PRO'}</span>
+    <h1 id={titleId}>{benefits[context] || 'Make your next step clearer'}</h1>
+    <p className="rook-pro-description">{descriptions[context] || 'More support for the way you train.'}</p>
+    <ProTrainingPreview context={context}/>
+    <ProCampaignBanner campaign={campaign} snapshot={offerSnapshot} active={restoredActive} preview={source === 'preview'} now={offerNow} placement="paywall" disabled={Boolean(busy)} triggerRef={offerTrigger} onOpen={() => setOffersOpen(true)}/>
+    <button type="button" ref={explorerTrigger} className="text-button rook-pro-explore" disabled={Boolean(busy)} onClick={() => setExploring(true)}>Explore Pro features</button>
+    {presentation.benefitsFirst && includedBenefits}
+    {restoredActive ? null : options.length === 2 ? <>
+      <fieldset className="rook-pro-options" disabled={Boolean(busy)}><legend>Choose your subscription</legend>
+        {options.map(({ key, label, pricing, trial }) => <label key={key} className={selected === key ? 'is-selected' : ''}>
+          <input type="radio" name={optionId} value={key} checked={selected === key} onChange={() => { setSelected(key); setError(''); setNotice(''); track(`${key}_selected`, { context, source }); }} />
+          <PlanOffer label={label} pricing={pricing} trial={trial} selected={selected === key} presentation={presentation}/>
+        </label>)}
+      </fieldset>
+    </> : <p className="rook-pro-unavailable" role="status">Subscription options are temporarily unavailable. Try again later or restore an existing purchase.</p>}
+    {!presentation.benefitsFirst && includedBenefits}
+    <div className="rook-pro-secondary">
+      <button type="button" disabled={Boolean(busy)} onClick={restore}>{busy === 'restore' ? 'Restoring…' : 'Restore purchases'}</button>
+      {managementUrl && <a href={managementUrl} target="_blank" rel="noopener noreferrer">Manage subscription</a>}
+      {privacyUrl && <a href={privacyUrl} target="_blank" rel="noopener noreferrer">Privacy</a>}
+      {termsUrl && <a href={termsUrl} target="_blank" rel="noopener noreferrer">Terms</a>}
+    </div>
+    <p className="rook-pro-ownership">Your first personal plan, progression, weekly and block reviews, logged workouts and history stay accessible without Pro.</p>
+    {!restoredActive && selectedOption && <p className="rook-pro-legal" id={`${optionId}-legal`}>
+      {selectedOption.trial.eligible && <span>{selectedOption.trial.cancellation} </span>}
+      {selectedOption.item.platform === 'ios' ? 'Manage or cancel in Settings → Apple Account → Subscriptions.' : selectedOption.item.platform === 'android' ? 'Manage or cancel in Google Play → Payments & subscriptions → Subscriptions.' : 'Manage or cancel in your app store’s subscription settings.'}
+    </p>}
+    <SheetActionFooter className="rook-pro-purchase-footer">
+      {notice && <p className="rook-pro-feedback" role="status">{notice}</p>}{error && <p className="rook-pro-feedback" role="alert">{error}</p>}
+      {!restoredActive && options.length === 2 && <>
+        <p className="rook-pro-billing" id={`${optionId}-billing`}><strong>{selectedOption?.trial.copy || selectedOption?.pricing.summary}</strong></p>
+        <button className="button primary rook-pro-continue" type="button" aria-describedby={`${optionId}-billing ${optionId}-renewal ${optionId}-legal`} disabled={Boolean(busy) || !selectedOption} onClick={() => buy(selectedOption?.item)}>{busy === 'purchase' ? 'Checking purchase…' : busy === 'restore' ? 'Restoring…' : selectedOption?.trial.cta}</button>
+        <p className="rook-pro-renewal" id={`${optionId}-renewal`}>{selectedOption?.trial.renewal}.</p>
+      </>}
+      {restoredActive && <button className="button primary" type="button" disabled={Boolean(busy)} onClick={dismiss}>Continue</button>}
+    </SheetActionFooter>
+  </main>;
+}

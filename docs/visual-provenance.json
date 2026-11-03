@@ -31459,11 +31459,11 @@
       ]
     },
     {
-      "assetId": "inline-app-8",
-      "path": "src/App.jsx",
-      "sourceLine": 10550,
+      "assetId": "inline-weighttrendchart-1",
+      "path": "src/WeightTrendChart.jsx",
+      "sourceLine": 47,
       "selector": "inline_svg",
-      "codeSha256": "fc23ff8624214058c02ef42cb385c69249df8580519d66f54d191d1cfc49e9fa",
+      "codeSha256": "693d9c35abe74da543bfe888e5f1329f450bfcde18d99bf765461985cc2b856b",
       "exerciseIds": [],
       "movementIds": [],
       "usage": "inline_ui_renderer",
@@ -31482,12 +31482,27 @@
           "type": "repository_inline_geometry",
           "path": "src/App.jsx",
           "line": 10550
+        },
+        {
+          "type": "previous_repository_inline_geometry",
+          "assetId": "inline-app-8",
+          "path": "src/App.jsx",
+          "codeSha256": "fc23ff8624214058c02ef42cb385c69249df8580519d66f54d191d1cfc49e9fa"
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/WeightTrendChart.jsx",
+          "line": 47,
+          "reviewedAt": "2026-11-03"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion.",
-        "Release extraction normalizes line endings only; SVG geometry verified identical to the local review source."
-      ]
+        "Release extraction normalizes line endings only; SVG geometry verified identical to the local review source.",
+        "Weight-history chart moved out of App.jsx into a dedicated source-defined renderer with a grid and time-spaced polyline. Axis labels remain HTML; no downloaded image or third-party drawing was introduced."
+      ],
+      "lfCodeSha256": "693d9c35abe74da543bfe888e5f1329f450bfcde18d99bf765461985cc2b856b",
+      "crlfCodeSha256": "2c65a221f0e26a0f1b838c91ab93a30bd9777915c1eeb3eb8c7122614f6106e0"
     },
     {
       "assetId": "inline-app-9",

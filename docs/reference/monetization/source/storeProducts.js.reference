@@ -1,0 +1,62 @@
+const sevenDays = period => period === 'P1W' || period === 'P7D';
+const validPrice = price => Number.isFinite(price?.amount) && price.amount > 0 && Boolean(price.currency && price.formattedPrice);
+const phasePrice = phase => ({ amount: phase?.price?.amountMicros / 1e6, currency: phase?.price?.currencyCode, formattedPrice: phase?.price?.formatted });
+const noIntro = product => !product.introPrice;
+function iosProduct(plan, pkg, config, eligibility) {
+  const product = pkg.product;
+  if (product.subscriptionPeriod !== (plan === 'annual' ? 'P1Y' : 'P1M')) return null;
+  const price = { amount: product.price, formattedPrice: product.priceString, currency: product.currencyCode };
+  const intro = product.introPrice;
+  const validTrial = intro?.price === 0 && intro.cycles === 1 && sevenDays(intro.period);
+  // Apple automatically applies introductory offers. Reject an unexpected offer,
+  // including Monthly trials or a trial in the no-trial experiment offering.
+  if (!validPrice(price) || (plan === 'monthly' && !noIntro(product))
+      || (intro && (!config.trialEnabled || !validTrial))) return null;
+  return { plan, platform: 'ios', storePackage: pkg, product: { identifier: product.identifier, price },
+    trialEligibility: plan === 'annual' && validTrial && config.trialEnabled
+      ? eligibility === 2 ? 'eligible' : eligibility === 1 || eligibility === 3 ? 'ineligible' : 'unknown' : 'ineligible',
+    trialDays: plan === 'annual' && validTrial && config.trialEnabled ? 7 : null };
+}
+function androidProduct(plan, pkg, config) {
+  const expected = plan === 'annual' ? 'P1Y' : 'P1M';
+  const options = pkg.product.subscriptionOptions;
+  if (!Array.isArray(options)) return null;
+  const validBase = option => option.isBasePlan && !option.isPrepaid && !option.installmentsInfo
+    && option.pricingPhases?.length === 1 && option.fullPricePhase?.billingPeriod?.iso8601 === expected
+    && option.fullPricePhase?.recurrenceMode === 1;
+  const base = options.find(validBase);
+  if (!base) return null;
+  const price = phasePrice(base.fullPricePhase);
+  if (!validPrice(price)) return null;
+  // Only the configured, store-determined acquisition offer is selectable.
+  // Never let the SDK automatically select another (e.g. developer-determined) offer.
+  const trial = plan === 'annual' && config.trialEnabled && config.annualTrialOptionId
+    ? options.find(option => option.id === config.annualTrialOptionId && !option.isPrepaid && !option.installmentsInfo
+      && option.pricingPhases?.length === 2 && option.pricingPhases[0]?.price?.amountMicros === 0
+      && sevenDays(option.pricingPhases[0]?.billingPeriod?.iso8601)
+      && option.freePhase?.price?.amountMicros === 0 && sevenDays(option.freePhase?.billingPeriod?.iso8601)
+      && (option.freePhase?.billingCycleCount === 1 || option.freePhase?.recurrenceMode === 3)
+      && option.fullPricePhase?.billingPeriod?.iso8601 === expected && option.fullPricePhase?.recurrenceMode === 1
+      && JSON.stringify(phasePrice(option.fullPricePhase)) === JSON.stringify(price)) : null;
+  return { plan, platform: 'android', storePackage: pkg, subscriptionOption: trial || base,
+    product: { identifier: pkg.product.identifier, price },
+    trialEligibility: trial ? 'eligible' : config.annualTrialOptionId ? 'ineligible' : 'unknown', trialDays: trial ? 7 : null };
+}
+export function resolveStoreProducts(offering, platform, config, eligibility = {}) {
+  const packages = offering?.availablePackages || [];
+  const products = {};
+  for (const [plan, id] of [['annual', config.annualId], ['monthly', config.monthlyId]]) {
+    const pkg = packages.find(item => item.product?.identifier === id);
+    if (!pkg) continue;
+    const item = platform === 'ios' ? iosProduct(plan, pkg, config, eligibility[id]?.status)
+      : platform === 'android' ? androidProduct(plan, pkg, config) : null;
+    if (item) products[plan] = item;
+  }
+  return products;
+}
+export function samePurchaseTerms(a, b) {
+  return Boolean(a && b && a.product.identifier === b.product.identifier
+    && JSON.stringify(a.product.price) === JSON.stringify(b.product.price)
+    && a.trialEligibility === b.trialEligibility && a.trialDays === b.trialDays
+    && a.subscriptionOption?.id === b.subscriptionOption?.id);
+}

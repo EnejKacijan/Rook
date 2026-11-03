@@ -17,7 +17,7 @@ const Modal=({children,close})=><div>{typeof children==='function'?children(clos
 const Header=({onClose})=><button aria-label="Close consent" onClick={onClose}>Close</button>;
 it('generated public notices are current, account-free and honest about unfinished operator details',()=>{
  expect(()=>generateLegalPages({check:true})).not.toThrow();expect(legalDraft).toBe(true);
- for(const {id} of legalDocuments){const html=readFileSync(`public/legal/${id}.html`,'utf8');expect(html).toContain('Skip to content');expect(html).toContain('Draft — not ready for public release');expect(html).not.toContain('<script');}
+ for(const {id} of legalDocuments){const html=readFileSync(`public/legal/${id}.html`,'utf8');expect(html).toContain('Skip to content');expect(html).toContain('Draft — not ready for public release');const page=new DOMParser().parseFromString(html,'text/html');expect([...page.scripts].map(script=>script.getAttribute('src'))).toEqual(['/legal/appearance.js']);expect(page.scripts[0].textContent).toBe('');}
  expect(existsSync('public/legal/software-notices.txt')).toBe(true);
 });
 it('shows optional choices off, no pretend request submission, and reuses the explicit local-delete confirmation',async()=>{

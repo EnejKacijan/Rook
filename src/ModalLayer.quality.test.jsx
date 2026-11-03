@@ -33,6 +33,27 @@ afterEach(async () => {
   vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers();
 });
 
+it('does not let a closing panel dismiss its replacement destination', async () => {
+  let replace, finish; const close=vi.fn();
+  function Harness(){
+    const [second,setSecond]=useState(false);replace=()=>setSecond(true);
+    return <ModalLayer close={close}>{requestClose=>second
+      ? <section key="second" className="screen detail-screen"><SheetHeader title="Second" onClose={requestClose}/></section>
+      : <main key="first" className="screen detail-screen"><SheetHeader title="First" onClose={requestClose}/></main>}
+    </ModalLayer>;
+  }
+  await act(async()=>root.render(<Harness/>));await tick();
+  const panel=host.querySelector('main');
+  panel.getAnimations=()=>[{transitionProperty:'transform',finished:new Promise(resolve=>{finish=resolve;})}];
+  act(()=>panel.querySelector('[aria-label="Close First"]').click());
+  expect(panel.hasAttribute('data-sheet-closing')).toBe(true);
+  await act(async()=>replace());
+  await act(async()=>{finish();await Promise.resolve();});await tick(1400);
+  expect(close).not.toHaveBeenCalled();expect(host.querySelector('section .detail-header').textContent).toContain('Second');
+  expect(host.querySelector('.sheet-drag-scrim')).toBeNull();
+  await click(host.querySelector('[aria-label="Close Second"]'));expect(close).toHaveBeenCalledOnce();
+});
+
 it.each([true, false])('a visually hidden content heading does not hide the only visible sheet title (hidden=%s)', async hidden => {
   await act(async () => root.render(<ModalLayer close={() => {}}>
     <main className="screen detail-screen">

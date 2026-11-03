@@ -45,6 +45,19 @@ describe("body-weight check-ins", () => {
     expect(bodyWeightFromKg(100, "lb")).toBe(220.5);
   });
 
+  it.each([
+    ['78,5', 'kg', 78.5], ['78.5', 'kg', 78.5],
+    [' 78,50 ', 'kg', 78.5], ['176,4', 'lb', 80.0137],
+  ])('accepts decimal weight %s in %s', (value, units, expectedKg) => {
+    const result=validateWeightCheckin({value,units,localDate:'2026-08-01'});
+    expect(result.valid).toBe(true);
+    expect(result.weightKg).toBeCloseTo(expectedKg,3);
+  });
+
+  it.each(['78,5.2', '78,,5', '78kg', '0x50', '1.000,5'])('rejects ambiguous or malformed weight %s', value => {
+    expect(validateWeightCheckin({value,units:'kg',localDate:'2026-08-01'}).valid).toBe(false);
+  });
+
   it("edits the existing local date rather than adding a duplicate", () => {
     const first = upsertWeightCheckin([], {
       localDate: "2026-08-01",

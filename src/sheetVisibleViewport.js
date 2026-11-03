@@ -74,13 +74,13 @@ export function bindSheetVisibleViewport(screen, onChange = () => {}, { fullPage
     // resize dynamic viewport units. The same owner writes ALL geometry.
     let resting = null, pinned = false, changed = false, revealed = false, revealTimer = null, revealFrame = null;
     const captureResting = () => {
-      if (!layer || !stableTop || pinned) return;
+      if (!layer || !stableTop || pinned || screen.hasAttribute('data-sheet-closing')) return;
       resting = { top: screen.offsetTop, height: screen.offsetHeight };
     };
     const cancelReveal = () => { clearTimeout(revealTimer); cancelAnimationFrame(revealFrame); revealTimer = revealFrame = null; };
     const reveal = () => {
       cancelReveal();
-      if (!stableTop || !owner.state?.keyboardOpen) return;
+      if (!stableTop || !owner.state?.keyboardOpen || screen.hasAttribute('data-sheet-closing')) return;
       // Debounce geometry, not focus/typing. Native reveal gets the opening
       // frames; one minimal internal correction follows settled geometry.
       revealTimer = setTimeout(() => {
@@ -88,7 +88,7 @@ export function bindSheetVisibleViewport(screen, onChange = () => {}, { fullPage
         revealFrame = requestAnimationFrame(() => {
           revealFrame = null;
           const input = document.activeElement;
-          if (!owner.state?.keyboardOpen || screen.inert || !screen.contains(input) || !input.matches('textarea, input')) return;
+          if (!owner.state?.keyboardOpen || screen.inert || screen.hasAttribute('data-sheet-closing') || !screen.contains(input) || !input.matches('textarea, input')) return;
           const bounds = input.getBoundingClientRect(), panel = screen.getBoundingClientRect();
           const top = (screen.querySelector('.detail-header')?.getBoundingClientRect().bottom || panel.top) + 12;
           const bottom = Math.min(panel.bottom, owner.state.offsetTop + owner.state.height) - 12;
@@ -102,7 +102,7 @@ export function bindSheetVisibleViewport(screen, onChange = () => {}, { fullPage
     captureResting();
     owner = { consumers: new Set(), state: null, apply: () => {
       const state = owner.state;
-      if (!state) return;
+      if (!state || screen.hasAttribute('data-sheet-closing')) return;
       const reduced = state.referenceHeight - state.height > 2 && (window.visualViewport.scale || 1) === 1;
       if (stableTop && layer) {
         // Geometry, not activeElement, ends keyboard mode (Done can retain focus).

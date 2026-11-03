@@ -1,1 +1,43 @@
-:root{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#202724;background:#f8faf8;color-scheme:light dark;font-size:16px;line-height:1.65}*{box-sizing:border-box}body{max-width:880px;margin:auto;padding:20px clamp(16px,5vw,40px) 48px}header{padding-bottom:16px;border-bottom:1px solid #c5cfca}a{color:#185b41;text-underline-offset:3px;overflow-wrap:anywhere}a:focus-visible{outline:3px solid currentColor;outline-offset:4px}header a{display:inline-flex;align-items:center;min-height:44px;font-weight:600}h1{font-size:clamp(26px,5vw,36px);line-height:1.2;margin:28px 0 12px}h2{font-size:20px;line-height:1.35;margin:28px 0 10px}p{margin:0 0 16px;overflow-wrap:anywhere}.intro{color:#4b5b53}.draft{margin-top:24px;padding:16px;border:1px solid #859a8e;border-radius:10px}.draft p{margin:8px 0 0}.version{margin-top:32px;font-size:14px;color:#4b5b53}nav{display:flex;flex-wrap:wrap;gap:0 20px;margin-top:24px;padding-top:16px;border-top:1px solid #c5cfca}nav a{min-height:44px;display:inline-flex;align-items:center}nav a[aria-current=page]{font-weight:700}.skip{position:absolute;left:16px;top:-100px;background:#fff;padding:12px;z-index:2}.skip:focus{top:8px}@media(prefers-color-scheme:dark){:root{background:#101713;color:#eaf0ec}a{color:#72d5a3}.intro,.version{color:#b2c3b9}.draft{border-color:#658271}header,nav{border-color:#3c5145}.skip{background:#101713}}@media(prefers-reduced-motion:reduce){*{scroll-behavior:auto}}@media(forced-colors:active){.draft{border:1px solid CanvasText}a:focus-visible{outline:3px solid Highlight}}
+/* Match the app's reading and navigation roles, without loading the app. */
+:root {
+  font-family:-apple-system,BlinkMacSystemFont,"Helvetica Neue",Arial,sans-serif;
+  color:var(--rook-text); background:var(--rook-bg); color-scheme:light dark;
+  font-size:100%; line-height:1.6; font-synthesis:none;
+}
+* { box-sizing:border-box; }
+body { max-width:744px; margin:auto; padding:0 24px max(24px,env(safe-area-inset-bottom)); font-size:var(--rook-type-body); }
+a { color:var(--rook-accent-text); text-underline-offset:3px; overflow-wrap:anywhere; }
+a:focus-visible { outline:2px solid var(--rook-focus-ring); outline-offset:3px; border-radius:6px; }
+.legal-header { padding-top:max(8px,env(safe-area-inset-top)); margin-bottom:28px; border-bottom:1px solid var(--rook-border); }
+.legal-back { display:inline-flex; align-items:center; gap:6px; min-height:52px; padding:4px 8px 4px 0; font-size:var(--rook-type-action); font-weight:600; text-decoration:none; }
+.legal-back svg { width:20px; height:20px; flex:none; }
+.eyebrow { color:var(--rook-secondary); font-size:var(--rook-type-label); font-weight:600; line-height:1.5; letter-spacing:.075em; }
+.legal-title { margin-bottom:24px; }
+.legal-title .eyebrow { margin:0 0 10px; }
+h1 { font-size:var(--rook-type-page); line-height:1.2; letter-spacing:-.02em; margin:0 0 12px; font-weight:700; }
+h2 { font-size:var(--rook-type-sheet); line-height:1.35; margin:28px 0 10px; font-weight:600; letter-spacing:-.01em; }
+p { margin:0 0 14px; overflow-wrap:anywhere; }
+.intro { color:var(--rook-secondary); margin:0; }
+li { overflow-wrap:anywhere; }
+li + li { margin-top:8px; }
+.draft { margin:0 0 28px; padding:12px 14px; border:1px solid var(--rook-border); border-radius:12px; background:var(--rook-surface); font-size:var(--rook-type-meta); line-height:1.5; }
+.draft strong { font-weight:600; }
+.draft p { color:var(--rook-secondary); margin:6px 0 0; }
+.version { margin:28px 0 0; font-size:var(--rook-type-meta); color:var(--rook-secondary); }
+.legal-footer { margin-top:28px; padding-top:20px; border-top:1px solid var(--rook-border); }
+.legal-footer > .eyebrow { margin:0 0 8px; }
+.legal-footer nav { display:flex; flex-direction:column; }
+.legal-footer nav a { display:flex; align-items:center; justify-content:space-between; gap:16px; min-height:48px; padding:10px 0; font-size:var(--rook-type-action); line-height:1.45; color:var(--rook-text); text-decoration:none; }
+.legal-footer nav a + a { border-top:1px solid var(--rook-border); }
+.legal-footer nav a[aria-current="page"] { color:var(--rook-accent-text); font-weight:600; }
+.legal-footer nav svg { width:18px; height:18px; flex:none; color:var(--rook-secondary); }
+.skip { position:absolute; left:16px; top:-100px; background:var(--rook-surface); color:var(--rook-text); padding:12px; z-index:2; }
+.skip:focus { top:8px; }
+@media(hover:hover) {
+  .legal-back:hover,.legal-footer nav a:hover { color:var(--rook-accent-text); }
+}
+@media(max-width:359px) { body { padding-inline:20px; } }
+@media(forced-colors:active) {
+  .draft { border-color:CanvasText; }
+  a:focus-visible { outline-color:Highlight; }
+}

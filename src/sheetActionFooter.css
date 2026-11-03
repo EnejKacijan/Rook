@@ -50,6 +50,20 @@
   transform: none;
   box-shadow: none;
 }
+/* Nested bodies own their footer inset. The outer-panel negative margin would
+   otherwise create a scroll range of safe-area + a few pixels, even when every
+   field and the action already fit (Conditioning and exercise notes). */
+:root .modal-layer > :is(.detail-screen, .sheet):has(> .sheet-scroll > .sheet-action-footer:not([data-separate], [hidden])) {
+  padding-bottom: 0;
+}
+:root .sheet-scroll:has(> .sheet-action-footer:not([data-separate], [hidden])) { padding-bottom: 0; }
+:root .sheet-scroll > .sheet-action-footer:not([data-separate]) {
+  bottom: 0;
+  margin-bottom: 0;
+}
+:root .sheet-scroll > .sheet-action-footer:not([data-separate], [data-keyboard-active]) {
+  padding-bottom: calc(var(--rook-sheet-content-bottom, 20px) + var(--sheet-action-safe-bottom));
+}
 /* Scratch and direct PlanEditor opt in. Keep their existing panel scroll owner;
    flex free space anchors short content, sticky bottom anchors overflowing work.
    The real footer remains in flow, reserving its own footprint without a late spacer. */

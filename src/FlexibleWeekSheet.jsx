@@ -341,10 +341,10 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         {dateWeeks.map(week=><section key={week} className="missed-date-group"><h2>{week===weekKey(today)?'This week':week===addCalendarDays(weekKey(today),7)?'Next week':`Week of ${dateLabel(week)}`}</h2><div className="flexible-week-dates">{validDates.filter(date=>weekKey(date)===week).map(date=><button key={date} data-move-date={date} aria-pressed={proposal?.request.mode==='move' && proposal.request.sessionId===sessionId && proposal.request.toDate===date} onClick={()=>chooseDestination(date)}>{dateLabel(date)}</button>)}</div></section>)}
         {!validDates.length && <><p role="status">No available dates in the next 14 days.</p><button className="button secondary" onClick={()=>setStep('more')}>Review other options</button></>}
       </> : <>
-      {!todayDestination?.available && <p id={destinationReasonId} className="sheet-footnote">Today: {todayDestination?.reason}</p>}
+      {!todayDestination?.available && item.scheduledDate!==today && <p id={destinationReasonId} className="sheet-footnote">Today: {todayDestination?.reason}</p>}
       <div className="flexible-week-dates">{Array.from({ length: 14 }, (_, i) => addCalendarDays(today, i)).map(d => {
         const occupied = sessions.some(s => s.logicalSessionId !== sessionId && s.scheduledDate === d && s.status !== 'skipped');
-        return <button key={d} data-move-date={d} disabled={!validDates.includes(d)} aria-label={`${dateLabel(d)}${occupied ? ', another workout scheduled' : ''}`} aria-describedby={d===today&&!todayDestination?.available?destinationReasonId:undefined} onClick={() => chooseDestination(d)}>{dateLabel(d)}</button>;
+        return <button key={d} data-move-date={d} disabled={!validDates.includes(d)} aria-label={`${dateLabel(d)}${occupied ? ', another workout scheduled' : ''}`} aria-describedby={d===today&&!todayDestination?.available&&item.scheduledDate!==today?destinationReasonId:undefined} onClick={() => chooseDestination(d)}>{dateLabel(d)}</button>;
       })}</div></>}
       {!resolutionMove && swapCandidates.length>0 && <button className="text-button" onClick={()=>setStep('swap')}>Swap with another workout</button>}
       {!missedDestination && !resolutionMove && !item.firstPlanWeek && <>

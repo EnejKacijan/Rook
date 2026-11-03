@@ -1,0 +1,103 @@
+import React, { useEffect, useId, useRef, useState } from 'react';
+import { PRO_FEATURES } from './proFeatureCatalog.js';
+import { ProCampaignBanner } from './ProCampaignBanner.jsx';
+import { useProCampaign } from './useProCampaign.js';
+import './proFeatureExplorer.css';
+
+const coachExamples = [
+  ['My week got busy', 'Try three sessions this week, keeping your main lifts. Review a shorter schedule before changing your plan.'],
+  ['I’m changing gyms', 'Keep your training goals and rebuild your next plan around the equipment at your new gym.'],
+  ['Plan my next block', 'Review what you completed, then build the next plan around your updated goals and weekly schedule.'],
+];
+const palettes = [['Forest', '#4cbd8a', '#10241d'], ['Ocean', '#81b8eb', '#152536'], ['Plum', '#d3a5e9', '#2a1c32']];
+const previews = [
+  { ...PRO_FEATURES[0], title: 'Know your next move.', outcome: 'Talk it through', icon: 'coach' },
+  { ...PRO_FEATURES[1], title: 'A new goal. A plan that fits.', outcome: 'Fit your week', icon: 'plan' },
+  { ...PRO_FEATURES[2], title: 'Busy weeks. Still moving.', outcome: 'Keep your rhythm', icon: 'trip' },
+  { id: 'library', label: 'Library & themes', title: 'Your routines. Your space.', outcome: 'Make it yours', icon: 'library' },
+];
+export function ProFeatureIcon({ name }) {
+  const paths = { coach: 'M5 4h14v11H9l-4 4V4Zm4 4h6M9 11h4', plan: 'M5 5h14v15H5V5Zm3-3v6m8-6v6M5 10h14m-10 4h2m3 0h1m-7 3h2', trip: 'M4 7h16v13H4V7Zm5 0V4h6v3m-3 0v13M4 12h16', library: 'M4 4h6v6H4V4Zm10 0h6v6h-6V4ZM4 14h6v6H4v-6Zm10 0h6v6h-6v-6Z' };
+  return <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d={paths[name] || paths.coach}/></svg>;
+}
+
+// The explorer receives navigation callbacks only. It cannot read or mutate
+// an athlete, use an AI service, grant access, or initiate a store purchase.
+export function ProFeatureExplorer({ Header, close, onDismiss, onViewPlans, onViewOffers, returnPlan, active = false, initialFeature = 'coach_limit', dialog = false, campaign = null, snapshot = null, preview = false, now }) {
+  const [feature, setFeature] = useState(['saved_workout_limit','premium_style'].includes(initialFeature) ? 'library' : previews.some(item => item.id === initialFeature) ? initialFeature : 'coach_limit');
+  const [question, setQuestion] = useState(0), [days, setDays] = useState(3);
+  const [goal, setGoal] = useState('muscle'), [equipment, setEquipment] = useState('gym');
+  const [weeks, setWeeks] = useState(2), [hotel, setHotel] = useState(true), [temporaryDays, setTemporaryDays] = useState(2);
+  const [saved, setSaved] = useState(false), [palette, setPalette] = useState(0);
+  const title = useRef(null), saveFocus = useRef(null), restoreSaveFocus = useRef(false), id = useId();
+  const toggleSaved = value => { restoreSaveFocus.current = true; setSaved(value); };
+  useEffect(() => { if (restoreSaveFocus.current) { saveFocus.current?.focus({ preventScroll: true }); restoreSaveFocus.current = false; } }, [saved]);
+  useEffect(() => { title.current?.focus({ preventScroll: true }); }, []);
+  const selected = previews.find(item => item.id === feature);
+  const offer = useProCampaign({ campaign, snapshot, active, preview, now });
+  const labels = { 'Example goal': 'Goal', 'Example training days': 'Days per week', 'Example plan equipment': 'Equipment', 'Example trip length': 'Duration', 'Example temporary days': 'Sessions per week', 'Example equipment': 'Equipment' };
+  const choices = (label, items, value, choose) => <div className="pro-example-choice-field">
+    {labels[label] && <span className="pro-example-control-label">{labels[label]}</span>}
+    <div className="pro-example-choices" role="group" aria-label={label}>
+      {items.map(([key, text]) => <button key={String(key)} type="button" aria-pressed={value === key} onClick={() => choose(key)}>{text}</button>)}
+    </div>
+  </div>;
+  return <main className="screen detail-screen pro-explorer" aria-labelledby={id} role={dialog ? 'dialog' : undefined} aria-modal={dialog || undefined}>
+    <Header title="Explore ROOK Pro" onBack={close} backLabel="Back from Pro preview" onClose={onDismiss || close} closeLabel="Close Pro preview"/>
+    <span className="eyebrow">ROOK PRO{active ? ' · ACTIVE' : ''}</span>
+    <h1 id={id} tabIndex={-1} ref={title}>Training that fits<br/><em>real life.</em></h1>
+    <p className="pro-explorer-intro">A changing schedule. A new gym. Your next goal.<br/>Make room for all of it with Pro.</p>
+    <ProCampaignBanner campaign={campaign} snapshot={snapshot} active={active} preview={preview} now={now} onOpen={onViewOffers} placement="explore" showAction={Boolean(returnPlan)}/>
+    <div className="pro-explore-section-heading"><strong>Try Pro in action</strong><span>Sample preview</span></div>
+    <div className="pro-feature-picker" role="group" aria-label="Explore Pro features">
+      {previews.map((item, index) => <button key={item.id} type="button" aria-pressed={feature === item.id} aria-controls={`${id}-example`} onClick={() => setFeature(item.id)}>
+        <span className="pro-feature-symbol"><ProFeatureIcon name={item.icon}/></span><span><strong>{item.label}</strong><small>{item.outcome}</small></span>
+      </button>)}
+    </div>
+    <section id={`${id}-example`} className="pro-feature-example" aria-label={selected.title}>
+      <p className="pro-explorer-sample visually-hidden">Sample data only. Nothing changes in your workouts.</p>
+      <h2>{selected.title}</h2>
+      {feature === 'coach_limit' && <>
+        <div className="pro-example-result">{["3 sessions · Your main lifts stay", "New equipment · Same goals", "Your next block · Ready to review"][question]}</div>
+        {choices('Example Coach question', coachExamples.map(([text], index) => [index, text]), question, setQuestion)}
+        <div className="pro-example-user">{coachExamples[question][0]}<span aria-hidden="true">↗</span></div><div className="pro-example-conversation" aria-live="polite"><strong><ProFeatureIcon name="coach"/> ROOK Coach <span>PRO</span></strong><p>{coachExamples[question][1]}</p></div>
+      </>}
+      {feature === 'generated_plan_apply' && <>
+        <p className="pro-demo-lead">Your goals lead. Your schedule sets the shape.</p>
+        {choices('Example goal', [['strength', 'Strength'], ['muscle', 'Muscle']], goal, setGoal)}
+        {choices('Example training days', [[3, '3 days / week'], [4, '4 days / week']], days, setDays)}
+        {choices('Example plan equipment', [['gym', 'Full gym'], ['dumbbells', 'Dumbbells']], equipment, setEquipment)}
+        <div className="pro-plan-result-heading"><span>YOUR SAMPLE WEEK</span><strong>{days} sessions · {goal === "strength" ? "Strength" : "Build muscle"}</strong><small>{equipment === "gym" ? "Full gym" : "Dumbbells + bodyweight"}</small></div><ul className="pro-example-workouts pro-plan-week" aria-live="polite">{(days === 3 ? goal === 'strength' ? [['Mon', 'Lower strength'], ['Wed', 'Upper strength'], ['Fri', 'Full body']] : [['Mon', 'Full body A'], ['Wed', 'Full body B'], ['Fri', 'Full body C']] : [['Mon', 'Upper A'], ['Tue', 'Lower A'], ['Thu', 'Upper B'], ['Fri', 'Lower B']]).map(([day, name]) => <li key={day}><small>{day}</small><div><strong>{name}{days===4&&goal==='strength'?' · Strength':''}</strong></div></li>)}</ul>
+      </>}
+      {feature === 'temporary_plan' && <>
+        <p className="pro-demo-lead">Keep your rhythm on a lighter schedule.</p>
+        {choices('Example trip length', [[2, '2 weeks'], [3, '3 weeks'], [4, '4 weeks']], weeks, setWeeks)}
+        {choices('Example temporary days', [[2, '2 days / week'], [3, '3 days / week']], temporaryDays, setTemporaryDays)}
+        {choices('Example equipment', [[true, 'Hotel gym'], [false, 'At home']], hotel, setHotel)}
+        <div className="pro-example-conversation pro-temporary-result" aria-live="polite"><strong>{weeks}-week training plan</strong><small>{temporaryDays} sessions/week · {hotel ? 'Hotel gym' : 'At home'}</small>
+          <ul className="pro-temporary-week">{(temporaryDays === 2 ? [['Mon','Full body A'],['Thu','Full body B']] : [['Mon','Full body A'],['Wed','Full body B'],['Fri','Full body C']]).map(([day,name],index)=><li key={day}><span>{day}</span><div><b>{name}</b><small>{hotel ? index === 0 ? 'Dumbbell press · Goblet squat' : 'Dumbbell row · Reverse lunge' : index === 0 ? 'Push-up · Split squat' : 'Band row · Glute bridge'}</small></div></li>)}</ul>
+          <p className="pro-temporary-retained">Your main plan stays available.</p>
+        </div>
+      </>}
+      {feature === 'library' && <>
+        <p className="pro-demo-lead">A routine for every kind of day. No saved-workout limit.</p>
+        <ul className="pro-example-workouts pro-library-workouts">{['Upper A', 'Lower A', 'Quick full body', 'Weekend workout', ...(saved ? ['Travel workout'] : [])].map((name,index) => <li key={name} className={index===4?'is-newly-saved':''}><span className="pro-library-symbol" aria-hidden="true"><ProFeatureIcon name="library"/></span><strong>{name}</strong>{index===4&&<button type="button" ref={saveFocus} className="pro-example-save" aria-pressed="true" aria-label="Remove Travel workout from sample library" onClick={()=>toggleSaved(false)}>Saved ✓</button>}</li>)}</ul>
+        {!saved && <div className="pro-save-example"><div><strong>Travel workout</strong><small>Ready for your next trip</small></div><button type="button" ref={saveFocus} className="pro-example-save" aria-pressed="false" aria-label="Save Travel workout to sample library" onClick={()=>toggleSaved(true)}>Save +</button></div>}
+        <p className="pro-example-status" role="status">{saved ? '5 sample workouts · Travel workout saved' : '4 sample workouts'}</p>
+        <h3>Make it yours</h3>
+        {choices('Example theme', palettes.map(([name], index) => [index, name]), palette, setPalette)}
+        <div className="pro-example-theme" style={{ '--pro-example-accent': palettes[palette][1], '--pro-example-bg': palettes[palette][2] }} aria-label={`${palettes[palette][0]} theme example`}>
+          <span>TODAY</span><strong>Upper A</strong><small>6 exercises · Your next session</small><div className="pro-theme-exercises"><span>Bench press</span><b>3 × 8</b><span>Dumbbell row</span><b>3 × 10</b></div>
+        </div>
+
+      </>}
+    </section>
+    <p className="pro-explorer-free">Your plan, logs, history and progression stay yours without Pro.</p>
+    <footer className="pro-explorer-actions">
+      {active ? <button className="button primary" type="button" onClick={close}>Back to training</button> : <>
+        <button className="button primary" type="button" onClick={!returnPlan && offer.status === 'available' && onViewOffers ? onViewOffers : () => onViewPlans?.()}>{returnPlan ? `Back to ${returnPlan === 'monthly' ? 'Monthly' : 'Annual'}` : offer.status === 'available' && onViewOffers ? 'See my Pro offer' : 'See Pro plans'}</button>
+        <button className="text-button" type="button" onClick={close}>Back</button>
+      </>}
+    </footer>
+  </main>;
+}

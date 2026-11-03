@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:phone": "node scripts/start-phone-preview.mjs",
     "build": "vite build",
     "preview": "vite preview",
     "start": "node --env-file-if-exists=.env server.mjs",

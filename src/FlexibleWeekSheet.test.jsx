@@ -254,3 +254,14 @@ it('externally starting the selected occurrence during Train Today returns to cu
  const state=fixture('2026-08-31'),source=missedFlexibleSessions(state)[0],update=vi.fn();render(state,{sessionId:source.logicalSessionId},update);act(()=>button('TRAIN TODAY').click());
  render({...state,activeWorkout:startWorkout(state,source.workout)},{sessionId:source.logicalSessionId},update);act(()=>button('Back').click());expect(document.querySelector('h1').textContent).toBe('What changed?');expect(update).not.toHaveBeenCalled();
 });
+it('moving today’s own workout does not repeat its current date as a "Today:" warning',()=>{
+ vi.setSystemTime(new Date('2026-09-07T12:00:00'));
+ const state=fixture('2026-09-07'),own=flexibleSessions(state).find(s=>s.scheduledDate==='2026-09-07');
+ expect(own).toBeTruthy();
+ render(state,{sessionId:own.logicalSessionId,destination:true});
+ expect(document.querySelector('h1').textContent).toContain('Move');
+ expect(document.body.textContent).toContain('Currently Mon, Sep 7');
+ expect(document.querySelector('.sheet-footnote')).toBeNull();
+ const todayCell=document.querySelector('[data-move-date="2026-09-07"]');
+ expect(todayCell.disabled).toBe(true);expect(todayCell.hasAttribute('aria-describedby')).toBe(false);
+});

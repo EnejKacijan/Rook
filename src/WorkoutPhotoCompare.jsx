@@ -71,7 +71,7 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
     <Header title={title} onBack={onBack} onClose={onClose} closeLabel="Close photo comparison" />
     <p className="eyebrow">PRIVATE PHOTOS</p>
     <h1 tabIndex={-1}>{title}</h1>
-    <p className="photo-compare-intro">Choose two photos from your timeline.</p>
+    {!comparing && <p className="photo-compare-intro">Pick an earlier and a later photo. ROOK puts the earlier one first.</p>}
     {status && <p role="status">{status}</p>}
     {!comparing && <>
       <div className="workout-photo-timeline-groups">

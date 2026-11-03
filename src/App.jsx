@@ -63,7 +63,7 @@ import {useLocalDay} from './useLocalDay.js';
 import { canRemoveUpNext, hasMeaningfulExerciseProgress, hasLoggedExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
 import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
 import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft,createCoachVisitTracker,persistCoachContinuation,coachConversationDayContext,coachActionsReadOnly} from './coachConversations.js';
-import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
+import {coachRequestEntry,applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
 import {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
 export {exerciseArt,preloadExerciseArt,exerciseThumbnailPresentation} from './exerciseArt.js';
@@ -142,7 +142,7 @@ import { SheetActionFooter } from './SheetActionFooter.jsx';
 import {useCustomExerciseRecognition} from './useCustomExerciseRecognition.js';
 import './customExerciseRecognition.css';
 import { bindSheetVisibleViewport } from './sheetVisibleViewport.js';
-import { SHEET_MOTION_DURATION, prepareSheetEntry, freezeSheetMotion, createSheetDragMotion, fadeSheetBackdrop } from './sheetMotion.js';
+import { SHEET_MOTION_DURATION, prepareSheetEntry, createSheetDragMotion, closeSheetMotion } from './sheetMotion.js';
 import { bindFullscreenViewerDrag } from './fullscreenViewerDrag.js';
 import { bindFullscreenPhotoScope } from './fullscreenPhotoScope.js';
 import './fullscreenViewerDrag.css';
@@ -200,6 +200,7 @@ import { flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, m
 import {hasMoveWorkoutDestination,hasTemporaryScheduleAction,moveWorkoutCandidates,firstPlanWeekWorkouts,swapWorkoutCandidates} from './flexibleWeek.js';
 import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
+import { WeightTrendChart } from './WeightTrendChart.jsx';
 import {
   Component,
   Fragment,
@@ -226,7 +227,9 @@ import {
   clearWorkoutPhotos,
   deleteWorkoutPhoto,
   getWorkoutPhoto,
+  restoreWorkoutPhoto,
   saveWorkoutPhoto,
+  workoutPhotoSaveMessage,
 } from "./workoutPhotos.js";
 import {
   createObjectUrlLease,
@@ -1989,6 +1992,7 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
   const closeViewerDrag = useRef(null);
   const closing = useRef(false);
   const closeTimer = useRef(null);
+  const cancelSheetClose = useRef(null);
   const historyMarker = useRef(null);
   const historyDismissed = useRef(false);
   const historyCleanupTimer = useRef(null);
@@ -2003,6 +2007,14 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
     const bindPanel = () => {
       if (panel === layer?.firstElementChild) return;
       const replacing = Boolean(panel);
+      if (replacing) {
+        if (cancelSheetClose.current) {
+          cancelSheetClose.current(); cancelSheetClose.current = null;
+          layer.querySelector(':scope > .sheet-drag-scrim')?.remove();
+          layer.style.animation = layer.style.transition = layer.style.backgroundColor = '';
+        }
+        closing.current = false;
+      }
       release();
       panel = layer?.firstElementChild;
       const releaseViewport = bindSheetVisibleViewport(panel, undefined, {
@@ -2031,6 +2043,7 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
   useEffect(
     () => () => {
       clearTimeout(closeTimer.current);
+      cancelSheetClose.current?.();
       clearTimeout(historyCleanupTimer.current);
     },
     [],
@@ -2083,6 +2096,7 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
       }
     };
     const updateHeader = () => {
+      if (panel.hasAttribute('data-sheet-closing')) return;
       findLargeTitle();
       const scrollable = panel.scrollHeight > panel.clientHeight + 2;
       const scrollTop = Math.max(0, panel.scrollTop);
@@ -2177,14 +2191,9 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
       closeTimer.current = setTimeout(close, 160);
       return;
     }
-    onCloseStart?.();
-    const height = freezeSheetMotion(layer, panel);
-    layer.style.transition = "";
     const duration = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? 0 : SHEET_MOTION_DURATION;
-    panel.style.transition = duration ? `transform ${duration}ms ease-out` : "none";
-    panel.style.transform = `translateY(${height + 24}px)`;
-    fadeSheetBackdrop(layer,duration);
-    closeTimer.current = setTimeout(close, duration);
+    cancelSheetClose.current = closeSheetMotion(layer, panel, close, {duration});
+    onCloseStart?.();
     return true;
   };
   closeViewerDrag.current = () => requestClose({ completedViewerDrag: true });
@@ -4312,6 +4321,7 @@ export function Onboarding({ state = null, update, exit, onPlanAccepted, onReque
         {notice && <p className="offline-banner">{notice}</p>}
       </div>
       <div className="onboarding-footer">
+        {stage.key === 'preferences' && !busy && !safetyBlocked && !(answers.trainingSplitChoice && answers.exercisePreference) && <small className="onboarding-requirement" role="status">Choose {[!answers.trainingSplitChoice && 'a weekly structure', !answers.exercisePreference && 'an exercise preference'].filter(Boolean).join(' and ')} to build your plan.</small>}
         {!singleDecision && <Button
           disabled={!valid || busy || safetyAnalysis.status === "checking"}
           onClick={() => {
@@ -5186,7 +5196,7 @@ export function Today({
             : "No workout was planned on this date."}</p>}
           {movedAwayRest && <div className="today-moved-provenance" aria-label="Moved workouts">{movedAway.map(item=><div key={item.logicalSessionId}>
             <p>{item.workout.name} · {workoutVisibleStatus({status:'moved',destination:displayDate(localDate(item.scheduledDate))})}</p>
-            <button type="button" className="text-button" onClick={()=>selectDate(weekday(item.scheduledDate),localDate(item.scheduledDate))}>View workout <span aria-hidden="true">›</span></button>
+            <button type="button" className="text-button" onClick={()=>selectDate(weekday(item.scheduledDate),localDate(item.scheduledDate))}><span>View workout</span><NavigationChevron className="inline-navigation-chevron"/></button>
           </div>)}</div>}
           <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso}
             historyOnly />
@@ -6460,8 +6470,12 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   );
   const previousIndex = active.exerciseIndex - 1;
   const hasPreviousExercise = previousIndex >= 0;
-  const nextIndex = active.exerciseIndex + 1;
-  const nextExercise = active.exercises[nextIndex] || null;
+  // Next follows Up Next: skip exercises whose sets are already all logged, so
+  // the last pending exercise ends on Finish instead of revisiting done work.
+  const pendingAfter = active.exercises.findIndex((entry, index) =>
+    index > active.exerciseIndex && !(entry.sets.length && entry.sets.every(set => set.completed)));
+  const nextIndex = pendingAfter >= 0 ? pendingAfter : active.exerciseIndex + 1;
+  const nextExercise = pendingAfter >= 0 ? active.exercises[nextIndex] : null;
   const incompleteCurrent = exercise.sets.filter((set) => !set.completed).length;
   const supersetRoundIndex = superset
     ? Math.max(
@@ -7982,6 +7996,20 @@ export function PrivateWorkoutPhotoViewer({
   );
 }
 
+// A small decorative preview for the Progress entry; the card itself is the control.
+function WorkoutPhotoStripThumb({ id }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let current = true, lease = null;
+    getWorkoutPhoto(id).then(record => {
+      if (!current || !record?.blob) return;
+      lease = createObjectUrlLease(record.blob); setUrl(lease.url);
+    }).catch(() => {});
+    return () => { current = false; lease?.revoke(); };
+  }, [id]);
+  return <i>{url && <img src={url} alt="" decoding="async"/>}</i>;
+}
+
 function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMode = false, selectionIndex = 0, disabled = false }) {
   const hostRef = useRef(null);
   const [nearViewport, setNearViewport] = useState(false);
@@ -8063,8 +8091,8 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMod
           </span>
         ) : null}
       </span>
-      <strong>{entry.workoutName}</strong>
-      <small>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(entry.day))}</small>
+      <strong>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(entry.day))}</strong>
+      <small>{entry.workoutName}</small>
     </button>
   );
 }
@@ -8116,7 +8144,7 @@ export function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) 
         Photos stay on this device. ROOK does not upload or analyze them.
       </p>
       <p className="workout-photo-timeline-status" role="status" aria-live="polite">{status}</p>
-      {entries.length >= 2 && <button className="text-button workout-photo-compare-entry" disabled={entries.filter(entry => entry.metadataAvailable && availability[entry.id] === true).length < 2} onClick={() => setCompareMode(true)}>COMPARE</button>}
+      {entries.length >= 2 && <ExerciseNavigationButton type="button" className="list-row workout-photo-compare-entry" disabled={entries.filter(entry => entry.metadataAvailable && availability[entry.id] === true).length < 2} onClick={() => setCompareMode(true)}><span><strong>Compare two photos</strong><small>Swipe or view side by side</small></span><NavigationChevron/></ExerciseNavigationButton>}
       {photos.status === "error" && <p role="status">Workout photos couldn’t be read on this device. <button className="text-button" onClick={photos.refresh}>Try again</button></p>}
       {photos.status === "error" ? null : photos.status === "loading" && !entries.length ? (
         <p className="muted">Loading workout photos…</p>
@@ -8159,9 +8187,14 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
   const [loading, setLoading] = useState(Boolean(workout.photoId));
   const [missing, setMissing] = useState(false);
   const [status, setStatus] = useState("");
+  // Success is visible as the photo itself; only announce it. Errors stay on screen.
+  const [statusQuiet, setStatusQuiet] = useState(false);
   const [busy, setBusy] = useState(false);
   const [viewerOpen, setViewerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const photoUndo = useTransientSnackbar({ className: 'workout-photo-undo', afterUndo: () => triggerHaptic('tap') });
+  const photoScope=useRef(null);
+  photoScope.current={workoutId:workout.id,workouts:workouts||[workout]};
   useLayoutEffect(() => { onBusyChange?.(busy); }, [busy, onBusyChange]);
 
   useEffect(() => {
@@ -8202,22 +8235,57 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
       return current;
     });
 
+  // Undo puts back the record read before it was removed. The photo now on the
+  // workout (if any) is removed only after the old one is safely back.
+  const offerPhotoUndo = (message, previous, replacementId) => photoUndo.show({
+    message,
+    valid:()=>photoScope.current.workoutId===previous.workoutId&&photoScope.current.workouts.some(item=>item.id===previous.workoutId&&(item.photoId||null)===(replacementId||null)),
+    undo: () => {
+      setBusy(true);
+      return restoreWorkoutPhoto(previous)
+        .then(async () => {
+          let restored = false;
+          // Commit the reference before deciding which blob may be removed.
+          // A queued React update must not be mistaken for a rejected restore.
+          flushSync(()=>update(current => {
+            restored=false;
+            const stored = current.workouts.find(item => item.id === previous.workoutId);
+            if (!stored || (stored.photoId||null)!==(replacementId||null)) return current;
+            stored.photoId = previous.id; restored = true;
+            return current;
+          }));
+          if (restored && replacementId) await deleteWorkoutPhoto(replacementId).catch(() => {});
+          if (!restored) await deleteWorkoutPhoto(previous.id).catch(() => {});
+          setStatusQuiet(restored);
+          setStatus(restored ? "Photo restored." : "Photo couldn’t be restored.");
+        })
+        .catch(() => { setStatusQuiet(false); setStatus("Photo couldn’t be restored."); })
+        .finally(() => setBusy(false));
+    },
+  });
+
   const choosePhoto = async (event) => {
     const file = event.currentTarget.files?.[0];
     event.currentTarget.value = "";
     if (!file || busy) return;
     const previousPhotoId = workout.photoId;
     setBusy(true);
+    setStatusQuiet(true);
     setStatus("Saving photo…");
+    photoUndo.clear();
     try {
       const saved = await saveWorkoutPhoto(workout.id, file);
+      const previous = previousPhotoId && previousPhotoId !== saved.id
+        ? await getWorkoutPhoto(previousPhotoId).catch(() => null) : null;
       updateReference(saved.id);
       if (previousPhotoId && previousPhotoId !== saved.id)
         deleteWorkoutPhoto(previousPhotoId).catch(() => {});
-      setStatus("Photo saved with this workout.");
       triggerHaptic("success");
-    } catch {
-      setStatus("Photo couldn’t be saved. Your workout was saved.");
+      if (previous?.blob) { setStatus(""); offerPhotoUndo("Photo replaced", previous, saved.id); }
+      else { setStatusQuiet(true); setStatus("Photo saved with this workout."); }
+    } catch (error) {
+      setStatusQuiet(false);
+      setStatus(workoutPhotoSaveMessage(error));
     } finally {
       setBusy(false);
     }
@@ -8229,8 +8297,12 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
     if (!target.id || busy || deletePending.current) return false;
     deletePending.current = true;
     setBusy(true);
+    setStatusQuiet(true);
     setStatus("Deleting photo…");
+    photoUndo.clear();
     try {
+      // Read the full record first so the inline delete can offer Undo.
+      const previous = fromPager ? null : await getWorkoutPhoto(target.id).catch(() => null);
       await deleteWorkoutPhoto(target.id);
       update(current => {
         const stored = current.workouts.find(item => item.id === target.workoutId);
@@ -8239,10 +8311,12 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
       });
       if (!fromPager) setViewerOpen(false);
       setConfirmDelete(false);
-      setStatus("Photo deleted. Your workout is unchanged.");
+      if (previous?.blob) { setStatus(""); offerPhotoUndo("Photo deleted. Your workout is unchanged.", previous, null); }
+      else setStatus("Photo deleted. Your workout is unchanged.");
       triggerHaptic("tap");
       return true;
     } catch {
+      setStatusQuiet(false);
       setStatus("Photo couldn’t be deleted. Try again.");
       return false;
     } finally {
@@ -8252,8 +8326,8 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
   };
 
   const picker = (
-    <label className={`workout-photo-picker${busy ? " is-disabled" : ""}`}>
-      <span>{workout.photoId ? "CHANGE PHOTO" : "ADD PHOTO"}</span>
+    <label className={`workout-photo-picker${workout.photoId ? "" : " is-empty"}${busy ? " is-disabled" : ""}`}>
+      <span>{workout.photoId ? "CHANGE PHOTO" : busy ? "SAVING PHOTO…" : "+ ADD PHOTO"}</span>
       <input
         type="file"
         accept="image/*"
@@ -8300,15 +8374,15 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
         </>
       ) : missing ? (
         <div className="workout-photo-missing">
-          <p>Photo unavailable on this device.</p>
+          <p>This photo isn’t on this device. Photos aren’t synced, but a backup from the device that took it can bring it back.</p>
           <button type="button" onClick={() => updateReference(null)}>
-            REMOVE REFERENCE
+            REMOVE FROM WORKOUT
           </button>
         </div>
       ) : (
         picker
       )}
-      <p className="workout-photo-status" role="status" aria-live="polite">
+      <p className={`workout-photo-status${statusQuiet ? " visually-hidden" : ""}`} role="status" aria-live="polite">
         {status}
       </p>
       {viewerOpen && (
@@ -8331,6 +8405,7 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
           <button type="button" disabled={busy} onClick={removePhoto}>DELETE PHOTO</button>
         </div>
       )}
+      {photoUndo.surface}
     </section>
   );
 }
@@ -9649,6 +9724,7 @@ export function contextualCoachPrompts(state, now = Date.now()) {
 export function Coach({ state, update, setPage, setDetail, scrollMemory, availability = { state: 'ready' }, entryIntent, onEntryHandled, visitTracker }) {
   const personalThemes = usePersonalThemes();
   const [message, setMessage] = useState(state.coachDraft || "");
+  const [consentNotice, setConsentNotice] = useState(null);
   const [dayContext,setDayContext]=useState(()=>coachConversationDayContext(state));
   const [sendingId, setSendingId] = useState(null);
   const sending = Boolean(sendingId && sendingId === state.activeCoachConversationId);
@@ -9931,6 +10007,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
     sendingRef.current = {entryId,conversationId,requestId};
     setSendingId(conversationId);
     setConversationError('');
+    setConsentNotice(null);
     if (!preserveDraft) setMessage('');
     transcriptScroll.latest();
     try {
@@ -9944,6 +10021,28 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
       }
       if (commit.result.applied && copyMountedRef.current)availability.success?.();
     } catch (error) {
+      if (error?.code === 'ai-consent-required' && !retryEntry) {
+        // Declined consent is not a failed reply: nothing was sent. Return the
+        // message only to its own empty composer; newer drafts and cancelled
+        // requests still belong to the user.
+        let applied = false, restoredDraft = false;
+        flushSync(() => update(current => {
+          applied = false; restoredDraft = false;
+          if (!coachRequestEntry(current, identity)) return current;
+          const next = structuredClone(current);
+          next.conversations = next.conversations.filter(item => item.id !== entryId);
+          restoredDraft = !preserveDraft && current.activeCoachConversationId === conversationId && !current.coachDraft;
+          if (restoredDraft) next.coachDraft = value;
+          applied = true;
+          return next;
+        }, {planVersion:false}));
+        if (applied && copyMountedRef.current && liveState.current.profile.id === identity.profileId
+          && displayedConversationRef.current === conversationId) {
+          if (restoredDraft) setMessage(value);
+          setConsentNotice(identity);
+        }
+        return;
+      }
       let applied = false;
       flushSync(() => update(current => {
         const next = applyCoachRequestResult(current, identity, {requestError:true});
@@ -10309,6 +10408,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
         </header>
       <div className="coach-scroll" ref={scrollRef} tabIndex={0} aria-label="Coach conversation" data-scroll-mode={transcriptScroll.mode}>
         <div className="coach-transcript" ref={transcriptRef}>
+        {consentNotice?.profileId === state.profile.id && consentNotice?.conversationId === displayedId && !conversationError && <p className="offline-banner coach-consent-notice" role="status">Message not sent. AI data sharing is off. Send again to review that choice, or change it in Profile → Privacy &amp; legal.</p>}
         {conversationError && !newChatConfirm && <div className="offline-banner" role="alert">{conversationError} <button type="button" className="text-button" onClick={()=>enterConversation()}>Try again</button></div>}
         {!hasConversation && <h1 className="visually-hidden">Coach</h1>}
         {!coachAvailable && (
@@ -10566,7 +10666,54 @@ function WeightTrendInformation({backgroundRef}) {
     <p>Trend weight uses weekly check-in averages to smooth daily changes. It does not estimate body fat.</p>
     <p>Requires at least 3 check-ins spanning 7 days and 2 calendar weeks.</p>
     <p>Changes compare the latest weekly average with an earlier week, ideally four weeks apart. The actual interval is shown.</p>
+    <p>Up and down are shown the same way for every goal. Water, food and training move weight from day to day, so ROOK doesn't mark a change as good or bad.</p>
+    <p>Turning off check-ins hides weight from Progress. Your check-ins stay saved and come back if you turn them on again.</p>
   </ProfileInformation>;
+}
+
+// What ROOK will not do from weight alone, worded for the goal the person chose.
+const WEIGHT_STABLE_NOTE = {
+  lose_fat: "ROOK won't tell you to eat less or train more from weight alone.",
+  build_muscle: "ROOK won't tell you to eat more or train more from weight alone.",
+};
+function WeightTrendSummary({ state, trend, setDetail }) {
+  const earlyTrend = weightTrendEarlyState(trend);
+  const unit = weightUnit(state.profile.units);
+  const trendDays = trend.comparison?.days || 0;
+  const trendInterval = trendDays >= 27 && trendDays <= 29 ? "4 weeks" : `${trendDays} ${trendDays === 1 ? "day" : "days"}`;
+  const trendChange = trend.ready
+    ? `${trend.changeKg < 0 ? "−" : trend.changeKg > 0 ? "+" : ""}${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trendInterval}`
+    : null;
+  return <>
+    <button type="button" className="weight-trend-title" aria-label="Open weight history" onClick={() => setDetail({ weightHistory: true })}>
+      <h2>Weight trend</h2>
+      <NavigationChevron/>
+    </button>
+    <div className="weight-trend-summary">
+      {trend.ready && <span>TREND WEIGHT</span>}
+      <strong>{trend.ready ? `${bodyWeightFromKg(trend.latest.weightKg, unit).toFixed(1)} ${unit}` : earlyTrend.title}</strong>
+      {trendChange && <small>{trendChange}</small>}
+      {!trend.ready && <small>{earlyTrend.body}</small>}
+    </div>
+  </>;
+}
+function WeightTrendNotices({ trend, focus }) {
+  return <>
+    {trend.stable && (
+      <p className="weight-trend-notice">
+        <strong>No clear change over the last 4 weeks.</strong> Short flat
+        periods are normal. {WEIGHT_STABLE_NOTE[focus] || "ROOK won't change your plan from weight alone."}
+      </p>
+    )}
+    {trend.rapidDownward && (
+      <p className="weight-trend-notice" role="status">
+        Your recent weight trend is changing quickly. ROOK can't tell
+        whether that rate is appropriate for you. Consider checking with a
+        qualified healthcare professional, especially if the change is
+        unplanned or you feel unwell.
+      </p>
+    )}
+  </>;
 }
 
 function GoalProgress({
@@ -10581,18 +10728,9 @@ function GoalProgress({
   const progression = progressionSummary(progressionRows);
   const hasComparableData = progressionRows.length >= 2;
   const trend = weightTrend(state.weightCheckins);
-  const earlyTrend = weightTrendEarlyState(trend);
-  const unit = weightUnit(state.profile.units);
-  const formatTrendWeight = (value) =>
-    `${bodyWeightFromKg(value, unit).toFixed(1)} ${unit}`;
-  const trendDays = trend.comparison?.days || 0;
-  const trendInterval =
-    trendDays >= 27 && trendDays <= 29
-      ? "4 weeks"
-      : `${trendDays} ${trendDays === 1 ? "day" : "days"}`;
-  const trendChange = trend.ready
-    ? `${trend.changeKg < 0 ? "−" : trend.changeKg > 0 ? "+" : ""}${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trendInterval}`
-    : null;
+  const tracking = Boolean(state.weightTrackingEnabled);
+  // Check-ins are offered where body weight is part of the goal; any goal can turn them on in Profile.
+  const offerCheckins = !tracking && focus === "build_muscle" && !profileIsUnder18(state.profile);
   const trainingProgress = hasComparableData
     ? progression.label
     : "More comparable workouts are needed";
@@ -10666,10 +10804,18 @@ function GoalProgress({
             <strong>{content.value}</strong>
             {content.breakdown && <small className="goal-progress-breakdown">{content.breakdown}</small>}
           </div>
+          {tracking && <div className="goal-progress-weight">
+            <WeightTrendSummary state={state} trend={trend} setDetail={setDetail}/>
+            <WeightTrendNotices trend={trend} focus={focus}/>
+          </div>}
+          {offerCheckins && (
+            <button type="button" className="goal-progress-action" onClick={() => setDetail({ weightOptIn: true })}>
+              ADD WEIGHT CHECK-INS
+            </button>
+          )}
         </div>
       </section>
     );
-  const tracking = Boolean(state.weightTrackingEnabled);
   return (
     <section className="goal-progress-section">
       <div className="statistics-heading"><Eyebrow>{sectionLabel}</Eyebrow>
@@ -10678,51 +10824,13 @@ function GoalProgress({
         </ProfileInformation>}
       </div>
       <div className="goal-progress-card">
-        {tracking ? (
-          <button
-            type="button"
-            className="weight-trend-title"
-            aria-label="Open weight history"
-            onClick={() => setDetail({ weightHistory: true })}
-          >
-            <h2>Weight trend</h2>
-            <NavigationChevron/>
-          </button>
-        ) : (
-          <h2>Fat-loss support</h2>
-        )}
-        {tracking ? (
-          <div className="weight-trend-summary">
-            {trend.ready && <span>TREND WEIGHT</span>}
-            <strong>
-              {trend.ready
-                ? formatTrendWeight(trend.latest.weightKg)
-                : earlyTrend.title}
-            </strong>
-            {trendChange && <small>{trendChange}</small>}
-            {!trend.ready && <small>{earlyTrend.body}</small>}
-          </div>
-        ) : null}
+        {tracking ? <WeightTrendSummary state={state} trend={trend} setDetail={setDetail}/> : <h2>Fat-loss support</h2>}
         <div className="goal-progress-metric">
           <span>STRENGTH WHILE LOSING</span>
           <strong>{trainingProgress}</strong>
           {hasComparableData && progression.breakdown && <small className="goal-progress-breakdown">{progression.breakdown}</small>}
         </div>
-        {trend.stable && (
-          <p className="weight-trend-notice">
-            <strong>No clear change over the last 4 weeks.</strong> Short flat
-            periods are normal. ROOK won't tell you to eat less or train more
-            from weight alone.
-          </p>
-        )}
-        {trend.rapidDownward && (
-          <p className="weight-trend-notice" role="status">
-            Your recent weight trend is changing quickly. ROOK can't tell
-            whether that rate is appropriate for you. Consider checking with a
-            qualified healthcare professional, especially if the change is
-            unplanned or you feel unwell.
-          </p>
-        )}
+        {tracking && <WeightTrendNotices trend={trend} focus={focus}/>}
         {!tracking && (
           <button
             type="button"
@@ -10777,6 +10885,14 @@ function ProgressFocusSheet({ state, update, close }) {
       </div>
     </main>
   );
+}
+
+function weightCheckinSummary(state) {
+  if (!state.weightTrackingEnabled) return "Off · Optional body-weight trend";
+  const latest = [...(state.weightCheckins || [])].sort((a, b) => a.localDate.localeCompare(b.localDate)).pop();
+  if (!latest) return "On · No check-ins yet";
+  const unit = weightUnit(state.profile.units);
+  return `On · Last ${bodyWeightFromKg(latest.weightKg, unit).toFixed(1)} ${unit}, ${new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(new Date(`${latest.localDate}T12:00:00`))}`;
 }
 
 function WeightOptInSheet({ update, setDetail, close }) {
@@ -10874,11 +10990,10 @@ function WeightEditor({ state, update, request, setDetail }) {
             <span>Weight</span>
             <div className="weight-input-wrap">
               <input
-                type="number"
+                type="text"
                 inputMode="decimal"
-                step="0.1"
-                min={unit === "lb" ? "22" : "10"}
-                max={unit === "lb" ? "1543" : "700"}
+                autoComplete="off"
+                spellCheck={false}
                 value={value}
                 aria-describedby={error ? "weight-entry-error" : undefined}
                 onChange={(event) => {
@@ -10889,7 +11004,7 @@ function WeightEditor({ state, update, request, setDetail }) {
               <span>{unit}</span>
             </div>
           </label>
-          <label>
+          <label className="weight-date-field">
             <span>Date</span>
             <input
               type="date"
@@ -10936,22 +11051,11 @@ function WeightEditor({ state, update, request, setDetail }) {
   );
 }
 
-function WeightHistory({ state, setDetail, close, saved }) {
+function WeightHistory({ state, update, setDetail, close, saved }) {
   const screenRef = useRef(null);
   const trend = weightTrend(state.weightCheckins);
   const earlyTrend = weightTrendEarlyState(trend);
   const unit = weightUnit(state.profile.units);
-  const values = trend.points.map((point) => point.weightKg);
-  const minimum = values.length ? Math.min(...values) : 0;
-  const maximum = values.length ? Math.max(...values) : 1;
-  const range = Math.max(0.1, maximum - minimum);
-  const points = trend.points
-    .map((point, index) => {
-      const x = trend.points.length === 1 ? 50 : (index / (trend.points.length - 1)) * 100;
-      const y = 92 - ((point.weightKg - minimum) / range) * 78;
-      return `${x},${y}`;
-    })
-    .join(" ");
   const changeSummary = trend.ready
     ? `${trend.changeKg < 0 ? "Down" : trend.changeKg > 0 ? "Up" : "Unchanged by"} ${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trend.comparison.days} days.`
     : "Weight trend is still building.";
@@ -10972,19 +11076,11 @@ function WeightHistory({ state, setDetail, close, saved }) {
         </h1>
         <p>{trend.ready ? changeSummary : earlyTrend.body}</p>
         {trend.ready && trend.points.length >= 2 && (
-          <svg
-            className="weight-trend-chart"
-            viewBox="0 0 100 100"
-            role="img"
-            aria-label={summary}
-            preserveAspectRatio="none"
-          >
-            <polyline points={points} fill="none" vectorEffect="non-scaling-stroke" />
-          </svg>
+          <WeightTrendChart points={trend.points} units={state.profile.units} summary={summary}/>
         )}
       </section>
       <div className="weight-history-actions">
-        <button onClick={() => setDetail({ weightEditor: {} })}>ADD WEIGHT</button>
+        <button type="button" className="weight-history-add" onClick={() => setDetail({ weightEditor: {} })}>ADD WEIGHT</button>
       </div>
       {weeklyAverages.length > 0 && (
         <section className="weight-history-averages">
@@ -11018,6 +11114,12 @@ function WeightHistory({ state, setDetail, close, saved }) {
             </button>
           ))}
       </section>}
+      <section className="weight-history-turn-off">
+        <Button variant="quiet" onClick={() => {
+          update((current) => { current.weightTrackingEnabled = false; return current; });
+          close();
+        }}>TURN OFF CHECK-INS</Button>
+      </section>
     </main>
   );
 }
@@ -11171,15 +11273,17 @@ export function Progress({ state, update, setDetail, setPage }) {
             </strong>
             <small>
               {photos.entries.length
-                ? "Look back through your photo timeline."
-                : photos.status === "ready" ? "Optional photos saved after workouts will appear here."
+                ? "Stored only on this device"
+                : photos.status === "ready" ? "Add one after a workout. Photos stay on this device."
                 : photos.status === "error" ? "Open your timeline to try again."
                 : "Reading saved photos on this device."}
             </small>
           </span>
+          {photos.entries.length > 0 && <span className="workout-photo-entry-strip" aria-hidden="true">
+            {photos.entries.slice(0, 3).map(entry => <WorkoutPhotoStripThumb key={entry.id} id={entry.id}/>)}
+          </span>}
           <NavigationChevron className="navigation-chevron"/>
         </button>
-        <small className="workout-photo-entry-privacy">Stored privately on this device.</small>
       </section>);
   const trainingSections = (<>{improvementEvents.length > 0 ? (
         <section className="progress-lower recent-improvements-section">
@@ -11734,6 +11838,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
           <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('profile-details')}><span><strong>Personal details</strong><small>{personal.length ? personal.map(([,value])=>value).join(' · ') : 'Add name, age or sex'}</small></span><NavigationChevron/></ExerciseNavigationButton>
+          {(state.weightTrackingEnabled || !profileIsUnder18(p)) && <ExerciseNavigationButton className="list-row" onClick={()=>setDetail(state.weightTrackingEnabled ? { weightHistory: true } : { weightOptIn: true })}><span><strong>Weight check-ins</strong><small>{weightCheckinSummary(state)}</small></span><NavigationChevron/></ExerciseNavigationButton>}
         </section>
       )}
       {!area && personalIncomplete && (
@@ -18524,6 +18629,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           <Eyebrow>TODAY ONLY · {adjustmentModeLabel(proposal.mode)}</Eyebrow>
           <h1 className="workflow-title">{proposal.workout.name}</h1>
           <p>{proposal.workout.exercises.length} exercises · Estimated time: <span style={{whiteSpace:'nowrap'}}>{roundedEstimate(proposal.originalWorkout.estimatedMinutes || estimateSessionMinutes(proposal.originalWorkout.exercises))} min</span> → <span style={{whiteSpace:'nowrap'}}>{roundedEstimate(proposal.workout.estimatedMinutes)} min</span></p>
+          {proposal.mode === ADJUST_TODAY_MODES.lessTime && proposal.requestedMinutes && roundedEstimate(proposal.workout.estimatedMinutes) > proposal.requestedMinutes && <p className="adjust-calm-note adjust-time-fit" role="status">Closest fit for {proposal.requestedMinutes} min. Main sets stay. Remove an exercise in Edit workout to shorten it more.</p>}
           {proposal.mode === ADJUST_TODAY_MODES.equipment ? <dl className="adjust-equipment-delta"><div><dt>Current</dt><dd>{currentEquipmentContext.name ? `${currentEquipmentContext.name} · ` : ""}{gymEquipmentSummary(currentEquipmentContext.equipment)}</dd></div><div><dt>For this workout</dt><dd>{proposal.gymProfileName ? `${proposal.gymProfileName} · ` : ""}{gymEquipmentSummary(proposal.temporaryEquipment)}</dd></div></dl> : proposal.gymProfileName && <p className="adjust-gym-context">Using {proposal.gymProfileName} equipment today</p>}
 
           <section className="adjust-review-section">
@@ -18813,6 +18919,7 @@ export function Detail({
     return (
       <WeightHistory
         state={state}
+        update={update}
         setDetail={setDetail}
         close={close}
         saved={detail.saved}
@@ -20503,8 +20610,6 @@ function HydratedApp({startup,placements}) {
   const openAskCoach=date=>{
     setCoachEntry(createCoachDayContext(state,date));setDetail(null);setPage('coach');
   };
-  const [detailClosing, setDetailClosing] = useState(false);
-  useEffect(() => { setDetailClosing(false); }, [detail]);
   const [entryMode, setEntryMode] = useState(()=>{
     if (import.meta.env.DEV && import.meta.env.MODE==='theme-preview' && startup.firstRunVerified && !state.profile.onboardingComplete && ['welcome','sign-in','restore'].includes(placements?.firstRunEntry)) return placements.firstRunEntry;
     return initialFirstRunEntry(startup,state);
@@ -20684,8 +20789,7 @@ function HydratedApp({startup,placements}) {
     <div className="app-shell">
       <div className="app-content" ref={backgroundRef}>
         {['workout','complete'].includes(page) ? <WorkoutMotion kind="completion" identity={page}>{content}</WorkoutMotion> : content}
-        {(!detail || detailClosing) &&
-          !repairPreview &&
+        {!repairPreview &&
           !["workout", "optional-session", "complete"].includes(page) && (
           <BottomNav page={page} setPage={setPage} onActiveTabRetap={tab=>{
             if(tab==='today')selectCalendarToday(update);
@@ -20697,7 +20801,6 @@ function HydratedApp({startup,placements}) {
         <ModalLayer
           key={detail?.visual ? "exercise-visual" : "detail"}
           close={closeDetail}
-          onCloseStart={() => setDetailClosing(true)}
           backgroundRef={backgroundRef}
           presentation={detail?.visual ? "fullscreen" : (detail === "plan-builder" || detail?.editPlan?.fullscreen) ? "editor-page" : "sheet"}
           tabNavigation={detail?.editPlan?.fullscreen ? leave => <TabRouteNavigation page={page} setPage={setPage} leave={leave} backgroundRef={backgroundRef} /> : undefined}

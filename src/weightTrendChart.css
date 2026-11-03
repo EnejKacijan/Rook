@@ -1,0 +1,19 @@
+.weight-trend-chart {
+  --weight-chart-height:7.5rem;
+  display:grid; grid-template-columns:max-content minmax(0,1fr); gap:calc(.7em + 4px) 10px;
+  width:100%; margin:16px 0 0; font-size:var(--rook-type-meta); line-height:1.4;
+  color:var(--rook-secondary); font-variant-numeric:tabular-nums;
+}
+.weight-chart-unit { font-size:var(--rook-type-label); }
+.weight-chart-y {
+  display:flex; flex-direction:column; justify-content:space-between; text-align:right;
+  height:calc(var(--weight-chart-height) + 1.4em); margin-block:-.7em;
+}
+.weight-chart-plot { position:relative; min-width:0; height:var(--weight-chart-height); margin-inline:3px; }
+.weight-chart-plot svg { display:block; width:100%; height:100%; overflow:visible; }
+.weight-chart-plot line { stroke:var(--rook-border); stroke-width:1; }
+.weight-chart-plot polyline { stroke:var(--rook-accent-text); stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+.weight-chart-point { position:absolute; width:6px; height:6px; border-radius:50%; background:var(--rook-accent-text); transform:translate(-50%,-50%); pointer-events:none; }
+.weight-chart-x { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; min-width:0; padding-inline:3px; }
+.weight-chart-x time { white-space:nowrap; }
+.weight-chart-x time:last-child { margin-left:auto; text-align:right; }

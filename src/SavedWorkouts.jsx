@@ -114,7 +114,10 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
         !window.confirm('Discard this workout draft and return to the start?')) return;
     close();
   };
-  const back=()=>{if(firstRun){leaveFirstRun();return;}if(editing){setEditing(false);return;}if(source&&onBack){onBack();return;}if(renaming){setRenaming(false);setDraft(null);copyReference.current=null;return;}if(source){close();return;}reset();};
+  const back=()=>{if(firstRun){leaveFirstRun();return;}if(editing){setEditing(false);return;}if(source&&onBack){onBack();return;}
+    // A logged workout has no workout library behind it: like its first review,
+    // Back from an edited review leaves without saving instead of opening the library.
+    if(source){close();return;}if(renaming){setRenaming(false);setDraft(null);copyReference.current=null;return;}reset();};
   if(navigationRef)navigationRef.current=back;
   const save=value=>{
     try{const result=commit(current=>{if(copyReference.current)resolvePlanWorkout(current,copyReference.current);return (firstRun?saveFirstRunWorkout:saveWorkoutTemplate)(current,value,{id:selected?.id||createId.current,revision:selected?.revision??null});});if(!result.changed)return;setNotice('Workout saved');if(firstRun||source){(onSaved||close)();return;}reset();}catch(e){setError(e.message);}

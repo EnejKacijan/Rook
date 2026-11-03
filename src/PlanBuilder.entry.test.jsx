@@ -189,3 +189,10 @@ it('keeps the weekly presets separate and explains Arnold without adding preset 
   expect(host.querySelectorAll('[data-focus]')).toHaveLength(10);
   expect(host.querySelector('[data-focus="push"],[data-focus="pull"],[data-focus="full-body"]')).toBeNull();
 });
+it('says which review answers are still needed while Build my plan is unavailable',async()=>{
+  const state=fixture();Object.assign(state.profile,createReturningUserFixture(0).profile,{ageRange:'30–39',exercisePreference:null,trainingSplitChoice:null,trainingPreferences:''});mount(state);openToday();await review(state.profile);
+  const hint=()=>host.querySelector('.onboarding-requirement');
+  expect(hint().textContent).toBe('Choose a weekly structure and an exercise preference to build your plan.');
+  click('LET ROOK CHOOSE');expect(hint().textContent).toBe('Choose an exercise preference to build your plan.');
+  click('No preference');expect(hint()).toBeNull();expect(button('BUILD MY PLAN').disabled).toBe(false);
+});

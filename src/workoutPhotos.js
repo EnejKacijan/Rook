@@ -207,6 +207,22 @@ export function getWorkoutPhoto(id) {
   );
 }
 
+// Undo for a delete or a replacement: put back the exact record that was read
+// before it was removed. Never overwrites a different photo with the same id.
+export function restoreWorkoutPhoto(record) {
+  if (!record?.id || !record.blob) return Promise.reject(new Error("The photo can no longer be restored."));
+  return usePhotoStore("readwrite", (store) => requestResult(store.add(record)));
+}
+
+// Messages from preparing a photo that say what the person can change.
+const PHOTO_CHOICE_ERRORS = new Set(["Choose an image file.", "Choose a photo smaller than 15 MB.", "That image has no readable dimensions."]);
+export function workoutPhotoSaveMessage(error) {
+  if (PHOTO_CHOICE_ERRORS.has(error?.message)) return `${error.message} Your workout was saved.`;
+  if (error?.name === "QuotaExceededError") return "Not enough storage on this device for the photo. Your workout was saved.";
+  if (error?.message === "That image format could not be read." || error?.name === "EncodingError") return "That photo couldn’t be opened. Try a JPEG or PNG. Your workout was saved.";
+  return "Photo couldn’t be saved. Your workout was saved.";
+}
+
 export function deleteWorkoutPhoto(id) {
   if (!id) return Promise.resolve();
   return usePhotoStore("readwrite", (store) => requestResult(store.delete(id)));

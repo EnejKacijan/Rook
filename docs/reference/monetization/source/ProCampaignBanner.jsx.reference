@@ -1,0 +1,23 @@
+import React, { useState } from 'react';
+import { useProCampaign, campaignEndLabel } from './useProCampaign.js';
+import './proCampaignBanner.css';
+
+const dismissalKey = id => `rook:pro-campaign-dismissed:${id}`;
+function wasDismissed(id) { try { return localStorage.getItem(dismissalKey(id)) === 'true'; } catch { return false; } }
+
+// Used on Today below the training action. A dismissal survives reloads for this
+// campaign, while its manually opened Pro page remains available.
+export function ProCampaignBanner({ campaign, snapshot, active = false, preview = false, now, onOpen, placement = 'today', triggerRef, disabled = false, showAction = true }) {
+  const offer = useProCampaign({ campaign, snapshot, active, preview, now });
+  const [dismissedId, setDismissedId] = useState(null);
+  if (offer.status !== 'available' || !onOpen) return null;
+  if (placement === 'today' && (dismissedId === offer.campaignId || wasDismissed(offer.campaignId))) return null;
+  const dismiss = () => { setDismissedId(offer.campaignId); try { localStorage.setItem(dismissalKey(offer.campaignId), 'true'); } catch { /* Session dismissal still applies. */ } };
+  return <aside className={`pro-campaign-banner pro-campaign-banner--${placement}`} aria-label={offer.title}>
+    <div className="pro-campaign-kicker"><span>ROOK PRO · {offer.title}</span>{placement === 'today' && <button type="button" aria-label="Dismiss Pro offer" onClick={dismiss}>×</button>}</div>
+    <strong className="pro-campaign-headline">More room to grow.</strong>
+    <p><b>{offer.intro.formattedPrice}</b> for your first year</p>
+    <small>Then {offer.renewal.formattedPrice}/year.{placement === 'today' ? ` · Ends ${campaignEndLabel(offer.endsAt)}` : ' Auto-renews until canceled.'}</small>
+    <div className="pro-campaign-bottom"><span>Ends {campaignEndLabel(offer.endsAt)}</span>{showAction && <button ref={triggerRef} type="button" disabled={disabled} onClick={onOpen}>See offer <span aria-hidden="true">↗</span></button>}</div>
+  </aside>;
+}

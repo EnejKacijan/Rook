@@ -71,6 +71,8 @@ body {
 /* Focus may scroll overflow:hidden ancestors even with a locked document.
    The modal coverage layer is a boundary, never a second sheet scroller. */
 .modal-layer:has(> [data-sheet-keyboard-open]) { overflow: clip; }
+/* A focused field must not pan the coverage layer during its exit transform. */
+.modal-layer:has(> [data-sheet-closing]) { overflow: clip; }
 /* A tall details sheet owns focus scrolling from the first focus frame, before
    viewport shrink crosses the keyboard threshold. Its backdrop never scrolls. */
 .modal-layer:has(> [data-sheet-viewport="stable-top"]) { overflow: clip; }
@@ -142,6 +144,9 @@ body {
   padding-bottom: var(--rook-sheet-safe-bottom);
 }
 .modal-layer > .detail-screen { padding-bottom: var(--rook-sheet-safe-bottom); }
+/* A panel with its own body scroller must not become a second scroll owner.
+   In particular, focusing a control must not pan the shell/header as well. */
+:root .modal-layer > :is(.screen, .sheet):has(> .sheet-scroll) { overflow: clip; }
 /* Compact menus keep their headers inside the responsive content gutters. */
 :root .modal-layer > .screen:is(.today-actions-sheet, .completed-workout-delete-confirm) > .detail-header {
   margin-inline: 0;
@@ -361,6 +366,9 @@ body {
 .weight-entry-form { display: flex; flex-direction: column; gap: 20px; }
 .weight-entry-form > label { display: flex; flex-direction: column; gap: 8px; color: var(--rook-secondary); font-size: 12px; font-weight: 650; }
 .weight-entry-form input { width: 100%; height: 54px; padding: 0 14px; border: 1px solid var(--rook-border); border-radius: 14px; background: var(--rook-surface); color: var(--rook-text); font-size: 17px; font-weight: 650; }
+/* Compact date row; larger text can wrap instead of clipping the date. */
+.weight-entry-form > .weight-date-field { flex-direction:row; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px 12px; }
+.weight-entry-form .weight-date-field input { flex:0 1 13rem; width:13rem; max-width:100%; min-width:0; height:48px; }
 .weight-input-wrap { position: relative; }
 .weight-input-wrap input { padding-right: 52px; }
 .weight-input-wrap > span { position: absolute; right: 15px; top: 50%; transform: translateY(-50%); color: var(--rook-muted); text-transform: lowercase; }
@@ -372,8 +380,6 @@ body {
 .weight-saved { margin: -15px 0 16px !important; color: var(--rook-accent-text) !important; font-size: 12px !important; font-weight: 700; }
 .weight-history-overview { margin-top: 0 !important; }
 .weight-history-overview h1 { font-variant-numeric: tabular-nums; }
-.weight-trend-chart { width: 100%; height: 132px; margin-top: 18px; padding: 8px 0; border-bottom: 1px solid var(--rook-border); overflow: visible; }
-.weight-trend-chart polyline { stroke: var(--rook-accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .weight-history-actions { display: flex; justify-content: flex-end; border-bottom: 1px solid var(--rook-border); }
 .weight-history-actions button { margin: 0; }
 .weight-history-averages { margin-top: 24px !important; }
@@ -398,9 +404,6 @@ body {
   .weight-trend-summary > strong { font-size: 24px; }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .weight-trend-chart polyline { transition: none; }
-}
 .exercise-progression { margin-top: 24px !important; padding: 17px 0 2px; border-top: 1px solid rgba(27,26,25,.08); }
 .exercise-progression > strong { display: block; margin-top: 9px; font-size: 15px; }
 .exercise-progression.progression-progress > strong { color: var(--rook-accent-text); }

@@ -71,9 +71,42 @@ export function createSheetDragMotion(getPanel, getLayer, {fadeDistance = 1} = {
 }
 
 export function fadeSheetBackdrop(layer,duration) {
-  const scrim=layer?.querySelector(':scope > .sheet-drag-scrim');
+  let scrim=layer?.querySelector(':scope > .sheet-drag-scrim');
+  if(layer&&!scrim){
+    // Button/Escape/backdrop dismissal uses the same composited scrim as drag.
+    // Animating the full-screen background color repaints everything beneath it.
+    scrim=document.createElement('div');scrim.className='sheet-drag-scrim';
+    scrim.setAttribute('aria-hidden','true');scrim.style.backgroundColor=getComputedStyle(layer).backgroundColor;
+    scrim.style.opacity='1';layer.append(scrim);
+    layer.style.transition='none';layer.style.backgroundColor='transparent';
+    void getComputedStyle(scrim).opacity;
+  }
   if(scrim){scrim.style.transition=duration?`opacity ${duration}ms ease-out`:'none';scrim.style.opacity='0';}
-  else if(layer)layer.style.backgroundColor='rgba(27, 26, 25, 0)';
+}
+
+/** Keep ownership until the browser finishes the actual slide, including a
+ * delayed first frame on a busy device. The returned cancellation prevents an
+ * old panel's completion from dismissing a replacement destination. */
+export function closeSheetMotion(layer,panel,close,{duration=SHEET_MOTION_DURATION}={}) {
+  panel.setAttribute('data-sheet-closing','');
+  panel.style.willChange='transform';
+  const height=freezeSheetMotion(layer,panel);
+  // Keyboard/stable-top sheets can end well above the coverage layer's bottom.
+  // Travel beyond that boundary even if the keyboard disappears during exit.
+  const box=panel.getBoundingClientRect(),bottom=layer.getBoundingClientRect().bottom;
+  const distance=Number.isFinite(box.top)&&bottom>0?Math.max(24,bottom-box.top+24):height+24;
+  const pose=panel.style.transform;
+  panel.style.transition=duration?`transform ${duration}ms ease-out`:'none';
+  panel.style.transform=`${pose&&pose!=='none'?`${pose} `:''}translate3d(0, ${distance}px, 0)`;
+  fadeSheetBackdrop(layer,duration);
+  let active=true,timer;
+  const finish=()=>{if(!active)return;active=false;clearTimeout(timer);if(layer.firstElementChild===panel)close();};
+  const transition=duration?panel.getAnimations?.().find(animation=>animation.transitionProperty==='transform'):null;
+  // Native completion owns real browsers. Tests/older engines with no animation
+  // API retain the established duration; a bounded fallback handles interruption.
+  timer=setTimeout(finish,transition?duration+1000:duration);
+  if(transition)transition.finished.then(finish,finish);
+  return ()=>{active=false;clearTimeout(timer);};
 }
 
 // Every bottom sheet uses the same full-travel rhythm, regardless of content height.

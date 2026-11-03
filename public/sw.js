@@ -1,5 +1,5 @@
-const CACHE = 'rook-v13';
-const APP_SHELL = ['/manifest.webmanifest', '/icon.svg', '/legal/legal.css', ...['index','privacy','terms','cookies','refunds','data-rights','operator','licenses'].map(id=>`/legal/${id}.html`)];
+const CACHE = 'rook-v14';
+const APP_SHELL = ['/manifest.webmanifest', '/icon.svg', '/legal/legal.css', '/legal/theme.css', '/legal/appearance.js', ...['index','privacy','terms','cookies','refunds','data-rights','operator','licenses'].map(id=>`/legal/${id}.html`)];
 
 async function precacheCurrentBuild() {
   const cache = await caches.open(CACHE);
@@ -44,7 +44,7 @@ self.addEventListener('fetch', event => {
     event.respondWith(fetch(request).then(response=>{
       if(response.ok){const copy=response.clone();event.waitUntil(caches.open(CACHE).then(cache=>cache.put(request,copy)));}
       return response;
-    }).catch(()=>caches.match(request,{ignoreVary:true})));
+    }).catch(()=>caches.match(request,{ignoreVary:true,ignoreSearch:true})));
     return;
   }
 

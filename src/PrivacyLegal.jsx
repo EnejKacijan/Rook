@@ -22,9 +22,11 @@ export function PrivacyLegal({Switch,setDetail,onDelete}) {
     {legalDraft&&<p className="legal-draft-note">Draft notices. Operator details and the release review must be completed before publication.</p>}
     <nav className="profile-settings-list" aria-label="Policies">{[['privacy','Privacy policy'],['terms','Terms of service'],['cookies','Cookies & storage'],['refunds','Payments & refunds'],['operator','Operator & contact'],['licenses','Licenses & credits']].map(([id,title])=><LegalLink key={id} document={id} className="list-row"><strong>{title}</strong><NavigationChevron/></LegalLink>)}</nav>
     <h2>Your data</h2>
-    <button type="button" className="list-row" onClick={()=>setDetail('backup-rook')}><strong>Export a ROOK backup</strong><NavigationChevron/></button>
-    <LegalLink document="data-rights" className="list-row"><strong>Data access &amp; deletion</strong><NavigationChevron/></LegalLink>
-    {requestHref?<a className="list-row" href={requestHref}><span><strong>Request cloud data deletion</strong><small>Opens an email draft for you to send</small></span><NavigationChevron/></a>:<p className="legal-contact-pending">Cloud deletion requests need the operator’s verified contact address. This is a release requirement still to complete.</p>}
-    <button type="button" className="list-row" onClick={onDelete}><span><strong className="danger-text">Delete local data</strong><small>Review before erasing this device. Cloud data is separate.</small></span><NavigationChevron/></button>
+    <div className="profile-settings-list">
+      <button type="button" className="list-row" onClick={()=>setDetail('backup-rook')}><strong>Export a ROOK backup</strong><NavigationChevron/></button>
+      <LegalLink document="data-rights" className="list-row"><strong>Data access &amp; deletion</strong><NavigationChevron/></LegalLink>
+      {requestHref?<a className="list-row" href={requestHref}><span><strong>Request cloud data deletion</strong><small>Opens an email draft for you to send</small></span><NavigationChevron/></a>:<p className="legal-contact-pending">Cloud deletion requests need the operator’s verified contact address. This is a release requirement still to complete.</p>}
+      <button type="button" className="list-row" onClick={onDelete}><span><strong className="danger-text">Delete local data</strong><small>Review before erasing this device. Cloud data is separate.</small></span><NavigationChevron/></button>
+    </div>
   </section>;
 }

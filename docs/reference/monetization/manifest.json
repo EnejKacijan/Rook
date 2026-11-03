@@ -1,0 +1,138 @@
+{
+  "capturedAt": "2026-11-03",
+  "sourceBranch": "codex/pro-native-review",
+  "sourceCheckoutHead": "5eb280ceda115cb051c052d33a9c3153c9857e7e",
+  "sourceState": "Uncommitted local Pro presentation sources, not present in that commit; copied as references only.",
+  "authority": "Historical UI prototype, not current free-app restrictions or approved prices.",
+  "files": [
+    {
+      "originalPath": "src/RookProPaywall.jsx",
+      "referencePath": "source/RookProPaywall.jsx.reference",
+      "sourceBytes": 13386,
+      "sourceSha256": "c16c968c480a35929eb24800f95af99e31f080cc0f78d124a17b583c9690b3c8",
+      "bytes": 13207,
+      "sha256": "88375918d6ef6181186feddb1ec7157d205b7a448934559dfabbbfa3beab441a"
+    },
+    {
+      "originalPath": "src/ProFeatureExplorer.jsx",
+      "referencePath": "source/ProFeatureExplorer.jsx.reference",
+      "sourceBytes": 11230,
+      "sourceSha256": "5e0c4effdf6a6cb1cf34a52927b0972bed792763395c42437f38a8c71fd824f9",
+      "bytes": 11119,
+      "sha256": "120e140a8b6d3103bb694a9de59a9a14e3a7bfbba8acd1731c53b6eeb41d64e6"
+    },
+    {
+      "originalPath": "src/ProCurrentOffers.jsx",
+      "referencePath": "source/ProCurrentOffers.jsx.reference",
+      "sourceBytes": 5614,
+      "sourceSha256": "6762541aa3c68ceeb91989a236311f63f6152920026eb43bd9cb206c03066ca0",
+      "bytes": 5554,
+      "sha256": "8885ff10f7dcbe6cdcc6c6ea9aa7139c64baceb579ccfd55cf94491a17226e71"
+    },
+    {
+      "originalPath": "src/ProCampaignBanner.jsx",
+      "referencePath": "source/ProCampaignBanner.jsx.reference",
+      "sourceBytes": 2039,
+      "sourceSha256": "b0144d5ed3f7480beab4b842a1008e2e292bbd62bcbdebc51ab572275b40f61a",
+      "bytes": 2016,
+      "sha256": "da603daa07620ee12638b2e908e87d8f30c5e0d9c8a943f66a6a6378faab33d1"
+    },
+    {
+      "originalPath": "src/ProTrainingPreview.jsx",
+      "referencePath": "source/ProTrainingPreview.jsx.reference",
+      "sourceBytes": 1530,
+      "sourceSha256": "bf7716ae4c3919072f4a15af0a471dd4ffe853f6954f488666caf91ebed996ea",
+      "bytes": 1529,
+      "sha256": "0b65210d33e5888d5c25d1e8320920ca38b7ac640609eacab1fdcdb501ff1c16"
+    },
+    {
+      "originalPath": "src/proFeatureCatalog.js",
+      "referencePath": "source/proFeatureCatalog.js.reference",
+      "sourceBytes": 859,
+      "sourceSha256": "c49004804ac5cb8c831930da219105b07e0386159b7321a3fc23860329df2caa",
+      "bytes": 850,
+      "sha256": "28aab0fe84a32ad732dcb00152d53f638ab017e8ccba16f00a0436d5087855d5"
+    },
+    {
+      "originalPath": "src/proCampaign.js",
+      "referencePath": "source/proCampaign.js.reference",
+      "sourceBytes": 2772,
+      "sourceSha256": "d66ec66c3e88008d98c9a85bac493c6f2a0b60d91b0a26f30ad3cc97e27f54b7",
+      "bytes": 2772,
+      "sha256": "d66ec66c3e88008d98c9a85bac493c6f2a0b60d91b0a26f30ad3cc97e27f54b7"
+    },
+    {
+      "originalPath": "src/paywallPricing.js",
+      "referencePath": "source/paywallPricing.js.reference",
+      "sourceBytes": 1942,
+      "sourceSha256": "c6f10e305969744faaf715bb28b502724ba93d4cd6daebbc104e3dfb72814109",
+      "bytes": 1942,
+      "sha256": "c6f10e305969744faaf715bb28b502724ba93d4cd6daebbc104e3dfb72814109"
+    },
+    {
+      "originalPath": "src/subscriptionPolicy.js",
+      "referencePath": "source/subscriptionPolicy.js.reference",
+      "sourceBytes": 2835,
+      "sourceSha256": "e83f104703971e35b394a9ff271ed38859de43c0bf434354a7921c52138e57da",
+      "bytes": 2835,
+      "sha256": "e83f104703971e35b394a9ff271ed38859de43c0bf434354a7921c52138e57da"
+    },
+    {
+      "originalPath": "src/storeProducts.js",
+      "referencePath": "source/storeProducts.js.reference",
+      "sourceBytes": 4248,
+      "sourceSha256": "44cf65c4649b80ea8be87deaf02df7d3255aad59926fb0ce5bb9b81009212a42",
+      "bytes": 4248,
+      "sha256": "44cf65c4649b80ea8be87deaf02df7d3255aad59926fb0ce5bb9b81009212a42"
+    },
+    {
+      "originalPath": "src/rookPro.css",
+      "referencePath": "source/rookPro.css.reference",
+      "sourceBytes": 9644,
+      "sourceSha256": "716545188a861caccfe1aca22399fc100d49545ff1339b10a1c83a2bc7cb8bfe",
+      "bytes": 9641,
+      "sha256": "683b8d3008fae501db1afcc509d88aba6276122facee562f02dca4ab438addb0"
+    },
+    {
+      "originalPath": "src/useProCampaign.js",
+      "referencePath": "source/useProCampaign.js.reference",
+      "sourceBytes": 1237,
+      "sourceSha256": "429f892574e47491c91e193054eeadb6d41bb801ec980a628a6d200cf4071566",
+      "bytes": 1236,
+      "sha256": "5e474fb5dbb1a9a547d43f06c4f255d35e9f8dc117da8ae83c28edd63ba35fc6"
+    },
+    {
+      "originalPath": "src/proFeatureExplorer.css",
+      "referencePath": "source/proFeatureExplorer.css.reference",
+      "sourceBytes": 10754,
+      "sourceSha256": "55a6fee283c2c1f1260ac719a6fe0f2f6a0673e5147e47451691c1495deced8c",
+      "bytes": 10687,
+      "sha256": "33d78df86c12405dd3727b7f75300c75f16231fc9e73c537470503a68ecaa37a"
+    },
+    {
+      "originalPath": "src/proCurrentOffers.css",
+      "referencePath": "source/proCurrentOffers.css.reference",
+      "sourceBytes": 2923,
+      "sourceSha256": "37e67e94495ad7c8e17dd4f2b54ef7f197255c1a8b2ea2457b838485451943d3",
+      "bytes": 2920,
+      "sha256": "c5d3a5b5e5271404b2283203a59fb1d0867d438c0d1db6777b4c7373c11ff5a3"
+    },
+    {
+      "originalPath": "src/proCampaignBanner.css",
+      "referencePath": "source/proCampaignBanner.css.reference",
+      "sourceBytes": 2617,
+      "sourceSha256": "30817a13ee6bed64939c3f9181d4be4edc65b14dabee212973cfa505c1482a96",
+      "bytes": 2594,
+      "sha256": "3cb76eb371f652d0c731940e83077f6c81281bec019800b2c22d6d15ac1e826d"
+    },
+    {
+      "originalPath": "src/proTrainingPreview.css",
+      "referencePath": "source/proTrainingPreview.css.reference",
+      "sourceBytes": 3107,
+      "sourceSha256": "8f2bc01d9a45800e162de8e8bd32322c84ff13e20d5a3872789e2cc5e9c34860",
+      "bytes": 3082,
+      "sha256": "0ce752b7897586c4d026911412ff9b381f73a0ae8ff770b724525a5c2f7c41ce"
+    }
+  ],
+  "normalization": "References use LF line endings and trim trailing whitespace; original source and normalized reference hashes are both recorded."
+}

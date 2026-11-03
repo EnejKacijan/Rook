@@ -1,0 +1,30 @@
+// Presentation boundary only. Store offers must be resolved and verified by
+// billing before reaching this module, and revalidated before any purchase.
+// No client-generated deadline, eligibility decision or entitlement is stored.
+export function resolveProCampaign(campaign, snapshot, { now = Date.now(), access = 'free', preview = false } = {}) {
+  if (access === 'active') return { status: 'active' };
+  if (access === 'unknown') return { status: 'unknown' };
+  if (!campaign || campaign.enabled !== true || !snapshot) return { status: 'unavailable' };
+  const key = value => typeof value === 'string' && value.trim().length > 0;
+  if (!key(campaign.id) || !key(campaign.productId) || !key(campaign.title)) return { status: 'unavailable' };
+  if (snapshot.eligibility === 'unknown') return { status: 'unknown' };
+  if (snapshot.eligibility !== 'eligible') return { status: 'ineligible' };
+  if (campaign.firstTimeProOnly && snapshot.customerState !== 'first-time') return { status: 'ineligible' };
+  const start = Date.parse(campaign.startsAt), end = Date.parse(campaign.endsAt);
+  if (!Number.isFinite(start) || !Number.isFinite(end) || start >= end || !Number.isFinite(now)) return { status: 'unavailable' };
+  if (now >= end) return { status: 'expired' };
+  if (now < start) return { status: 'unavailable' };
+  const checked = Date.parse(snapshot.verifiedAt), validUntil = Date.parse(snapshot.validUntil);
+  const trusted = snapshot.source === 'store' || preview && snapshot.source === 'preview';
+  const intro = snapshot.intro, renewal = snapshot.renewal;
+  const price = value => Number.isFinite(value?.amount) && value.amount > 0 &&
+    /^[A-Z]{3}$/.test(value.currency || '') && typeof value.formattedPrice === 'string' && value.formattedPrice.trim().length > 0;
+  if (!trusted || snapshot.verification !== 'verified' || snapshot.campaignId !== campaign.id ||
+      snapshot.productId !== campaign.productId || !key(snapshot.offerId) || snapshot.plan !== 'annual' || snapshot.autoRenews !== true ||
+      !Number.isFinite(checked) || checked > now || now - checked > 5 * 60_000 || !Number.isFinite(validUntil) || now >= validUntil ||
+      !price(intro) || !price(renewal) || intro.currency !== renewal.currency || intro.amount >= renewal.amount ||
+      intro.period !== 'P1Y' || intro.cycles !== 1 || renewal.period !== 'P1Y' || snapshot.trialDays !== 0) return { status: 'unavailable' };
+  return { status: 'available', title: campaign.title, endsAt: campaign.endsAt, campaignId: campaign.id,
+    productId: snapshot.productId, offerId: snapshot.offerId, source: snapshot.source,
+    intro, renewal, firstTimeProOnly: Boolean(campaign.firstTimeProOnly), discount: Math.floor((1 - intro.amount / renewal.amount) * 100), validUntil: snapshot.validUntil };
+}

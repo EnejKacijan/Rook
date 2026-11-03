@@ -16,6 +16,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
     const scrollerFor = input => input?.closest('[data-sheet-form-scroll], .sheet-scroll, .profile-setting-scroll, .superset-partner-options, .import-decision-scroll') || screen;
     const ownsFocus = input => !screen.inert && screen.contains(input) && input.matches('input:not([type="checkbox"]):not([type="radio"]), textarea, select') && input.closest('.detail-screen, .sheet') === screen;
     const keyboardLayout = () => {
+      if (screen.hasAttribute('data-sheet-closing')) return;
       const active = document.activeElement;
       // Focusing Save must not expand/move the footer between pointerdown and
       // click. Retain the field's layout context while a footer action has focus.
@@ -46,7 +47,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
     const reveal = () => {
       // Search chrome is outside the results scroller and already positioned by
       // the viewport owner. A footer must not pan its outer panel to reveal it.
-      if (footer.hidden || screen.classList.contains('is-search-browsing')) return;
+      if (footer.hidden || screen.classList.contains('is-search-browsing') || screen.hasAttribute('data-sheet-closing')) return;
       const input = document.activeElement;
       if (!ownsFocus(input)) return;
       const scroller = scrollerFor(input);
@@ -67,6 +68,7 @@ export function SheetActionFooter({ children, className = '', enabled = true, se
       else if (bounds.top < top) scroller.scrollTop = Math.max(0, scroller.scrollTop - (top - bounds.top));
     };
     const measure = () => {
+      if (screen.hasAttribute('data-sheet-closing')) return;
       keyboardLayout();
       footer.hidden=hidden || (hideWhileSearching || keyboardBehavior === 'hide')&&viewportState?.keyboardOpen;
       screen.classList.toggle('has-sheet-action-footer',!footer.hidden);

@@ -1574,7 +1574,7 @@ export function effectiveProgressFocus(state = {}) {
 }
 
 export function bodyWeightToKg(value, units = "kg") {
-  const numeric = Number(value);
+  const numeric = Number(typeof value === "string" ? value.trim().replace(",", ".") : value);
   if (!Number.isFinite(numeric)) return null;
   return units === "lb" ? numeric / 2.2046226218 : numeric;
 }
@@ -1586,7 +1586,8 @@ export function bodyWeightFromKg(value, units = "kg") {
 }
 
 export function validateWeightCheckin({ value, units = "kg", localDate } = {}) {
-  const weightKg = bodyWeightToKg(value, units);
+  const validFormat = typeof value !== "string" || /^\d+(?:[.,]\d*)?$/.test(value.trim());
+  const weightKg = validFormat ? bodyWeightToKg(value, units) : null;
   if (!Number.isFinite(weightKg) || weightKg < 10 || weightKg > 700)
     return { valid: false, error: "Enter a valid body weight." };
   if (!/^\d{4}-\d{2}-\d{2}$/.test(String(localDate || "")))
