@@ -3,6 +3,7 @@ import './workoutMotion.css';
 
 const reduced = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 function milliseconds(surface, token, fallback) {
+  if (!surface) return fallback;
   const value = getComputedStyle(surface).getPropertyValue(token).trim();
   const match = /^(\d*\.?\d+)(ms|s)$/.exec(value);
   return match ? Number(match[1]) * (match[2] === 's' ? 1000 : 1) : fallback;
@@ -76,18 +77,22 @@ export class WorkoutMotion extends React.Component {
     const surface = this.host.current?.firstElementChild;
     if (!surface?.animate) return;
     const completion = this.props.kind === 'completion', quiet = reduced();
+    const paired = !completion && this.props.supersetId && previous.supersetId === this.props.supersetId &&
+      this.props.exerciseIndex !== previous.exerciseIndex;
+    if (paired && quiet) return;
+    const offset = paired ? Math.sign(this.props.exerciseIndex - previous.exerciseIndex) * 10 : 5;
     const duration = workoutMotionDuration(surface, this.props.kind);
     const easing = getComputedStyle(surface).getPropertyValue('--rook-ease-standard').trim() || 'cubic-bezier(.2,0,0,1)';
     const timing = { duration, easing };
     const animations = [];
     if (outgoing) {
       outgoing.mount();
-      animations.push(outgoing.layer.animate([{opacity:1, transform:'translate(0,0)'}, {opacity:0, transform:completion?'translateY(-4px)':'translateX(-5px)'}], timing));
+      animations.push(outgoing.layer.animate([{opacity:1, transform:'translate(0,0)'}, {opacity:0, transform:completion?'translateY(-4px)':`translateX(${-offset}px)`}], timing));
     }
     // Completion contains a viewport-fixed Done dock: fade its screen without
     // turning it into a transformed containing block. The check scales locally.
     const move = !quiet && !completion;
-    animations.push(surface.animate([{opacity:0, ...(move && {transform:'translateX(5px)'})}, {opacity:1, ...(move && {transform:'translateX(0)'})}], timing));
+    animations.push(surface.animate([{opacity:0, ...(move && {transform:`translateX(${offset}px)`})}, {opacity:1, ...(move && {transform:'translateX(0)'})}], timing));
     let timer;
     const clear = () => {
       clearTimeout(timer); animations.forEach(animation => animation.cancel()); outgoing?.layer.remove();

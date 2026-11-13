@@ -6,6 +6,7 @@ import {WorkoutMotion} from './WorkoutMotion.jsx';
 import {createReturningUserFixture} from './demoFixture.js';
 import {isoDay, startWorkout, saveState, STORAGE_KEY, deserializeState} from './domain.js';
 import {startFreestyleWorkout, addFreestyleExercise} from './freestyleWorkout.js';
+import {pairActiveWorkoutExercises} from './supersets.js';
 
 let host, root, current, animations, navigation, liveFinish, reduced;
 beforeEach(() => {
@@ -60,6 +61,75 @@ function mount(initial) {
 const find = name => [...host.querySelectorAll('button')].find(node => node.textContent===name || node.getAttribute('aria-label')===name);
 const click = name => act(() => find(name).click());
 const advance = ms => act(() => vi.advanceTimersByTime(ms));
+
+function pairedWorkout() {
+  const state = fixture();
+  const workout = state.activeWorkout;
+  workout.rest = null;
+  const [a, b] = workout.exercises;
+  for (const entry of [a, b]) {
+    entry.restSeconds = 75;
+    entry.sets[0].completed = false;
+    entry.sets.push({...entry.sets[0], id:entry.sets[0].id+'-round-2'});
+  }
+  expect(pairActiveWorkoutExercises(workout.exercises, a.id, b.id, 'pair')).toBe(true);
+  return state;
+}
+
+it('logs A1 and A2 durably and animates both handoffs without restarting round rest', () => {
+  const state = pairedWorkout();
+  state.profile.restTimerAutoStart = true;
+  mount(state);
+  const header = host.querySelector('.workout-header');
+  click('Log set 1');
+  expect(current.activeWorkout.exerciseIndex).toBe(1);
+  expect(deserializeState(localStorage.getItem(STORAGE_KEY)).activeWorkout.exercises[0].sets[0].completed).toBe(true);
+  expect(current.activeWorkout.rest).toBeNull();
+  expect(animations[1].frames[0].transform).toBe('translateX(10px)');
+  expect(document.querySelector('.workout-motion-paint[inert]')).toBeTruthy();
+  click('Log set 1');
+  expect(current.activeWorkout.exercises[1].sets[0].completed).toBe(false);
+  advance(180);
+  click('Log set 1');
+  expect(current.activeWorkout.exerciseIndex).toBe(0);
+  const rest = {seconds:75, endsAt:Date.now()+75000};
+  expect(current.activeWorkout.rest).toEqual(rest);
+  expect(deserializeState(localStorage.getItem(STORAGE_KEY)).activeWorkout.rest).toEqual(rest);
+  expect(animations[3].frames[0].transform).toBe('translateX(-10px)');
+  expect(host.querySelector('.workout-header')).toBe(header);
+  expect(host.querySelector('[role="status"]').textContent).toMatch(/Set logged\. Next:/);
+  advance(180);
+  expect(document.querySelector('.workout-motion-paint')).toBeNull();
+  expect(current.activeWorkout.rest).toEqual(rest);
+});
+
+it('skips motion for an automatic superset handoff with reduced motion', () => {
+  reduced = true;
+  mount(pairedWorkout());
+  click('Log set 1');
+  expect(current.activeWorkout.exerciseIndex).toBe(1);
+  expect(current.activeWorkout.exercises[0].sets[0].completed).toBe(true);
+  expect(animations).toHaveLength(0);
+});
+
+it('a failed superset save keeps the same exercise and retries without a phantom handoff', () => {
+  const state = pairedWorkout();
+  expect(saveState(state)).toBe(true);
+  mount(state);
+  const write = Storage.prototype.setItem;
+  const failure = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function(key,value) {
+    if (key === STORAGE_KEY) throw new DOMException('Full','QuotaExceededError');
+    return write.call(this,key,value);
+  });
+  click('Log set 1');
+  expect(current.activeWorkout.exerciseIndex).toBe(0);
+  expect(current.activeWorkout.exercises[0].sets[0].completed).toBe(false);
+  expect(host.querySelector('[role="alert"]').textContent).toMatch(/Could not save/);
+  expect(animations).toHaveLength(0);
+  failure.mockRestore();
+  click('Log set 1');
+  expect(current.activeWorkout.exerciseIndex).toBe(1);
+});
 
 it.each(['planned','freestyle'])('%s: acknowledges then crossfades one exercise unit without animating the header or finishing', kind => {
   const state = fixture(kind), id = state.activeWorkout.id; mount(state);

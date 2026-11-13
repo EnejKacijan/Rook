@@ -9166,7 +9166,7 @@ export function restartActiveWorkout(state, restartedAt = Date.now()) {
   if (!activeWorkoutCanRestart(active)) return state;
   const snapshot = restartBaseline(active);
   // Restored instances must not coexist with removal tombstones or Undo data.
-  const {removedUpNextExercises,unreviewedIdleSince, ...session}=active;
+  const {removedUpNextExercises,unreviewedIdleSince,exerciseReplacements, ...session}=active;
   return {
     ...state,
     activeWorkout: {
@@ -9784,6 +9784,7 @@ export function completeWorkout(state, timing = null) {
   completedActiveWorkout.reusableStructure=reusableWorkoutStructure(state.activeWorkout);
   delete completedActiveWorkout.restartSnapshot;
   delete completedActiveWorkout.unreviewedIdleSince;
+  delete completedActiveWorkout.exerciseReplacements;
   if (completedActiveWorkout.source === 'freestyle') completedActiveWorkout.exercises = completedActiveWorkout.exercises.filter(exercise => exercise.sets.some(set => set.completed));
   const session = {
     ...completedActiveWorkout,

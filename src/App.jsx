@@ -71,6 +71,8 @@ import { capturePageSurface, playPageNavigation, stopPageNavigation } from './pa
 import { FirstRunNavigation, FirstRunStepMotion } from './FirstRunNavigation.jsx';
 import { FirstRunBackButton, NavigationChevron } from './NavigationChevron.jsx';
 import { WorkoutMotion, workoutMotionDuration } from './WorkoutMotion.jsx';
+import { activeExerciseReplacement, exerciseRevertIssue, rememberActiveExerciseReplacement, replacementSaveOptions, revertActiveExerciseReplacement, saveActiveReplacementToWorkout, setActiveReplacementDetailsHidden } from './activeExerciseReplacement.js';
+import './activeExerciseReplacement.css';
 import { CurrentExerciseContext } from './CurrentExerciseContext.jsx';
 import { createTodayScheduleReader } from './todayScheduleReader.js';
 import { useMainTabTransition } from './mainTabTransition.js';
@@ -434,7 +436,6 @@ import {
 } from "./gymProfiles.js";
 import {
   normalizeSubstitutionPreferencesState,
-  recordSubstitutionPreference,
   substitutionReason,
 } from "./substitutions.js";
 import {
@@ -6114,6 +6115,16 @@ function WorkoutConfirmation({ confirmation, cancel, keepTraining, continueActio
     document.body,
   );
 }
+function applyActiveReplacementAction(state, request, action) {
+  if (action === 'revert') return revertActiveExerciseReplacement(state, request);
+  if (action === 'hide' || action === 'show') return setActiveReplacementDetailsHidden(state, request, action === 'hide');
+  return saveActiveReplacementToWorkout(state, request, {undo:action === 'undo-save'});
+}
+
+function replacementRequest(state, active, replacement) {
+  return {profileId:state.profile.id, workoutId:active.id, entryId:replacement.entryId, revision:replacement.revision};
+}
+
 export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish }) {
   const active = state.activeWorkout;
   const summary = workoutSetSummary(active);
@@ -6174,6 +6185,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const upNextUndo = useExerciseRemoveUndo();
   const queueAction = useDurableAction(state,update);
   const [queueError,setQueueError]=useState('');
+  const [replacementError,setReplacementError]=useState(null);
   const [tipsOptions, setTipsOptions] = useState(null);
   const removalStateRef = useRef(state);
   removalStateRef.current = state;
@@ -6198,6 +6210,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     const button = event.target.closest('button,select');
     if (!button || button.closest('[role="dialog"]') || button.hasAttribute('data-workout-options') || button.hasAttribute('data-workout-scroll')) return;
     if(!['Back to Today','Workout options'].includes(button.getAttribute('aria-label'))&&workoutNeedsRecovery(active,Date.now())){event.preventDefault();event.stopPropagation();setDismissedTimingReview(null);setNow(Date.now());return;}
+    if (workoutActionLockRef.current && button.matches('button.check')) {
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     draftResolverRef.current = button;
     try {
       const completingRow = button.hasAttribute('data-workout-complete') ? button.closest('.set-row') : null;
@@ -6395,6 +6412,27 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       </main>
     );
   const exercise = currentExercise;
+  const replacement = activeExerciseReplacement(active, exercise);
+  const replacementVisible = replacement && !replacement.detailsHidden;
+  const saveOptions = replacementVisible ? replacementSaveOptions(state, active, replacement) : null;
+  const revertIssue = replacementVisible && !saveOptions.saved ? exerciseRevertIssue(state, exercise, replacement) : null;
+  const changeReplacement = action => {
+    if (workoutActionLockRef.current) return;
+    const request = replacementRequest(state, active, replacement);
+    setReplacementError(null);
+    try {
+      queueAction.commit(current => applyActiveReplacementAction(current, request, action));
+      if (action === 'revert') {
+        setExerciseNavigationAnnouncement(`Original restored: ${exerciseName(replacement.original)}`);
+        exerciseHeadingRef.current?.focus({preventScroll:true});
+      } else if (action === 'hide') {
+        setExerciseNavigationAnnouncement('Replacement actions moved to Exercise options.');
+        focusNavigationTarget(screenRef.current?.querySelector('.exercise-options-button'));
+      }
+    } catch (error) {
+      setReplacementError({revision:replacement.revision,message:error.message});
+    }
+  };
   if (active.source === 'freestyle' && !exercise) return <main ref={screenRef} data-active-workout="true" data-plan-extra={active.planWorkoutOrigin?'true':undefined} className="screen workout-screen freestyle-workout">
     {timingRecovery}
     <header className="workout-header"><button aria-label="Back to Today" onClick={backToToday}>‹</button><div className="workout-header-center">{active.planWorkoutOrigin&&<small className="workout-extra-label">Extra workout</small>}<strong>{active.name||'Freestyle workout'}</strong><small>{workoutNeedsRecovery(active,now)?'Finish or continue':formatWorkoutElapsedDuration(workoutElapsedSeconds(active,now))}</small></div><span className="workout-header-actions"><button className="text-button" disabled>Finish</button><button type="button" className="workout-options-trigger" aria-label="Workout options" onClick={()=>openWorkoutOptions()}><OverflowIcon/></button></span></header>
@@ -6534,8 +6572,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         (loadRequirement !== "required" || Number(segment.weight) > 0);
     });
   const toggleSet = (index) => {
-    const current = removalStateRef.current.activeWorkout?.exercises[removalStateRef.current.activeWorkout.exerciseIndex];
-    const set = current?.sets[index];
+    if (workoutActionLockRef.current) return;
+    const live = removalStateRef.current.activeWorkout;
+    const current = live?.exercises[live.exerciseIndex];
+    const set = current?.id === exercise.id && current.exerciseId === exercise.exerciseId ? current.sets[index] : null;
+    if (!set || set.id !== exercise.sets[index]?.id) return;
     if (set && !set.completed && !workingSetCanComplete(current, set)) {
       setInputValidation({setId:set.id,message:'Enter the required values before logging this set.'});
       const row = [...screenRef.current?.querySelectorAll('.set-row') || []].find(node=>node.dataset.setId===set.id);
@@ -6543,28 +6584,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       return;
     }
     setInputValidation(null);
-    // A record acknowledgement may follow only an accepted, durable set log.
-    // Keep the existing sequencing, superset and rest logic in this operation.
-    const commitLog = operation => {
-      const before=queueAction.latest.current,exerciseId=current?.id,setId=set?.id;
-      try {
-        const result=queueAction.commit(latest=>{
-          const workout=latest.activeWorkout;
-          if(workout?.id!==active.id||workout.exercises[workout.exerciseIndex]?.id!==exerciseId)return latest;
-          const original=workout.exercises[workout.exerciseIndex].sets.find(item=>item.id===setId);
-          if(!original)return latest;
-          const next=clone(latest);operation(next.activeWorkout);
-          const changed=next.activeWorkout.exercises.find(item=>item.id===exerciseId)?.sets.find(item=>item.id===setId);
-          if(!changed||Boolean(changed.completed)===Boolean(original.completed))return latest;
-          // There is no following effort to rest for once the whole session is logged.
-          if(changed.completed&&!workoutSetSummary(next.activeWorkout).firstIncomplete)next.activeWorkout.rest=null;
-          next.activeWorkout.updatedAt=Date.now();return next;
-        });
-        setCombinedSaveError('');
-        if(result.changed)recordFeedback.logged(before,result.state,exerciseId,setId);
-      } catch(error) {setCombinedSaveError(error.message);}
-    };
-    commitLog((workout) => {
+    const expectedSetId = set.id;
+    const applyLog = (workout) => {
       const current = workout.exercises[workout.exerciseIndex];
       const currentExerciseIndex = workout.exerciseIndex;
       const group = supersetMeta(workout.exercises, currentExerciseIndex);
@@ -6574,7 +6595,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       const nextIncomplete = current.sets.findIndex((set) => !set.completed);
       const set = current.sets[index];
       const timestamp = Date.now();
-      if (!set.completed && !workingSetCanComplete(current, set)) return;
+      if (set?.id !== expectedSetId || !set.completed && !workingSetCanComplete(current, set)) return;
       if (
         !set.completed &&
         (group
@@ -6633,7 +6654,38 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             ? { endsAt: timestamp + restSeconds * 1000, seconds: restSeconds }
             : { pending: true, seconds: restSeconds }
           : null;
-    });
+    };
+    // Save the set, cursor and rest together before showing feedback or moving focus.
+    const before = queueAction.latest.current;
+    try {
+      const result = queueAction.commit(latest => {
+        const workout = latest.activeWorkout;
+        const entry = workout?.exercises[workout.exerciseIndex];
+        const original = entry?.sets[index];
+        if (workout?.id !== live.id || entry?.id !== current.id || entry.exerciseId !== current.exerciseId ||
+            original?.id !== expectedSetId || Boolean(original.completed) !== Boolean(set.completed)) return latest;
+        const activeWorkout = clone(workout);
+        applyLog(activeWorkout);
+        const changed = activeWorkout.exercises[workout.exerciseIndex].sets[index];
+        if (changed.completed === original.completed) return latest;
+        if (changed.completed && !workoutSetSummary(activeWorkout).firstIncomplete) activeWorkout.rest = null;
+        activeWorkout.updatedAt = Date.now();
+        return {...latest, activeWorkout};
+      });
+      setCombinedSaveError("");
+      if (!result.changed) return;
+      recordFeedback.logged(before, result.state, current.id, expectedSetId);
+      const updated = result.state.activeWorkout;
+      if (updated.exerciseIndex !== live.exerciseIndex) {
+        workoutActionLockRef.current = true;
+        setNow(Date.now());
+        setExerciseTransitioning(true);
+        const nextName = exerciseName(updated.exercises[updated.exerciseIndex]);
+        revealExercise(updated, `${entryUnit === 'round' ? 'Round' : 'Set'} logged. Next: ${nextName}`);
+      }
+    } catch (error) {
+      setCombinedSaveError(error.message);
+    }
   };
   const addSet = () =>
     runRookViewTransition(() => mutate((workout) => {
@@ -6675,6 +6727,26 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       }),
     );
   };
+  const revealExercise = (workout, announcement) => {
+    const entry = workout.exercises[workout.exerciseIndex];
+    setExerciseNavigationAnnouncement(announcement);
+    const screen = screenRef.current;
+    if (screen) {
+      if (!scrollTabRootToTop(screen, {immediate:true}))
+        screen.scrollTo?.({ top: 0, behavior: "auto" });
+      requestAnimationFrame(() => requestAnimationFrame(() => {
+        const live = removalStateRef.current.activeWorkout;
+        if (screenRef.current === screen && live?.id === workout.id &&
+            live.exercises[live.exerciseIndex]?.id === entry.id)
+          exerciseHeadingRef.current?.focus({preventScroll: true});
+      }));
+    }
+    clearTimeout(workoutActionUnlockTimerRef.current);
+    workoutActionUnlockTimerRef.current = setTimeout(() => {
+      workoutActionLockRef.current = false;
+      setExerciseTransitioning(false);
+    }, workoutMotionDuration(screen, 'exercise'));
+  };
   const moveToExercise = (
     index,
     { alreadyLocked = false, haptic = "tap", announcement = "" } = {},
@@ -6689,11 +6761,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     if (!alreadyLocked) workoutActionLockRef.current = true;
     setExerciseTransitioning(true);
     if (haptic) triggerHaptic(haptic);
-    const unlock = () => {
-      clearTimeout(workoutActionUnlockTimerRef.current);
-      workoutActionLockRef.current = false;
-      setExerciseTransitioning(false);
-    };
     mutate((workout) => {
       workout.exercises[workout.exerciseIndex].startedAt ||= Date.now();
       workout.exerciseIndex = index;
@@ -6702,14 +6769,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     });
     setExerciseCompleting(false);
     setConfirmation(null);
-    setExerciseNavigationAnnouncement(announcement);
-    screenRef.current?.scrollTo({ top: 0, behavior: "auto" });
-    requestAnimationFrame(() =>
-      requestAnimationFrame(() =>
-        exerciseHeadingRef.current?.focus({ preventScroll: true }),
-      ),
-    );
-    workoutActionUnlockTimerRef.current = setTimeout(unlock, workoutMotionDuration(screenRef.current, 'exercise'));
+    revealExercise({...active, exerciseIndex:index}, announcement);
   };
   const finishWorkout = (timing = null) => {
     if (workoutActionLockRef.current) return;
@@ -7076,7 +7136,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           identity={`${active.id}:${exercise.id}:${exercise.exerciseId}`}
           screenRef={screenRef} titleRef={exerciseHeadingRef}/>
       </header>
-      <WorkoutMotion kind="exercise" identity={exercise.id}><div
+      <WorkoutMotion kind="exercise" identity={JSON.stringify([active.id, exercise.id, exercise.exerciseId])}
+        exerciseIndex={active.exerciseIndex} supersetId={superset?.id}><div
         key={`exercise-panel-${exercise.id}`}
         className="exercise-panel"
       >
@@ -7223,7 +7284,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <button
               className="exercise-options-button"
               aria-label="Exercise options"
-              aria-description={exercisePersonalNote(exercise) ? "Note added. Edit note in this menu." : "Includes Add note."}
+              aria-description={replacement?.detailsHidden ? "Includes replacement actions." : exercisePersonalNote(exercise) ? "Note added. Edit note in this menu." : "Includes Add note."}
               title="Exercise options"
               data-workout-options
               onPointerDown={event => event.preventDefault()}
@@ -7314,6 +7375,21 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           </div>
         </div>
       </section>
+      {replacementVisible && <section className="active-replacement" aria-label="Exercise replacement">
+        <div className="active-replacement-summary">
+          <p><strong>{saveOptions.saved ? `Saved to ${saveOptions.name || 'this workout'}` : 'Replaced for this session'}</strong><small>Original: {exerciseName(replacement.original)}</small></p>
+          <button type="button" className="text-button active-replacement-hide" aria-label="Hide replacement details"
+            title="Actions stay in Exercise options" data-workout-options onClick={() => changeReplacement('hide')}>Hide</button>
+        </div>
+        <div className="active-replacement-actions">
+          {!saveOptions.saved && !revertIssue && <button type="button" className="text-button" onClick={() => changeReplacement('revert')}>Revert to original</button>}
+          {saveOptions.canSave && <button type="button" className="text-button" onClick={() => changeReplacement('save')}>Save to this workout</button>}
+          {saveOptions.canUndo && <button type="button" className="text-button" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
+        </div>
+        <small role="status">{saveOptions.message}</small>
+        {revertIssue && <small>{revertIssue}</small>}
+        {replacementError?.revision === replacement.revision && <small role="alert">{replacementError.message}</small>}
+      </section>}
       {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} screenRef={screenRef} controllerRef={previousValuesController} Modal={ModalLayer} Header={SheetHeader} />}
       {progressionTipsEnabled(state.profile) && recommendation && (
         <section
@@ -7519,8 +7595,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 data-workout-complete={!set.completed ? set.id : undefined}
                 aria-describedby={inputValidation?.setId===set.id ? `${set.id}-input-error` : undefined}
                 data-check-state={set.completed ? "completed" : ready ? "ready" : activeSet ? "current" : "disabled"}
-                disabled={future}
-                aria-disabled={checkDisabled}
+                disabled={future || exerciseTransitioning}
+                aria-disabled={checkDisabled || exerciseTransitioning}
                 aria-pressed={set.completed}
                 aria-label={set.completed ? `Undo logged ${entryUnit} ${index + 1}` : `Log ${entryUnit} ${index + 1}`}
                 onClick={() => toggleSet(index)}
@@ -19826,6 +19902,7 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       if (showPreviousOnClose.current) requestAnimationFrame(() => onShowPreviousValues?.());
     };
   }, [draftGuard, onShowPreviousValues]);
+  const replacementAction = useDurableAction(state, update);
   const active = state.activeWorkout;
   const exerciseIndex = active?.exercises.findIndex(
     (item) => item.id === exercise.id,
@@ -19857,6 +19934,18 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       ),
   );
   const isCurrent=exerciseIndex===active?.exerciseIndex;
+  const replacement = isCurrent && current.exerciseId === exercise.exerciseId ? activeExerciseReplacement(active, current) : null;
+  const hiddenReplacement = replacement?.detailsHidden ? replacement : null;
+  const saveOptions = hiddenReplacement ? replacementSaveOptions(state, active, hiddenReplacement) : null;
+  const revertIssue = hiddenReplacement && !saveOptions.saved ? exerciseRevertIssue(state, current, hiddenReplacement) : null;
+  const changeReplacement = action => {
+    setError('');
+    try {
+      const request = replacementRequest(state, active, hiddenReplacement);
+      replacementAction.commit(current => applyActiveReplacementAction(current, request, action));
+      if (action === 'show' || action === 'revert') close();
+    } catch (failure) { setError(failure.message); }
+  };
   const moveable=Boolean(onMoveCurrent)&&isCurrent&&canMoveCurrentToUpNext(active,current.id);
   const removable=Boolean(onRemoveCurrent)&&isCurrent&&canRemoveCurrentExercise(active,current.id);
   const loggedWork=isCurrent&&hasLoggedExerciseProgress(active,current.id);
@@ -19872,6 +19961,16 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
     >
       <Eyebrow>EXERCISE</Eyebrow>
       <h2 id="active-exercise-options-title">Exercise options</h2>
+      {hiddenReplacement && <section className="active-replacement-menu" aria-label="Exercise replacement">
+        <Eyebrow>REPLACEMENT</Eyebrow>
+        <small>Original: {exerciseName(hiddenReplacement.original)}</small>
+        {!saveOptions.saved && !revertIssue && <button type="button" className="list-row" onClick={() => changeReplacement('revert')}>Revert to original</button>}
+        {saveOptions.canSave && <button type="button" className="list-row" onClick={() => changeReplacement('save')}>Save to this workout</button>}
+        {saveOptions.canUndo && <button type="button" className="list-row" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
+        <button type="button" className="list-row" onClick={() => changeReplacement('show')}>Show replacement details</button>
+        <small role="status">{saveOptions.saved && saveOptions.name ? `Saved to ${saveOptions.name}. ` : ''}{saveOptions.message}</small>
+        {revertIssue && <small>{revertIssue}</small>}
+      </section>}
       {isCurrent && onShowPreviousValues && <button type="button" className="list-row" onClick={() => {showPreviousOnClose.current = true; close();}}><span>Use previous values</span><NavigationChevron/></button>}
       {supportsPerSideLogging(current) && (
         <button className="choice-row rook-menu-navigation" onClick={() => setDetail({sessionLoggingSetup:{sessionId:active.id,exerciseId:current.id}})}>
@@ -20100,8 +20199,11 @@ function Replace({ exercise, state, update, close }) {
   const [picker, setPicker] = useState(false);
   const [customCreation, setCustomCreation] = useState(null);
   const [createdCustomId, setCreatedCustomId] = useState(null);
+  const [replaceError, setReplaceError] = useState('');
   const customTriggerRef = useRef(null);
-  const {commit: commitCustomExercise} = useDurableAction(state, update);
+  const {commit: commitReplacement} = useDurableAction(state, update);
+  const replacementOwner = useRef({profileId:state.profile.id, workoutId:state.activeWorkout?.id});
+  const originalId = activeExerciseReplacement(state.activeWorkout, exercise)?.original.exerciseId;
   useExerciseSearchSheet(sheetRef, picker && !customCreation, { focusedSearch: true });
   useEffect(() => {
     let cancelled = false;
@@ -20119,9 +20221,10 @@ function Replace({ exercise, state, update, close }) {
   const programIds = (state.program?.days || []).flatMap((day) =>
     day.exercises.map((item) => item.exerciseId),
   );
-  const activeIds = (state.activeWorkout?.exercises || [])
+  const otherExerciseIds = (state.activeWorkout?.exercises || [])
     .filter((item) => item.id !== exercise.id)
     .map((item) => item.exerciseId);
+  const activeIds = originalId ? [...otherExerciseIds, originalId] : otherExerciseIds;
   const customCandidates = availableCustomExerciseItems(state);
   const substitutionCatalog = [...Object.values(exerciseCatalog), ...customCandidates];
   const customCandidateKey = customCandidates.map((item) => `${item.id}:${item.name}:${item.pattern}:${item.muscles?.join(",")}:${item.equipment?.join(",")}`).join("|");
@@ -20174,7 +20277,6 @@ function Replace({ exercise, state, update, close }) {
   const [loadingMore, setLoadingMore] = useState(false);
   const [noMore, setNoMore] = useState(() => compatible.length <= 3);
   const [query, setQuery] = useState("");
-  const [rememberPreference, setRememberPreference] = useState(false);
   useEffect(() => {
     // Keep local suggestions stable until their inputs change. More compatible options
     // reveals the next locally ranked candidates without a network request.
@@ -20187,7 +20289,7 @@ function Replace({ exercise, state, update, close }) {
     // or returning from All available exercises to the recommended view.
     setPicker(false);
     setQuery("");
-    setRememberPreference(false);
+    setReplaceError('');
   }, [exercise.id, state.activeWorkout?.id]);
   const more = async () => {
     if (loadingMore || noMore) return;
@@ -20210,19 +20312,24 @@ function Replace({ exercise, state, update, close }) {
     }
   };
   const replace = (choice, allowAnyAllowed = false) => {
-    update((current) => {
+    setReplaceError('');
+    const revision = uid('active-replacement');
+    try {
+      commitReplacement((before) => {
+      const current = clone(before);
       const active = current.activeWorkout;
-      if (!active) return current;
-      const index = active.exercises.findIndex(
-        (item) => item.id === exercise.id,
-      );
+      const index = active?.exerciseIndex;
+      const previous = active?.exercises[index];
+      if (!active || active.id !== replacementOwner.current.workoutId || current.profile.id !== replacementOwner.current.profileId ||
+          previous?.id !== exercise.id || previous.exerciseId !== exercise.exerciseId)
+        throw new Error('This exercise has changed. Open Replace again to see your options.');
       const customRecord = (current.customExercises || []).find((item) => item.id === choice.id && !item.deletedAt);
       const catalog = exerciseCatalog[choice.id] || customExerciseCatalogItem(customRecord);
       const currentCandidates = [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(current)];
       if (
-        index < 0 ||
-        active.exercises[index].sets.some((set) => set.completed) ||
+        previous.sets.some((set) => set.completed) ||
         !catalog ||
+        choice.id === activeExerciseReplacement(active, previous)?.original.exerciseId ||
         active.exercises.some(
           (item, candidateIndex) =>
             candidateIndex !== index && item.exerciseId === choice.id,
@@ -20252,8 +20359,9 @@ function Replace({ exercise, state, update, close }) {
             )
         ).some((item) => item.id === choice.id)
       )
-        return current;
-      const stored = clone(active.exercises[index]);
+        throw new Error('This replacement is no longer available for the current exercise.');
+      rememberActiveExerciseReplacement(current, previous, choice.id, revision);
+      const stored = clone(previous);
       delete stored.importedName;
       delete stored.originalImportedName;
       delete stored.importedExercise;
@@ -20279,22 +20387,17 @@ function Replace({ exercise, state, update, close }) {
           ...set,
           weight: null,
           completed: false,
+          touched: false,
           rir: null,
           completedAt: undefined,
         })),
       };
-      // Keep the existing rest deadline when changing the upcoming movement.
-      if (rememberPreference)
-        recordSubstitutionPreference(current, {
-          sourceExerciseId: stored.exerciseId,
-          replacementExerciseId: choice.id,
-          gymProfileId: effectiveGymContext(current, active).id,
-        });
       refreshWorkoutWarmup(active, active.temporaryPlanAdjustment ? effectiveGymProfile(current, active) : current.profile, current.program);
       active.updatedAt = Date.now();
       return current;
-    });
-    close();
+      });
+      close();
+    } catch (error) { setReplaceError(error.message); }
   };
   const pickerChoices = searchExercises(allAllowed,query);
   const choiceButton = (choice, allowAnyAllowed = false, priority = false) => (
@@ -20324,7 +20427,7 @@ function Replace({ exercise, state, update, close }) {
         <CustomExercisesScreen state={state} createOnly initialName={customCreation.name}
           creationDescription="Save it to your exercise library, then select it in the results to use it for this workout. Your plan stays unchanged; equipment and restrictions still apply."
           close={() => setCustomCreation(null)}
-          update={operation => commitCustomExercise(current => {
+          update={operation => commitReplacement(current => {
             if (current.profile.id !== customCreation.profileId || current.activeWorkout?.id !== customCreation.workoutId)
               throw new Error('This profile or workout has changed.');
             return operation(clone(current));
@@ -20408,29 +20511,13 @@ function Replace({ exercise, state, update, close }) {
             <p>For this workout only.</p>
             <Eyebrow>RECOMMENDED</Eyebrow>
             {!suggestionsReady ? <p role="status" aria-live="polite">Finding suitable exercises…</p> : choices.length
-              ? choices.map(choiceButton)
+              ? choices.map((choice, index) => choiceButton(choice, false, index < 3))
               : (
                   <p className="offline-banner">
                     There is not enough compatible exercise metadata for a safe
                     replacement.
                   </p>
                 )}
-            <button
-              className={`substitution-preference-toggle${rememberPreference ? " is-selected" : ""}`}
-              aria-pressed={rememberPreference}
-              disabled={!suggestionsReady}
-              onClick={() => setRememberPreference((value) => !value)}
-            >
-              <span>
-                <strong>Prefer my choice</strong>
-                <small>
-                  {gymContext.id && gymContext.name
-                    ? `Only when training at ${gymContext.name}.`
-                    : "Use it in future replacement suggestions."}
-                </small>
-              </span>
-              <i aria-hidden="true">{rememberPreference ? "✓" : ""}</i>
-            </button>
             <div className="replacement-secondary">
               <button
                 onClick={more}
@@ -20447,6 +20534,7 @@ function Replace({ exercise, state, update, close }) {
             </div>
           </>
         )}
+        {replaceError && <p role="alert">{replaceError}</p>}
       </div>
     </main>
     </>

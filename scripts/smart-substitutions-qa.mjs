@@ -217,7 +217,6 @@ await screenshotState("390-preferred-replacement", fixture({ preferredId: "front
   assert.equal(await page.locator(".choice-row").first().locator("small").innerText(), "Preferred replacement");
 });
 await screenshotState("390-different-gym", fixture({ temporaryGym: true }), { width: 390, height: 844 }, async (page) => {
-  assert.match(await page.locator(".substitution-preference-toggle small").innerText(), /Travel Gym/);
   const choices = await page.locator(".choice-row strong").allInnerTexts();
   assert.ok(choices.every((name) => !/Barbell|Machine|Hack|Leg Press|Belt/.test(name)), choices.join(" | "));
 });
@@ -239,20 +238,29 @@ const runtime = await open(runtimeState);
 const page = runtime.page;
 const programBefore = await page.evaluate(() => JSON.stringify(JSON.parse(localStorage.getItem("lift-v2-state")).program));
 const source = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).activeWorkout.exercises[0]);
-await page.getByRole("button", { name: "Prefer my choice" }).click();
 const chosenName = await page.locator(".replace-sheet .choice-row").first().locator("strong").innerText();
 await page.locator(".replace-sheet .choice-row").first().click();
+await page.locator(".replace-sheet").waitFor({state:"hidden"});
 let stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 assert.equal(JSON.stringify(stored.program), programBefore, "workout replacement never mutates the permanent plan");
 assert.equal(stored.activeWorkout.exercises[0].supersetId, "pair-qa", "compatible superset membership is preserved");
 assert.equal(stored.activeWorkout.exercises[1].supersetId, "pair-qa");
 assert.ok(stored.activeWorkout.exercises[0].sets.every((set) => set.weight === null), "old load is not transferred");
 assert.ok(stored.activeWorkout.exercises[0].sets.every((set) => set.completed === false));
-assert.ok(stored.substitutionPreferences.some((item) => item.sourceExerciseId === source.exerciseId), "preference is stored only after explicit opt-in");
+assert.ok(!stored.substitutionPreferences.some((item) => item.sourceExerciseId === source.exerciseId), "replacement alone does not save a preference");
+await page.getByRole("button", {name:"Hide replacement details"}).click();
+await page.locator(".active-replacement").waitFor({state:"hidden"});
+await page.locator(".exercise-options-button").click();
+await page.getByRole("button", {name:"Save to this workout"}).click();
+await page.getByRole("button", {name:"Show replacement details"}).click();
+await page.locator(".active-replacement").waitFor({state:"visible"});
+stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
+const planSlot = state => state.program.days.find(day => day.id === state.activeWorkout.programDayId).exercises.find(entry => entry.id === source.id);
+assert.equal(planSlot(stored).exerciseId, stored.activeWorkout.exercises[0].exerciseId, "explicit save replaces the recurring workout slot");
+assert.ok(!stored.substitutionPreferences.some((item) => item.sourceExerciseId === source.exerciseId), "save does not change suggestion rankings");
 await page.reload({ waitUntil: "networkidle" });
 stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
-assert.ok(stored.substitutionPreferences.some((item) => item.sourceExerciseId === source.exerciseId), "preference survives reload");
-assert.equal(JSON.stringify(stored.program), programBefore);
+assert.equal(planSlot(stored).exerciseId, stored.activeWorkout.exercises[0].exerciseId, "saved replacement survives reload");
 assert.ok(chosenName);
 assert.deepEqual(runtime.errors, []);
 await runtime.context.close();
@@ -268,4 +276,4 @@ assert.deepEqual(offline.errors.filter(message=>message!=='Failed to load resour
 await offline.context.close();
 
 await browser.close();
-console.log("Smart Substitutions QA passed: visual matrix, shared local ranking, explicit durable preferences, gym filtering, manual fallback, session-only replacement, load reset, superset preservation, narrow layout, themes, and offline use.");
+console.log("Smart Substitutions QA passed: visual matrix, shared local ranking, durable workout-slot replacement and hidden actions, gym filtering, manual fallback, session-only replacement, load reset, superset preservation, narrow layout, themes, and offline use.");
