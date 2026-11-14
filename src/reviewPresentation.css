@@ -10,7 +10,6 @@
 .review-change-row>span,.review-change-row>small{font-size:14px;line-height:1.4;color:var(--rook-secondary)}
 .review-change-row .review-change-name{color:var(--rook-text);font-weight:600}
 .action-card .review-details>summary{font-size:14px}
-.review-schedule-history .flexible-week-review article{padding:12px 0}
 .program-change>span{display:grid;grid-template-columns:20px minmax(0,1fr);gap:4px 8px}
 .program-change>span>i{grid-row:1 / span 2}
 .program-change>span>small{grid-column:2;color:var(--rook-secondary);font-size:13px;line-height:1.4}

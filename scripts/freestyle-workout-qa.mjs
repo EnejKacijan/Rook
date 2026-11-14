@@ -75,7 +75,7 @@ try {
     planned.activeWorkout = startWorkout(planned, planned.program.days.find(d => d.weekday === weekday()));
     for (const e of planned.activeWorkout.exercises) for (const s of e.sets) Object.assign(s, { completed: true, weight: 30, reps: 8 });
     await page.evaluate(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), completeWorkout(planned)); await page.reload({ waitUntil: 'networkidle' });
-    await page.getByRole('button', { name: 'WORKOUT COMPLETE · VIEW HISTORY', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'VIEW WORKOUT DETAILS', exact: true }).waitFor();
     assert.equal((await stored()).activeWorkout,null); await shot('completed-day');
     const rest = structuredClone(baseline);rest.workouts=[];rest.flexibleWeek={sessions:{}}; rest.profile.availableDays = ['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].filter(day => day !== weekday()).slice(0,3); rest.program = buildProgram(rest.profile);
     await page.evaluate(s => localStorage.setItem('lift-v2-state', JSON.stringify(s)), rest); await page.reload({ waitUntil: 'networkidle' });

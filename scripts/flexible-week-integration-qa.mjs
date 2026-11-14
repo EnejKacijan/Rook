@@ -30,7 +30,7 @@ const shot=async(page,name)=>{await page.waitForTimeout(350);await page.screensh
 {
   const active=structuredClone(state);active.activeWorkout=startWorkout(active,plannedWorkoutForDate(active,today));active.activeWorkout.exercises.forEach(e=>e.sets.forEach(s=>{s.completed=true;s.weight=30;}));
   const done=completeWorkout(active);const {page,context}=await open(done);await shot(page,'completed');
-  await page.getByRole('button',{name:/WORKOUT COMPLETE.*VIEW HISTORY/i}).click();await shot(page,'history');assert.match(await page.locator('body').innerText(),/Originally planned for/);await context.close();
+  await page.getByRole('button',{name:'VIEW WORKOUT DETAILS',exact:true}).click();await shot(page,'history');assert.match(await page.locator('body').innerText(),/Originally planned for/);await context.close();
   const progress=await open(done);await progress.page.getByRole('button',{name:'PROGRESS',exact:true}).click();await shot(progress.page,'weekly-review');await progress.context.close();
 }
 {

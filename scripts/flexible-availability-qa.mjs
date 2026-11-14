@@ -3,28 +3,74 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { chromium } from 'playwright-core';
-import { blankState, buildProgram, WEEKDAYS } from '../src/domain.js';
+import { adjustWeekState, ADJUSTMENT_TODAY } from '../src/fixtures/adjustWeekState.js';
 import { addCalendarDays } from '../src/flexibleWeek.js';
-const out=new URL('../artifacts/flexible-availability-results/',import.meta.url);await mkdir(out,{recursive:true});
-const browser=await chromium.launch({executablePath:'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',headless:true});
-const today='2026-09-06';
-for(const width of [320,390,430])for(const appearance of ['light','dark'])for(const style of ['standard','premium']){
- const state=blankState();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:5,availableDays:['Mon','Tue','Wed','Fri','Sat'],sessionMinutes:60,environment:'Commercial gym',equipment:['full gym'],priorities:['Balanced'],onboardingComplete:true,appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});state.program=buildProgram(state.profile);state.program.trainingBlock.startDate=today;state.profile.availableDays=[...WEEKDAYS];
- state.program.days.forEach((d,i)=>{d.name=['Pull','Legs','Upper','Lower','Push'][i];});if(width===320)state.program.days[2].name='Upper strength with a deliberately long workout name';
- const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block'});await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);const page=await context.newPage();await page.clock.install({time:new Date(`${today}T12:00:00`)});await page.route('**/api/ai/status',r=>r.fulfill({status:200,contentType:'application/json',body:'{"available":false}'}));await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
- const initial=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state'))),profile=initial.profile;
- const assertUnchanged=async()=>{const current=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));for(const key of ['program','profile','workouts','activeWorkout','flexibleWeek'])assert.deepEqual(current[key],initial[key],`${key} stays unchanged before apply`);};
- const shot=async name=>{await page.waitForTimeout(350);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:fileURLToPath(new URL(`${width}-${style}-${appearance}-${name}.png`,out))});};
- const open=async()=>{await openAdjustWeek(page);await page.getByRole('button',{name:/My available days changed/}).click();};
- const dates=page.locator('.flexible-week-dates button'),cta=page.getByRole('button',{name:'REVIEW SCHEDULE',exact:true});
- const select=async indices=>{for(let i=0;i<await dates.count();i++){if((await dates.nth(i).getAttribute('aria-pressed')==='true')!==indices.includes(i))await dates.nth(i).click();}};
- await open();assert.equal(await dates.count(),7);assert.equal(await page.locator('.flexible-week-dates button[aria-pressed="true"]').count(),7);assert.equal(await cta.isDisabled(),true);await shot('01-baseline');
- assert.ok(await dates.nth(1).getByText('Pull',{exact:true}).count());assert.equal(await page.locator('.flexible-availability-note').evaluate(el=>getComputedStyle(el).textAlign),'left');
- await select([0,2,3,4,5,6]);assert.equal(await cta.isEnabled(),true);await shot('02-one-change');await cta.click();await page.getByRole('heading',{name:'Review your schedule',exact:true}).waitFor();assert.equal(await page.locator('.flexible-week-review article').count(),5);await shot('03-changes');await page.getByRole('button',{name:'CANCEL',exact:true}).click();
- await open();await select([1,2,3,4,5,6]);await cta.click();await page.getByRole('heading',{name:'Your schedule fits',exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'SHOW MORE DATES',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'Choose a session to skip',exact:true}).count(),0);await shot('04-no-change');await page.getByRole('button',{name:'EDIT DAYS',exact:true}).click();
- await select([0,1,2,3]);await cta.click();await page.getByRole('heading',{name:'More training days needed',exact:true}).waitFor();assert.match(await page.getByRole('status').innerText(),/5 sessions remain, but you selected 4 training days/);assert.doesNotMatch(await page.locator('body').innerText(),/No schedule changes|already fits/);assert.equal(await page.getByRole('button',{name:'Choose a session to skip',exact:true}).count(),0);assert.equal(await page.getByRole('button',{name:'DONE',exact:true}).count(),0);await assertUnchanged();await shot('05-capacity');
- await page.getByRole('button',{name:'CANCEL',exact:true}).click();await assertUnchanged();await open();await select([0,1,2,3]);await cta.click();await page.getByRole('button',{name:'EDIT DAYS',exact:true}).click();await select([0,1,2,3,4]);await shot('05-resolved-dates');await cta.click();await page.getByRole('heading',{name:'Review your schedule',exact:true}).waitFor();await assertUnchanged();await shot('05-resolved-review');await page.getByRole('button',{name:'CANCEL',exact:true}).click();await assertUnchanged();await open();await select([0,1,2,3]);await cta.click();await page.getByRole('button',{name:'SHOW MORE DATES',exact:true}).click();assert.equal(await dates.count(),14);assert.equal(await dates.nth(0).getAttribute('aria-pressed'),'true');assert.equal(await dates.nth(7).getAttribute('aria-pressed'),'false');
- const selected=[0,1,2,3,7,8,9,10,12,13];await select(selected);await dates.nth(7).scrollIntoViewIfNeeded();await shot('06-expanded');await cta.click();await page.getByRole('heading',{name:'Review your schedule',exact:true}).waitFor();assert.equal(await page.locator('.flexible-week-review article').count(),10);await shot('07-carry-review');await page.locator('.flexible-week-sheet').evaluate(el=>{el.scrollTop=el.scrollHeight;});await shot('08-carry-footer');await assertUnchanged();await page.getByRole('button',{name:'USE THIS SCHEDULE',exact:true}).click();
- const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));assert.deepEqual(saved.profile,profile);const allowed=selected.map(i=>addCalendarDays(today,i));assert.ok(Object.values(saved.flexibleWeek.sessions).every(r=>allowed.includes(r.scheduledDate)));assert.equal(new Set(Object.values(saved.flexibleWeek.sessions).map(r=>r.scheduledDate)).size,Object.keys(saved.flexibleWeek.sessions).length);await page.reload({waitUntil:'networkidle'});assert.deepEqual(await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')).flexibleWeek),saved.flexibleWeek);await context.close();
-}
-await browser.close();console.log('12 availability result flows passed: profile baseline, changed CTA, date context, actual diff, no-change, exact 5/4 capacity regression, expanded selected-only carry and reload.');
+
+const out=new URL('../artifacts/flexible-availability-results/',import.meta.url);
+await mkdir(out,{recursive:true});
+const browser=await chromium.launch({channel:'chrome',headless:true});
+const datesThroughSunday=Array.from({length:6},(_,index)=>addCalendarDays(ADJUSTMENT_TODAY,index));
+try {
+  for(const width of [320,390,430]) for(const appearance of ['light','dark']) for(const style of ['standard','premium']) {
+    const state=adjustWeekState({shifted:false});
+    Object.assign(state.profile,{appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance});
+    const context=await browser.newContext({viewport:{width,height:844},serviceWorkers:'block',reducedMotion:'reduce'});
+    try {
+      await context.addInitScript(s=>{if(!localStorage.getItem('lift-v2-state'))localStorage.setItem('lift-v2-state',JSON.stringify(s));},state);
+      const page=await context.newPage();
+      await page.clock.setFixedTime(new Date(`${ADJUSTMENT_TODAY}T12:00:00`));
+      await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));
+      await page.goto(process.env.ROOK_QA_URL||'http://127.0.0.1:4173');
+      const read=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
+      await page.getByRole('button',{name:'Today options',exact:true}).waitFor();
+      const initial=await read();
+      const assertUnchanged=async()=>{
+        const current=await read();
+        for(const key of ['program','profile','workouts','activeWorkout','flexibleWeek'])assert.deepEqual(current[key],initial[key],key);
+      };
+      const shot=async name=>{
+        assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+        await page.screenshot({path:fileURLToPath(new URL([width,style,appearance,name].join('-')+'.png',out))});
+      };
+      await openAdjustWeek(page);
+      const sheet=page.locator('.flexible-week-sheet');
+      const button=name=>sheet.getByRole('button',{name,exact:typeof name==='string'});
+      await button(/^My available days changed/).click();
+      await sheet.getByRole('heading',{name:'When can you train this week?'}).waitFor();
+      const available=sheet.locator('[data-available-date]');
+      assert.deepEqual(await available.evaluateAll(rows=>rows.map(row=>row.dataset.availableDate)),datesThroughSunday);
+      const select=async dates=>{
+        for(const day of datesThroughSunday){
+          const row=sheet.locator('[data-available-date="'+day+'"]');
+          if((await row.getAttribute('aria-pressed')==='true')!==dates.includes(day))await row.click();
+        }
+      };
+      const apply=button('APPLY SCHEDULE');
+      await select(datesThroughSunday.slice(0,4));
+      await button('REVIEW SCHEDULE').click();
+      await sheet.getByRole('heading',{name:'Your updated schedule'}).waitFor();
+      assert.equal(await sheet.getByText('Needs a day',{exact:true}).count(),1);
+      assert.equal(await apply.isDisabled(),true);
+      await shot('insufficient-days');
+      await assertUnchanged();
+      await button('EDIT DAYS').click();
+      await select(datesThroughSunday.slice(1));
+      await button('REVIEW SCHEDULE').click();
+      assert.equal(await apply.isEnabled(),true);
+      const changes=await sheet.locator('.flexible-week-review > article[data-session-id]').evaluateAll(rows=>rows.map(row=>row.dataset.sessionId));
+      assert.equal(changes.length,5,'each moved occurrence is listed once');
+      await assertUnchanged();
+      await shot('ready');
+      await apply.click();
+      await sheet.waitFor({state:'detached'});
+      const saved=await read();
+      assert.deepEqual(Object.keys(saved.flexibleWeek.sessions).sort(),changes.sort());
+      assert.deepEqual(Object.values(saved.flexibleWeek.sessions).map(row=>row.scheduledDate).sort(),datesThroughSunday.slice(1));
+      for(const key of ['program','profile','workouts'])assert.deepEqual(saved[key],initial[key]);
+      await page.reload();
+      await page.getByRole('button',{name:'Today options',exact:true}).waitFor();
+      assert.deepEqual((await read()).flexibleWeek,saved.flexibleWeek);
+      console.log(width,style,appearance,'current-week capacity, review, apply and reload passed');
+    } finally { await context.close(); }
+  }
+} finally { await browser.close(); }

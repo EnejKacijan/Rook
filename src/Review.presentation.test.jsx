@@ -27,24 +27,31 @@ function historicalState(){
   }
   return state;
 }
-it('shows current changes first, lazily reveals compact past rows, and never writes during inspection',()=>{
+it('shows current changes first and keeps closed-week records out of the sheet',()=>{
   const state=historicalState(),before=structuredClone(state),update=vi.fn(),write=vi.spyOn(Storage.prototype,'setItem');
   expect(temporaryScheduleReview(state).historical).toHaveLength(8);
   act(()=>root.render(<FlexibleWeekSheet state={state} update={update} close={()=>{}} Header={Header} request={{reviewExisting:true}}/>));
-  expect(host.querySelectorAll('[aria-label="Past schedule changes"]')).toHaveLength(0);
   expect(host.querySelectorAll('.flexible-schedule-changes article')).toHaveLength(2);
-  expect(host.querySelector('summary').textContent).toBe('Past changes (8)');
-  act(()=>host.querySelector('summary').click());
-  expect(host.querySelectorAll('[aria-label="Past schedule changes"] article')).toHaveLength(8);
-  expect(host.textContent).not.toContain('This change belongs to a previous plan week');
+  expect(host.querySelector('.flexible-schedule-history')).toBeNull();
+  expect(host.querySelector('summary')).toBeNull();
   expect(state).toEqual(before);expect(update).not.toHaveBeenCalled();expect(write).not.toHaveBeenCalled();
 });
-it('history-only inspection directly exposes its rows, with no empty group or disabled restore',()=>{
+it('a direct review with only closed-week changes has no restore or archive',()=>{
   const state=historicalState();for(const [id,record]of Object.entries(state.flexibleWeek.sessions))if(record.planFingerprint!=='old-plan')delete state.flexibleWeek.sessions[id];
   act(()=>root.render(<FlexibleWeekSheet state={state} update={()=>{}} close={()=>{}} Header={Header} request={{reviewExisting:true}}/>));
-  expect(host.querySelector('h1').textContent).toBe('Past changes');
-  expect(host.querySelectorAll('[aria-label="Past schedule changes"] article')).toHaveLength(8);
-  expect(host.querySelector('summary')).toBeNull();expect(host.textContent).not.toContain('EDIT SCHEDULE');expect(host.textContent).not.toContain('Restore');
+  expect(host.querySelector('h1').textContent).toBe('No current changes');
+  expect(host.querySelector('.flexible-schedule-history')).toBeNull();
+  expect(host.textContent).not.toContain('EDIT SCHEDULE');expect(host.textContent).not.toContain('RESTORE');
+});
+it('the week overview keeps a completed move from this week read-only',()=>{
+  const state=temporaryScheduleSummaryState(),entry=Object.values(state.flexibleWeek.sessions)[0];
+  state.workouts.push({id:'finished-move',logicalSessionId:entry.id,completedAt:'2026-10-02T13:00:00',exercises:[]});
+  vi.setSystemTime(new Date('2026-10-02T15:00:00'));
+  act(()=>root.render(<FlexibleWeekSheet state={state} update={()=>{}} close={()=>{}} Header={Header} request={{reviewExisting:true}}/>));
+  const recent=host.querySelector('.flexible-schedule-history');
+  expect(recent.querySelector('h2').textContent).toBe('Earlier this week');
+  expect(recent.querySelector('article').textContent).toContain('Completed');
+  expect(recent.querySelector('button')).toBeNull();
 });
 it('Today keeps the inline move link without a persistent success notice',()=>{
   vi.setSystemTime(new Date('2026-10-01T12:00:00'));const state=temporaryScheduleSummaryState();state.selectedDate='2026-10-01';

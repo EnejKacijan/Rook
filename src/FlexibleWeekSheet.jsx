@@ -14,7 +14,7 @@ import { buildCombinedProposal, combineFingerprint } from './combineWorkouts.js'
 import { CoachCombineCard } from './CoachCombine.jsx';
 import { isoDay, saveState, weekKey, weekday,calendarDate } from './domain.js';
 import { addCalendarDays, applyFlexibleWeek, createFlexibleWeekPlanner, flexibleSessionById, flexibleWeekConflict, flexibleReviewFingerprint, temporaryScheduleReview, proposeFlexibleWeek, missedFlexibleSessions, moveWorkoutDestinations, remainingPlanWeekDates } from './flexibleWeek.js';
-import {temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
+import {linkedScheduleChanges,temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
 import {combinedAdjustment} from './combinedWorkoutLifecycle.js';
 import './flexibleWeekChooser.css';
 import {reviewScheduleRecovery,applyScheduleRecovery} from './scheduleRecovery.js';
@@ -25,10 +25,15 @@ import {ReviewDetails} from './ReviewDetails.jsx';
 
 const dateLabel = date => new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
 function ScheduleHistory({entries}) {
-  return <section aria-label="Past schedule changes"><div className="flexible-week-review flexible-schedule-history">{entries.map(entry=><article key={entry.id} data-session-id={entry.id}>
-    <strong>{entry.name}</strong><span>{dateLabel(entry.originalDate)} → {dateLabel(entry.scheduledDate)} · {entry.status==='completed'?'Completed':entry.status==='combined'?'Combined':entry.skipped?'Skipped':entry.status==='optional'?'Extra workout':'Missed'}</span>
-  </article>)}</div></section>;
+  return <section className="flexible-schedule-history" aria-labelledby="recent-schedule-changes">
+    <h2 id="recent-schedule-changes" className="eyebrow">Earlier this week</h2>
+    <div className="flexible-week-review">{entries.map(entry=><article key={entry.id}>
+      <strong>{entry.name}</strong>
+      <span>{entry.skipped?dateLabel(entry.scheduledDate):`${dateLabel(entry.originalDate)} → ${dateLabel(entry.scheduledDate)}`} · {entry.status==='completed'?'Completed':entry.status==='combined'?'Combined':'Skipped'}</span>
+    </article>)}</div>
+  </section>;
 }
+const countChanges=count=>`${count} ${count===1?'change':'changes'}`;
 const profileWeekBaseline=(state,dates,sessions)=>dates.filter(date=>Array.isArray(state.profile?.availableDays) &&
   state.profile.availableDays.includes(weekday(calendarDate(date))) && !sessions.some(s=>['active','completed'].includes(s.status) && s.scheduledDate===date));
 export function groupRescheduleCandidates(candidates) {
@@ -53,7 +58,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const missed = useMemo(()=>missedFlexibleSessions(state,today,sessions),[state,today,sessions]);
   const initialSessionId = request.sessionId || (request.missed && missed.length===1 ? missed[0].logicalSessionId : null);
   const [initialSwap] = useState(()=>request.swap && request.otherSessionId ? proposeFlexibleWeek(state,{mode:'swap',sessionId:request.sessionId,otherSessionId:request.otherSessionId},today) : null);
-  const [steps, setSteps] = useState(initialSwap?.status==='ready' ? ['mode','swap','review'] : request.reviewExisting ? ['mode','existing'] : initialSessionId ? ['mode', request.swap ? 'swap' : !request.destination && missed.some(s=>s.logicalSessionId===initialSessionId) ? 'recovery' : 'destination'] : request.missed ? ['mode','missed'] : request.move ? ['pick'] : ['mode']);
+  const [steps, setSteps] = useState(initialSwap?.status==='ready' ? ['mode','swap','review'] : request.reviewExisting ? request.focusSessionId?['existing']:['mode','existing'] : initialSessionId ? ['mode', request.swap ? 'swap' : !request.destination && missed.some(s=>s.logicalSessionId===initialSessionId) ? 'recovery' : 'destination'] : request.missed ? ['mode','missed'] : request.move ? ['pick'] : ['mode']);
   const step = steps.at(-1);
   const setStep = next => setSteps(current => {
     const existing = current.lastIndexOf(next);
@@ -72,15 +77,16 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const availabilityPreview = useMemo(()=>step==='available' ? planner.check(availabilityRequest) : null,[planner,availabilityRequest,step]);
   const canReviewSchedule = Boolean(availabilityPreview?.remainingSessions);
   const [proposal, setProposal] = useState(initialSwap?.status==='ready' ? initialSwap : null);
+  const [focusedChangeId,setFocusedChangeId]=useState(request.focusSessionId||null);
   const [error, setError] = useState('');
   const openRecovery=id=>{try{setRecovery(reviewScheduleRecovery(state,id));setError('');setStep('repair');}catch(e){setError(e.message);}};
-  const repair=mode=>{try{recoveryAction.commit(current=>applyScheduleRecovery(current,recovery,mode));setRecovery(null);setError('');setSteps(['mode','existing']);}catch(e){setError(e.message);}};
+  const repair=mode=>{try{recoveryAction.commit(current=>applyScheduleRecovery(current,recovery,mode));setRecovery(null);setFocusedChangeId(null);setError('');setSteps(['mode','existing']);}catch(e){setError(e.message);}};
   const [persistenceFailed, setPersistenceFailed] = useState(false);
   const [adaptationChoice, setAdaptationChoice] = useState('restore');
   const applied = useRef(false);
   const screenRef = useRef(null);
   const returnAction = useRef(null);
-  const previousView = useRef({step,useToday});
+  const previousView = useRef({step,useToday,focusedChangeId});
   const staleAvailabilityReview=()=>proposal?.availabilitySchedule && (proposal.today!==today || proposal.fingerprint!==flexibleReviewFingerprint(state) ||
     proposal.request.combinedProposal && proposal.request.combinedProposal.fingerprint!==combineFingerprint(state));
   const reorderRows=useMemo(()=>['review','reorder'].includes(step) && !staleAvailabilityReview() ? flexibleReorderRows(proposal) : [],[step,state,today,proposal]);
@@ -112,16 +118,17 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   };
   useSheetBack(screenRef, step, steps.at(-2), goBack);
   useLayoutEffect(() => {
-    const changed=previousView.current.step!==step || previousView.current.useToday!==useToday;
-    previousView.current={step,useToday};
+    const changed=previousView.current.step!==step || previousView.current.useToday!==useToday || previousView.current.focusedChangeId!==focusedChangeId;
+    previousView.current={step,useToday,focusedChangeId};
     const screen=screenRef.current;
     if(!screen)return;
     screen.scrollTop=0;
-    if(changed)focusNavigationTarget(step==='existing' && request.focusSessionId
-      ? [...screen.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===request.focusSessionId)
+    if(changed)focusNavigationTarget(step==='restore-confirm'
+      ? screen.querySelector('#schedule-restore-title')
+      : step==='existing'?screen.querySelector('.schedule-change-title')
       : screen.querySelector(step==='recovery' && returnAction.current ? `[data-recovery-action="${returnAction.current}"]` : '.detail-header-back') || screen.querySelector('button'));
     returnAction.current=null;
-  }, [step,useToday]);
+  }, [step,useToday,focusedChangeId]);
   const item = useMemo(()=>sessionId ? flexibleSessionById(state,sessionId,today,{sessions,includeDuration:false}) : null,[state,sessionId,today,sessions]);
   const missedDestination = step==='destination' && item?.status==='missed';
   const firstWeekDestination=step==='destination'&&item?.firstPlanWeek;
@@ -140,21 +147,42 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const canTrainToday = useMemo(()=>item && canUseWorkoutToday(state,{sessionId},today,planner),[state,item,sessionId,today,planner]);
   const existingReview = useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
   const eligibleMissed=useMemo(()=>missed.filter(item=>planner.check({mode:'skip',sessionId:item.logicalSessionId}).status==='ready'),[planner,missed]);
+  const scheduleNeedsAttention=existingReview.unresolved.length>0;
   const hasMissed = eligibleMissed.length > 0;
   const canAdjustWeek=useMemo(()=>Boolean(planner.check({mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'}).remainingSessions),[planner,today]);
   const findMoves=['mode','pick'].includes(step) || step==='available'&&!canAdjustWeek || step==='existing'&&!canAdjustWeek&&!hasMissed;
   const candidates=useMemo(()=>findMoves ? planner.moveCandidates() : [],[planner,findMoves]);
   const remainingMoves=step==='available'&&!canAdjustWeek?candidates:[];
-  const restoreScope=useMemo(()=>temporaryScheduleRestoreScope(state,today),[state,today]);
-  const restorePreview=useMemo(()=>restoreScope.removable.length ? planner.check({mode:'restore'}) : null,[planner,restoreScope]);
-  const canRestore=restorePreview?.status==='ready';
   const canEditSchedule=hasMissed||canAdjustWeek||candidates.length>0;
   const rejoinDate=useMemo(()=>temporaryScheduleRejoinDate(state,today),[state,today]);
   const combinedSchedule=combinedAdjustment(state);
   const existingChangeCount=existingReview.items.length+(combinedSchedule?1:0);
-  const historicalChangeCount=existingReview.historical.length;
+  const recentChanges=existingReview.recent;
+  const hasScheduleReview=Boolean(existingChangeCount||recentChanges.length);
+  const linkedChanges=useMemo(()=>step==='existing' && focusedChangeId ? linkedScheduleChanges(state,focusedChangeId) : [],[state,step,focusedChangeId]);
+  const focusedChange=existingReview.items.find(entry=>entry.id===focusedChangeId);
+  const reviewedChanges=focusedChange?[focusedChange,...existingReview.items.filter(entry=>entry.id!==focusedChangeId && linkedChanges.some(change=>change.id===entry.id))]:focusedChangeId?[]:existingReview.items;
+  const restoreRequest=useMemo(()=>focusedChangeId?{mode:'restore',sessionId:focusedChangeId}:{mode:'restore'},[focusedChangeId]);
+  const restoreScope=useMemo(()=>step==='existing'?temporaryScheduleRestoreScope(state,today,focusedChangeId):null,[state,today,step,focusedChangeId]);
+  const restoreCount=restoreScope?.removable.length||0;
+  const restorePreview=useMemo(()=>restoreCount?planner.check(restoreRequest):null,[planner,restoreRequest,restoreCount]);
+  const canRestore=restorePreview?.status==='ready' && (!focusedChangeId || Boolean(focusedChange));
+  const scopedRestoreLabel=restoreCount>1?`RESTORE ${restoreCount} WORKOUTS`:focusedChange?.issue?'REVIEW RESTORE':'RESTORE ORIGINAL DATE';
+  const restoreRecords=step==='restore-confirm'?proposal?.restoreRecords||[]:[];
+  const focusedRestore=step==='restore-confirm' && Boolean(proposal?.request.sessionId);
+  const confirmingOne=restoreRecords.length===1;
+  const restoreConfirmationTitle=focusedRestore ? confirmingOne?'Restore original date?':'Restore original dates?' : 'Restore original schedule?';
+  const restoreConfirmLabel=focusedRestore
+    ? confirmingOne?'RESTORE WORKOUT':`RESTORE ${restoreRecords.length} WORKOUTS`
+    : `RESTORE ${countChanges(restoreRecords.length).toUpperCase()}`;
+  const retainedChanges=step==='restore-confirm'?existingReview.items.filter(entry=>!restoreRecords.some(record=>record.id===entry.id)):[];
   const skippedLabel=date=>weekKey(date)===weekKey(today)?'Skipped this week':'Skipped this occurrence';
-  const openRestore=()=>{const next=proposeFlexibleWeek(state,{mode:'restore'},today);if(next.status!=='ready'){setError(next.error);return;}setProposal(next);setError('');setStep('restore-confirm');};
+  const openRestore=()=>{
+    const next=proposeFlexibleWeek(state,restoreRequest,today);
+    if(next.status!=='ready'||!next.restoreRecords.length){setError(next.error||'There are no changes to restore.');return;}
+    setProposal(next);setError('');setStep('restore-confirm');
+  };
+  const editSchedule=()=>{setFocusedChangeId(null);setSteps(['mode']);};
   const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? planner.swaps(sessionId) : [],[planner,item,step,sessionId]);
   const simpleSwap = proposal?.request.mode === 'swap';
   const simpleMove = proposal?.request.mode === 'move' && !proposal.adaptationConflict;
@@ -231,14 +259,15 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   </main>;
   if(useToday)return <UseWorkoutTodaySheet state={state} update={update} close={close} Header={Header} setDetail={setDetail} className={steps.includes('recovery')?'missed-recovery-today':''} request={{sessionId:useToday}} onBack={()=>{setUseToday(null);returnAction.current='train';setError('');}}/>;
   return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}${recoveryView?' content-fit-screen missed-recovery-sheet':''}${['skip-confirm','restore-confirm','existing','mode'].includes(step)?' content-fit-screen flexible-compact-sheet':''}`}>
-    <Header title={step==='restore-confirm'?'Restore dates':step==='existing'?(existingChangeCount?'Schedule changes':'Past changes'):step==='more'?'More options':recoveryView?'Missed workout':firstWeekDestination?'Schedule workout':missedDestination?'Move workout':request.move ? 'Move a workout' : 'Adjust week'} onClose={close} onBack={step!=='done' && steps.length > 1 ? goBack : undefined} />
+    <Header title={step==='restore-confirm'?'Restore schedule':step==='existing'?'Schedule changes':step==='more'?'More options':recoveryView?'Missed workout':firstWeekDestination?'Schedule workout':missedDestination?'Move workout':request.move ? 'Move a workout' : 'Adjust week'} onClose={close} onBack={step!=='done' && steps.length > 1 ? goBack : undefined} />
     {!recoveryView && !missedDestination && !['existing','restore-confirm'].includes(step) && <p className="eyebrow">{step==='pick'?'MOVE A WORKOUT':'TEMPORARY SCHEDULE'}</p>}
     {step==='recovery' && item && <>
       <h1>{item.workout.name}</h1><p>Missed · {dateLabel(item.scheduledDate)}</p>
       <div className="missed-recovery-actions">
+        {scheduleNeedsAttention&&<button className="button secondary" onClick={()=>setStep('existing')}>REVIEW SCHEDULE FIRST</button>}
         {canTrainToday && <button className="button primary" data-recovery-action="train" onClick={()=>setUseToday(sessionId)}>TRAIN TODAY</button>}
         {canMove && <button className="button secondary" data-recovery-action="move" onClick={()=>setStep('destination')}>MOVE TO ANOTHER DAY</button>}
-        <button className="text-button" data-recovery-action="more" onClick={()=>setStep('more')}>More options</button>
+        {!scheduleNeedsAttention&&<button className="text-button" data-recovery-action="more" onClick={()=>setStep('more')}>More options</button>}
       </div>
     </>}
     {step==='more' && item && <>
@@ -252,38 +281,48 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     {step === 'mode' && <>
       <h1>What changed?</h1>
       <p>Make temporary changes. Keep your plan.</p>
-      {flexibleWeekConflict(state) && <p role="status">Your plan changed. Clear the old temporary schedule before adjusting again. Completed and active workouts stay fixed.</p>}
+      {flexibleWeekConflict(state,today) && <p role="status">Your plan changed. Review the temporary schedule before adjusting again. Completed and active workouts stay fixed.</p>}
       <div className="adjust-option-list">
-        {(existingChangeCount>0||historicalChangeCount>0) && <button className="choice-row rook-menu-navigation" onClick={()=>setStep('existing')}><span className="rook-menu-copy"><strong>{existingReview.unresolved.length ? 'Review temporary schedule' : existingChangeCount ? 'View current schedule' : 'View past schedule changes'}</strong><small>{existingReview.unresolved.length ? `${existingReview.unresolved.length} need attention` : existingChangeCount ? `${existingChangeCount} ${existingChangeCount===1?'change':'changes'}` : `${historicalChangeCount} past ${historicalChangeCount===1?'change':'changes'}`}</small></span><NavigationChevron/></button>}
-        {hasMissed&&<button className="choice-row rook-menu-navigation" onClick={() => { if(eligibleMissed.length===1)selectSession(eligibleMissed[0]);else setStep('missed'); }}><span className="rook-menu-copy"><strong>I missed a workout</strong><small>Move or skip an unstarted session.</small></span><NavigationChevron/></button>}
+        {hasScheduleReview && <button className="choice-row rook-menu-navigation" onClick={()=>setStep('existing')}><span className="rook-menu-copy"><strong>{existingReview.unresolved.length?'Review temporary schedule':'Schedule changes'}</strong><small>{existingReview.unresolved.length?`${existingReview.unresolved.length} need attention`:`${countChanges(existingChangeCount||recentChanges.length)}${existingChangeCount?'':' earlier this week'}`}</small></span><NavigationChevron/></button>}
+        {hasMissed&&<button className="choice-row rook-menu-navigation" onClick={() => {
+          if(eligibleMissed.length===1)selectSession(eligibleMissed[0]);
+          else setStep('missed');
+          feedback?.review();
+        }}><span className="rook-menu-copy"><strong>I missed a workout</strong><small>Move or skip an unstarted session.</small></span><NavigationChevron/></button>}
         {canAdjustWeek&&<button className="choice-row rook-menu-navigation" onClick={() => setStep('available')}><span className="rook-menu-copy"><strong>My available days changed</strong><small>Rearrange workouts through this Sunday.</small></span><NavigationChevron/></button>}
         {candidates.length>0 && <button className="choice-row rook-menu-navigation" onClick={() => setStep('pick')}><span className="rook-menu-copy"><strong>Move a workout</strong><small>Choose one session and another date.</small></span><NavigationChevron/></button>}
       </div>
-      {!hasMissed&&!canAdjustWeek&&!candidates.length&&!existingChangeCount&&!historicalChangeCount&&<p role="status">Your schedule is already set. No unstarted workouts can be changed right now.</p>}
+      {!hasMissed&&!canAdjustWeek&&!candidates.length&&!hasScheduleReview&&<p role="status">Your schedule is already set. No unstarted workouts can be changed right now.</p>}
     </>}
     {step === 'existing' && <>
-      <h1>{existingChangeCount?'Schedule changes':'Past changes'}</h1>
-      {existingChangeCount>1&&<p>{existingChangeCount} changes</p>}
-      {!existingChangeCount&&!historicalChangeCount&&<p>No schedule changes.</p>}
-      {existingReview.unresolved.length>0&&<p role="status">{existingReview.unresolved.length} {existingReview.unresolved.length===1?'workout needs':'workouts need'} attention.</p>}
-      {existingChangeCount>0&&<div className="flexible-week-review flexible-schedule-changes">{existingReview.items.map(entry=><article key={entry.id} data-session-id={entry.id} tabIndex={-1}>
+      {focusedChange ? <h1 className="schedule-change-title" tabIndex={-1} data-sheet-initial-focus>{focusedChange.name}</h1>
+        : <h1 className="schedule-change-title" tabIndex={-1} data-sheet-initial-focus>{focusedChangeId?'Change no longer current':existingChangeCount?'Current changes':recentChanges.length?'This week':'No current changes'}</h1>}
+      {focusedChangeId&&!focusedChange&&<p>Open Schedule changes to check the latest dates.</p>}
+      {!focusedChangeId&&existingReview.unresolved.length>0&&<p role="status">{existingReview.unresolved.length} {existingReview.unresolved.length===1?'workout needs':'workouts need'} attention.</p>}
+      {(reviewedChanges.length>0||!focusedChangeId&&combinedSchedule)&&<div className="flexible-week-review flexible-schedule-changes">{reviewedChanges.map(entry=><article key={entry.id} data-session-id={entry.id}>
         <small className="eyebrow">{entry.issue?'NEEDS ATTENTION':entry.skipped?'SKIPPED':'MOVED'}</small>
-        <strong>{entry.name}</strong>
-        <span>{entry.skipped?dateLabel(entry.originalDate):<>{dateLabel(entry.originalDate)} <span aria-label="to">→</span> {dateLabel(entry.scheduledDate)}</>}</span>
+        {entry.id!==focusedChangeId&&<strong>{entry.name}</strong>}
+        <span>{entry.skipped?dateLabel(entry.originalDate):<>Original {dateLabel(entry.originalDate)} <span aria-hidden="true">→</span> Now {dateLabel(entry.scheduledDate)}</>}</span>
         {entry.skipped&&entry.scheduledDate!==entry.originalDate&&<small>Last scheduled {dateLabel(entry.scheduledDate)}</small>}
+        {entry.skipped&&canRestore&&restoreScope.removable.some(record=>record.id===entry.id)&&<small>This skip can be undone.</small>}
         {entry.issue && <small>{entry.issue}</small>}
         {entry.issue && <button type="button" className="button secondary" onClick={()=>openRecovery(entry.id)}>Repair this move</button>}
-      </article>)}{combinedSchedule&&<article>
+      </article>)}{!focusedChangeId&&combinedSchedule&&<article>
         <small className="eyebrow">COMBINED</small><strong>{combinedSchedule.workout.name}</strong>
         {combinedSchedule.sourceSessions.map(source=><span key={source.logicalSessionId}>{source.name} · {dateLabel(source.originalDate)} → {dateLabel(combinedSchedule.date)}</span>)}
         <small>Source workouts stay reserved until the combined workout ends or is canceled.</small>
       </article>}</div>}
-      {historicalChangeCount>0&&(existingChangeCount?<ReviewDetails title={`Past changes (${historicalChangeCount})`} className="review-schedule-history"><ScheduleHistory entries={existingReview.historical}/></ReviewDetails>:<ScheduleHistory entries={existingReview.historical}/>)}
-      {existingReview.unresolved.length>0&&!canEditSchedule&&canRestore&&<p className="sheet-footnote">Restore the eligible temporary changes before editing the current schedule.</p>}
+      {focusedChange&&reviewedChanges.length>1&&<p className="sheet-footnote">These workouts moved together.</p>}
+      {focusedChange&&!focusedChange.issue&&!canRestore&&<p className="sheet-footnote">The original dates are no longer available for this change.</p>}
+      {!focusedChangeId&&recentChanges.length>0&&<ScheduleHistory entries={recentChanges}/>}
+      {!focusedChangeId&&existingReview.unresolved.length>0&&!canEditSchedule&&canRestore&&<p className="sheet-footnote">Restore the eligible temporary changes before editing the current schedule.</p>}
       <SheetActionFooter className="flexible-week-footer">
-        <button className="button primary" onClick={close}>DONE</button>
-        {existingChangeCount>0&&canEditSchedule&&<button className="button secondary" onClick={()=>setSteps(['mode'])}>EDIT SCHEDULE</button>}
-        {existingChangeCount>0&&canRestore&&<button className="text-button flexible-restore-action" onClick={openRestore}>Restore {restoreScope.removable.length} {restoreScope.removable.length===1?'change':'changes'}</button>}
+        {error&&<p role="alert">{error}</p>}
+        {canRestore&&<button className="button primary" onClick={openRestore}>{focusedChangeId?scopedRestoreLabel:restoreCount===1?'RESTORE ORIGINAL SCHEDULE':`RESTORE ${restoreCount} CHANGES`}</button>}
+        {!canRestore&&<button className="button primary" onClick={close}>DONE</button>}
+        {focusedChangeId&&hasScheduleReview&&<button className="button quiet" onClick={()=>{setFocusedChangeId(null);setSteps(['mode','existing']);setError('');}}>VIEW ALL SCHEDULE CHANGES</button>}
+        {!focusedChangeId&&existingChangeCount>0&&canEditSchedule&&<button className="button secondary" onClick={editSchedule}>EDIT SCHEDULE</button>}
+        {!focusedChangeId&&canRestore&&<button className="button quiet" onClick={close}>DONE</button>}
       </SheetActionFooter>
     </>}
     {['repair','repair-remove'].includes(step)&&recovery&&<>
@@ -296,15 +335,20 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       </>:<><p>Your recorded workouts stay unchanged. After removing this move:</p>{recovery.afterRemoval.length?<ul>{recovery.afterRemoval.map((item,index)=><li key={index}>{dateLabel(item.date)} · {item.name} · {item.status}</li>)}</ul>:<p>This workout has no remaining placement in the current schedule.</p>}<SheetActionFooter><button className="button primary" onClick={()=>repair('remove')}>REMOVE OUTDATED MOVE</button><button className="button quiet" onClick={goBack}>KEEP FOR REVIEW</button></SheetActionFooter></>}
     </>}
     {step==='restore-confirm'&&<>
-      <h1>Restore these dates?</h1>
-      <div className="flexible-week-review">{proposal?.changes.map(change=><article key={change.logicalSessionId}><strong>{change.name}</strong><span>{dateLabel(change.fromDate)} → {dateLabel(change.toDate)}</span></article>)}</div>
-      {restoreScope.removable.length>(proposal?.changes.length||0)&&<p>{restoreScope.removable.length-(proposal?.changes.length||0)} outdated changes will be removed.</p>}
-      {proposal?.status!=='ready'&&<p role="status">{proposal?.error}</p>}
+      <h1 id="schedule-restore-title" className="schedule-change-title" tabIndex={-1}>{restoreConfirmationTitle}</h1>
+      <div className="flexible-week-review flexible-schedule-changes">{restoreRecords.map(record=>{
+        const change=proposal.changes.find(item=>item.logicalSessionId===record.id);
+        return <article key={record.id}><strong>{record.name||change?.name||'Workout'}</strong>
+          <span>{!change?`Outdated change · ${dateLabel(record.scheduledDate)}`:record.skipped?`Skipped → ${dateLabel(change.toDate)}`:`${dateLabel(change.fromDate)} → ${dateLabel(change.toDate)}`}</span>
+          {!change&&<small>This saved change will be cleared.</small>}
+        </article>;
+      })}</div>
+      {retainedChanges.length>0&&<p className="sheet-footnote">{retainedChanges.length===1?`${retainedChanges[0].name} ${retainedChanges[0].skipped?'stays skipped':'keeps its scheduled date'}.`:`${retainedChanges.length} other changes stay as scheduled.`}</p>}
       {proposal?.adaptationConflict&&<p className="sheet-footnote">The affected today-only adjustment will be cleared.</p>}
       <SheetActionFooter className="flexible-week-footer">
         {error&&<p role="alert">{error}</p>}
-        <button className="button primary" disabled={proposal?.status!=='ready'||!restoreScope.removable.length} onClick={apply}>RESTORE {restoreScope.removable.length} {restoreScope.removable.length===1?'CHANGE':'CHANGES'}</button>
-        <button className="button quiet" data-sheet-initial-focus onClick={goBack}>KEEP TEMPORARY SCHEDULE</button>
+        <button className="button primary" disabled={!restoreRecords.length} onClick={apply}>{persistenceFailed?'TRY AGAIN':restoreConfirmLabel}</button>
+        <button className="button quiet" onClick={goBack}>KEEP CURRENT SCHEDULE</button>
       </SheetActionFooter>
     </>}
     {['pick', 'missed'].includes(step) && <>
@@ -317,7 +361,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
             <span><strong>{s.workout.name}</strong><small>{s.status==='missed'?'Missed · ':''}{dateLabel(s.scheduledDate)}{s.firstPlanWeek?' · Not scheduled yet':''}{s.moved?` · Originally ${dateLabel(s.originalDate)}`:''}</small></span><NavigationChevron/>
           </button>)}
         </section>)}</div>
-      </> : <div className="adjust-option-list missed-session-choices">{eligibleMissed.map(s => <button className="choice-row rook-menu-navigation" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={() => selectSession(s)}><span className="rook-menu-copy"><strong>{s.workout.name}</strong><small>Missed · {dateLabel(s.scheduledDate)}</small>{s.moved&&<small>Originally scheduled for {dateLabel(s.originalDate)}</small>}</span><NavigationChevron/></button>)}</div>}
+      </> : <div className="adjust-option-list missed-session-choices">{missed.map(s => <button className="choice-row rook-menu-navigation" key={s.logicalSessionId} data-session-id={s.logicalSessionId} onClick={() => selectSession(s)}><span className="rook-menu-copy"><strong>{s.workout.name}</strong><small>Missed · {dateLabel(s.scheduledDate)}</small>{s.moved&&<small>Originally scheduled for {dateLabel(s.originalDate)}</small>}</span><NavigationChevron/></button>)}</div>}
       {step==='pick' ? !candidates.length && <p role="status">No missed or upcoming workouts can be moved.</p> : !missed.length && <p>No unstarted sessions need moving.</p>}
     </>}
     {step === 'swap' && item && <>

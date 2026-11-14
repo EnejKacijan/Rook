@@ -26,15 +26,15 @@ it('reviews valid moves as resolved and pinpoints a stale move with an action',(
  const state=fixture('2026-08-31'),id=missedFlexibleSessions(state)[0].logicalSessionId;
  const moved=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:id,toDate:'2026-09-06'})).state;
  render(moved,{reviewExisting:true});
- expect(document.querySelector('h1').textContent).toBe('Schedule changes');
+ expect(document.querySelector('h1').textContent).toBe('Current changes');
  expect(document.body.textContent).not.toContain('All other workouts keep their dates.');
  expect([...document.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===id).textContent).toContain('Mon, Aug 31');
  expect([...document.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===id).textContent).toContain('Sun, Sep 6');
- expect(button('REVIEW RESTORING ORIGINAL SCHEDULE')).toBeUndefined();
+ expect(button('RESTORE ORIGINAL SCHEDULE')).toBeUndefined();
  const changed=structuredClone(moved);changed.program.days[0].name='Changed';render(changed,{reviewExisting:true,focusSessionId:id});
  expect(document.body.textContent).toContain('1 workout needs attention');
  expect([...document.querySelectorAll('[data-session-id]')].find(node=>node.dataset.sessionId===id).textContent).toContain('NEEDS ATTENTION');
- expect(button('Restore 1 change')).toBeUndefined();
+ expect(button('RESTORE ORIGINAL SCHEDULE')).toBeUndefined();
 });
 it('multiple missed summary opens a chooser without selecting the first identity',()=>{
  const state=fixture('2026-08-31'),select=vi.fn(),host=document.createElement('div');document.body.append(host);root=createRoot(host);

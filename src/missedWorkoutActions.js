@@ -1,21 +1,41 @@
-import {isoDay,saveState} from './domain.js';
+import {isoDay,saveState,weekKey} from './domain.js';
 import {missedFlexibleSessions,proposeFlexibleWeek,applyFlexibleWeek,flexibleReviewFingerprint} from './flexibleWeek.js';
 
-// Occurrence identity and placement, not render order, labels or today's clock.
+// The stored format also includes dates for existing backups and cloud clients.
 export function missedReminderKey(state, missed = missedFlexibleSessions(state)) {
  return JSON.stringify(missed.map(s=>JSON.stringify([s.logicalSessionId,s.scheduledDate,s.originalDate])).sort());
 }
-export function dismissMissedReminder(state,{persist=saveState}={}) {
- const next={...state,dismissedMissedReminderKey:missedReminderKey(state)};
+
+function readMissedReminder(key) {
+ try {
+  const receipt=JSON.parse(key);
+  if(!Array.isArray(receipt))return [];
+  return receipt.map(entry=>JSON.parse(entry)).filter(entry=>Array.isArray(entry)&&entry.length===3&&entry.every(value=>typeof value==='string'));
+ } catch { return []; }
+}
+
+export function isMissedReminderHidden(state, missed = missedFlexibleSessions(state)) {
+ if(!missed.length || !state.dismissedMissedReminderKey)return false;
+ const hiddenIds=new Set(readMissedReminder(state.dismissedMissedReminderKey).map(([id])=>id));
+ return missed.every(session=>hiddenIds.has(session.logicalSessionId));
+}
+
+export function dismissMissedReminder(state,{persist=saveState,missed=missedFlexibleSessions(state)}={}) {
+ const start=weekKey(isoDay());
+ const byId=new Map(readMissedReminder(state.dismissedMissedReminderKey)
+  .filter(([id,date])=>date>=start || state.flexibleWeek?.sessions?.[id]?.scheduledDate>=start)
+  .map(entry=>[entry[0],entry]));
+ for(const session of missed)byId.set(session.logicalSessionId,[session.logicalSessionId,session.scheduledDate,session.originalDate]);
+ const next={...state,dismissedMissedReminderKey:JSON.stringify([...byId.values()].map(entry=>JSON.stringify(entry)).sort())};
  if(!persist(next))throw Error('Couldn’t save this preference. The reminder is still visible. Try again.');
  return next;
 }
 export function canUndoMissedReminderHide(state,key) {
- return state.dismissedMissedReminderKey===key && missedReminderKey(state)===key;
+ return state.dismissedMissedReminderKey===key && isMissedReminderHidden(state);
 }
-export function undoMissedReminderHide(state,key,{persist=saveState}={}) {
+export function undoMissedReminderHide(state,key,{persist=saveState,previousKey=null}={}) {
  if(!canUndoMissedReminderHide(state,key))throw Error('The missed-workout reminder changed.');
- const next={...state,dismissedMissedReminderKey:null};
+ const next={...state,dismissedMissedReminderKey:previousKey};
  if(!persist(next))throw Error('Couldn’t save Undo. The reminder is still hidden. Try again.');
  return next;
 }

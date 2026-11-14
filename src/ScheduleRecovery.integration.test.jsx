@@ -34,14 +34,13 @@ const click = text => act(() => button(text).click());
 const reviewSchedule = () => act(() => host.querySelector('.schedule-attention-open').click());
 const sheet = () => host.querySelector('.flexible-week-sheet');
 
-it('the reported past move is inspectable as missed history, not an actionable dead-end or current-week warning', () => {
+it('a closed-week move is retained without creating an action or a warning', () => {
   const state = scheduleRecoveryState(); mount(state, true); const before = structuredClone(current);
   expect(host.querySelector('.temporary-schedule-summary')).toBeNull();
-  expect(sheet().querySelector('h1').textContent).toBe('Past changes');expect(sheet().querySelectorAll('.flexible-schedule-history article')).toHaveLength(1);
-  expect(sheet().textContent).toContain('Missed');
-  expect(sheet().textContent).toContain('Fri, Oct 9'); expect(sheet().textContent).toContain('Tue, Oct 6');
+  expect(sheet().querySelector('h1').textContent).toBe('No current changes');expect(sheet().querySelector('.flexible-schedule-history')).toBeNull();
+  expect(temporaryScheduleReview(current).historical).toHaveLength(1);
   expect(sheet().textContent).not.toContain('NEEDS ATTENTION');
-  expect(button('Restore 1 change')).toBeUndefined();
+  expect(button('RESTORE ORIGINAL SCHEDULE')).toBeUndefined();
   expect(button('EDIT SCHEDULE')).toBeUndefined();click('Back');
   expect(sheet().querySelector('h1').textContent).toBe('What changed?');
   expect(sheet().textContent).not.toContain('Your plan changed');
@@ -50,11 +49,11 @@ it('the reported past move is inspectable as missed history, not an actionable d
 it('Today -> Review -> Restore -> Today saves one real resolution and immediately removes the warning', () => {
   mount(scheduleRecoveryState({ future: true })); const before = structuredClone(current);
   expect(host.querySelector('.schedule-attention-open').textContent).toContain('Review schedule');reviewSchedule();
-  expect(sheet().querySelector('h1').textContent).toBe('Schedule changes');
+  expect(sheet().querySelector('h1').textContent).toBe('Current changes');
   expect(button('EDIT SCHEDULE')).toBeUndefined();
   expect(sheet().textContent).toContain('Restore the eligible temporary changes');
-  expect(button('Restore 1 change').disabled).toBe(false); click('Restore 1 change');
-  expect(sheet().querySelector('h1').textContent).toBe('Restore these dates?');
+  expect(button('RESTORE ORIGINAL SCHEDULE').disabled).toBe(false); click('RESTORE ORIGINAL SCHEDULE');
+  expect(sheet().querySelector('h1').textContent).toBe('Restore original schedule?');
   const apply = button('RESTORE 1 CHANGE'); act(() => { apply.click(); apply.click(); });
   expect(publishes).toHaveBeenCalledOnce(); expect(sheet()).toBeNull();
   expect(host.querySelector('.temporary-schedule-summary')).toBeNull();
@@ -64,18 +63,18 @@ it('Today -> Review -> Restore -> Today saves one real resolution and immediatel
   expect(temporaryScheduleReview(loaded).unresolved).toHaveLength(0);
 });
 it('failed offline persistence keeps the unresolved warning and permits retry', () => {
-  mount(scheduleRecoveryState({ future: true })); reviewSchedule(); click('Restore 1 change');
+  mount(scheduleRecoveryState({ future: true })); reviewSchedule(); click('RESTORE ORIGINAL SCHEDULE');
   const before = structuredClone(current);
   const fail = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw Error('full'); });
   click('RESTORE 1 CHANGE');
   expect(current).toEqual(before); expect(publishes).not.toHaveBeenCalled();
   expect(host.querySelector('.temporary-schedule-summary').textContent).toContain('1 workout needs attention');
   expect(sheet().querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
-  fail.mockRestore(); click('RESTORE 1 CHANGE');
+  fail.mockRestore(); click('TRY AGAIN');
   expect(publishes).toHaveBeenCalledOnce(); expect(host.querySelector('.temporary-schedule-summary')).toBeNull();
 });
 it('a new plan revision invalidates an open Restore review without overwriting the newer state', () => {
-  mount(scheduleRecoveryState({ future: true })); reviewSchedule(); click('Restore 1 change');
+  mount(scheduleRecoveryState({ future: true })); reviewSchedule(); click('RESTORE ORIGINAL SCHEDULE');
   act(() => change(state => { state.program.days[0].name = 'Changed again'; return state; }));
   const before = structuredClone(current); click('RESTORE 1 CHANGE');
   expect(current).toEqual(before); expect(publishes).not.toHaveBeenCalled();
@@ -86,12 +85,12 @@ it('a still-carried stale move remains visible, explicitly scoped and protected 
   mount(state); reviewSchedule();
   expect(host.querySelector('.temporary-schedule-summary').textContent).toContain('1 workout needs attention');expect(sheet().textContent).toContain('NEEDS ATTENTION');
   expect(button('Repair this move').disabled).toBe(false);
-  expect(button('Restore 1 change')).toBeUndefined();
+  expect(button('RESTORE ORIGINAL SCHEDULE')).toBeUndefined();
   expect(current.flexibleWeek).toEqual(state.flexibleWeek); expect(publishes).not.toHaveBeenCalled();
 });
 it('an empty live review does not invent a past change or an unresolved warning', () => {
   const state=scheduleRecoveryState();state.flexibleWeek.sessions={};mount(state,true);
-  expect(sheet().textContent).toContain('No schedule changes.');expect(sheet().querySelector('.flexible-schedule-history')).toBeNull();
+  expect(sheet().textContent).toContain('No current changes');expect(sheet().querySelector('.flexible-schedule-history')).toBeNull();
   expect(sheet().textContent).not.toContain('These past changes');
   expect(host.querySelector('.temporary-schedule-summary')).toBeNull();
 });

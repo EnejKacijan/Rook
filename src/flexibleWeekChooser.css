@@ -38,7 +38,13 @@
 .flexible-review-controls .button { min-width:0; margin:0; padding:8px; white-space:normal; }
 .flexible-schedule-changes article { overflow-wrap:anywhere; }
 .flexible-schedule-changes article > .eyebrow { margin:0; color:var(--rook-secondary); }
-.flexible-week-sheet .flexible-restore-action { align-self:center; min-height:44px; margin:0; padding:10px 0; white-space:normal; }
+.flexible-week-review.flexible-schedule-changes > article:last-child,
+.flexible-schedule-history .flexible-week-review > article:last-child { border-bottom:0; }
+.flexible-schedule-history { margin-top:16px; }
+.flexible-schedule-history > h2 { margin:0; }
+.flexible-schedule-history .flexible-week-review > article { padding:12px 0; }
+:root .flexible-week-sheet .schedule-change-title { font-size:clamp(24px, 7vw, 32px); line-height:1.15; }
+.flexible-week-origin .schedule-change-link { display:inline-flex; align-items:center; min-height:44px; margin:0 0 0 8px; padding:0 4px; color:var(--rook-accent-text); }
 .flexible-compact-sheet h1 { overflow-wrap:anywhere; }
 .flexible-week-sheet .flexible-reorder-action { display:flex;align-items:center;justify-content:space-between;min-height:44px;margin:0;padding:8px 0;color:var(--rook-accent-text); }
 .flexible-reorder-list { margin:20px 0;overflow-anchor:none; }

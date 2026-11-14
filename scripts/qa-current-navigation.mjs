@@ -25,7 +25,7 @@ export async function chooseOnboardingAnswer(page, name, nextStep) {
 }
 
 export async function openProfileArea(page, area) {
- const titles={program:'Program',training:'Training setup',preferences:'Preferences',data:'Data & backup'};
+ const titles={program:'Program',training:'Training setup',preferences:'Workout preferences',display:'Display',help:'Help',account:'Account & sync',data:'Data & backup'};
  const current=page.locator('.profile-subpage-header').getByText(titles[area],{exact:true});
  if(await current.isVisible())return;
  const entry=page.locator(`[data-profile-area="${area}"]`);
@@ -43,8 +43,14 @@ export async function openProfileArea(page, area) {
 export async function startFreestyle(page) {
  const entry=page.locator('.freestyle-entry').getByRole('button',{name:'Start freestyle workout',exact:true});
  if(!await entry.isVisible()){
-  await page.getByRole('button',{name:'Today options',exact:true}).click();
-  await page.locator('.today-actions-sheet').getByRole('button',{name:/^Start (another )?freestyle workout$/}).click();
+  const restDayEntry=page.getByRole('button',{name:'Train anyway',exact:true});
+  if(await restDayEntry.isVisible()){
+   await restDayEntry.click();
+   await page.getByRole('dialog',{name:'Train anyway',exact:true}).getByRole('button',{name:/^Freestyle workout/}).click();
+  }else{
+   await page.getByRole('button',{name:'Today options',exact:true}).click();
+   await page.locator('.today-actions-sheet').getByRole('button',{name:/^(?:Start (?:another )?)?freestyle workout$/i}).click();
+  }
  }
  await entry.click();
 }

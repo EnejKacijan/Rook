@@ -2,7 +2,7 @@ import {createContext,useContext,useRef,useState} from 'react';
 import {useExerciseRemoveUndo} from './SwipeActionRow.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {missedFlexibleSessions} from './flexibleWeek.js';
-import {canUndoMissedRecovery,canUndoMissedReminderHide,dismissMissedReminder,undoMissedRecovery,undoMissedReminderHide} from './missedWorkoutActions.js';
+import {canUndoMissedRecovery,canUndoMissedReminderHide,dismissMissedReminder,isMissedReminderHidden,undoMissedRecovery,undoMissedReminderHide} from './missedWorkoutActions.js';
 import {scheduleRevisionUndo,undoScheduleRevision,STALE_SCHEDULE_UNDO} from './scheduleTransactions.js';
 
 const FeedbackContext=createContext(null);
@@ -16,27 +16,29 @@ export function MissedWorkoutFeedbackProvider({state,update,children,onViewSched
  const {commit,latest}=useDurableAction(state,update);
  const [error,setError]=useState('');
  const actions=useRef(null);
- const [feedback]=useState(()=>({hide:()=>actions.current.hide(),applied:(...args)=>actions.current.applied(...args),scheduleApplied:(...args)=>actions.current.scheduleApplied(...args)}));
+ const [feedback]=useState(()=>({hide:()=>actions.current.remember(true),review:()=>actions.current.remember(false),applied:(...args)=>actions.current.applied(...args),scheduleApplied:(...args)=>actions.current.scheduleApplied(...args)}));
  const reverse=operation=>{
   setError('');
   try {commit(operation);return true;}
   catch {setError('Couldn’t save Undo. Your data is unchanged. Try again.');return false;}
  };
- const hide=()=>{
-  const current=latest.current,count=missedFlexibleSessions(current).length;
-  if(!count)return;
+ const remember=showUndo=>{
+  const current=latest.current,missed=missedFlexibleSessions(current);
+  if(!missed.length || isMissedReminderHidden(current,missed))return false;
+  const previousKey=current.dismissedMissedReminderKey;
   setError('');
   try {
    const {state:next,changed}=commit(value=>{
-    const hidden=dismissMissedReminder(value,{persist:alreadyPersisted});
+    const hidden=dismissMissedReminder(value,{persist:alreadyPersisted,missed});
     return hidden.dismissedMissedReminderKey===value.dismissedMissedReminderKey?value:hidden;
    });
-   if(!changed)return;
+   if(!changed || !showUndo)return;
    const key=next.dismissedMissedReminderKey;
-   notice.show({message:count===1?'Missed workout reminder hidden':'Missed workouts hidden',
+   notice.show({message:'Reminder hidden. Find missed workouts in ···.',
     valid:()=>canUndoMissedReminderHide(latest.current,key),
-    undo:()=>reverse(value=>undoMissedReminderHide(value,key,{persist:alreadyPersisted}))});
-  } catch {setError('Couldn’t save this preference. The reminder is still visible. Try again.');}
+    undo:()=>reverse(value=>undoMissedReminderHide(value,key,{persist:alreadyPersisted,previousKey}))});
+   return true;
+  } catch {if(showUndo)setError('Couldn’t save this preference. The reminder is still visible. Try again.');}
  };
  const applied=({message,undo})=>{
   setError('');
@@ -55,7 +57,7 @@ export function MissedWorkoutFeedbackProvider({state,update,children,onViewSched
    }
   }});
  };
- actions.current={hide,applied,scheduleApplied};
+ actions.current={remember,applied,scheduleApplied};
  return <FeedbackContext.Provider value={feedback}>
   {children}
   <div className="missed-workout-feedback">{notice.surface}

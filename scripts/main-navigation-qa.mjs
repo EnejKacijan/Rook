@@ -21,6 +21,13 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
    const css=getComputedStyle(nav);
    return {nav:box(nav),safePadding:parseFloat(css.paddingBottom),background:css.backgroundColor,buttons:[...nav.querySelectorAll('button')].map(b=>({box:box(b),current:b.getAttribute('aria-current'),label:b.textContent,font: getComputedStyle(b.querySelector('.nav-label')||b.querySelector('span')).fontSize,color:getComputedStyle(b).color,icon:b.querySelector('svg')?box(b.querySelector('svg')):null})),screenPadding:getComputedStyle(document.querySelector('main.screen')).paddingBottom,coach:document.querySelector('.coach-input')?box(document.querySelector('.coach-input')):null};
  });
+ const waitForMeasuredNav=()=>page.waitForFunction(()=>{
+   const nav=document.querySelector('.bottom-nav');
+   if(!nav)return false;
+   const height=nav.getBoundingClientRect().height;
+   const reserved=parseFloat(document.documentElement.style.getPropertyValue('--bottom-nav-total-height'));
+   return height>0 && Math.abs(reserved-height)<1;
+ },null,{timeout:2000});
  for(const tab of ['TODAY','COACH','PROGRESS','PROFILE']){
    await page.locator('.bottom-nav').getByRole('button',{name:tab,exact:true}).click();
    await page.locator(`.${tab.toLowerCase()}-screen`).waitFor();await page.evaluate(()=>document.fonts.ready);
@@ -29,9 +36,9 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
    if(!before){
      assert.equal(await page.locator('html').getAttribute('data-appearance'),appearance);
      assert.equal(await page.locator('html').getAttribute('data-style'),style);
-     assert.equal(m.nav.height,56);assert.equal(m.safePadding,0);
+     assert.ok(m.nav.height>=56 && m.nav.height<57);assert.equal(m.safePadding,0);
      assert.equal(m.buttons.filter(b=>b.current==='page').length,1);
-     for(const b of m.buttons){assert.ok(b.box.height>=48);assert.equal(b.icon.width,22);assert.equal(b.icon.height,22);assert.equal(b.font,'9.5px');}
+     for(const b of m.buttons){assert.ok(b.box.height>=48);assert.equal(b.icon.width,22);assert.equal(b.icon.height,22);assert.equal(b.font,'11px');}
      const contrast=await page.locator('.bottom-nav').evaluate(nav=>{
        const rgb=s=>s.match(/[\d.]+/g).slice(0,3).map(Number);
        const lum=c=>c.map(v=>v/255).map(v=>v<=.04045?v/12.92:((v+.055)/1.055)**2.4).reduce((s,v,i)=>s+v*[.2126,.7152,.0722][i],0);
@@ -61,8 +68,12 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
    await page.locator('.bottom-nav button').first().focus();await page.keyboard.press('Enter');
    assert.equal(await page.locator('.bottom-nav button').first().getAttribute('aria-current'),'page');
    assert.ok(await page.locator('.bottom-nav button').first().evaluate(e=>e.matches(':focus-visible')&&getComputedStyle(e).outlineStyle!=='none'));
-   await page.evaluate(()=>document.documentElement.style.setProperty('--rook-nav-safe-bottom','34px'));await page.waitForTimeout(100);
-   assert.equal((await measure()).nav.height,90,'34px safe area is added exactly once');
+   const cdp=await context.newCDPSession(page);
+   const heightWithoutInset=(await measure()).nav.height;
+   await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{bottom:34}});
+   await page.waitForFunction(()=>getComputedStyle(document.querySelector('.bottom-nav')).paddingBottom==='34px');
+   await waitForMeasuredNav();
+   assert.ok(Math.abs((await measure()).nav.height - heightWithoutInset - 34)<1,'34px safe area is added exactly once');
    await page.evaluate(()=>{document.documentElement.style.fontSize='32px';});await page.waitForTimeout(100);
    for(const tab of ['TODAY','COACH','PROGRESS','PROFILE']){
      await page.locator('.bottom-nav').getByRole('button',{name:tab,exact:true}).click();await page.waitForTimeout(100);
@@ -70,11 +81,14 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
      for(const b of enlarged.buttons)assert.ok(b.box.height>=48);
      assert.ok(Math.max(...enlarged.buttons.map(b=>b.icon.y))-Math.min(...enlarged.buttons.map(b=>b.icon.y))<1,'Icons share one row even when a large label wraps');
      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
-     assert.ok(await page.locator('.bottom-nav').evaluate(nav=>Math.abs(parseFloat(getComputedStyle(document.documentElement).getPropertyValue('--bottom-nav-total-height'))-nav.getBoundingClientRect().height)<1));
+     await waitForMeasuredNav();
      if(tab==='COACH')assert.ok(Math.abs(enlarged.coach.bottom-enlarged.nav.y)<1);
      await page.screenshot({path:`${output}/${width}-${style}-${appearance}-${tab.toLowerCase()}-large-text-safe-area.png`});
    }
-   await page.evaluate(()=>{document.documentElement.style.fontSize='';document.documentElement.style.removeProperty('--rook-nav-safe-bottom');});
+   await page.evaluate(()=>{document.documentElement.style.fontSize='';});
+   await cdp.send('Emulation.setSafeAreaInsetsOverride',{insets:{bottom:0}});
+   await page.waitForFunction(()=>getComputedStyle(document.querySelector('.bottom-nav')).paddingBottom==='0px');
+   await waitForMeasuredNav();
    await page.locator('.bottom-nav').getByRole('button',{name:'COACH',exact:true}).click();
    const input=page.locator('.coach-input textarea');await input.fill('A long local draft to check wrapping and composer growth. '.repeat(12));
    assert.equal(await page.locator('.bottom-nav').isVisible(),true,'Focus alone does not claim that a native keyboard has opened');

@@ -77,7 +77,7 @@ export function MonthCalendar({state,selectedDate,header,onSelect,today=isoDay()
     </div>
     <div className="month-calendar-viewport" ref={viewportRef} data-month-drag>
       <div className="month-calendar-pages" ref={trackRef}>
-      {pages.map(page=><div key={page.key} className="month-calendar-grid" role="grid" aria-labelledby={page.offset===0?'workout-calendar-month':undefined} aria-hidden={page.offset!==0} inert={page.offset!==0} ref={page.offset===0?gridRef:undefined}>
+      {pages.map(page=><div key={page.key} className="month-calendar-grid" role="grid" aria-labelledby={page.offset===0?'workout-calendar-month':undefined} aria-hidden={page.offset!==0} inert={page.offset!==0?'':undefined} ref={page.offset===0?gridRef:undefined}>
       <div role="row" className="month-calendar-weekdays">{['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(day=><span role="columnheader" key={day}>{day}</span>)}</div>
       {Array.from({length:page.dates.length/7},(_,row)=><div role="row" key={row}>{page.dates.slice(row*7,row*7+7).map(key=>{
         const {markers=[],label:stateLabel}=statuses[key]||{};

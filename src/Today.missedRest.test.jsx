@@ -11,7 +11,7 @@ import {canUseWorkoutToday} from './useWorkoutToday.js';
 let root,detail,update;
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-19T12:00:00'));globalThis.IS_REACT_ACT_ENVIRONMENT=true;vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));localStorage.clear();const host=document.createElement('div');document.body.append(host);root=createRoot(host);detail=vi.fn();update=vi.fn();});
 afterEach(()=>{act(()=>root.unmount());document.body.innerHTML='';vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();});
-const button=text=>[...document.querySelectorAll('button')].find(b=>b.textContent===text);
+const button=text=>[...document.querySelectorAll('button')].find(b=>b.getAttribute('aria-label')===text||b.textContent===text);
 const click=element=>act(()=>element.click());
 const draw=state=>act(()=>root.render(<Today state={state} update={update} setPage={()=>{}} setDetail={detail}/>));
 const overflow=state=>act(()=>root.render(<TodayActionsSheet state={state} date={isoDay()} hasWorkout={false} update={update} setDetail={detail} close={()=>{}}/>));
@@ -28,7 +28,9 @@ it.each([0,1,2,3])('rest hierarchy and routing with %i missed occurrences',count
  expect(document.querySelectorAll('.missed-reminder-hide')).toHaveLength(count>0?1:0);
  if(count){expect(rest.contains(summary)).toBe(true);expect(rest.querySelector('p').compareDocumentPosition(summary)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();expect(summary.compareDocumentPosition(rest.querySelector('.rest-up-next'))&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();click(document.querySelector('.today-missed-open'));expect(detail).toHaveBeenCalledWith({flexibleWeek:count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true}});}
  expect(rest.querySelector('.rest-up-next-row').tagName).toBe('BUTTON');expect(rest.querySelector('.rest-freestyle-action')).toBeNull();expect(rest.querySelector('.rest-day-actions').textContent).toBe('+ Add optional activityTrain anyway');
- expect(serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();
+ expect(serializeState(state)).toBe(before);
+ if(count)expect(update.mock.calls[0][1].persistedState).toEqual({...state,dismissedMissedReminderKey:expect.any(String)});
+ else expect(update).not.toHaveBeenCalled();
 });
 it.each(['2026-09-18','2026-09-19'])('one Hide dismisses the only reminder and survives reload on %s',date=>{
  vi.setSystemTime(new Date(`${date}T12:00:00`));
@@ -54,7 +56,13 @@ it.each(['2026-09-18','2026-09-19'])('one Hide dismisses the only reminder and s
 });
 it.each([1,2,3])('dismissed %i occurrences remain accessible through overflow after reload',count=>{
  const before=todayMissedRestFixture({count}),state=deserializeState(serializeState(dismissMissedReminder(before,{persist:()=>true})));
- draw(state);expect(document.querySelector('.today-missed-row')).toBeNull();overflow(state);click(button('Missed workouts'));
+ draw(state);expect(document.querySelector('.today-missed-row')).toBeNull();
+ const menu=button('Today options');
+ expect(menu.querySelector('.today-missed-menu-dot')).toBeNull();
+ expect(document.getElementById(menu.getAttribute('aria-describedby')).textContent).toContain(`${count} missed workout`);
+ overflow(state);const missedAction=button('Missed workouts');
+ expect(document.getElementById(missedAction.getAttribute('aria-describedby')).textContent).toBe(`${count} to review`);
+ click(missedAction);
  const request=detail.mock.calls[0][0].flexibleWeek;expect(request).toEqual(count===1?{sessionId:missedFlexibleSessions(state)[0].logicalSessionId}:{missed:true});
  sheet(state,request);expect(document.querySelector('h1').textContent).toBe(count===1?'UPPER B':'Choose a missed session');
  expect(update).not.toHaveBeenCalled();expect(state.flexibleWeek).toEqual(before.flexibleWeek);expect(state.workouts).toEqual(before.workouts);

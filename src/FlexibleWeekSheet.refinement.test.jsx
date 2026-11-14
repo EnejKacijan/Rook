@@ -5,6 +5,7 @@ import {FlexibleWeekSheet} from './FlexibleWeekSheet.jsx';
 import {MissedWorkoutFeedbackProvider} from './MissedWorkoutFeedback.jsx';
 import {TemporaryScheduleSummary} from './TemporaryScheduleSummary.jsx';
 import {adjustWeekState} from './fixtures/adjustWeekState.js';
+import {temporaryScheduleSummaryState} from './fixtures/temporaryScheduleSummaryState.js';
 import {flexibleSessions,proposeFlexibleWeek,applyFlexibleWeek,temporaryScheduleReview} from './flexibleWeek.js';
 import {deserializeState,STORAGE_KEY} from './domain.js';
 let root,current,change;
@@ -30,12 +31,33 @@ it('swipe dismissal keeps the applied revision and shared pointer interaction pa
  act(()=>vi.advanceTimersByTime(4500));pointer(notice(),'pointerdown',10);act(()=>vi.advanceTimersByTime(5000));expect(notice()).not.toBeNull();pointer(window,'pointermove',180);pointer(window,'pointerup',180);act(()=>vi.advanceTimersByTime(180));expect(notice()).toBeNull();expect(current.flexibleWeek).toEqual(applied);
 });
 it('stale Undo never overwrites newer state and offers View schedule',()=>{draw();applySkip();change(s=>({...s,flexibleWeek:{...s.flexibleWeek,generation:'other-device',revision:s.flexibleWeek.revision+1}}));const before=current;click('Undo');expect(current).toBe(before);expect(notice()).toBeNull();expect(document.querySelector('[role="alert"]').textContent).toContain('changed');act(()=>document.querySelector('[role="alert"] button').click());expect(document.querySelector('header h2').textContent).toBe('Schedule changes');});
-it('View schedule has canonical title, changed-only list and Edit / Restore actions',()=>{draw(skipped(base()),{reviewExisting:true});expect(document.querySelector('header h2').textContent).toBe('Schedule changes');expect(document.querySelector('h1').textContent).toBe('Schedule changes');expect(document.body.textContent).not.toContain('All other workouts keep their dates.');expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(1);expect(document.querySelector('article').textContent).toContain('SKIPPED');expect(button('EDIT SCHEDULE')).toBeDefined();expect(button('Restore 1 change')).toBeDefined();click('EDIT SCHEDULE');expect(document.querySelector('h1').textContent).toBe('What changed?');expect(button('View current schedule1 change')).toBeDefined();expect(document.body.textContent).not.toContain('0 moved');});
+it('View schedule shows a changed-only list and Edit / Restore actions',()=>{draw(skipped(base()),{reviewExisting:true});expect(document.querySelector('header h2').textContent).toBe('Schedule changes');expect(document.querySelector('h1').textContent).toBe('Current changes');expect(document.querySelectorAll('.flexible-week-review article')).toHaveLength(1);expect(document.querySelector('article').textContent).toContain('SKIPPED');expect(button('EDIT SCHEDULE')).toBeDefined();expect(button('RESTORE ORIGINAL SCHEDULE')).toBeDefined();click('EDIT SCHEDULE');expect(document.querySelector('h1').textContent).toBe('What changed?');expect(button('Schedule changes1 change')).toBeDefined();});
 it('cancel Restore changes no domain state; confirm restores safe overrides without touching history',()=>{
- draw(skipped(base()),{reviewExisting:true});const before=structuredClone(current);click('Restore 1 change');expect(document.querySelector('h1').textContent).toBe('Restore these dates?');click('KEEP TEMPORARY SCHEDULE');expect(current).toEqual(before);expect(document.querySelector('header h2').textContent).toBe('Schedule changes');
- click('Restore 1 change');click('RESTORE 1 CHANGE');expect(current.flexibleWeek.sessions).toEqual({});expect(current.workouts).toEqual(before.workouts);expect(current.program).toEqual(before.program);expect(notice().textContent).toBe('Schedule updatedUndo');
+ draw(skipped(base()),{reviewExisting:true});const before=structuredClone(current);click('RESTORE ORIGINAL SCHEDULE');expect(document.querySelector('h1').textContent).toBe('Restore original schedule?');expect(document.querySelector('.flexible-schedule-changes').textContent).toContain('Skipped → Tue, Sep 29');click('KEEP CURRENT SCHEDULE');expect(current).toEqual(before);expect(document.querySelector('header h2').textContent).toBe('Schedule changes');
+ click('RESTORE ORIGINAL SCHEDULE');click('RESTORE 1 CHANGE');expect(current.flexibleWeek.sessions).toEqual({});expect(current.workouts).toEqual(before.workouts);expect(current.program).toEqual(before.program);expect(notice().textContent).toBe('Schedule updatedUndo');
 });
-it('Restore review cannot clobber a newer schedule revision',()=>{draw(skipped(base()),{reviewExisting:true});click('Restore 1 change');change(s=>({...s,flexibleWeek:{...s.flexibleWeek,generation:'newer'}}));const before=current;click('RESTORE 1 CHANGE');expect(current).toBe(before);expect(document.querySelector('[role="alert"]').textContent).toContain('changed');});
+it('Restore review cannot clobber a newer schedule revision',()=>{draw(skipped(base()),{reviewExisting:true});click('RESTORE ORIGINAL SCHEDULE');change(s=>({...s,flexibleWeek:{...s.flexibleWeek,generation:'newer'}}));const before=current;click('RESTORE 1 CHANGE');expect(current).toBe(before);expect(document.querySelector('[role="alert"]').textContent).toContain('changed');});
+it('View change restores a linked swap and leaves an unrelated skip intact',()=>{
+ const state=skipped(temporaryScheduleSummaryState());
+ const records=Object.values(state.flexibleWeek.sessions),selected=records.find(record=>record.originalDate==='2026-10-01'),skip=records.find(record=>record.skipped);
+ draw(state,{reviewExisting:true,focusSessionId:selected.id});
+ expect(document.querySelector('h1').textContent).toBe(selected.name);
+ expect(document.querySelectorAll('.flexible-schedule-changes article')).toHaveLength(2);
+ click('RESTORE 2 WORKOUTS');
+ expect(document.querySelector('.flexible-week-sheet').textContent).toContain(`${skip.name} stays skipped.`);
+ expect(current.flexibleWeek).toEqual(state.flexibleWeek);
+ click('RESTORE 2 WORKOUTS');
+ expect(current.flexibleWeek.sessions).toEqual({[skip.id]:skip});
+ expect(current.workouts).toEqual(state.workouts);
+ expect(current.program).toEqual(state.program);
+});
+it('a completed member of a swap prevents restoring the other member',()=>{
+ const state=temporaryScheduleSummaryState(),[selected,linked]=Object.values(state.flexibleWeek.sessions);
+ state.workouts.push({id:'completed-swap',logicalSessionId:linked.id,completedAt:'2026-09-28T08:00:00',exercises:[]});
+ draw(state,{reviewExisting:true,focusSessionId:selected.id});
+ expect(document.querySelector('.flexible-week-footer .primary').textContent).toBe('DONE');
+ expect(button('DONE')).toBeDefined();
+});
 it('failed Apply writes leave the previous schedule and allow a retry',()=>{draw();click('Move a workoutChoose one session and another date.');const row=[...document.querySelectorAll('[data-session-id]')].find(n=>n.textContent.includes('NOGE A')&&n.textContent.includes('Sep 29'));act(()=>row.click());click('Skip this session');const before=current,fail=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw Error('full');});click('SKIP WORKOUT');expect(current).toBe(before);expect(notice()).toBeNull();expect(document.querySelector('[role="alert"]').textContent).toContain('unchanged');fail.mockRestore();click('TRY AGAIN');expect(notice()).not.toBeNull();});
 it('What changed hides both non-actionable missed and availability choices while retaining useful Move',()=>{
  vi.setSystemTime(new Date('2026-10-04T12:00:00'));const s=base();s.workouts.push(...flexibleSessions(s).filter(i=>i.scheduledDate<'2026-10-04').map(i=>({id:'done-'+i.logicalSessionId,logicalSessionId:i.logicalSessionId,completedAt:'2026-10-02T12:00:00'})));

@@ -104,7 +104,7 @@ async function verifyLongForm(page, selector, label) {
   const [panelBox, headerBox, firstContentBox] = await Promise.all([
     panel.boundingBox(),
     header.boundingBox(),
-    panel.locator(":scope > .eyebrow").first().boundingBox(),
+    header.evaluate(node => node.nextElementSibling?.getBoundingClientRect().toJSON()),
   ]);
   assert.ok(headerBox.y >= panelBox.y, `${label} header stays inside the surface`);
   assert.ok(
@@ -194,9 +194,10 @@ for (const theme of ["light", "dark", "premium"]) {
   await page.locator(".modal-layer").waitFor({ state: "detached" });
 
   await page.setViewportSize({ width: 390, height: 1100 });
-  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /Appearance/ }).click();
+  await openProfileArea(page, 'display'); await page.getByRole("button", { name: /^Appearance/ }).click();
   const appearanceHeader = page.locator(".appearance-screen > .detail-header");
   await appearanceHeader.waitFor();
+  await page.locator('.appearance-screen').evaluate(async node => { await Promise.all(node.getAnimations().map(animation => animation.finished)); });
   assert.equal(
     await appearanceHeader.evaluate(node => getComputedStyle(node).position),
     "relative",

@@ -48,18 +48,24 @@ it('the warning disappears only when the underlying invalid links are resolved',
   expect(notice().textContent).toContain('2 workouts need attention');
   const valid=temporaryScheduleSummaryState();render(valid);expect(notice()).toBeNull();expect(write).not.toHaveBeenCalled();
 });
-it('Today routes the warning directly to the existing schedule repair view',()=>{
-  const state=unresolved(),view=vi.fn();render(state,view,true);act(()=>host.querySelector('.schedule-attention-open').click());
+it('Today prioritizes schedule repair and gives unseen misses a quiet menu cue',()=>{
+  const state=unresolved(),view=vi.fn();render(state,view,true);
+  expect(host.querySelector('.today-missed-row')).toBeNull();
+  expect(host.querySelector('.today-overflow-entry .today-missed-menu-dot')).not.toBeNull();
+  act(()=>host.querySelector('.schedule-attention-open').click());
   expect(view).toHaveBeenCalledWith({flexibleWeek:{reviewExisting:true}});expect(write).not.toHaveBeenCalled();
 });
-it.each(['current','past'])('the overflow menu keeps %s schedule changes directly accessible without writes',kind=>{
+it.each(['current','past'])('the overflow menu shows active changes and hides closed-week changes (%s)',kind=>{
   const state=temporaryScheduleSummaryState(),view=vi.fn();
   if(kind==='past'){
     state.flexibleWeek.sessions=Object.fromEntries(Object.values(state.flexibleWeek.sessions).map((record,index)=>{const date=['2026-09-14','2026-09-15'][index],id=`${record.workoutId}:${date}`;state.workouts.push({id:'past-'+index,logicalSessionId:id,completedAt:date+'T11:00:00',exercises:[]});return [id,{...record,id,originalDate:date,scheduledDate:date,planFingerprint:'old-plan'}];}));
   }
   if(kind==='past')expect(temporaryScheduleReview(state).historical).toHaveLength(2);
   act(()=>root.render(<TodayActionsSheet state={state} date="2026-09-29" hasWorkout={false} update={()=>{}} setDetail={view} close={()=>{}}/>));
-  act(()=>button('Schedule changes').click());expect(view).toHaveBeenCalledWith({flexibleWeek:{reviewExisting:true}});expect(write).not.toHaveBeenCalled();
+  if(kind==='current'){
+    act(()=>button('Schedule changes').click());expect(view).toHaveBeenCalledWith({flexibleWeek:{reviewExisting:true}});
+  }else expect(button('Schedule changes')).toBeUndefined();
+  expect(write).not.toHaveBeenCalled();
 });
 it.each([false,true])('Done only closes the review; unresolved=%s is not acknowledged or changed',invalid=>{
   const state=invalid?unresolved():temporaryScheduleSummaryState(),before=structuredClone(state),close=vi.fn();

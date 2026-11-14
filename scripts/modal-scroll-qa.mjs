@@ -36,7 +36,7 @@ async function verifyScroller(page, locator, label, terminalPadding = 20) {
     };
   });
   assert.match(state.overflowY, /auto|scroll/, `${label} has its own vertical scroll area`);
-  assert.equal(state.overscroll, 'contain', `${label} does not scroll the frozen page behind it`);
+  assert.match(state.overscroll, /^(contain|none)$/, `${label} does not scroll the frozen page behind it`);
   assert.match(state.touchAction, /pan-y/, `${label} allows native vertical touch gestures`);
   assert.equal(state.paddingBottom, terminalPadding, `${label} owns its current terminal content spacing`);
   if (state.scrollHeight > state.clientHeight) assert.ok(state.scrollTop > 0, `${label} content can reach the bottom`);
@@ -73,7 +73,7 @@ async function verifyScroller(page, locator, label, terminalPadding = 20) {
   await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 
   await openProfileArea(page, 'program'); await page.getByRole('button', { name: 'Replace plan' }).click();
-  await page.getByRole('button', { name: /Import from Notes|Import a different plan/ }).click();
+  await page.getByRole('button', { name: /Bring my plan|Import a different plan/ }).click();
   await verifyScroller(page, page.locator('.modal-layer > .import-plan-screen'), 'Import Plan', 0);
   await page.getByRole('button', { name: /^Close/ }).click(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 

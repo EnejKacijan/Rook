@@ -28,11 +28,19 @@ for(const width of [320,390,430])for(const appearance of ['light','dark'])for(co
     results.push({width,appearance,style,name,...g});await capture(name);
   }
   const nameInput=sheet.locator('input[type="text"]').first();
-  if(await nameInput.count()) {await nameInput.fill('');assert.equal(await footer.getByRole('button',{name:'SAVE CHANGES',exact:true}).isDisabled(),true);await capture('disabled-save');}
+  if(await nameInput.count()) {await nameInput.fill('');assert.equal(await footer.getByRole('button',{name:'SAVE TO WEEKLY PLAN',exact:true}).isDisabled(),true);await capture('disabled-save');}
   await page.setViewportSize({width,height:480});
   await nameInput.focus();
-  assert.ok(await nameInput.evaluate(e=>e.getBoundingClientRect().bottom<=e.closest('main').querySelector('.sheet-action-footer').getBoundingClientRect().top),'Focused input clears action area in keyboard-sized viewport');
-  const g=await geometry();assert.ok(g.buttonBottom<=480,JSON.stringify(g));
+  await page.waitForFunction(()=>document.querySelector('.edit-plan-screen .sheet-action-footer').dataset.keyboardLayout==='flow');
+  assert.ok(await nameInput.evaluate(e=>{
+    const box=e.getBoundingClientRect(),panel=e.closest('main');
+    const headerBottom=panel.querySelector('.detail-header').getBoundingClientRect().bottom;
+    const footerTop=panel.querySelector('.sheet-action-footer').getBoundingClientRect().top;
+    return box.top>=headerBottom-1&&box.bottom<=Math.min(innerHeight,footerTop);
+  }),'Keyboard-sized viewport keeps the focused input visible and clear of both header and footer');
+  await nameInput.blur();
+  await footer.getByRole('button',{name:'SAVE TO WEEKLY PLAN',exact:true}).scrollIntoViewIfNeeded();
+  const g=await geometry();assert.ok(g.buttonTop>=0&&g.buttonBottom<=480,JSON.stringify(g));
   await page.setViewportSize({width,height:844});
   await page.addStyleTag({content:'.edit-plan-screen { --sheet-action-safe-bottom: 34px !important; }'});
   assert.ok(await footer.evaluate(f=>f.getBoundingClientRect().bottom-f.lastElementChild.getBoundingClientRect().bottom)>=34);

@@ -53,7 +53,7 @@ await page.screenshot({
   fullPage: false,
 });
 await page.getByRole("button", { name: "BACK UP NOW" }).click();
-await page.getByRole("heading", { name: "Keep a recovery copy of your training." }).waitFor();
+await page.getByRole("heading", { name: "Back up your training" }).waitFor();
 await page.getByRole("button", { name: "Close Back up ROOK" }).click();
 await context.close();
 const newUserContext = await browser.newContext({

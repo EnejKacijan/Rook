@@ -135,18 +135,25 @@ export function temporaryScheduleReview(state, today = isoDay()) {
     return {
       id: record.id, name: record.name || destination?.workout?.name || 'Workout',
       originalDate: record.originalDate, scheduledDate: record.scheduledDate,
+      performedDate: lifecycle.actualPerformedDate,
       skipped: Boolean(record.skipped), finished, issue, historical, stale, status: lifecycle.status,
     };
   }).sort((a,b) => a.originalDate.localeCompare(b.originalDate) || a.id.localeCompare(b.id));
   const currentWeek=weekKey(today);
-  const activeItems=items.filter(item=>!item.historical && (item.issue || item.skipped || item.originalDate!==item.scheduledDate) &&
-    (item.issue || !item.finished && (item.originalDate>=currentWeek || item.scheduledDate>=currentWeek)));
+  const currentChanges=items.filter(item=>!item.historical && (item.issue || item.skipped || item.originalDate!==item.scheduledDate) &&
+    (item.issue || item.originalDate>=currentWeek || item.scheduledDate>=currentWeek));
+  const activeItems=currentChanges.filter(item=>item.issue || !item.finished && !(item.skipped && item.scheduledDate<today));
+  const recent=currentChanges.filter(item=>{
+    const date=['completed','combined'].includes(item.status)?item.performedDate:item.status==='skipped'&&item.scheduledDate<today?item.scheduledDate:null;
+    return date && date>=currentWeek && date<=today;
+  });
   const savedIds=new Set(activeItems.map(item=>item.id));
   const unchanged=effectiveWeekSchedule(state,today,{includeDuration:false}).filter(item=>!savedIds.has(item.logicalSessionId))
     .map(item=>({id:item.logicalSessionId,name:item.workout.name,originalDate:item.originalDate,
       scheduledDate:item.scheduledDate,skipped:false,finished:false,issue:null,unchanged:true}));
   return {
     items:activeItems,
+    recent,
     historical:items.filter(item=>item.historical && (item.stale || item.skipped || item.originalDate!==item.scheduledDate)),
     resultingItems:[...activeItems,...unchanged].sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate)||a.id.localeCompare(b.id)),
     unresolved: activeItems.filter(item => item.issue),
@@ -239,14 +246,29 @@ function acceptedFirstPlanWeekSession(state,item) {
   return Boolean(block&&record&&record.blockId===block.id&&record.blockWeekNumber===1&&
     record.originalDate>=weekKey(block.startDate)&&record.originalDate<block.startDate);
 }
-// Restore applies only to still-future placements with no historical or active
-// ownership. A past skip/move and an archived block resolution remain facts.
-export function temporaryScheduleRestoreScope(state,today=isoDay()) {
-  const removable=records(state).filter(record=>record.originalDate>=today && record.scheduledDate>=today &&
+export function linkedScheduleChanges(state, sessionId) {
+  const stored=records(state), source=stored.find(record=>record.id===sessionId);
+  if(!source)return [];
+  const linked=new Set([source]);
+  // Follow only the occupants of dates this restoration needs to free.
+  for(const change of linked) {
+    for(const record of stored) {
+      if(!record.skipped && record.originalDate!==record.scheduledDate && record.scheduledDate===change.originalDate)linked.add(record);
+    }
+  }
+  return [...linked];
+}
+
+// Past dates, active or completed sessions, and resolved block skips stay fixed.
+export function temporaryScheduleRestoreScope(state,today=isoDay(),sessionId) {
+  const stored=records(state);
+  const target=sessionId?linkedScheduleChanges(state,sessionId):stored;
+  const eligible=target.filter(record=>record.originalDate>=today && record.scheduledDate>=today &&
     !['active','completed','combined','reserved'].includes(flexibleSessionStatus(state,record,today)) &&
     state.activeOptionalSession?.date!==record.scheduledDate && state.activeOptionalSession?.date!==record.originalDate &&
     !state.program?.trainingBlock?.resolvedSkips?.some(skip=>skip.logicalSessionId===record.id));
-  return {removable,retained:records(state).filter(record=>!removable.includes(record))};
+  const removable=sessionId && eligible.length!==target.length ? [] : eligible;
+  return {removable,retained:stored.filter(record=>!removable.includes(record))};
 }
 export function temporaryScheduleRejoinDate(state,today=isoDay(),combined=combinedAdjustment(state),overrides=records(state)) {
   const dates=overrides.filter(record=>(record.skipped||record.originalDate!==record.scheduledDate) && !['completed','combined'].includes(flexibleSessionStatus(state,record,today)))
@@ -314,7 +336,7 @@ function hasMoveDestination(planner, sessionId, today) {
 // The Adjust week entry opens the existing mode surface. Offer it only when
 // that surface has an eligible operation or a saved change to inspect/resolve.
 function hasScheduleAction(state,today,review,planner) {
-  if(review.items.length || review.historical.length || combinedAdjustment(state))return true;
+  if(review.items.length || review.recent.length || combinedAdjustment(state))return true;
   if(planner.check({mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'}).remainingSessions)return true;
   if(missedFlexibleSessions(state,today,planner.sessions()).some(item=>planner.check({mode:'skip',sessionId:item.logicalSessionId}).status==='ready'))return true;
   return planner.moveCandidates().length>0;
@@ -412,6 +434,7 @@ function buildFlexibleWeekProposal(state, request, today, {sessions, hasConflict
   }
   const byId = new Map(all.map(i => [i.logicalSessionId, i]));
   const changes = [];
+  const restoreScope=request.mode==='restore'?temporaryScheduleRestoreScope(state,today,request.sessionId):null;
   let availabilitySchedule, availabilityDetails;
   const push = (item, toDate, skipped = false) => {
     const existing = state.flexibleWeek?.sessions?.[item.logicalSessionId];
@@ -420,9 +443,11 @@ function buildFlexibleWeekProposal(state, request, today, {sessions, hasConflict
       blockWeekNumber: existing?.blockWeekNumber || (item.workout.trainingBlock ? Math.min(item.workout.trainingBlock.totalWeeks, item.workout.trainingBlock.blockWeekNumber + futureWeeks) : null) });
   };
   if (request.mode === 'restore') {
-    for (const record of temporaryScheduleRestoreScope(state,today).removable) {
-      const item = byId.get(record.id);
-      if (item && record.originalDate >= today) push(item, record.originalDate);
+    if(request.sessionId && !restoreScope.removable.length)return fail('This change can no longer be restored.');
+    // Existing month-spanning moves can originate outside the picker horizon.
+    for (const record of restoreScope.removable) {
+      const item = byId.get(record.id) || materialize(state,record,flexiblePlanFingerprint(state));
+      if (item) push(item, record.originalDate);
     }
   } else if (request.mode === 'swap') {
     const first = byId.get(request.sessionId), second = byId.get(request.otherSessionId);
@@ -575,8 +600,14 @@ function buildFlexibleWeekProposal(state, request, today, {sessions, hasConflict
     catch(error) { return fail(error.message); }
   }
   if (request.mode === 'restore') {
-    const kept = Object.fromEntries(temporaryScheduleRestoreScope(state,today).retained.map(r => [r.id, r]));
-    final = flexibleSessions({ ...state, flexibleWeek: { ...state.flexibleWeek, sessions: kept } }, today, {includeDuration:false}).filter(i => i.status !== 'skipped');
+    const kept = Object.fromEntries(restoreScope.retained.map(r => [r.id, r]));
+    const restored = { ...state, flexibleWeek: { ...state.flexibleWeek, sessions: kept } };
+    final = flexibleSessions(restored, today, {includeDuration:false}).filter(i => i.status !== 'skipped');
+    const outsidePicker = new Set(restoreScope.removable.filter(record => record.originalDate>end).map(record=>record.originalDate));
+    for (const date of outsidePicker) {
+      if (effectiveWeekSchedule(restored,date,{includeDuration:false}).filter(item=>item.scheduledDate===date).length>1)
+        return fail('Restoring would create a collision. Adjust remaining week instead.');
+    }
   }
   const seen = new Set();
   for (const item of final) {
@@ -586,15 +617,18 @@ function buildFlexibleWeekProposal(state, request, today, {sessions, hasConflict
   }
   if (!review) return {status:'ready',...availabilityDetails};
   const adjusted = state.todayAdaptation;
-  const adaptationConflict = changes.some(c => c.workoutId === adjusted?.programDayId && c.fromDate === adjusted?.date && (c.skipped || c.toDate !== c.fromDate));
+  const adaptationConflict = restoreScope
+    ? restoreScope.removable.some(record=>record.workoutId===adjusted?.programDayId && record.scheduledDate===adjusted?.date)
+    : changes.some(c => c.workoutId === adjusted?.programDayId && c.fromDate === adjusted?.date && (c.skipped || c.toDate !== c.fromDate));
   // Derive the scope from canonical occurrence changes without cloning the
   // entire workout history for every candidate date in the Move picker.
   const changedIds=new Set(changes.map(change=>change.logicalSessionId));
-  const overrides=request.mode==='restore'?temporaryScheduleRestoreScope(state,today).retained:
+  const overrides=restoreScope?restoreScope.retained:
     [...records(state).filter(record=>!changedIds.has(record.id)),...changes.map(change=>({...change,id:change.logicalSessionId,scheduledDate:change.toDate}))];
   const rejoinDate = temporaryScheduleRejoinDate(state,today,request.combinedProposal||combinedAdjustment(state),overrides);
   final.sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate));
   return { status: 'ready', ...reviewReceipt(state,request,today), changes, adaptationConflict,
+    restoreRecords:restoreScope?.removable,
     availabilitySchedule,
     ...availabilityDetails,
     rejoinDate,
@@ -614,6 +648,7 @@ export function applyFlexibleWeek(state, proposal, { adaptationChoice } = {}) {
   if (proposal.adaptationConflict && !['restore', 'keep'].includes(adaptationChoice)) return { status: 'conflict', state, error: 'Choose what happens to the today-only adjustment.' };
   const checked = proposeFlexibleWeek(state, proposal.request, proposal.today);
   if (checked.status !== 'ready' || JSON.stringify(checked.changes) !== JSON.stringify(proposal.changes) ||
+      JSON.stringify(checked.restoreRecords) !== JSON.stringify(proposal.restoreRecords) ||
       JSON.stringify(checked.availabilitySchedule) !== JSON.stringify(proposal.availabilitySchedule) ||
       JSON.stringify(checked.sourceScope) !== JSON.stringify(proposal.sourceScope)) return { status: 'stale', state, error: 'The schedule changed. Review it again.' };
   if (proposal.request.mode === 'available' && !proposal.changes.length && !proposal.request.combinedProposal) return {status:'applied',state};
@@ -637,7 +672,7 @@ function projectFlexibleWeek(state,proposal,{adaptationChoice,resolveSkips=true}
     todayAdaptation: structuredClone(state.todayAdaptation),
   };
   if (proposal.request.mode === 'restore') {
-    const removableIds=new Set(temporaryScheduleRestoreScope(state,proposal.today||isoDay()).removable.map(record=>record.id));
+    const removableIds=new Set(proposal.restoreRecords.map(record=>record.id));
     for (const [id, record] of Object.entries(next.flexibleWeek.sessions)) if (removableIds.has(id)) {
       // A future quarantined reference has no materialized destination in this
       // review. Clear its orphaned edits; historical records were excluded above.

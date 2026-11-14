@@ -107,7 +107,7 @@ await openProfileArea(page, 'data');
 await page.locator('.profile-subpage-header').getByText('Data & backup', {exact:true}).waitFor();
 await page.screenshot({ path: output("390-profile-data-light-standard.png"), fullPage: true });
 await openProfileArea(page, 'data'); await page.getByRole("button", { name: /Back up ROOK/ }).click();
-await page.getByRole("heading", { name: "Keep a recovery copy of your training." }).waitFor();
+await page.getByRole("heading", { name: "Back up your training" }).waitFor();
 await page.screenshot({ path: output("390-backup-light-standard.png"), fullPage: true });
 await page.getByRole("button", { name: "CREATE BACKUP" }).click();
 await page.getByRole("button", { name: "SAVE BACKUP", exact: true }).waitFor();

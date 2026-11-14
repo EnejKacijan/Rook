@@ -117,9 +117,11 @@
 .rest-day-state .rest-freestyle-action { min-height: 44px; min-width: 44px; padding: 8px 0; color: var(--rook-secondary); font-size: 13px; font-weight: 500; text-align: left; }
 .today-day-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
 .today-day-header > .eyebrow { min-width: 0; overflow-wrap: anywhere; }
-.today-day-header .today-overflow-entry { margin: -13px 0; min-height: 44px; min-width: 44px; color: var(--rook-secondary); }
+.today-day-header .today-overflow-entry { position:relative; margin: -13px 0; min-height: 44px; min-width: 44px; color: var(--rook-secondary); }
+.today-missed-menu-dot { position:absolute; inset-block-start:8px; inset-inline-end:8px; width:6px; height:6px; border-radius:50%; background:var(--rook-accent-text); pointer-events:none; }
 .today-actions-sheet > .list-row { width: 100%; min-height: 48px; display:flex; align-items:center; justify-content:space-between; gap:12px; text-align:left; font: inherit; color: var(--rook-text); background: transparent; border-inline: 0; border-top: 0; }
 .today-actions-sheet > .list-row > span:first-child { flex:1; min-width:0; white-space:normal; overflow-wrap:anywhere; }
+.today-missed-menu-row > small { color: var(--rook-secondary); font-size: .875rem; line-height: 1.4; }
 .today-actions-sheet > .today-delete-action { margin-top: 12px; border-bottom: 0; }
 .today-workout-chooser .list-row { min-height: 64px; color: var(--rook-text); }
 .today-workout-chooser .list-row > span:first-child { white-space: normal; overflow-wrap: anywhere; }
@@ -138,13 +140,13 @@
 @media (prefers-reduced-motion: reduce) {
   .rest-day-state > .today-missed-disclosure + .rest-up-next { transition: none; }
 }
-.today-missed-label { margin:0; color:var(--rook-secondary); font-size:14px; font-weight:500; line-height:1.4; }
-.today-missed-row > .missed-reminder-hide { min-width:44px; min-height:44px; padding:8px 0; color:var(--rook-secondary); font-size:14px; }
+.today-missed-label { margin:0; color:var(--rook-secondary); font-size:.9375rem; font-weight:500; line-height:1.4; }
+.today-missed-row > .missed-reminder-hide { min-width:44px; min-height:44px; padding:8px 0; color:var(--rook-secondary); font-size:.875rem; }
 .today-missed-open { display:flex; align-items:center; justify-content:space-between; gap:8px; width:100%; min-width:0; min-height:44px; padding:4px 0; border:0; background:transparent; color:var(--rook-text); text-align:left; }
 .today-missed-open > span:first-child { display:grid; gap:2px; min-width:0; }
-.today-missed-workout { min-width:0; font-size:14px; line-height:1.4; overflow-wrap:anywhere; }
-.today-missed-open strong { font-size:16px; line-height:1.4; overflow-wrap:anywhere; }
-.today-missed-open time { color:var(--rook-secondary); font-size:14px; line-height:1.4; }
+.today-missed-workout { min-width:0; font-size:.875rem; line-height:1.4; overflow-wrap:anywhere; }
+.today-missed-open strong { font-size:1rem; line-height:1.4; overflow-wrap:anywhere; }
+.today-missed-open time { color:var(--rook-secondary); font-size:.875rem; line-height:1.4; }
 .today-missed-chevron { flex: 0 0 auto; color: var(--rook-secondary); font-size: 22px; }
 :root .missed-workout-feedback .missed-feedback-error { bottom: calc(var(--bottom-nav-total-height, 90px) + 12px); }
 .missed-workout-feedback .today-undo > span { min-width: 0; overflow-wrap: anywhere; }
@@ -170,8 +172,8 @@
 .temporary-schedule-summary.needs-attention{margin-top:12px;border-bottom:1px solid var(--rook-border)}
 .temporary-schedule-summary .schedule-attention-open{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;min-height:56px;padding:10px 0;border:0;background:transparent;color:var(--rook-text);text-align:left}
 .schedule-attention-open>span{display:grid;gap:4px;min-width:0}
-.schedule-attention-open strong{font-size:14px;line-height:1.4}
-.schedule-attention-open small{font-size:12px;line-height:1.4;color:var(--rook-secondary)}
+.schedule-attention-open strong{font-size:1rem;line-height:1.4}
+.schedule-attention-open small{font-size:.875rem;line-height:1.4;color:var(--rook-secondary)}
 .schedule-attention-open>.rook-navigation-chevron{flex-shrink:0;color:var(--rook-accent-text)}
 .flexible-week-origin { display: block; margin-top: 8px; }
 .flexible-week-dates { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 20px 0; }

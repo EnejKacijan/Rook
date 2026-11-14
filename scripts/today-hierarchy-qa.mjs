@@ -29,16 +29,23 @@ const context=await browser.newContext({viewport:{width,height:844},serviceWorke
   for(const text of ['Less time','Different equipment','Low energy','Specific exercise unavailable'])assert.equal(await page.getByText(text,{exact:true}).count(),1);
   await page.keyboard.press('Escape');await page.locator('.adjust-today-sheet').waitFor({state:'hidden'});
  }
- if(mode==='rest'){assert.equal(await page.getByRole('button',{name:'Start freestyle workout',exact:true}).count(),1);assert.equal(await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).count(),0);}
+ if(mode==='rest'){
+  assert.equal(await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).count(),0);
+  await page.getByRole('button',{name:'Train anyway',exact:true}).click();
+  const rest=page.getByRole('dialog',{name:'Train anyway',exact:true});
+  await rest.getByRole('button',{name:/^Freestyle workout/}).waitFor();
+  await rest.getByRole('button',{name:'Close Train anyway',exact:true}).click();
+  await rest.waitFor({state:'detached'});
+ }
  if(mode==='active')assert.equal(await page.getByRole('button',{name:'RESUME WORKOUT',exact:true}).count(),1);
  if(mode==='missed'){assert.equal(await page.locator('.today-missed-open').count(),1);await page.locator('.today-missed-open').click();await page.locator('.flexible-week-sheet').waitFor();await page.keyboard.press('Escape');}
 const menu=page.getByRole('button',{name:'Today options',exact:true});await menu.click();await page.locator('.today-actions-sheet').waitFor();await page.waitForTimeout(300);await page.screenshot({path:`${prefix}-menu.png`});assert.equal(await page.getByRole('button',{name:'Adjust week',exact:true}).count(),1);if(mode==='planned')assert.equal(await page.getByRole('button',{name:/^Edit in plan/}).isEnabled(),true);
- if(mode==='active')assert.equal(await page.getByRole('button',{name:'Start freestyle workout',exact:true}).count(),0);
+ if(mode==='active')assert.equal(await page.getByRole('button',{name:/^Freestyle workout/}).count(),0);
  await page.keyboard.press('Escape');await page.locator('.today-actions-sheet').waitFor({state:'hidden'});
  assert.equal(await menu.evaluate(e=>document.activeElement===e),true);
  await page.keyboard.press('Enter');await page.locator('.today-actions-sheet').waitFor();
  await page.waitForTimeout(250);await page.mouse.click(2,2);await page.locator('.today-actions-sheet').waitFor({state:'hidden'});
  await menu.click();await page.getByRole('button',{name:'Adjust week',exact:true}).click();await page.locator('.flexible-week-sheet').waitFor();assert.equal(await page.locator('.flexible-week-sheet').count(),1);await page.keyboard.press('Escape');
- if(mode==='planned'){await menu.click();await page.getByRole('button',{name:'Start freestyle workout',exact:true}).click();await page.getByText('Choose exercises as you go. Your plan won’t change.',{exact:true}).waitFor();await page.getByRole('button',{name:'Start freestyle workout',exact:true}).click();await page.locator('.freestyle-workout').waitFor();}
+ if(mode==='planned'){await menu.click();await page.getByRole('button',{name:'Freestyle workout',exact:true}).click();await page.getByText('Choose exercises as you go. Your plan won’t change.',{exact:true}).waitFor();await page.getByRole('button',{name:'Start freestyle workout',exact:true}).click();await page.locator('.freestyle-workout').waitFor();}
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));assert.deepEqual(saved.program,baseline);console.log(`PASS ${width} ${style} ${appearance} ${mode}: hierarchy, routes, dismissal, plan unchanged`);await context.close();
 }}finally{await browser.close();}

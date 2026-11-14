@@ -16,25 +16,42 @@ page.on('pageerror', error => errors.push(error.message)); page.on('console', me
 await page.goto(`${process.env.ROOK_QA_URL || 'http://127.0.0.1:4173'}/?bottom-sheet-drag=1`, { waitUntil: 'networkidle' }); await page.getByRole('button', { name: 'PROFILE', exact: true }).click();
 
 async function openScreen(buttonName) {
-  await openProfileArea(page, buttonName==='Edit plan'?'program':['Logging & increments','Appearance'].includes(buttonName)?'preferences':'training');
+  await openProfileArea(page, buttonName==='Edit plan'?'program':buttonName==='Appearance'?'display':buttonName==='Logging & increments'?'preferences':'training');
   await page.getByRole('button', { name: buttonName }).click(); const panel = page.locator('.modal-layer > .screen'); await panel.waitFor(); const handle = page.getByRole('button', { name: 'Drag down or tap to close' }); await handle.waitFor();
   assert.equal(await handle.count(), 1, `${buttonName} receives exactly one shared drag handle`); return { panel, handle };
 }
 
+const settleEntry = panel => panel.evaluate(node=>Promise.all(node.getAnimations().map(animation=>animation.finished)));
+async function expectAnimatedClose(panel, click) {
+  // Read the exit pose at the end of the actual click, before browser round trips
+  // can outlast the animation on a busy machine.
+  await panel.evaluate(node=>{
+    window.qaSheetExit=null;
+    window.addEventListener('click',()=>{
+      window.qaSheetExit={transform:node.style.transform,duration:node.style.transitionDuration};
+    },{once:true});
+  });
+  await click();
+  const exit=await page.evaluate(()=>window.qaSheetExit);
+  assert.match(exit?.transform??'',/translateY\([1-9]/);
+  assert.equal(exit.duration,'180ms');
+  await page.locator('.modal-layer').waitFor({state:'detached'});
+}
+
 {
-  const { panel, handle } = await openScreen('Edit plan'); await page.waitForTimeout(220); const box = await handle.boundingBox(); const startX = box.x + 24; const startY = box.y + 8;
+  const { panel, handle } = await openScreen('Edit plan'); await settleEntry(panel); const box = await handle.boundingBox(); const startX = box.x + 24; const startY = box.y + 8;
   assert.ok(box.width >= 350 && box.height >= 44, 'the whole top edge is a wide Spotify-style drag surface, not just the visible indicator');
   assert.equal(await handle.evaluate(element => getComputedStyle(element).cursor), 'default', 'desktop does not show a hand/grab cursor');
   await page.screenshot({ path: output('390-edit-plan-handle.png'), fullPage: false });
   await page.mouse.move(startX, startY); await page.mouse.down(); await page.mouse.move(startX, startY + 30, { steps: 3 }); await page.waitForTimeout(90); await page.mouse.move(startX, startY + 58, { steps: 3 }); await page.waitForTimeout(90);
   assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'sheet follows the pointer during a partial drag');
-  assert.notEqual(await page.locator('.modal-layer').evaluate(element => getComputedStyle(element).backgroundColor), 'rgba(27, 26, 25, 0.35)', 'backdrop fades with drag progress');
+  assert.ok(await page.locator('.sheet-drag-scrim').evaluate(element => Number(getComputedStyle(element).opacity)<1), 'backdrop fades with drag progress');
   await page.mouse.up(); await page.waitForTimeout(220); assert.equal(await page.locator('.modal-layer').count(), 1, 'short drag springs the sheet back'); assert.equal(await panel.evaluate(element => getComputedStyle(element).transform), 'none');
-  const resetBox = await handle.boundingBox(); await page.mouse.move(resetBox.x + 24, resetBox.y + 8); await page.mouse.down(); await page.mouse.move(resetBox.x + 24, resetBox.y + 132, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const resetBox = await handle.boundingBox(); await page.mouse.move(resetBox.x + 24, resetBox.y + 8); await page.mouse.down(); await page.mouse.move(resetBox.x + 24, resetBox.y + 168, { steps: 7 }); await page.mouse.up(); await page.locator('.modal-layer').waitFor({ state: 'detached' });
 }
 
 {
-  const { panel } = await openScreen('Edit plan'); await page.mouse.click(8, 8); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the backdrop starts the same downward sheet animation before close'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const { panel } = await openScreen('Edit plan'); await settleEntry(panel); await expectAnimatedClose(panel,()=>page.mouse.click(8,8));
 }
 
 {
@@ -48,11 +65,11 @@ async function openScreen(buttonName) {
   const [enteredPanelTop, enteredHandleTop] = await measureTogether();
   assert.ok(Math.abs((enteredHandleTop - openingHandleTop) - (enteredPanelTop - openingPanelTop)) <= 1, 'the header grabber travels upward with the sheet as one surface');
   assert.match(await page.locator('.modal-layer').evaluate(element => getComputedStyle(element).animationName), /rook-sheet-backdrop-in/, 'the backdrop fades in with the sheet');
-  await handle.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'tapping the top handle starts the standard downward close animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  await expectAnimatedClose(panel,()=>handle.click());
 }
 
 {
-  const { panel } = await openScreen('Logging & increments'); const close = page.getByRole('button', { name: 'Close Logging' }); assert.equal((await close.innerText()).trim(), '×', 'Logging uses a neutral close control instead of a back arrow'); await close.click(); await page.waitForTimeout(40); assert.notEqual(await panel.evaluate(element => getComputedStyle(element).transform), 'none', 'the close button uses the same downward sheet animation'); await page.locator('.modal-layer').waitFor({ state: 'detached' });
+  const {panel}=await openScreen('Logging & increments'); const close = page.getByRole('button', { name: 'Close Logging' }); assert.equal((await close.innerText()).trim(), '×', 'Logging uses a neutral close control instead of a back arrow'); await expectAnimatedClose(panel,()=>close.click());
 }
 
 for (const name of ['Logging & increments', 'Training priorities', 'Personal details']) {

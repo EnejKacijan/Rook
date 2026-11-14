@@ -185,7 +185,8 @@ import { WorkoutPhotoCompare } from './WorkoutPhotoCompare.jsx';
 import { BlockReviewSheet } from './BlockReviewSheet.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
-import { MissedWorkoutFeedbackProvider } from './MissedWorkoutFeedback.jsx';
+import { MissedWorkoutFeedbackProvider, useMissedWorkoutFeedback } from './MissedWorkoutFeedback.jsx';
+import {isMissedReminderHidden} from './missedWorkoutActions.js';
 import { createFlexibleWeekPlanner, flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, flexibleOccurrencesForDate, moveWorkoutCandidates, firstPlanWeekWorkouts } from './flexibleWeek.js';
 import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
@@ -1639,7 +1640,8 @@ export function BottomNav({ page, setPage, onActiveTabRetap }) {
     };
     measure();
     const observer = new ResizeObserver(measure);
-    observer.observe(nav);
+    // Safe-area padding can change the outer height without changing the content box.
+    observer.observe(nav, {box:'border-box'});
     return () => { observer.disconnect(); root.style.removeProperty('--bottom-nav-total-height'); };
   }, []);
   return (
@@ -4837,6 +4839,7 @@ export function Today({
   const todayUndo = useTransientSnackbar({ afterUndo: () => triggerHaptic('tap') });
   const [calendarOpen, setCalendarOpen] = useState(false);
   const calendarBackground = useRef(null);
+  const todayOptionsButton = useRef(null);
   const [todayEditMode, setTodayEditMode] = useState(false);
   const [todayEditOrder, setTodayEditOrder] = useState([]);
   const [todayDraggingId, setTodayDraggingId] = useState(null);
@@ -4906,12 +4909,12 @@ export function Today({
   const undoBanner = todayUndo.surface;
   const selectedIso = isoDay(selectedDate);
   const selectedDay = weekday(selectedDate);
-  const todayKey = isoDay();
+  const todayKey = useCalendarDay();
   const scheduleState = useRef(state);
   if (Object.keys(state).some(key => key !== 'selectedDate' && key !== 'selectedDay' &&
     state[key] !== scheduleState.current[key])) scheduleState.current = state;
   const scheduleReader = useMemo(()=>createTodayScheduleReader(state),[scheduleState.current,todayKey]);
-  const viewingToday = selectedIso === isoDay();
+  const viewingToday = selectedIso === todayKey;
   const combineDiscovery=useMemo(()=>combineWorkoutDiscovery(state),[scheduleState.current,todayKey]);
   const combineHint=viewingToday&&!todayEditMode&&onCombineWorkouts&&combineDiscovery.available&&combineDiscovery.hasMissed
     ? <CombineWorkoutHint onStart={onCombineWorkouts}/> : null;
@@ -4995,8 +4998,15 @@ export function Today({
     : [], [scheduleState.current,planReady,todayKey]);
   const workoutToday = useMemo(() =>
     planReady && Boolean(plannedWorkoutForDate(state, new Date())), [scheduleState.current,planReady,todayKey]);
-  const missedReminder = selectedIso === isoDay() && !trackedActive && <MissedWorkoutSummary state={scheduleState.current} update={update} today={todayKey} onSelect={request=>setDetail({flexibleWeek:request})}/>;
   const scheduleReview = useMemo(() => temporaryScheduleReview(state), [scheduleState.current,todayKey]);
+  const missedSessions = useMemo(() => missedFlexibleSessions(scheduleState.current,todayKey), [scheduleState.current,todayKey]);
+  const missedMenuDescription = useId();
+  const canShowMissed = viewingToday && !trackedActive;
+  const showMissedReminder = canShowMissed && !scheduleReview.unresolved.length;
+  const missedReminderHidden = isMissedReminderHidden(state,missedSessions);
+  const focusTodayOptions = () => focusNavigationTarget(todayOptionsButton.current);
+  const missedReminder = showMissedReminder && <MissedWorkoutSummary state={scheduleState.current} update={update} today={todayKey} sessions={missedSessions}
+    onHide={focusTodayOptions} onSelect={request=>{focusTodayOptions();setDetail({flexibleWeek:request});}}/>;
   const temporaryPeriod = temporaryPlanStatus(state);
   const calendar = (showMissed = true) => (
     <>
@@ -5029,7 +5039,17 @@ export function Today({
       onResume={resumeActiveWorkout}
     />
   );
-  const dayHeader = label => <div className="today-day-header"><Eyebrow>{label}</Eyebrow><button className="text-button today-overflow-entry" aria-label="Today options" aria-haspopup="dialog" onClick={() => setDetail({ todayActions: {date:selectedIso,hasWorkout:Boolean(recurringTemplate),combineDiscovery:{state:scheduleState.current,today:todayKey,available:combineDiscovery.available}} })}><OverflowIcon/></button></div>;
+  const missedInMenu = viewingToday && missedSessions.length>0 && (!showMissedReminder || missedReminderHidden);
+  const showMissedDot = canShowMissed && !missedReminderHidden && missedSessions.length>0 && !showMissedReminder;
+  const dayHeader = label => <div className="today-day-header">
+    <Eyebrow>{label}</Eyebrow>
+    <button ref={todayOptionsButton} className="text-button today-overflow-entry" aria-label="Today options" aria-haspopup="dialog" aria-describedby={missedInMenu?missedMenuDescription:undefined}
+      onClick={() => setDetail({ todayActions: {date:selectedIso,hasWorkout:Boolean(recurringTemplate),combineDiscovery:{state:scheduleState.current,today:todayKey,available:combineDiscovery.available}} })}>
+      <OverflowIcon/>
+      {showMissedDot&&<span className="today-missed-menu-dot" aria-hidden="true"/>}
+    </button>
+    {missedInMenu&&<span id={missedMenuDescription} className="visually-hidden">{pluralize(missedSessions.length,'missed workout')} available to review</span>}
+  </div>;
   const freestyleEntry = <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} />;
   const activeOptionalNotice = activeOptional && (
     <ActiveOptionalSessionNotice
@@ -5649,7 +5669,7 @@ export function Today({
         {dayHeader(displayDate(selectedDate))}
         {fullyCompleted ? <CompletedSessionOverview workout={completed} /> : <WorkoutTitle workout={session} day={selectedDay} />}
         <CombinedProvenance adjustment={session.adjustment || session.todayOnlyAdjustment} />
-        {session.flexibleWeekMoved && <small className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))} · <button type="button" className="text-button" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button></small>}
+        {session.flexibleWeekMoved && <div className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))}{scheduleReview.moved.some(change=>change.id===session.logicalSessionId)&&<button type="button" className="text-button schedule-change-link" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button>}</div>}
         {session.trainingBlock && (
           <button type="button" onClick={() => setDetail("training-block")} aria-label="View training block" className={`today-block-week${session.trainingBlock.plannedDeload ? " is-deload" : ""}`}>
             <strong>Week {session.trainingBlock.blockWeekNumber} of {session.trainingBlock.totalWeeks}</strong>
@@ -8610,6 +8630,8 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
 }
 export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,combineDiscovery,onCombineWorkouts,onAskCoach}) {
   const today=useCalendarDay();
+  const missedCountId=useId();
+  const missedFeedback=useMissedWorkoutFeedback();
   const {commit}=useDurableAction(state,update);
   const [noticeError,setNoticeError]=useState('');
   const showCombinedNotice=()=>{
@@ -8620,7 +8642,7 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
   const planner=useMemo(()=>createFlexibleWeekPlanner(state,today),[state,today]);
   const missed=useMemo(()=>missedFlexibleSessions(state,today,planner.sessions()),[state,today,planner]);
   const scheduleChanges=useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
-  const hasScheduleChanges=Boolean(scheduleChanges.items.length||scheduleChanges.historical.length||combinedAdjustment(state));
+  const hasScheduleChanges=Boolean(scheduleChanges.items.length||scheduleChanges.recent.length||combinedAdjustment(state));
   const occurrences=useMemo(()=>flexibleOccurrencesForDate(state,date,null,{includeDuration:false}),[state,date,today]);
   const occurrence=occurrences.find(s=>s.scheduledDate===date && ['planned','missed','optional'].includes(s.status)) || firstPlanWeekWorkouts(state,today).find(item=>item.originalDate===date);
   const occurrenceId=occurrence?.logicalSessionId;
@@ -8670,7 +8692,13 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
       {canMove && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,destination:true}})}><span>Move to another day</span><NavigationChevron/></button>}
       {canSwap && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}><span>Swap with another workout</span><NavigationChevron/></button>}
     </>}
-    {missed.length>0 && <button className="list-row" onClick={()=>setDetail({flexibleWeek:missed.length===1?{sessionId:missed[0].logicalSessionId}:{missed:true}})}><span>Missed workouts</span><NavigationChevron/></button>}
+    {missed.length>0 && <button className="list-row today-missed-menu-row" aria-label="Missed workouts" aria-describedby={missedCountId}
+      onClick={()=>{
+        setDetail({flexibleWeek:missed.length===1?{sessionId:missed[0].logicalSessionId}:{missed:true}});
+        missedFeedback?.review();
+      }}>
+      <span>Missed workouts</span><small id={missedCountId}>{missed.length} to review</small><NavigationChevron/>
+    </button>}
     {canCombine&&<button type="button" className="list-row" onClick={onCombineWorkouts}><span>Combine two workouts<small>Review a combined workout for today in Coach</small></span><NavigationChevron/></button>}
     {hasScheduleChanges&&<button className="list-row" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true}})}><span>Schedule changes</span><NavigationChevron/></button>}
     {canAdjust && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}><span>Adjust week</span><NavigationChevron/></button>}
