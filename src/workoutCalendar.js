@@ -28,7 +28,7 @@ export function calendarDayStates(state,dates) {
   const weeks=new Map();
   return Object.fromEntries(dates.map(key=>{
     const week=isoDay(weekDate('Mon',key));
-    if(!weeks.has(week))weeks.set(week,new Map(currentWeekSchedule(state,calendarLocalDate(key)).map(item=>[item.scheduledDate,item.workout])));
+    if(!weeks.has(week))weeks.set(week,new Map(currentWeekSchedule(state,calendarLocalDate(key),{includeDuration:false}).map(item=>[item.scheduledDate,item.workout])));
     const scheduled=weeks.get(week).get(key);
     const complete=(state.workouts||[]).some(w=>w.completedAt&&workoutPerformedDate(w)===key);
     const planned=Boolean(state.program && (scheduled||optionalStrengthForDate(state,calendarLocalDate(key)) || state.todayAdaptation?.mode==='repeat' && state.todayAdaptation.date===key));
@@ -49,7 +49,7 @@ export function calendarDayPresentation(state,dates) {
     // Count executions once from history, not again for each linked occurrence
     // (one combined workout can fulfil several source occurrences).
     const counts={active:Number(day.active),completed:(state.workouts||[]).filter(w=>w.completedAt&&workoutPerformedDate(w)===date).length,planned:0,missed:0};
-    for(const occurrence of state.program ? flexibleOccurrencesForDate(state,date,occurrenceRead) : []){
+    for(const occurrence of state.program ? flexibleOccurrencesForDate(state,date,occurrenceRead,{includeDuration:false}) : []){
       // The occurrence can be browsed on its scheduled/source date while its
       // execution is already happening elsewhere. Calendar activity is a fact
       // of the execution date, never provenance of the source occurrence.

@@ -1,4 +1,4 @@
-import {createContext,useContext,useState} from 'react';
+import {createContext,useContext,useRef,useState} from 'react';
 import {useExerciseRemoveUndo} from './SwipeActionRow.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {missedFlexibleSessions} from './flexibleWeek.js';
@@ -15,6 +15,8 @@ export function MissedWorkoutFeedbackProvider({state,update,children,onViewSched
  const notice=useExerciseRemoveUndo();
  const {commit,latest}=useDurableAction(state,update);
  const [error,setError]=useState('');
+ const actions=useRef(null);
+ const [feedback]=useState(()=>({hide:()=>actions.current.hide(),applied:(...args)=>actions.current.applied(...args),scheduleApplied:(...args)=>actions.current.scheduleApplied(...args)}));
  const reverse=operation=>{
   setError('');
   try {commit(operation);return true;}
@@ -53,7 +55,8 @@ export function MissedWorkoutFeedbackProvider({state,update,children,onViewSched
    }
   }});
  };
- return <FeedbackContext.Provider value={{hide,applied,scheduleApplied}}>
+ actions.current={hide,applied,scheduleApplied};
+ return <FeedbackContext.Provider value={feedback}>
   {children}
   <div className="missed-workout-feedback">{notice.surface}
    {error&&<aside className="today-undo missed-feedback-error" role="alert"><span>{error}</span>{error===STALE_SCHEDULE_UNDO&&onViewSchedule&&<button type="button" onClick={()=>{setError('');onViewSchedule();}}>View schedule</button>}<button type="button" onClick={()=>setError('')}>Dismiss</button></aside>}

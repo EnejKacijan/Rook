@@ -206,8 +206,7 @@ export function prescribeTrainingBlockWorkout(state, template) {
     progressionExpectation: week.progressionExpectation,
     plannedDeload: week.phase === "deload",
   };
-  workout.exercises = workout.exercises.map((exercise) => {
-    const next = clone(exercise);
+  for (const next of workout.exercises) {
     const baseSetCount = next.sets.length;
     const setDelta = next.programmingRole === "main" ? week.mainSetDelta : 0;
     const targetSetCount = Math.max(
@@ -227,15 +226,14 @@ export function prescribeTrainingBlockWorkout(state, template) {
       const source = clone(next.sets.at(-1) || { weight: null, completed: false, rir: null });
       next.sets.push({
         ...source,
-        id: `${exercise.id}:block-week-${week.weekNumber}:set-${next.sets.length + 1}`,
+        id: `${next.id}:block-week-${week.weekNumber}:set-${next.sets.length + 1}`,
         reps: next.repMin,
         completed: false,
       });
     }
     next.sets = next.sets.map((set) => ({ ...set, reps: next.repMin }));
     if (week.changes.length) next.blockTargetReasons = clone(week.changes);
-    return next;
-  });
+  }
   return workout;
 }
 

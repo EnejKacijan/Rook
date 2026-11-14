@@ -1,6 +1,6 @@
-import {flexibleReviewFingerprint,flexibleSessions} from './flexibleWeek.js';
-import React,{useLayoutEffect,useRef,useState} from 'react';
-import {proposeWorkoutToday,applyWorkoutToday,canUseWorkoutToday} from './useWorkoutToday.js';
+import {createFlexibleWeekPlanner,flexibleReviewFingerprint} from './flexibleWeek.js';
+import React,{useLayoutEffect,useMemo,useRef,useState} from 'react';
+import {proposeWorkoutToday,applyWorkoutToday} from './useWorkoutToday.js';
 import {workoutPerformedDate} from './workoutDates.js';
 import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {focusNavigationTarget} from './navigationFocus.js';
@@ -11,12 +11,15 @@ export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetai
   const [reviewState,setReviewState]=useState(state),[repeatId,setRepeatId]=useState(null);
   const [destination,setDestination]=useState(null),[error,setError]=useState(''),[choosingDate,setChoosingDate]=useState(false);
   const applied=useRef(false),screen=useRef(null),dateAction=useRef(null);
-  const effectiveRequest=repeatId?{workoutId:repeatId}:request;
-  const liveProposal=proposeWorkoutToday(state,{...effectiveRequest,displacedToDate:destination},today);
-  const changed=flexibleReviewFingerprint(state)!==flexibleReviewFingerprint(reviewState);
+  const effectiveRequest=useMemo(()=>repeatId?{workoutId:repeatId}:request,[repeatId,request]);
+  const planner=useMemo(()=>createFlexibleWeekPlanner(state,today),[state,today]);
+  const liveProposal=useMemo(()=>proposeWorkoutToday(state,{...effectiveRequest,displacedToDate:destination},today,{planner}),[state,today,effectiveRequest,destination,planner]);
+  const changed=useMemo(()=>state!==reviewState && flexibleReviewFingerprint(state)!==flexibleReviewFingerprint(reviewState),[state,reviewState]);
   const proposal=changed ? liveProposal.status==='conflict'?liveProposal:{status:'stale',error:'Your schedule changed. Review the updated workout before applying.'} : liveProposal;
   const completed=state.workouts.find(w=>w.id===proposal.completedWorkoutId && w.completedAt);
   const performedDate=completed && workoutPerformedDate(completed);
+  const repeat=useMemo(()=>completed && proposeWorkoutToday(state,{workoutId:completed.id},today,{planner,eligibilityOnly:true}),[state,today,completed,planner]);
+  const canRepeat=repeat?.status==='ready' || repeat?.status==='choose-date';
   const conflict=proposal.status==='choose-date',picker=conflict&&choosingDate;
   const displacedName=proposal.displaced?.workout.name;
   const swapDestination=proposal.swapProposal?.changes.find(change=>change.logicalSessionId===proposal.displaced?.logicalSessionId)?.toDate;
@@ -33,10 +36,10 @@ export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetai
     if(applied.current)return;
     try{const next=applyWorkoutToday(state,nextProposal);applied.current=true;update(()=>next,{planVersion:false,persistedState:next});close();}catch(e){setError(e.message);}
   };
-  const sessions=picker?flexibleSessions(state):[];
+  const sessions=picker?planner.sessions():[];
   return <main ref={screen} className={`screen detail-screen use-workout-today-sheet${className?` ${className}`:''}`}>
     <Header title={picker?`Move ${displacedName}`:conflict?'Train today':'Use this workout today'} onBack={goBack} onClose={close}/>
-    {completed?<><h1>{completed.name}</h1><p role="status">{performedDate?`Performed ${label(performedDate)}.`:'Completed workout.'}</p>{setDetail && <button className="button secondary" onClick={()=>setDetail({completedWorkout:completed.id})}>View completed workout</button>}<button className="text-button" disabled={!canUseWorkoutToday(state,{workoutId:completed.id})} onClick={()=>{setRepeatId(completed.id);setReviewState(state);setDestination(null);setError('');setChoosingDate(false);}}>Repeat today</button>{!canUseWorkoutToday(state,{workoutId:completed.id}) && <p>{proposeWorkoutToday(state,{workoutId:completed.id}).error}</p>}</>:
+    {completed?<><h1>{completed.name}</h1><p role="status">{performedDate?`Performed ${label(performedDate)}.`:'Completed workout.'}</p>{setDetail && <button className="button secondary" onClick={()=>setDetail({completedWorkout:completed.id})}>View completed workout</button>}<button className="text-button" disabled={!canRepeat} onClick={()=>{setRepeatId(completed.id);setReviewState(state);setDestination(null);setError('');setChoosingDate(false);}}>Repeat today</button>{!canRepeat && <p>{repeat?.error}</p>}</>:
       picker?<><h1 tabIndex={-1}>Move {displacedName}</h1><p>Choose a new date for this workout.</p><div className="flexible-week-dates">{proposal.dates.map(date=>{
         const scheduled=sessions.find(session=>session.scheduledDate===date&&!['skipped','superseded'].includes(session.status));
         return <button key={date} onClick={()=>{setDestination(date);setError('');}}><strong>{label(date)}</strong><small>{scheduled?.workout.name || 'Rest day'}</small></button>;

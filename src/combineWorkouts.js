@@ -14,7 +14,7 @@ const clone=value=>structuredClone(value);
 export const combineFingerprint=state=>combinedStateToken([state.program,state.profile,state.gymProfiles,state.defaultGymProfileId,
   state.flexibleWeek,state.weekScheduleOverrides,state.workoutOccurrenceOverrides,state.workouts,state.optionalSessions,
   state.todayAdaptation,state.activeWorkout,state.activeOptionalSession]);
-export const combineSources=(state,today=isoDay())=>flexibleSessions(state,today).filter(s=>(s.status==='planned'||actionableMissedSession(state,s,today))&&!s.workout.optional);
+export const combineSources=(state,today=isoDay())=>flexibleSessions(state,today,{includeDuration:false}).filter(s=>(s.status==='planned'||actionableMissedSession(state,s,today))&&!s.workout.optional);
 const purpose=item=>{
   const p=item.pattern||'';
   if(['horizontal-push','incline-push'].includes(p))return 'press';
@@ -42,7 +42,11 @@ function useful(exercises,required,sources){
 // The private assembler can see an ownership-validated projection for revision;
 // no reservations are released in storage to build or review a candidate.
 export function buildCombinedProposal(state,request={}) { return assembleCombinedProposal(state,request); }
-function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},base=null) {
+export function canPrepareCombinedPair(state,request,eligible) {
+  const result=assembleCombinedProposal(state,request,null,{eligible,eligibilityOnly:true});
+  return result.status==="ready" || result.status==="needs-exercise-review";
+}
+function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},base=null,{eligible,eligibilityOnly=false}={}) {
   const fail=error=>({status:'conflict',error});
   if(!state.program||date!==isoDay())return fail('Choose two sessions to combine for today.');
   if(state.activeWorkout||state.activeOptionalSession)return fail('Finish or cancel the active workout before combining sessions.');
@@ -50,7 +54,8 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
   if(flexibleWeekConflict(state))return fail('Review the existing temporary schedule before combining sessions.');
   if(!Array.isArray(sourceIds)||sourceIds.length!==2||new Set(sourceIds).size!==2)return fail('Choose exactly two source workouts.');
   if(minutes!==null&&(!Number.isFinite(minutes)||minutes<10||minutes>180))return fail('Choose 10–180 minutes, or No strict limit.');
-  const eligible=combineSources(state),sources=sourceIds.map(id=>eligible.find(s=>s.logicalSessionId===id));
+  eligible??=combineSources(state);
+  const sources=sourceIds.map(id=>eligible.find(s=>s.logicalSessionId===id));
   if(sources.some(s=>!s))return fail('A source workout is completed, reserved, or no longer available. Choose two unresolved sessions.');
   if(eligible.some(s=>s.scheduledDate===date&&!sourceIds.includes(s.logicalSessionId)) || state.optionalSessions?.some(s=>s.date===date&&s.status==='planned'))
     return fail('Today already has another workout. Include today’s planned workout or resolve it before combining these two.');
@@ -68,10 +73,12 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
   if(blocked.length){
     const issues=blocked.map(issue=>{
       const source=sources.flatMap(s=>s.workout.exercises.map(e=>({workoutId:s.workoutId,exerciseEntryId:e.id,combinedId:`${s.logicalSessionId}:${e.id}`}))).find(e=>e.combinedId===issue.exerciseEntryId);
+      if(eligibilityOnly)return {...issue,exerciseEntryId:source?.exerciseEntryId,workoutId:source?.workoutId};
       const exercise=all.find(e=>e.id===issue.exerciseEntryId);
       const suggestedMatch=issue.reason==='definition'?suggestedCombinedExerciseMatch(exercise,profile,safety):null;
       return {...issue,exerciseEntryId:source?.exerciseEntryId||null,workoutId:source?.workoutId||null,...(suggestedMatch?{suggestedMatch}:{})};
     });
+    if(eligibilityOnly)return {status:issues.every(issue=>issue.workoutId&&issue.exerciseEntryId)?"needs-exercise-review":"conflict"};
     return {...fail(`I need a specific detail for ${[...new Set(issues.map(e=>e.name))].join(', ')} before combining. Open the exercise below; your workouts are unchanged.`),
       combineReviewRequired:{profileId:state.profile.id,planId:state.program.id,sourceIds,minutes,fingerprint:combineFingerprint(state),issues}};
   }
@@ -132,13 +139,14 @@ function assembleCombinedProposal(state,{sourceIds,minutes,date=isoDay()}={},bas
     }
   }
   if(edits.order.length)exercises.sort((a,b)=>(edits.order.indexOf(a.id)<0?999:edits.order.indexOf(a.id))-(edits.order.indexOf(b.id)<0?999:edits.order.indexOf(b.id)));
-  const id=base?.id||uid('combined-workout'),estimatedMinutes=combinedMinutes(exercises,profile);
+  const id=base?.id || (eligibilityOnly ? 'combined-preview' : uid('combined-workout')), estimatedMinutes=combinedMinutes(exercises,profile);
   const workout={id,name:'Combined workout',weekday:weekday(date),location:profile.environment==='Home gym'?'Home':'Commercial gym',
     exercises,estimatedMinutes,durationPlanningVersion:1,warmupPlan:{mode:'auto'}};
   // Validate one executable occurrence, not a replacement weekly programme.
   // Source-specific open targets remain valid; eligibility was checked above.
   const validation=validateProgram({name:'Temporary combined workout',days:[workout]}, {...profile,daysPerWeek:1,availableDays:[weekday(date)],sessionMinutes:target},{preserveSchedule:true,allowImportedExercises:true});
   if(!validation.valid)return fail(`Review these source prescriptions before combining: ${validation.errors.join(' ')}`);
+  if(eligibilityOnly)return {status:"ready"};
   const sourceSessions=sources.map(s=>({programId:state.program.id,workoutId:s.workoutId,logicalSessionId:s.logicalSessionId,
     originalDate:s.originalDate,scheduledDate:s.scheduledDate,name:s.workout.name,reservedBy:id}));
   return {status:'ready',proposal:{schemaVersion:1,mode:'combine',id,date,sourceSessions,workout,requestedMinutes:minutes,

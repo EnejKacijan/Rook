@@ -2,8 +2,8 @@ import {isoDay,saveState} from './domain.js';
 import {missedFlexibleSessions,proposeFlexibleWeek,applyFlexibleWeek,flexibleReviewFingerprint} from './flexibleWeek.js';
 
 // Occurrence identity and placement, not render order, labels or today's clock.
-export function missedReminderKey(state) {
- return JSON.stringify(missedFlexibleSessions(state).map(s=>JSON.stringify([s.logicalSessionId,s.scheduledDate,s.originalDate])).sort());
+export function missedReminderKey(state, missed = missedFlexibleSessions(state)) {
+ return JSON.stringify(missed.map(s=>JSON.stringify([s.logicalSessionId,s.scheduledDate,s.originalDate])).sort());
 }
 export function dismissMissedReminder(state,{persist=saveState}={}) {
  const next={...state,dismissedMissedReminderKey:missedReminderKey(state)};

@@ -2732,11 +2732,11 @@ function rotatingWorkoutForDate(program, scheduledDate) {
   }
   return position ? sequence[(position - 1) % sequence.length] : null;
 }
-export function currentWeekSchedule(state, date = new Date()) {
+export function currentWeekSchedule(state, date = new Date(), {includeDuration = true} = {}) {
   return state.flexibleWeek || combinedAdjustment(state) || state.workouts?.some(w=>w.combinedSourcesResolved)
-    ? effectiveWeekSchedule(state, date) : baseWeekSchedule(state, date);
+    ? effectiveWeekSchedule(state, date, {includeDuration}) : baseWeekSchedule(state, date, {includeDuration});
 }
-export function baseWeekSchedule(state, date = new Date()) {
+export function baseWeekSchedule(state, date = new Date(), {includeDuration = true} = {}) {
   if (!state?.program) return [];
   const key = weekKey(date);
   const rotationStart = validRotationStartDate(state.program);
@@ -2779,8 +2779,19 @@ export function baseWeekSchedule(state, date = new Date()) {
         ? { ...sourceWorkout, exercises: occurrenceExercises }
         : sourceWorkout;
       if (!workout.exercises.length) return null;
-      const prescribedWorkout = {...temporaryOccurrenceWorkout(state, occurrence, prescribeTrainingBlockWorkout(state, workout), scheduledDate)};
-      prescribedWorkout.estimatedMinutes = estimatePersonalWorkoutMinutes(state, prescribedWorkout);
+      const prescription = temporaryOccurrenceWorkout(state, occurrence, prescribeTrainingBlockWorkout(state, workout), scheduledDate);
+      const prescribedWorkout = { ...prescription };
+      // Most schedule callers only need identity and placement. A workout view
+      // reads the estimate on demand, once for this projected prescription.
+      if (includeDuration) {
+        let estimate;
+        Object.defineProperty(prescribedWorkout, "estimatedMinutes", {
+          enumerable: true,
+          configurable: true,
+          get() { return estimate ??= estimatePersonalWorkoutMinutes(state, prescription); },
+          set(value) { estimate = value; },
+        });
+      }
       return {
         workout: prescribedWorkout,
         workoutId: sourceWorkout.id,

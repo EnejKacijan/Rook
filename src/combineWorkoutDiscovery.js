@@ -1,5 +1,5 @@
 import {isoDay,exerciseCatalog} from './domain.js';
-import {combineSources,buildCombinedProposal} from './combineWorkouts.js';
+import {combineSources,canPrepareCombinedPair} from './combineWorkouts.js';
 import {pendingCoachWorkflows} from './coachConversations.js';
 import {flexibleWeekConflict} from './flexibleWeek.js';
 import {effectiveGymContext} from './gymProfiles.js';
@@ -21,9 +21,7 @@ export function combineWorkoutDiscovery(state,today=isoDay()) {
     .sort((a,b)=>Number(b.status==='missed')-Number(a.status==='missed'));
   for(let i=0;i<sources.length-1;i++)for(let j=i+1;j<sources.length;j++){
     if(required.some(s=>s!==sources[i]&&s!==sources[j]))continue;
-    const result=buildCombinedProposal(state,{sourceIds:[sources[i].logicalSessionId,sources[j].logicalSessionId],minutes:null,date:today});
-    const review=result.combineReviewRequired?.issues;
-    if(result.status==='ready'||review?.length&&review.every(issue=>issue.workoutId&&issue.exerciseEntryId))
+    if(canPrepareCombinedPair(state,{sourceIds:[sources[i].logicalSessionId,sources[j].logicalSessionId],minutes:null,date:today},eligible))
       return {available:true,hasMissed:sources[i].status==='missed'||sources[j].status==='missed'};
   }
   return unavailable;

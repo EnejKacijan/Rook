@@ -1,5 +1,5 @@
 import {isoDay, uid, workoutPerformedDate, saveState, weekday,calendarDate,estimateSessionMinutes} from './domain.js';
-import {addCalendarDays, flexibleSessions, flexibleSessionById, flexibleReviewFingerprint, proposeFlexibleWeek, applyFlexibleWeek, completedWorkoutForOccurrence} from './flexibleWeek.js';
+import {addCalendarDays, createFlexibleWeekPlanner, flexibleSessionById, flexibleReviewFingerprint, proposeFlexibleWeek, applyFlexibleWeek, completedWorkoutForOccurrence} from './flexibleWeek.js';
 import {preparedExercise} from './workoutSessionStart.js';
 
 export const isRepeatAdjustment = value => value?.schemaVersion===1 && value.mode==='repeat';
@@ -16,10 +16,10 @@ export function repeatTemplate(state,date) {
   if(!isRepeatAdjustment(a) || a.date!==date)return null;
   return {...structuredClone(a.workout),adapted:true,todayOnlyAdjustment:structuredClone(a)};
 }
-export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnly=false}={}) {
-  const sessions=flexibleSessions(state,today);
+export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnly=false,planner=createFlexibleWeekPlanner(state,today)}={}) {
+  const sessions=planner.sessions();
   const record=request.workoutId ? state.workouts.find(w=>w.id===request.workoutId && w.completedAt) : null;
-  const source=request.sessionId ? flexibleSessionById(state,request.sessionId,today) : null;
+  const source=request.sessionId ? flexibleSessionById(state,request.sessionId,today,{sessions,includeDuration:false}) : null;
   const resolved=request.sessionId?completedWorkoutForOccurrence(state,source||{logicalSessionId:request.sessionId}):null;
   const fail=error=>({status:'conflict',error,...(resolved?{completedWorkoutId:resolved.id}:{}),sourceStatus:source?.status});
   if(resolved&&!record)return fail(`This workout was already performed. View the completed workout or start a new repeat.`);
@@ -29,9 +29,11 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
   if(state.todayAdaptation)return fail('Finish or cancel the pending workout adjustment first.');
   if(source?.scheduledDate===today)return fail('This workout is already scheduled for today.');
   const displaced=sessions.find(s=>s.scheduledDate===today && s.logicalSessionId!==source?.logicalSessionId && ['planned','missed','optional'].includes(s.status));
-  const swapProposal=displaced && source ? proposeFlexibleWeek(state,{mode:'swap',sessionId:source.logicalSessionId,otherSessionId:displaced.logicalSessionId},today) : null;
+  const swapRequest=displaced && source ? {mode:'swap',sessionId:source.logicalSessionId,otherSessionId:displaced.logicalSessionId} : null;
+  const swapProposal=swapRequest ? (eligibilityOnly ? planner.check(swapRequest) : proposeFlexibleWeek(state,swapRequest,today)) : null;
   if(request.swap){
     if(swapProposal?.status!=='ready')return fail(swapProposal?.error || 'These workouts can no longer be swapped. Review your selection again.');
+    if(eligibilityOnly)return {status:'ready'};
     return {status:'ready',today,request:structuredClone(request),fingerprint:flexibleReviewFingerprint(state),kind:'swap',
       sourceName:source.workout.name,sourceDate:source.originalDate,displaced,swapProposal};
   }
@@ -40,7 +42,7 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
     const dates=[];
     for(let i=1;i<=13;i++){
       const toDate=addCalendarDays(today,i);
-      if(proposeFlexibleWeek(state,{mode:'move',sessionId:displaced.logicalSessionId,toDate},today).status!=='ready')continue;
+      if(planner.check({mode:'move',sessionId:displaced.logicalSessionId,toDate}).status!=='ready')continue;
       dates.push(toDate);
       // Menu eligibility needs one valid destination. The actual proposal still
       // enumerates every date using exactly the same canonical move validation.
@@ -58,14 +60,16 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
   }
   let moveProposal=null;
   if(source){
-    moveProposal=proposeFlexibleWeek(staged,{mode:'move',sessionId:source.logicalSessionId,toDate:today,allowCompletedToday:true},today);
+    const moveRequest={mode:'move',sessionId:source.logicalSessionId,toDate:today,allowCompletedToday:true};
+    moveProposal=eligibilityOnly && staged===state ? planner.check(moveRequest) : proposeFlexibleWeek(staged,moveRequest,today);
     if(moveProposal.status!=='ready')return moveProposal;
   }
+  if(eligibilityOnly)return {status:'ready'};
   return {status:'ready',today,request:structuredClone(request),fingerprint:flexibleReviewFingerprint(state),kind:record?'repeat':'move',
     sourceName:record?.name || source.workout.name,sourceDate:record?workoutPerformedDate(record):source.originalDate,displaced,displacedProposal,moveProposal};
 }
-export function canUseWorkoutToday(state,request,today=isoDay()) {
-  return ['ready','choose-date'].includes(proposeWorkoutToday(state,request,today,{eligibilityOnly:true}).status);
+export function canUseWorkoutToday(state,request,today=isoDay(),planner) {
+  return ['ready','choose-date'].includes(proposeWorkoutToday(state,request,today,{eligibilityOnly:true,planner}).status);
 }
 export function applyWorkoutToday(state,proposal,{persist=saveState}={}) {
   if(proposal?.status!=='ready' || proposal.today!==isoDay() || proposal.fingerprint!==flexibleReviewFingerprint(state))throw Error('The workouts changed. Review your selection again.');

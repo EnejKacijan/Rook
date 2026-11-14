@@ -1,8 +1,7 @@
 import {it,expect,beforeEach,afterEach,vi} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
 import {isoDay,deserializeState,serializeState,adaptedTemplateForToday,startWorkout,completeWorkout,plannedWorkoutForDate} from './domain.js';
-import {flexibleSessions} from './flexibleWeek.js';
-import * as flexibleWeek from './flexibleWeek.js';
+import {applyFlexibleWeek,createFlexibleWeekPlanner,flexibleSessions,proposeFlexibleWeek} from './flexibleWeek.js';
 import {proposeWorkoutToday,applyWorkoutToday,cancelRepeatedWorkout,canUseWorkoutToday} from './useWorkoutToday.js';
 import {buildBackupArchive,parseBackupArchive} from './backup.js';
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-17T12:00:00'));});
@@ -23,7 +22,7 @@ const apply=(s,p)=>applyWorkoutToday(s,p,{persist:()=>true});
 it('Train Today uses the canonical swap, preserves occurrence provenance, and logs only on the performed day',()=>{
  const s=fixture(),source=flexibleSessions(s).find(item=>item.scheduledDate==='2026-09-21'),request={sessionId:source.logicalSessionId,swap:true};
  const p=proposeWorkoutToday(s,request);expect(p.kind).toBe('swap');
- const canonical=flexibleWeek.proposeFlexibleWeek(s,{mode:'swap',sessionId:source.logicalSessionId,otherSessionId:p.displaced.logicalSessionId});
+ const canonical=proposeFlexibleWeek(s,{mode:'swap',sessionId:source.logicalSessionId,otherSessionId:p.displaced.logicalSessionId});
  expect(p.swapProposal).toEqual(canonical);
  const next=deserializeState(serializeState(apply(s,p)));expect(next.selectedDate).toBe(isoDay());expect(next.program).toEqual(s.program);expect(next.workouts).toEqual(s.workouts);
  expect(plannedWorkoutForDate(next,isoDay()).logicalSessionId).toBe(source.logicalSessionId);
@@ -36,7 +35,7 @@ it('Train Today uses the canonical swap, preserves occurrence provenance, and lo
 });
 it('swap targets the current source slot even when its original date differs, without duplicating occurrences',()=>{
  const s=fixture(),source=flexibleSessions(s).find(item=>item.scheduledDate==='2026-09-21');
- const moved=flexibleWeek.applyFlexibleWeek(s,flexibleWeek.proposeFlexibleWeek(s,{mode:'move',sessionId:source.logicalSessionId,toDate:'2026-09-18'})).state;
+ const moved=applyFlexibleWeek(s,proposeFlexibleWeek(s,{mode:'move',sessionId:source.logicalSessionId,toDate:'2026-09-18'})).state;
  const p=proposeWorkoutToday(moved,{sessionId:source.logicalSessionId,swap:true}),next=apply(moved,p);
  expect(p.swapProposal.changes.find(c=>c.logicalSessionId===p.displaced.logicalSessionId).toDate).toBe('2026-09-18');
  expect(next.flexibleWeek.sessions[source.logicalSessionId].originalDate).toBe('2026-09-21');expect(next.flexibleWeek.sessions[p.displaced.logicalSessionId].scheduledDate).toBe('2026-09-18');
@@ -53,11 +52,11 @@ it('swap revalidates persistence, active guards, stale state and double applicat
 });
 it('stops menu eligibility at the first valid destination while the real proposal retains all dates',()=>{
  const s=completed(fixture()),request={workoutId:s.workouts[0].id},before=serializeState(s);
- const validate=vi.spyOn(flexibleWeek,'proposeFlexibleWeek');
- const proposal=proposeWorkoutToday(s,request);expect(proposal.status).toBe('choose-date');expect(proposal.dates.length).toBeGreaterThan(1);
+ const planner=createFlexibleWeekPlanner(s),validate=vi.spyOn(planner,'check');
+ const proposal=proposeWorkoutToday(s,request,isoDay(),{planner});expect(proposal.status).toBe('choose-date');expect(proposal.dates.length).toBeGreaterThan(1);
  const fullChecks=validate.mock.calls.length;expect(fullChecks).toBe(13);validate.mockClear();
- expect(canUseWorkoutToday(s,request)).toBe(true);expect(validate.mock.calls.length).toBeLessThan(fullChecks);
- expect(validate.mock.calls.at(-1)[1].toDate).toBe(proposal.dates[0]);
+ expect(canUseWorkoutToday(s,request,isoDay(),planner)).toBe(true);expect(validate.mock.calls.length).toBeLessThan(fullChecks);
+ expect(validate.mock.calls.at(-1)[0].toDate).toBe(proposal.dates[0]);
  expect(serializeState(s)).toBe(before);expect(proposeWorkoutToday(s,request)).toEqual(proposal);
 });
 it.each(['unchanged','activeWorkout','activeOptionalSession','todayAdaptation','completed-block','missing-record','no-exercises'])('menu eligibility agrees with canonical proposal for %s',guard=>{

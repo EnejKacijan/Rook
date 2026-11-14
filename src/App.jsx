@@ -186,8 +186,7 @@ import { BlockReviewSheet } from './BlockReviewSheet.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import { FlexibleWeekSheet } from './FlexibleWeekSheet.jsx';
 import { MissedWorkoutFeedbackProvider } from './MissedWorkoutFeedback.jsx';
-import { flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, proposeFlexibleWeek, flexibleOccurrenceForDate, flexibleOccurrencesForDate } from './flexibleWeek.js';
-import {hasMoveWorkoutDestination,hasTemporaryScheduleAction,moveWorkoutCandidates,firstPlanWeekWorkouts} from './flexibleWeek.js';
+import { createFlexibleWeekPlanner, flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, flexibleOccurrencesForDate, moveWorkoutCandidates, firstPlanWeekWorkouts } from './flexibleWeek.js';
 import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import {
@@ -1977,7 +1976,6 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
   const historyMarker = useRef(null);
   const historyDismissed = useRef(false);
   const historyCleanupTimer = useRef(null);
-  const [panelRevision, setPanelRevision] = useState(0);
   const fullscreen = presentation === "fullscreen";
   const presentationRef = useRef(presentation);
   presentationRef.current = presentation;
@@ -2043,23 +2041,10 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
   }, [children]);
   useLayoutEffect(() => {
     const layer = layerRef.current;
-    const panel = layer?.firstElementChild;
-    if (!panel) return undefined;
-    const header = Array.from(panel.children).find((child) =>
-      child.matches?.(".detail-header, .long-form-sheet-header"),
-    );
-    if (!header) return undefined;
-
-    let largeTitle = null;
-    const findLargeTitle = () => {
-      const children = Array.from(panel.children);
-      const headerIndex = children.indexOf(header);
-      largeTitle = children
-        .slice(headerIndex + 1)
-        .find((child) => child.matches?.("h1, h2")) || null;
-    };
+    if (!layer) return undefined;
+    let panel, header, largeTitle, frame = null;
     const updateHeader = () => {
-      findLargeTitle();
+      if (!header) return;
       const scrollable = panel.scrollHeight > panel.clientHeight + 2;
       const scrollTop = Math.max(0, panel.scrollTop);
       const collapsing = Boolean(largeTitle);
@@ -2070,43 +2055,41 @@ export function ModalLayer({ children, close, backgroundRef, presentation = "she
       header.classList.toggle("is-static-sheet-header", !scrollable);
       header.classList.toggle("is-collapsing-sheet-header", collapsing);
       header.classList.toggle("has-scrolled-content", scrollable && scrollTop > 3);
-      header.classList.toggle(
-        "shows-compact-title",
-        collapsing && scrollTop >= revealAt,
-      );
-    };
-    header.classList.add("rook-sheet-header");
-    updateHeader();
-    const frame = requestAnimationFrame(() => {
+      header.classList.toggle("shows-compact-title", collapsing && scrollTop >= revealAt);
       header.classList.add("is-ready");
-      updateHeader();
-    });
-    let headerFrame = 0;
-    const scheduleHeader = () => { if (!headerFrame) headerFrame = requestAnimationFrame(() => { headerFrame = 0; updateHeader(); }); };
-    const mutationObserver = new MutationObserver(() => {
-      if (layer.firstElementChild !== panel) { setPanelRevision(value => value + 1); return; }
-      scheduleHeader();
-    });
-    mutationObserver.observe(layer, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-    const resizeObserver = typeof ResizeObserver === "function"
-      ? new ResizeObserver(scheduleHeader)
-      : null;
-    resizeObserver?.observe(panel);
-    panel.addEventListener("scroll", updateHeader, { passive: true });
-    window.addEventListener("resize", updateHeader);
-    return () => {
-      cancelAnimationFrame(frame);
-      cancelAnimationFrame(headerFrame);
-      mutationObserver.disconnect();
-      resizeObserver?.disconnect();
-      panel.removeEventListener("scroll", updateHeader);
-      window.removeEventListener("resize", updateHeader);
     };
-  }, [children, panelRevision]);
+    const scheduleHeader = () => {
+      if (frame === null) frame = requestAnimationFrame(() => { frame = null; updateHeader(); });
+    };
+    const resize = typeof ResizeObserver === "function" ? new ResizeObserver(scheduleHeader) : null;
+    const bindHeader = () => {
+      const next = layer.firstElementChild;
+      if (next !== panel) {
+        panel?.removeEventListener("scroll", scheduleHeader);
+        resize?.disconnect();
+        panel = next;
+        panel?.addEventListener("scroll", scheduleHeader, { passive: true });
+        if (panel) resize?.observe(panel);
+      }
+      const children = Array.from(panel?.children || []);
+      const headerIndex = children.findIndex(child => child.matches(".detail-header, .long-form-sheet-header"));
+      header = children[headerIndex];
+      largeTitle = header && children.slice(headerIndex + 1).find(child => child.matches("h1, h2"));
+      header?.classList.add("rook-sheet-header");
+      scheduleHeader();
+    };
+    bindHeader();
+    const mutations = new MutationObserver(bindHeader);
+    mutations.observe(layer, { childList: true, subtree: true, characterData: true });
+    window.addEventListener("resize", scheduleHeader);
+    return () => {
+      if (frame !== null) cancelAnimationFrame(frame);
+      mutations.disconnect();
+      resize?.disconnect();
+      panel?.removeEventListener("scroll", scheduleHeader);
+      window.removeEventListener("resize", scheduleHeader);
+    };
+  }, [presentation]);
   const requestClose = (options) => {
     if (closing.current) return true;
     if (!options?.completedViewerDrag) viewerDrag.current?.cancel();
@@ -4806,11 +4789,11 @@ export function NoPlanToday({state,update,setPage,setDetail,campaignSlot=null}) 
     return ()=>clearInterval(timer);
   },[active?.id,optional?.id]);
   const resume=()=>{
-    if (active && selectedIso!==activeDate) flushSync(()=>update(current=>{current.selectedDate=activeDate;current.selectedDay=weekday(activeDate);return current;}));
+    if (active && selectedIso!==activeDate) flushSync(()=>update(null,{navigationDate:{date:activeDate,day:weekday(activeDate)}}));
     setPage(active?'workout':'optional-session');
   };
   return <main className="screen today-screen no-plan-today">
-    {calendarOpen&&createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso} header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>} onSelect={key=>{update(current=>{current.selectedDate=key;current.selectedDay=weekday(key);return current;});requestClose();}}/>}</ModalLayer>,document.body)}
+    {calendarOpen&&createPortal(<ModalLayer close={()=>setCalendarOpen(false)} backgroundRef={calendarBackground}>{requestClose=><MonthCalendar state={state} selectedDate={selectedIso} header={<SheetHeader title="Calendar" onClose={requestClose} closeLabel="Close calendar"/>} onSelect={key=>{update(null,{navigationDate:{date:key,day:weekday(key)}});requestClose();}}/>}</ModalLayer>,document.body)}
     <div className="no-plan-today-heading"><div><Eyebrow>{displayDate(selectedDate)}</Eyebrow><h1>{today?'Today': 'Workouts logged'}</h1></div><button type="button" className="no-plan-calendar-action" aria-label="Browse workout dates" onClick={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}><CalendarIcon/><span>Calendar</span></button></div>
     {active&&<ActiveWorkoutNotice workout={active} dateKey={activeDate} now={now} onResume={resume}/>}
     {optional&&<ActiveOptionalSessionNotice session={optional} now={now} onResume={resume}/>}
@@ -4895,8 +4878,10 @@ export function Today({
     const refreshCalendar = () => {
       const nextDay = isoDay(), previousDay = lastCalendarDay.current;
       lastCalendarDay.current = nextDay;
-      setNow(Date.now());
-      if (nextDay !== previousDay && state.selectedDate === previousDay) update(current => ({ ...current, selectedDate: nextDay, selectedDay: weekday(nextDay) }));
+      if (nextDay !== previousDay) {
+        setNow(Date.now());
+        if (state.selectedDate === previousDay) update(null,{navigationDate:{date:nextDay,day:weekday(nextDay)}});
+      }
     };
     const interval = setInterval(refreshCalendar, 30000);
     window.addEventListener('focus', refreshCalendar);
@@ -5010,7 +4995,7 @@ export function Today({
     : [], [scheduleState.current,planReady,todayKey]);
   const workoutToday = useMemo(() =>
     planReady && Boolean(plannedWorkoutForDate(state, new Date())), [scheduleState.current,planReady,todayKey]);
-  const missedReminder = selectedIso === isoDay() && !trackedActive && <MissedWorkoutSummary state={state} update={update} onSelect={request=>setDetail({flexibleWeek:request})}/>;
+  const missedReminder = selectedIso === isoDay() && !trackedActive && <MissedWorkoutSummary state={scheduleState.current} update={update} today={todayKey} onSelect={request=>setDetail({flexibleWeek:request})}/>;
   const scheduleReview = useMemo(() => temporaryScheduleReview(state), [scheduleState.current,todayKey]);
   const temporaryPeriod = temporaryPlanStatus(state);
   const calendar = (showMissed = true) => (
@@ -5044,7 +5029,7 @@ export function Today({
       onResume={resumeActiveWorkout}
     />
   );
-  const dayHeader = label => <div className="today-day-header"><Eyebrow>{label}</Eyebrow><button className="text-button today-overflow-entry" aria-label="Today options" aria-haspopup="dialog" onClick={() => setDetail({ todayActions: {date:selectedIso,hasWorkout:Boolean(plannedWorkoutForDate(state,selectedDate))} })}><OverflowIcon/></button></div>;
+  const dayHeader = label => <div className="today-day-header"><Eyebrow>{label}</Eyebrow><button className="text-button today-overflow-entry" aria-label="Today options" aria-haspopup="dialog" onClick={() => setDetail({ todayActions: {date:selectedIso,hasWorkout:Boolean(recurringTemplate),combineDiscovery:{state:scheduleState.current,today:todayKey,available:combineDiscovery.available}} })}><OverflowIcon/></button></div>;
   const freestyleEntry = <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} />;
   const activeOptionalNotice = activeOptional && (
     <ActiveOptionalSessionNotice
@@ -5057,7 +5042,7 @@ export function Today({
     const sets = active.exercises.flatMap((exercise) => exercise.sets);
     const completedSets = sets.filter((set) => set.completed).length;
     const elapsed = workoutElapsedSeconds(active,now);
-    const plannedOccurrence = active.source === 'freestyle' ? flexibleOccurrenceForDate(state,selectedIso,recurringTemplate?.id) : null;
+    const plannedOccurrence = active.source === 'freestyle' ? occurrence : null;
     const scheduledDate = linkedOccurrence?.scheduledDate || active.canonicalPlanDate;
     return (
       <main className="screen today-screen">
@@ -8623,7 +8608,7 @@ export function CompletedWorkoutDeletion({workoutId,state,update,close,cancel,ba
         </ModalLayer>, document.body,
       );
 }
-export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,onCombineWorkouts,onAskCoach}) {
+export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,combineDiscovery,onCombineWorkouts,onAskCoach}) {
   const today=useCalendarDay();
   const {commit}=useDurableAction(state,update);
   const [noticeError,setNoticeError]=useState('');
@@ -8632,15 +8617,22 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
     catch{setNoticeError('Couldn’t save this preference. Try again.');}
   };
   const records=completedWorkoutsForDate(state.workouts,date);
-  const missed=missedFlexibleSessions(state,today);
-  const scheduleChanges=temporaryScheduleReview(state,today);
+  const planner=useMemo(()=>createFlexibleWeekPlanner(state,today),[state,today]);
+  const missed=useMemo(()=>missedFlexibleSessions(state,today,planner.sessions()),[state,today,planner]);
+  const scheduleChanges=useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
   const hasScheduleChanges=Boolean(scheduleChanges.items.length||scheduleChanges.historical.length||combinedAdjustment(state));
-  const occurrences=flexibleOccurrencesForDate(state,date);
+  const occurrences=useMemo(()=>flexibleOccurrencesForDate(state,date,null,{includeDuration:false}),[state,date,today]);
   const occurrence=occurrences.find(s=>s.scheduledDate===date && ['planned','missed','optional'].includes(s.status)) || firstPlanWeekWorkouts(state,today).find(item=>item.originalDate===date);
-  const canMove=Boolean(occurrence && hasMoveWorkoutDestination(state,occurrence.logicalSessionId,today));
+  const occurrenceId=occurrence?.logicalSessionId;
+  const canMove=useMemo(()=>Boolean(occurrenceId && planner.hasMove(occurrenceId)),[planner,occurrenceId]);
+  const canSwap=useMemo(()=>Boolean(occurrenceId && planner.swaps(occurrenceId).length),[planner,occurrenceId]);
+  const canAdjust=useMemo(()=>planner.hasScheduleAction(scheduleChanges),[planner,scheduleChanges]);
+  const hasCombineAction=Boolean(onCombineWorkouts);
+  const savedDiscovery=combineDiscovery?.state===state && combineDiscovery.today===today ? combineDiscovery.available : undefined;
+  const canCombine=useMemo(()=>hasCombineAction&&(savedDiscovery??combineWorkoutDiscovery(state,today).available),[state,today,hasCombineAction,savedDiscovery]);
   const linkedRecords=occurrences.map(s=>s.completedWorkout).filter(w=>w && !records.some(record=>record.id===w.id));
   const actionRecords=[...new Map([...records,...linkedRecords].map(w=>[w.id,w])).values()];
-  const repeatRecords=actionRecords.filter(w=>canUseWorkoutToday(state,{workoutId:w.id},today));
+  const repeatRecords=actionRecords.filter(w=>canUseWorkoutToday(state,{workoutId:w.id},today,planner));
   const deleteRecords=records.filter(w=>!completedWorkoutDeletionGuard(state,w.id));
   const [choosing,setChoosing]=useState(null),[deleting,setDeleting]=useState(null);
   const panel=useRef(null),trigger=useRef(null);
@@ -8674,14 +8666,14 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
     {records.length>0 && canStartOptionalSession(state,date) && <button type="button" className="list-row" onClick={()=>{if(canStartOptionalSession(state,date))setDetail({conditioning:date});}}><span>Conditioning</span><NavigationChevron/></button>}
     {repeatRecords.length>0 && <button className="list-row" data-day-action="repeat" onClick={event=>chooseRecord('repeat',event)}><span>{repeatLabel}</span><NavigationChevron/></button>}
     {occurrence && <>
-      {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}><span>{occurrence.firstPlanWeek?'Use this workout today':occurrence.status==='missed'?'Train this workout today':'Train today instead'}</span><NavigationChevron/></button>}
+      {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today,planner) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}><span>{occurrence.firstPlanWeek?'Use this workout today':occurrence.status==='missed'?'Train this workout today':'Train today instead'}</span><NavigationChevron/></button>}
       {canMove && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,destination:true}})}><span>Move to another day</span><NavigationChevron/></button>}
-      {flexibleSessions(state).some(other=>proposeFlexibleWeek(state,{mode:'swap',sessionId:occurrence.logicalSessionId,otherSessionId:other.logicalSessionId}).status==='ready') && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}><span>Swap with another workout</span><NavigationChevron/></button>}
+      {canSwap && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,swap:true}})}><span>Swap with another workout</span><NavigationChevron/></button>}
     </>}
     {missed.length>0 && <button className="list-row" onClick={()=>setDetail({flexibleWeek:missed.length===1?{sessionId:missed[0].logicalSessionId}:{missed:true}})}><span>Missed workouts</span><NavigationChevron/></button>}
-    {onCombineWorkouts&&combineWorkoutDiscovery(state,today).available&&<button type="button" className="list-row" onClick={onCombineWorkouts}><span>Combine two workouts<small>Review a combined workout for today in Coach</small></span><NavigationChevron/></button>}
+    {canCombine&&<button type="button" className="list-row" onClick={onCombineWorkouts}><span>Combine two workouts<small>Review a combined workout for today in Coach</small></span><NavigationChevron/></button>}
     {hasScheduleChanges&&<button className="list-row" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true}})}><span>Schedule changes</span><NavigationChevron/></button>}
-    {hasTemporaryScheduleAction(state,today) && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}><span>Adjust week</span><NavigationChevron/></button>}
+    {canAdjust && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{}})}><span>Adjust week</span><NavigationChevron/></button>}
     {hasWorkout && state.program && <button className="list-row" disabled={blocked} onClick={()=>setDetail('edit-plan')}><span>Edit in plan<small>Changes the recurring plan</small></span><NavigationChevron/></button>}
     {date===isoDay() && !hasWorkout && !occurrences.length && !blocked && <button className="list-row" onClick={()=>setDetail({restTraining:date})}><span>Rest-day activities</span><NavigationChevron/></button>}
     {(hasWorkout || records.length>0) && date===isoDay() && !blocked && <button className="list-row" onClick={()=>setDetail({todayFreestyle:{date}})}><span>Freestyle workout</span><NavigationChevron/></button>}
@@ -18663,7 +18655,7 @@ export function Detail({
     return <OptionalActivityDetails id={detail.optionalActivity} state={state} update={update} close={close} Header={SheetHeader} Modal={ModalLayer} />;
   if (detail === "week") {
     const schedule = new Map(
-      currentWeekSchedule(state).map((item) => [
+      currentWeekSchedule(state, new Date(), {includeDuration:false}).map((item) => [
         item.scheduledDate,
         item.workout,
       ]),
@@ -18687,11 +18679,7 @@ export function Detail({
               {workout && (
                 <button
                   onClick={() => {
-                    update((current) => {
-                      current.selectedDay = day;
-                      current.selectedDate = isoDay(date);
-                      return current;
-                    });
+                    update(null,{navigationDate:{day,date:isoDay(date)}});
                     close();
                   }}
                 >
@@ -20544,6 +20532,9 @@ function Replace({ exercise, state, update, close }) {
 export default function App({placements}={}) {
   return <PersonalThemesProvider Modal={ModalLayer} Header={SheetHeader}><StartupBoundary load={loadInitialLiftState} renderImport={props=><RestoreBackupSheet {...props} state={blankState()} update={()=>{}}/>}>{startup=><HydratedApp startup={startup} placements={placements}/>}</StartupBoundary></PersonalThemesProvider>;
 }
+const StableToday = memo(Today);
+const StableNoPlanToday = memo(NoPlanToday);
+const StableProgress = memo(Progress);
 const StableActiveWorkout = memo(ActiveWorkout);
 function HydratedApp({startup,placements}) {
   useSemanticSwipeBack();
@@ -20582,11 +20573,11 @@ function HydratedApp({startup,placements}) {
     setPageState(next);
   },[prepareTabTransition]);
   const [detail, setDetail] = useState(null);
-  const openCombineWorkouts=()=>{
+  const openCombineWorkouts=useCallback(()=>{
     setCoachEntry({id:uid('combine-entry'),profileId:state.profile.id,planId:state.program?.id,date:isoDay()});
     setDetail(null);
     setPage('coach');
-  };
+  },[state.profile.id,state.program?.id,setPage]);
   const openAskCoach=date=>{
     setCoachEntry(createCoachDayContext(state,date));setDetail(null);setPage('coach');
   };
@@ -20599,6 +20590,7 @@ function HydratedApp({startup,placements}) {
   const [restoreEntryParent,setRestoreEntryParent]=useState(null);
   const [repairPreview, setRepairPreview] = useState(null);
   const [planReadyNotice, setPlanReadyNotice] = useState(null);
+  const dismissPlanReady = useCallback(() => setPlanReadyNotice(null), []);
   const seasonalTransitionBlocked = Boolean(accountSync.locked || state.activeWorkout || state.activeOptionalSession || detail ||
     !state.profile.onboardingComplete || entryMode || repairPreview ||
     !['today', 'coach', 'progress', 'profile'].includes(page));
@@ -20715,16 +20707,16 @@ function HydratedApp({startup,placements}) {
   }
   const content =
     page === "today" ? (
-      (state.program && trainingStyleFor(state)==='plan' ? <Today
+      (state.program && trainingStyleFor(state)==='plan' ? <StableToday
         state={state}
         update={update}
         setPage={setPage}
         setDetail={setDetail}
         planReady={planReadyNotice}
-        dismissPlanReady={() => setPlanReadyNotice(null)}
+        dismissPlanReady={dismissPlanReady}
         onCombineWorkouts={openCombineWorkouts}
         campaignSlot={placements?.today}
-      /> : <NoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail} campaignSlot={placements?.today}/>)
+      /> : <StableNoPlanToday state={state} update={update} setPage={setPage} setDetail={setDetail} campaignSlot={placements?.today}/>)
     ) : page === "optional-session" ? (
       <ActiveOptionalSession state={state} update={update} setPage={setPage} />
     ) : page === "workout" ? (
@@ -20747,7 +20739,7 @@ function HydratedApp({startup,placements}) {
     ) : page === "coach" ? (
       <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} entryIntent={coachEntry} onEntryHandled={consumeCoachEntry} />
     ) : page === "progress" ? (
-      <Progress state={state} update={update} setDetail={setDetail} setPage={setPage} />
+      <StableProgress state={state} update={update} setDetail={setDetail} setPage={setPage} />
     ) : (
       <Profile
         state={state}

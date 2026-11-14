@@ -45,9 +45,18 @@ export function flexibleReviewFingerprint(state) {
     state.activeWorkout, state.activeOptionalSession, state.workouts, state.todayAdaptation, state.program?.trainingBlock?.currentWeek]);
 }
 export function flexibleWeekConflict(state, today = isoDay()) {
-  return records(state).some(record => !historicalTemporarySession(state, record, today) &&
-    !['completed', 'active', 'combined', 'reserved'].includes(flexibleSessionStatus(state, record, today)) &&
-    record.planFingerprint !== flexiblePlanFingerprint(state));
+  const stored = records(state);
+  if (!stored.length) return false;
+  const fingerprint = flexiblePlanFingerprint(state);
+  return hasStaleScheduleRecords(state,today,stored,fingerprint);
+}
+function hasStaleScheduleRecords(state,today,stored,fingerprint) {
+  return stored.some(record => {
+    if (record.planFingerprint === fingerprint) return false;
+    const lifecycle = flexibleSessionLifecycle(state, record, today);
+    return !['completed', 'active', 'combined', 'reserved'].includes(lifecycle.status) &&
+      !historicalTemporarySession(state, record, today, lifecycle);
+  });
 }
 export function flexibleSessionStatus(state, item, today = isoDay()) {
   return flexibleSessionLifecycle(state,item,today).status;
@@ -77,9 +86,9 @@ export function flexibleSessionLifecycle(state, item, today = isoDay()) {
     originalScheduledDate:item.originalDate,currentScheduledDate:item.scheduledDate,
     actualPerformedDate:completedWorkout?workoutPerformedDate(completedWorkout):activeWorkout?workoutPerformedDate(activeWorkout):null};
 }
-function materialize(state, record) {
+function materialize(state, record, fingerprint) {
   const source = state.program?.days.find(day => day.id === record.workoutId);
-  if (!source || record.planFingerprint !== flexiblePlanFingerprint(state)) return null;
+  if (!source || record.planFingerprint !== fingerprint) return null;
   let prescribed = source;
   if (record.blockWeekNumber && state.program.trainingBlock) {
     prescribed = prescribeTrainingBlockWorkout({ ...state, program: { ...state.program, trainingBlock: { ...state.program.trainingBlock, currentWeek: record.blockWeekNumber } } }, source);
@@ -109,12 +118,14 @@ function historicalTemporarySession(state, record, today, lifecycle = flexibleSe
 // permission. Historical changes remain inspectable facts, never a successful
 // restoration, a completed workout, or an actionable missing destination.
 export function temporaryScheduleReview(state, today = isoDay()) {
-  const items = records(state).map(record => {
+  const stored = records(state);
+  const fingerprint = stored.length ? flexiblePlanFingerprint(state) : null;
+  const items = stored.map(record => {
     const lifecycle = flexibleSessionLifecycle(state, record, today);
     const finished = ['active', 'completed', 'combined', 'reserved'].includes(lifecycle.status);
     const historical = historicalTemporarySession(state, record, today, lifecycle);
-    const destination = !record.skipped && materialize(state, record);
-    const stale = record.planFingerprint !== flexiblePlanFingerprint(state) || !record.skipped && !destination;
+    const destination = !record.skipped && materialize(state, record, fingerprint);
+    const stale = record.planFingerprint !== fingerprint || !record.skipped && !destination;
     let issue = null;
     if (!finished && !historical && !record.skipped && !destination) {
       issue = state.program?.days.some(day => day.id === record.workoutId)
@@ -131,7 +142,7 @@ export function temporaryScheduleReview(state, today = isoDay()) {
   const activeItems=items.filter(item=>!item.historical && (item.issue || item.skipped || item.originalDate!==item.scheduledDate) &&
     (item.issue || !item.finished && (item.originalDate>=currentWeek || item.scheduledDate>=currentWeek)));
   const savedIds=new Set(activeItems.map(item=>item.id));
-  const unchanged=effectiveWeekSchedule(state,today).filter(item=>!savedIds.has(item.logicalSessionId))
+  const unchanged=effectiveWeekSchedule(state,today,{includeDuration:false}).filter(item=>!savedIds.has(item.logicalSessionId))
     .map(item=>({id:item.logicalSessionId,name:item.workout.name,originalDate:item.originalDate,
       scheduledDate:item.scheduledDate,skipped:false,finished:false,issue:null,unchanged:true}));
   return {
@@ -142,37 +153,48 @@ export function temporaryScheduleReview(state, today = isoDay()) {
     moved: activeItems.filter(item => !item.issue && !item.skipped && item.originalDate !== item.scheduledDate),
   };
 }
-export function effectiveWeekSchedule(state, date, {includeCombined=false} = {}) {
+export function effectiveWeekSchedule(state, date, {includeCombined = false, includeDuration = true, fingerprint} = {}) {
   const start = weekKey(date), end = addCalendarDays(start, 6);
   const stored = records(state), ids = new Set(stored.map(r => r.id));
-  const base = baseWeekSchedule(state, date).filter(item => !ids.has(identity(item))).map(item => ({ ...item, logicalSessionId: identity(item) }));
+  const base = baseWeekSchedule(state, date, {includeDuration}).filter(item => !ids.has(identity(item))).map(item => ({ ...item, logicalSessionId: identity(item) }));
   // Invalid references are quarantined, never rebound to a new/deleted template.
-  const moved = stored.filter(r => !r.skipped && r.scheduledDate >= start && r.scheduledDate <= end).map(r => materialize(state, r)).filter(Boolean);
+  const inWeek = stored.filter(record => !record.skipped && record.scheduledDate >= start && record.scheduledDate <= end);
+  const plan = fingerprint ?? (inWeek.length ? flexiblePlanFingerprint(state) : null);
+  const moved = inWeek.map(record => materialize(state, record, plan)).filter(Boolean);
   return [...base, ...moved].filter(item=>includeCombined || !combinedOccurrenceState(state,item)).sort((a, b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 export function flexibleSourceForDate(state, date) {
   return records(state).filter(r => r.originalDate === date && (r.skipped || r.scheduledDate !== date));
 }
-export function flexibleOccurrencesForDate(state,date,readCache=null) {
+export function flexibleOccurrencesForDate(state,date,readCache=null,{includeDuration=true}={}) {
   const all=new Map();
   const put=item=>{if(item&&(item.scheduledDate===date||item.originalDate===date)){const id=item.logicalSessionId||item.id||identity(item);all.set(id,{...item,logicalSessionId:id});}};
   const week=weekKey(date);
   let schedule=readCache?.weeks.get(week);
-  if(!schedule){schedule=effectiveWeekSchedule(state,date,{includeCombined:true});readCache?.weeks.set(week,schedule);}
+  if(!schedule){schedule=effectiveWeekSchedule(state,date,{includeCombined:true,includeDuration});readCache?.weeks.set(week,schedule);}
   schedule.forEach(put);
   // Pre-start weekdays are opt-in choices in the picker, not calendar
   // occurrences. Even legacy weekday mappings must not invent missed work.
   const firstWeek=readCache?(readCache.firstPlanWeek??=firstPlanWeekWorkouts(state)):firstPlanWeekWorkouts(state);
   firstWeek.forEach(choice=>all.delete(choice.logicalSessionId));
-  if(readCache&&!readCache.materialized)readCache.materialized=records(state).map(record=>materialize(state,record));
-  (readCache?.materialized || records(state).map(record=>materialize(state,record))).forEach(put);
+  const stored=records(state);
+  if(readCache&&!readCache.materialized){
+    const fingerprint=stored.length ? flexiblePlanFingerprint(state) : null;
+    readCache.materialized=stored.map(record=>materialize(state,record,fingerprint)).filter(Boolean);
+  }
+  const materialized=readCache?.materialized ?? (()=>{
+    const matching=stored.filter(record=>record.scheduledDate===date||record.originalDate===date);
+    const fingerprint=matching.length ? flexiblePlanFingerprint(state) : null;
+    return matching.map(record=>materialize(state,record,fingerprint));
+  })();
+  materialized.forEach(put);
   // A legacy explicit skip is absent from baseWeekSchedule. Materialize only
   // its known template/date for truthful read-only presentation, without editing
   // the saved override or inventing a completion.
   const overrides=state.workoutOccurrenceOverrides?.[date];
   if(overrides&&Object.values(overrides).some(o=>o.skipWorkout)){
     const unskipped=Object.fromEntries(Object.entries(overrides).map(([id,o])=>[id,{...o,skipWorkout:false}]));
-    baseWeekSchedule({...state,workoutOccurrenceOverrides:{...state.workoutOccurrenceOverrides,[date]:unskipped}},date)
+    baseWeekSchedule({...state,workoutOccurrenceOverrides:{...state.workoutOccurrenceOverrides,[date]:unskipped}},date,{includeDuration})
       .filter(item=>overrides[item.workoutId]?.skipWorkout).forEach(item=>put({...item,skipped:true}));
   }
   return [...all.values()].map(item=>({...item,...flexibleSessionLifecycle(state,item)}));
@@ -182,14 +204,15 @@ export function flexibleOccurrenceForDate(state,date,workoutId) {
   const scheduled=items.filter(item=>item.scheduledDate===date);
   return scheduled.find(item=>['planned','missed','optional','active'].includes(item.status)) || scheduled[0] || items[0] || null;
 }
-export function flexibleSessions(state, today = isoDay()) {
+export function flexibleSessions(state, today = isoDay(), {includeDuration = true, fingerprint: plan} = {}) {
   const first = addCalendarDays(weekKey(today), -7), last = addCalendarDays(today, 13);
-  const all = new Map();
+  const all = new Map(), stored = records(state);
+  const fingerprint = plan ?? (stored.length ? flexiblePlanFingerprint(state) : null);
   for (let cursor = first; cursor <= last; cursor = addCalendarDays(cursor, 7)) {
-    for (const item of effectiveWeekSchedule(state, cursor,{includeCombined:true})) if (item.originalDate <= last) all.set(item.logicalSessionId, item);
+    for (const item of effectiveWeekSchedule(state, cursor,{includeCombined:true,includeDuration,fingerprint})) if (item.originalDate <= last) all.set(item.logicalSessionId, item);
   }
-  for (const record of records(state)) {
-    const item = materialize(state, record);
+  for (const record of stored) {
+    const item = materialize(state, record, fingerprint);
     if (item && (record.scheduledDate <= last || record.skipped)) all.set(record.id, item);
   }
   return [...all.values()].filter(item => item.originalDate >= (state.program?.trainingBlock?.startDate || weekKey(today)) || state.flexibleWeek?.sessions?.[item.logicalSessionId]).map(item => ({ ...item, status: flexibleSessionStatus(state, item, today) })).sort((a, b) => a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
@@ -245,11 +268,11 @@ export function availabilityAdjustmentScope(state, today = isoDay(), sessions = 
   });
   return { start, end, sources };
 }
-function scheduleChangeError(state, mode, today) {
+function scheduleChangeError(state, mode, today, hasConflict) {
   if (state.todayAdaptation?.mode === 'repeat') return 'Finish or cancel the repeated workout before changing the schedule.';
   if (combinedAdjustment(state)) return 'Finish or cancel the combined workout before changing its source schedule.';
   if (!validDate(today) || !state.program) return 'No current plan is available.';
-  if (flexibleWeekConflict(state,today) && mode !== 'restore') return 'Your plan changed. Review and clear the old temporary schedule first.';
+  if (mode !== 'restore' && hasConflict()) return 'Your plan changed. Review and clear the old temporary schedule first.';
   return null;
 }
 function moveSourceError(state, item, today) {
@@ -263,43 +286,49 @@ const missedMoveIsBackward = (item, toDate, today) => item.status === 'missed' &
 // include upcoming occurrences throughout the existing rolling 14-day window.
 // Explicit old-calendar moves still use flexibleSessionById, not a revived backlog.
 export function moveWorkoutCandidates(state, today = isoDay()) {
-  if (scheduleChangeError(state, 'move', today)) return [];
+  return createFlexibleWeekPlanner(state,today).moveCandidates();
+}
+function moveCandidates(state, today, planner, hasConflict) {
+  if (scheduleChangeError(state, 'move', today, hasConflict)) return [];
   const end = addCalendarDays(today, 13), adjustment = state.todayAdaptation;
-  return [...flexibleSessions(state,today),...firstPlanWeekWorkouts(state,today)].filter(item =>
+  return [...planner.sessions(),...firstPlanWeekWorkouts(state,today)].filter(item =>
     !moveSourceError(state,item,today) &&
     !(adjustment?.programDayId === item.workoutId && adjustment.date === item.scheduledDate) &&
     (item.firstPlanWeek || actionableMissedSession(state,item,today) ||
       ['planned','optional'].includes(item.status) && item.scheduledDate >= today && item.scheduledDate <= end))
-    .filter(item=>hasMoveWorkoutDestination(state,item.logicalSessionId,today))
+    .filter(item=>hasMoveDestination(planner,item.logicalSessionId,today))
     .sort((a,b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 // An occurrence's visible status is not scheduling permission. Resolve the exact
 // identity and validate a real destination before advertising the operation.
 // Stop at the first valid choice; the picker still enumerates the full window.
 export function hasMoveWorkoutDestination(state, sessionId, today = isoDay()) {
+  return createFlexibleWeekPlanner(state,today).hasMove(sessionId);
+}
+function hasMoveDestination(planner, sessionId, today) {
   for(let index=0;index<14;index++) {
-    if(proposeFlexibleWeek(state,{mode:'move',sessionId,toDate:addCalendarDays(today,index)},today).status==='ready')return true;
+    if(planner.check({mode:'move',sessionId,toDate:addCalendarDays(today,index)}).status==='ready')return true;
   }
   return false;
 }
 // The Adjust week entry opens the existing mode surface. Offer it only when
 // that surface has an eligible operation or a saved change to inspect/resolve.
-export function hasTemporaryScheduleAction(state,today=isoDay()) {
-  const review=temporaryScheduleReview(state,today);
+function hasScheduleAction(state,today,review,planner) {
   if(review.items.length || review.historical.length || combinedAdjustment(state))return true;
-  if(proposeFlexibleWeek(state,{mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'},today).remainingSessions)return true;
-  if(missedFlexibleSessions(state,today).some(item=>proposeFlexibleWeek(state,{mode:'skip',sessionId:item.logicalSessionId},today).status==='ready'))return true;
-  return moveWorkoutCandidates(state,today).length>0;
+  if(planner.check({mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'}).remainingSessions)return true;
+  if(missedFlexibleSessions(state,today,planner.sessions()).some(item=>planner.check({mode:'skip',sessionId:item.logicalSessionId}).status==='ready'))return true;
+  return planner.moveCandidates().length>0;
 }
 // Destination affordances use the same full validation as review and Apply.
 // A freestyle session is not a planned occurrence and occupies no schedule slot.
 export function moveWorkoutDestinations(state, sessionId, today = isoDay(), availabilityRequest = null) {
   const moveState = availabilityRequest ? availabilityMoveState(state, availabilityRequest, sessionId,today) : state;
+  const moves = createFlexibleWeekPlanner(moveState,today), availability = moveState === state ? moves : createFlexibleWeekPlanner(state,today);
   return Array.from({length:14}, (_, index) => {
     const date = addCalendarDays(today, index);
-    const proposal = proposeFlexibleWeek(moveState, {mode:'move', sessionId, toDate:date}, today);
-    const draft = proposal.status === 'ready' && availabilityRequest ? proposeFlexibleWeek(state, {...availabilityRequest,
-      resolutions:[...(availabilityRequest.resolutions || []).filter(r=>r.sessionId!==sessionId),{mode:'move',sessionId,toDate:date}]},today) : proposal;
+    const proposal = moves.check({mode:'move', sessionId, toDate:date});
+    const draft = proposal.status === 'ready' && availabilityRequest ? availability.check({...availabilityRequest,
+      resolutions:[...(availabilityRequest.resolutions || []).filter(r=>r.sessionId!==sessionId),{mode:'move',sessionId,toDate:date}]}) : proposal;
     return {date, available:proposal.status === 'ready' && ['ready','insufficient-capacity'].includes(draft.status), reason:proposal.error || draft.error || ''};
   });
 }
@@ -316,18 +345,18 @@ function availabilityMoveState(state, request, exceptId,today=isoDay()) {
 }
 // Explicit calendar selection may open a closed-week fact. It does not extend
 // Today's backlog, nor scan old weeks unless that exact identity was requested.
-export function flexibleSessionById(state, id, today=isoDay()) {
-  const current=flexibleSessions(state,today).find(item=>item.logicalSessionId===id);
+export function flexibleSessionById(state, id, today=isoDay(), {includeDuration=true, sessions=flexibleSessions(state,today,{includeDuration})}={}) {
+  const current=sessions.find(item=>item.logicalSessionId===id);
   if(current)return current;
   const firstWeek=firstPlanWeekWorkouts(state,today).find(item=>item.logicalSessionId===id);
   if(firstWeek)return firstWeek;
   const originalDate=String(id||'').slice(-10);
   if(!validDate(originalDate) || originalDate < (state.program?.trainingBlock?.startDate || isoDay(state.program?.createdAt || today)))return null;
-  const item=effectiveWeekSchedule(state,originalDate,{includeCombined:true}).find(item=>item.logicalSessionId===id);
+  const item=effectiveWeekSchedule(state,originalDate,{includeCombined:true,includeDuration}).find(item=>item.logicalSessionId===id);
   return item?{...item,status:flexibleSessionStatus(state,item,today)}:null;
 }
-export function missedFlexibleSessions(state, today = isoDay()) {
-  return flexibleSessions(state, today).filter(item => actionableMissedSession(state, item, today))
+export function missedFlexibleSessions(state, today = isoDay(), sessions = flexibleSessions(state,today,{includeDuration:false})) {
+  return sessions.filter(item => actionableMissedSession(state, item, today))
     .sort((a,b) => a.scheduledDate.localeCompare(b.scheduledDate) || a.originalDate.localeCompare(b.originalDate) || a.logicalSessionId.localeCompare(b.logicalSessionId));
 }
 // Status is factual; actionability expires at the end of the destination week.
@@ -344,14 +373,42 @@ function overlap(a, b) {
   const first = muscles(a.workout), second = muscles(b.workout);
   return [...first].some(m => second.has(m)) || (/lower|legs/i.test(a.workout.name) && /lower|legs/i.test(b.workout.name));
 }
-export function proposeFlexibleWeek(state, request, today = isoDay()) {
+// A batch owns one read of the current schedule. Visibility checks run the
+// same rules as review without serializing history or constructing a receipt.
+export function createFlexibleWeekPlanner(state,today=isoDay()) {
+  let snapshot, conflict, fingerprint;
+  const stored = records(state);
+  const readFingerprint = () => fingerprint ??= stored.length ? flexiblePlanFingerprint(state) : null;
+  const sessions = () => snapshot ??= flexibleSessions(state,today,{includeDuration:false,fingerprint:readFingerprint()});
+  const hasConflict = () => conflict ??= hasStaleScheduleRecords(state,today,stored,readFingerprint());
+  const planner = {
+    sessions,
+    check:request=>buildFlexibleWeekProposal(state,request,today,{sessions,hasConflict}),
+    hasMove:sessionId=>hasMoveDestination(planner,sessionId,today),
+    swaps:sessionId=>sessions().filter(other=>planner.check({mode:"swap",sessionId,otherSessionId:other.logicalSessionId}).status==="ready"),
+    moveCandidates:()=>moveCandidates(state,today,planner,hasConflict),
+    hasScheduleAction:review=>hasScheduleAction(state,today,review,planner),
+  };
+  return planner;
+}
+
+export function proposeFlexibleWeek(state,request,today=isoDay()) {
+  return buildFlexibleWeekProposal(state,request,today,{
+    sessions:()=>flexibleSessions(state,today,{includeDuration:false}),
+    hasConflict:()=>flexibleWeekConflict(state,today),
+    review:true,
+  });
+}
+
+function buildFlexibleWeekProposal(state, request, today, {sessions, hasConflict, review = false}) {
   const fail = error => ({ status: 'conflict', error });
-  const scheduleError = scheduleChangeError(state,request.mode,today);
+  const scheduleError = scheduleChangeError(state,request.mode,today,hasConflict);
   if (scheduleError) return fail(scheduleError);
-  const fingerprint = flexibleReviewFingerprint(state), end = addCalendarDays(today, 13);
-  const all = flexibleSessions(state, today);
+  const end = addCalendarDays(today, 13);
+  let all = sessions();
   if(request.sessionId && !all.some(i=>i.logicalSessionId===request.sessionId)){
-    const explicit=flexibleSessionById(state,request.sessionId,today);if(explicit)all.push(explicit);
+    const explicit=flexibleSessionById(state,request.sessionId,today,{sessions:all,includeDuration:false});
+    if(explicit)all=[...all,explicit];
   }
   const byId = new Map(all.map(i => [i.logicalSessionId, i]));
   const changes = [];
@@ -423,7 +480,8 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
       if (!targetIds.has(resolution.sessionId) || resolved.has(resolution.sessionId) || !['move','skip'].includes(resolution.mode))
         return fail('Resolve only remaining workouts from this plan week, once each.');
       const item=byId.get(resolution.sessionId);
-      const checked=proposeFlexibleWeek(availabilityMoveState(state,request,resolution.sessionId,today),resolution,today);
+      const staged=availabilityMoveState(state,request,resolution.sessionId,today);
+      const checked=createFlexibleWeekPlanner(staged,today).check(resolution);
       if (checked.status!=='ready') return fail(checked.error);
       resolved.set(resolution.sessionId,{toDate:resolution.mode==='skip'?null:resolution.toDate,skipped:resolution.mode==='skip',resolution:resolution.mode});
       push(item,resolution.mode==='skip'?item.scheduledDate:resolution.toDate,resolution.mode==='skip');
@@ -497,7 +555,7 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
       for(const item of sources)if(ids.has(item.logicalSessionId) && item.scheduledDate!==assignments.get(item.logicalSessionId))
         push(item,assignments.get(item.logicalSessionId));
     }
-    if (availabilityDetails.unresolvedCount) return {status:'insufficient-capacity',fingerprint,today,request:structuredClone(request),
+    if (availabilityDetails.unresolvedCount) return {status:'insufficient-capacity',...(review ? reviewReceipt(state,request,today) : {}),
       changes,availabilitySchedule,...availabilityDetails,adaptationConflict:false,warnings:[]};
   } else return fail('Choose how you want to adjust the week.');
   if (!changes.length && !availabilitySchedule && request.mode !== 'restore') return fail('No schedule changes are needed.');
@@ -518,7 +576,7 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
   }
   if (request.mode === 'restore') {
     const kept = Object.fromEntries(temporaryScheduleRestoreScope(state,today).retained.map(r => [r.id, r]));
-    final = flexibleSessions({ ...state, flexibleWeek: { ...state.flexibleWeek, sessions: kept } }, today).filter(i => i.status !== 'skipped');
+    final = flexibleSessions({ ...state, flexibleWeek: { ...state.flexibleWeek, sessions: kept } }, today, {includeDuration:false}).filter(i => i.status !== 'skipped');
   }
   const seen = new Set();
   for (const item of final) {
@@ -526,6 +584,7 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
     if (seen.has(item.scheduledDate)) return fail('Restoring would create a collision. Adjust remaining week instead.');
     seen.add(item.scheduledDate);
   }
+  if (!review) return {status:'ready',...availabilityDetails};
   const adjusted = state.todayAdaptation;
   const adaptationConflict = changes.some(c => c.workoutId === adjusted?.programDayId && c.fromDate === adjusted?.date && (c.skipped || c.toDate !== c.fromDate));
   // Derive the scope from canonical occurrence changes without cloning the
@@ -535,11 +594,14 @@ export function proposeFlexibleWeek(state, request, today = isoDay()) {
     [...records(state).filter(record=>!changedIds.has(record.id)),...changes.map(change=>({...change,id:change.logicalSessionId,scheduledDate:change.toDate}))];
   const rejoinDate = temporaryScheduleRejoinDate(state,today,request.combinedProposal||combinedAdjustment(state),overrides);
   final.sort((a,b)=>a.scheduledDate.localeCompare(b.scheduledDate));
-  return { status: 'ready', fingerprint, today, request: structuredClone(request), changes, adaptationConflict,
+  return { status: 'ready', ...reviewReceipt(state,request,today), changes, adaptationConflict,
     availabilitySchedule,
     ...availabilityDetails,
     rejoinDate,
     warnings: final.some((i, n) => n && addCalendarDays(final[n - 1].scheduledDate, 1) === i.scheduledDate) ? ['This creates back-to-back training days.'] : [] };
+}
+function reviewReceipt(state,request,today) {
+  return {fingerprint:flexibleReviewFingerprint(state),today,request:structuredClone(request)};
 }
 export function flexibleReorderRows(proposal) {
   if(proposal?.request?.mode!=='available' || proposal.status!=='ready' || proposal.unresolvedCount)return [];
@@ -564,8 +626,16 @@ export function applyFlexibleWeek(state, proposal, { adaptationChoice } = {}) {
   return { status: 'applied', state: next };
 }
 function projectFlexibleWeek(state,proposal,{adaptationChoice,resolveSkips=true}={}) {
-  const next = structuredClone(state);
-  next.flexibleWeek ||= { schemaVersion: 1, revision: 0, sessions: {} };
+  // A schedule projection changes only these slices. Keep history, active
+  // workouts and unrelated preferences out of the clone, including on Apply.
+  const next = {
+    ...state,
+    program: resolveSkips ? structuredClone(state.program) : state.program,
+    flexibleWeek: structuredClone(state.flexibleWeek) || {schemaVersion:1,revision:0,sessions:{}},
+    weekScheduleOverrides: structuredClone(state.weekScheduleOverrides),
+    workoutOccurrenceOverrides: structuredClone(state.workoutOccurrenceOverrides),
+    todayAdaptation: structuredClone(state.todayAdaptation),
+  };
   if (proposal.request.mode === 'restore') {
     const removableIds=new Set(temporaryScheduleRestoreScope(state,proposal.today||isoDay()).removable.map(record=>record.id));
     for (const [id, record] of Object.entries(next.flexibleWeek.sessions)) if (removableIds.has(id)) {
@@ -578,13 +648,14 @@ function projectFlexibleWeek(state,proposal,{adaptationChoice,resolveSkips=true}
       delete next.flexibleWeek.sessions[id];
     }
   } else {
+    const fingerprint = flexiblePlanFingerprint(state);
     for (const change of proposal.changes) {
       if (change.toDate !== change.fromDate && next.workoutOccurrenceOverrides?.[change.fromDate])
         delete next.workoutOccurrenceOverrides[change.fromDate][change.workoutId];
     }
     for (const change of proposal.changes) {
     if (next.weekScheduleOverrides?.[weekKey(change.originalDate)]) delete next.weekScheduleOverrides[weekKey(change.originalDate)][change.workoutId];
-    next.flexibleWeek.sessions[change.logicalSessionId] = { id: change.logicalSessionId, workoutId: change.workoutId, name: change.name, originalDate: change.originalDate, scheduledDate: change.toDate, skipped: change.skipped, blockId: state.program?.trainingBlock?.id || null, blockWeekNumber: change.blockWeekNumber, planFingerprint: flexiblePlanFingerprint(state), updatedAt: new Date().toISOString() };
+    next.flexibleWeek.sessions[change.logicalSessionId] = { id: change.logicalSessionId, workoutId: change.workoutId, name: change.name, originalDate: change.originalDate, scheduledDate: change.toDate, skipped: change.skipped, blockId: state.program?.trainingBlock?.id || null, blockWeekNumber: change.blockWeekNumber, planFingerprint: fingerprint, updatedAt: new Date().toISOString() };
     const occurrence = state.workoutOccurrenceOverrides?.[change.fromDate]?.[change.workoutId];
     if (occurrence && change.toDate !== change.fromDate) {
       (next.workoutOccurrenceOverrides[change.toDate] ||= {})[change.workoutId] = structuredClone(occurrence);
@@ -609,6 +680,9 @@ function projectFlexibleWeek(state,proposal,{adaptationChoice,resolveSkips=true}
     }
   }
   next.flexibleWeek.revision += 1;
-  if(resolveSkips) resolveTrainingBlockSkips(next, records(next).filter(record => record.planFingerprint === flexiblePlanFingerprint(next)));
+  if(resolveSkips) {
+    const fingerprint = flexiblePlanFingerprint(next);
+    resolveTrainingBlockSkips(next, records(next).filter(record => record.planFingerprint === fingerprint));
+  }
   return next;
 }

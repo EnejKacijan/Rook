@@ -13,8 +13,8 @@ import { focusNavigationTarget } from './navigationFocus.js';
 import { buildCombinedProposal, combineFingerprint } from './combineWorkouts.js';
 import { CoachCombineCard } from './CoachCombine.jsx';
 import { isoDay, saveState, weekKey, weekday,calendarDate } from './domain.js';
-import { addCalendarDays, applyFlexibleWeek, flexibleSessions, flexibleSessionById, flexibleWeekConflict, flexibleReviewFingerprint, temporaryScheduleReview, proposeFlexibleWeek, missedFlexibleSessions, moveWorkoutCandidates, moveWorkoutDestinations, remainingPlanWeekDates } from './flexibleWeek.js';
-import {hasMoveWorkoutDestination,temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
+import { addCalendarDays, applyFlexibleWeek, createFlexibleWeekPlanner, flexibleSessionById, flexibleWeekConflict, flexibleReviewFingerprint, temporaryScheduleReview, proposeFlexibleWeek, missedFlexibleSessions, moveWorkoutDestinations, remainingPlanWeekDates } from './flexibleWeek.js';
+import {temporaryScheduleRestoreScope,temporaryScheduleRejoinDate} from './flexibleWeek.js';
 import {combinedAdjustment} from './combinedWorkoutLifecycle.js';
 import './flexibleWeekChooser.css';
 import {reviewScheduleRecovery,applyScheduleRecovery} from './scheduleRecovery.js';
@@ -46,11 +46,13 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const [recovery,setRecovery]=useState(null);
   const feedback=useMissedWorkoutFeedback();
   const [useToday,setUseToday]=useState(null);
-  const today = useCalendarDay(), sessions = useMemo(()=>flexibleSessions(state,today),[state,today]);
+  const today = useCalendarDay();
+  const planner = useMemo(()=>createFlexibleWeekPlanner(state,today),[state,today]);
+  const sessions = planner.sessions();
   const remainingWeekDates = remainingPlanWeekDates(today);
-  const missed = useMemo(()=>missedFlexibleSessions(state,today),[state,today]);
+  const missed = useMemo(()=>missedFlexibleSessions(state,today,sessions),[state,today,sessions]);
   const initialSessionId = request.sessionId || (request.missed && missed.length===1 ? missed[0].logicalSessionId : null);
-  const initialSwap = request.swap && request.otherSessionId ? proposeFlexibleWeek(state,{mode:'swap',sessionId:request.sessionId,otherSessionId:request.otherSessionId},today) : null;
+  const [initialSwap] = useState(()=>request.swap && request.otherSessionId ? proposeFlexibleWeek(state,{mode:'swap',sessionId:request.sessionId,otherSessionId:request.otherSessionId},today) : null);
   const [steps, setSteps] = useState(initialSwap?.status==='ready' ? ['mode','swap','review'] : request.reviewExisting ? ['mode','existing'] : initialSessionId ? ['mode', request.swap ? 'swap' : !request.destination && missed.some(s=>s.logicalSessionId===initialSessionId) ? 'recovery' : 'destination'] : request.missed ? ['mode','missed'] : request.move ? ['pick'] : ['mode']);
   const step = steps.at(-1);
   const setStep = next => setSteps(current => {
@@ -67,8 +69,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const [combinePreview,setCombinePreview]=useState(null);
   const availabilityRequest=useMemo(()=>({mode:'available',availableDates:available,dateScope:'current-week',resolutions,
     ...(combinedProposal?{combinedProposal}:{}),...(workoutOrder?{workoutOrder}:{})}),[available,resolutions,combinedProposal,workoutOrder]);
-  const availabilityPreview = useMemo(()=>['available','review'].includes(step) ? proposeFlexibleWeek(state,
-    availabilityRequest,today) : null,[state,today,availabilityRequest,step]);
+  const availabilityPreview = useMemo(()=>step==='available' ? planner.check(availabilityRequest) : null,[planner,availabilityRequest,step]);
   const canReviewSchedule = Boolean(availabilityPreview?.remainingSessions);
   const [proposal, setProposal] = useState(initialSwap?.status==='ready' ? initialSwap : null);
   const [error, setError] = useState('');
@@ -82,7 +83,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const previousView = useRef({step,useToday});
   const staleAvailabilityReview=()=>proposal?.availabilitySchedule && (proposal.today!==today || proposal.fingerprint!==flexibleReviewFingerprint(state) ||
     proposal.request.combinedProposal && proposal.request.combinedProposal.fingerprint!==combineFingerprint(state));
-  const reorderRows=staleAvailabilityReview()?[]:flexibleReorderRows(proposal);
+  const reorderRows=useMemo(()=>['review','reorder'].includes(step) && !staleAvailabilityReview() ? flexibleReorderRows(proposal) : [],[step,state,today,proposal]);
   useEffect(()=>{
     if(step==='reorder' && !reorderRows.length){
       setStep('review');setError('The plan or sessions changed. Review the schedule again.');
@@ -121,7 +122,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       : screen.querySelector(step==='recovery' && returnAction.current ? `[data-recovery-action="${returnAction.current}"]` : '.detail-header-back') || screen.querySelector('button'));
     returnAction.current=null;
   }, [step,useToday]);
-  const item = useMemo(()=>sessionId ? flexibleSessionById(state,sessionId,today) : null,[state,sessionId,today]);
+  const item = useMemo(()=>sessionId ? flexibleSessionById(state,sessionId,today,{sessions,includeDuration:false}) : null,[state,sessionId,today,sessions]);
   const missedDestination = step==='destination' && item?.status==='missed';
   const firstWeekDestination=step==='destination'&&item?.firstPlanWeek;
   const recoveryView = ['recovery','more'].includes(step);
@@ -134,25 +135,27 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const todayDestination = destinations.find(destination=>destination.date===today);
   const destinationReasonId = useId();
   const dateWeeks = [...new Set(validDates.map(date=>weekKey(date)))];
-  const candidates = useMemo(()=>['mode','pick'].includes(step) ? moveWorkoutCandidates(state,today) : [],[state,today,step]);
-  const canMove = useMemo(()=>item && ['recovery','more'].includes(step) && hasMoveWorkoutDestination(state,sessionId,today),[state,item,sessionId,today,step]);
-  const canTrainToday = useMemo(()=>item && canUseWorkoutToday(state,{sessionId},today),[state,item,sessionId,today]);
+
+  const canMove = useMemo(()=>item && ['recovery','more'].includes(step) && planner.hasMove(sessionId),[planner,item,sessionId,step]);
+  const canTrainToday = useMemo(()=>item && canUseWorkoutToday(state,{sessionId},today,planner),[state,item,sessionId,today,planner]);
   const existingReview = useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
-  const eligibleMissed=useMemo(()=>missed.filter(item=>proposeFlexibleWeek(state,{mode:'skip',sessionId:item.logicalSessionId},today).status==='ready'),[state,today,missed]);
+  const eligibleMissed=useMemo(()=>missed.filter(item=>planner.check({mode:'skip',sessionId:item.logicalSessionId}).status==='ready'),[planner,missed]);
   const hasMissed = eligibleMissed.length > 0;
-  const canAdjustWeek=useMemo(()=>Boolean(proposeFlexibleWeek(state,{mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'},today).remainingSessions),[state,today]);
-  const remainingMoves=useMemo(()=>step==='available'&&!canAdjustWeek?moveWorkoutCandidates(state,today):[],[state,today,step,canAdjustWeek]);
+  const canAdjustWeek=useMemo(()=>Boolean(planner.check({mode:'available',availableDates:remainingPlanWeekDates(today),dateScope:'current-week'}).remainingSessions),[planner,today]);
+  const findMoves=['mode','pick'].includes(step) || step==='available'&&!canAdjustWeek || step==='existing'&&!canAdjustWeek&&!hasMissed;
+  const candidates=useMemo(()=>findMoves ? planner.moveCandidates() : [],[planner,findMoves]);
+  const remainingMoves=step==='available'&&!canAdjustWeek?candidates:[];
   const restoreScope=useMemo(()=>temporaryScheduleRestoreScope(state,today),[state,today]);
-  const restorePreview=useMemo(()=>restoreScope.removable.length ? proposeFlexibleWeek(state,{mode:'restore'},today) : null,[state,today,restoreScope]);
+  const restorePreview=useMemo(()=>restoreScope.removable.length ? planner.check({mode:'restore'}) : null,[planner,restoreScope]);
   const canRestore=restorePreview?.status==='ready';
-  const canEditSchedule=useMemo(()=>hasMissed||canAdjustWeek||moveWorkoutCandidates(state,today).length>0,[state,today,hasMissed,canAdjustWeek]);
+  const canEditSchedule=hasMissed||canAdjustWeek||candidates.length>0;
   const rejoinDate=useMemo(()=>temporaryScheduleRejoinDate(state,today),[state,today]);
   const combinedSchedule=combinedAdjustment(state);
   const existingChangeCount=existingReview.items.length+(combinedSchedule?1:0);
   const historicalChangeCount=existingReview.historical.length;
   const skippedLabel=date=>weekKey(date)===weekKey(today)?'Skipped this week':'Skipped this occurrence';
   const openRestore=()=>{const next=proposeFlexibleWeek(state,{mode:'restore'},today);if(next.status!=='ready'){setError(next.error);return;}setProposal(next);setError('');setStep('restore-confirm');};
-  const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? sessions.filter(s=>proposeFlexibleWeek(state,{mode:'swap',sessionId,otherSessionId:s.logicalSessionId},today).status==='ready') : [],[state,today,item,step,sessions,sessionId]);
+  const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? planner.swaps(sessionId) : [],[planner,item,step,sessionId]);
   const simpleSwap = proposal?.request.mode === 'swap';
   const simpleMove = proposal?.request.mode === 'move' && !proposal.adaptationConflict;
   const firstWeekMove=simpleMove&&item?.firstPlanWeek&&item.logicalSessionId===proposal.request.sessionId;
@@ -184,7 +187,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   };
   const review = action => {
     setResolutionSessionId(null);
-    setError(''); const result = action.mode==='available' ? availabilityPreview : proposeFlexibleWeek(state, action, today);
+    setError(''); const result = proposeFlexibleWeek(state, action.mode==='available' ? availabilityRequest : action, today);
     if (action.mode === 'available' && !result.availabilitySchedule?.length) { setAvailabilityResult(result); setStep('availability-result'); return; }
     if (action.mode === 'available') {setProposal(result);setStep('review');return;}
     if (result.status !== 'ready') { setError(result.error); return; }
@@ -196,6 +199,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     setPersistenceFailed(false);
     const result = applyFlexibleWeek(state, proposal, { adaptationChoice });
     if (result.status !== 'applied') { setError(result.error); return; }
+    if (result.state === state) { applied.current = true; close(); return; }
     if (!saveState(result.state)) { setPersistenceFailed(true); setError('ROOK couldn’t save the schedule. Your previous schedule is unchanged. Try again.'); return; }
     applied.current = true; update(() => result.state, {persistedState:result.state});
     if(feedback?.scheduleApplied){feedback.scheduleApplied(state,result.state);close();return;}
