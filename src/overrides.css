@@ -300,13 +300,16 @@ body {
   gap: 4px;
 }
 .workout-photo-entry-card strong { font-size: 14px; }
-.workout-photo-entry-card small,
-.workout-photo-entry-privacy {
+.workout-photo-entry-card small {
   color: var(--rook-secondary);
   font-size: 11px;
   line-height: 1.4;
 }
-.workout-photo-entry-privacy { display: block; margin-top: 8px; }
+.workout-photo-entry-strip { margin-left: auto; display: flex; flex-shrink: 0; }
+.workout-photo-entry-strip:empty { display: none; }
+.workout-photo-entry-strip > span { width: 40px; height: 40px; overflow: hidden; border: 2px solid var(--rook-surface); border-radius: 10px; background: var(--rook-surface-muted); }
+.workout-photo-entry-strip > span + span { margin-left: -14px; }
+.workout-photo-entry-strip img { width: 100%; height: 100%; display: block; object-fit: cover; }
 .working-weights-section { padding-bottom: 0; }
 
 .goal-progress-section { margin-top: 30px !important; }
@@ -428,6 +431,15 @@ body {
 .exercise-e1rm-trend g[role="button"]:focus-visible .e1rm-point-hit { stroke: var(--rook-secondary); stroke-width: 1; }
 .exercise-e1rm-trend .e1rm-summary { margin: 7px 0 0; min-height: 16px; color: var(--rook-secondary); font-size: 11px; line-height: 1.45; }
 .exercise-e1rm-trend polyline { stroke: var(--rook-accent, #1f6b4c); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+@media (prefers-reduced-motion: no-preference) {
+  .trend-line-reveal { stroke-dasharray: 1 1; animation: trend-line-draw 480ms var(--rook-ease-standard, ease-out) 200ms both; }
+  .exercise-e1rm-trend:has(.trend-line-reveal) :is(.e1rm-point, .e1rm-point-value) { animation: trend-point-in 180ms ease-out 500ms both; }
+}
+@keyframes trend-line-draw {
+  from { stroke-dashoffset: 1; }
+  to { stroke-dashoffset: 0; }
+}
+@keyframes trend-point-in { from { opacity: 0; } to { opacity: 1; } }
 .exercise-e1rm-note { margin: 11px 0 0 !important; color: var(--rook-muted, #8a8783); font-size: 10.5px !important; line-height: 1.45; }
 :root[data-appearance="dark"] .exercise-performance-history .list-row > span:last-child { color: var(--rook-secondary, #b7b1a5); }
 @media (max-width: 340px) {
@@ -1778,6 +1790,7 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
 }
 .workout-photo-picker:focus-within { border-color: var(--rook-accent); }
 .workout-photo-picker.is-disabled { opacity: .55; cursor: wait; }
+.workout-photo-picker.is-empty { width: 100%; min-height: 48px; border-style: dashed; background: transparent; }
 .workout-photo-picker input {
   position: absolute;
   width: 1px;
@@ -1819,6 +1832,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   font-weight: 800;
   letter-spacing: .08em;
 }
+.workout-photo-memory .workout-photo-thumbnail { width: min(100%, 360px); height: auto; aspect-ratio: 1; margin-top: 14px; border-radius: 14px; }
+.workout-photo-memory .workout-photo-thumbnail > span { right: 12px; bottom: 12px; }
 .workout-photo-actions {
   margin-top: 10px;
   display: flex;
@@ -1826,6 +1841,7 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   gap: 14px;
 }
 .workout-photo-actions .workout-photo-picker { margin-top: 0; }
+.workout-photo-memory .workout-photo-actions .workout-photo-picker { flex: 1; min-width: 0; }
 .workout-photo-actions > button,
 .workout-photo-missing button {
   min-height: 44px;
@@ -1867,7 +1883,7 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   grid-template-rows: auto minmax(0, 1fr);
   gap: 12px;
   place-items: stretch;
-  background: rgba(8, 9, 8, .94);
+  background: rgb(8, 9, 8);
 }
 .workout-photo-viewer-panel {
   position: relative;
@@ -1912,6 +1928,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   letter-spacing: .08em;
 }
 .workout-photo-viewer-actions > .workout-photo-delete { color: #ef8a82; grid-column: 1 / -1; justify-self: center; }
+.workout-photo-viewer-actions > button:not(.workout-photo-delete) { min-height: 46px; border: 1px solid rgba(255, 255, 255, .22); border-radius: 13px; }
+.workout-photo-viewer-actions > button:not(.workout-photo-delete):disabled { opacity: .45; }
 .workout-photo-export-status { color: #c8ccc9; font-size: 12px; text-align: center; }
 :root[data-appearance="dark"][data-style="premium"] .workout-photo-viewer-actions > .workout-photo-delete {
   color: #ef8a82;
@@ -2003,6 +2021,9 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   min-height: min(540px, 92dvh);
 }
 .workout-photo-timeline-screen > h1 { margin-bottom: 0; }
+.workout-photo-timeline-screen .workout-photo-compare-entry { margin-top: 8px; border-block: 1px solid var(--rook-border); }
+.workout-photo-timeline-screen .workout-photo-compare-entry small { display: block; margin-top: 3px; color: var(--rook-secondary); }
+.workout-photo-timeline-screen .workout-photo-compare-entry:disabled { opacity: .5; }
 .workout-photo-timeline-intro {
   max-width: 31rem;
   margin: 10px 0 0;

@@ -321,6 +321,14 @@
 .plan-editor-last-session > div { display:grid; grid-template-columns:40px minmax(0,1fr); gap:8px; align-items:baseline; }
 .plan-editor-last-session small { font-size:11px; color:var(--rook-secondary,#77736f); }
 .plan-editor-last-session strong { font-size:12px; font-weight:600; overflow-wrap:anywhere; }
+.plan-editor-weight-reference { margin-top: 14px; }
+.plan-editor-weight-reference .rook-details + .rook-details { border-top: 1px solid var(--rook-border); }
+.plan-editor-weight-reference .plan-editor-weights { margin: 0 0 12px; }
+.plan-editor-weight-reference .text-button { min-height: 44px; text-align: left; }
+.plan-weight-history-list { font-size: 13px; color: var(--rook-secondary); }
+.plan-weight-history-list > div + div { margin-top: 10px; }
+.plan-weight-history-list strong { color: var(--rook-text); }
+.plan-weight-history-list ul { padding-left: 18px; margin: 4px 0 12px; }
 .plan-editor .match-review { margin-top: 9px; }
 .plan-editor .match-review > div > span { color: #8a8783; font-size: 10px; line-height: 1.3; }
 .plan-editor-actions { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 4px 12px; margin-top: 12px; }

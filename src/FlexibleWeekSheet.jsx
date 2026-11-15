@@ -20,10 +20,20 @@ import './flexibleWeekChooser.css';
 import {reviewScheduleRecovery,applyScheduleRecovery} from './scheduleRecovery.js';
 import {useDurableAction} from './useDurableAction.js';
 import {AnimatedDetails} from './AnimatedDetails.jsx';
-import {exerciseName} from './domain.js';
+import {displayWeight,exerciseMeasure,exerciseName,weightUnit} from './domain.js';
 import {ReviewDetails} from './ReviewDetails.jsx';
 
 const dateLabel = date => new Intl.DateTimeFormat('en', { weekday: 'short', month: 'short', day: 'numeric' }).format(new Date(`${date}T12:00:00`));
+function RecoveryWorkoutPreview({workout,label,units}) {
+  if(!workout?.exercises?.length)return null;
+  return <AnimatedDetails><summary>{label} · {workout.exercises.length} {workout.exercises.length===1?'exercise':'exercises'}</summary>
+    <ul>{workout.exercises.map(e=>{
+      const reps=e.repMin?` × ${e.repMin}${e.repMax!=null&&e.repMax!==e.repMin?`–${e.repMax}`:''}${exerciseMeasure(e)==='seconds'?' sec':''}`:'';
+      const weights=e.sets.map(set=>Number.isFinite(set.weight)?displayWeight(set.weight,units):'—');
+      const loads=weights.some(weight=>weight!=='—')?` · ${new Set(weights).size===1?weights[0]:weights.join(' / ')} ${weightUnit(units)}`:'';
+      return <li key={e.id}><strong>{exerciseName(e)}</strong> · {reps?`${e.sets.length}${reps}`:`${e.sets.length} ${e.sets.length===1?'set':'sets'}`}{loads}</li>;
+    })}</ul></AnimatedDetails>;
+}
 function ScheduleHistory({entries}) {
   return <section className="flexible-schedule-history" aria-labelledby="recent-schedule-changes">
     <h2 id="recent-schedule-changes" className="eyebrow">Earlier this week</h2>
@@ -49,6 +59,7 @@ export function missedSessionDestinations(state, sessionId, today=isoDay()) {
 export function FlexibleWeekSheet({ state, update, close, Header, request = {}, setDetail, onBack }) {
   const recoveryAction=useDurableAction(state,update);
   const [recovery,setRecovery]=useState(null);
+  const recoveryChange=recovery?.record.skipped?'skip':'move';
   const feedback=useMissedWorkoutFeedback();
   const [useToday,setUseToday]=useState(null);
   const today = useCalendarDay();
@@ -180,7 +191,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const openRestore=()=>{
     const next=proposeFlexibleWeek(state,restoreRequest,today);
     if(next.status!=='ready'||!next.restoreRecords.length){setError(next.error||'There are no changes to restore.');return;}
-    setProposal(next);setError('');setStep('restore-confirm');
+    setAdaptationChoice('restore');setProposal(next);setError('');setStep('restore-confirm');
   };
   const editSchedule=()=>{setFocusedChangeId(null);setSteps(['mode']);};
   const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? planner.swaps(sessionId) : [],[planner,item,step,sessionId]);
@@ -306,7 +317,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         {entry.skipped&&entry.scheduledDate!==entry.originalDate&&<small>Last scheduled {dateLabel(entry.scheduledDate)}</small>}
         {entry.skipped&&canRestore&&restoreScope.removable.some(record=>record.id===entry.id)&&<small>This skip can be undone.</small>}
         {entry.issue && <small>{entry.issue}</small>}
-        {entry.issue && <button type="button" className="button secondary" onClick={()=>openRecovery(entry.id)}>Repair this move</button>}
+          {entry.issue && <button type="button" className="button secondary" onClick={()=>openRecovery(entry.id)}>{entry.skipped?'Review this skip':'Review this move'}</button>}
       </article>)}{!focusedChangeId&&combinedSchedule&&<article>
         <small className="eyebrow">COMBINED</small><strong>{combinedSchedule.workout.name}</strong>
         {combinedSchedule.sourceSessions.map(source=><span key={source.logicalSessionId}>{source.name} · {dateLabel(source.originalDate)} → {dateLabel(combinedSchedule.date)}</span>)}
@@ -326,13 +337,27 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       </SheetActionFooter>
     </>}
     {['repair','repair-remove'].includes(step)&&recovery&&<>
-      <h1>{step==='repair-remove'?'Remove this outdated move?':'Repair this move'}</h1>
-      <p><strong>{recovery.workout?.workoutName||recovery.workout?.name||recovery.record.name}</strong></p>
-      <p>{dateLabel(recovery.record.originalDate)} → {dateLabel(recovery.record.scheduledDate)}</p>
+      <h1>{step==='repair-remove'?`Remove temporary ${recoveryChange}?`:recovery.record.name||'Review workout change'}</h1>
+      <p>{step==='repair-remove'&&recovery.record.name?`${recovery.record.name} · `:''}{dateLabel(recovery.record.originalDate)} → {dateLabel(recovery.record.scheduledDate)}</p>
       {step==='repair'?<>
-        {recovery.workout?<><p>Keep the moved date using the current plan’s exercises and targets.</p><AnimatedDetails><summary>Review exercises · {recovery.workout.exercises.length}</summary><ul>{recovery.workout.exercises.map(e=><li key={e.id}>{exerciseName(e)} · {e.sets.length} sets · {e.repMin}{e.repMax!==e.repMin?`–${e.repMax}`:''}</li>)}</ul></AnimatedDetails></>:<p role="status">{recovery.reason}</p>}
-        <SheetActionFooter><button className="button primary" disabled={!recovery.workout} onClick={()=>repair('keep')}>KEEP MOVED DATE</button><button className="text-button" onClick={()=>setStep('repair-remove')}>Remove outdated move</button><button className="text-button" onClick={goBack}>Back to schedule</button></SheetActionFooter>
-      </>:<><p>Your recorded workouts stay unchanged. After removing this move:</p>{recovery.afterRemoval.length?<ul>{recovery.afterRemoval.map((item,index)=><li key={index}>{dateLabel(item.date)} · {item.name} · {item.status}</li>)}</ul>:<p>This workout has no remaining placement in the current schedule.</p>}<SheetActionFooter><button className="button primary" onClick={()=>repair('remove')}>REMOVE OUTDATED MOVE</button><button className="button quiet" onClick={goBack}>KEEP FOR REVIEW</button></SheetActionFooter></>}
+        <p>{recovery.workout||recovery.adjustment?.workout
+          ? recovery.adjustment ? 'Choose which version to use on the moved date. This doesn’t change your weekly plan.' : 'Keep the moved date and use the current plan’s exercises and targets.'
+          : recovery.reason}</p>
+        {recovery.groupCount>1&&<p>These workouts moved together. This decision applies to both dates.</p>}
+        <RecoveryWorkoutPreview workout={recovery.adjustment?.snapshot} label="Your one-off adjustment" units={state.profile.units} />
+        <RecoveryWorkoutPreview workout={recovery.workout} label="Workout from the current plan" units={state.profile.units} />
+        {recovery.adjustment?.reason&&recovery.workout&&<p role="status">Your one-off adjustment can’t be used: {recovery.adjustment.reason}</p>}
+        <SheetActionFooter>
+          {error&&<p role="alert">{error}</p>}
+          {recovery.adjustment?.workout&&<button className="button primary" onClick={()=>repair('keep-adjustment')}>KEEP DATE AND ADJUSTMENT</button>}
+          {recovery.workout&&<button className={`button ${recovery.adjustment?.workout?'secondary':'primary'}`} onClick={()=>repair('keep')}>{recovery.adjustment?'KEEP DATE, USE UPDATED PLAN':'KEEP MOVED DATE'}</button>}
+          <button className={`button ${recovery.workout||recovery.adjustment?.workout?'quiet':'secondary'}`} onClick={()=>{setError('');setStep('repair-remove');}}>REMOVE TEMPORARY {recoveryChange.toUpperCase()}</button>
+        </SheetActionFooter>
+      </>:<>
+        <p>{recovery.discardsChanges?'This also clears the affected one-off edits. ':''}Completed workouts and your permanent plan stay unchanged.</p>
+        {recovery.afterRemoval.length?<ul>{recovery.afterRemoval.map((item,index)=><li key={index}>{dateLabel(item.date)} · {item.name} · {item.status}</li>)}</ul>:<p>The current plan has no workout to put back for this occurrence.</p>}
+        <SheetActionFooter>{error&&<p role="alert">{error}</p>}<button className="button primary" onClick={()=>repair('remove')}>REMOVE TEMPORARY {recoveryChange.toUpperCase()}</button><button className="button quiet" onClick={goBack}>KEEP FOR REVIEW</button></SheetActionFooter>
+      </>}
     </>}
     {step==='restore-confirm'&&<>
       <h1 id="schedule-restore-title" className="schedule-change-title" tabIndex={-1}>{restoreConfirmationTitle}</h1>

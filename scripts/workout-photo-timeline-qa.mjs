@@ -148,7 +148,7 @@ async function openTimeline(run) {
   const entry = run.page.locator(".workout-photo-entry-section");
   await entry.scrollIntoViewIfNeeded();
   await entry.getByRole("button").click();
-  await run.page.getByRole("heading", { name: "Your training, over time." }).waitFor();
+  await run.page.locator(".workout-photo-timeline-screen").waitFor();
 }
 
 const empty = await open(fixture(0));
@@ -163,6 +163,11 @@ await empty.context.close();
 
 const few = await open(fixture(5));
 await openTimeline(few);
+await few.page.getByRole("button", { name: "Close workout photos" }).click();
+await few.page.locator(".workout-photo-timeline-screen").waitFor({ state: "detached" });
+await few.page.waitForFunction(() => [...document.querySelectorAll('.workout-photo-entry-strip img')].filter(image => image.naturalWidth).length === 3);
+await few.page.locator(".workout-photo-entry-card").screenshot({ path: output("390-progress-entry-previews.png") });
+await few.page.locator(".workout-photo-entry-card").click();
 await few.page.locator(".workout-photo-timeline-item img.is-ready").first().waitFor();
 assert.equal(await few.page.getByText("September 2026", { exact: true }).count(), 1);
 assert.equal(await few.page.getByText("August 2026", { exact: true }).count(), 1);
@@ -189,7 +194,8 @@ assert.equal(await many.page.locator(".workout-photo-timeline-item").count(), 24
 await many.page.screenshot({ path: output("390-many-photos.png") });
 await many.page.getByRole("button", { name: "Close workout photos" }).click();
 await many.page.locator(".workout-photo-timeline-screen").waitFor({ state: "detached" });
-await many.page.waitForTimeout(50);
+await many.page.getByRole("button", { name: "TODAY", exact: true }).click();
+await many.page.waitForFunction(() => window.__photoUrlStats.revoked === window.__photoUrlStats.created);
 const cleanupStats = await many.page.evaluate(() => window.__photoUrlStats);
 assert.equal(cleanupStats.revoked, cleanupStats.created, "every transient thumbnail URL is revoked on unmount");
 await assertClean(many, "hundreds/memory cleanup");

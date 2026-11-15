@@ -52,11 +52,17 @@ export function flexibleWeekConflict(state, today = isoDay()) {
 }
 function hasStaleScheduleRecords(state,today,stored,fingerprint) {
   return stored.some(record => {
-    if (record.planFingerprint === fingerprint) return false;
+    if (!needsScheduleResolution(state,record,today,fingerprint)) return false;
     const lifecycle = flexibleSessionLifecycle(state, record, today);
     return !['completed', 'active', 'combined', 'reserved'].includes(lifecycle.status) &&
       !historicalTemporarySession(state, record, today, lifecycle);
   });
+}
+function needsScheduleResolution(state,record,today,fingerprint){
+  if(record.skipped)return record.scheduledDate>=today&&record.planFingerprint!==fingerprint&&
+    !state.program?.trainingBlock?.resolvedSkips?.some(skip=>skip.logicalSessionId===record.id);
+  return record.planFingerprint!==fingerprint||!state.program?.days?.some(day=>day.id===record.workoutId)||
+    Boolean(state.workoutOccurrenceOverrides?.[record.scheduledDate]?.[record.workoutId]?.skipWorkout);
 }
 export function flexibleSessionStatus(state, item, today = isoDay()) {
   return flexibleSessionLifecycle(state,item,today).status;
@@ -127,9 +133,9 @@ export function temporaryScheduleReview(state, today = isoDay()) {
     const destination = !record.skipped && materialize(state, record, fingerprint);
     const stale = record.planFingerprint !== fingerprint || !record.skipped && !destination;
     let issue = null;
-    if (!finished && !historical && !record.skipped && !destination) {
-      issue = state.program?.days.some(day => day.id === record.workoutId)
-        ? 'The plan changed. Choose how to restore this workout to the current schedule.'
+    if (!finished && !historical && needsScheduleResolution(state,record,today,fingerprint)) {
+      issue = record.skipped ? 'The plan changed after this workout was skipped.' : state.program?.days.some(day => day.id === record.workoutId)
+        ? 'The plan changed. Review the workout and its moved date.'
         : 'The original workout is no longer in this plan. Clear its old temporary move.';
     }
     return {

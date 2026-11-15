@@ -188,7 +188,7 @@ await page.getByRole("button", { name: "Close Restore backup" }).click();
 await page.getByRole("button", { name: "PROGRESS", exact: true }).click();
 await page.locator(".workout-photo-entry-section").scrollIntoViewIfNeeded();
 await page.locator(".workout-photo-entry-card").click();
-await page.getByRole("heading", { name: "Your training, over time." }).waitFor();
+await page.locator(".workout-photo-timeline-screen").waitFor();
 await page.locator(".workout-photo-timeline-item").waitFor();
 assert.equal(await page.locator(".workout-photo-timeline-item").count(), 1, "restored photos reconstruct the Timeline");
 assert.match(await page.locator(".workout-photo-timeline-item").first().innerText(), new RegExp(original.workouts[0].name, "i"));

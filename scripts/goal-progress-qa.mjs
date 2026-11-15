@@ -134,7 +134,12 @@ await optIn.page.getByRole("button", { name: "ADD WEIGHT" }).click();
 await optIn.page.getByRole("spinbutton", { name: "Weight kg" }).fill("82.8");
 await optIn.page.locator('input[type="date"]').fill("2026-08-28");
 await optIn.page.getByRole("button", { name: "SAVE" }).click();
-await optIn.page.waitForTimeout(250);
+const weightLine = optIn.page.locator(".weight-trend-chart polyline");
+assert.equal(await weightLine.evaluate(line => {
+  const animation = line.getAnimations().find(item => item.animationName === 'trend-line-draw');
+  return animation?.effect.getKeyframes().map(frame => frame.strokeDashoffset).join(',');
+}), '1px,0px');
+await weightLine.evaluate(line => Promise.all(line.getAnimations().map(animation => animation.finished)));
 await optIn.page.screenshot({ path: output("weight-history-early-trend.png") });
 assert.equal(
   await optIn.page.getByRole("heading", { name: "Building your trend" }).count(),

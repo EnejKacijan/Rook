@@ -4,6 +4,7 @@ import { createObjectUrlLease, groupWorkoutPhotoTimeline } from './workoutPhotoT
 import { canComparePhotos, chronologicalPhotoPair, toggleComparePhoto } from './workoutPhotoCompare.js';
 import { PhotoComparisonViewer } from './PhotoComparisonViewer.jsx';
 import { WorkoutPhotoPager } from './WorkoutPhotoPager.jsx';
+import { SheetActionFooter } from './SheetActionFooter.jsx';
 import './workoutPhotoCompare.css';
 
 export function WorkoutPhotoCompare({ entries, availability, onAvailability, onBack, onClose, onDeletePhoto, onViewWorkout, busy, status, Header, Thumbnail, Viewer }) {
@@ -71,7 +72,7 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
     <Header title={title} onBack={onBack} onClose={onClose} closeLabel="Close photo comparison" />
     <p className="eyebrow">PRIVATE PHOTOS</p>
     <h1 tabIndex={-1}>{title}</h1>
-    <p className="photo-compare-intro">Choose two photos from your timeline.</p>
+    {!comparing && <p className="photo-compare-intro">Pick an earlier and a later photo. ROOK puts the earlier one first.</p>}
     {status && <p role="status">{status}</p>}
     {!comparing && <>
       <div className="workout-photo-timeline-groups">
@@ -79,7 +80,7 @@ export function WorkoutPhotoCompare({ entries, availability, onAvailability, onB
           {group.entries.map(entry => <Thumbnail key={entry.id} entry={entry} selectionMode selectionIndex={selection.findIndex(photo => photo.id === entry.id) + 1} disabled={!entry.metadataAvailable || availability[entry.id] !== true || selection.length === 2 && !selection.some(photo => photo.id === entry.id)} onAvailability={onAvailability} onOpen={() => selectPhoto(entry)} />)}
         </div></section>)}
       </div>
-      <footer className="photo-compare-selection-footer"><p role="status">{selection.length} of 2 selected</p><button className="button primary" disabled={!ready} onClick={() => setComparing(true)}>COMPARE PHOTOS</button><button className="button quiet" onClick={onBack}>CANCEL</button></footer>
+      <SheetActionFooter className="photo-compare-selection-footer"><p role="status">{selection.length} of 2 selected</p><button className="button primary" disabled={!ready} onClick={() => setComparing(true)}>COMPARE PHOTOS</button><button className="button quiet" onClick={onBack}>CANCEL</button></SheetActionFooter>
     </>}
     {comparing && <PhotoComparisonViewer pair={pair} images={images} onLoad={loaded} onError={failed} onChooseAnother={chooseAnother} onBack={()=>setComparing(false)} onClose={onClose} Header={Header} onInspect={(id,trigger)=>{photoTrigger.current=trigger;setInspecting(id);}} />}
     {inspecting && <WorkoutPhotoPager entries={entries} initialId={inspecting} Viewer={Viewer} returnFocusRef={photoTrigger}

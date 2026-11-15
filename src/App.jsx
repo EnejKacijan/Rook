@@ -190,6 +190,9 @@ import {isMissedReminderHidden} from './missedWorkoutActions.js';
 import { createFlexibleWeekPlanner, flexibleSourceForDate, flexibleWeekConflict, temporaryScheduleReview, missedFlexibleSessions, flexibleSessions, flexibleOccurrencesForDate, moveWorkoutCandidates, firstPlanWeekWorkouts } from './flexibleWeek.js';
 import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
+import { preserveMovesAfterPlanEdit } from './scheduleRecovery.js';
+import { PlanWeightReference } from './PlanWeightReference.jsx';
+import { supportsPlannedLoads } from './planWeightHistory.js';
 import {
   Component,
   Fragment,
@@ -701,6 +704,7 @@ export function useLiftState(startup) {
           return previous;
         }
         if (programMeaningfullyChanged(previousProgram, next.program)) {
+          if (options.reconcileTemporarySchedule) next = preserveMovesAfterPlanEdit(previous, next);
           if (!previousProgram && next.program) next.profile.noPlanReceipt = null;
           const requested = options.planVersion;
           if (requested !== false) {
@@ -5133,11 +5137,11 @@ export function Today({
   if(!completed && occurrence && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{workoutVisibleStatus({status:occurrence.status})}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
   const isHistoricalWeek = selectedMonday < currentMonday;
   const movedSources = flexibleSourceForDate(state, selectedIso);
-  const movedSourceIssue = scheduleReview.unresolved.find(item=>movedSources.some(source=>source.id===item.id));
+  const movedSourceIssue = scheduleReview.unresolved.find(item=>item.originalDate===selectedIso||item.scheduledDate===selectedIso);
   const movedSource = movedSources.find(source=>source.id===movedSourceIssue?.id) || movedSources[0];
   // Invalid links and explicit skips retain their existing actionable meaning.
   // A successful move, in contrast, is provenance, not this date's workout.
-  if (!template && !completed && movedSource && (movedSourceIssue || movedSource.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSource.workout?.name || movedSource.name}</h1><p>{movedSourceIssue ? 'Needs a destination' : workoutVisibleStatus({status:'skipped'})}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
+  if (!template && !completed && (movedSourceIssue || movedSource?.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSourceIssue?.name || movedSource?.workout?.name || movedSource?.name}</h1><p>{movedSourceIssue ? `This temporary ${movedSourceIssue.skipped?'skip':'move'} needs review after a plan change.` : workoutVisibleStatus({status:'skipped'})}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
   if (!template && !completed) {
     const upcoming = scheduleReader.next(selectedIso);
     const upcomingTitle = upcoming
@@ -8053,6 +8057,22 @@ export function PrivateWorkoutPhotoViewer({
   );
 }
 
+// At most three previews are mounted; the timeline still owns the full collection.
+function WorkoutPhotoStripThumb({ id }) {
+  const [url, setUrl] = useState("");
+  useEffect(() => {
+    let current = true;
+    let lease;
+    getWorkoutPhoto(id).then(photo => {
+      if (!current || !photo?.blob) return;
+      lease = createObjectUrlLease(photo.blob);
+      setUrl(lease.url);
+    }).catch(() => {});
+    return () => { current = false; lease?.revoke(); };
+  }, [id]);
+  return url ? <span><img src={url} alt="" decoding="async" onError={() => setUrl("")} /></span> : null;
+}
+
 function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMode = false, selectionIndex = 0, disabled = false }) {
   const hostRef = useRef(null);
   const [nearViewport, setNearViewport] = useState(false);
@@ -8134,8 +8154,8 @@ function LazyWorkoutPhotoThumbnail({ entry, onOpen, onAvailability, selectionMod
           </span>
         ) : null}
       </span>
-      <strong>{entry.workoutName}</strong>
-      <small>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(entry.day))}</small>
+      <strong>{new Intl.DateTimeFormat("en", { month: "short", day: "numeric" }).format(localDate(entry.day))}</strong>
+      <small>{entry.workoutName}</small>
     </button>
   );
 }
@@ -8181,14 +8201,14 @@ export function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) 
 
   return (
     <main className="screen detail-screen workout-photo-timeline-screen">
-      <SheetHeader title="Workout photos" onClose={close} closeLabel="Close workout photos" />
-      <Eyebrow>PRIVATE TIMELINE</Eyebrow>
-      <h1>Your training, over time.</h1>
+      <SheetHeader title={<span role="heading" aria-level={1}>Workout photos</span>} onClose={close} closeLabel="Close workout photos" />
       <p className="workout-photo-timeline-intro">
         Photos stay on this device. ROOK does not upload or analyze them.
       </p>
       <p className="workout-photo-timeline-status" role="status" aria-live="polite">{status}</p>
-      {entries.length >= 2 && <button className="text-button workout-photo-compare-entry" disabled={entries.filter(entry => entry.metadataAvailable && availability[entry.id] === true).length < 2} onClick={() => setCompareMode(true)}>COMPARE</button>}
+      {entries.length >= 2 && <ExerciseNavigationButton type="button" className="list-row workout-photo-compare-entry" disabled={entries.filter(entry => entry.metadataAvailable && availability[entry.id] === true).length < 2} onClick={() => setCompareMode(true)}>
+        <span><strong>Compare two photos</strong><small>Swipe or view side by side</small></span><NavigationChevron />
+      </ExerciseNavigationButton>}
       {photos.status === "error" && <p role="status">Workout photos couldn’t be read on this device. <button className="text-button" onClick={photos.refresh}>Try again</button></p>}
       {photos.status === "error" ? null : photos.status === "loading" && !entries.length ? (
         <p className="muted">Loading workout photos…</p>
@@ -8213,7 +8233,7 @@ export function WorkoutPhotoTimelineScreen({ state, update, close, setDetail }) 
       ) : photos.status === "ready" ? (
         <section className="workout-photo-timeline-empty">
           <strong>No workout photos yet.</strong>
-          <p>If you ever save one after a workout, it will appear here. Photos are always optional.</p>
+          <p>Photos added after workouts appear here.</p>
         </section>
       ) : null}
       {selected && <WorkoutPhotoPager entries={entries} initialId={selected.id} Viewer={PrivateWorkoutPhotoViewer}
@@ -8324,7 +8344,7 @@ export function WorkoutPhotoMemory({ workout, workouts, update, onBusyChange, on
   };
 
   const picker = (
-    <label className={`workout-photo-picker${busy ? " is-disabled" : ""}`}>
+    <label className={`workout-photo-picker${workout.photoId ? "" : " is-empty"}${busy ? " is-disabled" : ""}`}>
       <span>{workout.photoId ? "CHANGE PHOTO" : "ADD PHOTO"}</span>
       <input
         type="file"
@@ -11023,7 +11043,7 @@ function WeightHistory({ state, setDetail, close, saved }) {
             aria-label={summary}
             preserveAspectRatio="none"
           >
-            <polyline points={points} fill="none" vectorEffect="non-scaling-stroke" />
+            <polyline className="trend-line-reveal" pathLength="1" points={points} fill="none" vectorEffect="non-scaling-stroke" />
           </svg>
         )}
       </section>
@@ -11222,15 +11242,17 @@ export function Progress({ state, update, setDetail, setPage }) {
             </strong>
             <small>
               {photos.entries.length
-                ? "Look back through your photo timeline."
-                : photos.status === "ready" ? "Optional photos saved after workouts will appear here."
+                ? "Stored only on this device"
+                : photos.status === "ready" ? "Add one after a workout. Photos stay on this device."
                 : photos.status === "error" ? "Open your timeline to try again."
                 : "Reading saved photos on this device."}
             </small>
           </span>
+          {photos.entries.length > 0 && <span className="workout-photo-entry-strip" aria-hidden="true">
+            {photos.entries.filter(entry => entry.metadataAvailable).slice(0, 3).map(entry => <WorkoutPhotoStripThumb key={entry.id} id={entry.id} />)}
+          </span>}
           <NavigationChevron className="navigation-chevron"/>
         </button>
-        <small className="workout-photo-entry-privacy">Stored privately on this device.</small>
       </section>);
   const trainingSections = (<>{improvements.length > 0 ? (
         <section className="progress-lower recent-improvements-section">
@@ -15247,7 +15269,13 @@ export function PlanEditor({
                             </small>
                           </label>
                         )}
-                        {imported && !importReview && (
+                        {mode==='edit'&&<PlanWeightReference key={exercise.exerciseId} exercise={exercise} workouts={exerciseState?.workouts} units={profile.units} commits={pendingNumberCommits.current}
+                          onWeightChange={(index,weight)=>setWeight(day.id,exercise.id,index,weight??'')}
+                          onWeightsChange={weights=>mutateExercise(day.id,exercise.id,target=>{
+                            if(!supportsPlannedLoads(target)||weights.length!==target.sets.length)return;
+                            weights.forEach((weight,index)=>Object.assign(target.sets[index],weight));
+                          })} />}
+                        {imported && !importReview && !(mode==='edit'&&supportsPlannedLoads(exercise)) && (
                           <div className="plan-editor-weights">
                             <span>{todayPreparation ? 'Prepared weight · kg' : 'Imported weight · kg'}</span>
                             <div>
@@ -16590,7 +16618,7 @@ function EditPlan({ state, update, close, reviewExerciseIds = [], fullscreen = f
       current.program = program;
       current.ai = { ...current.ai, lastPlanSource: "manual-edit" };
       return current;
-    }, { planVersion: { source: "Manual edit" } });
+    }, { planVersion: { source: "Manual edit" }, reconcileTemporarySchedule: true });
     dirtyRef.current=false;
     close();
   };

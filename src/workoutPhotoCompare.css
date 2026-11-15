@@ -11,10 +11,8 @@
 .photo-compare-unavailable p { font-size: 12px; margin: 0 0 8px; }
 .photo-compare-unavailable .text-button { white-space: normal; min-height: 44px; padding: 0; text-align: left; }
 .workout-photo-compare-screen .photo-compare-privacy { font-size: 12px; margin: 18px 0; }
-.photo-compare-selection-footer { position: sticky; bottom: -24px; z-index: 3; padding: 12px 0 calc(12px + env(safe-area-inset-bottom)); background: var(--rook-bg); box-shadow: 0 -12px 0 var(--rook-bg); margin-top: 24px; }
 .photo-compare-selection-footer p { margin: 0 0 10px; font-size: 12px; color: var(--rook-secondary); }
 :root[data-appearance] .workout-photo-compare-screen .photo-compare-selection-footer .button.primary:disabled { background: var(--rook-disabled-surface); color: var(--rook-disabled-text); border: 1px solid var(--rook-border); opacity: 1; }
-.workout-photo-compare-screen { scroll-padding-bottom: 180px; }
 .workout-photo-timeline-item.is-compare-selected .workout-photo-timeline-image { border: 2px solid var(--rook-accent); }
 .workout-photo-timeline-image > .photo-compare-selection-mark { position: absolute; z-index: 2; top: 6px; right: 6px; bottom: auto; left: auto; width: 24px; height: 24px; padding: 0; display: grid; place-items: center; border-radius: 50%; background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); font-size: 12px; font-weight: 700; }
 

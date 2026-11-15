@@ -31461,9 +31461,9 @@
     {
       "assetId": "inline-app-8",
       "path": "src/App.jsx",
-      "sourceLine": 10550,
+      "sourceLine": 11039,
       "selector": "inline_svg",
-      "codeSha256": "fc23ff8624214058c02ef42cb385c69249df8580519d66f54d191d1cfc49e9fa",
+      "codeSha256": "cabd13dfaa1ca1fb592ab601c92f1d6ce17d570496c255d5d58e60d8c98a660e",
       "exerciseIds": [],
       "movementIds": [],
       "usage": "inline_ui_renderer",
@@ -31482,6 +31482,12 @@
           "type": "repository_inline_geometry",
           "path": "src/App.jsx",
           "line": 10550
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/App.jsx",
+          "line": 11039,
+          "reviewedAt": "2026-11-15"
         }
       ],
       "notes": [
@@ -31585,7 +31591,7 @@
       "path": "src/EstimatedOneRepMaxChart.jsx",
       "sourceLine": 37,
       "selector": "inline_svg",
-      "codeSha256": "4b29236e2c84f4ccdcb62f06587a7aa931b6ffba3695250129ec8a47ca6cf541",
+      "codeSha256": "d04a5a32bcc7dbd05e9e0e36d2bad0443bb681f5c76cbbf00b82ab257cda417e",
       "exerciseIds": [],
       "movementIds": [],
       "usage": "inline_ui_renderer",
@@ -31615,13 +31621,19 @@
           "path": "src/EstimatedOneRepMaxChart.jsx",
           "line": 37,
           "reviewedAt": "2026-10-24"
+        },
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/EstimatedOneRepMaxChart.jsx",
+          "line": 37,
+          "reviewedAt": "2026-11-15"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; dynamic charts render user data rather than downloaded imagery. No copyright ownership assertion."
       ],
-      "lfCodeSha256": "2a3d8ba0f3a45e169a25f362488b935c816d6218f5af291447ca2b20e3555380",
-      "crlfCodeSha256": "4b29236e2c84f4ccdcb62f06587a7aa931b6ffba3695250129ec8a47ca6cf541"
+      "lfCodeSha256": "d04a5a32bcc7dbd05e9e0e36d2bad0443bb681f5c76cbbf00b82ab257cda417e",
+      "crlfCodeSha256": "c343b0eca38aba492b9036d4d9aee26f1893c0f301ccac082dffa4a0d38835a4"
     },
     {
       "assetId": "inline-exercisequeuepreview-1",

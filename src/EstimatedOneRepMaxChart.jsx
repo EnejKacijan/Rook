@@ -40,7 +40,7 @@ export function EstimatedOneRepMaxChart({ sessions, units, information }) {
           <text x={0} y={top + i * (bottom - top) / 2} dominantBaseline="middle">{axisLabels.indexOf(axisLabels[i]) === i ? axisLabels[i] : ''}</text>
         </g>)}
         <text x={0} y={10} className="e1rm-axis-unit">{unit}</text>
-        {points.length > 1 && <polyline points={points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" />}
+        {points.length > 1 && <polyline className="trend-line-reveal" pathLength="1" points={points.map(p => `${p.x},${p.y}`).join(' ')} fill="none" />}
         {points.map((p, i) => {
           const labelled = points.length <= 4 || i === 0 || i === points.length - 1;
           return <g key={`${p.date}-${i}`}>
