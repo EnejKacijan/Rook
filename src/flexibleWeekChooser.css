@@ -45,6 +45,9 @@
 .flexible-schedule-history .flexible-week-review > article { padding:12px 0; }
 :root .flexible-week-sheet .schedule-change-title { font-size:clamp(24px, 7vw, 32px); line-height:1.15; }
 .flexible-week-origin .schedule-change-link { display:inline-flex; align-items:center; min-height:44px; margin:0 0 0 8px; padding:0 4px; color:var(--rook-accent-text); }
+.today-recovered-workout-switch { min-height:44px; }
+.today-recovered-workout-switch small { display:block; margin-top:3px; color:var(--rook-secondary); }
+.today-recovered-workout-remove { min-height:44px; }
 .flexible-compact-sheet h1 { overflow-wrap:anywhere; }
 .flexible-week-sheet .flexible-reorder-action { display:flex;align-items:center;justify-content:space-between;min-height:44px;margin:0;padding:8px 0;color:var(--rook-accent-text); }
 .flexible-reorder-list { margin:20px 0;overflow-anchor:none; }

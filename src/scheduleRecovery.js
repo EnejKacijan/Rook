@@ -1,11 +1,12 @@
-import {adaptedTemplateForToday,baseWeekSchedule,isoDay,weekKey} from './domain.js';
+import {adaptedTemplateForToday,baseWeekSchedule,calendarDate,isoDay,weekday,weekKey} from './domain.js';
 import {todayWorkoutFingerprint} from './adjustToday.js';
 import {combinedAdjustment} from './combinedWorkoutLifecycle.js';
 import {flexiblePlanFingerprint,flexibleReviewFingerprint,flexibleSessionStatus,flexibleSessions,addCalendarDays,linkedScheduleChanges} from './flexibleWeek.js';
 import {scheduleTransactionId} from './scheduleTransactions.js';
 import {templateUseIssues} from './savedWorkouts.js';
+import {recoveredWorkoutDraft,recoveredWorkoutForDate} from './recoveredWorkout.js';
 
-const fingerprint=state=>JSON.stringify([state.profile,state.gymProfiles,state.defaultGymProfileId,flexibleReviewFingerprint(state)]);
+const fingerprint=state=>JSON.stringify([state.profile,state.gymProfiles,state.defaultGymProfileId,state.optionalSessions,flexibleReviewFingerprint(state)]);
 const protectedStatuses=['completed','active','reserved','combined'];
 const dateAtNoon=date=>new Date(`${date}T12:00:00`);
 const ownsAdjustment=(record,adjustment)=>adjustment?.date===record.scheduledDate&&adjustment.programDayId===record.workoutId;
@@ -70,6 +71,22 @@ function removeMoves(state,group){
   return next;
 }
 
+function projectOneOff(state,record){
+  const adjustment=detachedFor(record)||adjustmentFor(state,[record]);
+  if(record.skipped||state.program?.days.some(day=>day.id===record.workoutId)||!adjustment?.workout?.exercises?.length)
+    throw Error('There is no detached adjustment to keep for this workout.');
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(record.scheduledDate)||record.scheduledDate<isoDay()||record.scheduledDate>addCalendarDays(isoDay(),13))
+    throw Error('The moved date is no longer available for a one-off workout.');
+  const session=recoveredWorkoutDraft(record,adjustment);
+  if(recoveredWorkoutForDate(state,record.scheduledDate)||state.optionalSessions?.some(item=>item.id===session.id))
+    throw Error('There is already a saved one-off workout for this date.');
+  const issues=templateUseIssues({...state,activeWorkout:session.workout},session.workout);
+  if(issues.length)throw Error(issues.join(' '));
+  const next=removeMoves(state,[record]);
+  return {...next,optionalSessions:[...(state.optionalSessions||[]),session],selectedDate:record.scheduledDate,selectedDay:weekday(calendarDate(record.scheduledDate))};
+}
+const detachedFor=record=>ownsAdjustment(record,record.detachedAdjustment)?record.detachedAdjustment:null;
+
 // Edit Plan can safely keep a move when the identity, schedule rule and
 // prescription it was made against have not changed. Never revive stale links.
 export function preserveMovesAfterPlanEdit(before,after,today=isoDay()){
@@ -101,27 +118,32 @@ export function reviewScheduleRecovery(state,id){
   const record=editable(state,id),group=moveGroup(state,id),adjustment=adjustmentFor(state,group);
   const preview=(choice,workoutId)=>{try{return {workout:projectKeptDates(state,group,choice).workouts[workoutId]};}catch(error){return {workout:null,reason:error.message};}};
   const planned=preview('plan',id),adjusted=adjustment?preview('adjustment',group.find(item=>ownsAdjustment(item,adjustment)).id):null;
+  const detached=detachedFor(record);
+  let oneOff=false,oneOffReason='';
+  if((detached||ownsAdjustment(record,adjustment))&&!state.program?.days.some(day=>day.id===record.workoutId)){
+    try{projectOneOff(state,record);oneOff=true;}catch(error){oneOffReason=error.message;}
+  }
   const removed=removeMoves(state,group);
   const afterRemoval=flexibleSessions(removed,isoDay(),{includeDuration:false}).filter(item=>item.status!=='skipped'&&group.some(record=>
     item.workoutId===record.workoutId&&weekKey(item.originalDate)===weekKey(record.originalDate))).map(item=>({date:item.scheduledDate,name:item.workout.workoutName||item.workout.name,status:item.status}));
   return {id,today:isoDay(),fingerprint:fingerprint(state),record:structuredClone(record),groupCount:group.length,
-    workout:planned.workout,reason:planned.reason,adjustment:adjustment?{snapshot:adjustment.workout,...adjusted}:null,
-    discardsChanges:Boolean(adjustment||group.some(item=>state.workoutOccurrenceOverrides?.[item.scheduledDate]?.[item.workoutId])),afterRemoval};
+    workout:planned.workout,reason:planned.reason,adjustment:detached?{snapshot:detached.workout}:adjustment?{snapshot:adjustment.workout,...adjusted}:null,oneOff,oneOffReason,
+    discardsChanges:Boolean(adjustment||group.some(item=>detachedFor(item)||state.workoutOccurrenceOverrides?.[item.scheduledDate]?.[item.workoutId])),afterRemoval};
 }
 export function applyScheduleRecovery(state,review,mode){
   if(!review||review.today!==isoDay()||review.fingerprint!==fingerprint(state))throw Error('The plan or sessions changed. Review this move again.');
-  editable(state,review.id);
+  const record=editable(state,review.id);
   const group=moveGroup(state,review.id);
   let next;
   if(mode==='keep'||mode==='keep-adjustment'){
     if(mode==='keep-adjustment'&&!adjustmentFor(state,group))throw Error('The one-off adjustment changed. Review the move again.');
     next=projectKeptDates(state,group,mode==='keep'?'plan':'adjustment').state;
   }
-  else if(mode==='remove'){
-    next=removeMoves(state,group);
+  else if(mode==='remove'||mode==='one-off'){
+    next=mode==='one-off'?projectOneOff(state,record):removeMoves(state,group);
     // Retain the old fact for backups/audits; never delete workout history or
     // move a completed session. Removing an unstarted override resumes the plan.
-    next.flexibleWeek.recoveryHistory=[...(next.flexibleWeek.recoveryHistory||[]),...group.map(record=>({...record,removedAt:new Date().toISOString(),reason:'outdated-move-removed'}))].slice(-40);
+    next.flexibleWeek.recoveryHistory=[...(next.flexibleWeek.recoveryHistory||[]),...(mode==='one-off'?[record]:group).map(({detachedAdjustment,...record})=>({...record,removedAt:new Date().toISOString(),reason:mode==='one-off'?'outdated-move-kept-as-one-off':'outdated-move-removed'}))].slice(-40);
   }else throw Error('Choose how to repair this schedule change.');
   next.flexibleWeek.revision=(state.flexibleWeek.revision||0)+1;next.flexibleWeek.generation=scheduleTransactionId();
   return next;

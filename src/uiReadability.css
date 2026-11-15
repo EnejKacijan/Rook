@@ -1,5 +1,6 @@
 /* Reading text is distinct from compact chart/calendar metadata. Keep this
    scale scoped to content roles; numeric inputs retain their 16px zoom floor. */
+:root { --rook-type-action: .875rem; }
 :root .eyebrow { font-size:12px; line-height:1.3; }
 :root .list-row small,
 :root .choice-row small,
@@ -275,13 +276,18 @@
 :root .plate-inventory-row label small { font-size:14px; }
 :root .custom-exercise-fallback { font-size:14px; line-height:1.4; }
 :root .scratch-exercise-results .scratch-custom-exercise small { font-size:14px; line-height:1.45; }
-:root :is(.detail-screen,.sheet) .sheet-action-footer > .button { font-size:14px; line-height:1.4; }
+:root :is(.detail-screen,.sheet) .sheet-action-footer > .button {
+  font-size:var(--rook-type-action); line-height:1.4;
+}
 :root .plan-editor-prescription label { min-width:0; }
 :root .plan-editor-prescription span { overflow-wrap:anywhere; }
 :root .restriction-disclosure strong { white-space:normal; overflow:visible; }
 
 @media (max-width:360px) {
   :root .coach-history-header h2 { font-size:14px; }
+  :root :is(.detail-screen,.sheet) .sheet-action-footer > .button:not(.quiet) {
+    font-size:.8125rem; letter-spacing:.06em;
+  }
 }
 
 /* Type floor for persistent chrome. Labels people read on every visit were

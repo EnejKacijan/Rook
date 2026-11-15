@@ -2,12 +2,14 @@ import {isoDay,weekDate,workoutPerformedDate,currentWeekSchedule,optionalStrengt
 import {flexibleOccurrencesForDate} from './flexibleWeek.js';
 import {isRepeatAdjustment} from './useWorkoutToday.js';
 import {isCombinedAdjustment} from './combinedWorkoutLifecycle.js';
+import {recoveredWorkoutSession} from './recoveredWorkout.js';
 
 export const calendarLocalDate = value => value instanceof Date ? new Date(value) : new Date(`${String(value).slice(0,10)}T12:00:00`);
 export function calendarRange(state,today=isoDay()) {
   const recorded=(state.workouts||[]).filter(w=>w.completedAt&&workoutPerformedDate(w)).map(workoutPerformedDate).sort();
   const earliest=recorded[0]||isoDay(state.program?.createdAt||today);
-  const latest=Object.values(state.flexibleWeek?.sessions||{}).reduce((last,item)=>item.scheduledDate>last?item.scheduledDate:last,today);
+  const latestMove=Object.values(state.flexibleWeek?.sessions||{}).reduce((last,item)=>item.scheduledDate>last?item.scheduledDate:last,today);
+  const latest=(state.optionalSessions||[]).reduce((last,item)=>recoveredWorkoutSession(item)&&item.status==='planned'&&item.date>last?item.date:last,latestMove);
   return {min:isoDay(weekDate('Mon',earliest)),max:state.program?isoDay(weekDate('Sun',latest)):today};
 }
 export function shiftMonth(value,direction) {

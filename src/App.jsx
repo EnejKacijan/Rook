@@ -191,6 +191,7 @@ import { createFlexibleWeekPlanner, flexibleSourceForDate, flexibleWeekConflict,
 import {SegmentedControl} from './SegmentedControl.jsx';
 import { EstimatedOneRepMaxChart } from './EstimatedOneRepMaxChart.jsx';
 import { preserveMovesAfterPlanEdit } from './scheduleRecovery.js';
+import { cancelRecoveredWorkout, recoveredWorkoutForDate, transferRemovedMoveAdjustment } from './recoveredWorkout.js';
 import { PlanWeightReference } from './PlanWeightReference.jsx';
 import { supportsPlannedLoads } from './planWeightHistory.js';
 import {
@@ -704,7 +705,10 @@ export function useLiftState(startup) {
           return previous;
         }
         if (programMeaningfullyChanged(previousProgram, next.program)) {
-          if (options.reconcileTemporarySchedule) next = preserveMovesAfterPlanEdit(previous, next);
+          if (options.reconcileTemporarySchedule) {
+            transferRemovedMoveAdjustment(next);
+            next = preserveMovesAfterPlanEdit(previous, next);
+          }
           if (!previousProgram && next.program) next.profile.noPlanReceipt = null;
           const requested = options.planVersion;
           if (requested !== false) {
@@ -4841,6 +4845,8 @@ export function Today({
   const [starting, setStarting] = useState(false);
   const [startError, setStartError] = useState("");
   const todayUndo = useTransientSnackbar({ afterUndo: () => triggerHaptic('tap') });
+  const [selectedOneOff,setSelectedOneOff]=useState(null);
+  const recoveryAction=useDurableAction(state,update);
   const [calendarOpen, setCalendarOpen] = useState(false);
   const calendarBackground = useRef(null);
   const todayOptionsButton = useRef(null);
@@ -4924,6 +4930,8 @@ export function Today({
     ? <CombineWorkoutHint onStart={onCombineWorkouts}/> : null;
   useEffect(() => {
     todayReorderGesture.current?.cleanup?.();
+    setStartError('');
+    setSelectedOneOff(null);
     setTodayEditMode(false);
     setTodayEditOrder([]);
     todayEditOrderRef.current = [];
@@ -4936,7 +4944,11 @@ export function Today({
     ? workoutPerformedDate(active) || active.workoutDateKey || isoDay(active.startedAt || new Date())
     : null;
   const selectedActiveWorkout = Boolean(active && selectedIso === activeDateKey);
-  const {recurringTemplate, adaptedTemplate, template, occurrence} = scheduleReader.read(selectedIso);
+  const scheduled=scheduleReader.read(selectedIso);
+  const oneOff=recoveredWorkoutForDate(state,selectedIso);
+  const showingOneOff=Boolean(oneOff&&(!scheduled.template||scheduled.template.id===oneOff.id||selectedOneOff===oneOff.id));
+  const {recurringTemplate,adaptedTemplate,template,occurrence}=showingOneOff
+    ? {recurringTemplate:null,adaptedTemplate:oneOff,template:oneOff,occurrence:null} : scheduled;
   const todayAdjustment =
     viewingToday &&
     recurringTemplate &&
@@ -5024,6 +5036,10 @@ export function Today({
       {combinedAdjustment(state) && <CombinedWorkoutNotice state={state} update={update} />}
       {temporaryPeriod && temporaryPeriod.status !== 'ended' && <button className="list-row temporary-plan-notice" onClick={() => setDetail('temporary-plan')}><span><strong>{temporaryPeriod.planChanged ? 'Review temporary plan' : 'Temporary plan'}</strong><small>{temporaryPeriod.startDate} – {temporaryPeriod.endDate} · {temporaryPeriod.days.length} days a week · {temporaryPeriod.equipment.join(', ')}</small></span><NavigationChevron/></button>}
       <TemporaryScheduleSummary review={scheduleReview} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
+      {!selectedActiveWorkout&&oneOff&&scheduled.template&&scheduled.template.id!==oneOff.id&&
+        <ExerciseNavigationButton className="list-row today-recovered-workout-switch" onClick={()=>{setSelectedOneOff(showingOneOff?null:oneOff.id);setStartError('');}}>
+          <span><strong>{showingOneOff?'View other workout':'View one-off workout'}</strong><small>{showingOneOff?(scheduled.template.workoutName||scheduled.template.name):(oneOff.workoutName||oneOff.name)}</small></span><NavigationChevron/>
+        </ExerciseNavigationButton>}
       {showMissed && missedReminder}
       {planReady && (
         <PlanReadyNotice
@@ -5606,7 +5622,7 @@ export function Today({
   const start = () => {
     if (trainingPaused) {
       setDetail(
-        restrictedTemplateConflict
+        restrictedTemplateConflict && !showingOneOff
           ? {
               editPlan: {
                 reviewExerciseIds: restrictedTemplateConflicts.map(item => item.exerciseEntryId),
@@ -5647,7 +5663,7 @@ export function Today({
     } catch (error) {
       startLock.current = false;
       setStarting(false);
-      setStartError("Couldn’t start this workout. Please try again.");
+      setStartError(showingOneOff&&error instanceof Error ? error.message : "Couldn’t start this workout. Please try again.");
       console.error("Unable to start workout", error);
     }
   };
@@ -5673,6 +5689,7 @@ export function Today({
         {dayHeader(displayDate(selectedDate))}
         {fullyCompleted ? <CompletedSessionOverview workout={completed} /> : <WorkoutTitle workout={session} day={selectedDay} />}
         <CombinedProvenance adjustment={session.adjustment || session.todayOnlyAdjustment} />
+        {showingOneOff&&<p className="muted">One-off workout · {viewingToday?'Today only':displayDate(selectedDate)}</p>}
         {session.flexibleWeekMoved && <div className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))}{scheduleReview.moved.some(change=>change.id===session.logicalSessionId)&&<button type="button" className="text-button schedule-change-link" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button>}</div>}
         {session.trainingBlock && (
           <button type="button" onClick={() => setDetail("training-block")} aria-label="View training block" className={`today-block-week${session.trainingBlock.plannedDeload ? " is-deload" : ""}`}>
@@ -5708,7 +5725,7 @@ export function Today({
               VIEW WORKOUT DETAILS
             </Button>
           </div>
-        ) : selectedIso < isoDay() ? null : trackedActive ? (
+        ) : selectedIso < isoDay() || showingOneOff&&!viewingToday ? null : trackedActive ? (
           <p id="other-active-workout-edit-lock" className="active-workout-start-lock">
             Finish the active session before starting this workout.
           </p>
@@ -5717,7 +5734,7 @@ export function Today({
             variant={restrictedTemplateConflict ? "primary" : "secondary"}
             onClick={() =>
               setDetail(
-                restrictedTemplateConflict
+                restrictedTemplateConflict && !showingOneOff
                   ? {
                       editPlan: {
                         reviewExerciseIds: restrictedTemplateConflicts.map(item => item.exerciseEntryId),
@@ -5727,7 +5744,7 @@ export function Today({
               )
             }
           >
-            {restrictedTemplateConflict ? restrictedTemplateConflicts.length > 1 ? `REVIEW ${restrictedTemplateConflicts.length} CONFLICTS` : "REVIEW CONFLICT" : "REVIEW RESTRICTIONS"}
+            {restrictedTemplateConflict && !showingOneOff ? restrictedTemplateConflicts.length > 1 ? `REVIEW ${restrictedTemplateConflicts.length} CONFLICTS` : "REVIEW CONFLICT" : "REVIEW RESTRICTIONS"}
           </Button>
         ) : (
           <div
@@ -5784,14 +5801,15 @@ export function Today({
                   )}
                 </div>
               )}
-              {startError && (
-                <p className="today-start-error" role="alert">
-                  {startError}
-                </p>
-              )}
             </div>
           </div>
         )}
+        {showingOneOff&&!completed&&selectedIso>=todayKey&&<button className="text-button today-recovered-workout-remove" onClick={()=>{
+          if(!window.confirm('Remove this one-off workout from the schedule?'))return;
+          try{recoveryAction.commit(current=>cancelRecoveredWorkout(current,oneOff.optionalSessionId));setSelectedOneOff(null);setStartError('');}
+          catch(error){setStartError(error.message);}
+        }}>Remove one-off workout</button>}
+        {startError&&<p className="today-start-error" role="alert">{startError}</p>}
         <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly representedWorkoutId={completed?.id} />
       </section>
       {combineHint}
@@ -5836,11 +5854,15 @@ export function Today({
           const previousResult = previous
             ? `Last: ${load ? `${load} · ` : ""}${previousSets.map((set) => set.reps).join(" / ")}`
             : null;
+          const preparedWeights=showingOneOff ? exercise.sets.filter(set=>Number.isFinite(set.weight)).map(set=>displayWeight(set.weight,state.profile.units)) : [];
+          const preparedResult=preparedWeights.length
+            ? `Prepared: ${[...new Set(preparedWeights)].join(' / ')} ${weightUnit(state.profile.units)}${preparedWeights.length<exercise.sets.length?` · ${preparedWeights.length}/${exercise.sets.length} sets`:''}`
+            : null;
           const detail = completed
             ? completedSets ? pluralize(completedSets, 'set') + ' logged' : 'No sets logged'
             : isHistoricalWeek
               ? "Not logged"
-              : previousResult || (!isFirstSession ? "First session" : null);
+              : preparedResult || previousResult || (!isFirstSession ? "First session" : null);
           return (
             <TodayExerciseRow
               key={exercise.id}

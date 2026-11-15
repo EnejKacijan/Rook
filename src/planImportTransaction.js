@@ -5,6 +5,7 @@ import { normalizeAdvancedLoggingState } from './advancedLogging.js';
 import { normalizeGymProfilesState } from './gymProfiles.js';
 import { normalizeCustomExercisesState } from './customExercises.js';
 import { persistPlanImportMatches, planImportSafetyIssues } from './planImportMatching.js';
+import { transferRemovedMoveAdjustment } from './recoveredWorkout.js';
 
 // Construct independently; callers persist this value before publishing it.
 export function preparePlanImport(state, program, importedProfile, { date, weekday, initial = false } = {}) {
@@ -34,6 +35,7 @@ export function preparePlanImport(state, program, importedProfile, { date, weekd
   next.selectedDay = weekday;
   next.selectedDate = date;
   next.ai = { ...next.ai, lastPlanSource: 'ai-import' };
+  transferRemovedMoveAdjustment(next);
   next.todayAdaptation = null;
   next.weekScheduleOverrides = {};
   next.workoutOccurrenceOverrides = {};

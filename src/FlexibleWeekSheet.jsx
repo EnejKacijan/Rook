@@ -91,7 +91,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const [focusedChangeId,setFocusedChangeId]=useState(request.focusSessionId||null);
   const [error, setError] = useState('');
   const openRecovery=id=>{try{setRecovery(reviewScheduleRecovery(state,id));setError('');setStep('repair');}catch(e){setError(e.message);}};
-  const repair=mode=>{try{recoveryAction.commit(current=>applyScheduleRecovery(current,recovery,mode));setRecovery(null);setFocusedChangeId(null);setError('');setSteps(['mode','existing']);}catch(e){setError(e.message);}};
+  const repair=mode=>{try{recoveryAction.commit(current=>applyScheduleRecovery(current,recovery,mode));if(mode==='one-off'){close();return;}setRecovery(null);setFocusedChangeId(null);setError('');setSteps(['mode','existing']);}catch(e){setError(e.message);}};
   const [persistenceFailed, setPersistenceFailed] = useState(false);
   const [adaptationChoice, setAdaptationChoice] = useState('restore');
   const applied = useRef(false);
@@ -340,18 +340,20 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
       <h1>{step==='repair-remove'?`Remove temporary ${recoveryChange}?`:recovery.record.name||'Review workout change'}</h1>
       <p>{step==='repair-remove'&&recovery.record.name?`${recovery.record.name} · `:''}{dateLabel(recovery.record.originalDate)} → {dateLabel(recovery.record.scheduledDate)}</p>
       {step==='repair'?<>
-        <p>{recovery.workout||recovery.adjustment?.workout
+        <p>{recovery.oneOff?'This workout was removed from your plan. You can keep your adjusted workout on the moved date. It won’t repeat.':recovery.workout||recovery.adjustment?.workout
           ? recovery.adjustment ? 'Choose which version to use on the moved date. This doesn’t change your weekly plan.' : 'Keep the moved date and use the current plan’s exercises and targets.'
           : recovery.reason}</p>
-        {recovery.groupCount>1&&<p>These workouts moved together. This decision applies to both dates.</p>}
+        {recovery.groupCount>1&&<p>{recovery.oneOff?'Keeping this workout leaves the other move unchanged.':'These workouts moved together. This decision applies to the linked moves.'}</p>}
         <RecoveryWorkoutPreview workout={recovery.adjustment?.snapshot} label="Your one-off adjustment" units={state.profile.units} />
         <RecoveryWorkoutPreview workout={recovery.workout} label="Workout from the current plan" units={state.profile.units} />
         {recovery.adjustment?.reason&&recovery.workout&&<p role="status">Your one-off adjustment can’t be used: {recovery.adjustment.reason}</p>}
+        {recovery.oneOffReason&&<p role="status">{recovery.oneOffReason}</p>}
         <SheetActionFooter>
           {error&&<p role="alert">{error}</p>}
+          {recovery.oneOff&&<button className="button primary" onClick={()=>repair('one-off')}>KEEP AS ONE-OFF WORKOUT</button>}
           {recovery.adjustment?.workout&&<button className="button primary" onClick={()=>repair('keep-adjustment')}>KEEP DATE AND ADJUSTMENT</button>}
           {recovery.workout&&<button className={`button ${recovery.adjustment?.workout?'secondary':'primary'}`} onClick={()=>repair('keep')}>{recovery.adjustment?'KEEP DATE, USE UPDATED PLAN':'KEEP MOVED DATE'}</button>}
-          <button className={`button ${recovery.workout||recovery.adjustment?.workout?'quiet':'secondary'}`} onClick={()=>{setError('');setStep('repair-remove');}}>REMOVE TEMPORARY {recoveryChange.toUpperCase()}</button>
+          <button className={`button ${recovery.workout||recovery.adjustment?.workout||recovery.oneOff?'quiet':'secondary'}`} onClick={()=>{setError('');setStep('repair-remove');}}>REMOVE TEMPORARY {recoveryChange.toUpperCase()}</button>
         </SheetActionFooter>
       </>:<>
         <p>{recovery.discardsChanges?'This also clears the affected one-off edits. ':''}Completed workouts and your permanent plan stay unchanged.</p>

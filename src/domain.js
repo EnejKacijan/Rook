@@ -12,6 +12,7 @@ import {workoutElapsedSeconds} from './workoutTiming.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
 import {normalizeCoachConversations} from './coachConversations.js';
 import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
+import {recoveredWorkoutForDate} from './recoveredWorkout.js';
 import {workoutPerformedDate} from './workoutDates.js';
 export {workoutPerformedDate} from './workoutDates.js';
 import { effectiveWeekSchedule,flexibleSessionStatus,missedFlexibleSessions,flexibleFingerprintBeforeHydration,migrateFlexibleWeekFingerprints } from './flexibleWeek.js';
@@ -9025,6 +9026,16 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
   return workout;
 }
 export function startWorkout(state, template) {
+  const recovered=Boolean(template?.recoveredMove);
+  if(recovered){
+    const saved=recoveredWorkoutForDate(state,isoDay());
+    if(!saved||saved.optionalSessionId!==template.optionalSessionId||state.workouts?.some(w=>w.optionalSessionId===saved.optionalSessionId&&w.completedAt))
+      throw Error('This one-off workout is no longer scheduled for today.');
+    template=saved;
+    const gym=effectiveGymContext(state,template).profile;
+    if(template.exercises.some(e=>!planEditorExerciseAllowed(exerciseCatalog[e.exerciseId]||(e.importedExercise?.id===e.exerciseId?e.importedExercise:null),gym)))
+      throw Error('This one-off workout no longer matches your equipment or restrictions.');
+  }
   if(isRepeatAdjustment(state.todayAdaptation) && template?.todayOnlyAdjustment?.id!==state.todayAdaptation.id)throw Error('Finish or cancel the pending repeated workout first.');
   const combined=combinedAdjustment(state);
   if(combined&&template?.todayOnlyAdjustment?.id===combined.id&&template.exercises.some(e=>!planEditorExerciseAllowed(exerciseCatalog[e.exerciseId]||(e.importedExercise?.id===e.exerciseId?e.importedExercise:null),effectiveGymContext(state,{}).profile)))
@@ -9065,7 +9076,7 @@ export function startWorkout(state, template) {
   const startedAt = Date.now();
   const occurrence=currentWeekSchedule(state,state.selectedDate || isoDay(startedAt)).find(item=>item.workoutId===template.id && (!template.logicalSessionId || (item.logicalSessionId || `${item.workoutId}:${item.originalDate}`)===template.logicalSessionId));
   const logicalSessionId=template.logicalSessionId || (occurrence ? `${occurrence.workoutId}:${occurrence.originalDate}` : null);
-  const canonicalPlanDate = occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
+  const canonicalPlanDate = template.recoveredMove?.date || occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
   const workout = {
     id: uid("active"),
     ...(isRepeatAdjustment(template.todayOnlyAdjustment)?{source:'repeat',repeatedFromWorkoutId:template.todayOnlyAdjustment.sourceWorkoutId}:{}),
@@ -9077,6 +9088,7 @@ export function startWorkout(state, template) {
       logicalSessionId || template.trainingBlock?.blockWorkoutId ||
       (template.id ? `${template.id}:${canonicalPlanDate}` : null),
     optionalSessionId: template.optionalSessionId || null,
+    ...(recovered ? {recoveredMove:structuredClone(template.recoveredMove)} : {}),
     ...(logicalSessionId ? { logicalSessionId, originalScheduledDate: template.originalScheduledDate || occurrence?.originalDate || canonicalPlanDate, flexibleWeekMoved: template.flexibleWeekMoved || occurrence?.moved || false } : {}),
     ...(template.temporaryPlanAdjustment ? { temporaryPlanAdjustment: structuredClone(template.temporaryPlanAdjustment) } : {}),
     name: template.name,
@@ -9134,7 +9146,7 @@ export function startWorkout(state, template) {
               : null;
           const weight = loadRequirement === "none"
             ? null
-            : hasUnspecifiedRepTarget(base) ? set.weight ?? null : reviewedStart ?? previousSet?.weight ?? set.weight ?? null;
+            : recovered || hasUnspecifiedRepTarget(base) ? set.weight ?? null : reviewedStart ?? previousSet?.weight ?? set.weight ?? null;
           return {
             ...set,
             id: uid("set"),
@@ -9143,12 +9155,12 @@ export function startWorkout(state, template) {
             completed: false,
             weight,
             weightProvenance:
-              loadRequirement === "none" ? null : hasUnspecifiedRepTarget(base) ? set.weightProvenance ?? null : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0 || loadRequirement === 'optional' && previousSet && previousSet.rawImport?.version !== 2 && Object.hasOwn(previousSet,'weight') && (previousSet.weight === null || previousSet.weight === 0)
+              loadRequirement === "none" ? null : recovered || hasUnspecifiedRepTarget(base) ? set.weightProvenance ?? (weight!=null?'explicit-plan':null) : reviewedStart != null ? "next-block-review" : Number(previousSet?.weight) > 0 || loadRequirement === 'optional' && previousSet && previousSet.rawImport?.version !== 2 && Object.hasOwn(previousSet,'weight') && (previousSet.weight === null || previousSet.weight === 0)
                 ? "history"
                 : Number(weight) > 0
                   ? set.weightProvenance || "explicit-plan"
                   : null,
-            reps: hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
+            reps: recovered ? set.reps ?? (hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : base.repMin) : hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
             rir: null,
           };
         }),
@@ -9157,7 +9169,7 @@ export function startWorkout(state, template) {
     }),
   };
   normalizeAdvancedLoggingState({ activeWorkout: workout, workouts: [] });
-  const prepared = refreshWorkoutWarmup(workout, workout.temporaryPlanAdjustment ? effectiveGymContext(state, workout).profile : state.profile, state.program);
+  const prepared = refreshWorkoutWarmup(workout, workout.temporaryPlanAdjustment || recovered ? effectiveGymContext(state, workout).profile : state.profile, state.program);
   prepared.restartSnapshot = sessionStartSnapshot(prepared);
   return prepared;
 }

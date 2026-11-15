@@ -1,4 +1,5 @@
 import { trainingBlockDefinition } from "./trainingBlocks.js";
+import { transferRemovedMoveAdjustment } from './recoveredWorkout.js';
 
 export const PLAN_HISTORY_SCHEMA_VERSION = 1;
 export const PLAN_HISTORY_RECENT_LIMIT = 40;
@@ -254,6 +255,7 @@ export function restorePlanVersion(state, targetVersionId, timestamp = Date.now(
   state.program = restored;
   state.profile.availableDays = restored.days.map((day) => day.weekday);
   state.profile.daysPerWeek = restored.days.length;
+  if(transferRemovedMoveAdjustment(state))reconciliation.todayAdjustmentRemoved=false;
   state.todayAdaptation = null;
   state.weekScheduleOverrides = weekScheduleOverrides;
   state.workoutOccurrenceOverrides = workoutOccurrenceOverrides;

@@ -1,14 +1,16 @@
 import assert from 'node:assert/strict';
 import {mkdir} from 'node:fs/promises';
 import {chromium} from 'playwright-core';
-import {blankState,buildProgram,deserializeState,exerciseName} from '../src/domain.js';
+import {blankState,buildProgram,deserializeState,exerciseName,weekKey} from '../src/domain.js';
 import {applyTodayAdjustment,createManualTodayPreparation} from '../src/adjustToday.js';
 import {applyFlexibleWeek,flexibleSessions,proposeFlexibleWeek} from '../src/flexibleWeek.js';
+import {transferRemovedMoveAdjustment} from '../src/recoveredWorkout.js';
 import {openProfileArea} from './qa-current-navigation.mjs';
 
 const date='2026-10-24';
 const origin=process.env.ROOK_QA_URL||'http://127.0.0.1:4400';
 const planSource=process.env.ROOK_QA_PLAN_SOURCE;
+const removedSource=process.env.ROOK_QA_REMOVED_SOURCE==='1';
 const out='artifacts/plan-move-recovery';await mkdir(out,{recursive:true});
 function fixture(appearance,style){
   let state=blankState();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:['Mon','Wed','Fri'],sessionMinutes:60,equipment:['full gym'],environment:'Commercial gym',priorities:['Balanced'],onboardingComplete:true,appearancePreference:appearance,stylePreference:style,themePreference:style==='premium'?'premium':appearance,showExerciseImages:false});
@@ -31,6 +33,13 @@ function fixture(appearance,style){
   const day=state.program.days.find(item=>item.id===friday.workoutId),exercise=day.exercises[0];
   const sets=exercise.sets.map((set,index)=>({...set,id:`prior-set-${index}`,completed:true,weight:61-index,reps:8}));
   state.workouts=[{id:'prior-workout',name:day.name,completedAt:'2026-10-16T12:00:00.000Z',performedDate:'2026-10-16',exercises:[{...exercise,sets}]}];
+  if(removedSource){
+    state.program.days=state.program.days.filter(item=>item.id!==day.id);
+    state.program.source=planSource||'manual';state.program.userEdited=true;
+    state.profile.daysPerWeek=state.program.days.length;state.profile.availableDays=state.program.days.map(day=>day.weekday);
+    transferRemovedMoveAdjustment(state,date);
+    if(style==='premium')state.weekScheduleOverrides[weekKey(date)]={[state.program.days[0].id]:date};
+  }
   return {state,dayId:day.id,entryId:exercise.id,entryName:exerciseName(exercise),prior:sets.map(set=>set.weight)};
 }
 
@@ -49,6 +58,38 @@ try{
       const button=(name,scope=page)=>scope.getByRole('button',{name,exact:true});
       const read=()=>page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
       await page.goto(origin);
+      if(removedSource){
+        await page.locator('.schedule-attention-open').click();
+        const sheet=page.locator('.flexible-week-sheet');
+        await button('Review this move',sheet).click();
+        await sheet.locator('summary').filter({hasText:'Your one-off adjustment'}).click();
+        await sheet.getByText(/43/).first().waitFor();
+        await page.screenshot({path:`${out}/${key}-keep-as-one-off.png`});
+        await button('KEEP AS ONE-OFF WORKOUT',sheet).click();
+        await sheet.waitFor({state:'detached'});
+        await page.reload();await page.locator('.today-hero').waitFor();
+        assert.equal(await page.locator('.schedule-attention-open').count(),0);
+        if(style==='premium'){
+          await page.getByRole('button',{name:/^View one-off workout/}).click();
+          await page.getByRole('button',{name:/^View other workout/}).waitFor();
+        }
+        await page.getByText('One-off workout · Today only',{exact:true}).waitFor();
+        await page.getByText(/Prepared: 43 kg/).waitFor();
+        const kept=await read();
+        assert.equal(kept.selectedDate,date);assert.equal(kept.todayAdaptation,null);
+        assert.equal(kept.program.days.some(item=>item.id===dayId),false);
+        assert.equal(kept.optionalSessions[0].workout.exercises[0].sets[0].weight,43);
+        assert.equal(kept.workouts.length,1);
+        await page.screenshot({path:`${out}/${key}-recovered-today.png`});
+        await button('START WORKOUT').click();
+        await page.waitForFunction(()=>Boolean(JSON.parse(localStorage.getItem('lift-v2-state'))?.activeWorkout));
+        const active=(await read()).activeWorkout;
+        assert.equal(active.optionalSessionId,kept.optionalSessions[0].id);
+        assert.equal(active.exercises[0].sets[0].weight,43,'the logger keeps the actual adjustment and ignores history defaults');
+        assert.deepEqual(errors,[]);
+        console.log(`${key}: keep removed workout, reload, browse same-day workouts and start confirmed.`);
+        continue;
+      }
       await button('PROFILE').click();await openProfileArea(page,'program');await page.getByRole('button',{name:/Edit plan/}).click();
       const editor=page.locator('.edit-plan-screen'),entry=editor.locator(`[id="import-exercise-${entryId}"]`);
       await button(`Edit ${entryName}`,entry).click();

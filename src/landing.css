@@ -101,14 +101,13 @@
 .entry-v2.welcome-landing .entry-action-row:last-child { border-bottom:0; }
 .entry-v2.welcome-landing .entry-action-row .entry-action-chevron { width:24px; height:24px; padding:3px; color:var(--rook-secondary); flex-basis:24px; }
 .entry-v2.welcome-landing .entry-action-row:active { background:var(--rook-surface-muted); }
-.entry-v2.welcome-landing .entry-action-copy strong { font-size:16px; }
 .entry-v2.welcome-landing .entry-action-copy small { font-size:13px; }
 .entry-v2.welcome-landing .entry-content { grid-area:1 / 1; margin:0; }
 .entry-v2.welcome-landing .entry-content h1 { font-size:clamp(32px,8.5vw,39px); line-height:1.04; letter-spacing:-.04em; max-width:none; }
 .entry-v2.welcome-landing .entry-content > p { margin-top:8px; font-size:16px; line-height:1.5; min-height:0; }
 .welcome-landing .welcome-progress { margin-top:12px; }
 .entry-v2.welcome-landing .entry-primary-action { margin:0; padding:0; }
-.entry-v2.welcome-landing .entry-primary-action > .button { min-height:56px; font-size:15px; letter-spacing:.02em; display:flex; align-items:center; justify-content:center; gap:10px; }
+.entry-v2.welcome-landing .entry-primary-action > .button { min-height:56px; font-size:var(--rook-type-action,.875rem); letter-spacing:.02em; display:flex; align-items:center; justify-content:center; gap:10px; }
 .entry-pro-badge { padding:3px 6px; border:1px solid currentColor; border-radius:5px; font-size:10px; line-height:1.1; letter-spacing:.06em; }
 .entry-v2.welcome-landing .entry-primary-note { margin:8px 0 0; font-size:12px; line-height:1.5; }
 .entry-v2.welcome-landing .welcome-actions > p { margin-top:0; }

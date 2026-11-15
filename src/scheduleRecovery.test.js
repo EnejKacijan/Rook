@@ -1,5 +1,8 @@
 import {beforeEach,afterEach,it,expect,vi} from 'vitest';
-import {adaptedTemplateForToday,blankState,buildProgram,deserializeState,plannedWorkoutForDate,serializeState} from './domain.js';
+import {adaptedTemplateForToday,blankState,buildProgram,completeWorkout,deserializeState,plannedWorkoutForDate,serializeState,startWorkout} from './domain.js';
+import {cancelRecoveredWorkout,recoveredWorkoutForDate} from './recoveredWorkout.js';
+import {calendarDayPresentation,calendarRange} from './workoutCalendar.js';
+import {persistProgramReplacement} from './planReplacement.js';
 import {applyTodayAdjustment,createManualTodayPreparation} from './adjustToday.js';
 import {flexiblePlanFingerprint,flexibleFingerprintBeforeHydration,applyFlexibleWeek,proposeFlexibleWeek,flexibleSessions,flexibleWeekConflict,temporaryScheduleReview} from './flexibleWeek.js';
 import {applyScheduleRecovery,preserveMovesAfterPlanEdit,reviewScheduleRecovery} from './scheduleRecovery.js';
@@ -60,6 +63,82 @@ it('shows the saved one-off snapshot when the source was removed and clears only
   expect(next.todayAdaptation).toBeNull();
   expect(next.workoutOccurrenceOverrides[record.scheduledDate]).toEqual({other:{skipWorkout:true}});
   expect(next.workouts).toEqual(state.workouts);
+});
+function removedSourceFixture(){
+  const {state,id}=adjustedFixture(),record=state.flexibleWeek.sessions[id];
+  state.program.days=state.program.days.filter(day=>day.id!==record.workoutId);
+  state.program.source='manual';state.program.userEdited=true;
+  state.profile.daysPerWeek=state.program.days.length;
+  state.profile.availableDays=state.program.days.map(day=>day.weekday);
+  state.todayAdaptation.workout.exercises[0].sets[0].reps=7;
+  return {state,id,record};
+}
+it('keeps a removed workout on the moved date, retaining the edited loads even when newer history exists',()=>{
+  const {state,id,record}=removedSourceFixture();
+  const historyExercise=structuredClone(state.todayAdaptation.workout.exercises[0]);
+  Object.assign(historyExercise.sets[0],{weight:80,reps:11,completed:true});
+  state.workouts.push({id:'prior',completedAt:'2026-10-18T12:00:00Z',exercises:[historyExercise]});
+  const review=reviewScheduleRecovery(state,id);
+  expect(review.oneOff).toBe(true);
+  const kept=applyScheduleRecovery(state,review,'one-off');
+  expect(kept.flexibleWeek.sessions[id]).toBeUndefined();
+  expect(kept.todayAdaptation).toBeNull();
+  expect(kept.program).toEqual(state.program);
+  expect(kept.workouts).toEqual(state.workouts);
+  expect(temporaryScheduleReview(kept).unresolved).toEqual([]);
+  expect(()=>applyScheduleRecovery(kept,review,'one-off')).toThrow('changed');
+  const loaded=deserializeState(serializeState(kept),{strict:true});
+  const workout=recoveredWorkoutForDate(loaded,record.scheduledDate);
+  expect(workout.exercises.map(e=>e.id)).toEqual(state.todayAdaptation.workout.exercises.map(e=>e.id));
+  expect(workout.trainingBlock).toBeUndefined();
+  expect(recoveredWorkoutForDate(loaded,record.originalDate)).toBeNull();
+  expect(calendarDayPresentation(loaded,[record.scheduledDate])[record.scheduledDate].counts.planned).toBe(1);
+  loaded.activeWorkout=startWorkout(loaded,workout);
+  expect(loaded.activeWorkout.exercises[0].sets[0]).toMatchObject({reps:7,weight:43,completed:false});
+  expect(loaded.activeWorkout.canonicalPlanDate).toBe(record.scheduledDate);
+  expect(()=>cancelRecoveredWorkout(loaded,workout.optionalSessionId)).toThrow('no longer available');
+  loaded.activeWorkout.exercises[0].sets[0].completed=true;
+  const done=completeWorkout(loaded);
+  expect(done.optionalSessions[0].status).toBe('completed');
+  expect(done.program).toEqual(loaded.program);
+  expect(done.workouts.at(-1)).toMatchObject({optionalSessionId:workout.optionalSessionId});
+  expect(recoveredWorkoutForDate(done,record.scheduledDate)).toBeNull();
+});
+it('keeps a future moved date navigable and allows an unstarted one-off to be removed without resurrecting the plan entry',()=>{
+  const {state,id,record}=removedSourceFixture();
+  record.scheduledDate='2026-10-28';state.todayAdaptation.date=record.scheduledDate;
+  const kept=applyScheduleRecovery(state,reviewScheduleRecovery(state,id),'one-off');
+  const workout=recoveredWorkoutForDate(kept,record.scheduledDate);
+  expect(calendarRange(kept).max).toBe('2026-11-01');
+  expect(()=>startWorkout(kept,workout)).toThrow('no longer scheduled for today');
+  const cancelled=cancelRecoveredWorkout(kept,workout.optionalSessionId);
+  expect(recoveredWorkoutForDate(cancelled,record.scheduledDate)).toBeNull();
+  expect(cancelled.workouts).toEqual(state.workouts);
+  expect(cancelled.program).toEqual(state.program);
+});
+it('keeps incompatible adjustments for review instead of creating an unstartable workout',()=>{
+  const {state,id}=removedSourceFixture();
+  state.todayAdaptation.temporaryEquipment=['bodyweight'];
+  const review=reviewScheduleRecovery(state,id);
+  expect(review.oneOff).toBe(false);
+  expect(review.oneOffReason).toMatch(/equipment|restrictions/);
+  expect(()=>applyScheduleRecovery(state,review,'one-off')).toThrow();
+  expect(state.optionalSessions).toEqual([]);
+  expect(state.todayAdaptation.workout.exercises[0].sets[0].weight).toBe(43);
+});
+it('keeps the removed workout reviewable across actual plan replacement and reload',()=>{
+  const {state,id}=adjustedFixture(),record=state.flexibleWeek.sessions[id];
+  const program={...state.program,source:'manual',userEdited:true,days:state.program.days.filter(day=>day.id!==record.workoutId)};
+  const profile={...state.profile,daysPerWeek:program.days.length,availableDays:program.days.map(day=>day.weekday)};
+  const replaced=persistProgramReplacement(state,program,{profile},()=>true);
+  expect(replaced.todayAdaptation).toBeNull();
+  expect(replaced.flexibleWeek.sessions[id].detachedAdjustment.workout.exercises[0].sets[0].weight).toBe(43);
+  const loaded=deserializeState(serializeState(replaced),{strict:true});
+  const review=reviewScheduleRecovery(loaded,id);
+  expect(review.oneOff).toBe(true);
+  const kept=applyScheduleRecovery(loaded,review,'one-off');
+  expect(recoveredWorkoutForDate(kept,record.scheduledDate).exercises[0].sets[0].weight).toBe(43);
+  expect(kept.flexibleWeek.recoveryHistory.at(-1)).not.toHaveProperty('detachedAdjustment');
 });
 it('repairs both sides of a stale swap together without reviving the original placements',()=>{
   const {state}=fixture();

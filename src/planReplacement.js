@@ -1,6 +1,7 @@
 import {validateProgram,isoDay,weekday} from './domain.js';
 import {normalizeTrainingBlocksState} from './trainingBlocks.js';
 import {addPlanVersion} from './planHistory.js';
+import {transferRemovedMoveAdjustment} from './recoveredWorkout.js';
 
 // Build/Scratch share Import's persist-before-publish boundary, without using
 // Import's source-specific conversion or changing historical session records.
@@ -14,6 +15,7 @@ export function persistProgramReplacement(state,program,{profile=state.profile,s
   next.program=structuredClone(program);
   next.selectedDate=isoDay();next.selectedDay=weekday();
   next.ai={...next.ai,lastPlanSource:source};
+  transferRemovedMoveAdjustment(next);
   next.todayAdaptation=null;next.weekScheduleOverrides={};next.workoutOccurrenceOverrides={};
   normalizeTrainingBlocksState(next);
   addPlanVersion(next,{previousProgram:state.program,source:state.program?'Plan replacement':'Initial plan',reason:state.program?'Plan replaced after review':'Manual plan created'});
