@@ -64,10 +64,47 @@ describe('reuse corresponding previous sets in one operation',()=>{
     expect(entry(result.state).sets[2]).toMatchObject({weight:15,reps:7});
     expect(entry(result.state).sets[3]).toMatchObject({weight:12.5,reps:8});
   });
-  it('never invents a missing historical set or repeats the final one',()=>{
+  it('repeats the last recorded set for extra sets without changing historical set count',()=>{
     const state=fixture();history(state).sets.pop();
-    const result=apply(state);expect(entry(result.state).sets[2]).toEqual(entry(state).sets[2]);
-    expect(result.record.future).toHaveLength(1);
+    const before=structuredClone(state),result=apply(state);
+    expect(entry(result.state).sets.map(set=>[set.weight,set.reps])).toEqual([[15,8],[15,7],[15,7]]);
+    expect(result.record.future).toHaveLength(2);expect(result.state.workouts).toEqual(before.workouts);
+    expect(undoPreviousValues(result.state,result.record)).toEqual(before);
+  });
+  it('can reuse into an extra current set after the earlier sets have been logged',()=>{
+    const state=fixture();history(state).sets.pop();entry(state).sets.slice(0,2).forEach(set=>Object.assign(set,{weight:20,reps:6,completed:true}));
+    const before=structuredClone(state),result=preparePreviousValues(state,identity(state,2),{remaining:true});
+    expect(entry(result.state).sets[2]).toMatchObject({weight:15,reps:7,completed:false});
+    expect(entry(result.state).sets.slice(0,2)).toEqual(entry(before).sets.slice(0,2));
+    expect(undoPreviousValues(result.state,result.record)).toEqual(before);
+  });
+  it('protects manually entered extra-set values while filling its untouched fields',()=>{
+    const state=fixture();history(state).sets.pop();Object.assign(entry(state).sets[2],{weight:25,weightEntryMode:'manual',touched:true});
+    const result=apply(state);expect(entry(result.state).sets[2]).toMatchObject({weight:25,reps:7});
+    expect(undoPreviousValues(result.state,result.record)).toEqual(state);
+  });
+  it('fills any number of extra sets from a single completed ordinary set',()=>{
+    const state=fixture();history(state).sets=history(state).sets.slice(0,1);
+    entry(state).sets.push({...structuredClone(entry(state).sets[2]),id:'working-3'});
+    const result=apply(state);expect(entry(result.state).sets.map(set=>[set.weight,set.reps])).toEqual([[15,8],[15,8],[15,8],[15,8]]);
+    expect(undoPreviousValues(result.state,result.record)).toEqual(state);
+  });
+  it('does not borrow values for an empty matching set, and repeats only usable completed data for extras',()=>{
+    const state=fixture();history(state).sets[1]={weight:null,reps:null,completed:true};history(state).sets.pop();
+    const result=apply(state);expect(entry(result.state).sets[1]).toEqual(entry(state).sets[1]);
+    expect(entry(result.state).sets[2]).toMatchObject({weight:15,reps:8,completed:false});
+    history(state).sets[0].completed=false;expect(apply(state)).toEqual({state,record:null});
+  });
+  it('repeats timed seconds into extra sets without inventing a load',()=>{
+    const state=fixture('plank');history(state).sets=history(state).sets.slice(0,2).map((set,index)=>({...set,weight:null,reps:45-index*5}));
+    const result=apply(state);expect(entry(result.state).sets.map(set=>[set.weight,set.reps])).toEqual([[null,45],[null,40],[null,40]]);
+  });
+  it('keeps per-side counts separate when repeating the last ordinary set',()=>{
+    const state=fixture('one-arm-dumbbell-row');entry(state).loggingMode=history(state).loggingMode='per_side';
+    entry(state).sets.forEach(set=>{set.sides={left:{reps:6},right:{reps:6}};});
+    history(state).sets=history(state).sets.slice(0,2).map((set,index)=>({...set,sides:{left:{reps:8-index},right:{reps:9-index}}}));
+    const result=apply(state);expect(entry(result.state).sets[2].sides).toEqual({left:{reps:7},right:{reps:8}});
+    expect(undoPreviousValues(result.state,result.record)).toEqual(state);
   });
   it('uses only available fields, preserves today’s effort and does not import timestamps',()=>{
     const state=fixture();history(state).sets[1]={weight:20,reps:null,completed:true,completedAt:123};

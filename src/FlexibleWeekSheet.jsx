@@ -34,12 +34,13 @@ function RecoveryWorkoutPreview({workout,label,units}) {
       return <li key={e.id}><strong>{exerciseName(e)}</strong> · {reps?`${e.sets.length}${reps}`:`${e.sets.length} ${e.sets.length===1?'set':'sets'}`}{loads}</li>;
     })}</ul></AnimatedDetails>;
 }
-function ScheduleHistory({entries}) {
+function ScheduleHistory({entries,onRevert,canRevert}) {
   return <section className="flexible-schedule-history" aria-labelledby="recent-schedule-changes">
     <h2 id="recent-schedule-changes" className="eyebrow">Earlier this week</h2>
     <div className="flexible-week-review">{entries.map(entry=><article key={entry.id}>
       <strong>{entry.name}</strong>
       <span>{entry.skipped?dateLabel(entry.scheduledDate):`${dateLabel(entry.originalDate)} → ${dateLabel(entry.scheduledDate)}`} · {entry.status==='completed'?'Completed':entry.status==='combined'?'Combined':'Skipped'}</span>
+      {onRevert&&canRevert?.(entry)&&<button className="text-button schedule-revert-action" onClick={()=>onRevert(entry.id)}>Revert skip</button>}
     </article>)}</div>
   </section>;
 }
@@ -70,7 +71,8 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const missed = useMemo(()=>missedFlexibleSessions(state,today,sessions),[state,today,sessions]);
   const initialSessionId = request.sessionId || (request.missed && missed.length===1 ? missed[0].logicalSessionId : null);
   const [initialSwap] = useState(()=>request.swap && request.otherSessionId ? proposeFlexibleWeek(state,{mode:'swap',sessionId:request.sessionId,otherSessionId:request.otherSessionId},today) : null);
-  const [steps, setSteps] = useState(initialSwap?.status==='ready' ? ['mode','swap','review'] : request.reviewExisting ? request.focusSessionId?['existing']:['mode','existing'] : initialSessionId ? ['mode', request.swap ? 'swap' : !request.destination && missed.some(s=>s.logicalSessionId===initialSessionId) ? 'recovery' : 'destination'] : request.missed ? ['mode','missed'] : request.move ? ['pick'] : ['mode']);
+  const [initialWeekShift]=useState(()=>request.shift?proposeFlexibleWeek(state,{mode:'recover-week',sessionId:request.sessionId},today):null);
+  const [steps, setSteps] = useState(request.shift?['mode','shift-review']:initialSwap?.status==='ready' ? ['mode','swap','review'] : request.reviewExisting ? request.focusSessionId?['existing']:['mode','existing'] : initialSessionId ? ['mode', request.swap ? 'swap' : !request.destination && missed.some(s=>s.logicalSessionId===initialSessionId) ? 'recovery' : 'destination'] : request.missed ? ['mode','missed'] : request.move ? ['pick'] : ['mode']);
   const step = steps.at(-1);
   const setStep = next => setSteps(current => {
     const existing = current.lastIndexOf(next);
@@ -88,8 +90,11 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     ...(combinedProposal?{combinedProposal}:{}),...(workoutOrder?{workoutOrder}:{})}),[available,resolutions,combinedProposal,workoutOrder]);
   const availabilityPreview = useMemo(()=>step==='available' ? planner.check(availabilityRequest) : null,[planner,availabilityRequest,step]);
   const canReviewSchedule = Boolean(availabilityPreview?.remainingSessions);
-  const [proposal, setProposal] = useState(initialSwap?.status==='ready' ? initialSwap : null);
+  const [proposal, setProposal] = useState(initialWeekShift || (initialSwap?.status==='ready' ? initialSwap : null));
+  const [shiftExtraDates,setShiftExtraDates]=useState([]);
   const [focusedChangeId,setFocusedChangeId]=useState(request.focusSessionId||null);
+  const [revertBlocked,setRevertBlocked]=useState(null);
+  const [revertMessage,setRevertMessage]=useState('');
   const [error, setError] = useState('');
   const openRecovery=id=>{try{setRecovery(reviewScheduleRecovery(state,id));setError('');setStep('repair');}catch(e){setError(e.message);}};
   const repair=(mode,toDate)=>{
@@ -102,6 +107,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const [persistenceFailed, setPersistenceFailed] = useState(false);
   const [adaptationChoice, setAdaptationChoice] = useState('keep');
   const applied = useRef(false);
+  useEffect(()=>{if(step==='existing')applied.current=false;},[state,step]);
   const screenRef = useRef(null);
   const returnAction = useRef(null);
   const previousView = useRef({step,useToday,focusedChangeId});
@@ -151,6 +157,9 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const missedDestination = step==='destination' && item?.status==='missed';
   const firstWeekDestination=step==='destination'&&item?.firstPlanWeek;
   const recoveryView = ['recovery','more'].includes(step);
+  const shiftView=['shift-review','shift-extra'].includes(step);
+  const shiftCurrent=useMemo(()=>Boolean(proposal?.today===today&&proposal.fingerprint===flexibleReviewFingerprint(state)&&
+    (!proposal.recoveryShift||JSON.stringify(proposal.recoveryShift.availableDays)===JSON.stringify([...(state.profile.availableDays||[])].sort()))),[state,today,proposal]);
   const selectSession = session => {setResolutionSessionId(null);setSessionId(session.logicalSessionId);setStep(session.status==='missed'?'recovery':'destination');};
   // More options is a disclosure, not an extra navigation level for its children.
   const openRecoveryOption = next => {setError('');setSteps(current=>[...current.slice(0,current.lastIndexOf('recovery')+1),next]);};
@@ -163,6 +172,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
 
   const canMove = useMemo(()=>item && ['recovery','more'].includes(step) && planner.hasMove(sessionId),[planner,item,sessionId,step]);
   const canTrainToday = useMemo(()=>item && canUseWorkoutToday(state,{sessionId},today,planner),[state,item,sessionId,today,planner]);
+  const canShiftWeek=useMemo(()=>Boolean(recoveryView&&item?.status==='missed'&&planner.check({mode:'recover-week',sessionId}).status==='ready'),[planner,item,sessionId,recoveryView]);
   const existingReview = useMemo(()=>temporaryScheduleReview(state,today),[state,today]);
   const eligibleMissed=useMemo(()=>missed.filter(item=>planner.check({mode:'skip',sessionId:item.logicalSessionId}).status==='ready'),[planner,missed]);
   const scheduleNeedsAttention=existingReview.unresolved.length>0;
@@ -176,6 +186,9 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const combinedSchedule=combinedAdjustment(state);
   const existingChangeCount=existingReview.items.length+(combinedSchedule?1:0);
   const recentChanges=existingReview.recent;
+  const skippedBySchedule=entry=>Boolean(state.flexibleWeek?.sessions?.[entry.id]?.skipped);
+  const canRevertRecentSkip=entry=>skippedBySchedule(entry)&&!entry.issue&&!entry.finished&&
+    !state.program?.trainingBlock?.resolvedSkips?.some(skip=>skip.logicalSessionId===entry.id);
   const hasScheduleReview=Boolean(existingChangeCount||recentChanges.length);
   const linkedChanges=useMemo(()=>step==='existing' && focusedChangeId ? linkedScheduleChanges(state,focusedChangeId) : [],[state,step,focusedChangeId]);
   const focusedChange=existingReview.items.find(entry=>entry.id===focusedChangeId);
@@ -187,10 +200,11 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
   const canRestore=restorePreview?.status==='ready' && (!focusedChangeId || Boolean(focusedChange));
   const scopedRestoreLabel=restoreCount>1?`RESTORE ${restoreCount} WORKOUTS`:focusedChange?.issue?'REVIEW RESTORE':'RESTORE ORIGINAL DATE';
   const restoreRecords=step==='restore-confirm'?proposal?.restoreRecords||[]:[];
+  const individualRevert=step==='restore-confirm'&&proposal?.request.revert;
   const focusedRestore=step==='restore-confirm' && Boolean(proposal?.request.sessionId);
   const confirmingOne=restoreRecords.length===1;
-  const restoreConfirmationTitle=focusedRestore ? confirmingOne?'Restore original date?':'Restore original dates?' : 'Restore original schedule?';
-  const restoreConfirmLabel=focusedRestore
+  const restoreConfirmationTitle=individualRevert ? confirmingOne?'Revert this change?':'Revert linked changes?' : focusedRestore ? confirmingOne?'Restore original date?':'Restore original dates?' : 'Restore original schedule?';
+  const restoreConfirmLabel=individualRevert ? confirmingOne?'REVERT CHANGE':`REVERT ${restoreRecords.length} CHANGES` : focusedRestore
     ? confirmingOne?'RESTORE WORKOUT':`RESTORE ${restoreRecords.length} WORKOUTS`
     : `RESTORE ${countChanges(restoreRecords.length).toUpperCase()}`;
   const retainedChanges=step==='restore-confirm'?existingReview.items.filter(entry=>!restoreRecords.some(record=>record.id===entry.id)):[];
@@ -200,6 +214,18 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     if(next.status!=='ready'||!next.restoreRecords.length){setError(next.error||'There are no changes to restore.');return;}
     setAdaptationChoice('restore');setProposal(next);setError('');setStep('restore-confirm');
   };
+  const openRevert=id=>{
+    const next=proposeFlexibleWeek(state,{mode:'restore',sessionId:id,revert:true},today);
+    setError('');setPersistenceFailed(false);setRevertMessage('');
+    if(next.status!=='ready'){
+      setSessionId(id);setRevertBlocked(next.error);setStep('revert-blocked');return;
+    }
+    // Future adjustments follow the workout. Returning an adjustment to a past
+    // date would strand it outside the missed-workout chooser; disclose its reset.
+    const pastAdjustment=next.changes.some(change=>change.toDate<today && change.workoutId===state.todayAdaptation?.programDayId && change.fromDate===state.todayAdaptation?.date);
+    setAdaptationChoice(pastAdjustment?'restore':'keep');setProposal(next);setStep('restore-confirm');
+  };
+  const canMoveBlocked=useMemo(()=>Boolean(step==='revert-blocked'&&sessionId&&planner.hasMove(sessionId)),[step,sessionId,planner]);
   const editSchedule=()=>{setFocusedChangeId(null);setSteps(['mode']);};
   const swapCandidates = useMemo(()=>item && ['more','swap','destination'].includes(step) ? planner.swaps(sessionId) : [],[planner,item,step,sessionId]);
   const simpleSwap = proposal?.request.mode === 'swap';
@@ -252,6 +278,12 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     if (result.state === state) { applied.current = true; close(); return; }
     if (!saveState(result.state)) { setPersistenceFailed(true); setError('ROOK couldn’t save the schedule. Your previous schedule is unchanged. Try again.'); return; }
     applied.current = true; update(() => result.state, {persistedState:result.state});
+    if(selectedProposal.request.revert){
+      feedback?.scheduleApplied?.(state,result.state);
+      setFocusedChangeId(null);setProposal(null);setSteps(['mode','existing']);
+      setRevertMessage(selectedProposal.restoreRecords.length===1?'Change reverted.':`${selectedProposal.restoreRecords.length} changes reverted.`);
+      return;
+    }
     if(feedback?.scheduleApplied){feedback.scheduleApplied(state,result.state);close();return;}
     if(item?.status==='missed' && selectedProposal.request.mode==='move' && feedback) {
       feedback.applied({message:`${item.workout.name} moved to ${dateLabel(selectedProposal.request.toDate)}`,undo:missedRecoveryUndo(state,result.state,sessionId)});
@@ -270,6 +302,16 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     // Moving an occurrence also moves its saved one-off workout. No additional
     // choice or prescription reset is needed for a calendar-only operation.
     commitProposal(current,'keep');
+  };
+  const openWeekShift=()=>{
+    const result=proposeFlexibleWeek(state,{mode:'recover-week',sessionId},today);
+    setError('');setPersistenceFailed(false);setProposal(result);setStep('shift-review');
+  };
+  const chooseShiftExtra=()=>{
+    if(!shiftCurrent){setStep('shift-review');setError('The schedule changed. Update the preview first.');return;}
+    const result=proposeFlexibleWeek(state,{...proposal.request,extraDates:shiftExtraDates},today);
+    if(result.status!=='ready'){setError(result.error);return;}
+    setProposal(result);setPersistenceFailed(false);setError('');setStep('shift-review');
   };
   const skipMissed = () => {
     if (applied.current || item?.status !== 'missed') return;
@@ -291,18 +333,40 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     <p role="status">This workout is no longer available to reschedule.</p>
     <button className="button secondary" onClick={reviewCurrentSchedule}>Review current schedule</button>
   </main>;
-  if(useToday)return <UseWorkoutTodaySheet state={state} update={update} close={close} Header={Header} setDetail={setDetail} className={steps.includes('recovery')?'missed-recovery-today':''} request={{sessionId:useToday}} onBack={()=>{setUseToday(null);returnAction.current='train';setError('');}}/>;
-  return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}${recoveryView?' content-fit-screen missed-recovery-sheet':''}${['skip-confirm','restore-confirm','existing','mode'].includes(step)?' content-fit-screen flexible-compact-sheet':''}`}>
-    <Header title={step==='restore-confirm'?'Restore schedule':step==='existing'?'Schedule changes':step==='more'?'More options':recoveryView?'Missed workout':firstWeekDestination?'Schedule workout':missedDestination?'Move workout':request.move ? 'Move a workout' : 'Adjust week'} onClose={close} onBack={step!=='done' && steps.length > 1 ? goBack : undefined} />
-    {!recoveryView && !missedDestination && !['existing','restore-confirm'].includes(step) && <p className="eyebrow">{step==='pick'?'MOVE A WORKOUT':'TEMPORARY SCHEDULE'}</p>}
+  if(useToday)return <UseWorkoutTodaySheet state={state} update={update} close={close} Header={Header} setDetail={setDetail} onShiftWeek={()=>{setUseToday(null);openWeekShift();}} className={steps.includes('recovery')?'missed-recovery-today':''} request={{sessionId:useToday}} onBack={()=>{setUseToday(null);returnAction.current='train';setError('');}}/>;
+  return <main ref={screenRef} className={`screen detail-screen flexible-week-sheet${missedDestination?' content-fit-screen missed-destination-sheet':''}${recoveryView?' content-fit-screen missed-recovery-sheet':''}${['skip-confirm','restore-confirm','revert-blocked','existing','mode'].includes(step)?' content-fit-screen flexible-compact-sheet':''}`}>
+    <Header title={shiftView?'Shift this week':individualRevert||step==='revert-blocked'?'Revert change':step==='restore-confirm'?'Restore schedule':step==='existing'?'Schedule changes':step==='more'?'More options':recoveryView?'Missed workout':firstWeekDestination?'Schedule workout':missedDestination?'Move workout':request.move ? 'Move a workout' : 'Adjust week'} onClose={close} onBack={step!=='done' && steps.length > 1 ? goBack : undefined} />
+    {!recoveryView && !missedDestination && !['existing','restore-confirm','revert-blocked'].includes(step) && <p className="eyebrow">{step==='pick'?'MOVE A WORKOUT':'TEMPORARY SCHEDULE'}</p>}
     {step==='recovery' && item && <>
       <h1>{item.workout.name}</h1><p>Missed · {dateLabel(item.scheduledDate)}</p>
       <div className="missed-recovery-actions">
         {scheduleNeedsAttention&&<button className="button secondary" onClick={()=>setStep('existing')}>REVIEW SCHEDULE FIRST</button>}
         {canTrainToday && <button className="button primary" data-recovery-action="train" onClick={()=>setUseToday(sessionId)}>TRAIN TODAY</button>}
+        {canShiftWeek && <button className="button secondary" data-recovery-action="shift" onClick={openWeekShift}>SHIFT THE REST OF THIS WEEK</button>}
         {canMove && <button className="button secondary" data-recovery-action="move" onClick={()=>setStep('destination')}>MOVE TO ANOTHER DAY</button>}
         {!scheduleNeedsAttention&&<button className="text-button" data-recovery-action="more" onClick={()=>setStep('more')}>More options</button>}
       </div>
+    </>}
+    {shiftView&&proposal?.status!=='ready'&&<>
+      <h1>This week cannot shift</h1><p role="status">{proposal?.error||'Choose another workout from the current schedule.'}</p>
+      <button className="button secondary" onClick={reviewCurrentSchedule}>OPEN CURRENT SCHEDULE</button>
+    </>}
+    {shiftView&&proposal?.status==='ready'&&proposal.recoveryShift&&<>
+      <h1>{step==='shift-extra'?proposal.recoveryShift.extraDates.length===1?'Choose an extra day':`Choose ${proposal.recoveryShift.extraDates.length} extra days`:'Shift the rest of this week?'}</h1>
+      <p>{proposal.recoveryShift.sourceCompleted?'Your completed workout stays recorded.':'The missed workout goes first.'} Next week keeps its existing dates.</p>
+      {step==='shift-extra'?<div className="flexible-week-dates">{proposal.recoveryShift.extraDateOptions.map(date=><button key={date} data-shift-extra={date} disabled={!shiftCurrent} aria-pressed={shiftExtraDates.includes(date)} onClick={()=>setShiftExtraDates(current=>proposal.recoveryShift.extraDates.length===1?[date]:current.includes(date)?current.filter(value=>value!==date):[...current,date])}>{dateLabel(date)}</button>)}</div>:<>
+        <div className="flexible-week-review">{proposal.changes.map(change=><article key={change.logicalSessionId} data-shift-session={change.logicalSessionId}><strong>{change.name}</strong><span>{dateLabel(change.fromDate)} → {dateLabel(change.toDate)}</span></article>)}</div>
+        {proposal.recoveryShift.extraDates.length>0&&<p className="sheet-footnote">Extra training {proposal.recoveryShift.extraDates.length===1?'day':'days'} this week: {proposal.recoveryShift.extraDates.map(dateLabel).join(', ')}.</p>}
+        {proposal.recoveryShift.extraDateOptions.length>proposal.recoveryShift.extraDates.length&&<button className="text-button" onClick={()=>{setShiftExtraDates(proposal.recoveryShift.extraDates);setError('');setStep('shift-extra');}}>Change extra {proposal.recoveryShift.extraDates.length===1?'day':'days'}</button>}
+        {proposal.adaptationConflict&&<p className="sheet-footnote">Your saved workout adjustments move with their workouts.</p>}
+        {proposal.warnings.map(warning=><p className="sheet-footnote" key={warning}>{warning}</p>)}
+      </>}
+      <SheetActionFooter>{error&&<p role="alert">{error}</p>}
+        {!shiftCurrent&&<><p role="status">The schedule changed.</p><button className="button secondary" onClick={openWeekShift}>UPDATE PREVIEW</button></>}
+        {step==='shift-extra'&&<button className="button primary" disabled={!shiftCurrent||shiftExtraDates.length!==proposal.recoveryShift.extraDates.length} onClick={chooseShiftExtra}>USE THESE DAYS</button>}
+        {step==='shift-review'&&<button className="button primary" disabled={!shiftCurrent} onClick={()=>commitProposal(proposal,'keep')}>{persistenceFailed?'TRY AGAIN':'SHIFT THIS WEEK'}</button>}
+        <button className="button quiet" onClick={close}>CANCEL</button>
+      </SheetActionFooter>
     </>}
     {step==='more' && item && <>
       <h1>{item.workout.name}</h1><p>Missed · {dateLabel(item.scheduledDate)}</p>
@@ -333,6 +397,7 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         : <h1 className="schedule-change-title" tabIndex={-1} data-sheet-initial-focus>{focusedChangeId?'Change no longer current':existingChangeCount?'Current changes':recentChanges.length?'This week':'No current changes'}</h1>}
       {focusedChangeId&&!focusedChange&&<p>Open Schedule changes to check the latest dates.</p>}
       {!focusedChangeId&&existingReview.unresolved.length>0&&<p role="status">{existingReview.unresolved.length} {existingReview.unresolved.length===1?'workout needs':'workouts need'} attention.</p>}
+      {revertMessage&&<p role="status">{revertMessage}</p>}
       {(reviewedChanges.length>0||!focusedChangeId&&combinedSchedule)&&<div className="flexible-week-review flexible-schedule-changes">{reviewedChanges.map(entry=><article key={entry.id} data-session-id={entry.id}>
         <small className="eyebrow">{entry.issue?'NEEDS ATTENTION':entry.skipped?'SKIPPED':'MOVED'}</small>
         {entry.id!==focusedChangeId&&<strong>{entry.name}</strong>}
@@ -341,14 +406,15 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         {entry.skipped&&canRestore&&restoreScope.removable.some(record=>record.id===entry.id)&&<small>This skip can be undone.</small>}
         {entry.issue && <small>{entry.issue}</small>}
           {entry.issue && <button type="button" className="button secondary" onClick={()=>openRecovery(entry.id)}>{entry.skipped?'Review this skip':'Review this move'}</button>}
+        {!entry.issue&&(skippedBySchedule(entry)?canRevertRecentSkip(entry):entry.originalDate!==entry.scheduledDate)&&<button type="button" className="text-button schedule-revert-action" onClick={()=>openRevert(entry.id)}>{skippedBySchedule(entry)?'Revert skip':'Revert move'}</button>}
+        {!entry.issue&&skippedBySchedule(entry)&&!canRevertRecentSkip(entry)&&<small>Already counted in plan progress.</small>}
       </article>)}{!focusedChangeId&&combinedSchedule&&<article>
         <small className="eyebrow">COMBINED</small><strong>{combinedSchedule.workout.name}</strong>
         {combinedSchedule.sourceSessions.map(source=><span key={source.logicalSessionId}>{source.name} · {dateLabel(source.originalDate)} → {dateLabel(combinedSchedule.date)}</span>)}
         <small>Source workouts stay reserved until the combined workout ends or is canceled.</small>
       </article>}</div>}
       {focusedChange&&reviewedChanges.length>1&&<p className="sheet-footnote">These workouts moved together.</p>}
-      {focusedChange&&!focusedChange.issue&&!canRestore&&<p className="sheet-footnote">The original dates are no longer available for this change.</p>}
-      {!focusedChangeId&&recentChanges.length>0&&<ScheduleHistory entries={recentChanges}/>}
+      {!focusedChangeId&&recentChanges.length>0&&<ScheduleHistory entries={recentChanges} onRevert={openRevert} canRevert={canRevertRecentSkip}/>}
       {!focusedChangeId&&existingReview.unresolved.length>0&&!canEditSchedule&&canRestore&&<p className="sheet-footnote">Restore the eligible temporary changes before editing the current schedule.</p>}
       <SheetActionFooter className="flexible-week-footer">
         {error&&<p role="alert">{error}</p>}
@@ -357,6 +423,14 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
         {focusedChangeId&&hasScheduleReview&&<button className="button quiet" onClick={()=>{setFocusedChangeId(null);setSteps(['mode','existing']);setError('');}}>VIEW ALL SCHEDULE CHANGES</button>}
         {!focusedChangeId&&existingChangeCount>0&&canEditSchedule&&<button className="button secondary" onClick={editSchedule}>EDIT SCHEDULE</button>}
         {!focusedChangeId&&canRestore&&<button className="button quiet" onClick={close}>DONE</button>}
+      </SheetActionFooter>
+    </>}
+    {step==='revert-blocked'&&<>
+      <h1>Original date unavailable</h1>
+      <p>{revertBlocked}</p>
+      <SheetActionFooter className="flexible-week-footer">
+        {canMoveBlocked&&<button className="button primary" onClick={()=>{setResolutionSessionId(null);setProposal(null);setError('');setPersistenceFailed(false);setStep('destination');}}>MOVE TO ANOTHER DAY</button>}
+        <button className={`button ${canMoveBlocked?'quiet':'primary'}`} onClick={goBack}>BACK TO CHANGES</button>
       </SheetActionFooter>
     </>}
     {['repair','repair-remove','repair-move'].includes(step)&&recovery&&!recoveryIsCurrent&&<>
@@ -399,15 +473,17 @@ export function FlexibleWeekSheet({ state, update, close, Header, request = {}, 
     </>}
     {step==='restore-confirm'&&<>
       <h1 id="schedule-restore-title" className="schedule-change-title" tabIndex={-1}>{restoreConfirmationTitle}</h1>
+      {individualRevert&&!confirmingOne&&<p>To free the original date, these linked changes need to be reverted together.</p>}
       <div className="flexible-week-review flexible-schedule-changes">{restoreRecords.map(record=>{
         const change=proposal.changes.find(item=>item.logicalSessionId===record.id);
-        return <article key={record.id}><strong>{record.name||change?.name||'Workout'}</strong>
+        return <article key={record.id} data-revert-session={individualRevert?record.id:undefined}><strong>{record.name||change?.name||'Workout'}</strong>
           <span>{!change?`Outdated change · ${dateLabel(record.scheduledDate)}`:record.skipped?`Skipped → ${dateLabel(change.toDate)}`:`${dateLabel(change.fromDate)} → ${dateLabel(change.toDate)}`}</span>
           {!change&&<small>This saved change will be cleared.</small>}
+          {individualRevert&&change?.toDate<today&&!state.workoutOccurrenceOverrides?.[change.fromDate]?.[change.workoutId]?.skipWorkout&&<small>{change.originalDate<(state.program?.trainingBlock?.startDate||weekKey(today))?'Returns to this week’s unscheduled plan.':'Returns as a missed workout.'}</small>}
         </article>;
       })}</div>
       {retainedChanges.length>0&&<p className="sheet-footnote">{retainedChanges.length===1?`${retainedChanges[0].name} ${retainedChanges[0].skipped?'stays skipped':'keeps its scheduled date'}.`:`${retainedChanges.length} other changes stay as scheduled.`}</p>}
-      {proposal?.adaptationConflict&&<p className="sheet-footnote">The affected today-only adjustment will be cleared.</p>}
+      {proposal?.adaptationConflict&&<p className="sheet-footnote">{adaptationChoice==='keep'?'Your one-off adjustment follows the workout.':'The affected today-only adjustment will be cleared.'}</p>}
       <SheetActionFooter className="flexible-week-footer">
         {error&&<p role="alert">{error}</p>}
         <button className="button primary" disabled={!restoreRecords.length} onClick={apply}>{persistenceFailed?'TRY AGAIN':restoreConfirmLabel}</button>

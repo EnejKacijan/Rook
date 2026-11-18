@@ -7416,13 +7416,13 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       </section>
       {replacementVisible && <section className="active-replacement" aria-label="Exercise replacement">
         <div className="active-replacement-summary">
-          <p><strong>{saveOptions.saved ? `Saved to ${saveOptions.name || 'this workout'}` : 'Replaced for this session'}</strong><small>Original: {exerciseName(replacement.original)}</small></p>
+          <p><strong>{saveOptions.saved ? saveOptions.savedLabel : 'Replaced for this session'}</strong><small>Original: {exerciseName(replacement.original)}</small></p>
           <button type="button" className="text-button active-replacement-hide" aria-label="Hide replacement details"
             title="Actions stay in Exercise options" data-workout-options onClick={() => changeReplacement('hide')}>Hide</button>
         </div>
         <div className="active-replacement-actions">
           {!saveOptions.saved && !revertIssue && <button type="button" className="text-button" onClick={() => changeReplacement('revert')}>Revert to original</button>}
-          {saveOptions.canSave && <button type="button" className="text-button" onClick={() => changeReplacement('save')}>Save to this workout</button>}
+          {saveOptions.canSave && <button type="button" className="text-button" onClick={() => changeReplacement('save')}>{saveOptions.saveLabel}</button>}
           {saveOptions.canUndo && <button type="button" className="text-button" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
         </div>
         <small role="status">{saveOptions.message}</small>
@@ -8708,6 +8708,8 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
   const linkedRecords=occurrences.map(s=>s.completedWorkout).filter(w=>w && !records.some(record=>record.id===w.id));
   const actionRecords=[...new Map([...records,...linkedRecords].map(w=>[w.id,w])).values()];
   const repeatRecords=actionRecords.filter(w=>canUseWorkoutToday(state,{workoutId:w.id},today,planner));
+  const weekShiftRecords=actionRecords.map(record=>({record,sessionId:record.logicalSessionId||record.sourceOccurrenceId||occurrences.find(item=>item.completedWorkout?.id===record.id)?.logicalSessionId}))
+    .filter(item=>item.sessionId&&planner.check({mode:'recover-week',sessionId:item.sessionId}).status==='ready');
   const deleteRecords=records.filter(w=>!completedWorkoutDeletionGuard(state,w.id));
   const [choosing,setChoosing]=useState(null),[deleting,setDeleting]=useState(null);
   const panel=useRef(null),trigger=useRef(null);
@@ -8740,6 +8742,7 @@ export function TodayActionsSheet({state,update,close,setDetail,date,hasWorkout,
     {noticeError&&<p role="alert">{noticeError}</p>}
     {records.length>0 && canStartOptionalSession(state,date) && <button type="button" className="list-row" onClick={()=>{if(canStartOptionalSession(state,date))setDetail({conditioning:date});}}><span>Conditioning</span><NavigationChevron/></button>}
     {repeatRecords.length>0 && <button className="list-row" data-day-action="repeat" onClick={event=>chooseRecord('repeat',event)}><span>{repeatLabel}</span><NavigationChevron/></button>}
+    {weekShiftRecords.map(({record,sessionId})=><button className="list-row" data-day-action="shift-week" key={sessionId} onClick={()=>setDetail({flexibleWeek:{sessionId,shift:true}})}><span>{weekShiftRecords.length===1?'Shift remaining workouts this week':`Shift workouts after ${record.name}`}</span><NavigationChevron/></button>)}
     {occurrence && <>
       {date!==today && canUseWorkoutToday(state,{sessionId:occurrence.logicalSessionId},today,planner) && <button className="list-row" onClick={()=>setDetail({useWorkoutToday:{sessionId:occurrence.logicalSessionId}})}><span>{occurrence.firstPlanWeek?'Use this workout today':occurrence.status==='missed'?'Train this workout today':'Train today instead'}</span><NavigationChevron/></button>}
       {canMove && <button className="list-row" onClick={()=>setDetail({flexibleWeek:{sessionId:occurrence.logicalSessionId,destination:true}})}><span>Move to another day</span><NavigationChevron/></button>}
@@ -20064,10 +20067,10 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
         <Eyebrow>REPLACEMENT</Eyebrow>
         <small>Original: {exerciseName(hiddenReplacement.original)}</small>
         {!saveOptions.saved && !revertIssue && <button type="button" className="list-row" onClick={() => changeReplacement('revert')}>Revert to original</button>}
-        {saveOptions.canSave && <button type="button" className="list-row" onClick={() => changeReplacement('save')}>Save to this workout</button>}
+        {saveOptions.canSave && <button type="button" className="list-row" onClick={() => changeReplacement('save')}>{saveOptions.saveLabel}</button>}
         {saveOptions.canUndo && <button type="button" className="list-row" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
         <button type="button" className="list-row" onClick={() => changeReplacement('show')}>Show replacement details</button>
-        <small role="status">{saveOptions.saved && saveOptions.name ? `Saved to ${saveOptions.name}. ` : ''}{saveOptions.message}</small>
+        <small role="status">{saveOptions.saved ? `${saveOptions.savedLabel}. ` : ''}{saveOptions.message}</small>
         {revertIssue && <small>{revertIssue}</small>}
       </section>}
       {isCurrent && onShowPreviousValues && <button type="button" className="list-row" onClick={() => {showPreviousOnClose.current = true; close();}}><span>Use previous values</span><NavigationChevron/></button>}

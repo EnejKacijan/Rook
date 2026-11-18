@@ -21,7 +21,7 @@ function fixture({id='hack-squat',units='kg',rir=true,mode='normal',sets=3,match
  let state=addFreestyleExercise(startFreestyleWorkout(createReturningUserFixture(0)),id);state=addFreestyleExercise(state,'leg-press');
  Object.assign(state.profile,{units,rirEnabled:rir,showExerciseImages:false,restTimerEnabled:true});const exercise=state.activeWorkout.exercises[0];exercise.loggingMode=mode;
  const first=exercise.sets[0];exercise.sets=Array.from({length:sets},(_,i)=>({...structuredClone(first),id:first.id+'-'+i,...(mode==='per_side'?{sides:{left:{reps:null},right:{reps:null}}}:{})}));
- if(matching)Object.assign(exercise.sets[0],{weight:90,reps:7});
+ if(matching)exercise.sets.forEach(set=>Object.assign(set,{weight:90,reps:7}));
  state.workouts=[{id:'previous',completedAt:new Date(Date.now()-86400000).toISOString(),exercises:[{...structuredClone(exercise),sets:[{weight:id==='plank'?null:90,reps:id==='plank'?45:7,rir:2,completed:true,...(mode==='per_side'?{sides:{left:{reps:7},right:{reps:9}}}:{})}]}]}];state.activeWorkout.rest={endsAt:Date.now()+90000,seconds:90};return state;
 }
 function mount(initial=fixture()){function Harness(){const[state,setState]=useState(initial),[detail,setDetail]=useState(null);current=state;changeState=fn=>{updates();setState(s=>fn(structuredClone(s)));};const open=value=>{details(value);setDetail(value);};return <><ActiveWorkout state={state} update={changeState} setDetail={open} setPage={navigate}/>{detail&&<Detail detail={detail} state={state} update={changeState} close={()=>setDetail(null)} setDetail={open} setPage={navigate}/>}</>;}act(()=>root.render(<Harness/>));}
@@ -60,6 +60,24 @@ it('one explicit reuse fills each remaining historical set, writes once, and Und
  expect(host.textContent).toContain('Previous values added to 3 sets');expect(save).toHaveBeenCalledOnce();
  click(button('Undo'));expectUndoState(before);expect(save).toHaveBeenCalledTimes(2);
 });
+it('one explicit reuse fills three current sets from two previous sets and Undo restores all three',()=>{
+ const state=repeatedFixture();state.workouts[0].exercises[0].sets.pop();mount(state);
+ const before=structuredClone(current),save=vi.spyOn(domain,'saveState');expect(use().textContent).toBe('Use for 3 sets');click(use());
+ expect(current.activeWorkout.exercises[0].sets.map(set=>[set.weight,set.reps,set.completed])).toEqual([[15,8,false],[15,7,false],[15,7,false]]);
+ expect(host.textContent).toContain('Previous values added to 3 sets');expect(save).toHaveBeenCalledOnce();
+ click(button('Undo'));expectUndoState(before);expect(save).toHaveBeenCalledTimes(2);
+});
+it('the manual plan-workout action also fills extra sets using the last previous set',()=>{
+ const state=repeatedFixture();state.activeWorkout.source='plan';delete state.activeWorkout.exercises[0].prescriptionSource;state.workouts[0].exercises[0].sets.pop();mount(state);
+ expect(use()).toBeNull();const action=openUse();expect(action.textContent).toBe('Use for 3 sets');
+ expect(document.body.textContent).toContain('Extra sets repeat the last recorded set.');click(action);
+ expect(current.activeWorkout.exercises[0].sets.map(set=>[set.weight,set.reps])).toEqual([[15,8],[15,7],[15,7]]);
+});
+it('identifies the actual previous source set when reusing into an extra current set',()=>{
+ const state=repeatedFixture();state.workouts[0].exercises[0].sets.pop();state.activeWorkout.exercises[0].sets.slice(0,2).forEach(set=>set.completed=true);mount(state);
+ expect(host.querySelector('.previous-values-source').textContent).toBe('Previous workout · set 215 kg × 7 reps');
+ expect(use().textContent).toBe('Use for 1 set');click(use());expect(current.activeWorkout.exercises[0].sets[2]).toMatchObject({weight:15,reps:7,completed:false});
+});
 it('the next set already has its own weight and reps after logging the first reused set',()=>{
  mount(repeatedFixture());click(use());click(host.querySelector('[aria-label="Log set 1"]'));
  expect(current.activeWorkout.exercises[0].sets[1]).toMatchObject({weight:15,reps:7,completed:false});
@@ -89,6 +107,11 @@ it('offers remaining reuse even if the current set already matches, with an accu
  expect(host.textContent).toContain('Previous values added to 2 sets');
  expect(current.activeWorkout.exercises[0].sets[0]).toEqual(state.activeWorkout.exercises[0].sets[0]);
  expect(current.activeWorkout.exercises[0].sets[2].weight).toBe(12.5);
+});
+it('shows the last previous set when only an extra future set needs values',()=>{
+ const state=repeatedFixture();state.workouts[0].exercises[0].sets.pop();Object.assign(state.activeWorkout.exercises[0].sets[0],{weight:15,reps:8});Object.assign(state.activeWorkout.exercises[0].sets[1],{weight:15,reps:7});mount(state);
+ expect(use().textContent).toBe('Use for 1 set');expect(host.querySelector('.previous-values-source').textContent).toBe('Previous workout · set 215 kg × 7 reps');click(use());
+ expect(current.activeWorkout.exercises[0].sets[2]).toMatchObject({weight:15,reps:7,completed:false});
 });
 it('a failed bulk save changes no set and does not claim that values were applied',()=>{
  mount(repeatedFixture());const before=structuredClone(current),save=vi.spyOn(domain,'saveState').mockReturnValue(false);click(use());
@@ -130,7 +153,7 @@ it('a cancelled pointer does not apply values or exempt the next ordinary action
 });
 it.each(['weight','reps'])('focused empty %s cannot block its explicit previous-values replacement',field=>{
  mount();const node=input(field),before=structuredClone(current);act(()=>node.focus());const save=vi.spyOn(domain,'saveState');pointerApply();
- expect(set()).toMatchObject({id:before.activeWorkout.exercises[0].sets[0].id,weight:90,reps:7,rir:null,completed:false});expect(input('weight').value).toBe('90');expect(input('reps').value).toBe('7');expect(host.textContent).toContain('Previous values applied');expect(save).toHaveBeenCalledOnce();expect(updates).toHaveBeenCalledOnce();
+ expect(set()).toMatchObject({id:before.activeWorkout.exercises[0].sets[0].id,weight:90,reps:7,rir:null,completed:false});expect(input('weight').value).toBe('90');expect(input('reps').value).toBe('7');expect(host.textContent).toContain('Previous values added to 3 sets');expect(save).toHaveBeenCalledOnce();expect(updates).toHaveBeenCalledOnce();
  click(button('Undo'));expectUndoState(before);const snapshot={};node.dispatchEvent(new CustomEvent('rook-snapshot-draft',{detail:snapshot}));expect(snapshot.snapshot.draft).toBe('');
 });
 it.each(['53,','082,50','.'])('pointerdown/blur/capture/click replaces raw %s without a preliminary write and Undo restores it exactly',raw=>{
@@ -151,9 +174,9 @@ it.each(['next','finish','back'])('ordinary %s settles an invalid required draft
 it.each([{id:'pull-up',field:'weight'},{id:'assisted-pull-up',field:'weight'},{id:'plank',field:'reps'},{mode:'per_side',field:'sides.left'},{mode:'per_side',field:'sides.right'}])('focused blank %j follows the same set-scoped domain copy and Undo',options=>{
  mount(fixture(options));const before=structuredClone(current),node=input(options.field);act(()=>node.focus());pointerApply();expect(set().reps).toBe(options.id==='plank'?45:7);if(options.mode==='per_side')expect(set().sides).toEqual({left:{reps:7},right:{reps:9}});click(button('Undo'));expectUndoState(before);expect(node.value).toBe('');
 });
-it('owner flow applies once, acknowledges only affected values, dismisses the hint, and restores just that set',()=>{
+it('owner flow applies once, acknowledges current values, dismisses the hint, and restores every affected set',()=>{
  mount();const before=structuredClone(current),weight=input('weight'),reps=input('reps'),history=host.querySelector('.exercise-options-button'),row=weight.closest('.set-row');const save=vi.spyOn(domain,'saveState'),apply=use();
- act(()=>{apply.click();apply.click();});expect(save).toHaveBeenCalledOnce();expect(set()).toMatchObject({weight:90,reps:7,rir:null,completed:false});expect(current.activeWorkout.exercises[0].sets.slice(1)).toEqual(before.activeWorkout.exercises[0].sets.slice(1));
+ act(()=>{apply.click();apply.click();});expect(save).toHaveBeenCalledOnce();expect(set()).toMatchObject({weight:90,reps:7,rir:null,completed:false});expect(current.activeWorkout.exercises[0].sets.slice(1).map(set=>[set.weight,set.reps,set.completed])).toEqual([[90,7,false],[90,7,false]]);
  expect(input('weight')).toBe(weight);expect(input('reps')).toBe(reps);expect(weight.closest('.set-row')).toBe(row);expect(host.querySelector('.exercise-options-button')).toBe(history);expect(button('Undo')).toBeDefined();
  const fields=animations.filter(a=>a.node.matches('input'));expect(fields.map(a=>a.node)).toEqual([weight,reps]);expect(fields.every(a=>a.timing.duration===160)).toBe(true);expect(host.querySelector('.previous-values-offer')).toBeNull();
  const count=animations.length;act(()=>vi.advanceTimersByTime(1000));expect(animations).toHaveLength(count);settle();click(button('Undo'));expectUndoState(before);expect(host.querySelector('.exercise-options-button')).toBe(history);expect(use()).toBeNull();expect(input('weight')).toBe(weight);
@@ -214,8 +237,8 @@ it.each([{id:'hack-squat',units:'lb',rir:false},{id:'pull-up'},{id:'assisted-pul
  if(options.mode==='per_side'){expect(input('sides.left').value).toBe('7');expect(input('sides.right').value).toBe('9');}
  click(button('Undo'));expectUndoState(before);
 });
-it('only the corresponding first uncompleted set is affected when earlier sets are done',()=>{
- const initial=fixture();Object.assign(initial.activeWorkout.exercises[0].sets[0],{weight:10,reps:5,completed:true});initial.workouts[0].exercises[0].sets.push({weight:80,reps:8,completed:true});mount(initial);click(openUse());expect(current.activeWorkout.exercises[0].sets[0]).toEqual(initial.activeWorkout.exercises[0].sets[0]);expect(current.activeWorkout.exercises[0].sets[1]).toMatchObject({weight:80,reps:8,completed:false});expect(current.activeWorkout.exercises[0].sets[2]).toEqual(initial.activeWorkout.exercises[0].sets[2]);
+it('fills remaining sets with the last historical values while earlier completed sets stay fixed',()=>{
+ const initial=fixture();Object.assign(initial.activeWorkout.exercises[0].sets[0],{weight:10,reps:5,completed:true});initial.workouts[0].exercises[0].sets.push({weight:80,reps:8,completed:true});mount(initial);click(openUse());expect(current.activeWorkout.exercises[0].sets[0]).toEqual(initial.activeWorkout.exercises[0].sets[0]);expect(current.activeWorkout.exercises[0].sets[1]).toMatchObject({weight:80,reps:8,completed:false});expect(current.activeWorkout.exercises[0].sets[2]).toMatchObject({weight:80,reps:8,completed:false});
 });
 it('logging, navigation and reload expire local Undo without changing timer, identity or copied values',()=>{
  mount();const before=structuredClone(current.activeWorkout);click(openUse());const saved=domain.deserializeState(domain.serializeState(current),{strict:true});expect(saved.activeWorkout.id).toBe(before.id);expect(saved.activeWorkout.startedAt).toBe(before.startedAt);expect(saved.activeWorkout.rest).toEqual(before.rest);

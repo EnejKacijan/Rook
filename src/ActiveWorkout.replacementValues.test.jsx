@@ -84,13 +84,14 @@ it('replacing an exercise preserves the existing session rest deadline',async()=
 });
 it('saves only this recurring workout slot and uses the replacement when the workout starts again',async()=>{
  const s=fixture(),plan=structuredClone(s.program),original=plan.days[0].exercises[1];
- mount(s);expect(button('Save to this workout')).toBeUndefined();
+ mount(s);expect(button('Save to plan')).toBeUndefined();
  await replace('T-Bar Row');
  expect(current.program).toEqual(plan);
- expect(button('Save to this workout').closest('.active-replacement')).toBeTruthy();
+ expect(button('Save to plan').closest('.active-replacement')).toBeTruthy();
+ expect(host.querySelector('.active-replacement [role="status"]').textContent).toBe(`Save for future ${plan.days[0].name} sessions.`);
  act(()=>mutate(s=>{Object.assign(s.activeWorkout.exercises[1].sets[0],{weight:87,reps:5,completed:true});return s;}));
  const active=structuredClone(entry()),history=structuredClone(current.workouts);
- click(button('Save to this workout'));
+ click(button('Save to plan'));
  const saved=current.program.days[0].exercises[1];
  expect(saved).toMatchObject({id:original.id,exerciseId:'t-bar-row',repMin:original.repMin,repMax:original.repMax,restSeconds:original.restSeconds});
  expect(saved.sets.map(set=>[set.id,set.reps])).toEqual(original.sets.map(set=>[set.id,set.reps]));
@@ -99,7 +100,8 @@ it('saves only this recurring workout slot and uses the replacement when the wor
  expect(current.program.days[0].exercises.filter(e=>e.id!==original.id)).toEqual(plan.days[0].exercises.filter(e=>e.id!==original.id));
  expect(current.substitutionPreferences).toEqual(s.substitutionPreferences);expect(current.workouts).toEqual(history);expect(entry()).toEqual(active);
  expect(current.planVersions.at(-1)).toMatchObject({summary:'Exercise replaced',program:{days:current.program.days}});
- expect(host.textContent).toContain(`Saved to ${plan.days[0].name}`);
+ expect(host.textContent).toContain('Saved to plan');
+ expect(host.querySelector('.active-replacement [role="status"]').textContent).toBe(`Future ${plan.days[0].name} sessions will use this exercise.`);
  const restored=deserializeState(serializeState(current),{strict:true});
  const next=startWorkout({...restored,activeWorkout:null},restored.program.days[0]);
  expect(next.exercises[1].exerciseId).toBe('t-bar-row');
@@ -110,9 +112,9 @@ it('after two swaps and a reload, undo restores only the future workout and Reve
  s.activeWorkout.exercises[1].supersetId=s.activeWorkout.exercises[2].supersetId='my-pair';
  mount(s);
  await replace('T-Bar Row');
- click(button('Save to this workout'));
+ click(button('Save to plan'));
  await replace('Barbell Row');
- click(button('Save to this workout'));
+ click(button('Save to plan'));
  expect(current.program.days[0].exercises[1].exerciseId).toBe('barbell-row');
  expect(current.program.days.slice(1)).toEqual(plan.days.slice(1));
  const loaded=deserializeState(serializeState(current),{strict:true});
@@ -131,7 +133,7 @@ it('after two swaps and a reload, undo restores only the future workout and Reve
 it('can undo the future workout change after logging without undoing the active exercise or its sets',async()=>{
  mount();await replace('T-Bar Row');
  const original=current.program.days[0].exercises[1].exerciseId;
- click(button('Save to this workout'));
+ click(button('Save to plan'));
  act(()=>mutate(s=>{Object.assign(s.activeWorkout.exercises[1].sets[0],{weight:40,reps:9,completed:true});return s;}));
  const before=structuredClone(entry());click(button('Undo saved change'));
  expect(current.program.days[0].exercises[1].exerciseId).toBe(original);
@@ -140,9 +142,9 @@ it('can undo the future workout change after logging without undoing the active 
 });
 it('a failed revert or permanent save preserves the current replacement and allows retry',async()=>{
  mount();await replace('T-Bar Row');const before=structuredClone(current);
- saveState.mockReturnValue(false);click(button('Revert to original'));click(button('Save to this workout'));
+ saveState.mockReturnValue(false);click(button('Revert to original'));click(button('Save to plan'));
  expect(current).toEqual(before);expect(host.querySelector('.active-replacement [role="alert"]').textContent).toMatch(/Could not save/);
- saveState.mockReturnValue(true);click(button('Save to this workout'));
+ saveState.mockReturnValue(true);click(button('Save to plan'));
  expect(current.program.days[0].exercises[1].exerciseId).toBe('t-bar-row');
 });
 it('updates a saved workout by its source slot, and starts the saved replacement next time',async()=>{
@@ -151,7 +153,9 @@ it('updates a saved workout by its source slot, and starts the saved replacement
  mount(useSavedWorkout(ready,{templateId:'upper',revision:1,requestId:'start-upper'}));
  await replace('T-Bar Row');
  const active=structuredClone(entry());
- click(button('Save to this workout'));
+ expect(button('Save to plan')).toBeUndefined();
+ click(button('Update saved workout'));
+ expect(host.textContent).toContain('Saved to library');
  expect(current.savedWorkoutTemplates[0]).toMatchObject({id:'upper',revision:2,exercises:[{exerciseId:'t-bar-row'},ready.savedWorkoutTemplates[0].exercises[1]]});
  expect(entry()).toEqual(active);expect(current.program).toEqual(program);expect(current.substitutionPreferences).toEqual([]);
  const next=useSavedWorkout({...current,activeWorkout:null},{templateId:'upper',revision:2,requestId:'next-upper'});
@@ -160,11 +164,11 @@ it('updates a saved workout by its source slot, and starts the saved replacement
 it('keeps one-off and stale source replacements local to the current session',async()=>{
  const s=fixture();s.activeWorkout.temporaryPlanAdjustment={id:'temporary',equipment:['full gym']};mount(s);
  await replace('T-Bar Row');
- expect(button('Save to this workout')).toBeUndefined();
+ expect(button('Save to plan')).toBeUndefined();
  expect(button('Revert to original')).toBeTruthy();expect(current.program).toEqual(s.program);
  act(()=>root.render(null));mount(fixture());await replace('T-Bar Row');
  act(()=>mutate(s=>{s.program.days[0].exercises[1].exerciseId='barbell-row';return s;}));
- expect(button('Save to this workout')).toBeUndefined();
+ expect(button('Save to plan')).toBeUndefined();
  expect(host.textContent).toContain('The saved workout changed');
 });
 it('moves replacement actions to the exercise menu without changing the workout until an action is selected',async()=>{
@@ -177,14 +181,14 @@ it('moves replacement actions to the exercise menu without changing the workout 
  expect(document.activeElement).toBe(host.querySelector('.exercise-options-button'));
  click(host.querySelector('.exercise-options-button'));
  expect(button('Revert to original').closest('.active-replacement-menu')).toBeTruthy();
- click(button('Save to this workout'));
+ click(button('Save to plan'));
  expect(current.program.days[0].exercises[1].exerciseId).toBe('t-bar-row');
  expect(host.querySelector('.active-replacement')).toBeNull();
  click(button('Undo saved change'));
  expect(current.program.days[0].exercises[1].exerciseId).toBe(before.program.days[0].exercises[1].exerciseId);
  click(button('Show replacement details'));
  expect(host.querySelector('.active-replacement-menu')).toBeNull();
- expect(button('Save to this workout').closest('.active-replacement')).toBeTruthy();
+ expect(button('Save to plan').closest('.active-replacement')).toBeTruthy();
 });
 it('keeps a hidden replacement in the menu after reload and shows a new replacement again',async()=>{
  mount();await replace('T-Bar Row');click(button('Hide'));

@@ -1,6 +1,6 @@
 import {exerciseLoadRequirement,previousExercise} from './domain.js';
 import {preparedExercise} from './workoutSessionStart.js';
-import {copyFreestylePrevious,freestylePreviousSets,previousWorkingSetValues,previousValuesSetEligible,withPreviousWorkingSetValues} from './freestyleWorkout.js';
+import {copyFreestylePrevious,freestylePreviousSets,previousWorkingSetValues,previousWorkingSetSource,previousValuesSetEligible,withPreviousWorkingSetValues} from './freestyleWorkout.js';
 import {loggingModeOf,unilateralSetReps,setTypeOf} from './advancedLogging.js';
 import {userEditedWeight} from './workoutWeightChanges.js';
 
@@ -53,7 +53,7 @@ export function previousValuesFutureChanges(state,identity,{protectedFields=[]}=
     ordinal++;
     if(!previousValuesSetEligible(set))continue;
     if(protectedFields.some(item=>item.setId===set.id))continue;
-    const values=previousWorkingSetValues(exercise,history[ordinal]);
+    const values=previousWorkingSetValues(exercise,previousWorkingSetSource(exercise,history,ordinal)?.set);
     const knownEntryMode=set.weightEntryMode||set.repsEntryMode||set.sideRepsEntryMode||set.rirEntryMode;
     if(set.touched&&!knownEntryMode)continue;
     if(userEditedWeight(set))delete values.weight;

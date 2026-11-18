@@ -170,6 +170,19 @@ export function previousWorkingSetValues(exercise, prior) {
   return values;
 }
 
+// Explicit reuse matches working sets by ordinal, then repeats the last usable
+// completed set for extra sets today. An empty matching set stays empty rather
+// than shifting another historical set into its place.
+export function previousWorkingSetSource(exercise, previous, ordinal) {
+  if(!Number.isInteger(ordinal)||ordinal<0||!previous.length)return null;
+  if(ordinal<previous.length)return {set:previous[ordinal],ordinal};
+  for(let index=previous.length-1;index>=0;index--){
+    if(Object.keys(previousWorkingSetValues(exercise,previous[index])).length)
+      return {set:previous[index],ordinal:index};
+  }
+  return null;
+}
+
 export function withPreviousWorkingSetValues(set, values) {
   const target = { ...set, ...values, rir: null, touched: true };
   if (values.sides) {
@@ -196,7 +209,10 @@ export function copyFreestylePrevious(state, exerciseId, setId, ordinal) {
   if (!active) return state;
   const exercise = active.exercises.find(e => e.id === exerciseId);
   const set = exercise?.sets.find(s => s.id === setId);
-  const prior = exercise && freestylePreviousSets(state, exercise)[ordinal];
+  const index=exercise?.sets.findIndex(s=>s.id===setId);
+  const expectedOrdinal=exercise?.sets.slice(0,index).filter(s=>setTypeOf(s)==='standard'&&!s.segments?.length).length;
+  if(ordinal!==expectedOrdinal)return state;
+  const prior = exercise && previousWorkingSetSource(exercise,freestylePreviousSets(state,exercise),ordinal)?.set;
   const values = previousWorkingSetValues(exercise, prior);
   if (!previousValuesSetEligible(set) || !Object.keys(values).length) return state;
   const next = structuredClone(state);

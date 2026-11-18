@@ -6,7 +6,7 @@ import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {focusNavigationTarget} from './navigationFocus.js';
 import {useCalendarDay} from './useCalendarDay.js';
 const label=date=>new Intl.DateTimeFormat('en',{weekday:'short',month:'short',day:'numeric',year:'numeric'}).format(new Date(`${date}T12:00:00`));
-export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetail,onBack,className=''}) {
+export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetail,onBack,onShiftWeek,className=''}) {
   const today=useCalendarDay();
   const [reviewState,setReviewState]=useState(state),[repeatId,setRepeatId]=useState(null);
   const [destination,setDestination]=useState(null),[error,setError]=useState(''),[choosingDate,setChoosingDate]=useState(false);
@@ -20,6 +20,7 @@ export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetai
   const performedDate=completed && workoutPerformedDate(completed);
   const repeat=useMemo(()=>completed && proposeWorkoutToday(state,{workoutId:completed.id},today,{planner,eligibilityOnly:true}),[state,today,completed,planner]);
   const canRepeat=repeat?.status==='ready' || repeat?.status==='choose-date';
+  const canShiftWeek=useMemo(()=>Boolean(liveProposal.displaced&&!changed&&(onShiftWeek||setDetail)&&effectiveRequest.sessionId&&planner.check({mode:'recover-week',sessionId:effectiveRequest.sessionId}).status==='ready'),[changed,onShiftWeek,setDetail,effectiveRequest,planner,liveProposal.displaced]);
   const conflict=proposal.status==='choose-date',picker=conflict&&choosingDate;
   const displacedName=proposal.displaced?.workout.name;
   const swapDestination=proposal.swapProposal?.changes.find(change=>change.logicalSessionId===proposal.displaced?.logicalSessionId)?.toDate;
@@ -50,6 +51,7 @@ export function UseWorkoutTodaySheet({state,update,close,Header,request,setDetai
     {proposal.status==='conflict' && !completed && setDetail && <button className="button secondary" onClick={()=>setDetail({flexibleWeek:{}})}>Review current schedule</button>}
     {proposal.status==='stale' && <button className="button secondary" onClick={()=>{setReviewState(state);setDestination(null);setChoosingDate(false);setError('');}}>Review updated workout</button>}
     <SheetActionFooter>
+      {canShiftWeek&&<button className="button primary" onClick={()=>onShiftWeek?onShiftWeek():setDetail({flexibleWeek:{sessionId:effectiveRequest.sessionId,shift:true}})}>SHIFT THE REST OF THIS WEEK</button>}
       {conflict&&!picker&&<>{swapDestination&&<button className="button primary" onClick={()=>apply(proposeWorkoutToday(state,{...effectiveRequest,swap:true}))}>SWAP WORKOUTS</button>}{proposal.dates.length>0 && <button ref={dateAction} className="button secondary" onClick={()=>{setChoosingDate(true);setError('');}}>Choose another date for {displacedName}</button>}</>}
       {proposal.status==='ready' && <button className="button primary" onClick={()=>apply(proposal)}>{proposal.kind==='repeat'?'REPEAT TODAY':'USE TODAY'}</button>}
       <button className="button quiet" onClick={onBack||close}>CANCEL</button>

@@ -1,7 +1,7 @@
 import {NavigationChevron} from './NavigationChevron.jsx';
 import React, { useMemo, useState } from 'react';
 import { exerciseMeasure, displayWeight, isoDay, isSessionAddedExercise } from './domain.js';
-import { startFreestyleWorkout, freestylePreviousSets, freestyleEffortLimit, previousValuesSetEligible, previousWorkingSetValues } from './freestyleWorkout.js';
+import { startFreestyleWorkout, freestylePreviousSets, freestyleEffortLimit, previousValuesSetEligible, previousWorkingSetValues, previousWorkingSetSource } from './freestyleWorkout.js';
 import {PreviousValuesHelper} from './PreviousValuesHelper.jsx';
 import './freestyleWorkout.css';
 import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
@@ -46,14 +46,15 @@ export function FreestylePrevious({ state, exercise, update, screenRef, controll
   const index = exercise.sets.findIndex(s => !s.completed);
   const ordinal = exercise.sets.slice(0,index).filter(set=>setTypeOf(set)==='standard'&&!set.segments?.length).length;
   const set = exercise.sets[index];
-  const prior = previous[ordinal];
+  const source=previousWorkingSetSource(exercise,previous,ordinal);
+  const prior = source?.set;
   const values = previousWorkingSetValues(exercise,prior);
   const canCopy = previousValuesSetEligible(set) && Object.keys(values).length > 0;
   const label = s => [s.weight != null ? `${displayWeight(s.weight, state.profile.units)} ${state.profile.units}` : null,
     s.sides ? `${s.sides.left?.reps ?? '—'} / ${s.sides.right?.reps ?? '—'} per side` : s.reps != null ? `${s.reps} ${exerciseMeasure(exercise) === 'seconds' ? 'sec' : 'reps'}` : null].filter(Boolean).join(' × ');
   return <div className="freestyle-previous">
     {limit != null && <p className="training-limit-note">Your training limit: keep at least {limit} RIR.</p>}
-    {canCopy && <PreviousValuesHelper key={`${state.profile.id}:${state.activeWorkout.id}:${exercise.id}:${exercise.exerciseId}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} ordinal={ordinal} label={label(values)} screenRef={screenRef} controllerRef={controllerRef} Modal={Modal} Header={Header}
+    {canCopy && <PreviousValuesHelper key={`${state.profile.id}:${state.activeWorkout.id}:${exercise.id}:${exercise.exerciseId}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} ordinal={ordinal} formatValues={label} screenRef={screenRef} controllerRef={controllerRef} Modal={Modal} Header={Header}
       autoOffer={state.activeWorkout.source === 'freestyle' || isSessionAddedExercise(exercise) || Boolean(exercise.replacementOfExerciseId)}/>}
   </div>;
 }

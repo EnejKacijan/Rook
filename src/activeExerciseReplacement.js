@@ -127,10 +127,12 @@ export function replacementSaveOptions(state, workout, record) {
   const target = record.target === undefined && destination?.entry.exerciseId === record.original.exerciseId
     ? {...destination.owner, exerciseId:record.original.exerciseId} : record.target;
   const name = destination?.workout.workoutName || destination?.workout.name;
+  const savedTemplate = (destination?.owner.kind || record.saved?.target?.kind) === 'template';
+  const labels = {saveLabel:savedTemplate?'Update saved workout':'Save to plan', savedLabel:savedTemplate?'Saved to library':'Saved to plan'};
   if (record.saved) {
     const canUndo = matchesDestination(destination, record.saved.target) &&
       destination.entry.exerciseId === record.replacementId && destination.revision === record.saved.revision;
-    return {saved:true, canUndo, name, message:canUndo ? 'This change applies the next time you start this workout.'
+    return {saved:true, canUndo, name, ...labels, message:canUndo ? `Future ${name || 'workout'} sessions will use this exercise.`
       : 'The saved workout has changed since this replacement.'};
   }
   if (!destination || !target) return {message:'This replacement applies to the current session.'};
@@ -138,7 +140,7 @@ export function replacementSaveOptions(state, workout, record) {
     return {message:'The saved workout changed. Edit it directly to make this replacement permanent.'};
   if (destination.workout.exercises.some(entry => entry.id !== destination.entry.id && entry.exerciseId === record.replacementId))
     return {message:'This exercise is already in the saved workout.'};
-  return {canSave:true, name, message:`Use this exercise the next time you start ${name || 'this workout'}.`};
+  return {canSave:true, name, ...labels, message:`Save for future ${name || 'workout'} sessions.`};
 }
 
 function replacementDefinition(entry, item, state) {

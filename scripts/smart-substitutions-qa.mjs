@@ -251,7 +251,7 @@ assert.ok(!stored.substitutionPreferences.some((item) => item.sourceExerciseId =
 await page.getByRole("button", {name:"Hide replacement details"}).click();
 await page.locator(".active-replacement").waitFor({state:"hidden"});
 await page.locator(".exercise-options-button").click();
-await page.getByRole("button", {name:"Save to this workout"}).click();
+await page.getByRole("button", {name:"Save to plan"}).click();
 await page.getByRole("button", {name:"Show replacement details"}).click();
 await page.locator(".active-replacement").waitFor({state:"visible"});
 stored = await page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));

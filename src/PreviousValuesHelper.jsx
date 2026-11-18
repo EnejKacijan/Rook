@@ -6,10 +6,10 @@ import {previousValuesHintId,previousValuesHint,updatePreviousValuesHint} from '
 import {useDurableAction} from './useDurableAction.js';
 import {preparePreviousValues,canUndoPreviousValues,undoPreviousValues,previousValuesMatch,previousValuesFutureChanges} from './previousValues.js';
 import {loggingModeOf} from './advancedLogging.js';
-import {previousWorkingSetValues,freestylePreviousSets} from './freestyleWorkout.js';
+import {previousWorkingSetValues,previousWorkingSetSource,freestylePreviousSets} from './freestyleWorkout.js';
 import {exerciseName,exerciseMeasure} from './domain.js';
 
-export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordinal=index,label,screenRef,controllerRef,autoOffer=false,Modal,Header}) {
+export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordinal=index,formatValues,screenRef,controllerRef,autoOffer=false,Modal,Header}) {
   const {commit,latest}=useDurableAction(state,update);
   const [record,setRecord]=useState(null),[undoable,setUndoable]=useState(false),[error,setError]=useState(''),[draftEdited,setDraftEdited]=useState(false);
   const [expiring,setExpiring]=useState(false);
@@ -19,10 +19,15 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordi
   const [hint,setHint]=useState(()=>previousValuesHint(identity)),[manualOpen,setManualOpen]=useState(false),[manualHasDraft,setManualHasDraft]=useState(false);
   const consume=()=>setHint(updatePreviousValuesHint(identity,{dismissed:true}));
   const reuseIdentity={sessionId:state.activeWorkout.id,exerciseId:exercise.id,catalogExerciseId:exercise.exerciseId,profileId:state.profile.id,loggingMode:loggingModeOf(exercise),setId:set.id,ordinal};
-  const expectedHistory=JSON.stringify(freestylePreviousSets(state,exercise));
+  const history=freestylePreviousSets(state,exercise);
+  const expectedHistory=JSON.stringify(history);
   const currentMatches=!draftEdited&&previousValuesMatch(set,prior,exercise);
   const futureChanges=previousValuesFutureChanges(state,reuseIdentity);
   const copyCount=Number(!currentMatches)+futureChanges.length;
+  const shownOrdinal=currentMatches&&futureChanges.length?futureChanges[0].ordinal:ordinal;
+  const shownSource=previousWorkingSetSource(exercise,history,shownOrdinal);
+  const sourceOrdinal=shownSource?.ordinal??ordinal;
+  const label=formatValues(previousWorkingSetValues(exercise,shownSource?.set));
   const matches=currentMatches&&!futureChanges.length;
   const showOffer=autoOffer&&!hint.dismissed&&(!hint.setId||hint.setId===set.id)&&!set.touched&&!draftEdited&&!matches&&!record;
   useEffect(()=>{if(showOffer&&!hint.setId)setHint(updatePreviousValuesHint(identity,{setId:set.id}));},[showOffer,identity,set.id,hint.setId]);
@@ -141,7 +146,7 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordi
     }catch(e){setError(e.message);return false;}
   };
   const appliedCount=record?Number(record.patch.length>0)+(record.future?.length||0):0;
-  const source=<span className="previous-values-source"><small>{copyCount>1?'Previous workout':`Previous workout · set ${ordinal+1}`}</small><strong>{copyCount>1?`Set ${ordinal+1} · `:''}{label}</strong></span>;
+  const source=<span className="previous-values-source"><small>{copyCount>1?'Previous workout':`Previous workout · set ${sourceOrdinal+1}`}</small><strong>{copyCount>1?`Set ${sourceOrdinal+1} · `:''}{label}</strong></span>;
   const useButton=(manual=false,dismissManual)=><button type="button" className={manual?'button primary previous-values-apply':'freestyle-copy'} data-workout-replaces={scope} disabled={matches&&!(manual&&manualHasDraft)}
     onPointerDown={event=>{pendingDrafts.current={drafts:snapshot(),protectedFields:futureDraftFields()};if(!manual)event.preventDefault();}} onPointerCancel={()=>{pendingDrafts.current=null;}} onKeyDown={()=>{pendingDrafts.current={drafts:snapshot(),protectedFields:futureDraftFields()};}}
     onClick={()=>{if(apply()&&manual)dismissManual();}}>Use for {Math.max(1,copyCount)} {copyCount>1?'sets':'set'}</button>;
@@ -159,7 +164,7 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordi
           const field=input.closest('[data-workout-field]').dataset.workoutField;
           return <div key={field}><span>{field==='weight'?state.profile.units:field==='reps'?(exerciseMeasure(exercise)==='seconds'?'Seconds':'Reps'):field==='sides.left'?'Left reps':'Right reps'}</span><strong>{input.value||'Not entered'}</strong></div>;
         })}</section>
-        <p>Available previous values replace this set’s entries. Each following unlogged set uses its matching previous values; your manual entries stay unchanged.</p>
+        <p>Replaces this set’s values and fills untouched sets after it. Extra sets repeat the last recorded set.</p>
         {error&&<p className="form-error" role="alert">{error}</p>}
         {useButton(true,requestClose)}<button type="button" className="button quiet" onClick={requestClose}>Cancel</button>
       </section>}
