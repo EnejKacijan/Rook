@@ -26,6 +26,6 @@ export function scheduleRecoveryState({ future = false, stale = true } = {}) {
       skipped: false, blockId: state.program.trainingBlock.id, blockWeekNumber: future ? 2 : 1,
       planFingerprint: flexiblePlanFingerprint(state), updatedAt: '2026-10-05T11:00:00.000Z' },
   } };
-  if (stale) state.program.days[0].name = 'Updated workout';
+  if (stale) state.program.days.at(-1).weekday = 'Thu';
   return state;
 }

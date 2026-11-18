@@ -74,11 +74,13 @@ describe('Flexible Week logical sessions', () => {
     expect(applyFlexibleWeek(state, p, { adaptationChoice: 'restore' }).state.todayAdaptation).toBeNull();
     expect(applyFlexibleWeek(state, p, { adaptationChoice: 'keep' }).state.todayAdaptation.date).toBe('2026-09-05');
   });
-  it('reload round-trips placement and quarantines changed plans', () => {
+  it('reload round-trips placement, accepts renames and quarantines removed workouts', () => {
     const state = fixture(), next = applyFlexibleWeek(state, proposal(state)).state;
     expect(deserializeState(JSON.stringify(next)).flexibleWeek).toEqual(next.flexibleWeek);
     expect(plannedWorkoutForDate(deserializeState(next), '2026-09-05')).not.toBeNull();
-    next.program.days[0].name = 'Edited'; expect(flexibleWeekConflict(next)).toBe(true);
+    next.program.days[0].name = 'Edited'; expect(flexibleWeekConflict(next)).toBe(false);
+    next.program.days=next.program.days.filter(day=>day.id!==Object.values(next.flexibleWeek.sessions)[0].workoutId);
+    expect(flexibleWeekConflict(next)).toBe(true);
     expect(plannedWorkoutForDate(next, '2026-09-05')).toBeNull();
   });
   it('distinguishes a valid temporary move from an unresolved stale occurrence without duplicating identity',()=>{
@@ -87,11 +89,11 @@ describe('Flexible Week logical sessions', () => {
     expect(valid.items).toHaveLength(1);expect(valid.unresolved).toHaveLength(0);
     expect(valid.moved[0]).toMatchObject({originalDate:'2026-08-31',scheduledDate:'2026-09-05'});
     expect(flexibleSessions(next).filter(item=>item.logicalSessionId===valid.items[0].id)).toHaveLength(1);
-    next.program.days[0].name='Edited';
+    next.program.days=next.program.days.filter(day=>day.id!==Object.values(next.flexibleWeek.sessions)[0].workoutId);
     const unresolved=temporaryScheduleReview(next);
     expect(unresolved.unresolved).toHaveLength(1);
     expect(unresolved.unresolved[0]).toMatchObject({id:valid.items[0].id,originalDate:'2026-08-31'});
-    expect(unresolved.unresolved[0].issue).toMatch(/plan changed/i);
+    expect(unresolved.unresolved[0].issue).toMatch(/no longer in this plan/i);
     expect(unresolved.moved).toHaveLength(0);
   });
   it('backup archive restores effective schedule exactly', async () => {

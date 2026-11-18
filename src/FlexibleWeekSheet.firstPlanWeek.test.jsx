@@ -28,7 +28,7 @@ it('groups unscheduled first-week choices separately and saves only after confir
   const choice=document.querySelector(`[data-session-id="${source.logicalSessionId}"]`);expect(choice.textContent).toContain('Not scheduled yet');click(choice);
   expect(document.querySelector('h1').textContent).toBe(`Schedule ${source.workout.name}`);expect(button('Skip this session')).toBeUndefined();
   const destination=document.querySelector('[data-move-date="2026-10-25"]');expect(destination).toBeTruthy();click(destination);
-  expect(document.querySelector('h1').textContent).toBe(`Schedule ${source.workout.name}?`);expect(document.body.textContent).toContain('From weekly plan');expect(document.body.textContent).toContain('Sun, Oct 25');
+  expect(document.querySelector('h1').textContent).toBe(`Schedule ${source.workout.name}`);expect(document.querySelector('.flexible-week-review')).toBeNull();expect(document.querySelector('[data-move-date="2026-10-25"]').getAttribute('aria-pressed')).toBe('true');expect(document.body.textContent).toContain('Sun, Oct 25');
   expect(update).not.toHaveBeenCalled();expect(localStorage.getItem('lift-v2-state')).toBe(before);click(button('SCHEDULE WORKOUT'));
   expect(update).toHaveBeenCalledOnce();expect(plannedWorkoutForDate(update.mock.calls[0][1].persistedState,'2026-10-25').logicalSessionId).toBe(source.logicalSessionId);
   expect(update.mock.calls[0][1].persistedState.program).toEqual(state.program);expect(missedFlexibleSessions(update.mock.calls[0][1].persistedState)).toHaveLength(0);

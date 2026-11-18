@@ -43,17 +43,30 @@ try{for(const width of (process.env.ROOK_COMPLETION_EXTRAS?[390]:[320,390]))for(
   }
   await page.waitForTimeout(650);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
   if(!process.env.ROOK_COMPLETION_BASELINE){
-   assert.equal(await page.locator('.completion-recognition').count(),['record','lb','milestone'].includes(kind)?1:0);
-   if(kind==='record')assert.match(await page.locator('.completion-recognition').innerText(),/New rep PR/);
+   const hasRecords=['record','lb'].includes(kind);
+   const trophy=page.locator('.session-log-trophy');
+   const bestGain=page.locator('.session-log-best-gain');
+   assert.equal(await trophy.count()>0,hasRecords);
+   assert.equal(await bestGain.count(),0,'record gains start collapsed');
+   assert.equal(await page.locator('.completion-recognition').count(),kind==='milestone'?1:0);
+   if(hasRecords){
+    await page.getByRole('button',{name:/Personal best/}).first().click();
+    await bestGain.first().waitFor();
+    assert.equal(await bestGain.first().locator('[aria-hidden="true"]').innerText(),'+1 rep');
+    if(kind==='lb') assert.match(await page.locator('.session-log-set').first().innerText(),/lb/);
+   }
    if(kind==='empty')assert.equal(await page.getByRole('heading',{name:'Workout ended',exact:true}).count(),1);
    if(kind==='milestone')assert.match(await page.locator('.completion-recognition').innerText(),/10 workouts logged/);
-   if(kind==='lb')assert.match(await page.locator('.completion-recognition').innerText(),/lb/);
    if(['record','lb','milestone'].includes(kind)){
     const contrasts=await page.locator('.complete-screen').evaluate(root=>{
      const rgb=value=>value.startsWith('#')?value.slice(1).match(/../g).map(v=>parseInt(v,16)):value.match(/[\d.]+/g).slice(0,3).map(Number);
      const luminance=color=>rgb(color).map(v=>{v/=255;return v<=.04045?v/12.92:((v+.055)/1.055)**2.4;}).reduce((sum,v,i)=>sum+v*[.2126,.7152,.0722][i],0);
-     const bg=luminance(getComputedStyle(document.documentElement).getPropertyValue('--rook-bg').trim());
-     return [...root.querySelectorAll('.completion-recognition > *, .stat-grid small, .workout-photo-heading > p > small, .session-note-editor > small')].map(e=>{const fg=luminance(getComputedStyle(e).color);return (Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05);});
+     const tokens=getComputedStyle(document.documentElement);
+     const bg=luminance(tokens.getPropertyValue('--rook-bg').trim());
+     return [...root.querySelectorAll('.session-log-best-gain, .completion-recognition > *, .stat-grid small, .workout-photo-heading > p > small, .session-note-editor > small')].map(e=>{
+      const fg=luminance(getComputedStyle(e).color);
+      return (Math.max(bg,fg)+.05)/(Math.min(bg,fg)+.05);
+     });
     });assert.ok(contrasts.every(r=>r>=4.5),`recognition contrast ${contrasts}`);
    }
    const haptics=await page.evaluate(()=>window.haptics);assert.equal(haptics.length,kind==='save-failure'?0:1,'one successful finish haptic only');

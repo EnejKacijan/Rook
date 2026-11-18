@@ -12,7 +12,7 @@ import { openProtectedAccount, protectedProfileAccess } from './accountProfileAc
 import { clearFirstRunAccountClaim, readFirstRunAccountClaim } from './firstRunAccountClaim.js';
 import { signInFirstRunAccount } from './firstRunAccountSignIn.js';
 import { ACCOUNT_SYNC_SCHEMA } from './accountSyncModel.js';
-import {authenticateEmailAccount,linkEmailAnonymousAccount,resetEmailAccountPassword,canAddGoogleAccountPassword,addGoogleAccountPassword,confirmGooglePasswordAccount} from './emailAccountAuth.js';
+import {authenticateEmailAccount,linkEmailAnonymousAccount,resetEmailAccountPassword,canAddGoogleAccountPassword,addGoogleAccountPassword,confirmGooglePasswordAccount,getEmailPasswordRequirements} from './emailAccountAuth.js';
 
 export const ACCOUNT_SIGNED_OUT_KEY = 'rook-account-signed-out-v1';
 const INITIAL_DEBOUNCE_MS = 15000;
@@ -65,6 +65,7 @@ export function useAccountSync({ state, update, persistenceFailed }) {
   }), [accountAction]);
   const secureWithGoogle = useCallback(() => secureWithProvider('google.com'), [secureWithProvider]);
   const registerWithEmail=useCallback(details=>secureWithProvider('password',(client,isCurrent)=>linkEmailAnonymousAccount(client,details,{isCurrent})),[secureWithProvider]);
+  const getRegistrationPasswordRequirements=useCallback(password=>getEmailPasswordRequirements(clientRef.current,password),[]);
   const passwordAccountAction=useCallback((operation,details)=>accountAction(async current=>{
     const client=clientRef.current,user=client?.auth.currentUser,storage=globalThis.localStorage;
     const profileId=latest.current.state.profile.id;
@@ -349,5 +350,5 @@ export function useAccountSync({ state, update, persistenceFailed }) {
     accountCreatedAt:sync.linked && !accountUser?.isAnonymous ? accountUser?.metadata?.creationTime || null : null,
     enabled: safelyConfigured(), separate, canSecure, secureWithGoogle, secureWithProvider, signOutAccount, signInToThisDevice, signInWithAnotherAccount,
     useSeparateProfile, switchToSavedProfile, signInFirstRunWithGoogle, signInFirstRunWithProvider, detachFirstRunAccountAfterBackup,
-    registerWithEmail,signInFirstRunWithEmail,signInToThisDeviceWithEmail,signInWithAnotherEmail,resetPasswordWithEmail,verifyEmail,refreshEmailVerification };
+    registerWithEmail,getRegistrationPasswordRequirements,signInFirstRunWithEmail,signInToThisDeviceWithEmail,signInWithAnotherEmail,resetPasswordWithEmail,verifyEmail,refreshEmailVerification };
 }

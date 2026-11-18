@@ -37,10 +37,10 @@ function destination(state) {
   act(()=>host.querySelector(`[data-session-id="${id}"]`).click());
   return id;
 }
-it.each(['freestyle','none','completed-freestyle'])('reviews then durably applies Move to today with %s, without mutating the active session or plan', kind => {
+it.each(['freestyle','none','completed-freestyle'])('durably applies Move to today from the date picker with %s, without mutating the active session or plan', kind => {
   const state=moveToTodayFixture(kind), before=structuredClone(state);mount(state);
   const id=destination(state);expect(button('Use this workout today')).toBeUndefined();expect(button('Move to today')).toBeUndefined();expect(todayCell().disabled).toBe(false);
-  tapToday();expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');
+  tapToday();expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN');expect(host.querySelector('.flexible-week-review')).toBeNull();
   expect(host.textContent).toContain('Wed, Sep 23 → Sun, Sep 20');
   expect(current).toEqual(before);expect(publish).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
   tap('MOVE WORKOUT');expect(close).toHaveBeenCalledOnce();
@@ -82,18 +82,23 @@ it('does not treat an unrelated completed planned record performed today as an o
   expect(proposeFlexibleWeek(state,{mode:'move',sessionId:moveToTodaySource(state).logicalSessionId,toDate:isoDay()}).status).toBe('ready');
   mount(state);destination(state);expect(todayCell().disabled).toBe(false);
 });
-it('keeps review, selected destination, saved schedule and active workout on persistence failure, then retries', () => {
+it('keeps the picker, selected destination, saved schedule and active workout on persistence failure, then retries', () => {
   const state=moveToTodayFixture();localStorage.setItem(STORAGE_KEY,serializeState(state));const saved=localStorage.getItem(STORAGE_KEY);mount(state);destination(state);tapToday();
   const write=vi.spyOn(Storage.prototype,'setItem').mockImplementation(()=>{throw Error('full');});tap('MOVE WORKOUT');
   expect(current).toEqual(state);expect(localStorage.getItem(STORAGE_KEY)).toBe(saved);expect(close).not.toHaveBeenCalled();expect(publish).not.toHaveBeenCalled();
-  expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');expect(host.querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
+  expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN');expect(todayCell().getAttribute('aria-pressed')).toBe('true');expect(host.querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
   write.mockRestore();tap('TRY AGAIN');expect(close).toHaveBeenCalledOnce();expect(current.activeWorkout).toEqual(state.activeWorkout);
 });
-it.each(['schedule','source-started'])('keeps the review and rejects Apply when %s changes', kind => {
+it('rebases a harmless schedule change without asking for review', () => {
   const state=moveToTodayFixture();mount(state);destination(state);tapToday();
-  act(()=>change(next=>{if(kind==='schedule')next.weekScheduleOverrides={'2026-09-21':{}};else next.activeWorkout=startWorkout({...next,activeWorkout:null},moveToTodaySource(next).workout);return next;}));
-  const before=structuredClone(current);expect(host.querySelector('h1').textContent).toBe('Move FUNKCIONALNI DAN?');tap('MOVE WORKOUT');
-  expect(current).toEqual(before);expect(publish).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();expect(host.querySelector('[role="alert"]').textContent).toContain('Review the schedule again');
+  act(()=>change(next=>{next.weekScheduleOverrides={'2026-09-21':{}};return next;}));
+  tap('MOVE WORKOUT');expect(publish).toHaveBeenCalledOnce();expect(close).toHaveBeenCalledOnce();expect(current.weekScheduleOverrides).toEqual({'2026-09-21':{}});
+});
+it('leaves the date picker safely when the source workout starts elsewhere', () => {
+  const state=moveToTodayFixture();mount(state);destination(state);tapToday();
+  act(()=>change(next=>{const source=moveToTodaySource(next);next.activeWorkout={...startWorkout({...next,activeWorkout:null},source.workout),logicalSessionId:source.logicalSessionId};return next;}));
+  const before=structuredClone(current);expect(button('MOVE WORKOUT')).toBeUndefined();expect(host.querySelector('[role="status"]').textContent).toContain('no longer available');
+  expect(current).toEqual(before);expect(publish).not.toHaveBeenCalled();expect(close).not.toHaveBeenCalled();
 });
 it('never presents a move to the same date as an actionable no-op', () => {
   const state=moveToTodayFixture(), source=moveToTodaySource(state);

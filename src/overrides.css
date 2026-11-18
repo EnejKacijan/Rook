@@ -331,6 +331,8 @@ body {
   letter-spacing: .12em;
 }
 .goal-progress-metric > strong { color: var(--rook-text); font-size: 14px; line-height: 1.35; }
+.goal-progress-weight { margin-top: 18px; padding-top: 12px; border-top: 1px solid var(--rook-border); }
+.goal-progress-weight .weight-trend-title h2 { font-size: 16px; }
 .goal-progress-breakdown { color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
 .goal-progress-footnote { margin: 18px 0 0 !important; padding-top: 14px; border-top: 1px solid var(--rook-border); font-size: 11.5px !important; }
 .goal-progress-action,
@@ -395,6 +397,7 @@ body {
 .weight-history-average-row > strong { flex: 0 0 auto; }
 .weight-history-list { margin-top: 24px !important; }
 .weight-history-list .list-row { min-height: 58px; }
+.weight-history-turn-off { margin-top: 16px; }
 
 @media (max-width: 374px) {
   .goal-progress-card { padding: 16px; }

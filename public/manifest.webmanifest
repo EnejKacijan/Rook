@@ -4,6 +4,7 @@
   "description": "A workout plan that progresses with you.",
   "start_url": "/",
   "display": "standalone",
+  "orientation": "portrait",
   "background_color": "#f6f5f2",
   "theme_color": "#f6f5f2",
   "icons": [

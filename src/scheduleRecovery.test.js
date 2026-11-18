@@ -35,21 +35,18 @@ it('keeps a moved session and its one-off edits when a different workout in the 
   expect(next.program).toEqual(after.program);
   expect(next.workouts).toEqual(state.workouts);
 });
-it('reviews an edited moved workout with a real preview for each version and keeps future weeks on the new plan',()=>{
+it('uses the saved one-off workout without review and applies permanent edits to future weeks',()=>{
   const {state,id}=adjustedFixture(),after=structuredClone(state),record=after.flexibleWeek.sessions[id];
   after.program.days.find(day=>day.id===record.workoutId).exercises[0].sets[0].weight=57;
   const pending=preserveMovesAfterPlanEdit(state,after);
-  expect(temporaryScheduleReview(pending).unresolved.map(change=>change.id)).toEqual([id]);
-  const review=reviewScheduleRecovery(pending,id);
-  expect(review.adjustment.workout.exercises[0].sets[0].weight).toBe(43);
-  expect(review.workout.exercises[0].sets[0].weight).toBe(57);
-  const kept=deserializeState(serializeState(applyScheduleRecovery(pending,review,'keep-adjustment')),{strict:true});
+  expect(temporaryScheduleReview(pending).unresolved).toEqual([]);
+  const kept=deserializeState(serializeState(pending),{strict:true});
   expect(adaptedTemplateForToday(kept).exercises[0].sets[0].weight).toBe(43);
   expect(plannedWorkoutForDate(kept,'2026-10-30').exercises[0].sets[0].weight).toBe(57);
   expect(temporaryScheduleReview(kept).unresolved).toHaveLength(0);
-  const updated=applyScheduleRecovery(pending,review,'keep');
-  expect(updated.todayAdaptation).toBeNull();
-  expect(adaptedTemplateForToday(updated).exercises[0].sets[0].weight).toBe(57);
+  expect(plannedWorkoutForDate(kept,'2026-10-24').logicalSessionId).toBe(id);
+  kept.selectedDate='2026-10-24';kept.activeWorkout=startWorkout(kept,adaptedTemplateForToday(kept));
+  expect(kept.activeWorkout.exercises[0].sets[0].weight).toBe(43);
 });
 it('shows the saved one-off snapshot when the source was removed and clears only its linked edits on confirmation',()=>{
   const {state,id}=adjustedFixture(),record=state.flexibleWeek.sessions[id];
@@ -140,7 +137,7 @@ it('keeps the removed workout reviewable across actual plan replacement and relo
   expect(recoveredWorkoutForDate(kept,record.scheduledDate).exercises[0].sets[0].weight).toBe(43);
   expect(kept.flexibleWeek.recoveryHistory.at(-1)).not.toHaveProperty('detachedAdjustment');
 });
-it('repairs both sides of a stale swap together without reviving the original placements',()=>{
+it('keeps both sides of a swap available after an exercise target changes',()=>{
   const {state}=fixture();
   vi.setSystemTime(new Date('2026-10-19T12:00:00'));
   state.flexibleWeek=null;
@@ -148,12 +145,30 @@ it('repairs both sides of a stale swap together without reviving the original pl
   const swapped=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'swap',sessionId:first.logicalSessionId,otherSessionId:second.logicalSessionId}));
   expect(swapped.status).toBe('applied');
   const next=swapped.state;next.program.days[0].exercises[0].sets[0].weight=51;
+  expect(plannedWorkoutForDate(next,'2026-10-19').logicalSessionId).toBe(second.logicalSessionId);
+  expect(plannedWorkoutForDate(next,'2026-10-21').logicalSessionId).toBe(first.logicalSessionId);
+  expect(temporaryScheduleReview(next).unresolved).toEqual([]);
+});
+it('can resolve an unstarted side of a swap after its linked workout has been completed',()=>{
+  const {state}=fixture();
+  vi.setSystemTime(new Date('2026-10-19T12:00:00'));
+  state.flexibleWeek=null;
+  const sessions=flexibleSessions(state),first=sessions.find(item=>item.originalDate==='2026-10-19'),second=sessions.find(item=>item.originalDate==='2026-10-21');
+  let next=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'swap',sessionId:first.logicalSessionId,otherSessionId:second.logicalSessionId})).state;
+  next.selectedDate='2026-10-19';
+  next.activeWorkout=startWorkout(next,plannedWorkoutForDate(next,'2026-10-19'));
+  next.activeWorkout.exercises[0].sets[0].completed=true;
+  next=completeWorkout(next);
+  const completed=structuredClone(next.workouts),finishedRecord=structuredClone(next.flexibleWeek.sessions[second.logicalSessionId]);
+  next.flexibleWeek.sessions[first.logicalSessionId].planFingerprint='unlinked-legacy-move';
   const review=reviewScheduleRecovery(next,first.logicalSessionId);
-  expect(review.groupCount).toBe(2);
-  const kept=applyScheduleRecovery(next,review,'keep');
-  expect(plannedWorkoutForDate(kept,'2026-10-19').logicalSessionId).toBe(second.logicalSessionId);
-  expect(plannedWorkoutForDate(kept,'2026-10-21').logicalSessionId).toBe(first.logicalSessionId);
-  expect(temporaryScheduleReview(kept).unresolved).toEqual([]);
+  expect(review.groupCount).toBe(1);
+  expect(review.workout).toBeTruthy();
+  const repaired=applyScheduleRecovery(next,review,'keep');
+  expect(repaired.workouts).toEqual(completed);
+  expect(repaired.flexibleWeek.sessions[second.logicalSessionId]).toEqual(finishedRecord);
+  expect(plannedWorkoutForDate(repaired,'2026-10-21').logicalSessionId).toBe(first.logicalSessionId);
+  expect(temporaryScheduleReview(repaired).unresolved).toEqual([]);
 });
 it('keeps a past skip as a fact, but makes an outdated future skip removable',()=>{
   const {state,id}=fixture(),record=state.flexibleWeek.sessions[id];
@@ -162,10 +177,28 @@ it('keeps a past skip as a fact, but makes an outdated future skip removable',()
   expect(flexibleWeekConflict(state)).toBe(false);
   expect(temporaryScheduleReview(state).recent[0].id).toBe(id);
   record.scheduledDate='2026-10-24';
+  state.program.days=state.program.days.filter(day=>day.id!==record.workoutId);
   expect(flexibleWeekConflict(state)).toBe(true);
   expect(temporaryScheduleReview(state).unresolved[0].id).toBe(id);
   const removed=applyScheduleRecovery(state,reviewScheduleRecovery(state,id),'remove');
   expect(flexibleWeekConflict(removed)).toBe(false);
+});
+it('resolves a real destination collision by moving only that occurrence to a free date',()=>{
+  const {state,id}=fixture(),other=state.program.days[0];
+  state.weekScheduleOverrides={'2026-10-19':{[other.id]:'2026-10-24'}};
+  const history=structuredClone(state.workouts),program=structuredClone(state.program);
+  const review=reviewScheduleRecovery(state,id);
+  expect(review.workout).toBeNull();
+  expect(review.reason).toMatch(/Another workout/);
+  expect(review.moveDates).toContain('2026-10-25');
+  expect(()=>applyScheduleRecovery(state,review,'move',{toDate:'2026-10-24'})).toThrow('available date');
+  const next=applyScheduleRecovery(state,review,'move',{toDate:'2026-10-25'});
+  expect(next.flexibleWeek.sessions[id].scheduledDate).toBe('2026-10-25');
+  expect(plannedWorkoutForDate(next,'2026-10-25').logicalSessionId).toBe(id);
+  expect(plannedWorkoutForDate(next,'2026-10-24').id).toBe(other.id);
+  expect(temporaryScheduleReview(next).unresolved).toEqual([]);
+  expect(next.program).toEqual(program);expect(next.workouts).toEqual(history);
+  expect(temporaryScheduleReview(deserializeState(serializeState(next),{strict:true})).unresolved).toEqual([]);
 });
 it('a duration estimate refresh never hides a move; valid legacy hashes migrate on reload',()=>{
   const {state,id}=fixture(),fingerprint=flexiblePlanFingerprint(state);
@@ -178,19 +211,19 @@ it('a duration estimate refresh never hides a move; valid legacy hashes migrate 
   expect(plannedWorkoutForDate(loaded,'2026-10-24').logicalSessionId).toBe(id);
   expect(temporaryScheduleReview(loaded).unresolved).toHaveLength(0);
 });
-it('repairs a stale Fri→Sat move explicitly, keeps its date and block identity, and survives reload',()=>{
+it('keeps a Fri→Sat move available after an unrelated edit and reload',()=>{
   const {state,id}=fixture(),history=structuredClone(state.workouts);state.program.days[0].name='Changed other workout';
-  expect(plannedWorkoutForDate(state,'2026-10-24')).toBeNull();
-  const review=reviewScheduleRecovery(state,id);expect(review.workout).toBeTruthy();expect(temporaryScheduleReview(state).unresolved).toHaveLength(1);
-  const next=applyScheduleRecovery(state,review,'keep');
+  expect(plannedWorkoutForDate(state,'2026-10-24').logicalSessionId).toBe(id);
+  const next=deserializeState(serializeState(state),{strict:true});
   expect(plannedWorkoutForDate(next,'2026-10-24').logicalSessionId).toBe(id);
   expect(next.flexibleWeek.sessions[id].blockWeekNumber).toBe(1);expect(next.workouts).toEqual(history);expect(next.program).toEqual(state.program);
   expect(temporaryScheduleReview(deserializeState(next,{strict:true})).unresolved).toHaveLength(0);
 });
-it('does not silently rebind an already stale legacy record or a real prescription change during hydration',()=>{
+it('retains the occurrence across legacy hydration after a prescription edit',()=>{
   const {state,id}=fixture();state.flexibleWeek.sessions[id].planFingerprint=flexibleFingerprintBeforeHydration(state).legacy;
   state.program.days[0].exercises[0].sets.pop();
-  const loaded=deserializeState(state);expect(temporaryScheduleReview(loaded).unresolved).toHaveLength(1);
+  const loaded=deserializeState(state);expect(temporaryScheduleReview(loaded).unresolved).toHaveLength(0);
+  expect(plannedWorkoutForDate(loaded,'2026-10-24').logicalSessionId).toBe(id);
   expect(loaded.flexibleWeek.sessions[id].planFingerprint).toBe(state.flexibleWeek.sessions[id].planFingerprint);
 });
 it('offers a truthful removal for a deleted template, retains the original record in an audit, and leaves history unchanged',()=>{
@@ -202,14 +235,14 @@ it.each(['collision','block','past','active','completed'])('does not keep an uns
   const {state,id}=fixture(),record=state.flexibleWeek.sessions[id];state.program.version++;
   if(kind==='collision'){const day=state.program.days[0];state.weekScheduleOverrides={'2026-10-19':{[day.id]:'2026-10-24'}};}
   if(kind==='block')state.program.trainingBlock.id='different-block';
-  if(kind==='past')record.scheduledDate='2026-10-22';
+  if(kind==='past'){record.scheduledDate='2026-10-22';state.program.days.find(day=>day.id===record.workoutId).weekday='Sun';}
   if(kind==='active')state.activeWorkout={id:'active'};
   if(kind==='completed')state.workouts.push({id:'done',logicalSessionId:id,completedAt:'2026-10-24T10:00:00',exercises:[]});
   if(['active','completed'].includes(kind))expect(()=>reviewScheduleRecovery(state,id)).toThrow();
   else {const review=reviewScheduleRecovery(state,id);expect(review.workout).toBeNull();expect(()=>applyScheduleRecovery(state,review,'keep')).toThrow();}
 });
 it('rejects changed reviews and midnight without mutating the previous schedule',()=>{
-  const {state,id}=fixture();state.program.version++;const review=reviewScheduleRecovery(state,id),changed=structuredClone(state);changed.profile.units='lb';
+  const {state,id}=fixture();state.program.days.find(day=>day.id===state.flexibleWeek.sessions[id].workoutId).weekday='Sun';const review=reviewScheduleRecovery(state,id),changed=structuredClone(state);changed.profile.units='lb';
   expect(()=>applyScheduleRecovery(changed,review,'keep')).toThrow('changed');
   vi.setSystemTime(new Date('2026-10-25T12:00:00'));expect(()=>applyScheduleRecovery(state,review,'remove')).toThrow('changed');
   expect(state.flexibleWeek.sessions[id].planFingerprint).not.toBe(flexiblePlanFingerprint(state));

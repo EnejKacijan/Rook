@@ -115,7 +115,7 @@
 :root .scratch-editor-screen > .plan-name-field { gap: 6px; }
 :root .scratch-editor-screen > .plan-name-field > span { color: var(--rook-secondary); font-size: 14px; font-weight: 600; letter-spacing: 0; }
 :root .scratch-editor-screen > .plan-name-field > input { width: 100%; min-height: 46px; padding-inline: 12px; border: 1px solid var(--rook-border); border-radius: 10px; background: var(--rook-surface); color: var(--rook-text); font: inherit; font-size: 16px; font-weight: 650; }
-:root .scratch-editor-screen > .plan-name-field > input:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; }
+:root .scratch-editor-screen > .plan-name-field > input:focus-visible { outline: 2px solid var(--rook-focus-ring); }
 :root .scratch-editor-screen .plan-workout-reorder-bar { margin-block: 0 8px; border-bottom: 0; }
 :root .scratch-editor-screen .plan-workout-reorder-bar > .plan-workout-overflow { margin-left: auto; flex: 0 0 44px; width: 44px; min-height: 44px; padding: 0; border: 0; background: transparent; color: var(--rook-secondary); font: inherit; font-size: 18px; letter-spacing: 1px; }
 :root .scratch-editor-screen .plan-workout-overflow:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: 2px; border-radius: 8px; }
@@ -131,7 +131,7 @@
 .scratch-workout-day { padding: 15px 0; }
 .scratch-workout-day .workout-name-field { margin-bottom: 7px; }
 .scratch-workout-day .workout-name-field > input { height: 44px; border-color: color-mix(in srgb, var(--rook-accent) 20%, transparent); background: #fff; box-shadow: 0 1px 0 rgba(27,26,25,.02); }
-.scratch-workout-day .workout-name-field > input:focus { border-color: var(--rook-accent-text); outline: 3px solid var(--rook-focus-ring); }
+.scratch-workout-day .workout-name-field > input:focus { border-color: var(--rook-accent-text); outline: 2px solid var(--rook-focus-ring); }
 .scratch-day-status { min-height: 24px; margin: 0 1px 8px; display: flex; align-items: center; }
 .scratch-workout-day .scratch-day-status > small { color: #77736f; font-size: 10.5px; text-align: left; }
 .scratch-workout-day .scratch-day-status > small.ready { color: var(--rook-accent-text); font-weight: 750; }

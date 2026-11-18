@@ -19,7 +19,8 @@ function mount(){
   let state=domain.blankState();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:['Mon','Wed','Fri'],sessionMinutes:60,equipment:['full gym'],environment:'Commercial gym',priorities:['Balanced'],onboardingComplete:true});
   state.program=domain.buildProgram(state.profile);state.program.trainingBlock.startDate='2026-10-19';state.program.rotationStartDate='2026-10-19';state=domain.deserializeState(state);
   const source=flexibleSessions(state).find(item=>item.scheduledDate==='2026-10-23');
-  state=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:source.logicalSessionId,toDate:'2026-10-24'})).state;state.program.days[0].name='Changed';
+  state=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:source.logicalSessionId,toDate:'2026-10-24'})).state;
+  state.flexibleWeek.sessions[source.logicalSessionId].planFingerprint='unlinked-legacy-move';
   function Harness(){const[value,setValue]=useState(state);current=value;return <FlexibleWeekSheet state={value} update={fn=>setValue(fn)} close={()=>{}} Header={Header} request={{reviewExisting:true}}/>;}
   act(()=>root.render(<Harness/>));return source.logicalSessionId;
 }
@@ -38,4 +39,15 @@ it('requires an explicit removal confirmation and preserves workout history',()=
   const id=mount(),history=structuredClone(current.workouts);click('Review this move');click('REMOVE TEMPORARY MOVE');
   expect(current.flexibleWeek.sessions[id]).toBeTruthy();expect(persist).not.toHaveBeenCalled();click('REMOVE TEMPORARY MOVE');
   expect(current.flexibleWeek.sessions[id]).toBeUndefined();expect(current.workouts).toEqual(history);expect(current.flexibleWeek.recoveryHistory[0].id).toBe(id);
+});
+it('offers a working free-date choice and retains it for retry when storage fails',()=>{
+  const id=mount();click('Review this move');click('MOVE TO A FREE DATE');
+  const choose=()=>host.querySelector('[data-repair-date="2026-10-25"]');
+  expect(choose()).not.toBeNull();
+  persist.mockReturnValue(false);act(()=>choose().click());
+  expect(current.flexibleWeek.sessions[id].scheduledDate).toBe('2026-10-24');
+  expect(host.textContent).toContain('Could not save');
+  persist.mockReturnValue(true);act(()=>choose().click());
+  expect(current.flexibleWeek.sessions[id].scheduledDate).toBe('2026-10-25');
+  expect(temporaryScheduleReview(current).unresolved).toHaveLength(0);
 });

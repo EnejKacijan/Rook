@@ -116,7 +116,7 @@ export function AccountSyncPanel({ sync, displayName, Modal, backgroundRef }) {
     {sync?.state !== 'not-configured' && !sync?.linked && !collision && !sync?.providers?.some(id=>id!=='google.com') && <button type="button" className="list-row" disabled={busy || !sync?.canSecure} onClick={() => act(sync.secureWithGoogle)}><span><strong>Create account with Google</strong><small>Link this profile to Google so you can restore it on another device. Your training data stays here.</small></span></button>}
     {sync?.state !== 'not-configured' && !sync?.linked && !collision && sync?.providers?.some(id=>id!=='google.com') && <>
       <AccountAccessOptions providers={sync.providers} busy={busy} disabled={!sync?.canSecure} registrationOnly
-        onEmail={sync.registerWithEmail?details=>act(()=>sync.registerWithEmail(details),true):undefined}
+        onEmail={sync.registerWithEmail?details=>act(()=>sync.registerWithEmail(details),true):undefined} getPasswordRequirements={sync.getRegistrationPasswordRequirements}
         onChoose={id=>act(id==='google.com'?sync.secureWithGoogle:()=>sync.secureWithProvider(id))}/>
       <small className="account-sync-link-hint">Link this profile to an account so you can restore it on another device. Your training data stays here.</small>
     </>}

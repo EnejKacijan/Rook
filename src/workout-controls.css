@@ -400,7 +400,7 @@
 .exercise-note-sheet .sheet-scroll > .eyebrow { margin-top: 16px; }
 .exercise-note-field { display: block; margin-top: 8px; }
 .exercise-note-field textarea { width: 100%; min-height: 104px; max-height: 180px; padding: 14px 15px; resize: vertical; border: 1px solid rgba(27, 26, 25, .14); border-radius: 14px; background: #fff; color: #1b1a19; font: inherit; font-size: 15px; line-height: 1.45; }
-.exercise-note-field textarea:focus-visible { outline: 2px solid var(--rook-focus-ring); outline-offset: 2px; border-color: var(--rook-accent-text); }
+.exercise-note-field textarea:focus-visible { outline: 2px solid var(--rook-focus-ring); border-color: var(--rook-accent-text); }
 .exercise-note-meta { min-height: 20px; margin-top: 7px; display: flex; justify-content: space-between; gap: 14px; color: #8a8783; }
 .exercise-note-meta small:first-child { min-width: 0; }
 .exercise-note-meta small:last-child { flex: 0 0 auto; font-variant-numeric: tabular-nums; }

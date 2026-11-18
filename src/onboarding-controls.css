@@ -243,7 +243,7 @@
 /* Disclosure/scroll containers intentionally clip during motion. Keep the
    existing semantic focus ring inside Build controls, like age/sex controls,
    so their edge is visible without changing container geometry or overflow. */
-:root .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) :is(button, input, select, textarea):focus-visible { outline-offset: -3px; }
+:root .onboarding:not(.entry-screen):not(.physique-review-screen):not(.follow-up-onboarding) button:focus-visible { outline-offset: -3px; }
 .restriction-preference { min-width: 0; }
 .restriction-collapse { min-height: 36px; padding: 0 2px; border: 0; background: transparent; color: var(--rook-accent-text, #1f6b4c); font-size: 10px; font-weight: 750; letter-spacing: .08em; }
 .restriction-disclosure { width: 100%; min-height: 50px; margin-top: 6px; padding: 9px 2px; display: flex; align-items: center; justify-content: space-between; gap: 12px; border: 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.09)); background: transparent; color: var(--rook-text, #1b1a19); text-align: left; }

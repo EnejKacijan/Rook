@@ -1,0 +1,18 @@
+.session-log-trophy {
+  display: inline-block;
+  width: 1.15em;
+  height: 1.15em;
+  margin-inline-start: .35em;
+  vertical-align: -.22em;
+  color: var(--rook-accent-text);
+}
+.session-log-best-gain {
+  margin-inline-start: auto;
+  padding-inline-start: 8px;
+  color: var(--rook-accent-text);
+  font-weight: 700;
+  white-space: nowrap;
+}
+.session-log-set > .session-log-best-gain::before {
+  content: none;
+}

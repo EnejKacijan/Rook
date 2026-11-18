@@ -3,6 +3,8 @@
 .exercise-picker-thumbnail .exercise-illustration { width:44px; height:44px; }
 .exercise-picker-thumbnail img { display:block; width:44px; height:44px; object-fit:contain; }
 .exercise-picker-placeholder { opacity:.35; font-size:18px; }
+.exercise-picker-placeholder::before { content:'—'; }
+.exercise-picker-thumbnail .exercise-illustration > .exercise-picker-placeholder { position:absolute; inset:0; display:grid; place-items:center; }
 .exercise-picker-label { display:block; min-width:0; overflow-wrap:anywhere; }
 .exercise-picker-label > strong,.exercise-picker-label > small { display:block; }
 .exercise-picker-label > small { margin-top:3px; }

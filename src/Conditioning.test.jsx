@@ -63,7 +63,7 @@ it('strength days retain their primary workout and expose the secondary action a
   initial.profile.availableDays = ['Sun', 'Tue']; initial.program = domain.buildProgram(initial.profile);
   initial = domain.finishOptionalSession(domain.startOptionalSession(initial, { kind: 'Conditioning', intent: 'conditioning', activity: 'Rower', format: 'steady', duration: 20, intensity: 'Moderate' }, Date.now() - 1200000));
   mount(); expect(document.querySelector('.rest-day-state')).toBeNull(); expect(button('START WORKOUT')).toBeDefined();
-  expect(button('+ Conditioning')).toBeDefined(); expect(button('+ Light cardio')).toBeUndefined();
+  expect(button('Add conditioning')).toBeDefined(); expect(button('+ Light cardio')).toBeUndefined();
   expect(document.querySelector('.optional-session-note').textContent).toContain('Rower completed20 min · Moderate');
 });
 it('G/H/I: completed interval details reuse editor and canonical confirmation, keeping stable ID and scoped deletion', () => {

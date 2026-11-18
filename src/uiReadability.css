@@ -333,7 +333,8 @@
 /* Form focus stays inside the control, including at sheet/keyboard boundaries.
    Keep the ring visible without needing scroll-container overflow to paint it. */
 :root :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"]),textarea,select):is(:focus,:focus-visible) {
-  outline-offset:-3px !important;
+  outline-width:2px;
+  outline-offset:-2px;
 }
 :root :is(input:not([type="checkbox"],[type="radio"],[type="range"],[type="color"],[type="file"]),textarea,select) {
   min-width:0;

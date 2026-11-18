@@ -21,11 +21,107 @@ it('routes email sign-in from first run without invoking Google/Apple',async()=>
 it('creates an account only from explicit registration and rejects mismatched confirmation',async()=>{
  const onSubmit=vi.fn();render(<EmailAccountForm onSubmit={onSubmit} onBack={()=>{}}/>);await click('New to ROOK? Create an account');fill();edit('Confirm password','different-password');await submit();expect(onSubmit).not.toHaveBeenCalled();expect(host.textContent).toContain('passwords do not match');edit('Confirm password','synthetic-password-8');await submit();expect(onSubmit).toHaveBeenCalledWith(expect.objectContaining({intent:'register'}));
 });
+it('shows changing registration requirements and keeps both fields after a failed create attempt',async()=>{
+ vi.useFakeTimers();
+ try {
+   const getPasswordRequirements=vi.fn(async value=>{
+     const missing=[];
+     if(value.length<12)missing.push('at least 12 characters');
+     if(!/[A-Z]/.test(value))missing.push('an uppercase letter');
+     if(!value.includes('!'))missing.push('a symbol');
+     return missing;
+   });
+   const signInWithEmail=vi.fn().mockRejectedValueOnce({code:'auth/weak-password',message:'Use a symbol.'}).mockResolvedValueOnce({status:'new-account'});
+   const onSignedIn=vi.fn();
+   const waitForFeedback=async()=>act(async()=>vi.advanceTimersByTimeAsync(120));
+   render(<FirstRunSignIn providerReady providers={['password']} signInWithEmail={signInWithEmail}
+     getPasswordRequirements={getPasswordRequirements} onSignedIn={onSignedIn}/>);
+   await click('CONTINUE WITH EMAIL');
+   expect(getPasswordRequirements).not.toHaveBeenCalled();
+   await click('New to ROOK? Create an account');
+   expect(host.textContent).toContain('Use at least 8 characters.');
+   await waitForFeedback();
+   expect(host.textContent).toContain('Use at least 12 characters, an uppercase letter, a symbol.');
+   edit('Email','synthetic@example.test');
+   edit('Password','synthetic-password');
+   await waitForFeedback();
+   expect(host.textContent).toContain('Use an uppercase letter, a symbol.');
+   const password=edit('Password','Synthetic-password');
+   const confirmation=edit('Confirm password','Synthetic-password');
+   await waitForFeedback();
+   const hintId=password.getAttribute('aria-describedby');
+   expect(document.getElementById(hintId).textContent).toBe('Use a symbol.');
+   expect(host.querySelector('[role="alert"]')).toBeNull();
+   await submit();
+   expect(host.querySelectorAll('[role="alert"]')).toHaveLength(1);
+   expect(host.querySelector('[role="alert"]')).toBe(document.getElementById(hintId));
+   expect(host.textContent.match(/Use a symbol\./g)).toHaveLength(1);
+   expect(password.hasAttribute('aria-invalid')).toBe(false);
+   expect(password.value).toBe('Synthetic-password');
+   expect(confirmation.value).toBe('Synthetic-password');
+   edit('Password','Synthetic-password!');
+   expect(host.querySelector('[role="alert"]')).toBeNull();
+   expect(host.textContent).toContain('Passwords do not match yet.');
+   edit('Confirm password','Synthetic-password!');
+   await submit();
+   expect(onSignedIn).toHaveBeenCalledWith({status:'new-account'});
+   expect(password.value).toBe('');
+   expect(confirmation.value).toBe('');
+ } finally { vi.useRealTimers(); }
+});
+it('ignores requirements returned for a password the user has edited',async()=>{
+ vi.useFakeTimers();
+ try {
+   let finishPreviousCheck;
+   const getPasswordRequirements=vi.fn(value=>value==='first-password'
+     ? new Promise(resolve=>{finishPreviousCheck=resolve;})
+     : Promise.resolve([]));
+   render(<EmailAccountForm registrationOnly onSubmit={vi.fn()} getPasswordRequirements={getPasswordRequirements}/>);
+   edit('Password','first-password');
+   await act(async()=>vi.advanceTimersByTimeAsync(120));
+   edit('Password','Updated-password!');
+   await act(async()=>vi.advanceTimersByTimeAsync(120));
+   await act(async()=>finishPreviousCheck(['an uppercase letter']));
+   expect(host.textContent).toContain('Password meets the requirements.');
+   expect(host.textContent).not.toContain('Use an uppercase letter.');
+ } finally { vi.useRealTimers(); }
+});
 it('supports password managers and show/hide without changing values',async()=>{
  render(<EmailAccountForm onSubmit={()=>{}} onBack={()=>{}}/>);const field=edit('Password','synthetic-password-8');expect(field.type).toBe('password');expect(field.autocomplete).toBe('current-password');await click('Show password');expect(field.type).toBe('text');expect(field.value).toBe('synthetic-password-8');await click('Hide password');expect(field.type).toBe('password');
 });
 it('serializes duplicate submits, disables navigation while pending, and reports safe authentication errors',async()=>{
- let reject;const onSubmit=vi.fn(()=>new Promise((_,fail)=>{reject=fail;}));render(<EmailAccountForm onSubmit={onSubmit} onBack={()=>{}}/>);fill();await submit();await submit();expect(onSubmit).toHaveBeenCalledOnce();expect(button('Back to sign-in methods').disabled).toBe(true);await act(async()=>reject({code:'auth/wrong-password',message:'do not expose this'}));expect(host.textContent).toContain('Could not sign in with those details');expect(host.textContent).not.toContain('do not expose');
+ let reject;
+ const onSubmit=vi.fn(()=>new Promise((_,fail)=>{reject=fail;}));
+ render(<EmailAccountForm onSubmit={onSubmit} onBack={()=>{}}/>);
+ const email=edit('Email','synthetic@example.test');
+ const password=edit('Password','synthetic-password-8');
+ await submit();await submit();
+ expect(onSubmit).toHaveBeenCalledOnce();
+ expect(button('Back to sign-in methods').disabled).toBe(true);
+ expect(host.querySelector('[aria-invalid="true"]')).toBeNull();
+ await act(async()=>reject({code:'auth/wrong-password',message:'do not expose this'}));
+ const error=host.querySelector('[role="alert"]');
+ expect(error.textContent).toContain('Could not sign in with those details');
+ expect(host.textContent).not.toContain('do not expose');
+ for(const field of [email,password]){
+   expect(field.getAttribute('aria-invalid')).toBe('true');
+   expect(field.getAttribute('aria-describedby')).toBe(error.id);
+ }
+ edit('Password','synthetic-retry-password');
+ expect(host.querySelector('[aria-invalid="true"]')).toBeNull();
+ expect(host.querySelector('[role="alert"]')).toBeNull();
+ await submit();
+ await act(async()=>reject({code:'auth/invalid-credential'}));
+ expect(password.getAttribute('aria-invalid')).toBe('true');
+ edit('Email','another@example.test');
+ expect(host.querySelector('[aria-invalid="true"]')).toBeNull();
+});
+it('shows a connection error without marking the sign-in fields invalid',async()=>{
+ const onSubmit=vi.fn().mockRejectedValue({code:'auth/network-request-failed'});
+ render(<EmailAccountForm onSubmit={onSubmit} onBack={()=>{}}/>);
+ fill();await submit();
+ expect(host.querySelector('[role="alert"]').textContent).toContain('Check your connection');
+ expect(host.querySelector('[aria-invalid="true"]')).toBeNull();
 });
 it('offers reset without a password and gives a non-enumerating acknowledgement',async()=>{
  const onReset=vi.fn(async()=>{});render(<EmailAccountForm onSubmit={()=>{}} onReset={onReset} onBack={()=>{}}/>);await click('Forgot password?');edit('Email','synthetic@example.test');expect(host.querySelector('input[type="password"]')).toBeNull();await submit();expect(onReset).toHaveBeenCalledWith('synthetic@example.test');expect(host.textContent).toContain('If a password account uses this email');
@@ -34,7 +130,21 @@ it('offers only sign-in and reset for a protected existing profile',async()=>{
  const login=vi.fn(async()=>{});render(<AccountSyncLock Modal={Modal} sync={{providers:['google.com','password'],signInToThisDeviceWithEmail:login,resetPasswordWithEmail:vi.fn()}}/>);await click('CONTINUE WITH EMAIL');expect(host.textContent).not.toContain('New to ROOK?');fill();await submit();expect(login).toHaveBeenCalledOnce();
 });
 it('registers a local anonymous profile through the linking callback and preserves the photo-locality copy',async()=>{
- const registerWithEmail=vi.fn(async()=>({status:'linked'}));render(<AccountSyncPanel Modal={Modal} sync={{state:'synced',pendingCount:0,linked:false,canSecure:true,providers:['google.com','password'],registerWithEmail}}/>);await click('CONTINUE WITH EMAIL');expect(host.textContent).toContain('Create an email account');expect(host.textContent).not.toContain('New to ROOK?');fill();edit('Confirm password','synthetic-password-8');await submit();expect(registerWithEmail).toHaveBeenCalledWith(expect.objectContaining({intent:'register'}));await act(async()=>host.querySelector('[aria-label="Sync information"]').click());expect(document.querySelector('.account-sync-information').textContent).toContain('Workout photos stay on this device');
+ const registerWithEmail=vi.fn(async()=>({status:'linked'}));
+ const getRegistrationPasswordRequirements=vi.fn(async()=>['at least 8 characters','a number']);
+ render(<AccountSyncPanel Modal={Modal} sync={{state:'synced',pendingCount:0,linked:false,canSecure:true,providers:['google.com','password'],registerWithEmail,getRegistrationPasswordRequirements}}/>);
+ vi.useFakeTimers();
+ try {
+   await click('CONTINUE WITH EMAIL');
+   await act(async()=>vi.advanceTimersByTimeAsync(0));
+   expect(host.textContent).toContain('Create an email account');
+   expect(host.textContent).toContain('Use at least 8 characters, a number.');
+   expect(host.textContent).not.toContain('New to ROOK?');
+ } finally { vi.useRealTimers(); }
+ fill();edit('Confirm password','synthetic-password-8');await submit();
+ expect(registerWithEmail).toHaveBeenCalledWith(expect.objectContaining({intent:'register'}));
+ await act(async()=>host.querySelector('[aria-label="Sync information"]').click());
+ expect(document.querySelector('.account-sync-information').textContent).toContain('Workout photos stay on this device');
 });
 it('shows verification actions for email accounts and preserves normal sign-out',async()=>{
  const verifyEmail=vi.fn(async()=>{}),refreshEmailVerification=vi.fn(async()=>({verified:false}));render(<AccountSyncPanel Modal={Modal} sync={{state:'synced',pendingCount:0,linked:true,providerName:'Email',emailVerified:false,verifyEmail,refreshEmailVerification}}/>);await click('SEND VERIFICATION EMAIL');expect(verifyEmail).toHaveBeenCalledOnce();expect(host.textContent).toContain('Verification email sent');await click('I’VE VERIFIED MY EMAIL');expect(refreshEmailVerification).toHaveBeenCalledOnce();expect(host.textContent).toContain('Email is not verified yet');expect(host.textContent).toContain('Sign out');

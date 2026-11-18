@@ -1,5 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {authenticateEmailAccount,emailAccountDetails,emailAccountError,linkEmailAnonymousAccount,resetEmailAccountPassword} from './emailAccountAuth.js';
+import {authenticateEmailAccount,emailAccountDetails,emailAccountError,getEmailPasswordRequirements,linkEmailAnonymousAccount,resetEmailAccountPassword} from './emailAccountAuth.js';
 import {emailPasswordAvailable,availableAccountProviders} from './accountProviders.js';
 const details={email:' example@example.test ',password:' Synthetic password 8 ',intent:'register'};
 function setup(user=null){
@@ -31,6 +31,21 @@ it('honors configured Firebase password requirements before creating/linking a u
  const client=setup({uid:'anonymous',isAnonymous:true});client.authApi.validatePassword.mockResolvedValue({isValid:false,containsUppercaseLetter:false,meetsMinPasswordLength:false,passwordPolicy:{customStrengthOptions:{minPasswordLength:12}}});
  await expect(authenticateEmailAccount(client,details)).rejects.toThrow('Use at least 12 characters, an uppercase letter.');
  await expect(linkEmailAnonymousAccount(client,details)).rejects.toThrow('Use at least 12 characters');expect(client.authApi.linkWithCredential).not.toHaveBeenCalled();expect(client.authApi.createUserWithEmailAndPassword).not.toHaveBeenCalled();
+});
+it('combines the registration minimum with the Firebase policy and shares the initial read',async()=>{
+ const client=setup();
+ let finishPolicyRead;
+ client.authApi.validatePassword.mockImplementationOnce(()=>new Promise(resolve=>{finishPolicyRead=resolve;}))
+   .mockResolvedValueOnce({isValid:false,containsNumericCharacter:false,meetsMaxPasswordLength:false,
+     passwordPolicy:{customStrengthOptions:{minPasswordLength:6,maxPasswordLength:12}}});
+ const initial=getEmailPasswordRequirements(client,'short');
+ const updated=getEmailPasswordRequirements(client,'longer-password');
+ expect(client.authApi.validatePassword).toHaveBeenCalledTimes(1);
+ finishPolicyRead({isValid:false,meetsMinPasswordLength:false,containsNumericCharacter:false,
+   passwordPolicy:{customStrengthOptions:{minPasswordLength:6}}});
+ expect(await initial).toEqual(['at least 8 characters','a number']);
+ expect(await updated).toEqual(['at most 12 characters','a number']);
+ expect(client.authApi.validatePassword).toHaveBeenLastCalledWith(client.auth,'longer-password');
 });
 it('drops a delayed policy response after the account or profile changes',async()=>{
  const client=setup({uid:'anonymous',isAnonymous:true});let current=true;

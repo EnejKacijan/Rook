@@ -1,5 +1,6 @@
 import { trainingBlockDefinition } from "./trainingBlocks.js";
 import { transferRemovedMoveAdjustment } from './recoveredWorkout.js';
+import { temporaryScheduleReview } from './flexibleWeek.js';
 
 export const PLAN_HISTORY_SCHEMA_VERSION = 1;
 export const PLAN_HISTORY_RECENT_LIMIT = 40;
@@ -223,7 +224,7 @@ export function restorePlanVersion(state, targetVersionId, timestamp = Date.now(
     activeWorkoutPreserved: Boolean(state.activeWorkout),
     todayAdjustmentRemoved: Boolean(state.todayAdaptation),
     flexibleWeekReferencesRemoved: 0,
-    flexibleWeekNeedsReview: Object.keys(state.flexibleWeek?.sessions || {}).length,
+    flexibleWeekNeedsReview: 0,
     occurrenceReferencesRemoved: 0,
   };
   const weekScheduleOverrides = {};
@@ -259,6 +260,7 @@ export function restorePlanVersion(state, targetVersionId, timestamp = Date.now(
   state.todayAdaptation = null;
   state.weekScheduleOverrides = weekScheduleOverrides;
   state.workoutOccurrenceOverrides = workoutOccurrenceOverrides;
+  reconciliation.flexibleWeekNeedsReview = temporaryScheduleReview(state).unresolved.length;
   return { status: "restored", state, target, reconciliation };
 }
 

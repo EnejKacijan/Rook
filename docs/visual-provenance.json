@@ -6,7 +6,7 @@
     "licensed_third_party": 93,
     "rook_ai_generated": 662,
     "unknown": 11,
-    "rook_original": 23
+    "rook_original": 24
   },
   "exerciseReferenceSources": [
     {
@@ -32027,6 +32027,40 @@
       "codeSha256": "2ad9286471750c753b1124bc2c6fe74565303ef2d61c72510a194eb86ed789ac",
       "lfCodeSha256": "2ad9286471750c753b1124bc2c6fe74565303ef2d61c72510a194eb86ed789ac",
       "crlfCodeSha256": "b8bfb0ce36e73586f89e6f49480f0234784df38237e1628be9efd0864b391ed8"
+    },
+    {
+      "assetId": "inline-personalbesttrophy-1",
+      "path": "src/WorkoutPersonalBestDetails.jsx",
+      "sourceLine": 6,
+      "selector": "inline_svg",
+      "codeSha256": "3ec1aa3f067848f01399b3b0d9a4171c286c21c6b40795733bf327c290c56994",
+      "lfCodeSha256": "3ec1aa3f067848f01399b3b0d9a4171c286c21c6b40795733bf327c290c56994",
+      "crlfCodeSha256": "2f47080413a349ecbb355430ad818812d2153d1b1d9e638a18eac63b242902a9",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/WorkoutPersonalBestDetails.jsx",
+          "line": 6,
+          "reviewedAt": "2026-11-18"
+        }
+      ],
+      "notes": [
+        "Source-defined trophy icon used beside personal-best exercise results in the workout log. No downloaded image or copyright ownership assertion.",
+        "Reviewed the cup, handles and base strokes in PersonalBestTrophy; the accessible label is rendered separately from the SVG."
+      ]
     }
   ]
 }

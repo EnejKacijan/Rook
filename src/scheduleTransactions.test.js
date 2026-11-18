@@ -81,5 +81,5 @@ it('resumption is after the final override, not just the newly changed occurrenc
 it('details include changes only; Hide is presentation-only and cannot suppress unresolved attention',()=>{
  let s=change(sample(),'2026-09-29');const review=temporaryScheduleReview(s);expect(review.items).toHaveLength(1);expect(review.items[0].skipped).toBe(true);
  const hidden=hideTemporaryScheduleSummary(s);expect(hidden.flexibleWeek).toBe(s.flexibleWeek);expect(hidden.program).toBe(s.program);expect(temporaryScheduleSummaryHidden(hidden)).toBe(true);
- let moved=change(sample(),'2026-09-28','2026-10-03');moved=hideTemporaryScheduleSummary(moved);moved.program.days[0].name='Changed';expect(temporaryScheduleSummaryHidden(moved)).toBe(false);
+ let moved=change(sample(),'2026-09-28','2026-10-03');moved=hideTemporaryScheduleSummary(moved);moved.program.days=moved.program.days.filter(day=>day.id!==Object.values(moved.flexibleWeek.sessions)[0].workoutId);expect(temporaryScheduleSummaryHidden(moved)).toBe(false);
 });

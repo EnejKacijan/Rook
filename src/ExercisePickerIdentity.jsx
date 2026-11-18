@@ -21,9 +21,12 @@ export function ExercisePickerIdentity({item,enabled=true,deferOffscreen=true,pr
   },[deferOffscreen,priority,enabled,visible]);
   const exercise={...item,exerciseId:item.exerciseId || item.id};
   const image=useAvailableImage(enabled && (!deferOffscreen || priority || visible) && !item.custom ? canonicalPlanReviewArt(exercise,exerciseCatalog,exerciseArt) : null);
+  const placeholder=<span className="exercise-picker-placeholder" />;
   return <span className="exercise-picker-identity">
     {enabled && <span ref={thumbnail} className="exercise-picker-thumbnail" aria-hidden="true">
-      {image.source?<ExerciseIllustration src={image.source} onError={image.onError} alt="" width="44" height="44" loading="eager" fetchpriority={priority?'high':'auto'} decoding="async" draggable={false}/>:<span className="exercise-picker-placeholder">—</span>}
+      {image.source ? <ExerciseIllustration src={image.source} onError={image.onError}
+        loadingPlaceholder={placeholder} alt="" width="44" height="44" loading="eager"
+        fetchpriority={priority?'high':'auto'} decoding="async" draggable={false} /> : placeholder}
     </span>}
     <span className="exercise-picker-label">{children || <strong>{item.name}</strong>}</span>
   </span>;

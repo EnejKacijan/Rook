@@ -96,9 +96,11 @@ it('keeps the week link on its existing canonical training-block route', () => {
   expect(route).toBeNull();expect(document.querySelector('.today-screen')).toBe(today);
   expect(domain.serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();
 });
-it('keeps Conditioning as a quiet optional action opening the existing setup without changing history',()=>{
-  mount();const today=document.querySelector('.today-screen'),action=button('+ Conditioning'),before=domain.serializeState(state);
-  expect(action.classList.contains('text-button')).toBe(true);expect(action.classList.contains('primary')).toBe(false);
+it('groups Training options below the workout and opens Conditioning without changing history',()=>{
+  mount();const today=document.querySelector('.today-screen'),action=button('Add conditioning'),before=domain.serializeState(state);
+  const options=today.querySelector('.today-training-options');
+  expect([...options.querySelectorAll('button')].map(item=>item.textContent)).toEqual(['Add conditioning','Choose a workout']);
+  expect(action.classList.contains('list-row')).toBe(true);expect(action.classList.contains('primary')).toBe(false);
   expect(today.querySelector('.completion-actions').compareDocumentPosition(action)&Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   expect(today.querySelector('.today-optional-activities .eyebrow')).toBeNull();
   click(action);settle();expect(route).toEqual({conditioning:state.selectedDate});

@@ -50,6 +50,7 @@ export function ConditioningSheet({ date, state, update, close, setPage, Header 
 
 export function TodayOptionalActivities({ state, date, setDetail, recovery = false, historyOnly = false }) {
   const records = (state.optionalSessions || []).filter(item => item.date === date && item.status === 'completed' && (['Cardio', 'Mobility'].includes(item.kind) || item.kind === 'Conditioning' && item.intent === 'conditioning'));
+  if (historyOnly && !records.length) return null;
   return <section className="today-optional-activities" aria-label="Optional activities">
     {!historyOnly && date === isoDay() && <div className="today-optional-actions">
       {recovery && <button type="button" className="text-button" onClick={() => setDetail({ restTraining: date, optionalMode: 'cardio' })}>+ Light cardio</button>}

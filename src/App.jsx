@@ -8,6 +8,7 @@ import {ProfileHelp} from './ProfileHelp.jsx';
 import {ProfileInformation} from './ProfileInformation.jsx';
 import { physiqueReviewFailureCopy, physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {CompletedSessionOverview} from './CompletedSessionOverview.jsx';
+import {PersonalBestTrophy, PersonalBestGain} from './WorkoutPersonalBestDetails.jsx';
 import {ExercisePrSheet} from './ExercisePrSheet.jsx';
 import { SettingSwitch } from './SettingSwitch.jsx';
 import { useResolvedTheme, legacyThemePreference } from './useResolvedTheme.js';
@@ -1570,10 +1571,17 @@ export function SheetHeader({
 function FirstRunSheetHeader(props) {
   return <SheetHeader {...props} firstRunBack />;
 }
-function MyWorkoutsLink({ onClick }) {
-  return <ExerciseNavigationButton className="text-button today-my-workouts" onClick={onClick}>
-    <span>Choose a workout</span><NavigationChevron className="inline-navigation-chevron" />
-  </ExerciseNavigationButton>;
+function TodayTrainingOptions({ state, date, setDetail }) {
+  return <section className="today-training-options" aria-label="Other training options">
+    {canStartOptionalSession(state, date) && (
+      <ExerciseNavigationButton className="list-row" onClick={() => setDetail({ conditioning: date })}>
+        <span>Add conditioning</span><NavigationChevron />
+      </ExerciseNavigationButton>
+    )}
+    <ExerciseNavigationButton className="list-row today-my-workouts" onClick={() => setDetail('saved-workouts')}>
+      <span>Choose a workout</span><NavigationChevron />
+    </ExerciseNavigationButton>
+  </section>;
 }
 function Empty({ title, body, action, label = "NOTHING HERE YET" }) {
   return (
@@ -2771,7 +2779,7 @@ export function EntryLanding({ personalize, ownWorkouts, trainFreestyle, bringPl
   </main>;
 }
 
-export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signInWithProvider, signInWithEmail, resetPasswordWithEmail, providers = ['google.com'], providerName = 'Google', signedIn = false, email = null, providerReady = false, accountStatus = 'connecting', onSignedIn }) {
+export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signInWithProvider, signInWithEmail, resetPasswordWithEmail, getPasswordRequirements, providers = ['google.com'], providerName = 'Google', signedIn = false, email = null, providerReady = false, accountStatus = 'connecting', onSignedIn }) {
   const [busy, setBusy] = useState(false);
   const [emailOpen,setEmailOpen]=useState(false);
   const [error, setError] = useState('');
@@ -2802,7 +2810,7 @@ export function FirstRunSignIn({ back, restoreBackup, signInWithGoogle, signInWi
     <div className="entry-sign-in-providers">
       {signedIn ? <Button disabled>SIGNED IN WITH {providerName.toUpperCase()}</Button>
         : <AccountAccessOptions providers={providers} busy={busy} disabled={!providerReady} onChoose={begin} onEmail={signInWithEmail?details=>begin('password',details):undefined} onReset={resetPasswordWithEmail}
-            emailOpen={emailOpen} onEmailOpenChange={setEmailOpen} emailHeadingLevel={1} showEmailBack={false}/>}
+            getPasswordRequirements={getPasswordRequirements} emailOpen={emailOpen} onEmailOpenChange={setEmailOpen} emailHeadingLevel={1} showEmailBack={false}/>}
       {!providerReady && !signedIn && <p role={accountStatus === 'connecting' ? 'status' : 'alert'}>
         {accountStatus === 'connecting' ? 'Checking account availability…' : 'Account sign-in is unavailable right now. No local data was changed.'}
       </p>}
@@ -5898,8 +5906,8 @@ export function Today({
           </div>
         )}
       </section>}
-      <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} />
-      <MyWorkoutsLink onClick={() => setDetail('saved-workouts')} />
+      <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
+      <TodayTrainingOptions state={state} date={selectedIso} setDetail={setDetail} />
       {undoBanner}
     </main>
   );
@@ -8546,7 +8554,7 @@ function ExportSheet({ request, state, close }) {
   );
 }
 
-function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy }) {
+function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy, personalBests }) {
   const [expandedId, setExpandedId] = useState(null);
   return (
     <section className="complete-session-log">
@@ -8558,6 +8566,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
           const itemId = exercise.id || `${exercise.exerciseId}-${exerciseIndex}`;
           const disclosureId = `session-log-sets-${String(itemId).replace(/[^a-zA-Z0-9_-]/g, "-")}`;
           const expanded = expandedId === itemId;
+          const bests = personalBests?.get(exercise);
           return (
             <div
               className={`session-log-item${expanded ? " is-expanded" : ""}`}
@@ -8570,7 +8579,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
                 aria-controls={disclosureId}
                 onClick={() => setExpandedId(expanded ? null : itemId)}
               >
-                <strong>{exerciseName(exercise)}</strong>
+                <strong>{exerciseName(exercise)}{bests && <PersonalBestTrophy />}</strong>
                 <span className="session-log-summary">
                   <span>
                     {logged} / {pluralize(planned, loggingUnit(exercise))}
@@ -8584,6 +8593,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
               >
                 <div>
                   {exercise.sets.map((set, setIndex) => {
+                    const best = bests?.find(record => record.setIndex === setIndex);
                     const parts = sessionLogSetParts(
                       exercise,
                       set,
@@ -8598,6 +8608,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy 
                         {parts.map((part, partIndex) => (
                           <span key={`${part}-${partIndex}`}>{part}</span>
                         ))}
+                        {best && <PersonalBestGain best={best} units={units} />}
                       </div>
                     );
                   })}
@@ -8959,7 +8970,14 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   const [liveEntry] = useState(()=>Boolean(liveFinish && !liveFinish.presented && liveFinish.startedAt===session?.startedAt));
   const [motionCancelled,setMotionCancelled] = useState(false);
   useEffect(()=>{if(persistenceFailed)setMotionCancelled(true);},[persistenceFailed]);
-  const recognition = useMemo(()=>liveFinish?.startedAt===session?.startedAt ? completionRecognition(session,liveFinish.priorWorkouts,{eligible:exercise=>exerciseSupportsEstimatedOneRepMax(exercise)&&! /assist/i.test(exerciseName(exercise))}) : null,[liveFinish,session?.id]);
+  const recognition = useMemo(() => {
+    if (persistenceFailed || !session || !liveFinish || liveFinish.startedAt !== session.startedAt) return null;
+    return completionRecognition(session, liveFinish.priorWorkouts, {
+      eligible: exercise => exerciseSupportsEstimatedOneRepMax(exercise) && !/assist/i.test(exerciseName(exercise)),
+    });
+  }, [liveFinish, session, persistenceFailed]);
+  const recognitionId = recognition?.type === 'milestone' ? 'completion-recognition' : undefined;
+  const personalBests = recognition?.type === 'pr' ? recognition.byExercise : undefined;
   const headingRef = useRef(null);
   const completionScrollResetRef = useRef(false);
   const completionFeedbackSentRef = useRef(false);
@@ -9011,12 +9029,12 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       {!endedEarly ? <CompletedSessionOverview
         ref={headingRef}
         workout={session}
-        recognitionId={!persistenceFailed && recognition ? "completion-recognition" : undefined}
+        recognitionId={recognitionId}
       /> : <>
       <div className="complete-mark" aria-hidden="true">
         <span>✓</span>
       </div>
-      <h1 ref={headingRef} tabIndex={-1} aria-describedby={!persistenceFailed && recognition ? "completion-recognition" : undefined}>
+      <h1 ref={headingRef} tabIndex={-1} aria-describedby={recognitionId}>
         {summary.completed===0 ? "Workout ended" : endedEarly ? "Workout ended early" : "Workout complete"}
       </h1>
       <div className="stat-grid">
@@ -9037,16 +9055,14 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       {!endedEarly && <div className="completion-actions">
         <Button variant="secondary" onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
       </div>}
-      {!persistenceFailed && recognition && <p id="completion-recognition" className="completion-recognition">
+      {recognition?.type === 'milestone' && <p id={recognitionId} className="completion-recognition">
         <strong>{recognition.label}</strong>
-        {recognition.type==='pr' && <span>{exerciseName(recognition.exercise)} · {recognition.record.repPr || recognition.record.weightPr
-          ? `${displayWeight(recognition.record.weight,state.profile.units)} ${weightUnit(state.profile.units)} × ${recognition.record.reps}`
-          : `${displayEstimatedOneRepMax(recognition.record.estimatedOneRepMax,state.profile.units)} ${weightUnit(state.profile.units)} estimated`}</span>}
       </p>}
       {!endedEarly && <WorkoutSessionLog
         exercises={visibleExercises}
         units={state.profile.units}
         label="WORKOUT DETAILS"
+        personalBests={personalBests}
       />}
       {!persistenceFailed && session.exercises?.some(exercise => exercise.sets?.some(set => set.completed)) &&
         <button type="button" className="text-button complete-save-workout" onClick={() => setDetail({ saveWorkoutTemplate: { workoutId: session.id } })}>Save for reuse</button>}
@@ -9057,6 +9073,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
         exercises={visibleExercises}
         units={state.profile.units}
         label="SESSION LOG"
+        personalBests={personalBests}
       />}
       <section className="coach-note">
         <Eyebrow>{endedEarly ? "SAVED" : "NEXT SESSION"}</Eyebrow>
@@ -10656,6 +10673,55 @@ function WeightTrendInformation({backgroundRef}) {
   </ProfileInformation>;
 }
 
+function WeightTrendSummary({ trend, units, setDetail }) {
+  const early = weightTrendEarlyState(trend);
+  const unit = weightUnit(units);
+  const latestCheckin = trend.entries.at(-1);
+  const displayedWeight = trend.ready ? trend.latest : latestCheckin;
+  const formatWeight = entry => `${bodyWeightFromKg(entry.weightKg, unit).toFixed(1)} ${unit}`;
+  const days = trend.comparison?.days || 0;
+  const interval = days >= 27 && days <= 29 ? "4 weeks" : pluralize(days, "day");
+  const change = trend.ready
+    ? `${trend.changeKg < 0 ? "−" : trend.changeKg > 0 ? "+" : ""}${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${interval}`
+    : null;
+  return <>
+    <button type="button" className="weight-trend-title" aria-label="Open weight history"
+      onClick={() => setDetail({ weightHistory: true })}>
+      <h2>Weight trend</h2>
+      <NavigationChevron />
+    </button>
+    <div className="weight-trend-summary">
+      {displayedWeight && <span>{trend.ready ? "TREND WEIGHT" : "LATEST CHECK-IN"}</span>}
+      <strong>{displayedWeight ? formatWeight(displayedWeight) : early.title}</strong>
+      {change && <small>{change}</small>}
+      {latestCheckin ? <small>
+        {trend.ready && `Latest check-in · ${formatWeight(latestCheckin)} · `}
+        <time dateTime={latestCheckin.localDate}>{shortDisplayDate(latestCheckin.localDate)}</time>
+      </small> : <small>{early.body}</small>}
+    </div>
+  </>;
+}
+
+function WeightTrendNotices({ trend, focus }) {
+  return <>
+    {trend.stable && (
+      <p className="weight-trend-notice">
+        <strong>No clear change over the last 4 weeks.</strong> Short flat periods are normal.{" "}
+        {focus === "lose_fat" ? "ROOK won't tell you to eat less or train more from weight alone." :
+          "ROOK won't change your training plan based on weight alone."}
+      </p>
+    )}
+    {trend.rapidDownward && (
+      <p className="weight-trend-notice" role="status">
+        Your recent weight trend is changing quickly. ROOK can't tell
+        whether that rate is appropriate for you. Consider checking with a
+        qualified healthcare professional, especially if the change is
+        unplanned or you feel unwell.
+      </p>
+    )}
+  </>;
+}
+
 function GoalProgress({
   state,
   progressionRows,
@@ -10667,19 +10733,16 @@ function GoalProgress({
   const sectionLabel = state.progressFocusOverrideByPlanId?.[state.program?.id] ? 'PROGRESS FOCUS' : 'GOAL PROGRESS';
   const progression = progressionSummary(progressionRows);
   const hasComparableData = progressionRows.length >= 2;
-  const trend = weightTrend(state.weightCheckins);
-  const earlyTrend = weightTrendEarlyState(trend);
-  const unit = weightUnit(state.profile.units);
-  const formatTrendWeight = (value) =>
-    `${bodyWeightFromKg(value, unit).toFixed(1)} ${unit}`;
-  const trendDays = trend.comparison?.days || 0;
-  const trendInterval =
-    trendDays >= 27 && trendDays <= 29
-      ? "4 weeks"
-      : `${trendDays} ${trendDays === 1 ? "day" : "days"}`;
-  const trendChange = trend.ready
-    ? `${trend.changeKg < 0 ? "−" : trend.changeKg > 0 ? "+" : ""}${Math.abs(bodyWeightFromKg(trend.changeKg, unit)).toFixed(1)} ${unit} over ${trendInterval}`
-    : null;
+  const tracking = Boolean(state.weightTrackingEnabled);
+  const trend = tracking ? weightTrend(state.weightCheckins) : null;
+  const weightSummary = tracking && <WeightTrendSummary trend={trend} units={state.profile.units} setDetail={setDetail} />;
+  const weightNotices = tracking && <WeightTrendNotices trend={trend} focus={focus} />;
+  const optionalWeight = tracking && <div className="goal-progress-weight">{weightSummary}{weightNotices}</div>;
+  const addWeightCheckins = (
+    <button type="button" className="goal-progress-action" onClick={() => setDetail({ weightOptIn: true })}>
+      ADD WEIGHT CHECK-INS
+    </button>
+  );
   const trainingProgress = hasComparableData
     ? progression.label
     : "More comparable workouts are needed";
@@ -10699,6 +10762,7 @@ function GoalProgress({
           >
             CHOOSE FOCUS
           </button>
+          {optionalWeight}
         </div>
       </section>
     );
@@ -10753,10 +10817,11 @@ function GoalProgress({
             <strong>{content.value}</strong>
             {content.breakdown && <small className="goal-progress-breakdown">{content.breakdown}</small>}
           </div>
+          {optionalWeight}
+          {!tracking && focus === "build_muscle" && !profileIsUnder18(state.profile) && addWeightCheckins}
         </div>
       </section>
     );
-  const tracking = Boolean(state.weightTrackingEnabled);
   return (
     <section className="goal-progress-section">
       <div className="statistics-heading"><Eyebrow>{sectionLabel}</Eyebrow>
@@ -10765,60 +10830,14 @@ function GoalProgress({
         </ProfileInformation>}
       </div>
       <div className="goal-progress-card">
-        {tracking ? (
-          <button
-            type="button"
-            className="weight-trend-title"
-            aria-label="Open weight history"
-            onClick={() => setDetail({ weightHistory: true })}
-          >
-            <h2>Weight trend</h2>
-            <NavigationChevron/>
-          </button>
-        ) : (
-          <h2>Fat-loss support</h2>
-        )}
-        {tracking ? (
-          <div className="weight-trend-summary">
-            {trend.ready && <span>TREND WEIGHT</span>}
-            <strong>
-              {trend.ready
-                ? formatTrendWeight(trend.latest.weightKg)
-                : earlyTrend.title}
-            </strong>
-            {trendChange && <small>{trendChange}</small>}
-            {!trend.ready && <small>{earlyTrend.body}</small>}
-          </div>
-        ) : null}
+        {tracking ? weightSummary : <h2>Fat-loss support</h2>}
         <div className="goal-progress-metric">
           <span>STRENGTH WHILE LOSING</span>
           <strong>{trainingProgress}</strong>
           {hasComparableData && progression.breakdown && <small className="goal-progress-breakdown">{progression.breakdown}</small>}
         </div>
-        {trend.stable && (
-          <p className="weight-trend-notice">
-            <strong>No clear change over the last 4 weeks.</strong> Short flat
-            periods are normal. ROOK won't tell you to eat less or train more
-            from weight alone.
-          </p>
-        )}
-        {trend.rapidDownward && (
-          <p className="weight-trend-notice" role="status">
-            Your recent weight trend is changing quickly. ROOK can't tell
-            whether that rate is appropriate for you. Consider checking with a
-            qualified healthcare professional, especially if the change is
-            unplanned or you feel unwell.
-          </p>
-        )}
-        {!tracking && (
-          <button
-            type="button"
-            className="goal-progress-action"
-            onClick={() => setDetail({ weightOptIn: true })}
-          >
-            ADD WEIGHT CHECK-INS
-          </button>
-        )}
+        {weightNotices}
+        {!tracking && addWeightCheckins}
         <p className="goal-progress-footnote">
           {tracking ? "Weight trend, not body fat." : "Training progress, not body fat."}
         </p>
@@ -10874,7 +10893,7 @@ function WeightOptInSheet({ update, setDetail, close }) {
       <Eyebrow>OPTIONAL · PRIVATE</Eyebrow>
       <h1>Weight check-ins</h1>
       <p>
-        Weight check-ins are optional and stay on this device. They show
+        Weight check-ins are optional. They're saved on this device and included in account sync when enabled. They show
         body-weight change, not body fat. If you have an eating-disorder
         history, are pregnant, or weight tracking feels compulsive or
         distressing, use training progress instead.
@@ -11025,7 +11044,7 @@ function WeightEditor({ state, update, request, setDetail }) {
   );
 }
 
-function WeightHistory({ state, setDetail, close, saved }) {
+function WeightHistory({ state, update, setDetail, close, saved }) {
   const screenRef = useRef(null);
   const trend = weightTrend(state.weightCheckins);
   const earlyTrend = weightTrendEarlyState(trend);
@@ -11105,6 +11124,12 @@ function WeightHistory({ state, setDetail, close, saved }) {
             </button>
           ))}
       </section>}
+      {state.weightTrackingEnabled && <div className="weight-history-turn-off">
+        <Button variant="quiet" onClick={() => {
+          update(current => ({ ...current, weightTrackingEnabled: false }));
+          close();
+        }}>TURN OFF CHECK-INS</Button>
+      </div>}
     </main>
   );
 }
@@ -11844,6 +11869,13 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
           <ExerciseNavigationButton className="list-row" onClick={()=>setDetail('profile-details')}><span><strong>Personal details</strong><small>{personal.length ? personal.map(([,value])=>value).join(' · ') : 'Add name, age or sex'}</small></span><NavigationChevron/></ExerciseNavigationButton>
+          {(state.weightTrackingEnabled || !profileIsUnder18(p)) && (
+            <ExerciseNavigationButton className="list-row"
+              onClick={() => setDetail(state.weightTrackingEnabled ? { weightHistory: true } : { weightOptIn: true })}>
+              <span><strong>Weight check-ins</strong><small>{state.weightTrackingEnabled ? "On" : "Off · Optional"}</small></span>
+              <NavigationChevron />
+            </ExerciseNavigationButton>
+          )}
         </section>
       )}
       {!area && personalIncomplete && (
@@ -18944,6 +18976,7 @@ export function Detail({
     return (
       <WeightHistory
         state={state}
+        update={update}
         setDetail={setDetail}
         close={close}
         saved={detail.saved}
@@ -20764,6 +20797,7 @@ function HydratedApp({startup,placements}) {
           signInWithGoogle={accountSync.signInFirstRunWithGoogle} providerReady={['recovery-available', 'signed-in-new-account'].includes(accountSync.state)}
           signInWithProvider={accountSync.signInFirstRunWithProvider} providers={accountSync.providers} providerName={accountSync.providerName}
           signInWithEmail={accountSync.signInFirstRunWithEmail} resetPasswordWithEmail={accountSync.resetPasswordWithEmail}
+          getPasswordRequirements={accountSync.getRegistrationPasswordRequirements}
           signedIn={accountSync.state === 'signed-in-new-account'} email={accountSync.email} accountStatus={accountSync.state}
           onSignedIn={result => { if (result?.status === 'new-account') setEntryMode(null); else if (result?.status === 'restored') { setEntryMode(null); setPage('today'); } }}/>
         if (route === 'bring') return <BringPlanLanding back={() => back('bring')} importPlan={() => open('import', 'bring')} startFromScratch={() => open('scratch', 'bring')}/>;

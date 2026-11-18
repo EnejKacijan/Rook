@@ -1,12 +1,13 @@
 import {adaptedTemplateForToday,baseWeekSchedule,calendarDate,isoDay,weekday,weekKey} from './domain.js';
 import {todayWorkoutFingerprint} from './adjustToday.js';
 import {combinedAdjustment} from './combinedWorkoutLifecycle.js';
-import {flexiblePlanFingerprint,flexibleReviewFingerprint,flexibleSessionStatus,flexibleSessions,addCalendarDays,linkedScheduleChanges} from './flexibleWeek.js';
+import {flexiblePlanFingerprint,flexibleReviewFingerprint,flexibleSessionStatus,flexibleSessions,addCalendarDays,linkedScheduleChanges,temporaryScheduleIssue,createFlexibleWeekPlanner,proposeFlexibleWeek,applyFlexibleWeek} from './flexibleWeek.js';
 import {scheduleTransactionId} from './scheduleTransactions.js';
 import {templateUseIssues} from './savedWorkouts.js';
 import {recoveredWorkoutDraft,recoveredWorkoutForDate} from './recoveredWorkout.js';
 
 const fingerprint=state=>JSON.stringify([state.profile,state.gymProfiles,state.defaultGymProfileId,state.optionalSessions,flexibleReviewFingerprint(state)]);
+export const scheduleRecoveryIsCurrent=(state,review)=>Boolean(review && review.today===isoDay() && review.fingerprint===fingerprint(state));
 const protectedStatuses=['completed','active','reserved','combined'];
 const dateAtNoon=date=>new Date(`${date}T12:00:00`);
 const ownsAdjustment=(record,adjustment)=>adjustment?.date===record.scheduledDate&&adjustment.programDayId===record.workoutId;
@@ -16,20 +17,18 @@ function editable(state,id){
   if(!record||id!==`${record.workoutId}:${record.originalDate}`)throw Error('This schedule change is no longer available.');
   if(state.activeWorkout||state.activeOptionalSession||combinedAdjustment(state)||state.todayAdaptation?.mode==='repeat')throw Error('Finish or cancel the current workout before updating the schedule.');
   if(protectedStatuses.includes(flexibleSessionStatus(state,record)))throw Error('This workout has already started or finished. Its schedule stays protected.');
-  if(record.planFingerprint===flexiblePlanFingerprint(state)&&state.program?.days.some(day=>day.id===record.workoutId)&&
-    !state.workoutOccurrenceOverrides?.[record.scheduledDate]?.[record.workoutId]?.skipWorkout)throw Error('This schedule change is already up to date.');
+  if(!temporaryScheduleIssue(state,record))throw Error('This schedule change is already up to date.');
   if(record.skipped&&(record.scheduledDate<isoDay()||state.program?.trainingBlock?.resolvedSkips?.some(skip=>skip.logicalSessionId===id)))throw Error('This skip belongs to the recorded schedule and can’t be changed here.');
   return record;
 }
 function moveGroup(state,id){
-  const group=linkedScheduleChanges(state,id);
-  if(group.some(record=>protectedStatuses.includes(flexibleSessionStatus(state,record))))throw Error('A linked workout has already started or finished. Its schedule stays protected.');
-  return group;
+  return linkedScheduleChanges(state,id).filter(record=>!protectedStatuses.includes(flexibleSessionStatus(state,record)));
 }
 function projectKeptDates(state,group,choice,today=isoDay()){
   const block=state.program?.trainingBlock,plan=flexiblePlanFingerprint(state);
   const adjustment=adjustmentFor(state,group);
   const next={...state, flexibleWeek:{...state.flexibleWeek,sessions:{...state.flexibleWeek.sessions}},
+    workoutOccurrenceOverrides:{...state.workoutOccurrenceOverrides},
     todayAdaptation:choice==='plan' && adjustment ? null : state.todayAdaptation};
   for(const record of group){
     const day=state.program?.days?.find(day=>day.id===record.workoutId);
@@ -40,7 +39,16 @@ function projectKeptDates(state,group,choice,today=isoDay()){
     const originalWeek=baseWeekSchedule(state,record.originalDate,{includeDuration:false});
     if(!originalWeek.some(item=>item.workoutId===record.workoutId&&item.originalDate===record.originalDate)&&
       originalWeek.some(item=>item.workoutId===record.workoutId))throw Error('The current plan puts this workout on a different original date.');
-    next.flexibleWeek.sessions[record.id]={...record,planFingerprint:plan};
+    next.flexibleWeek.sessions[record.id]={...record,programId:state.program.id,planFingerprint:plan};
+    const override=next.workoutOccurrenceOverrides[record.scheduledDate]?.[record.workoutId];
+    if(override?.skipWorkout){
+      next.workoutOccurrenceOverrides[record.scheduledDate]={...next.workoutOccurrenceOverrides[record.scheduledDate],
+        [record.workoutId]:{...override,skipWorkout:false}};
+    }
+  }
+  for(const record of group){
+    const issue=temporaryScheduleIssue(next,next.flexibleWeek.sessions[record.id]);
+    if(issue)throw Error(issue);
   }
   const all=flexibleSessions(next,today,{includeDuration:false});
   const workouts=Object.fromEntries(group.map(record=>{
@@ -87,6 +95,15 @@ function projectOneOff(state,record){
 }
 const detachedFor=record=>ownsAdjustment(record,record.detachedAdjustment)?record.detachedAdjustment:null;
 
+function recoveryMoveSource(state,record) {
+  const original=removeMoves(state,[record]);
+  // Stage this exact occurrence at its source so the normal Move validator can
+  // choose a new date while retaining its pinned training-block week.
+  original.flexibleWeek.sessions[record.id]={...record,scheduledDate:record.originalDate,
+    programId:state.program?.id,planFingerprint:flexiblePlanFingerprint(state)};
+  return original;
+}
+
 // Edit Plan can safely keep a move when the identity, schedule rule and
 // prescription it was made against have not changed. Never revive stale links.
 export function preserveMovesAfterPlanEdit(before,after,today=isoDay()){
@@ -126,18 +143,32 @@ export function reviewScheduleRecovery(state,id){
   const removed=removeMoves(state,group);
   const afterRemoval=flexibleSessions(removed,isoDay(),{includeDuration:false}).filter(item=>item.status!=='skipped'&&group.some(record=>
     item.workoutId===record.workoutId&&weekKey(item.originalDate)===weekKey(record.originalDate))).map(item=>({date:item.scheduledDate,name:item.workout.workoutName||item.workout.name,status:item.status}));
+  const occurrence=state.workoutOccurrenceOverrides?.[record.scheduledDate]?.[record.workoutId];
+  const canMove=group.length===1 && !record.skipped && !adjustment && !detached &&
+    !Object.keys(occurrence||{}).some(key=>key!=='skipWorkout');
+  const moves=canMove ? createFlexibleWeekPlanner(recoveryMoveSource(state,record)) : null;
+  const moveDates=canMove ? Array.from({length:14},(_,index)=>addCalendarDays(isoDay(),index))
+    .filter(date=>date!==record.scheduledDate && moves.check({mode:'move',sessionId:record.id,toDate:date}).status==='ready') : [];
   return {id,today:isoDay(),fingerprint:fingerprint(state),record:structuredClone(record),groupCount:group.length,
     workout:planned.workout,reason:planned.reason,adjustment:detached?{snapshot:detached.workout}:adjustment?{snapshot:adjustment.workout,...adjusted}:null,oneOff,oneOffReason,
-    discardsChanges:Boolean(adjustment||group.some(item=>detachedFor(item)||state.workoutOccurrenceOverrides?.[item.scheduledDate]?.[item.workoutId])),afterRemoval};
+    discardsChanges:Boolean(adjustment||group.some(item=>detachedFor(item)||state.workoutOccurrenceOverrides?.[item.scheduledDate]?.[item.workoutId])),afterRemoval,moveDates};
 }
-export function applyScheduleRecovery(state,review,mode){
-  if(!review||review.today!==isoDay()||review.fingerprint!==fingerprint(state))throw Error('The plan or sessions changed. Review this move again.');
+export function applyScheduleRecovery(state,review,mode,{toDate}={}){
+  if(!scheduleRecoveryIsCurrent(state,review))throw Error('The plan or sessions changed. Review this move again.');
   const record=editable(state,review.id);
   const group=moveGroup(state,review.id);
   let next;
   if(mode==='keep'||mode==='keep-adjustment'){
     if(mode==='keep-adjustment'&&!adjustmentFor(state,group))throw Error('The one-off adjustment changed. Review the move again.');
     next=projectKeptDates(state,group,mode==='keep'?'plan':'adjustment').state;
+  }
+  else if(mode==='move'){
+    if(!review.moveDates?.includes(toDate))throw Error('Choose an available date for this workout.');
+    const original=recoveryMoveSource(state,record);
+    const proposal=proposeFlexibleWeek(original,{mode:'move',sessionId:record.id,toDate});
+    const result=applyFlexibleWeek(original,proposal);
+    if(result.status!=='applied')throw Error(result.error||'This date is no longer available.');
+    next=result.state;
   }
   else if(mode==='remove'||mode==='one-off'){
     next=mode==='one-off'?projectOneOff(state,record):removeMoves(state,group);

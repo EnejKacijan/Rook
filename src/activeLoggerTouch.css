@@ -97,7 +97,8 @@
  outline-color:var(--rook-workout-action-accent);
 }
 .workout-screen .sets .set-load-context { min-height:var(--logger-height); background:transparent; border:0; font-family:inherit; font-size:1rem !important; line-height:1.2; letter-spacing:-.015em; }
-.workout-screen .sets :is(button,input):focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent)); outline-offset:-3px; }
+.workout-screen .sets :is(button,input):focus-visible { outline:2px solid var(--rook-focus-ring,var(--rook-accent)); }
+.workout-screen .sets button:focus-visible { outline-offset:-3px; }
 .workout-screen .sets input[aria-invalid="true"] { box-shadow:inset 0 -2px var(--rook-error-text,var(--rook-accent)); }
 .workout-screen .sets .set-load-heading { position:relative; }
 .workout-screen .sets .set-load-heading .plate-calculator-entry { position:absolute; right:0; margin:0; }

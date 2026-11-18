@@ -50,8 +50,8 @@ it('Today -> Review -> Restore -> Today saves one real resolution and immediatel
   mount(scheduleRecoveryState({ future: true })); const before = structuredClone(current);
   expect(host.querySelector('.schedule-attention-open').textContent).toContain('Review schedule');reviewSchedule();
   expect(sheet().querySelector('h1').textContent).toBe('Current changes');
-  expect(button('EDIT SCHEDULE')).toBeUndefined();
-  expect(sheet().textContent).toContain('Restore the eligible temporary changes');
+  expect(button('EDIT SCHEDULE')).toBeDefined();
+  expect(sheet().textContent).toContain('Choose a free date or remove the old move.');
   expect(button('RESTORE ORIGINAL SCHEDULE').disabled).toBe(false); click('RESTORE ORIGINAL SCHEDULE');
   expect(sheet().querySelector('h1').textContent).toBe('Restore original schedule?');
   const apply = button('RESTORE 1 CHANGE'); act(() => { apply.click(); apply.click(); });
@@ -93,4 +93,18 @@ it('an empty live review does not invent a past change or an unresolved warning'
   expect(sheet().textContent).toContain('No current changes');expect(sheet().querySelector('.flexible-schedule-history')).toBeNull();
   expect(sheet().textContent).not.toContain('These past changes');
   expect(host.querySelector('.temporary-schedule-summary')).toBeNull();
+});
+it('returns from a changed open recovery to the current available actions',()=>{
+  mount(scheduleRecoveryState({future:true}));
+  reviewSchedule();click('Review this move');
+  act(()=>change(state=>{state.profile.units='lb';return state;}));
+  expect(button('REMOVE TEMPORARY MOVE')).toBeUndefined();
+  expect(button('OPEN CURRENT SCHEDULE')).toBeDefined();
+  click('OPEN CURRENT SCHEDULE');
+  expect(button('Review this move')).toBeDefined();
+  click('Review this move');
+  click('REMOVE TEMPORARY MOVE');click('REMOVE TEMPORARY MOVE');
+  expect(sheet()).toBeNull();
+  expect(temporaryScheduleReview(current).unresolved).toEqual([]);
+  expect(publishes).toHaveBeenCalledOnce();
 });

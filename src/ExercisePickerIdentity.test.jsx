@@ -8,9 +8,17 @@ let root,host;
 afterEach(()=>{act(()=>root?.unmount());host?.remove();root=null;host=null;});
 function render(item,enabled=true){if(!root){host=document.createElement('div');document.body.append(host);root=createRoot(host);}act(()=>root.render(<button><ExercisePickerIdentity item={item} enabled={enabled}/></button>));}
 it('loads visible canonical art eagerly with reserved dimensions and survives image failure',()=>{
- const item=Object.values(exerciseCatalog).find(i=>i.artId);render(item);const image=host.querySelector('img'),slot=host.querySelector('.exercise-picker-thumbnail');
+ const item=exerciseCatalog['barbell-bench-press'];render(item);const image=host.querySelector('img'),slot=host.querySelector('.exercise-picker-thumbnail');
  expect(image.getAttribute('loading')).toBe('eager');expect(image.width).toBe(44);expect(image.height).toBe(44);expect(image.alt).toBe('');
- act(()=>image.dispatchEvent(new Event('error')));expect(host.querySelector('img')).toBeNull();expect(host.querySelector('.exercise-picker-thumbnail')).toBe(slot);expect(host.textContent).toContain(item.name);
+ expect(slot.querySelector('.exercise-picker-placeholder')).not.toBeNull();
+ act(()=>image.dispatchEvent(new Event('load')));
+ expect(slot.querySelector('.exercise-picker-placeholder')).toBeNull();
+
+ const next=exerciseCatalog['leg-press'];render(next);
+ expect(slot.querySelector('.exercise-picker-placeholder')).not.toBeNull();
+ act(()=>slot.querySelector('img').dispatchEvent(new Event('error')));
+ expect(host.querySelector('img')).toBeNull();expect(host.querySelector('.exercise-picker-thumbnail')).toBe(slot);
+ expect(slot.querySelector('.exercise-picker-placeholder')).not.toBeNull();expect(host.textContent).toContain(next.name);
 });
 it('never assigns nearest-name art to custom/imported unresolved candidates',()=>{
  root=null;render({id:'custom-x',name:'Barbell Bench Press',custom:true});expect(host.querySelector('img')).toBeNull();

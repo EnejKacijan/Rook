@@ -38,58 +38,42 @@ function chronologicalWorkouts(workouts = []) {
 }
 
 function completedWeightedSets(exercise) {
-  return (exercise?.sets || [])
-    .filter(
-      (set) =>
-        set.completed &&
-        finitePositive(set.weight) &&
-        prComparableSet(exercise, set) &&
-        Number.isInteger(Number(effectiveSetReps(exercise, set))) &&
-        Number(effectiveSetReps(exercise, set)) > 0,
-    )
-    .map((set) => ({
-      ...set,
-      weight: Number(set.weight),
-      reps: Number(effectiveSetReps(exercise, set)),
-    }));
+  return (exercise?.sets || []).flatMap((set, setIndex) => {
+    if (!set.completed || !finitePositive(set.weight) || !prComparableSet(exercise, set)) return [];
+    const reps = Number(effectiveSetReps(exercise, set));
+    return Number.isInteger(reps) && reps > 0
+      ? [{ ...set, setIndex, weight: Number(set.weight), reps }]
+      : [];
+  });
 }
 
-export function analyzeSetPr(set, priorSets = [], { e1rmEligible = true } = {}) {
-  if (
-    !set?.completed ||
-    !finitePositive(set.weight) ||
-    !Number.isInteger(Number(set.reps)) ||
-    Number(set.reps) <= 0
-  )
-    return null;
-  const weight = Number(set.weight);
-  const reps = Number(set.reps);
-  const prior = priorSets.filter(
-    (item) =>
-      item?.completed !== false &&
-      finitePositive(item.weight) &&
-      Number.isInteger(Number(item.reps)) &&
-      Number(item.reps) > 0,
-  );
+function setBests(sets, e1rmEligible) {
+  let heaviest = null, bestEstimate = null;
+  const repsAtWeight = new Map();
+  for (const set of sets) {
+    const weight = Number(set.weight), reps = Number(set.reps);
+    if (!heaviest || weight > heaviest.weight || (weight === heaviest.weight && reps > heaviest.reps))
+      heaviest = { weight, reps };
+    repsAtWeight.set(weight, Math.max(repsAtWeight.get(weight) ?? 0, reps));
+    if (e1rmEligible) {
+      const estimate = estimatedOneRepMax(weight, reps);
+      if (estimate !== null && (bestEstimate === null || estimate > bestEstimate)) bestEstimate = estimate;
+    }
+  }
+  return { heaviest, repsAtWeight, bestEstimate };
+}
+
+function compareSetPr(weight, reps, prior, e1rmEligible) {
   // A first exposure establishes a baseline; it is not presented as a PR.
-  if (!prior.length) return null;
-  const bestWeight = Math.max(...prior.map((item) => Number(item.weight)));
-  const sameLoad = prior.filter((item) => Number(item.weight) === weight);
-  const weightPr = weight > bestWeight;
-  const repPr =
-    !weightPr &&
-    sameLoad.length > 0 &&
-    reps > Math.max(...sameLoad.map((item) => Number(item.reps)));
+  if (!prior.heaviest) return null;
+  const weightPr = weight > prior.heaviest.weight;
+  const previousReps = prior.repsAtWeight.get(weight);
+  const repPr = previousReps !== undefined && reps > previousReps;
   const e1rm = e1rmEligible ? estimatedOneRepMax(weight, reps) : null;
-  const priorE1rms = e1rmEligible
-    ? prior
-        .map((item) => estimatedOneRepMax(item.weight, item.reps))
-        .filter((value) => value !== null)
-    : [];
   const e1rmPr =
     e1rm !== null &&
-    priorE1rms.length > 0 &&
-    e1rm > Math.max(...priorE1rms) + 0.01;
+    prior.bestEstimate !== null &&
+    e1rm > prior.bestEstimate + 0.01;
   if (!weightPr && !repPr && !e1rmPr) return null;
   return {
     weight,
@@ -100,6 +84,90 @@ export function analyzeSetPr(set, priorSets = [], { e1rmEligible = true } = {}) 
     e1rmPr,
     label: e1rmPr ? "Est. 1RM PR" : weightPr ? "WEIGHT PR" : "REP PR",
   };
+}
+
+export function analyzeSetPr(set, priorSets = [], { e1rmEligible = true } = {}) {
+  if (
+    !set?.completed ||
+    !finitePositive(set.weight) ||
+    !Number.isInteger(Number(set.reps)) ||
+    Number(set.reps) <= 0
+  )
+    return null;
+  const prior = priorSets.filter(
+    (item) =>
+      item?.completed !== false &&
+      finitePositive(item.weight) &&
+      Number.isInteger(Number(item.reps)) &&
+      Number(item.reps) > 0,
+  );
+  return compareSetPr(Number(set.weight), Number(set.reps), setBests(prior, e1rmEligible), e1rmEligible);
+}
+
+function improvementsBySet(sets, prior) {
+  let heaviest = null, bestEstimate = null;
+  const repBests = new Map();
+  for (const set of sets) {
+    const result = compareSetPr(set.weight, set.reps, prior, true);
+    if (!result) continue;
+    const record = { ...result, exercise: set.exercise, setIndex: set.setIndex };
+    if (record.weightPr && (!heaviest || record.weight > heaviest.weight ||
+        (record.weight === heaviest.weight && record.reps > heaviest.reps))) heaviest = record;
+    if (record.repPr && record.reps > (repBests.get(record.weight)?.reps ?? 0))
+      repBests.set(record.weight, record);
+    if (record.e1rmPr && (!bestEstimate || record.estimatedOneRepMax > bestEstimate.estimatedOneRepMax))
+      bestEstimate = record;
+  }
+
+  // Category winners share the same record only when they came from the same set.
+  const rows = new Map();
+  const rowFor = record => {
+    if (!rows.has(record)) {
+      const { weight, reps, exercise, setIndex } = record;
+      rows.set(record, { weight, reps, exercise, setIndex });
+    }
+    return rows.get(record);
+  };
+  if (heaviest) rowFor(heaviest).previousHeaviest = prior.heaviest;
+  for (const record of repBests.values())
+    rowFor(record).previousReps = prior.repsAtWeight.get(record.weight);
+  if (bestEstimate) rowFor(bestEstimate).estimate = {
+    current: bestEstimate.estimatedOneRepMax,
+    previous: prior.bestEstimate,
+  };
+  return [...rows.values()];
+}
+
+export function workoutPersonalBests(workout, history, eligible) {
+  const exercises = new Map();
+  for (const exercise of workout.exercises || []) {
+    if (!exercise.exerciseId || !eligible(exercise)) continue;
+    const sets = completedWeightedSets(exercise);
+    if (!sets.length) continue;
+    if (!exercises.has(exercise.exerciseId))
+      exercises.set(exercise.exerciseId, { sets: [], prior: [] });
+    exercises.get(exercise.exerciseId).sets.push(...sets.map(set => ({ ...set, exercise })));
+  }
+  const byExercise = new Map();
+  if (!exercises.size) return byExercise;
+
+  for (const previous of history) {
+    for (const exercise of previous.exercises || []) {
+      const entry = exercises.get(exercise.exerciseId);
+      if (!entry || !eligible(exercise)) continue;
+      entry.prior.push(...completedWeightedSets(exercise));
+    }
+  }
+  for (const { sets, prior } of exercises.values()) {
+    if (!prior.length) continue;
+    // An exercise can appear in multiple log rows. Attribute each best to the
+    // entry that contains the winning set, even when names are identical.
+    for (const { exercise, ...best } of improvementsBySet(sets, setBests(prior, true))) {
+      if (!byExercise.has(exercise)) byExercise.set(exercise, []);
+      byExercise.get(exercise).push(best);
+    }
+  }
+  return byExercise;
 }
 
 export function exercisePerformance(
