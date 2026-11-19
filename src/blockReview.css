@@ -44,6 +44,7 @@
 .block-review-outcomes-row { margin-top: 24px; }
 .block-review-outcomes-row small { color: var(--rook-secondary) !important; font-size: .8125rem !important; line-height: 1.35; }
 .block-review-sheet .review-details { margin-top: 4px; }
+.block-review-outcomes-row + .review-details { border-top: 0; margin-top: 0; }
 
 /* The decision is its own surface, after the story. */
 .block-review-next { margin-top: 32px; padding: 22px 20px 20px; border-radius: 22px; border: 1px solid var(--rook-border); background: var(--rook-surface); }

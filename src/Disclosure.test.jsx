@@ -30,7 +30,7 @@ it('reduced motion switches directly to the compact target without hiding its ac
 it('reveals options above a fixed footer without changing focus',()=>{
   host.style.overflowY='auto';host.scrollBy=vi.fn();
   const panel=document.createElement('div'),footer=document.createElement('div');footer.className='sheet-action-footer';host.append(panel,footer);
-  host.getBoundingClientRect=()=>({top:80,bottom:760});footer.getBoundingClientRect=()=>({top:650});panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});
+  host.getBoundingClientRect=()=>({top:80,bottom:760});footer.getBoundingClientRect=()=>({top:650,bottom:760,height:110});panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});
   revealDisclosure(panel);expect(host.scrollBy).toHaveBeenCalledWith({top:102,behavior:'smooth'});
   host.scrollBy.mockClear();panel.getBoundingClientRect=()=>({top:200,bottom:400,height:200});revealDisclosure(panel);expect(host.scrollBy).not.toHaveBeenCalled();
   vi.stubGlobal('matchMedia',()=>({matches:true}));panel.getBoundingClientRect=()=>({top:540,bottom:740,height:200});revealDisclosure(panel);expect(host.scrollBy).toHaveBeenCalledWith({top:102,behavior:'auto'});
