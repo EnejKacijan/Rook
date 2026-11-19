@@ -76,7 +76,7 @@ describe('rest for the whole deload week',()=>{
     expect(next.program.trainingBlock.resolvedSkips).toHaveLength(3);expect(next.completedTrainingBlocks).toHaveLength(1);
     expect(currentWeekSchedule(next)).toEqual([]);expect(missedFlexibleSessions(next)).toEqual([]);
     expect(trainingRestForDate(next,'2026-11-22')).toMatchObject({mode:'rest',restFrom:'2026-11-16',restThrough:'2026-11-22'});
-    expect(trainingRestForDate(next,'2026-11-23')).toBeNull();expect(reviewTrainingBlock(next)).toMatchObject({completedSessions:0,skipped:3,loggedSets:0});
+    expect(trainingRestForDate(next,'2026-11-23')).toBeNull();expect(reviewTrainingBlock(next)).toMatchObject({completedSessions:0,skipped:0,plannedRestSessions:3,plannedRest:{weekNumber:6},loggedSets:0});
     expect(weeklyPerformanceReview(next,new Date())).toMatchObject({completed:0,completedSets:0,exercisesProgressed:0});
     expect(()=>startWorkout(next,next.program.days[0])).toThrow('planned rest week');
   });
@@ -84,7 +84,7 @@ describe('rest for the whole deload week',()=>{
     let state=finish(deloadFixture(),'2026-11-16');const history=structuredClone(state.workouts);
     vi.setSystemTime(new Date('2026-11-18T12:00:00'));state=choose(state,'rest');
     expect(state.workouts).toEqual(history);expect(state.program.trainingBlock.resolvedSkips).toHaveLength(2);
-    expect(reviewTrainingBlock(state)).toMatchObject({completedSessions:1,skipped:2});
+    expect(reviewTrainingBlock(state)).toMatchObject({completedSessions:1,skipped:0,plannedRestSessions:2});
     expect(state.program.trainingBlock.deloadChoices[6]).toMatchObject({restFrom:'2026-11-18',restThrough:'2026-11-24'});
   });
   it('cancels a moved deload occurrence beyond the rest window and leaves no review dead end',()=>{

@@ -8,6 +8,7 @@ import {ProfileHelp} from './ProfileHelp.jsx';
 import {ProfileInformation} from './ProfileInformation.jsx';
 import { physiqueReviewFailureCopy, physiqueReviewUnavailableError } from './physiqueReviewFailure.js';
 import {CompletedSessionOverview} from './CompletedSessionOverview.jsx';
+import {CompletionRecords} from './CompletionRecords.jsx';
 import {PersonalBestTrophy, PersonalBestGain} from './WorkoutPersonalBestDetails.jsx';
 import {ExercisePrSheet} from './ExercisePrSheet.jsx';
 import { SettingSwitch } from './SettingSwitch.jsx';
@@ -8996,6 +8997,10 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   }, [liveFinish, session, persistenceFailed]);
   const recognitionId = recognition?.type === 'milestone' ? 'completion-recognition' : undefined;
   const personalBests = recognition?.type === 'pr' ? recognition.byExercise : undefined;
+  const currentBlock = state.program?.trainingBlock;
+  // Only the session that closed the block points to its review.
+  const finishedBlock = !persistenceFailed && currentBlock?.completed && session?.trainingBlock?.blockId === currentBlock.id &&
+    !session.optionalSessionId && liveFinish?.startedAt === session.startedAt ? currentBlock : null;
   const headingRef = useRef(null);
   const completionScrollResetRef = useRef(false);
   const completionFeedbackSentRef = useRef(false);
@@ -9070,12 +9075,20 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
         </div>
       </div>
       </>}
-      {!endedEarly && <div className="completion-actions">
-        <Button variant="secondary" onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
-      </div>}
+      {isDeloadWorkout(session) && <p className="completion-deload-note">Deload session. Lighter targets by design, kept apart from progress and records.</p>}
+      <CompletionRecords personalBests={personalBests} units={state.profile.units} />
       {recognition?.type === 'milestone' && <p id={recognitionId} className="completion-recognition">
         <strong>{recognition.label}</strong>
       </p>}
+      {finishedBlock && <section className="completion-block-card" aria-label="Training block complete">
+        <Eyebrow>BLOCK COMPLETE</Eyebrow>
+        <strong>{finishedBlock.name}</strong>
+        <p>{finishedBlock.totalWeeks} weeks done. See what changed before choosing your next block.</p>
+        <button type="button" className="text-button" onClick={() => setDetail('block-review')}>REVIEW BLOCK</button>
+      </section>}
+      {!endedEarly && <div className="completion-actions">
+        <Button variant="secondary" onClick={() => setDetail({ completedWorkout: session.id })}>VIEW WORKOUT DETAILS</Button>
+      </div>}
       {!endedEarly && <WorkoutSessionLog
         exercises={visibleExercises}
         units={state.profile.units}

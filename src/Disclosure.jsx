@@ -50,11 +50,24 @@ export function revealDisclosure(node) {
   const pageScroll=!scroller;
   scroller ||= document.scrollingElement;
   if(!scroller)return;
-  const viewport=pageScroll?{top:0,bottom:window.innerHeight}:scroller.getBoundingClientRect(),bounds=node.getBoundingClientRect();
-  const footer=scroller.querySelector('.sheet-action-footer');
-  const bottom=Math.min(viewport.bottom,window.visualViewport?.height || window.innerHeight,footer?.getBoundingClientRect().top ?? Infinity)-12;
-  const header=scroller.querySelector('.detail-header');
-  const top=Math.max(viewport.top,0,header?.getBoundingClientRect().bottom ?? 0)+12;
+  const visibleTop=window.visualViewport?.offsetTop||0;
+  const visibleBottom=visibleTop+(window.visualViewport?.height||window.innerHeight);
+  const viewport=pageScroll?{top:visibleTop,bottom:visibleBottom}:scroller.getBoundingClientRect(),body=node.getBoundingClientRect();
+  const details=node.parentElement?.matches('details')?node.parentElement:null;
+  const summary=details?.querySelector(':scope > summary')?.getBoundingClientRect();
+  const bounds={top:summary?.top??body.top,bottom:body.bottom,height:body.bottom-(summary?.top??body.top)};
+  const footer=scroller.querySelector('.sheet-action-footer:not([hidden])');
+  const footerBounds=footer?.getBoundingClientRect();
+  const footerTop=footerBounds&&footerBounds.bottom>Math.max(viewport.top,visibleTop)&&footerBounds.top<Math.min(viewport.bottom,visibleBottom)?footerBounds.top:Infinity;
+  const bottom=Math.min(viewport.bottom,visibleBottom,footerTop)-12;
+  const header=scroller.querySelector('.detail-header, .sheet-header-chrome');
+  const top=Math.max(viewport.top,visibleTop,header?.getBoundingClientRect().bottom ?? 0)+12;
+  if(bottom<=top||body.height<=0)return;
+  // Short disclosures reveal all their content. Long ones keep the summary and
+  // the first lines together below the sheet header, rather than jumping to the end.
   const delta=bounds.height>bottom-top ? bounds.top-top : bounds.bottom>bottom ? Math.min(bounds.bottom-bottom,bounds.top-top) : bounds.top<top ? bounds.top-top : 0;
-  if(delta)scroller.scrollBy({top:delta,behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+  if(Number.isFinite(delta)&&Math.abs(delta)>.5){
+    if(typeof scroller.scrollBy==='function')scroller.scrollBy({top:delta,behavior:window.matchMedia?.('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
+    else scroller.scrollTop+=delta;
+  }
 }
