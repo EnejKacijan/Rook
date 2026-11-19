@@ -82,7 +82,7 @@ function gainLabel(item, format) {
   return parts.join(' · ');
 }
 
-function Page({ page, stats, units, active, reduced, onStats, onClose }) {
+function Page({ page, stats, units, active, reduced, onStats }) {
   const format = useFormat(units);
   const p = { active, reduced };
   const year = stats.year;
@@ -211,7 +211,6 @@ function Page({ page, stats, units, active, reduced, onStats, onClose }) {
       <div className="year-finale-actions year-reveal">
         <ShareButton stats={stats} units={units} />
         <button type="button" className="button secondary" onClick={onStats}>ALL YEAR STATS</button>
-        <button type="button" className="button quiet" onClick={onClose}>CLOSE</button>
       </div>
     </div>;
     default: return null;
@@ -351,7 +350,7 @@ export function YearInReview({ state, close, initialYear, today = isoDay() }) {
         <div ref={track} className="year-track" style={{ '--index': index }}>
           {pages.map((page, i) => <section key={`${year}-${page.kind}`} className={`year-page is-${page.kind}${i === index ? ' is-active' : ''}`}
             style={{ '--offset': i - index }} aria-hidden={i !== index} inert={i !== index ? '' : undefined} aria-roledescription="page" aria-label={pageLabel(page.kind)}>
-            {Math.abs(i - index) <= 1 && <Page page={page} stats={stats || { year }} units={units} active={i === index} reduced={reduced} onStats={() => setView('stats')} onClose={close} />}
+            {Math.abs(i - index) <= 1 && <Page page={page} stats={stats || { year }} units={units} active={i === index} reduced={reduced} onStats={() => setView("stats")} />}
           </section>)}
         </div>
       </div>
@@ -360,7 +359,7 @@ export function YearInReview({ state, close, initialYear, today = isoDay() }) {
         <button type="button" className="year-nav-button" aria-label="Previous page" disabled={index === 0} onClick={() => goTo(i => i - 1)}><NavigationChevron direction="left" /></button>
         <span aria-hidden="true">{index + 1} / {pages.length}</span>
         {index < last ? <button type="button" className="year-nav-button is-next" aria-label="Next page" onClick={() => goTo(i => i + 1)}><span>NEXT</span><NavigationChevron /></button>
-          : <button type="button" className="year-nav-button is-next" onClick={() => setView('stats')}><span>ALL STATS</span></button>}
+          : <button type="button" className="year-nav-button is-next is-done" onClick={close}><span>DONE</span></button>}
       </footer>}
     </>}
   </section>;

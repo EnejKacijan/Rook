@@ -182,3 +182,5 @@
 .year-review.is-reduced-motion :is(.year-track, .year-parallax, .year-reveal, .year-month-bar > i) { transition: none !important; }
 .year-review.is-reduced-motion :is(.year-parallax, .year-reveal, .year-month-bar > i) { transform: none !important; opacity: 1 !important; }
 .year-review.is-reduced-motion .year-celebration { display: none; }
+/* The last page's primary action is Share; Done stays quiet. */
+.year-nav-button.is-next.is-done { border-color: var(--rook-border); background: var(--rook-surface); color: var(--rook-text); }

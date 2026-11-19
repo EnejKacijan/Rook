@@ -266,7 +266,7 @@ describe('year in review viewer', () => {
   it('opens all year stats and returns to the story', () => {
     render(<YearInReview state={demo()} close={() => {}} initialYear={2026} today={YEAR_REVIEW_DEMO_TODAY} />);
     for (let i = 0; i < 9; i++) click(button('Next page'));
-    click(button('ALL STATS'));
+    click(button('ALL YEAR STATS'));
     expect(host.textContent).toContain('ALL YEAR STATS');
     expect(host.textContent).toContain('Logged training time');
     click(button('BACK TO STORY'));
