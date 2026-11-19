@@ -119,7 +119,7 @@ await capture("390-next-block-review", fixture({ week: 6, complete: true }), { w
   await openDetails(page);
   await page.getByRole("button", { name: "REVIEW BLOCK", exact: true }).click();
   await page.getByRole("button", { name: "REVIEW NEXT BLOCK" }).click();
-  await page.getByRole("button", { name: "START NEXT BLOCK" }).waitFor();
+  await page.getByRole("button", { name: "CONFIRM NEXT BLOCK" }).waitFor();
 });
 await capture("390-edit-block-no-deload", fixture({ week: 2 }), { width: 390, height: 844 }, async (page) => {
   await openDetails(page);
@@ -165,7 +165,7 @@ await openDetails(completed.page);
 const oldId = await completed.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).program.trainingBlock.id);
 await completed.page.getByRole("button", { name: "REVIEW BLOCK", exact: true }).click();
 await completed.page.getByRole("button", { name: "REVIEW NEXT BLOCK" }).click();
-await completed.page.getByRole("button", { name: "START NEXT BLOCK" }).click();
+await completed.page.getByRole("button", { name: "CONFIRM NEXT BLOCK" }).click();
 await completed.page.waitForTimeout(150);
 const nextState = await completed.page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")));
 assert.notEqual(nextState.program.trainingBlock.id, oldId, "reviewed next block gets a new stable identity");

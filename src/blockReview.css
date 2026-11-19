@@ -85,6 +85,8 @@
 .block-next-content { padding-bottom: calc(var(--block-footer-height, 126px) + 30px); margin-bottom: calc(-1 * var(--block-footer-height, 126px)); }
 .block-review-sheet .flexible-week-footer { box-shadow: 0 -12px 0 var(--rook-bg), 0 48px 0 var(--rook-bg); }
 .block-review-sheet .flexible-week-footer p { margin: 0 0 12px; font-size: 14px; line-height: 1.45; }
+.block-review-sheet .block-first-workout { text-align: center; color: var(--rook-secondary); }
+.block-first-workout time { color: var(--rook-text); font-weight: 600; }
 .block-review-sheet .flexible-week-footer > .text-button { min-height: 44px; margin-bottom: 8px; }
 .block-review-sheet .flexible-week-footer:has([role="alert"], [role="status"]) { box-shadow: 0 -24px 0 var(--rook-bg), 0 48px 0 var(--rook-bg); }
 .block-review-sheet .rook-search-field > input { box-sizing: border-box; height: 52px; min-height: 52px; padding-block: 12px; }
