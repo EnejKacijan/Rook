@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="robots" content="noindex" />
+    <title>Rook · Year in review demo</title>
+    <script>
+      (() => {
+        const params = new URLSearchParams(location.search);
+        let appearance = params.get("theme");
+        try { appearance ||= localStorage.getItem("rook.year-review-demo.theme"); } catch {}
+        if (!["light", "dark"].includes(appearance)) appearance = matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+        const root = document.documentElement;
+        root.dataset.appearance = appearance;
+        root.dataset.style = "standard";
+        root.dataset.theme = appearance;
+        root.style.colorScheme = appearance;
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/yearReviewDemo.jsx"></script>
+  </body>
+</html>

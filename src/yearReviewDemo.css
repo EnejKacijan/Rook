@@ -1,0 +1,10 @@
+.year-demo { padding-bottom: calc(40px + env(safe-area-inset-bottom, 0px)); }
+.year-demo-cases { display: grid; gap: 8px; margin: 22px 0 0; padding: 0; border: 0; }
+.year-demo-cases legend { margin-bottom: 8px; padding: 0; }
+.year-demo-cases label { display: flex; gap: 12px; align-items: center; min-height: 56px; padding: 10px 14px; border-radius: 16px; border: 1px solid var(--rook-border); background: var(--rook-surface); color: var(--rook-text); cursor: pointer; }
+.year-demo-cases label.is-selected { border-color: var(--rook-accent-text); background: var(--rook-accent-soft); }
+.year-demo-cases input { accent-color: var(--rook-accent-text); width: 18px; height: 18px; flex: none; }
+.year-demo-cases strong { display: block; font-size: .9375rem; }
+.year-demo-cases small { display: block; margin-top: 2px; color: var(--rook-secondary); font-size: .8125rem; }
+.year-demo-tools { display: flex; gap: 8px; margin-top: 14px; }
+.year-demo-label { margin: 28px 0 0; }
