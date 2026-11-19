@@ -8,6 +8,8 @@ export function progressionPresentation(advice,exercise,units='kg') {
   if(advice.weight)action=`${advice.title==='Consider a small increase'?'If effort was on target, try':'Try'} ${displayWeight(advice.weight,units)} ${weightUnit(units)} on your next working sets.`;
   else switch(advice.title){
     case 'Build reps first':action=`Same ${setup}. Add one rep to a set below ${max}.`;break;
+    case 'Planned deload':action=`Use the reduced set target${exercise.targetRir!=null?` and leave ${exercise.targetRir} reps in reserve`:''}. Your normal progression resumes after deload.`;break;
+    case 'Build this week’s volume':case 'Follow this week’s set target':case 'Follow this week’s effort target':action=advice.detail;break;
     case 'Repeat to confirm':action=timed?`Repeat ${max} seconds per hold before progressing.`:`Repeat the same ${setup} for one more workout.`;break;
     case 'Repeat this load':case 'Repeat this variation':action=`Keep the same ${setup} for one more workout.`;break;
     case 'Hold the load':case 'Hold the variation':action=exercise.targetRir!=null?`Keep the same ${setup}. Leave at least ${exercise.targetRir} reps in reserve.`:`Keep the same ${setup} and stay within your target effort.`;break;
@@ -25,5 +27,5 @@ export function progressionPresentation(advice,exercise,units='kg') {
     default:action=advice.detail;
   }
   const caution=advice.type==='stalled'||['Review the load','Review the variation','Use a smaller increment','Reduce the hold target slightly'].includes(advice.title);
-  return {heading:advice.weight&&advice.title==='Ready to progress'?'Increase weight':advice.title,action,tone:caution?'caution':advice.type==='progress'?'progress':'neutral',explanation:advice.detail};
+  return {heading:advice.weight&&advice.title==='Ready to progress'?'Increase weight':advice.title,action:advice.afterDeload?`After deload: ${action}`:action,tone:caution?'caution':advice.type==='progress'?'progress':'neutral',explanation:advice.detail};
 }

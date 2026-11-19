@@ -8,6 +8,7 @@ import { completedWorkoutsForDate } from './completedWorkoutsForDate.js';
 import { importedSessionTimeLabel } from './historicalSetSemantics.js';
 import { ExerciseNavigationButton } from './ExerciseNavigationButton.jsx';
 import { setTypeOf } from './advancedLogging.js';
+import {isDeloadWorkout} from './progressionHistory.js';
 
 export function FreestyleEntry({ state, update, setPage, setDetail, date, historyOnly = false, hideHistory = false, representedWorkoutId = null, tertiary = false, primary = false, noPlan = false }) {
   const [error, setError] = useState('');
@@ -43,6 +44,9 @@ export function FreestyleActions({ setDetail, hideAdd = false }) {
 export function FreestylePrevious({ state, exercise, update, screenRef, controllerRef, Modal, Header }) {
   const limit = useMemo(() => freestyleEffortLimit(state, exercise.exerciseId), [state.profile, exercise.exerciseId]);
   const previous = freestylePreviousSets(state, exercise);
+  const deload=isDeloadWorkout(state.activeWorkout)||exercise.blockPrescription?.phase==='deload';
+  const hasDeloadHistory=state.workouts.some(workout=>isDeloadWorkout(workout)&&workout.exercises?.some(item=>item.exerciseId===exercise.exerciseId));
+  const historyLabel=deload?'Previous deload workout':hasDeloadHistory?'Previous normal workout':'Previous workout';
   const index = exercise.sets.findIndex(s => !s.completed);
   const ordinal = exercise.sets.slice(0,index).filter(set=>setTypeOf(set)==='standard'&&!set.segments?.length).length;
   const set = exercise.sets[index];
@@ -54,7 +58,7 @@ export function FreestylePrevious({ state, exercise, update, screenRef, controll
     s.sides ? `${s.sides.left?.reps ?? '—'} / ${s.sides.right?.reps ?? '—'} per side` : s.reps != null ? `${s.reps} ${exerciseMeasure(exercise) === 'seconds' ? 'sec' : 'reps'}` : null].filter(Boolean).join(' × ');
   return <div className="freestyle-previous">
     {limit != null && <p className="training-limit-note">Your training limit: keep at least {limit} RIR.</p>}
-    {canCopy && <PreviousValuesHelper key={`${state.profile.id}:${state.activeWorkout.id}:${exercise.id}:${exercise.exerciseId}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} ordinal={ordinal} formatValues={label} screenRef={screenRef} controllerRef={controllerRef} Modal={Modal} Header={Header}
+    {canCopy && <PreviousValuesHelper key={`${state.profile.id}:${state.activeWorkout.id}:${exercise.id}:${exercise.exerciseId}:${set.id}`} state={state} update={update} exercise={exercise} set={set} prior={prior} index={index} ordinal={ordinal} formatValues={label} historyLabel={historyLabel} screenRef={screenRef} controllerRef={controllerRef} Modal={Modal} Header={Header}
       autoOffer={state.activeWorkout.source === 'freestyle' || isSessionAddedExercise(exercise) || Boolean(exercise.replacementOfExerciseId)}/>}
   </div>;
 }

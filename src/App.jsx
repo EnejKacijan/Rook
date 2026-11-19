@@ -103,6 +103,9 @@ import { startFirstRunFreestyle } from './firstRunNoPlan.js';
 import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancellation.js';
 import { removeFreestyleExercise } from './freestyleWorkout.js';
 import {prepareTodayReplacementValues} from './previousValues.js';
+import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
+import {DeloadWeekNotice,DeloadWeekChoice} from './DeloadWeekChoice.jsx';
+import {needsDeloadChoice} from './deloadWeek.js';
 import { adjustedMovedLabel } from './progressPresentation.js';
 import { loggedExercises, highestSimpleLoggedLoad } from './loggedExercises.js';
 import { importedSetComparable,importedSessionTimeLabel } from './historicalSetSemantics.js';
@@ -506,6 +509,8 @@ import {
   currentTrainingBlockWeek,
   normalizeTrainingBlocksState,
   reconfigureTrainingBlock,
+  effectiveTrainingBlockWeek,
+  trainingRestForDate,
 } from "./trainingBlocks.js";
 import {
   GENERIC_HISTORY_CSV_HEADER,
@@ -5042,6 +5047,7 @@ export function Today({
         calendarOpen={calendarOpen}
         openCalendar={event=>{calendarBackground.current=event.currentTarget.closest('.app-shell');setCalendarOpen(true);}}/>
       {combinedAdjustment(state) && <CombinedWorkoutNotice state={state} update={update} />}
+      {viewingToday&&<DeloadWeekNotice state={state} setDetail={setDetail} today={todayKey}/>}
       {temporaryPeriod && temporaryPeriod.status !== 'ended' && <button className="list-row temporary-plan-notice" onClick={() => setDetail('temporary-plan')}><span><strong>{temporaryPeriod.planChanged ? 'Review temporary plan' : 'Temporary plan'}</strong><small>{temporaryPeriod.startDate} – {temporaryPeriod.endDate} · {temporaryPeriod.days.length} days a week · {temporaryPeriod.equipment.join(', ')}</small></span><NavigationChevron/></button>}
       <TemporaryScheduleSummary review={scheduleReview} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
       {!selectedActiveWorkout&&oneOff&&scheduled.template&&scheduled.template.id!==oneOff.id&&
@@ -5149,6 +5155,7 @@ export function Today({
   const completed = occurrence?.completedWorkout && occurrence.actualPerformedDate===selectedIso ? occurrence.completedWorkout :
     !template ? datedWorkouts.find(workout=>workout.source!=='freestyle' && workoutPerformedDate(workout)===selectedIso) : null;
   const performedElsewhere=occurrence?.completedWorkout && occurrence.actualPerformedDate!==selectedIso ? occurrence.completedWorkout : null;
+  const deloadRest=trainingRestForDate(state,selectedIso);
   if(performedElsewhere) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">
       {dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay} />
     {occurrence.originalDate!==selectedIso && <small className="flexible-week-origin">Moved from {displayDate(localDate(occurrence.originalDate))}</small>}
@@ -5158,16 +5165,16 @@ export function Today({
     {freestyleEntry}
   </section></main>;
   if(!completed && occurrence && occurrence.status==='active' && sourceLinkedActive)return <main className="screen today-screen">{calendar()}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>Started early · {shortDisplayDate(activeDateKey)}</p><Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>{freestyleEntry}</section></main>;
-  if(!completed && occurrence && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{workoutVisibleStatus({status:occurrence.status})}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
+  if(!completed && occurrence && !(deloadRest&&occurrence.status==='skipped') && ['skipped','active','reserved','combined'].includes(occurrence.status))return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<WorkoutTitle workout={occurrence.workout} day={selectedDay}/><p>{workoutVisibleStatus({status:occurrence.status})}</p>{occurrence.activeWorkout && <Button onClick={resumeActiveWorkout}>RESUME WORKOUT</Button>}{freestyleEntry}</section></main>;
   const isHistoricalWeek = selectedMonday < currentMonday;
   const movedSources = flexibleSourceForDate(state, selectedIso);
   const movedSourceIssue = scheduleReview.unresolved.find(item=>item.originalDate===selectedIso||item.scheduledDate===selectedIso);
   const movedSource = movedSources.find(source=>source.id===movedSourceIssue?.id) || movedSources[0];
   // Invalid links and explicit skips retain their existing actionable meaning.
   // A successful move, in contrast, is provenance, not this date's workout.
-  if (!template && !completed && (movedSourceIssue || movedSource?.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSourceIssue?.name || movedSource?.workout?.name || movedSource?.name}</h1><p>{movedSourceIssue ? `This temporary ${movedSourceIssue.skipped?'skip':'move'} needs review after a plan change.` : workoutVisibleStatus({status:'skipped'})}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
+  if (!template && !completed && !deloadRest && (movedSourceIssue || movedSource?.skipped)) return <main className="screen today-screen">{calendar()}{activeNotice}{activeOptionalNotice}<section className="today-hero">{dayHeader(displayDate(selectedDate))}<h1>{movedSourceIssue?.name || movedSource?.workout?.name || movedSource?.name}</h1><p>{movedSourceIssue ? `This temporary ${movedSourceIssue.skipped?'skip':'move'} needs review after a plan change.` : workoutVisibleStatus({status:'skipped'})}</p>{movedSourceIssue && <Button variant="secondary" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:movedSourceIssue.id}})}>REVIEW SCHEDULE</Button>}{freestyleEntry}</section></main>;
   if (!template && !completed) {
-    const upcoming = scheduleReader.next(selectedIso);
+    const upcoming = state.program.trainingBlock?.completed&&deloadRest?null:scheduleReader.next(selectedIso);
     const upcomingTitle = upcoming
       ? workoutDisplayParts(upcoming.workout, upcoming.workout.weekday)
       : null;
@@ -5193,7 +5200,7 @@ export function Today({
         {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
         <section className="rest-day-state">
           {dayHeader(movedAwayRest ? displayDate(selectedDate) : 'REST DAY')}
-          <h1>Rest day</h1>
+          <h1>{deloadRest?'Rest week':'Rest day'}</h1>
           <p>
             {movedAwayRest ? "No workout scheduled for this day." : isHistoricalWeek
               ? "No workout was planned on this date."
@@ -5640,6 +5647,10 @@ export function Today({
       );
       return;
     }
+    if(needsDeloadChoice(state,template)){
+      setDetail({deloadWeek:{blockId:template.trainingBlock.blockId,weekNumber:template.trainingBlock.blockWeekNumber}});
+      return;
+    }
     if (startLock.current) return;
     startLock.current = true;
     setStarting(true);
@@ -5768,7 +5779,7 @@ export function Today({
                 aria-busy={starting}
               >
                 <span aria-live="polite">
-                  {starting ? "STARTING…" : (selectedIso > isoDay() && weekKey(selectedIso) === weekKey() ? "START TODAY" : "START WORKOUT")}
+                  {starting ? "STARTING…" : needsDeloadChoice(state,template)?'CHOOSE THIS WEEK':(selectedIso > isoDay() && weekKey(selectedIso) === weekKey() ? "START TODAY" : "START WORKOUT")}
                 </span>
               </Button>
               {viewingToday && recurringTemplate && !isRepeatAdjustment(session.todayOnlyAdjustment) && !todayEditMode && (
@@ -6482,10 +6493,12 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const canonicalSupersetStep = superset
     ? nextSupersetStep(active.exercises, superset.id)
     : null;
-  const prior = previousExercise(state.workouts, exercise.exerciseId);
+  const deloadSession=isDeloadWorkout(active);
+  const prior = previousExercise(progressionHistoryForPhase(state.workouts,deloadSession), exercise.exerciseId);
+  const hasDeloadHistory=state.workouts.some(workout=>isDeloadWorkout(workout)&&workout.exercises?.some(item=>item.exerciseId===exercise.exerciseId));
   const elapsed = workoutElapsedSeconds(active,now);
   const item = exerciseCatalog[exercise.exerciseId];
-  const performancePr = exerciseRecordPresentation(activeExercisePrDetails(state.workouts, exercise, {
+  const performancePr = deloadSession?null:exerciseRecordPresentation(activeExercisePrDetails(state.workouts, exercise, {
     e1rmEligible: exerciseSupportsEstimatedOneRepMax(exercise),
   }),state.profile.units);
   const increment =
@@ -6495,6 +6508,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     exercise,
     state.workouts,
     state.profile,
+    state,
   );
   const remainingSets = exercise.sets.filter((set) => !set.completed);
   const progressionCopy=progressionPresentation(recommendation,exercise,state.profile.units);
@@ -7374,13 +7388,14 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <p className="exercise-meta">
               {exercise.prescriptionSource==='saved-template'?<>{active.planWorkoutOrigin?.requestId===exercise.queueAdditionId?'Plan targets':'Saved workout'} · {targetLabel(exercise,state.profile.rirEnabled)}</>:sessionExercise ? `${active.source==='freestyle'?'Freestyle · ':''}Choose your sets and reps` : <>Target {targetLabel(exercise, state.profile.rirEnabled)}</>}
             </p>
+            {deloadSession&&<small className="exercise-history-meta">Deload · recovery session</small>}
             {(!sessionExercise || !prior) && <small className="exercise-history-meta">
               {prior
-                ? `Last ${prior.sets
+                ? `${deloadSession?'Last deload':hasDeloadHistory?'Last normal':'Last'} ${prior.sets
                   .filter((set) => set.completed)
                   .map((set) => exerciseValueLabel(exercise, set.reps))
                   .join(" / ")}`
-                : "First session"}
+                : deloadSession?'First deload session':hasDeloadHistory?'First normal session':'First session'}
             </small>}
             {performancePr && (
                 <ExerciseRecordBadge
@@ -11549,6 +11564,7 @@ export function exerciseHistoryEntries(workouts = [], exerciseId, limit = 8) {
         )
         .map((item) => ({
           ...item,
+          ...(isDeloadWorkout(workout)?{deload:true}:{}),
           date:
             workoutPerformedDate(workout) ||
             workout.completedAt ||
@@ -17403,6 +17419,7 @@ function TrainingBlockScreen({ state, update, close }) {
   const [totalWeeks, setTotalWeeks] = useState(block?.totalWeeks || 6);
   const [includeDeload, setIncludeDeload] = useState(block?.plannedDeloadWeek != null);
   const [archivedId, setArchivedId] = useState(null);
+  const [deloadRequest,setDeloadRequest]=useState(null);
   useLayoutEffect(() => {
     const reset = () => {
       if (screenRef.current) screenRef.current.scrollTop = 0;
@@ -17416,6 +17433,7 @@ function TrainingBlockScreen({ state, update, close }) {
     };
   }, [view, block?.id]);
   if (!block) return null;
+  if(deloadRequest)return <DeloadWeekChoice state={state} update={update} close={()=>setDeloadRequest(null)} Header={SheetHeader} request={deloadRequest}/>;
   if (view === "review" || view === "history") return <BlockReviewSheet state={state} update={update} close={close} Header={SheetHeader} blockId={view === "history" ? archivedId : undefined} onBack={()=>setView('overview')}/>;
   const currentWeek = currentTrainingBlockWeek(state);
   const completedWeeks = block.completed ? block.totalWeeks : Math.max(0, block.currentWeek - 1);
@@ -17446,7 +17464,8 @@ function TrainingBlockScreen({ state, update, close }) {
   };
   const weekRows = (sourceBlock) => (
     <section className="training-block-weeks" aria-label="Program weeks">
-      {(sourceBlock.weeks || []).map((week) => {
+      {(sourceBlock.weeks || []).map((rawWeek) => {
+        const week=effectiveTrainingBlockWeek(sourceBlock,rawWeek);
         const status = sourceBlock.completed || week.weekNumber < sourceBlock.currentWeek
           ? "complete"
           : week.weekNumber === sourceBlock.currentWeek
@@ -17508,6 +17527,7 @@ function TrainingBlockScreen({ state, update, close }) {
         <div><dt>Deload</dt><dd>{block.plannedDeloadWeek ? `Week ${block.plannedDeloadWeek}` : "None"}</dd></div>
         <div><dt>Workouts</dt><dd>{state.program.days.length} per week</dd></div>
       </dl>
+      <DeloadWeekNotice state={state} setDetail={value=>setDeloadRequest(value.deloadWeek)}/>
       {weekRows(block)}
       <section className="training-block-workouts">
         <Eyebrow>WEEKLY WORKOUTS</Eyebrow>
@@ -18745,6 +18765,7 @@ export function Detail({
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
   if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} Illustration={ExerciseDetailIllustration} />;
+  if(detail?.deloadWeek)return <DeloadWeekChoice state={state} update={update} close={close} Header={SheetHeader} request={detail.deloadWeek}/>;
   if(detail?.coachWorkoutReuse)return <CoachWorkoutReuseSheet state={state} update={update} reference={detail.coachWorkoutReuse} entryId={detail.coachEntryId} Header={SheetHeader} close={close} setDetail={setDetail} onStarted={()=>{close();setPage('workout');}}/>;
   if(detail==='saved-workouts'||detail?.saveWorkoutTemplate||detail?.savedWorkout||detail?.createSavedWorkout){
     const source=detail?.saveWorkoutTemplate?(detail.saveWorkoutTemplate.workoutId?state.workouts.find(w=>w.id===detail.saveWorkoutTemplate.workoutId):state.activeWorkout):null;
@@ -19105,7 +19126,7 @@ export function Detail({
     e1rmEligible: supportsEstimatedOneRepMax,
   });
   const e1rmHistory = performance.sessions
-    .filter((session) => session.estimatedOneRepMax !== null)
+    .filter((session) => !session.deload && session.estimatedOneRepMax !== null)
     .slice(-8);
   const loadContext = catalogExercise?.equipment?.includes("resistance bands")
     ? "Band"
@@ -19130,7 +19151,7 @@ export function Detail({
           : loadRequirement === "optional"
             ? "No added weight"
             : "Not set yet";
-  const progression = sourceOnlyHistory ? null : nextWorkoutAdvice(exercise, state.workouts, state.profile);
+  const progression = sourceOnlyHistory ? null : nextWorkoutAdvice(exercise, state.workouts, state.profile,state);
   const detailIllustration = detailArtwork.source;
   return (
     <main ref={panelRef} className="screen detail-screen">
@@ -19226,7 +19247,7 @@ export function Detail({
             information={<ProfileInformation label="About estimated 1RM" title="Estimated 1RM" Modal={ModalLayer} backgroundRef={panelRef}>
               <p>Estimated maximum for one rep, not a measured lift.</p>
               <p>{E1RM_FORMULA}.</p>
-              <p>Uses logged sets of 1–12 reps only.</p>
+              <p>Uses logged sets of 1–12 reps from normal sessions. Deload stays in your history.</p>
             </ProfileInformation>}/>}
         </section>
       )}
@@ -19276,6 +19297,7 @@ export function Detail({
                       month: "short",
                       day: "numeric",
                     }).format(new Date(item.date))}
+                    {item.deload && ' · Deload'}
                   </small>
                 </span>
                 <span>

@@ -1,4 +1,4 @@
-import { hasOpenRepTarget, hasUnspecifiedRepTarget } from './advancedLogging.js';
+import { hasOpenRepTarget, hasUnspecifiedRepTarget, loggingModeOf, setTypeOf } from './advancedLogging.js';
 export const TRAINING_BLOCK_SCHEMA_VERSION = 1;
 export const DEFAULT_TRAINING_BLOCK_WEEKS = 6;
 
@@ -147,6 +147,7 @@ export function createTrainingBlock(program, options = {}) {
     completed: Boolean(options.completed),
     completedAt: options.completedAt || null,
     resolvedSkips: Array.isArray(options.resolvedSkips) ? clone(options.resolvedSkips).filter(item => item?.blockWorkoutId && item?.blockWeekId) : [],
+    ...(options.deloadChoices && typeof options.deloadChoices==='object' ? {deloadChoices:clone(options.deloadChoices)} : {}),
     weeks: blockWeeks(program, id, totalWeeks, plannedDeloadWeek, options.weeks),
   };
 }
@@ -181,10 +182,61 @@ export function normalizeTrainingBlocksState(state) {
 }
 
 export const currentTrainingBlock = (state) => state?.program?.trainingBlock || null;
+export function effectiveTrainingBlockWeek(block,week) {
+  if(!week || week.phase!=='deload' || block?.deloadChoices?.[week.weekNumber]?.mode!=='normal')return week;
+  const previous=block.weeks.filter(item=>item.weekNumber<week.weekNumber&&item.phase!=='deload').at(-1);
+  return {...week,...(previous?{repOffset:previous.repOffset,rirDelta:previous.rirDelta,mainSetDelta:previous.mainSetDelta,setMultiplier:previous.setMultiplier}:targetsForWeek(week.weekNumber,block.totalWeeks,null)),
+    phase:'final',label:'Normal training',reason:'Normal training selected for this week.',scheduledDeload:true,
+    progressionExpectation:'Use normal performance-based progression guidance.',changes:clone(previous?.changes||[])};
+}
 export const currentTrainingBlockWeek = (state) => {
   const block = currentTrainingBlock(state);
-  return block?.weeks?.find((week) => week.weekNumber === block.currentWeek) || null;
+  return effectiveTrainingBlockWeek(block,block?.weeks?.find((week) => week.weekNumber === block.currentWeek)) || null;
 };
+export function trainingRestForDate(state,date) {
+  return [state?.program?.trainingBlock,...(state?.completedTrainingBlocks||[])].filter(Boolean)
+    .flatMap(block=>Object.values(block.deloadChoices||{}).map(choice=>({...choice,blockId:block.id})))
+    .find(choice=>choice.mode==='rest'&&choice.restFrom<=date&&choice.restThrough>=date)||null;
+}
+export function trainingRestBoundaries(state){
+  const choices=[state?.program?.trainingBlock,...(state?.completedTrainingBlocks||[])].filter(Boolean)
+    .flatMap(block=>Object.values(block.deloadChoices||{})).filter(choice=>choice.mode==='rest');
+  return [...new Set(choices.map(choice=>Date.parse(choice.selectedAt)).filter(time=>Number.isFinite(time)&&time<=Date.now()))].sort((a,b)=>a-b);
+}
+
+const targetNumber=value=>value==null||value===''?null:Number(value);
+const progressionShape=exercise=>JSON.stringify([
+  exercise.exerciseId,loggingModeOf(exercise),Boolean(exercise.supersetId),exercise.importRole||null,
+  targetNumber(exercise.repMin??exercise.repRange?.[0]),targetNumber(exercise.repMax??exercise.repRange?.[1]),targetNumber(exercise.targetRir),
+  (exercise.sets||[]).filter(set=>set.planned!==false&&!set.added).map(set=>[setTypeOf(set),Boolean(set.segments?.length)]),
+]);
+const sameBlockPrescription=(a,b)=>Boolean(a&&b&&a.programId===b.programId&&a.workoutId===b.workoutId&&a.base===b.base);
+export {sameBlockPrescription};
+
+// Validate phase provenance against the actual prescription. A manual target
+// edit, replacement or extra prescribed set must not borrow a planned transition.
+export function trainingBlockExerciseContext(state,exercise,workout=null,cache=new Map()) {
+  if(!exercise||workout?.adjustment||workout?.temporaryPlanAdjustment)return null;
+  const stored=exercise.blockPrescription,context=workout?.trainingBlock;
+  if(stored){
+    if(stored.schemaVersion!==1||stored.target!==progressionShape(exercise)||!stored.base||!stored.programId||!stored.workoutId)return null;
+    if(context&&(stored.blockId!==context.blockId||stored.weekNumber!==context.blockWeekNumber||stored.phase!==context.phase))return null;
+    return stored;
+  }
+  if(!state||!context?.blockId||!context.blockWeekNumber)return null;
+  const archived=state.completedTrainingBlocks?.find(block=>block.id===context.blockId);
+  const program=state.program?.trainingBlock?.id===context.blockId?state.program:archived?.program;
+  const block=state.program?.trainingBlock?.id===context.blockId?state.program.trainingBlock:archived;
+  const week=block?.weeks?.find(item=>item.weekNumber===context.blockWeekNumber);
+  if(!program||!week||context.blockWeekId&&context.blockWeekId!==week.id)return null;
+  const dayId=workout.programDayId||week.workouts.find(item=>item.id===context.blockWorkoutId)?.programDayId;
+  const day=program.days?.find(item=>item.id===dayId);
+  if(!day)return null;
+  const key=`${block.id}:${week.weekNumber}:${day.id}`;
+  if(!cache.has(key))cache.set(key,prescribeTrainingBlockWorkout({program:{...program,trainingBlock:{...block,currentWeek:week.weekNumber}}},day));
+  const expected=cache.get(key).exercises.find(item=>item.id===exercise.id&&item.exerciseId===exercise.exerciseId);
+  return expected&&progressionShape(expected)===progressionShape(exercise)?expected.blockPrescription:null;
+}
 
 export function prescribeTrainingBlockWorkout(state, template) {
   const block = currentTrainingBlock(state);
@@ -205,8 +257,10 @@ export function prescribeTrainingBlockWorkout(state, template) {
     reason: week.reason,
     progressionExpectation: week.progressionExpectation,
     plannedDeload: week.phase === "deload",
+    ...(block.deloadChoices?.[week.weekNumber]?{deloadChoice:block.deloadChoices[week.weekNumber].mode}:{}),
   };
   for (const next of workout.exercises) {
+    const base=template.exercises.find(exercise=>exercise.id===next.id);
     const baseSetCount = next.sets.length;
     const setDelta = next.programmingRole === "main" ? week.mainSetDelta : 0;
     const targetSetCount = Math.max(
@@ -232,6 +286,8 @@ export function prescribeTrainingBlockWorkout(state, template) {
       });
     }
     next.sets = next.sets.map((set) => ({ ...set, reps: next.repMin }));
+    next.blockPrescription={schemaVersion:1,programId:state.program.id,workoutId:template.id,blockId:block.id,
+      weekNumber:week.weekNumber,phase:week.phase,base:progressionShape(base),target:progressionShape(next)};
     if (week.changes.length) next.blockTargetReasons = clone(week.changes);
   }
   return workout;
@@ -286,6 +342,7 @@ export function reconfigureTrainingBlock(program, options = {}) {
     completed: false,
     completedAt: null,
     weeks: [],
+    deloadChoices: current.deloadChoices,
   });
 }
 

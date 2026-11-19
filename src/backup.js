@@ -133,6 +133,17 @@ function validateDurableState(raw) {
   if (state.completedTrainingBlocks !== undefined && !Array.isArray(state.completedTrainingBlocks))
     fail("invalid-backup", "completedTrainingBlocks is invalid.");
   for (const block of [state.program?.trainingBlock, ...(state.completedTrainingBlocks || [])].filter(Boolean)) {
+    if(block.deloadChoices!==undefined){
+      const choices=asObject(block.deloadChoices,'Deload week choices');
+      for(const [number,choice] of Object.entries(choices)){
+        if(!/^(?:[1-9]|1[0-2])$/.test(number)||!choice||typeof choice.id!=='string'||choice.weekNumber!==Number(number)||
+          !['deload','normal','rest'].includes(choice.mode)||typeof choice.selectedAt!=='string'||!Number.isFinite(Date.parse(choice.selectedAt)))
+          fail('invalid-backup','Invalid deload week choice.');
+        if(choice.mode==='rest'&&(!/^\d{4}-\d{2}-\d{2}$/.test(choice.restFrom||'')||!/^\d{4}-\d{2}-\d{2}$/.test(choice.restThrough||'')||
+          !Number.isFinite(Date.parse(`${choice.restFrom}T12:00:00`))||Math.round((Date.parse(`${choice.restThrough}T12:00:00Z`)-Date.parse(`${choice.restFrom}T12:00:00Z`))/86400000)!==6))
+          fail('invalid-backup','Invalid planned rest week.');
+      }
+    }
     if (block.resolvedSkips !== undefined && (!Array.isArray(block.resolvedSkips) || block.resolvedSkips.some(item =>
       !item || typeof item.blockWorkoutId !== 'string' || typeof item.blockWeekId !== 'string' ||
       !block.weeks?.some(week => week.id === item.blockWeekId && week.workouts?.some(ref => ref.id === item.blockWorkoutId)))))

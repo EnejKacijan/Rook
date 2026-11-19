@@ -148,9 +148,13 @@
   .up-next .up-next-prescription,.up-next .up-next-note,
   .session-log-summary,.session-log-set,.session-feedback-options button,
   .session-feedback-skip,.session-feedback-change,.optional-session-header > div small,
-  .rest-timer .button,.workout-confirm .button,.today-exercise-edit-copy small,
+  .rest-timer .button,.today-exercise-edit-copy small,
   .today-exercise-edit-target,.today-edit-help,.today-edit-lock-note) {
   font-size:14px; line-height:1.4;
+}
+:root .workout-confirm-actions > .button {
+  min-width:0; padding:8px 10px; font-size:.75rem; line-height:1.35;
+  font-weight:700; letter-spacing:.04em; white-space:normal;
 }
 :root .workout-screen .warmup-count-note,
 :root .workout-screen .warmup-general-guidance { font-size:14px; line-height:1.45; }

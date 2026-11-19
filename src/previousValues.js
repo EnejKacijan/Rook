@@ -3,6 +3,7 @@ import {preparedExercise} from './workoutSessionStart.js';
 import {copyFreestylePrevious,freestylePreviousSets,previousWorkingSetValues,previousWorkingSetSource,previousValuesSetEligible,withPreviousWorkingSetValues} from './freestyleWorkout.js';
 import {loggingModeOf,unilateralSetReps,setTypeOf} from './advancedLogging.js';
 import {userEditedWeight} from './workoutWeightChanges.js';
+import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
 
 const equal=(a,b)=>JSON.stringify(a)===JSON.stringify(b);
 const locate=(state,record)=>{
@@ -141,7 +142,7 @@ export function prepareTodayReplacementValues(state, exercise, item) {
   const compound = item.kind === 'compound' || item.kind === 'power';
   const fallback = timed ? [item.durationRange?.[0] || 20,item.durationRange?.[1] || 40]
     : compound ? [6,10] : [10,15];
-  const previous = previousExercise(state.workouts || [],item.id);
+  const previous = previousExercise(progressionHistoryForPhase(state.workouts,isDeloadWorkout(state.activeWorkout)||next.blockPrescription?.phase==='deload'),item.id);
   const compatible = freestylePreviousSets(state,next).some(set => Object.keys(previousWorkingSetValues(next,set)).length);
   const historicalRange = compatible && Number.isInteger(previous?.repMin) && previous.repMin > 0 &&
     Number.isInteger(previous?.repMax) && previous.repMax >= previous.repMin;

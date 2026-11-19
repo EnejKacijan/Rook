@@ -9,7 +9,7 @@ import {loggingModeOf} from './advancedLogging.js';
 import {previousWorkingSetValues,previousWorkingSetSource,freestylePreviousSets} from './freestyleWorkout.js';
 import {exerciseName,exerciseMeasure} from './domain.js';
 
-export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordinal=index,formatValues,screenRef,controllerRef,autoOffer=false,Modal,Header}) {
+export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordinal=index,formatValues,historyLabel='Previous workout',screenRef,controllerRef,autoOffer=false,Modal,Header}) {
   const {commit,latest}=useDurableAction(state,update);
   const [record,setRecord]=useState(null),[undoable,setUndoable]=useState(false),[error,setError]=useState(''),[draftEdited,setDraftEdited]=useState(false);
   const [expiring,setExpiring]=useState(false);
@@ -146,7 +146,7 @@ export function PreviousValuesHelper({state,update,exercise,set,prior,index,ordi
     }catch(e){setError(e.message);return false;}
   };
   const appliedCount=record?Number(record.patch.length>0)+(record.future?.length||0):0;
-  const source=<span className="previous-values-source"><small>{copyCount>1?'Previous workout':`Previous workout · set ${sourceOrdinal+1}`}</small><strong>{copyCount>1?`Set ${sourceOrdinal+1} · `:''}{label}</strong></span>;
+  const source=<span className="previous-values-source"><small>{copyCount>1?historyLabel:`${historyLabel} · set ${sourceOrdinal+1}`}</small><strong>{copyCount>1?`Set ${sourceOrdinal+1} · `:''}{label}</strong></span>;
   const useButton=(manual=false,dismissManual)=><button type="button" className={manual?'button primary previous-values-apply':'freestyle-copy'} data-workout-replaces={scope} disabled={matches&&!(manual&&manualHasDraft)}
     onPointerDown={event=>{pendingDrafts.current={drafts:snapshot(),protectedFields:futureDraftFields()};if(!manual)event.preventDefault();}} onPointerCancel={()=>{pendingDrafts.current=null;}} onKeyDown={()=>{pendingDrafts.current={drafts:snapshot(),protectedFields:futureDraftFields()};}}
     onClick={()=>{if(apply()&&manual)dismissManual();}}>Use for {Math.max(1,copyCount)} {copyCount>1?'sets':'set'}</button>;

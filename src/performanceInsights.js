@@ -1,4 +1,5 @@
 import { workoutPerformedDate as workoutDate } from './workoutDates.js';
+import {isDeloadWorkout} from './progressionHistory.js';
 export const E1RM_FORMULA = "Epley: weight × (1 + reps ÷ 30)";
 export const E1RM_MIN_REPS = 1;
 export const E1RM_MAX_REPS = 12;
@@ -139,6 +140,7 @@ function improvementsBySet(sets, prior) {
 }
 
 export function workoutPersonalBests(workout, history, eligible) {
+  if(isDeloadWorkout(workout))return new Map();
   const exercises = new Map();
   for (const exercise of workout.exercises || []) {
     if (!exercise.exerciseId || !eligible(exercise)) continue;
@@ -151,7 +153,7 @@ export function workoutPersonalBests(workout, history, eligible) {
   const byExercise = new Map();
   if (!exercises.size) return byExercise;
 
-  for (const previous of history) {
+  for (const previous of history.filter(workout=>!isDeloadWorkout(workout))) {
     for (const exercise of previous.exercises || []) {
       const entry = exercises.get(exercise.exerciseId);
       if (!entry || !eligible(exercise)) continue;
@@ -182,7 +184,7 @@ export function exercisePerformance(
       if (exercise.exerciseId !== exerciseId) continue;
       const sets = completedWeightedSets(exercise);
       if (!sets.length) continue;
-      allSets.push(...sets);
+      if(!isDeloadWorkout(workout))allSets.push(...sets);
       const estimates = e1rmEligible
         ? sets
             .map((set) => ({
@@ -192,6 +194,7 @@ export function exercisePerformance(
             .filter((set) => set.value !== null)
         : [];
       sessions.push({
+        ...(isDeloadWorkout(workout)?{deload:true}:{}),
         date: workoutDate(workout),
         workoutId: workout.id,
         bestWeight: Math.max(...sets.map((set) => set.weight)),
@@ -243,8 +246,8 @@ export function activeExercisePrDetails(
   exercise,
   { e1rmEligible = true } = {},
 ) {
-  if (!exercise?.exerciseId) return null;
-  const priorSets = chronologicalWorkouts(workouts).flatMap((workout) =>
+  if (!exercise?.exerciseId||exercise.blockPrescription?.phase==='deload') return null;
+  const priorSets = chronologicalWorkouts(workouts).filter(workout=>!isDeloadWorkout(workout)).flatMap((workout) =>
     (workout.exercises || [])
       .filter((item) => item.exerciseId === exercise.exerciseId)
       .flatMap(completedWeightedSets),
@@ -280,6 +283,7 @@ export function prEventsForWorkouts(
   const priorByExercise = new Map();
   const events = [];
   for (const workout of chronologicalWorkouts(workouts)) {
+    if(isDeloadWorkout(workout))continue;
     for (const exercise of workout.exercises || []) {
       const exerciseId = exercise.exerciseId;
       if (!exerciseId) continue;
@@ -402,8 +406,8 @@ function observationForExercises(workouts) {
 }
 
 function exerciseProgressCounts(previousWorkouts, weekWorkouts) {
-  const previous = observationForExercises(previousWorkouts);
-  const current = observationForExercises(weekWorkouts);
+  const previous = observationForExercises(previousWorkouts.filter(workout=>!isDeloadWorkout(workout)));
+  const current = observationForExercises(weekWorkouts.filter(workout=>!isDeloadWorkout(workout)));
   let progressed = 0;
   let held = 0;
   for (const [exerciseId, latest] of current) {

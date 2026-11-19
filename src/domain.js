@@ -1,5 +1,5 @@
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
-import {progressionHistory} from './progressionHistory.js';
+import {progressionHistory,isDeloadWorkout,normalProgressionHistory} from './progressionHistory.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
 import {prepareTypoText,typoNameScore} from './exerciseSearchTypos.js';
 import { illustrationProvenanceForAsset } from './illustrationProvenance.js';
@@ -73,6 +73,10 @@ import {
   normalizeTrainingBlocksState,
   prescribeTrainingBlockWorkout,
   resolveTrainingBlockSkips,
+  trainingBlockExerciseContext,
+  sameBlockPrescription,
+  trainingRestForDate,
+  trainingRestBoundaries,
 } from "./trainingBlocks.js";
 import {
   accumulateStimulus,
@@ -2739,6 +2743,7 @@ export function currentWeekSchedule(state, date = new Date(), {includeDuration =
 }
 export function baseWeekSchedule(state, date = new Date(), {includeDuration = true} = {}) {
   if (!state?.program) return [];
+  if(state.program.trainingBlock?.completed&&Object.values(state.program.trainingBlock.deloadChoices||{}).some(choice=>choice.mode==='rest'))return [];
   const key = weekKey(date);
   const rotationStart = validRotationStartDate(state.program);
   const overrides = state.weekScheduleOverrides?.[key] || {};
@@ -2751,6 +2756,7 @@ export function baseWeekSchedule(state, date = new Date(), {includeDuration = tr
       const sourceWorkout =
         rotatingWorkoutForDate(state.program, originalDate) || slot;
       const scheduledDate = overrides[sourceWorkout.id] || originalDate;
+      if(trainingRestForDate(state,scheduledDate))return null;
       const occurrence =
         state.workoutOccurrenceOverrides?.[scheduledDate]?.[sourceWorkout.id];
       if (occurrence?.skipWorkout) return null;
@@ -9026,6 +9032,8 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
   return workout;
 }
 export function startWorkout(state, template) {
+  if(trainingRestForDate(state,isoDay())&&state.program?.days?.some(day=>day.id===template?.id))
+    throw Error('This is a planned rest week. Change your week choice before starting a plan workout.');
   const recovered=Boolean(template?.recoveredMove);
   if(recovered){
     const saved=recoveredWorkoutForDate(state,isoDay());
@@ -9127,7 +9135,7 @@ export function startWorkout(state, template) {
         !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
         ? base.nextBlockStartingLoad.weight : null;
       const repeatedPrescription=template.exercises.filter(e=>e.exerciseId===base.exerciseId).length>1;
-      const previous = previousExercise(state.workouts, base.exerciseId, base.importRole, repeatedPrescription?base.id:null);
+      const previous = previousExercise(normalProgressionHistory(state.workouts), base.exerciseId, base.importRole, repeatedPrescription?base.id:null);
       const compatiblePrevious = previous &&
         loggingModeOf(previous) === loggingModeOf(base) &&
         exerciseMeasure(previous) === exerciseMeasure(base) &&
@@ -9160,7 +9168,7 @@ export function startWorkout(state, template) {
                 : Number(weight) > 0
                   ? set.weightProvenance || "explicit-plan"
                   : null,
-            reps: recovered ? set.reps ?? (hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : base.repMin) : hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : reviewedStart != null ? base.repMin : previousSet?.reps ?? base.repMin,
+            reps: recovered ? set.reps ?? (hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : base.repMin) : hasOpenRepTarget(base)||hasUnspecifiedRepTarget(base) ? null : reviewedStart != null || isDeloadWorkout(template) ? base.repMin : previousSet?.reps ?? base.repMin,
             rir: null,
           };
         }),
@@ -9308,31 +9316,43 @@ export function resumeCompletedWorkout(
 }
 // Missing legacy prescription metadata is not fabricated. Known differences
 // start a new evidence context; exercise IDs remain the variation authority.
-export function progressionContextMatches(left, right) {
+function progressionSetupMatches(left, right) {
   if (left.exerciseId !== right.exerciseId ||
       exerciseMeasure(left) !== exerciseMeasure(right) ||
       exerciseLoadRequirement(left) !== exerciseLoadRequirement(right) ||
       loggingModeOf(left) !== loggingModeOf(right) ||
       Boolean(left.supersetId) !== Boolean(right.supersetId) ||
       (left.importRole || null) !== (right.importRole || null)) return false;
+  return true;
+}
+export function progressionContextMatches(left, right) {
+  if(!progressionSetupMatches(left,right))return false;
   return ['repMin', 'repMax', 'targetRir'].every((key, index) => {
     const a = left[key] ?? (index < 2 ? left.repRange?.[index] : null);
     const b = right[key] ?? (index < 2 ? right.repRange?.[index] : null);
     return a == null || b == null || Number(a) === Number(b);
   });
 }
+export const progressionTargetsComparable=(left,right,leftContext,rightContext)=>progressionContextMatches(left,right)||
+  progressionSetupMatches(left,right)&&sameBlockPrescription(leftContext,rightContext);
+const progressionWorkout=(state,history,exercise)=>state?.activeWorkout?.exercises?.includes(exercise)?state.activeWorkout:
+  [...history].reverse().find(workout=>workout.exercises?.includes(exercise));
 const progressionRir = set => set.rir == null || set.rir === '' ||
   !Number.isFinite(Number(set.rir)) ? null : Number(set.rir);
 
 // Shared factual observations for the existing next-step rules and the
 // on-demand progression review. Building evidence never changes saved records.
-export function collectProgressionEvidence(exercise, history) {
+export function collectProgressionEvidence(exercise, history, state=null) {
   const min = exercise.repMin ?? exercise.repRange?.[0];
   const max = exercise.repMax ?? exercise.repRange?.[1];
   if (!(min > 0) || !(max >= min)) return null;
   const timed = exerciseMeasure(exercise) === "seconds";
   const catalogItem = exerciseCatalog[exercise.exerciseId];
   const loadRequirement = exerciseLoadRequirement(exercise);
+  const contextCache=new Map();
+  const context=trainingBlockExerciseContext(state,exercise,progressionWorkout(state,history,exercise),contextCache);
+  const restBoundaries=trainingRestBoundaries(state);
+  let recoveryEpoch=0,restCursor=0;
   const appearances = progressionHistory(history)
     .map((workout, index) => ({
       workout,
@@ -9344,7 +9364,13 @@ export function collectProgressionEvidence(exercise, history) {
           ? workout.exercises.find(item=>item.exerciseId===exercise.exerciseId) : null),
       ambiguous: workout.exercises?.filter(item=>item.exerciseId===exercise.exerciseId).length>1,
     }))
-    .filter((entry) => entry.item || entry.ambiguous);
+    .filter((entry) => entry.item || entry.ambiguous)
+    .flatMap(entry=>{
+      while(restCursor<restBoundaries.length&&restBoundaries[restCursor]<=Date.parse(entry.workout.completedAt)){recoveryEpoch++;restCursor++;}
+      const blockContext=entry.item&&trainingBlockExerciseContext(state,entry.item,entry.workout,contextCache);
+      if(isDeloadWorkout(entry.workout)||blockContext?.phase==='deload'){recoveryEpoch++;return [];}
+      return [{...entry,blockContext,recoveryEpoch}];
+    });
   const observations = appearances
     .map((entry) => {
       if(!entry.item)return {...entry,completed:[]};
@@ -9388,6 +9414,7 @@ export function collectProgressionEvidence(exercise, history) {
           exercise.targetRir === undefined ||
           Number(set.rir) >= Number(exercise.targetRir),
       );
+      const ownEffortOkay=completed.every(set=>progressionRir(set)==null||entry.item.targetRir==null||progressionRir(set)>=Number(entry.item.targetRir));
       const effortRecorded = completed.every(
         (set) => set.rir !== null && set.rir !== undefined && set.rir !== "" && Number.isFinite(Number(set.rir)),
       );
@@ -9413,7 +9440,8 @@ export function collectProgressionEvidence(exercise, history) {
           ? Math.max(...completed.map((set) => Number(effectiveSetReps(entry.item, set))))
           : null,
         totalReps: completed.reduce((sum,set)=>sum+Number(effectiveSetReps(entry.item,set)),0),
-        effortOkay,
+        effortOkay:effortOkay&&ownEffortOkay,
+        ownEffortOkay,currentEffortOkay:effortOkay,
         effortRecorded,
         // Conservative advice thresholds, not measurements of form or readiness.
         // A one-rep miss is rep-building work; review needs a repeated broad miss.
@@ -9425,24 +9453,39 @@ export function collectProgressionEvidence(exercise, history) {
       };
     })
     .filter((entry) => entry.completed.length);
-  return {min, max, timed, catalogItem, loadRequirement, appearances, observations};
+  recoveryEpoch+=restBoundaries.length-restCursor;
+  return {min, max, timed, catalogItem, loadRequirement, appearances, observations,context,recoveryEpoch};
 }
 
-export function progressionFor(exercise, history, profile = null) {
-  const evidence = collectProgressionEvidence(exercise, history);
+export function progressionFor(exercise, history, profile = null, state=null) {
+  const owner=progressionWorkout(state,history,exercise);
+  const currentContext=trainingBlockExerciseContext(state,exercise,owner);
+  if(isDeloadWorkout(owner)||currentContext?.phase==='deload')return {
+    type:'hold',title:'Planned deload',
+    detail:'Follow the reduced set target and leave the planned reps in reserve. Deload results are logged separately from normal progression; no load increase is suggested.',
+  };
+  const evidence = collectProgressionEvidence(exercise, history,state);
   if (!evidence) return null;
-  const {min, max, timed, catalogItem, loadRequirement, appearances, observations} = evidence;
+  const {min, max, timed, catalogItem, loadRequirement, appearances, observations,context,recoveryEpoch} = evidence;
   if (!observations.length) return null;
   const latest = observations.at(-1);
   if (!latest.complete || latest.index !== appearances.at(-1)?.index ||
-      !progressionContextMatches(latest.item, exercise)) return null;
+      !progressionTargetsComparable(latest.item, exercise,latest.blockContext,context)) return null;
   const requested=exercise.sets?.filter(set=>set.planned!==false&&!set.added&&progressionComparableSet(set));
-  if(requested && requested.length!==latest.planned.length)return null;
+  if(requested && requested.length!==latest.planned.length){
+    if(!sameBlockPrescription(latest.blockContext,context))return null;
+    return {type:'hold',title:requested.length>latest.planned.length?'Build this week’s volume':'Follow this week’s set target',
+      detail:`The block changes this exercise from ${latest.planned.length} to ${requested.length} working sets. Keep a manageable load and complete the new set target before considering an increase.`};
+  }
+  if(sameBlockPrescription(latest.blockContext,context)&&latest.ownEffortOkay&&!latest.currentEffortOkay)return {
+    type:'hold',title:'Follow this week’s effort target',
+    detail:'This week calls for more reps in reserve than your last normal workout. Keep a manageable load and meet the new effort target before considering an increase.',
+  };
   if (loadRequirement === "optional" && !latest.hasLoad && !latest.hasNoLoad) return null;
   const structurallyComparable = observations.filter(
     (entry) => entry.complete && entry.planned.length === latest.planned.length &&
       entry.positions === latest.positions && entry.loadKinds === latest.loadKinds &&
-      progressionContextMatches(entry.item, latest.item),
+      progressionTargetsComparable(entry.item, latest.item,entry.blockContext,latest.blockContext),
   );
   const comparable = structurallyComparable.filter((entry) => {
     if (loadRequirement === "none") return true;
@@ -9457,6 +9500,7 @@ export function progressionFor(exercise, history, profile = null) {
   // when recorded; missing effort never becomes a fabricated RIR value.
   const previousAppearance = appearances.at(-2);
   const underperformancePrevious = previous && previous.index === previousAppearance?.index &&
+    latest.recoveryEpoch===recoveryEpoch&&previous.recoveryEpoch===latest.recoveryEpoch&&progressionContextMatches(previous.item,latest.item)&&progressionContextMatches(latest.item,exercise)&&
     latest.completed.every((set, index) => progressionRir(set) === progressionRir(previous.completed[index]))
       ? previous : null;
   const previousWithoutLoad = structurallyComparable
@@ -9604,7 +9648,8 @@ export function progressionFor(exercise, history, profile = null) {
   // later sets counts too. A flat best set alone is not evidence of a stall.
   const completeRecent = [];
   for(let i=appearances.length-1;i>=0;i--){
-    const entry=comparable.find(item=>item.index===appearances[i].index);
+    const entry=comparable.find(item=>item.index===appearances[i].index&&item.recoveryEpoch===recoveryEpoch&&
+      progressionContextMatches(item.item,latest.item)&&progressionContextMatches(latest.item,exercise));
     if(!entry || !entry.effortOkay || entry.completed.some((set,index)=>progressionRir(set)!==progressionRir(latest.completed[index])))break;
     completeRecent.unshift(entry);
   }
@@ -9709,7 +9754,7 @@ function exerciseObservation(exercise) {
 }
 export function recentExerciseProgress(workouts) {
   const histories = new Map();
-  for (const workout of workouts || [])
+  for (const workout of (workouts || []).filter(workout=>!isDeloadWorkout(workout)))
     for (const exercise of workout.exercises || []) {
       const observation = exerciseObservation(exercise);
       if (!observation) continue;
@@ -9755,9 +9800,15 @@ export function recentExerciseProgress(workouts) {
     (a, b) => new Date(b.completedAt || 0) - new Date(a.completedAt || 0),
   );
 }
-export function possibleFatigueSignal(workouts) {
+export function possibleFatigueSignal(workouts,state=null) {
   const observations = new Map();
-  for (const workout of workouts || [])
+  const recoveryBoundary=trainingRestBoundaries(state).at(-1);
+  for (const workout of workouts || []) {
+    if(recoveryBoundary!=null&&Date.parse(workout.completedAt)<=recoveryBoundary)continue;
+    if(isDeloadWorkout(workout)){
+      for(const exercise of workout.exercises || [])observations.delete(exercise.exerciseId);
+      continue;
+    }
     for (const exercise of workout.exercises || []) {
       const item = exerciseCatalog[exercise.exerciseId];
       if (item?.stability !== "high") continue;
@@ -9767,13 +9818,16 @@ export function possibleFatigueSignal(workouts) {
         observations.set(exercise.exerciseId, []);
       observations
         .get(exercise.exerciseId)
-        .push({ ...observation, completedAt: workout.completedAt });
+        .push({ ...observation, exercise, completedAt: workout.completedAt });
     }
+  }
   const decliningExerciseIds = [...observations.entries()]
     .filter(([, values]) => {
       if (values.length < 2) return false;
       const previous = values.at(-2);
       const latest = values.at(-1);
+      if(!progressionContextMatches(latest.exercise,previous.exercise)||
+        latest.exercise.sets.filter(progressionComparableSet).length!==previous.exercise.sets.filter(progressionComparableSet).length)return false;
       return latest.weight !== null && previous.weight !== null
         ? latest.weight < previous.weight ||
             (latest.weight === previous.weight && latest.reps < previous.reps)
@@ -10204,9 +10258,9 @@ export function coachContext(state) {
     progressionResults: uniqueExercises.map((item) => ({
       exerciseId: item.exerciseId,
       name: exerciseName(item),
-      result: nextWorkoutAdvice(item, state.workouts, state.profile),
+      result: nextWorkoutAdvice(item, state.workouts, state.profile,state),
     })),
-    fatigueSignal: possibleFatigueSignal(state.workouts),
+    fatigueSignal: possibleFatigueSignal(state.workouts,state),
     missedWorkouts: missedPlannedWorkouts(state),
     preferences: {
       units: state.profile.units,
@@ -10747,6 +10801,7 @@ export function deterministicCoach(state, message) {
       planned,
       state.workouts,
       state.profile,
+      state,
     );
     if (recommendation?.weight)
       return {

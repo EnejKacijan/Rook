@@ -1,7 +1,9 @@
 import { workoutPerformedDate } from './workoutDates.js';
-import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, compatibleReplacementCandidates, isExerciseAllowed, isoDay } from './domain.js';
+import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, compatibleReplacementCandidates, isExerciseAllowed, isoDay,collectProgressionEvidence,progressionTargetsComparable } from './domain.js';
+import {isDeloadWorkout} from './progressionHistory.js';
+import {trainingRestForDate} from './trainingBlocks.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
-import { effectiveSetReps, progressionComparableSet, loggingModeOf } from './advancedLogging.js';
+import { effectiveSetReps, progressionComparableSet } from './advancedLogging.js';
 import { summarizeSessionFeedback } from './sessionFeedback.js';
 import { exercisePerformance, prEventsForWorkouts } from './performanceInsights.js';
 import { defaultGymProfile, equipmentProfile } from './gymProfiles.js';
@@ -15,7 +17,6 @@ const dateOf = workoutPerformedDate;
 const working = exercise => (exercise.sets || []).filter(set => set.planned !== false && !set.added);
 const completeSets = exercise => working(exercise).filter(set => set.completed);
 const eligible = exercise => exerciseMeasure(exercise) === 'reps' && exerciseLoadRequirement(exercise) !== 'none';
-const shape = exercise => JSON.stringify([exercise.repMin, exercise.repMax, exercise.targetRir, loggingModeOf(exercise), working(exercise).length]);
 const chronological = workouts => [...workouts].sort((a,b) => String(dateOf(a)).localeCompare(String(dateOf(b))) || String(a.completedAt).localeCompare(String(b.completedAt)));
 export function authoritativeBlockWorkouts(state, blockId) {
   const superseded = new Set((state.workouts || []).map(workout => workout.supersedesCompletionId).filter(Boolean));
@@ -47,15 +48,19 @@ export function nextBlockReplacementChoices(state, exercise) {
 }
 function exerciseOutcome(state, block, day, exercise, workouts) {
   const appearances=workouts.filter(w=>!w.optionalSessionId && w.programDayId===day.id);
-  const comparable=appearances.filter(w=>!w.trainingBlock?.plannedDeload && !w.adjustment).flatMap(w=>{
+  const comparable=appearances.filter(w=>!isDeloadWorkout(w) && !w.adjustment).flatMap(w=>{
     const item=w.exercises?.find(e=>e.id===exercise.id && e.exerciseId===exercise.exerciseId);
     const sets=item?working(item):[];
     if(!sets.length || !sets.every(s=>s.completed && progressionComparableSet(s) && effectiveSetReps(item,s)!=null))return [];
     return [{...w,exercises:[item]}];
   });
   const latest=comparable.at(-1)?.exercises[0];
-  const cohort=latest?comparable.filter(w=>shape(w.exercises[0])===shape(latest)):[];
-  const decision=cohort.length>=2?nextWorkoutAdvice(latest,appearances.filter(w=>!w.trainingBlock?.plannedDeload&&!w.adjustment),baseGym(state).profile):null;
+  const evidence=latest&&collectProgressionEvidence(latest,comparable,state);
+  const latestObservation=evidence?.observations.at(-1);
+  const cohort=latestObservation?evidence.observations.filter(item=>item.complete&&item.planned.length===latestObservation.planned.length&&
+    item.positions===latestObservation.positions&&item.loadKinds===latestObservation.loadKinds&&
+    progressionTargetsComparable(item.item,latest,item.blockContext,latestObservation.blockContext)).map(item=>item.workout):[];
+  const decision=cohort.length>=2?nextWorkoutAdvice(latest,appearances.filter(w=>!isDeloadWorkout(w)&&!w.adjustment),baseGym(state).profile,state):null;
   let status=cohort.length<2?'insufficient':'held',reason=cohort.length<2?'Not enough comparable sessions to recommend a change.':'Keep the exercise and continue the current progression.';
   if(decision?.type==='progress'){status='progressed';reason=decision.detail;}
   else if(decision?.type==='stalled' || decision?.title==='Review the load' || decision?.title==='Review the variation' || decision?.title==='Reduce the hold target slightly'){status='review';reason=decision.detail;}
@@ -68,7 +73,7 @@ function exerciseOutcome(state, block, day, exercise, workouts) {
   const sameLoads=fromWeight!=null && currentWeight===fromWeight;
   const repGain=first && latest ? Math.min(...lastSets.map(s=>effectiveSetReps(latest,s)))-Math.min(...firstSets.map(s=>effectiveSetReps(first,s))) : 0;
   if(cohort.length>=2 && effortOK && repsOK && (currentWeight>fromWeight && fromWeight!=null || sameLoads && repGain>0)){status='progressed';reason=currentWeight>fromWeight?'Higher working load with the prescribed repetitions and effort.':'More repetitions at the same working load.';}
-  const substitutions=appearances.filter(w=>!w.adjustment && !w.trainingBlock?.plannedDeload).map(w=>w.exercises?.find(e=>e.id===exercise.id)).filter(Boolean);
+  const substitutions=appearances.filter(w=>!w.adjustment && !isDeloadWorkout(w)).map(w=>w.exercises?.find(e=>e.id===exercise.id)).filter(Boolean);
   const frequency=new Map();for(const item of substitutions)if(item.exerciseId!==exercise.exerciseId)frequency.set(item.exerciseId,(frequency.get(item.exerciseId)||0)+1);
   // An old permanent plan edit is not evidence of a temporary replacement.
   const permanentChange=(state.planVersions||[]).some(v=>v.timestamp?.slice(0,10)>=block.startDate && v.program?.trainingBlock?.id===block.id && v.program.days?.some(d=>d.id===day.id && d.exercises?.some(e=>e.id===exercise.id && e.exerciseId!==exercise.exerciseId)));
@@ -109,6 +114,11 @@ function nextStartDate(state, now) {
   const date=new Date(now);date.setHours(12,0,0,0);
   const today=isoDay(date),alreadyTrained=(state.workouts||[]).some(w=>w.completedAt && dateOf(w)===today);
   if(alreadyTrained)date.setDate(date.getDate()+1);
+  for(let i=0;i<24;i++){
+    const rest=trainingRestForDate(state,isoDay(date));
+    if(!rest)break;
+    date.setTime(new Date(`${rest.restThrough}T12:00:00`).getTime());date.setDate(date.getDate()+1);
+  }
   for(let i=0;i<7;i++){
     const weekday=new Intl.DateTimeFormat('en',{weekday:'short'}).format(date);
     if(state.program.days.some(day=>day.weekday===weekday))return isoDay(date);

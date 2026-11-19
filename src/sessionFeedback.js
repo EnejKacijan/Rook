@@ -1,3 +1,5 @@
+import {isDeloadWorkout} from './progressionHistory.js';
+
 export const SESSION_FEEDBACK = Object.freeze({
   easier: 'Easier than expected',
   about_right: 'About right',
@@ -18,7 +20,7 @@ export function saveSessionFeedback(state, workoutId, value, {persist} = {}) {
 // Block-level descriptive summary only. Exercise-level guidance reads the most
 // recent rating separately and never treats it as a logged set result.
 export function summarizeSessionFeedback(workouts) {
-  const eligible=workouts.filter(w=>w.completedAt && !w.endedEarly && !w.adjustment && !w.optionalSessionId && !w.trainingBlock?.plannedDeload &&
+  const eligible=workouts.filter(w=>w.completedAt && !w.endedEarly && !w.adjustment && !w.optionalSessionId && !isDeloadWorkout(w) &&
     w.exercises?.some(e=>e.sets?.some(s=>s.completed)));
   const rated=eligible.filter(w=>sessionFeedbackLabel(w.sessionFeedback));
   if(rated.length<4 || rated.length<eligible.length/2)return null;
