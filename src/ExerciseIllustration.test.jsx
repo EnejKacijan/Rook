@@ -74,6 +74,29 @@ it('keeps native lazy loading in charge and clears the previous mask when the im
   act(() => image.dispatchEvent(new Event('load')));
   expect(art.style.getPropertyValue('--exercise-illustration-source')).toContain('/second.svg');
 });
+it('keeps a stable placeholder while loading, stops on error and starts again for a different source', () => {
+  render(<ExerciseIllustration src="/first.svg" alt="Bench Press illustration"/>);
+  const art = host.querySelector('.exercise-illustration'), image = art.querySelector('img');
+  expect(art.classList.contains('is-loading')).toBe(true);
+  expect(art.querySelector('.exercise-illustration-placeholder').textContent).toBe('—');
+  act(() => image.dispatchEvent(new Event('error')));
+  expect(art.classList.contains('is-loading')).toBe(false);
+  expect(art.querySelector('.exercise-illustration-placeholder')).not.toBeNull();
+  render(<ExerciseIllustration src="/second.svg" alt="Row illustration"/>);
+  expect(art.querySelector('img')).toBe(image);
+  expect(art.classList.contains('is-loading')).toBe(true);
+  act(() => image.dispatchEvent(new Event('load')));
+  expect(art.classList.contains('is-loading')).toBe(false);
+  expect(art.querySelector('.exercise-illustration-placeholder')).toBeNull();
+});
+it('preserves the picker dash through loading and a failed request', () => {
+  render(<ExercisePickerIdentity item={exerciseCatalog['barbell-bench-press']} deferOffscreen={false}/>);
+  const art = host.querySelector('.exercise-illustration'), image = art.querySelector('img');
+  expect(art.querySelector('.exercise-picker-placeholder')).not.toBeNull();
+  act(() => image.dispatchEvent(new Event('error')));
+  expect(host.querySelector('.exercise-picker-placeholder')).not.toBeNull();
+  expect(host.querySelector('.exercise-illustration.is-loading')).toBeNull();
+});
 it('shares theme ink across picker, compact/expanded review, detail and fullscreen viewer', () => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   const state = blankState(), item = exerciseCatalog['barbell-bench-press'];

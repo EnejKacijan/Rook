@@ -1,0 +1,187 @@
+/* Your year in Rook: a full-page story with direct, finger-following pages.
+   Only transform and opacity animate. Reduced motion removes movement,
+   parallax, counting and the celebration. */
+:root .modal-layer > .screen.year-review {
+  --year-gutter: 24px;
+  --year-ease: cubic-bezier(.22, .8, .22, 1);
+  --year-page-ms: 420ms;
+  position: relative;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  width: 100%;
+  max-width: 500px;
+  height: 100%;
+  min-height: 0;
+  max-height: 100%;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: 0;
+  box-shadow: none;
+  animation: none;
+  background: var(--rook-bg);
+  color: var(--rook-text);
+}
+@media (max-width: 374px) { :root .modal-layer > .screen.year-review { --year-gutter: 18px; } }
+
+/* Chrome: progress, year and close. */
+.year-review-bar { position: relative; z-index: 2; display: grid; gap: 6px; padding: calc(10px + env(safe-area-inset-top, 0px)) var(--year-gutter) 4px; }
+.year-progress { list-style: none; display: flex; gap: 4px; margin: 0; padding: 0; }
+.year-progress > li { flex: 1 1 0; min-width: 0; }
+.year-progress button { display: flex; align-items: center; width: 100%; height: 24px; padding: 0; border: 0; background: transparent; }
+.year-progress button > i { display: block; width: 100%; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--rook-text) 14%, transparent); overflow: hidden; position: relative; }
+.year-progress button > i::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--rook-accent-fill); transform: scaleX(0); transform-origin: left; transition: transform 260ms var(--year-ease); }
+.year-progress button:is(.is-done, .is-current) > i::after { transform: scaleX(1); }
+.year-review-controls { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 44px; }
+.year-select select, .year-select-static { min-height: 40px; padding: 0 30px 0 12px; border: 1px solid var(--rook-border); border-radius: 12px; background: var(--rook-surface) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='none' stroke='%23888' stroke-width='1.8' stroke-linecap='round'%3E%3Cpath d='m6 8 4 4 4-4'/%3E%3C/svg%3E") right 8px center / 16px no-repeat; color: var(--rook-text); font-size: .9375rem; font-weight: 700; font-variant-numeric: tabular-nums; appearance: none; }
+.year-select-static { display: inline-flex; align-items: center; padding-right: 12px; background-image: none; border-color: transparent; background-color: transparent; padding-left: 0; }
+.year-close { display: grid; place-items: center; width: 44px; height: 44px; margin-right: -8px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--rook-text); }
+.year-close > span { font-size: 30px; font-weight: 300; line-height: 1; }
+.year-nav-button svg { width: 20px; height: 20px; }
+
+/* Pages. The track moves by the committed index plus the live drag. */
+.year-viewport { position: relative; min-height: 0; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
+.year-track { display: flex; height: 100%; transform: translate3d(calc(var(--index, 0) * -100% + var(--drag, 0) * 100%), 0, 0); transition: transform var(--year-page-ms) var(--year-ease); will-change: transform; }
+.year-track.is-dragging { transition: none; }
+.year-review .year-page { position: relative; flex: 0 0 100%; min-width: 0; height: 100%; margin: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.year-page::before { content: ""; position: absolute; inset: 0 0 auto; height: 70%; pointer-events: none; background: radial-gradient(120% 70% at 50% 0%, var(--rook-accent-soft), transparent 70%); opacity: .9; }
+.year-page-body { position: relative; display: flex; flex-direction: column; min-height: 100%; padding: 20px var(--year-gutter) 32px; box-sizing: border-box; }
+.year-page-body.is-centered { justify-content: center; align-items: center; text-align: center; padding-bottom: 56px; }
+
+/* Content arrives once its page is current; neighbours wait empty. */
+:root .screen.year-review .year-reveal { opacity: 0; transform: translate3d(0, 14px, 0); transition: opacity 180ms ease-out, transform 180ms ease-out; }
+:root .screen.year-review .year-page.is-active .year-reveal { opacity: 1; transform: none; transition: opacity 420ms ease-out, transform 560ms var(--year-ease); transition-delay: calc(140ms + var(--r, 0) * 70ms); }
+
+/* Type. Rem-based sizes grow with the user's font setting; vw caps keep
+   numbers on screen at 320px. */
+.year-review :is(p, h2, h3) { margin: 0; overflow-wrap: anywhere; }
+:root .screen.year-review .year-eyebrow { display: flex; align-items: center; gap: 8px; color: var(--rook-accent-text); font-size: .6875rem; font-weight: 750; letter-spacing: .14em; line-height: 1.2; }
+:root .screen.year-review .is-centered .year-eyebrow { justify-content: center; }
+:root .screen.year-review .year-eyebrow .session-log-trophy { width: 16px; height: 16px; }
+:root .screen.year-review .year-display { margin-top: 10px; color: var(--rook-text); font-size: min(9rem, 34vw); font-weight: 800; line-height: .9; letter-spacing: -.06em; font-variant-numeric: tabular-nums; }
+:root .screen.year-review .year-big { margin-top: 18px; color: var(--rook-text); font-size: min(6.5rem, 26vw); font-weight: 800; line-height: .95; letter-spacing: -.055em; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+:root .screen.year-review .year-big.is-text { font-size: min(3.5rem, 15vw); line-height: 1; letter-spacing: -.04em; }
+:root .screen.year-review .year-big small { color: var(--rook-secondary); font-size: .3em; font-weight: 700; letter-spacing: -.01em; }
+.year-review h2.year-title { margin-top: 6px; color: var(--rook-text); font-size: 1.75rem; font-weight: 750; line-height: 1.1; letter-spacing: -.03em; }
+:root .screen.year-review .year-big + h2.year-title { margin-top: 2px; }
+.year-review p.year-lede { margin-top: 14px; color: var(--rook-text); font-size: 1.0625rem; line-height: 1.45; }
+:root .screen.year-review .year-lede strong { color: var(--rook-accent-text); }
+.year-review p.year-note { margin-top: 14px; color: var(--rook-secondary); font-size: .875rem; line-height: 1.45; }
+:root .screen.year-review .year-hint { margin-top: 36px; color: var(--rook-secondary); font-size: .8125rem; letter-spacing: .02em; }
+.year-count { display: inline; }
+
+/* Illustrations keep a stable box while they load. */
+.year-art { display: grid; place-items: center; flex: none; width: 56px; height: 56px; padding: 4px; box-sizing: border-box; border-radius: 15px; background: var(--rook-surface-muted); }
+.year-art > .exercise-illustration { width: 100%; height: 100%; }
+.year-art.is-hero { width: min(168px, 42vw); height: min(168px, 42vw); margin-bottom: 26px; padding: 12px; border-radius: 36px; background: var(--rook-surface); border: 1px solid var(--rook-accent-hairline, var(--rook-border)); }
+.year-parallax { transform: translate3d(calc((var(--offset, 0) + var(--drag, 0)) * 38%), 0, 0); transition: transform var(--year-page-ms) var(--year-ease); }
+.year-track.is-dragging .year-parallax { transition: none; }
+
+/* Months. */
+:root .screen.year-review .year-months { list-style: none; display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 5px; margin: 28px 0 0; padding: 0; }
+.year-months > li { display: grid; justify-items: center; gap: 6px; min-width: 0; }
+.year-month-bar { display: flex; align-items: flex-end; width: 100%; height: 120px; border-radius: 7px; background: color-mix(in srgb, var(--rook-text) 6%, transparent); overflow: hidden; }
+.year-month-bar > i { display: block; width: 100%; height: calc(var(--h, 0) * 100%); min-height: 3px; border-radius: 7px 7px 0 0; background: linear-gradient(to top, var(--rook-accent-fill) calc((1 - var(--a, 0)) * 100%), color-mix(in srgb, var(--rook-accent-fill) 40%, var(--rook-surface)) 0); transform-origin: bottom; transform: scaleY(0); transition: transform 160ms ease-out; }
+.year-page.is-active .year-month-bar > i { transform: scaleY(1); transition: transform 620ms var(--year-ease); transition-delay: calc(260ms + var(--m, 0) * 40ms); }
+.year-months small { color: var(--rook-secondary); font-size: .6875rem; font-weight: 700; }
+.year-months > .is-top small { color: var(--rook-accent-text); }
+
+/* Facts, stacks and lists. */
+:root .screen.year-review .year-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; margin: 26px 0 0; }
+.year-facts > div, .year-grid > div { padding: 14px 16px; border-radius: 18px; background: var(--rook-surface); border: 1px solid var(--rook-border); min-width: 0; }
+.year-facts dt, .year-grid dt { color: var(--rook-secondary); font-size: .8125rem; line-height: 1.3; }
+.year-facts dd, .year-grid dd { margin: 4px 0 0; color: var(--rook-text); font-size: 1.375rem; font-weight: 750; line-height: 1.15; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
+.year-facts dd small { display: block; margin-top: 4px; color: var(--rook-secondary); font-size: .8125rem; font-weight: 500; line-height: 1.35; }
+:root .screen.year-review .year-stack { list-style: none; display: grid; margin: 18px 0 0; padding: 0; }
+.year-stack > li { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 10px; padding: 16px 0; border-bottom: 1px solid var(--rook-border); }
+.year-stack > li:last-child { border-bottom: 0; }
+:root .screen.year-review .year-stack strong { color: var(--rook-text); font-size: min(3.25rem, 15vw); font-weight: 800; line-height: 1; letter-spacing: -.045em; font-variant-numeric: tabular-nums; }
+:root .screen.year-review .year-stack > li > span { color: var(--rook-text); font-size: 1.0625rem; font-weight: 650; }
+:root .screen.year-review .year-stack small { flex-basis: 100%; margin-top: 6px; color: var(--rook-secondary); font-size: .875rem; line-height: 1.4; }
+:root .screen.year-review .year-list { list-style: none; display: grid; gap: 10px; margin: 22px 0 0; padding: 0; }
+.year-list > li { display: flex; align-items: center; gap: 14px; min-width: 0; }
+.year-list > li > span { display: grid; gap: 3px; min-width: 0; }
+.year-list strong { color: var(--rook-text); font-size: 1rem; font-weight: 700; line-height: 1.3; overflow-wrap: anywhere; }
+.year-list small { color: var(--rook-secondary); font-size: .875rem; line-height: 1.35; }
+.year-list.is-cards > li { padding: 12px 14px 12px 12px; border-radius: 20px; background: var(--rook-surface); border: 1px solid var(--rook-border); align-items: center; }
+.year-list.is-cards .year-art { width: 72px; height: 72px; border-radius: 17px; }
+.year-list.is-cards small { color: var(--rook-accent-text); font-weight: 700; }
+.year-list.is-ranked > li > b { width: 22px; flex: none; color: var(--rook-accent-text); font-size: 1.25rem; font-weight: 800; text-align: center; font-variant-numeric: tabular-nums; }
+.year-pair { display: inline-flex; flex-wrap: wrap; align-items: baseline; column-gap: 6px; color: var(--rook-secondary); font-size: .9375rem; line-height: 1.35; font-variant-numeric: tabular-nums; }
+.year-pair-to { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; }
+.year-pair-to > [aria-hidden] { color: var(--rook-accent-text); }
+.year-pair strong { font-size: 1.0625rem; font-weight: 750; }
+.year-focus { margin-top: 26px; }
+.year-focus ul { list-style: none; display: grid; gap: 10px; margin: 10px 0 0; padding: 0; }
+.year-focus li { display: grid; grid-template-columns: minmax(84px, auto) minmax(0, 1fr) 3.2em; align-items: center; gap: 10px; color: var(--rook-text); font-size: .9375rem; font-weight: 650; text-transform: capitalize; }
+.year-focus li > i { display: block; height: 8px; border-radius: 4px; background: linear-gradient(to right, var(--rook-accent-fill) calc(var(--w, 0) * 100%), color-mix(in srgb, var(--rook-text) 8%, transparent) 0); }
+.year-focus li > small { color: var(--rook-secondary); font-size: .8125rem; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Finale. */
+:root .screen.year-review .year-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 24px 0 0; }
+.year-grid dd { font-size: 1.75rem; letter-spacing: -.03em; }
+.year-finale-actions { display: grid; gap: 12px; margin-top: auto; padding-top: 28px; }
+.year-finale-actions .button { width: 100%; margin: 0; }
+:root .screen.year-review .year-finale-stats { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; margin: 0; padding: 8px 12px; border: 0; background: transparent; color: var(--rook-secondary); font-size: .875rem; font-weight: 650; line-height: 1.4; letter-spacing: 0; text-transform: none; }
+.year-finale-stats svg { width: 16px; height: 16px; flex: none; }
+:root .screen.year-review p.year-share-status { min-height: 0; margin: 0; color: var(--rook-secondary); font-size: .8125rem; line-height: 1.4; text-align: center; }
+:root .screen.year-review p.year-share-status:empty { display: none; }
+
+/* A short burst on the records page and the finale. */
+.year-celebration { position: absolute; top: 72px; left: 50%; width: 0; height: 0; pointer-events: none; z-index: 1; }
+.year-celebration > i { --angle: calc(var(--n) * 25.714deg); --reach: 110px; position: absolute; left: -3px; top: -6px; width: 6px; height: 12px; border-radius: 2px; background: var(--rook-accent-fill); opacity: 0; animation: year-burst 1100ms cubic-bezier(.15, .7, .3, 1) 260ms both; }
+.year-celebration > i:nth-child(3n) { --reach: 150px; width: 8px; height: 8px; border-radius: 50%; background: color-mix(in srgb, var(--rook-accent-fill) 55%, var(--rook-surface)); }
+.year-celebration > i:nth-child(3n + 1) { --reach: 84px; background: var(--rook-accent-text); }
+@keyframes year-burst {
+  0% { opacity: 0; transform: rotate(var(--angle)) translate3d(0, 0, 0) scale(.4); }
+  15% { opacity: 1; }
+  100% { opacity: 0; transform: rotate(var(--angle)) translate3d(0, calc(var(--reach) * -1), 0) rotate(160deg) scale(1); }
+}
+
+/* Footer navigation: thumb reach, no auto-advance. */
+.year-review-nav { position: relative; z-index: 2; display: grid; grid-template-columns: 52px 1fr auto; align-items: center; gap: 12px; padding: 10px var(--year-gutter) calc(14px + env(safe-area-inset-bottom, 0px)); border-top: 1px solid var(--rook-border); background: var(--rook-bg); }
+.year-review-nav > span { color: var(--rook-secondary); font-size: .8125rem; font-weight: 650; text-align: center; font-variant-numeric: tabular-nums; }
+.year-nav-button { display: inline-flex; align-items: center; justify-content: center; gap: 4px; min-width: 52px; min-height: 52px; padding: 0; border: 1px solid var(--rook-border); border-radius: 26px; background: var(--rook-surface); color: var(--rook-text); }
+.year-nav-button.is-next { min-width: 124px; padding: 0 16px 0 22px; border-color: transparent; background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); font-size: .8125rem; font-weight: 750; letter-spacing: .08em; }
+.year-nav-button.is-next:not(:has(svg)) { padding: 0 22px; }
+.year-nav-button:not(:disabled):active { transform: scale(.97); }
+.year-nav-button:disabled { opacity: .35; }
+
+/* All year stats: a calm list. */
+.year-stats-scroll { grid-row: 2 / 4; min-height: 0; overflow-y: auto; overscroll-behavior: contain; }
+.year-stats { padding: 8px var(--year-gutter) calc(28px + env(safe-area-inset-bottom, 0px)); }
+:root .screen.year-review .year-stats h2 { margin-top: 8px; font-size: 2.25rem; font-weight: 800; letter-spacing: -.04em; }
+.year-stats dl { margin: 18px 0 0; }
+.year-stats dl > div { display: flex; justify-content: space-between; align-items: baseline; gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--rook-border); }
+.year-stats dt { color: var(--rook-text); font-size: .9375rem; line-height: 1.35; min-width: 0; }
+.year-stats dt small { display: block; margin-top: 3px; color: var(--rook-secondary); font-size: .8125rem; }
+.year-stats dd { margin: 0; color: var(--rook-text); font-size: .9375rem; font-weight: 750; text-align: right; font-variant-numeric: tabular-nums; }
+:root .screen.year-review .year-stats .sheet-footnote { margin: 18px 0 20px; color: var(--rook-secondary); font-size: .8125rem; line-height: 1.5; }
+
+/* Entry points. */
+.year-review-card { position: relative; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; margin: 16px 0 0; padding: 18px 18px 14px; border-radius: 22px; overflow: hidden; background: var(--rook-accent-soft); border: 1px solid var(--rook-accent-hairline, var(--rook-border)); }
+.year-review-card > div:first-child { position: relative; z-index: 1; min-width: 0; }
+.year-review-card .eyebrow { margin: 0; color: var(--rook-accent-text); }
+.year-review-card strong { display: block; margin-top: 8px; color: var(--rook-text); font-size: 1.25rem; font-weight: 750; letter-spacing: -.02em; }
+.screen .year-review-card p:not(.eyebrow) { margin: 4px 0 0; color: var(--rook-secondary); font-size: .875rem; line-height: 1.4; }
+.year-review-card-actions { position: relative; z-index: 1; display: grid; justify-items: end; }
+.year-review-card-actions .text-button { min-height: 44px; padding: 8px 4px; font-weight: 750; letter-spacing: .08em; font-size: .75rem; }
+.year-review-card-actions .text-button.is-quiet { color: var(--rook-secondary); }
+.year-review-card-mark { position: absolute; right: -6px; top: -18px; color: color-mix(in srgb, var(--rook-accent-text) 12%, transparent); font-size: 5.5rem; font-weight: 800; letter-spacing: -.06em; line-height: 1; pointer-events: none; }
+.year-review-entry { margin-top: 28px; }
+.year-review-entry > .eyebrow { margin: 0 0 4px; }
+.year-review-entry-row small { display: block; margin-top: 3px; color: var(--rook-secondary); font-size: .8125rem; }
+
+@media (prefers-reduced-motion: reduce) {
+  .year-track, .year-parallax, .year-progress button > i::after, .year-month-bar > i,
+  :root .screen.year-review .year-reveal, :root .screen.year-review .year-page.is-active .year-reveal { transition: none !important; }
+  .year-parallax { transform: none !important; }
+  :root .screen.year-review .year-reveal { opacity: 1 !important; transform: none !important; }
+  .year-month-bar > i { transform: none !important; }
+  .year-celebration { display: none; }
+}
+.year-review.is-reduced-motion :is(.year-track, .year-parallax, .year-reveal, .year-month-bar > i) { transition: none !important; }
+.year-review.is-reduced-motion :is(.year-parallax, .year-reveal, .year-month-bar > i) { transform: none !important; opacity: 1 !important; }
+.year-review.is-reduced-motion .year-celebration { display: none; }
+/* The last page's primary action is Share; Done stays quiet. */
+.year-nav-button.is-next.is-done { border-color: var(--rook-border); background: var(--rook-surface); color: var(--rook-text); }

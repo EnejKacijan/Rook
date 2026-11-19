@@ -5199,6 +5199,7 @@ export function Today({
         {activeNotice}
         {activeOptionalNotice}
         {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
+        {isToday && <YearReviewTodayCard state={state} open={year=>setDetail({yearReview:{year}})} />}
         <section className="rest-day-state">
           {dayHeader(movedAwayRest ? displayDate(selectedDate) : 'REST DAY')}
           <h1>{deloadRest?'Rest week':'Rest day'}</h1>
@@ -5695,6 +5696,7 @@ export function Today({
       {calendar()}
       {activeNotice}
       {activeOptionalNotice}
+      {viewingToday && <YearReviewTodayCard state={state} open={year => setDetail({ yearReview: { year } })} />}
       {viewingToday && state.program.trainingBlock?.completed && (
         <section className="block-complete-card">
           <Eyebrow>BLOCK COMPLETE</Eyebrow>
@@ -11461,6 +11463,7 @@ export function Progress({ state, update, setDetail, setPage }) {
         </div>
       </section>
       {earlyData ? <>{trainingSections}{progressionSection}{goalSection}{photoSection}</> : <>{goalSection}{progressionSection}{photoSection}{trainingSections}</>}
+      <YearReviewProgressEntry state={state} open={year => setDetail({ yearReview: { year } })} />
     </main>
   );
 }
@@ -18777,6 +18780,7 @@ export function Detail({
   useEffect(() => {
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
+  if (detail?.yearReview) return <YearInReview state={state} close={close} initialYear={detail.yearReview.year} />;
   if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} Illustration={ExerciseDetailIllustration} />;
   if(detail?.deloadWeek)return <DeloadWeekChoice state={state} update={update} close={close} Header={SheetHeader} request={detail.deloadWeek}/>;
   if(detail?.coachWorkoutReuse)return <CoachWorkoutReuseSheet state={state} update={update} reference={detail.coachWorkoutReuse} entryId={detail.coachEntryId} Header={SheetHeader} close={close} setDetail={setDetail} onStarted={()=>{close();setPage('workout');}}/>;
@@ -20922,7 +20926,7 @@ function HydratedApp({startup,placements}) {
           close={closeDetail}
           onCloseStart={() => setDetailClosing(true)}
           backgroundRef={backgroundRef}
-          presentation={detail?.visual ? "fullscreen" : (detail === "plan-builder" || detail?.editPlan?.fullscreen) ? "editor-page" : "sheet"}
+          presentation={detail?.visual ? "fullscreen" : (detail === "plan-builder" || detail?.editPlan?.fullscreen || detail?.yearReview) ? "editor-page" : "sheet"}
           tabNavigation={detail?.editPlan?.fullscreen ? leave => <TabRouteNavigation page={page} setPage={setPage} leave={leave} backgroundRef={backgroundRef} /> : undefined}
         >
           <Detail
@@ -20984,3 +20988,4 @@ import { applyHybridDecision } from './hybridImportReview.js';
 import { setSourceDecisionPending } from './importSourceFidelity.js';
 import { ImportInterpretationOffer } from './ImportInterpretationOffer.jsx';
 import { useSemanticSwipeBack } from './useSemanticSwipeBack.js';
+import { YearInReview, YearReviewTodayCard, YearReviewProgressEntry } from './YearInReview.jsx';
