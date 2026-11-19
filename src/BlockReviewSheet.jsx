@@ -1,15 +1,14 @@
 import {AnimatedDetails} from './AnimatedDetails.jsx';
 import {ReviewDetails} from './ReviewDetails.jsx';
-import {NavigationChevron} from './NavigationChevron.jsx';
 import { useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { SheetActionFooter } from './SheetActionFooter.jsx';
-import { displayWeight, displayEstimatedOneRepMax, weightUnit, saveState, searchExercises } from './domain.js';
+import { displayWeight, saveState, searchExercises } from './domain.js';
 import { applyNextBlock, nextBlockReplacementChoices, proposeNextBlock, reviewTrainingBlock } from './blockReview.js';
+import { BlockReviewSummary, BlockOutcomes, shortDate } from './BlockReviewSummary.jsx';
 import { SearchInput } from './SearchInput.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import './blockReview.css';
 
-const labels={progressed:'Progressed',held:'Held',review:'Review',insufficient:'Insufficient data'};
 export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
   const current=state.program?.trainingBlock;
   const block=blockId && blockId!==current?.id ? state.completedTrainingBlocks?.find(b=>b.id===blockId) : current;
@@ -47,29 +46,13 @@ export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
   const source=change && state.program.days.find(d=>d.id===change.dayId)?.exercises.find(e=>e.id===change.id);
   const candidates=source?searchExercises(nextBlockReplacementChoices(state,source),query):[];
   return <main ref={ref} className="screen detail-screen block-review-sheet">
-    <Header title={step==='next'?(proposal?.repeat?'Repeat block':'Next block'):step==='replacement'?'Choose replacement':'Block review'} onClose={close} onBack={step!=='summary'||onBack?back:undefined}/>
-    {step==='summary' && <>
-      <p className="eyebrow">BLOCK REVIEW</p><h1>{review.name}</h1><p>{review.totalWeeks} weeks · {review.startDate}{review.completedAt?` – ${review.completedAt.slice(0,10)}`:''}</p>
-      {block.historyCorrectedAt && <p className="sheet-footnote">Historical data changed after this block was reviewed. This summary reflects corrected history; approved plan decisions remain unchanged.</p>}
-      <section className="block-review-hero" aria-label="Completed planned sessions"><strong>{review.completedSessions} / {review.plannedSessions}</strong><span>planned sessions completed</span></section>
-      <h2 className="eyebrow">TRAINING</h2>
-      <dl className="training-block-summary"><div><dt>Working sets</dt><dd>{review.loggedSets} / {review.prescribedSets}</dd></div><div><dt>Moved / skipped</dt><dd>{review.moved} / {review.skipped}</dd></div></dl>
-      {review.sessionFeedback && <p className="sheet-footnote session-feedback-block">{review.sessionFeedback.text}</p>}
-      <ReviewDetails title="About these results">
-        <p>Working sets include recorded today-only changes. Skipped sessions are counted separately.</p>
-        {!!review.endedEarly && <p>{review.endedEarly} sessions ended early. Only logged work is counted.</p>}
-        {!!review.optionalCompleted && <p>{review.optionalCompleted} extra sessions completed separately.</p>}
-        {review.deloadCompleted && <p>Deload recorded. Lower programmed targets are not regression.</p>}
-        {review.sessionFeedback && <p>Session difficulty reflects your feedback, not a recovery measurement.</p>}
-      </ReviewDetails>
-      <h2 className="eyebrow">PERFORMANCE</h2><dl className="training-block-summary"><div><dt>Progressed</dt><dd>{review.progressed}</dd></div><div><dt>Held</dt><dd>{review.held}</dd></div><div><dt>PR highlights</dt><dd>{review.prs}</dd></div><div><dt>For review</dt><dd>{review.review}</dd></div></dl>
-      <button className="list-row" onClick={()=>setStep('exercises')}><span>Exercise outcomes</span><NavigationChevron/></button>
-      {!historical && <section className="block-review-next"><h2 className="eyebrow">NEXT BLOCK</h2><p>{review.rows.every(r=>r.status==='insufficient')?'Keep the current structure while you build more training history.':'Review suggested loads and exercise changes for your next block.'}</p><button className="button primary" disabled={!block.completed} onClick={()=>prepare(false)}>REVIEW NEXT BLOCK</button><button className="button secondary" disabled={!block.completed} onClick={()=>prepare(true)}>REPEAT BLOCK</button>{!block.completed&&<p className="sheet-footnote">Finish the remaining block workouts first.</p>}</section>}
-      <button className="button quiet" onClick={close}>NOT NOW</button>
-    </>}
-    {step==='exercises' && <><p className="eyebrow">BLOCK EVIDENCE</p><h1>Exercise outcomes</h1><p>Comparable recorded sessions, not calendar movement. Held is a neutral result.</p><section className="block-outcomes">{review.rows.map(row=><article key={row.id}><h2>{row.name}</h2><strong>{labels[row.status]}</strong>{row.currentWeight!=null && <p>{row.fromWeight!=null&&row.fromWeight!==row.currentWeight?`${load(row.fromWeight)} → `:''}{load(row.currentWeight)}{row.repGain>0?` · +${row.repGain} reps`:''}</p>}<small>{row.comparableSessions} comparable sessions</small><p>{row.reason}</p>{row.estimatedOneRepMax!=null && <small>Estimated 1RM: {displayEstimatedOneRepMax(row.estimatedOneRepMax,state.profile.units)} {weightUnit(state.profile.units)} · estimated, not measured</small>}</article>)}</section></>}
+    <Header title={step==='next'?(proposal?.repeat?'Repeat block':'Next block'):step==='replacement'?'Choose replacement':step==='exercises'?'Exercise results':'Block review'} onClose={close} onBack={step!=='summary'||onBack?back:undefined}/>
+    {step==='summary' && <BlockReviewSummary review={review} block={block} units={state.profile.units} historical={historical} onOutcomes={()=>setStep('exercises')}
+      next={<>{!historical && <section className="block-review-next" aria-labelledby="block-next-title"><p className="eyebrow">WHAT’S NEXT</p><h2 id="block-next-title">Plan your next block</h2><p>{review.rows.every(r=>r.status==='insufficient')?'Keep the current structure while you build more training history.':'See suggested weights and exercise changes first. Nothing changes until you start.'}</p><button className="button primary" disabled={!block.completed} onClick={()=>prepare(false)}>REVIEW NEXT BLOCK</button><button className="button secondary" disabled={!block.completed} onClick={()=>prepare(true)}>REPEAT BLOCK</button>{!block.completed&&<p className="sheet-footnote">Finish the remaining block workouts first.</p>}</section>}
+      <button className="button quiet block-review-close" onClick={close}>{historical?'CLOSE':'NOT NOW'}</button></>}/>}
+    {step==='exercises' && <BlockOutcomes review={review} units={state.profile.units}/>}
     {step==='next' && proposal && <>
-      <p className="review-scope">Weekly plan · {proposal.repeat?'Repeat block':'Next block'}</p><h1>{review.name}</h1><p>{proposal.totalWeeks} weeks · Starts {proposal.startDate}{proposal.plannedDeloadWeek?` · Deload Week ${proposal.plannedDeloadWeek}`:''}</p>
+      <p className="review-scope">Weekly plan · {proposal.repeat?'Repeat block':'Next block'}</p><h1>{review.name}</h1><p>{proposal.totalWeeks} weeks · Starts {shortDate(proposal.startDate)}{proposal.plannedDeloadWeek?` · Deload Week ${proposal.plannedDeloadWeek}`:''}</p>
       <div className="block-next-content"><h2 className="eyebrow">{proposal.changes.length?'REVIEW CHANGES':'KEEPING THE STRUCTURE'}</h2>
       {!proposal.changes.length && <p>Keep your current exercises and targets.</p>}
       {proposal.changes.map(item=><section className="block-next-change" key={item.id}><h2>{item.name}</h2><p>{item.kind==='load'?`${load(item.from)} → ${load(item.to)}`:`Recommended: ${item.toName}`}</p><ReviewDetails title="Why this change?"><p>{item.reason}</p></ReviewDetails>
