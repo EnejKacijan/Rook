@@ -1,6 +1,7 @@
 import React,{useLayoutEffect,useRef,useState} from 'react';
 import {exerciseName,saveState,pluralize} from './domain.js';
-import {reviewPrescription,reviewSetTarget} from './reviewPrescription.js';
+import {reviewPrescription} from './reviewPrescription.js';
+import {WorkoutExerciseList} from './WorkoutExerciseList.jsx';
 import {effectiveGymContext} from './gymProfiles.js';
 import {reviewCombinedSelection,buildCombinedProposal,combineFingerprint} from './combineWorkouts.js';
 import {combinedAdjustment,cancelCombinedWorkout,persistCombinedState,isCombinedAdjustment} from './combinedWorkoutLifecycle.js';
@@ -126,7 +127,7 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
  const changes=combinedReviewChanges(state,proposal),stale=proposal.fingerprint!==combineFingerprint(state)||!changes;
  const edit=()=>{editStart.current=structuredClone(proposal);setReviewing(true);setError('');onReviewCancelled?.(false);};
  const cancel=()=>{if(editStart.current)setProposal(editStart.current);setReviewing(false);setError('');onReviewCancelled?.(true);};
- const workoutRows=<div className="review-change-list">{proposal.workout.exercises.map(exercise=><div className="review-change-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><span>{pluralize(exercise.sets.length,'set')} · {reviewPrescription(exercise,{units:state.profile.units})} · {exercise.restSeconds} sec rest{exercise.supersetId?' · Superset':''}</span><ReviewDetails title="Set targets">{exercise.sets.map((set,index)=><p key={set.id}>Set {index+1} · {reviewSetTarget(exercise,set,{units:state.profile.units})}</p>)}</ReviewDetails></div>)}</div>;
+ const workoutRows=<WorkoutExerciseList exercises={proposal.workout.exercises} profile={state.profile}/>;
  return <div onMouseDownCapture={keepComposerFocus} className={`action-card combine-card${reviewing?' action-card-reviewing combine-review-surface':''}`}>
    {reviewing&&!draftSchedule&&<button ref={backRef} type="button" className="text-button" aria-label="Back to combined workout proposal" onClick={cancel}>‹ Back</button>}
    <h3>{proposal.revisionSummary?'Updated combined workout':'Combined workout'}</h3><p>{proposal.requestedMinutes==null?`About ${Math.round(proposal.workout.estimatedMinutes)} min · `:''}Today only · {dateLabel(proposal.date)}</p><CombinedProvenance adjustment={proposal}/>

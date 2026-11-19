@@ -12,8 +12,6 @@
 :root .adjust-exercise-fields .adjustment-target-editor label{grid-column:span 2}
 :root .adjust-exercise-fields .adjustment-target-editor label:nth-child(n+4){grid-column:span 3}
 :root .adjust-exercise-fields .adjustment-target-editor label:last-child:nth-child(4){grid-column:1/-1}
-.adjust-exercise-readonly{display:grid;gap:4px;padding:12px 13px;grid-column:1/-1}
-.adjust-exercise-readonly small{color:var(--rook-secondary)}
 .adjust-removal-feedback{display:flex;align-items:center;justify-content:space-between;gap:12px;margin:10px 0;padding:8px 0;font-size:14px;color:var(--rook-secondary)}
 .adjust-removal-feedback>span{min-width:0;overflow-wrap:anywhere}
 .adjust-removal-feedback>button{flex:0 0 auto;min-height:44px}

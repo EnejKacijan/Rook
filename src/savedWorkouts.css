@@ -3,10 +3,6 @@
 .saved-workouts h1,.saved-workouts strong,.saved-workouts p{overflow-wrap:anywhere}
 .saved-template-name{display:flex;flex-direction:column;gap:8px}
 .saved-template-name input{min-height:44px;width:100%;box-sizing:border-box;font-size:16px;border:1px solid var(--rook-border);border-radius:12px;padding:12px;background:var(--rook-surface-muted);color:var(--rook-text);appearance:none}
-.saved-template-exercises{list-style:none;margin:12px 0;padding:0}
-.saved-template-exercises li{padding:12px 0;border-bottom:1px solid var(--rook-border);min-width:0}
-.saved-template-exercises strong,.saved-template-exercises small{display:block;overflow-wrap:anywhere}
-.saved-template-exercises small{color:var(--rook-muted);margin-top:4px}
 .saved-template-overlaps{min-width:0;padding:12px 0;color:var(--rook-secondary);font-size:14px;line-height:1.45}
 .saved-template-overlap-context{display:grid;gap:8px;overflow-wrap:anywhere}
 .saved-workouts .saved-template-overlap-context p,.saved-workouts .saved-template-overlap-context ul{margin:0}

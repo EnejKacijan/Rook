@@ -6,6 +6,7 @@ import { displayWeight, saveState, searchExercises } from './domain.js';
 import { applyNextBlock, nextBlockReplacementChoices, proposeNextBlock, reviewTrainingBlock } from './blockReview.js';
 import { BlockReviewSummary, BlockOutcomes } from './BlockReviewSummary.jsx';
 import { SearchInput } from './SearchInput.jsx';
+import { WorkoutExerciseList } from './WorkoutExerciseList.jsx';
 import { useSheetBack } from './useSheetBack.js';
 import './blockReview.css';
 
@@ -60,7 +61,7 @@ export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
         {item.plateOptions && <p className="sheet-footnote">Exact load is not available with your configured plates. Closest: {[item.plateOptions.lower,item.plateOptions.upper].filter(v=>v!=null).join(' / ')} {item.plateOptions.unit}. The target is not silently rounded.</p>}
         {!reviewBlocked && <fieldset className="flexible-adjustment-choice"><legend>Next-block choice</legend>{[['keep','Keep current'],['recommendation','Use recommendation']].map(([value,label])=><label key={value}><input type="radio" name={`block-choice-${item.id}`} checked={choices[item.id]===value} onChange={()=>setChoices(c=>({...c,[item.id]:value}))}/>{label}</label>)}{item.kind==='replacement' && <button className="text-button" onClick={()=>{setReplacementId(item.id);setQuery('');setStep('replacement');}}>Choose another replacement</button>}{!['keep','recommendation'].includes(choices[item.id]) && <small>Selected: {nextBlockReplacementChoices(state,state.program.days.find(d=>d.id===item.dayId).exercises.find(e=>e.id===item.id)).find(c=>c.id===choices[item.id])?.name}</small>}</fieldset>}
       </section>)}
-      <AnimatedDetails className="block-unchanged"><summary>Current program · {review.rows.length} exercises</summary>{state.program.days.map(day=><section key={day.id}><h2>{day.name}</h2>{day.exercises.map(exercise=><p key={exercise.id}>{review.rows.find(r=>r.id===exercise.id)?.name} · {exercise.sets.length} × {exercise.repMin}–{exercise.repMax}{exercise.targetRir!=null?` · ${exercise.targetRir} RIR`:''}</p>)}</section>)}</AnimatedDetails>
+      <AnimatedDetails className="block-unchanged"><summary>Current program · {review.rows.length} exercises</summary>{state.program.days.map(day=><section key={day.id}><h2>{day.name}</h2><WorkoutExerciseList exercises={day.exercises} profile={state.profile}/></section>)}</AnimatedDetails>
       {Boolean(state.todayAdaptation||Object.keys(state.flexibleWeek?.sessions||{}).length||Object.keys(state.weekScheduleOverrides||{}).length||Object.keys(state.workoutOccurrenceOverrides||{}).length)&&<p className="sheet-footnote">Confirming this block clears pending workout and schedule adjustments.</p>}</div>
       <SheetActionFooter className="flexible-week-footer">
         <p className="block-first-workout">First workout: <time dateTime={proposal.startDate}>{firstWorkout}</time></p>

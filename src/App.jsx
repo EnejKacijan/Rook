@@ -131,6 +131,7 @@ import './loggedExercises.css';
 import { PlanNumberInput } from './PlanNumberInput.jsx';
 import { AdjustmentTargetsEditor } from './AdjustmentTargetsEditor.jsx';
 import { AdjustmentExerciseList } from './AdjustmentExerciseList.jsx';
+import { WorkoutExerciseList } from './WorkoutExerciseList.jsx';
 import { applyAdjustmentPrescription, cleanAdjustmentSupersets } from './adjustmentPrescription.js';
 import { createWorkoutDurationEstimator, estimatePersonalWorkoutMinutes, makeProgramExercise } from './domain.js';
 import { nextImportReview } from './nextImportReview.js';
@@ -9282,14 +9283,7 @@ export function OptionalWorkoutActionCard({ action, result, state, onAccept, onV
         <strong>{pluralize(action.exerciseIds.length, "exercise")}</strong>
         <span>{adaptationDurationLabel(action.minutes,estimateSessionMinutes(exercises))}</span>
       </div>
-      <div className="optional-workout-list">
-        {exercises.map((exercise) => (
-          <div key={exercise.exerciseId}>
-            <span aria-hidden="true">+</span>
-            <span><strong>{exerciseCatalog[exercise.exerciseId]?.name || "Exercise"}</strong><small>{pluralize(exercise.sets.length,'set')} · {reviewPrescription(exercise,{units:state.profile.units})}</small></span>
-          </div>
-        ))}
-      </div>
+      <WorkoutExerciseList exercises={exercises} profile={state.profile}/>
       {action.explanation && <ReviewDetails title="Why this workout?"><p>{action.explanation}</p></ReviewDetails>}
       <Button onClick={() => onAccept(action)}>{isToday?'ADD TO TODAY':`ADD TO ${dayName.toUpperCase()}`}</Button>
     </div>
@@ -9541,7 +9535,7 @@ export function AdaptActionCard({
           {changedIds.map(suggestionRow)}
         </div>
         {skippedNames.length>0&&<p className="adapt-skip-summary">Omitted on {dayName}: {skippedNames.join(', ')}</p>}
-        <ReviewDetails title="Full workout"><div className="adapt-suggestion-list">{reviewedIds.map(suggestionRow)}</div></ReviewDetails>
+        <ReviewDetails title="Full workout"><WorkoutExerciseList exercises={selectedExercises} profile={state.profile}/></ReviewDetails>
         <Button
           onClick={() =>
             onAccept({
@@ -9626,7 +9620,7 @@ export function AdaptActionCard({
               Omitted today: {skippedNames.join(", ")}
             </p>
           )}
-          <ReviewDetails title="Full workout"><div className="adapt-suggestion-list">{reviewedIds.map(suggestionRow)}</div></ReviewDetails>
+          <ReviewDetails title="Full workout"><WorkoutExerciseList exercises={selectedExercises} profile={state.profile}/></ReviewDetails>
           {!meaningful&&<p>No changes to apply.</p>}
         </>
       )}
@@ -18740,7 +18734,7 @@ export function AdjustTodaySheet({ state, update, close, setPage, request = {} }
           </section>
           <ReviewDetails title={`${existing?'Full workout':'Edit workout'} · ${proposal.workout.exercises.length} exercises`}>
             {removedDraft&&<div className="adjust-removal-feedback"><span role="status">{removedDraft.name} removed for today.</span><button type="button" className="text-button" onClick={()=>{setProposal(current=>restoreTodayAdjustmentExercise(current,removedDraft.proposal,removedDraft.entryId,state));setRemovedDraft(null);}}>Undo</button></div>}
-            <AdjustmentExerciseList exercises={proposal.workout.exercises} editingId={editingTargetsId} onToggle={setEditingTargetsId} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} readOnly={Boolean(existing)}
+            <AdjustmentExerciseList exercises={proposal.workout.exercises} editingId={editingTargetsId} onToggle={setEditingTargetsId} rirEnabled={state.profile.rirEnabled} profile={state.profile} commits={targetCommits.current} readOnly={Boolean(existing)}
               onEdit={(entryId,target)=>setProposal(current=>editTodayAdjustmentTargets(current,entryId,target,state))}
               onRemove={entryId=>{
                 flushSync(()=>[...targetCommits.current].forEach(commit=>commit()));

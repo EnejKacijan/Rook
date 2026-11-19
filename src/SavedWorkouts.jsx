@@ -5,8 +5,8 @@ import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {SearchInput} from './SearchInput.jsx';
 import {OverflowIcon} from './OverflowIcon.jsx';
 import {DestructiveConfirmationSheet} from './DestructiveConfirmationSheet.jsx';
-import {ExercisePickerIdentity} from './ExercisePickerIdentity.jsx';
-import {exerciseName,exerciseMeasure,exerciseCatalog,uid,pluralize} from './domain.js';
+import {WorkoutExerciseList} from './WorkoutExerciseList.jsx';
+import {exerciseName,uid,pluralize} from './domain.js';
 import {useDurableAction} from './useDurableAction.js';
 import {focusNavigationTarget} from './navigationFocus.js';
 import {useExerciseSearchSheet} from './useExerciseSearchSheet.js';
@@ -162,7 +162,7 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
       <p>{planSelection?`${planSelection.contextLabel} · `:''}{pluralize(review.exercises.length,'exercise')}{!planSelection&&' · Reuse these exercises and targets anytime.'}</p>
       {planSelection?.todayDraft&&<p className="plan-template-note">{planSelection.adjusted?'Adjusted for today':'Scheduled for today'}</p>}
       {copyReference.current&&<p className="plan-template-note">Saved separately from your plan.</p>}
-      <ol className="saved-template-exercises">{review.exercises.map((e,index)=><li key={e.id||index}><ExercisePickerIdentity item={e.importedExercise||exerciseCatalog[e.exerciseId]||{id:e.exerciseId,name:exerciseName(e)}} enabled={state.profile.showExerciseImages!==false}><strong>{exerciseName(e)}</strong><small>{pluralize(e.sets.length,'set')} · {e.repMin==null?'Target not set':`${e.repMin}${e.repMax!==e.repMin?`–${e.repMax}`:''} ${exerciseMeasure(e)==='seconds'?'sec':'reps'}`}{e.loggingMode==='per_side'?' · per side':''}</small></ExercisePickerIdentity></li>)}</ol>
+      <WorkoutExerciseList exercises={review.exercises} profile={state.profile} className="saved-template-exercises"/>
       {planSelection?<div className="plan-template-actions">
         {planError&&<p role="alert">{planError}</p>}
         {issues.length>0&&<div role="status"><p>Review before using</p><ul>{issues.map((issue,i)=><li key={i}>{issue}</li>)}</ul></div>}

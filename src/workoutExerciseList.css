@@ -1,0 +1,11 @@
+.workout-exercise-list { list-style: none; margin: 12px 0; padding: 0; min-width: 0; }
+.workout-exercise-list > .workout-exercise-row { min-width: 0; padding: 12px 0; border-bottom: 1px solid var(--rook-border); }
+.workout-exercise-list > .workout-exercise-row:last-child { border-bottom: 0; }
+:root .workout-exercise-list .workout-exercise-name { display: block; margin: 0; color: var(--rook-text); font-size: 15px; font-weight: 650; line-height: 1.35; text-align: left; overflow-wrap: anywhere; }
+:root .workout-exercise-list .workout-exercise-target,
+:root .workout-exercise-list .workout-exercise-pair { display: block; margin: 4px 0 0; color: var(--rook-secondary); font-size: 13px; line-height: 1.4; text-align: left; overflow-wrap: anywhere; }
+:root .workout-exercise-list .workout-exercise-pair { color: var(--rook-accent-text); }
+.review-details-body > .workout-exercise-list { margin: 0; }
+.workout-exercise-list .workout-exercise-targets { margin: 6px 0 0; border: 0; }
+.workout-exercise-targets > summary { padding: 8px 0; }
+:root .workout-exercise-targets .review-details-body > p { margin: 6px 0; color: var(--rook-secondary); font-size: 13px; line-height: 1.45; }

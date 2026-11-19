@@ -124,6 +124,15 @@ it('review shows current and target delta; Apply persists only one-workout adjus
 });
 
 const openWorkoutEditor=()=>click([...host.querySelectorAll('summary')].find(node=>node.textContent.startsWith('Edit workout')));
+it('reopens an applied adjustment with the shared read-only workout overview',async()=>{
+  mount();check('Home');await review();click(button('USE THIS WORKOUT'));
+  const applied=current,before=structuredClone(applied);save.mockClear();update.mockClear();
+  act(()=>root.render(<AdjustTodaySheet state={applied} update={update} close={close} request={{view:'review'}}/>));
+  click([...host.querySelectorAll('summary')].find(node=>node.textContent.startsWith('Full workout')));
+  expect(host.querySelectorAll('.workout-exercise-list > li')).toHaveLength(applied.todayAdaptation.workout.exercises.length);
+  expect(host.querySelectorAll('.adjust-exercise-card,.adjust-exercise-remove,input')).toHaveLength(0);
+  expect(applied).toEqual(before);expect(save).not.toHaveBeenCalled();expect(update).not.toHaveBeenCalled();
+});
 const editInput=(node,value)=>{
   act(()=>{node.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));});
 };
