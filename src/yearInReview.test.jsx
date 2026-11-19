@@ -73,7 +73,7 @@ describe('year boundary and local dates', () => {
 describe('one record per real session', () => {
   it('uses the correction, not the superseded record', () => {
     const original = session('w1', [2026, 3, 2], bench(60, 8), { minutes: 40 });
-    const corrected = { ...structuredClone(original), id: 'w1-fixed', supersedesCompletionId: 'w1', durationSeconds: 3000, exercises: bench(60, 10) };
+    const corrected = { ...structuredClone(original), id: 'w1-fixed', supersedesCompletionId: 'w1', completedAt: new Date(original.startedAt + 3000000).toISOString(), durationSeconds: 3000, exercises: bench(60, 10) };
     const stats = yearInReview(state([original, corrected]), 2026);
     expect(stats).toMatchObject({ workouts: 1, reps: 10, time: { totalSeconds: 3000 } });
   });
@@ -139,6 +139,45 @@ describe('logged training time', () => {
     expect(stats.conditioning).toEqual({ sessions: 1, seconds: 1200, counted: 1 });
     expect(stats.otherActivities).toEqual({ sessions: 1, seconds: 0, counted: 0 });
     expect(stats).toMatchObject({ workouts: 1, trainingDays: 3, strengthDays: 1 });
+  });
+
+  it('counts long saved sessions in totals, the median, longest and previous-year time', () => {
+    const s = state([
+      session('old', [2025, 2, 1], bench(60, 8), { minutes: 420 }),
+      session('long', [2026, 2, 1], bench(60, 8), { minutes: 390 }),
+      session('short', [2026, 2, 2], bench(60, 8), { minutes: 60 }),
+    ]);
+    expect(yearInReview(s, 2026)).toMatchObject({
+      time: { totalSeconds: 450 * 60, counted: 2, of: 2, typicalSeconds: 225 * 60, longest: { seconds: 390 * 60 } },
+      previous: { time: { totalSeconds: 420 * 60, counted: 1, of: 1 } },
+    });
+  });
+
+  it('uses reviewed training time without adding excluded pauses back in', () => {
+    const reviewed = session('reviewed', [2026, 2, 1, 8], bench(60, 8), { minutes: 600 });
+    Object.assign(reviewed, { durationSeconds: 390 * 60, excludedIdleMs: 210 * 60000, timingReviewedAt: Date.parse(reviewed.completedAt) });
+    expect(yearInReview(state([reviewed]), 2026).time).toMatchObject({ totalSeconds: 390 * 60, counted: 1, of: 1 });
+  });
+
+  it('keeps explicit long import durations when precise timestamps are unavailable', () => {
+    const imported = { id: 'date-only', completedAt: '2026-02-01', sourceDate: { day: '2026-02-01', precision: 'date' }, historicalImport: { fingerprint: 'long-import' }, durationSeconds: 390 * 60, exercises: bench(60, 8) };
+    expect(yearInReview(state([imported]), 2026).time).toMatchObject({ totalSeconds: 390 * 60, counted: 1 });
+    expect(reliableDurationSeconds(390 * 60, { startedAt: '2026-02-01T08:00:00', completedAt: '2026-02-01T14:30:00' })).toBe(390 * 60);
+  });
+
+  it('rejects contradictory precise timestamps and invalid values without a time cap', () => {
+    const workout = session('a', [2026, 2, 1], bench(60, 8), { minutes: 390 });
+    expect(reliableDurationSeconds(390 * 60, workout)).toBe(390 * 60);
+    expect(reliableDurationSeconds(391 * 60, workout)).toBeNull();
+    expect(reliableDurationSeconds(390 * 60, { ...workout, endedAt: workout.startedAt - 1 })).toBeNull();
+    expect(reliableDurationSeconds(390 * 60, { ...workout, endedAt: workout.startedAt + 3600000 })).toBeNull();
+    for (const value of [0, -1, null, undefined, '', NaN, Infinity, true, [], Number.MAX_VALUE]) expect(reliableDurationSeconds(value)).toBeNull();
+  });
+
+  it('counts long conditioning separately using its saved elapsed time', () => {
+    const startedAt = new Date(2026, 1, 1, 8).getTime();
+    const s = state([], { optionalSessions: [{ id: 'long-bike', kind: 'Conditioning', intent: 'conditioning', status: 'completed', startedAt, completedAt: new Date(startedAt + 8 * 3600000).toISOString(), elapsedSeconds: 6 * 3600 }] });
+    expect(yearInReview(s, 2026)).toMatchObject({ time: { totalSeconds: 0 }, conditioning: { sessions: 1, seconds: 6 * 3600, counted: 1 } });
   });
 });
 
@@ -266,7 +305,7 @@ describe('year in review viewer', () => {
   it('opens all year stats and returns to the story', () => {
     render(<YearInReview state={demo()} close={() => {}} initialYear={2026} today={YEAR_REVIEW_DEMO_TODAY} />);
     for (let i = 0; i < 9; i++) click(button('Next page'));
-    click(button('ALL YEAR STATS'));
+    click(button('All year stats'));
     expect(host.textContent).toContain('ALL YEAR STATS');
     expect(host.textContent).toContain('Logged training time');
     click(button('BACK TO STORY'));

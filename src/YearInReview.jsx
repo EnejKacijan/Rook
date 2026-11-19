@@ -220,7 +220,7 @@ function Page({ page, stats, units, active, reduced, onStats }) {
       </dl>
       <div className="year-finale-actions year-reveal">
         <ShareButton stats={stats} units={units} />
-        <button type="button" className="button secondary" onClick={onStats}>ALL YEAR STATS</button>
+        <button type="button" className="text-button year-finale-stats" onClick={onStats}>All year stats<NavigationChevron /></button>
       </div>
     </div>;
     default: return null;

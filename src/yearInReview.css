@@ -43,7 +43,7 @@
 .year-viewport { position: relative; min-height: 0; overflow: hidden; touch-action: pan-y; user-select: none; -webkit-user-select: none; }
 .year-track { display: flex; height: 100%; transform: translate3d(calc(var(--index, 0) * -100% + var(--drag, 0) * 100%), 0, 0); transition: transform var(--year-page-ms) var(--year-ease); will-change: transform; }
 .year-track.is-dragging { transition: none; }
-.year-page { position: relative; flex: 0 0 100%; min-width: 0; height: 100%; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
+.year-review .year-page { position: relative; flex: 0 0 100%; min-width: 0; height: 100%; margin: 0; overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }
 .year-page::before { content: ""; position: absolute; inset: 0 0 auto; height: 70%; pointer-events: none; background: radial-gradient(120% 70% at 50% 0%, var(--rook-accent-soft), transparent 70%); opacity: .9; }
 .year-page-body { position: relative; display: flex; flex-direction: column; min-height: 100%; padding: 20px var(--year-gutter) 32px; box-sizing: border-box; }
 .year-page-body.is-centered { justify-content: center; align-items: center; text-align: center; padding-bottom: 56px; }
@@ -120,10 +120,11 @@
 /* Finale. */
 :root .screen.year-review .year-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin: 24px 0 0; }
 .year-grid dd { font-size: 1.75rem; letter-spacing: -.03em; }
-.year-finale-actions { display: grid; gap: 4px; margin-top: auto; padding-top: 26px; }
-.year-finale-actions .button { width: 100%; }
-.year-finale-actions .button.primary { margin-bottom: 6px; }
-:root .screen.year-review p.year-share-status { min-height: 0; margin: 0 0 6px; color: var(--rook-secondary); font-size: .8125rem; line-height: 1.4; text-align: center; }
+.year-finale-actions { display: grid; gap: 12px; margin-top: auto; padding-top: 28px; }
+.year-finale-actions .button { width: 100%; margin: 0; }
+:root .screen.year-review .year-finale-stats { display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 44px; margin: 0; padding: 8px 12px; border: 0; background: transparent; color: var(--rook-secondary); font-size: .875rem; font-weight: 650; line-height: 1.4; letter-spacing: 0; text-transform: none; }
+.year-finale-stats svg { width: 16px; height: 16px; flex: none; }
+:root .screen.year-review p.year-share-status { min-height: 0; margin: 0; color: var(--rook-secondary); font-size: .8125rem; line-height: 1.4; text-align: center; }
 :root .screen.year-review p.year-share-status:empty { display: none; }
 
 /* A short burst on the records page and the finale. */

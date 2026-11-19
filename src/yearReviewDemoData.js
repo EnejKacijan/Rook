@@ -124,7 +124,7 @@ function mixedHistory() {
   for (const w of state.workouts) for (const e of w.exercises) if (e.loggingMode === 'per_side') for (const s of e.sets) s.sides = { left: { reps: s.reps }, right: { reps: s.reps } };
   // A correction: the resumed session supersedes the first completion.
   const original = state.workouts.find(w => w.id === 'mixed-10-1');
-  state.workouts.push({ ...structuredClone(original), id: 'mixed-10-1-corrected', supersedesCompletionId: original.id, durationSeconds: original.durationSeconds + 600 });
+  state.workouts.push({ ...structuredClone(original), id: 'mixed-10-1-corrected', supersedesCompletionId: original.id, completedAt: new Date(Date.parse(original.completedAt) + 600000).toISOString(), durationSeconds: original.durationSeconds + 600 });
   // The same record stored twice must count once.
   state.workouts.push(structuredClone(state.workouts.find(w => w.id === 'mixed-12-4')));
   // Left open for three days by mistake: counted as a workout, not as time.

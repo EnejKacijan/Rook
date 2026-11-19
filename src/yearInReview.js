@@ -9,9 +9,6 @@ import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, exerciseName
 import { isImportedHistorySet } from './historicalSetSemantics.js';
 import { isConditioning } from './optionalActivity.js';
 
-// A strength session longer than this is a session left open by mistake, not
-// training time. Such records are left out of time totals instead of guessed.
-export const MAX_RELIABLE_SESSION_SECONDS = 5 * 60 * 60;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 export const monthName = index => MONTHS[index];
 
@@ -20,8 +17,18 @@ const yearOf = day => (typeof day === 'string' ? Number(day.slice(0, 4)) : NaN);
 const completedSets = exercise => (exercise?.sets || []).filter(set => set.completed);
 const loggedWork = workout => (workout.exercises || []).some(exercise => completedSets(exercise).length);
 
-export function reliableDurationSeconds(seconds) {
-  return finitePositive(seconds) && Number(seconds) <= MAX_RELIABLE_SESSION_SECONDS ? Math.round(Number(seconds)) : null;
+// Date-only and timezone-free imports do not establish an elapsed-time bound.
+const recordedInstant = value => typeof value === 'number' ? value : typeof value === 'string' && /T.*(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? Date.parse(value) : NaN;
+export function reliableDurationSeconds(seconds, session) {
+  if (!['number', 'string'].includes(typeof seconds) || !finitePositive(seconds)) return null;
+  const duration = Math.round(Number(seconds));
+  if (!Number.isSafeInteger(duration) || duration < 1) return null;
+  const start = recordedInstant(session?.startedAt);
+  const end = [session?.endedAt, session?.completedAt].map(recordedInstant).find(Number.isFinite);
+  // Trust saved training time, including reviewed long sessions and pauses.
+  // Reject contradictions in precise timestamps instead of imposing a cap.
+  if (Number.isFinite(start) && Number.isFinite(end) && (end < start || duration * 1000 > end - start + 1000)) return null;
+  return duration;
 }
 
 // One record per real session. progressionHistory resolves corrections
@@ -155,7 +162,7 @@ function previousYear(all, activities, year) {
   const workouts = all.filter(workout => yearOf(workoutPerformedDate(workout)) === year);
   if (!workouts.length) return null;
   const days = [...workouts.map(workoutPerformedDate), ...activities.filter(session => yearOf(activityDay(session)) === year).map(activityDay)];
-  const timed = workouts.map(workout => reliableDurationSeconds(workout.durationSeconds)).filter(value => value != null);
+  const timed = workouts.map(workout => reliableDurationSeconds(workout.durationSeconds, workout)).filter(value => value != null);
   return { year, workouts: workouts.length, activeWeeks: new Set(days.map(day => weekKey(calendarDate(day)))).size,
     sets: workouts.reduce((sum, workout) => sum + (workout.exercises || []).reduce((n, exercise) => n + completedSets(exercise).length, 0), 0),
     time: { totalSeconds: timed.reduce((a, b) => a + b, 0), counted: timed.length, of: workouts.length } };
@@ -174,9 +181,9 @@ export function yearInReview(state, year) {
   for (const session of activities) months[Number(activityDay(session).slice(5, 7)) - 1].activities++;
   const topMonth = workouts.length ? months.reduce((best, month) => month.workouts > best.workouts ? month : best, months[0]) : null;
 
-  // Logged time: stored durations only. Missing or implausible ones are left
-  // out and reported as coverage, never filled in.
-  const timed = workouts.map(workout => ({ workout, seconds: reliableDurationSeconds(workout.durationSeconds) })).filter(item => item.seconds != null);
+  // Saved durations have no upper time limit. Missing or contradictory ones
+  // are reported as coverage, never filled in from wall-clock time.
+  const timed = workouts.map(workout => ({ workout, seconds: reliableDurationSeconds(workout.durationSeconds, workout) })).filter(item => item.seconds != null);
   const longest = timed.reduce((best, item) => !best || item.seconds > best.seconds ? item : best, null);
   const totalSeconds = timed.reduce((sum, item) => sum + item.seconds, 0);
 
@@ -227,7 +234,7 @@ export function yearInReview(state, year) {
 
   const conditioning = activities.filter(isConditioning), otherActivities = activities.filter(session => !isConditioning(session));
   const activityTime = list => {
-    const valid = list.map(session => reliableDurationSeconds(session.elapsedSeconds)).filter(value => value != null);
+    const valid = list.map(session => reliableDurationSeconds(session.elapsedSeconds, session)).filter(value => value != null);
     return { seconds: valid.reduce((a, b) => a + b, 0), counted: valid.length };
   };
 
