@@ -1,5 +1,6 @@
 import {workoutPerformedDate,workoutSetSummary} from './domain.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
+import {isDeloadWorkout} from './progressionHistory.js';
 
 export function completedProgressWorkouts(workouts=[]) {
   return workouts.filter(workout=>
@@ -22,6 +23,7 @@ function priority(result) {
 export function selectProgressionRows(state,completedWorkouts=completedProgressWorkouts(state.workouts)) {
   const latest=[],seenLogged=new Set();
   for(const workout of [...completedWorkouts].reverse())
+    if(!isDeloadWorkout(workout))
     for(const exercise of workout.exercises)
       if(!seenLogged.has(exercise.exerciseId)&&exercise.sets.some(set=>set.completed)){
         seenLogged.add(exercise.exerciseId);
@@ -40,7 +42,7 @@ export function selectProgressionRows(state,completedWorkouts=completedProgressW
       seen.add(exercise.exerciseId);
       exercises.push(exercise);
     }
-  return exercises.map(exercise=>({exercise,result:nextWorkoutAdvice(exercise,state.workouts,state.profile)}))
+  return exercises.map(exercise=>({exercise,result:nextWorkoutAdvice(exercise,state.workouts,state.profile,state)}))
     .filter(item=>item.result)
     .sort((left,right)=>priority(left.result)-priority(right.result));
 }

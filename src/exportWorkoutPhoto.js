@@ -8,9 +8,9 @@ export function workoutPhotoFile(blob, date) {
   return new File([blob], `ROOK-workout-${day}.${extension}`, {type:blob.type});
 }
 
-export async function exportWorkoutPhoto(file) {
+export async function exportWorkoutPhoto(file, { title = 'ROOK workout photo' } = {}) {
   if (!file) throw new Error('Photo unavailable.');
-  const nativeResult = await presentNativeFile(file, { title: 'ROOK workout photo' });
+  const nativeResult = await presentNativeFile(file, { title });
   if (nativeResult) return nativeResult;
   const files = [file];
   if (typeof navigator.share === 'function' && typeof navigator.canShare === 'function' && navigator.canShare({files})) {

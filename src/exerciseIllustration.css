@@ -1,5 +1,26 @@
 .exercise-illustration { position: relative; display: block; }
-.exercise-illustration > img { display: block; width: 100%; height: 100%; object-fit: contain; }
+.exercise-illustration > img { display: block; width: 100%; height: 100%; object-fit: contain; opacity: var(--exercise-illustration-ready, 0); }
+.exercise-illustration-placeholder { position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none; color: var(--rook-secondary); font-size: 18px; opacity: .35; }
+
+/* Wait through fast/cache hits. Animate only the empty frame, never the dash
+   or the artwork. Removing the loading state also cancels the delayed pulse. */
+.exercise-illustration.is-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 10px;
+  pointer-events: none;
+  background: var(--rook-accent-soft, var(--rook-surface-muted));
+  opacity: 0;
+  animation: exercise-illustration-pulse 1600ms ease-in-out 300ms infinite;
+}
+@keyframes exercise-illustration-pulse {
+  0%, 100% { opacity: 0; }
+  50% { opacity: .85; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .exercise-illustration.is-loading::before { animation: none; }
+}
 
 /* Scoped to canonical exercise art. Photos, logos and other images keep their
    own colors. Keep the original image as a fallback in older browsers. */

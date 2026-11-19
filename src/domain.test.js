@@ -3110,6 +3110,9 @@ ogrevalni set 12kg
       };
       workout.exercises.splice(1, 0, duplicate);
       const original = structuredClone(workout.exercises);
+      const originalPrescription = structuredClone(
+        plannedWorkoutForDate(state, new Date(2026, 7, 20, 12)).exercises,
+      );
       removeExerciseFromOccurrence(state, {
         planDate: "2026-08-20",
         workoutId: workout.id,
@@ -3138,7 +3141,7 @@ ogrevalni set 12kg
       });
       expect(
         plannedWorkoutForDate(state, new Date(2026, 7, 20, 12)).exercises,
-      ).toEqual(original);
+      ).toEqual(originalPrescription);
     } finally {
       vi.useRealTimers();
     }

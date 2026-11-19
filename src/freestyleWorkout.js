@@ -5,6 +5,7 @@ import { availableCustomExerciseItems, customExerciseSnapshot } from './customEx
 import { effectiveGymContext } from './gymProfiles.js';
 import { compileProfileTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
 import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
+import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
 
 export function freestyleCatalog(state) {
   const profile = effectiveGymContext(state, state.activeWorkout || {}).profile;
@@ -121,7 +122,7 @@ export function removeFreestyleExercise(state, id) {
 // Copy one ordinary working set, including explicit per-side values when the
 // logging modes match. Advanced sets remain inspectable, never flattened.
 export function freestylePreviousSets(state, exercise) {
-  const prior = previousExercise(state.workouts, exercise.exerciseId);
+  const prior = previousExercise(progressionHistoryForPhase(state.workouts,isDeloadWorkout(state.activeWorkout)||exercise.blockPrescription?.phase==='deload'), exercise.exerciseId);
   if (!prior || loggingModeOf(prior) !== loggingModeOf(exercise) ||
       exerciseMeasure(prior) !== exerciseMeasure(exercise) ||
       exerciseLoadRequirement(prior) !== exerciseLoadRequirement(exercise)) return [];

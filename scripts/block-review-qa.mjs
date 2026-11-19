@@ -35,10 +35,10 @@ for(const width of process.env.ROOK_QA_EXTRAS_ONLY?[]:[320,390,430])for(const ap
  const screen=page.locator('.block-review-sheet');await screen.evaluate(el=>el.scrollTop=el.scrollHeight);await shot('07-long-review-bottom');
  const footer=page.locator('.block-review-sheet .flexible-week-footer');const last=page.locator('.block-next-content > p').last();assert.ok((await last.boundingBox()).y+(await last.boundingBox()).height <=(await footer.boundingBox()).y+2,'last review explanation clears footer');
  await page.getByText(/^Current program · \d+ exercises$/).click();await page.getByText(/^Current program · \d+ exercises$/).scrollIntoViewIfNeeded();await shot('07-current-program');
- const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));await page.getByRole('button',{name:'START NEXT BLOCK',exact:true}).click();await shot('08-new-block');
+ const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));await page.getByRole('button',{name:'CONFIRM NEXT BLOCK',exact:true}).click();await shot('08-new-block');
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));assert.equal(saved.program.trainingBlock.currentWeek,1);assert.notEqual(saved.program.trainingBlock.id,before.program.trainingBlock.id);assert.equal(saved.planVersions.length,before.planVersions.length+1);assert.deepEqual(saved.workouts,before.workouts);
  await page.reload({waitUntil:'networkidle'});assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')))).program.trainingBlock.id,saved.program.trainingBlock.id);
- await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'program'); await page.getByRole('button',{name:/Training block/}).click();await page.locator('.training-block-history-count .list-row').first().click();await shot('09-old-block');assert.equal(await page.getByRole('button',{name:'START NEXT BLOCK',exact:true}).count(),0);assert.deepEqual(errors,[]);await context.close();console.log(`${width} ${style} ${appearance}: review, replacement, apply/reload and historical block passed`);
+ await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'program'); await page.getByRole('button',{name:/Training block/}).click();await page.locator('.training-block-history-count .list-row').first().click();await shot('09-old-block');assert.equal(await page.getByRole('button',{name:'CONFIRM NEXT BLOCK',exact:true}).count(),0);assert.deepEqual(errors,[]);await context.close();console.log(`${width} ${style} ${appearance}: review, replacement, apply/reload and historical block passed`);
 }
 for(const scenario of ['insufficient','persistence','stale','offline','repeat']){
  const context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),seed=fixture({lowData:scenario==='insufficient'});
@@ -51,10 +51,10 @@ for(const scenario of ['insufficient','persistence','stale','offline','repeat'])
   // Review regeneration on a different day is also a stale proposal.
   await page.clock.install({time:new Date(Date.now()+86400000*8)});
  }
- if(scenario==='persistence'||scenario==='stale'){await page.getByRole('button',{name:'START NEXT BLOCK',exact:true}).click();await page.getByRole('alert').waitFor();const alertBox=await page.getByRole('alert').boundingBox();assert.ok(alertBox.y>=0&&alertBox.y+alertBox.height<844,'failure explanation is immediately visible');assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')))).program.trainingBlock.id,seed.program.trainingBlock.id);}
+ if(scenario==='persistence'||scenario==='stale'){await page.getByRole('button',{name:'CONFIRM NEXT BLOCK',exact:true}).click();await page.getByRole('alert').waitFor();const alertBox=await page.getByRole('alert').boundingBox();assert.ok(alertBox.y>=0&&alertBox.y+alertBox.height<844,'failure explanation is immediately visible');assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')))).program.trainingBlock.id,seed.program.trainingBlock.id);}
  await page.waitForTimeout(350);await page.screenshot({path:`${out}/390-${scenario}.png`});
  if(scenario==='stale')assert.equal(await page.locator('.block-next-change fieldset').count(),0,'stale choices are hidden');
- if(scenario==='offline'||scenario==='repeat') {await page.getByRole('button',{name:scenario==='repeat'?'REPEAT BLOCK':'START NEXT BLOCK',exact:true}).click();assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')))).program.trainingBlock.currentWeek,1);}
+ if(scenario==='offline'||scenario==='repeat') {await page.getByRole('button',{name:'CONFIRM NEXT BLOCK',exact:true}).click();assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')))).program.trainingBlock.currentWeek,1);}
  await context.close();console.log(`${scenario}: passed`);
 }
 for(const scenario of ['not-now','active']){
@@ -63,7 +63,7 @@ for(const scenario of ['not-now','active']){
  await page.getByRole('button',{name:'PROFILE',exact:true}).click();await openProfileArea(page, 'program'); await page.getByRole('button',{name:/Training block/}).click();await page.getByRole('button',{name:'REVIEW BLOCK',exact:true}).click();
  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));
  if(scenario==='not-now'){await page.getByRole('button',{name:'NOT NOW',exact:true}).click();const after=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));assert.deepEqual(after.program,before.program);assert.deepEqual(after.planVersions,before.planVersions);}
- else{await page.getByRole('button',{name:'REVIEW NEXT BLOCK',exact:true}).click();assert.equal(await page.getByRole('button',{name:'START NEXT BLOCK',exact:true}).isDisabled(),true);await page.getByText('Finish the active workout before starting the next block.',{exact:true}).waitFor();}
+ else{await page.getByRole('button',{name:'REVIEW NEXT BLOCK',exact:true}).click();assert.equal(await page.getByRole('button',{name:'CONFIRM NEXT BLOCK',exact:true}).isDisabled(),true);await page.getByText('Finish the active workout before starting the next block.',{exact:true}).waitFor();}
  await page.waitForTimeout(350);await page.screenshot({path:`${out}/390-${scenario}.png`});await context.close();console.log(`${scenario}: passed`);
 }
 for(const applied of [false,true]){

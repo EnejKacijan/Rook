@@ -1,7 +1,9 @@
 import { workoutPerformedDate } from './workoutDates.js';
-import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, compatibleReplacementCandidates, isExerciseAllowed, isoDay } from './domain.js';
+import { exerciseCatalog, exerciseName, exerciseMeasure, exerciseLoadRequirement, compatibleReplacementCandidates, isExerciseAllowed, isoDay,collectProgressionEvidence,progressionTargetsComparable } from './domain.js';
+import {isDeloadWorkout} from './progressionHistory.js';
+import {trainingRestForDate,effectiveTrainingBlockWeek} from './trainingBlocks.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
-import { effectiveSetReps, progressionComparableSet, loggingModeOf } from './advancedLogging.js';
+import { effectiveSetReps, progressionComparableSet } from './advancedLogging.js';
 import { summarizeSessionFeedback } from './sessionFeedback.js';
 import { exercisePerformance, prEventsForWorkouts } from './performanceInsights.js';
 import { defaultGymProfile, equipmentProfile } from './gymProfiles.js';
@@ -15,7 +17,6 @@ const dateOf = workoutPerformedDate;
 const working = exercise => (exercise.sets || []).filter(set => set.planned !== false && !set.added);
 const completeSets = exercise => working(exercise).filter(set => set.completed);
 const eligible = exercise => exerciseMeasure(exercise) === 'reps' && exerciseLoadRequirement(exercise) !== 'none';
-const shape = exercise => JSON.stringify([exercise.repMin, exercise.repMax, exercise.targetRir, loggingModeOf(exercise), working(exercise).length]);
 const chronological = workouts => [...workouts].sort((a,b) => String(dateOf(a)).localeCompare(String(dateOf(b))) || String(a.completedAt).localeCompare(String(b.completedAt)));
 export function authoritativeBlockWorkouts(state, blockId) {
   const superseded = new Set((state.workouts || []).map(workout => workout.supersedesCompletionId).filter(Boolean));
@@ -47,15 +48,19 @@ export function nextBlockReplacementChoices(state, exercise) {
 }
 function exerciseOutcome(state, block, day, exercise, workouts) {
   const appearances=workouts.filter(w=>!w.optionalSessionId && w.programDayId===day.id);
-  const comparable=appearances.filter(w=>!w.trainingBlock?.plannedDeload && !w.adjustment).flatMap(w=>{
+  const comparable=appearances.filter(w=>!isDeloadWorkout(w) && !w.adjustment).flatMap(w=>{
     const item=w.exercises?.find(e=>e.id===exercise.id && e.exerciseId===exercise.exerciseId);
     const sets=item?working(item):[];
     if(!sets.length || !sets.every(s=>s.completed && progressionComparableSet(s) && effectiveSetReps(item,s)!=null))return [];
     return [{...w,exercises:[item]}];
   });
   const latest=comparable.at(-1)?.exercises[0];
-  const cohort=latest?comparable.filter(w=>shape(w.exercises[0])===shape(latest)):[];
-  const decision=cohort.length>=2?nextWorkoutAdvice(latest,appearances.filter(w=>!w.trainingBlock?.plannedDeload&&!w.adjustment),baseGym(state).profile):null;
+  const evidence=latest&&collectProgressionEvidence(latest,comparable,state);
+  const latestObservation=evidence?.observations.at(-1);
+  const cohort=latestObservation?evidence.observations.filter(item=>item.complete&&item.planned.length===latestObservation.planned.length&&
+    item.positions===latestObservation.positions&&item.loadKinds===latestObservation.loadKinds&&
+    progressionTargetsComparable(item.item,latest,item.blockContext,latestObservation.blockContext)).map(item=>item.workout):[];
+  const decision=cohort.length>=2?nextWorkoutAdvice(latest,appearances.filter(w=>!isDeloadWorkout(w)&&!w.adjustment),baseGym(state).profile,state):null;
   let status=cohort.length<2?'insufficient':'held',reason=cohort.length<2?'Not enough comparable sessions to recommend a change.':'Keep the exercise and continue the current progression.';
   if(decision?.type==='progress'){status='progressed';reason=decision.detail;}
   else if(decision?.type==='stalled' || decision?.title==='Review the load' || decision?.title==='Review the variation' || decision?.title==='Reduce the hold target slightly'){status='review';reason=decision.detail;}
@@ -66,9 +71,13 @@ function exerciseOutcome(state, block, day, exercise, workouts) {
   const effortOK=latest && lastSets.every(s=>s.rir==null || latest.targetRir==null || Number(s.rir)>=Number(latest.targetRir));
   const repsOK=latest && lastSets.every(s=>effectiveSetReps(latest,s)>=latest.repMin);
   const sameLoads=fromWeight!=null && currentWeight===fromWeight;
-  const repGain=first && latest ? Math.min(...lastSets.map(s=>effectiveSetReps(latest,s)))-Math.min(...firstSets.map(s=>effectiveSetReps(first,s))) : 0;
+  // Lowest working set of the first and latest comparable sessions. Together
+  // they read as "every working set reached at least weight × reps".
+  const fromReps=first&&firstSets.length?Math.min(...firstSets.map(s=>effectiveSetReps(first,s))):null;
+  const currentReps=latest&&lastSets.length?Math.min(...lastSets.map(s=>effectiveSetReps(latest,s))):null;
+  const repGain=first && latest ? currentReps-fromReps : 0;
   if(cohort.length>=2 && effortOK && repsOK && (currentWeight>fromWeight && fromWeight!=null || sameLoads && repGain>0)){status='progressed';reason=currentWeight>fromWeight?'Higher working load with the prescribed repetitions and effort.':'More repetitions at the same working load.';}
-  const substitutions=appearances.filter(w=>!w.adjustment && !w.trainingBlock?.plannedDeload).map(w=>w.exercises?.find(e=>e.id===exercise.id)).filter(Boolean);
+  const substitutions=appearances.filter(w=>!w.adjustment && !isDeloadWorkout(w)).map(w=>w.exercises?.find(e=>e.id===exercise.id)).filter(Boolean);
   const frequency=new Map();for(const item of substitutions)if(item.exerciseId!==exercise.exerciseId)frequency.set(item.exerciseId,(frequency.get(item.exerciseId)||0)+1);
   // An old permanent plan edit is not evidence of a temporary replacement.
   const permanentChange=(state.planVersions||[]).some(v=>v.timestamp?.slice(0,10)>=block.startDate && v.program?.trainingBlock?.id===block.id && v.program.days?.some(d=>d.id===day.id && d.exercises?.some(e=>e.id===exercise.id && e.exerciseId!==exercise.exerciseId)));
@@ -80,7 +89,7 @@ function exerciseOutcome(state, block, day, exercise, workouts) {
   const replacementReason=replacement?`${exerciseName(exercise)} was replaced with ${replacement.name} in ${frequency.get(replacement.id)} of ${substitutions.length} recorded non-deload sessions. Suitable for ${gym?.name||'your base equipment'}.`:null;
   if(replacement){status='review';reason=replacementReason;}
   const performance=exercisePerformance(comparable,exercise.exerciseId,{e1rmEligible:eligible(exercise)});
-  return {id:exercise.id,dayId:day.id,name:exerciseName(exercise),exerciseId:exercise.exerciseId,status,reason,comparableSessions:cohort.length,fromWeight,currentWeight,repGain,decision,estimatedOneRepMax:performance.estimatedOneRepMax,replacement:replacement?{id:replacement.id,name:replacement.name,reason:replacementReason,preferred:Boolean(preference)}:null};
+  return {id:exercise.id,dayId:day.id,name:exerciseName(exercise),exerciseId:exercise.exerciseId,status,reason,comparableSessions:cohort.length,fromWeight,currentWeight,fromReps,currentReps,repGain,decision,estimatedOneRepMax:performance.estimatedOneRepMax,replacement:replacement?{id:replacement.id,name:replacement.name,reason:replacementReason,preferred:Boolean(preference)}:null};
 }
 export function reviewTrainingBlock(state, block=state.program?.trainingBlock) {
   if(!block)return null;
@@ -94,21 +103,47 @@ export function reviewTrainingBlock(state, block=state.program?.trainingBlock) {
   const blockIds=new Set(workouts.map(w=>w.id));
   const superseded=new Set((state.workouts||[]).map(w=>w.supersedesCompletionId).filter(Boolean));
   const prEvents=prEventsForWorkouts((state.workouts||[]).filter(w=>!superseded.has(w.id)),{e1rmEligible:eligible}).filter(event=>blockIds.has(event.workoutId));
+  // One record per exercise: the heaviest record-setting set of this block.
+  const prBests={};
+  for(const event of prEvents){
+    const best=prBests[event.exerciseId];
+    const types=[...new Set([...(best?.types||[]),event.type])];
+    if(!best||event.weight>best.weight||event.weight===best.weight&&event.reps>best.reps)prBests[event.exerciseId]={exerciseId:event.exerciseId,weight:event.weight,reps:event.reps,date:event.date,types};
+    else best.types=types;
+  }
+  const completedSlot=id=>planned.some(w=>w.trainingBlock.blockWorkoutId===id);
+  const restSkip=item=>item.reason==='planned-rest';
+  const restChoice=Object.values(block.deloadChoices||{}).find(choice=>choice?.mode==='rest');
+  const weeks=(block.weeks||[]).map(raw=>{
+    const week=effectiveTrainingBlockWeek(block,raw),refs=(week.workouts||[]).filter(ref=>!program?.days.find(d=>d.id===ref.programDayId)?.optional);
+    const skips=(block.resolvedSkips||[]).filter(item=>refs.some(ref=>ref.id===item.blockWorkoutId)&&!completedSlot(item.blockWorkoutId));
+    return {weekNumber:week.weekNumber,phase:week.phase,choice:block.deloadChoices?.[week.weekNumber]?.mode||null,planned:refs.length,
+      completed:refs.filter(ref=>planned.some(w=>w.trainingBlock.blockWorkoutId===ref.id&&logged(w)>0)).length,
+      skipped:skips.filter(item=>!restSkip(item)).length,plannedRest:skips.filter(restSkip).length};
+  });
   return {blockId:block.id,name:block.name,totalWeeks:block.totalWeeks,startDate:block.startDate,completedAt:block.completedAt,completed:Boolean(block.completed),sessionFeedback,
     plannedSessions:block.weeks.reduce((sum,week)=>sum+week.workouts.filter(ref=>!program?.days.find(d=>d.id===ref.programDayId)?.optional).length,0),
     completedSessions:planned.filter(w=>logged(w)>0).length,endedEarly:planned.filter(w=>w.endedEarly).length,
-    skipped:new Set((block.resolvedSkips||[]).map(item=>item.blockWorkoutId).filter(id=>!planned.some(w=>w.trainingBlock.blockWorkoutId===id))).size,
+    // Planned recovery is a choice, not a missed session.
+    skipped:new Set((block.resolvedSkips||[]).filter(item=>!restSkip(item)).map(item=>item.blockWorkoutId).filter(id=>!completedSlot(id))).size,
+    plannedRestSessions:new Set((block.resolvedSkips||[]).filter(restSkip).map(item=>item.blockWorkoutId).filter(id=>!completedSlot(id))).size,
+    plannedRest:restChoice?{weekNumber:restChoice.weekNumber,restFrom:restChoice.restFrom,restThrough:restChoice.restThrough}:null,weeks,
     optionalCompleted:workouts.filter(w=>w.optionalSessionId && logged(w)>0).length,
     moved:planned.filter(w=>w.flexibleWeekMoved).length,adjusted:planned.filter(w=>w.adjustment).length,
     loggedSets:planned.reduce((sum,w)=>sum+logged(w),0),prescribedSets:planned.reduce((sum,w)=>sum+(w.exercises||[]).reduce((n,e)=>n+working(e).length,0),0),
     progressed:rows.filter(r=>r.status==='progressed').length,held:rows.filter(r=>r.status==='held').length,review:rows.filter(r=>r.status==='review').length,
-    prs:new Set(prEvents.map(event=>`${event.workoutId}:${event.exerciseId}`)).size,
+    prs:new Set(prEvents.map(event=>`${event.workoutId}:${event.exerciseId}`)).size,prExercises:Object.keys(prBests).length,prBests:Object.values(prBests),
     deloadCompleted:planned.some(w=>w.trainingBlock?.plannedDeload && logged(w)>0),rows};
 }
 function nextStartDate(state, now) {
   const date=new Date(now);date.setHours(12,0,0,0);
   const today=isoDay(date),alreadyTrained=(state.workouts||[]).some(w=>w.completedAt && dateOf(w)===today);
   if(alreadyTrained)date.setDate(date.getDate()+1);
+  for(let i=0;i<24;i++){
+    const rest=trainingRestForDate(state,isoDay(date));
+    if(!rest)break;
+    date.setTime(new Date(`${rest.restThrough}T12:00:00`).getTime());date.setDate(date.getDate()+1);
+  }
   for(let i=0;i<7;i++){
     const weekday=new Intl.DateTimeFormat('en',{weekday:'short'}).format(date);
     if(state.program.days.some(day=>day.weekday===weekday))return isoDay(date);
