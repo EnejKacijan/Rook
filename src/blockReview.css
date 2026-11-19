@@ -55,6 +55,7 @@
 .block-review-close { margin-top: 12px; }
 
 .block-outcomes article { display: grid; grid-template-columns: 48px minmax(0, 1fr); gap: 14px; padding: 16px 0; border-bottom: 1px solid var(--rook-border); }
+.block-review-sheet > .block-outcomes:last-of-type > article:last-child { border-bottom: 0; }
 .block-outcomes article p { margin: 4px 0 0; }
 .block-outcomes article small { display: block; margin-top: 4px; font-size: .8125rem; line-height: 1.45; }
 .block-outcomes .block-outcome-reason { color: var(--rook-secondary); font-size: .875rem; line-height: 1.45; }
