@@ -149,6 +149,18 @@ export function yearReviewYears(state, today = isoDay()) {
 }
 export const yearReviewUnlocked = (year, today = isoDay()) => Number.isInteger(year) && year < yearOf(today);
 
+// Last year's totals for a neutral comparison with the user's own history.
+// Time is compared only when both years have a duration on every workout.
+function previousYear(all, activities, year) {
+  const workouts = all.filter(workout => yearOf(workoutPerformedDate(workout)) === year);
+  if (!workouts.length) return null;
+  const days = [...workouts.map(workoutPerformedDate), ...activities.filter(session => yearOf(activityDay(session)) === year).map(activityDay)];
+  const timed = workouts.map(workout => reliableDurationSeconds(workout.durationSeconds)).filter(value => value != null);
+  return { year, workouts: workouts.length, activeWeeks: new Set(days.map(day => weekKey(calendarDate(day)))).size,
+    sets: workouts.reduce((sum, workout) => sum + (workout.exercises || []).reduce((n, exercise) => n + completedSets(exercise).length, 0), 0),
+    time: { totalSeconds: timed.reduce((a, b) => a + b, 0), counted: timed.length, of: workouts.length } };
+}
+
 export function yearInReview(state, year) {
   const all = authoritativeWorkouts(state.workouts);
   const workouts = all.filter(workout => yearOf(workoutPerformedDate(workout)) === year)
@@ -220,6 +232,7 @@ export function yearInReview(state, year) {
   };
 
   return {
+    previous: previousYear(all, completedActivities(state), year - 1),
     year, workouts: workouts.length, trainingDays: allDays.size, strengthDays: days.size,
     firstDay: workouts[0] ? workoutPerformedDate(workouts[0]) : null, lastDay: workouts.at(-1) ? workoutPerformedDate(workouts.at(-1)) : null,
     activeWeeks: weeks.size, weeksInYear: weeksInYear(year), months, topMonth,

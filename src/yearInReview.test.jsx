@@ -358,3 +358,25 @@ describe('share image', () => {
     }
   });
 });
+
+describe('comparison with your previous year', () => {
+  it('compares with last year neutrally, and time only with full coverage', () => {
+    const s = state([
+      session('a', [2025, 3, 1], bench(60, 8), { minutes: 40 }), session('b', [2025, 3, 8], bench(60, 8), { minutes: null }),
+      session('c', [2026, 3, 1], bench(60, 8)), session('d', [2026, 3, 8], bench(60, 8)), session('e', [2026, 3, 15], bench(60, 8)),
+    ]);
+    const stats = yearInReview(s, 2026);
+    expect(stats.previous).toEqual({ year: 2025, workouts: 2, activeWeeks: 2, sets: 2, time: { totalSeconds: 2400, counted: 1, of: 2 } });
+    expect(yearInReview(s, 2025).previous).toBeNull();
+    render(<YearInReview state={s} close={() => {}} initialYear={2026} today="2027-01-02" />);
+    click(button('Next page'));
+    expect(host.querySelector('.year-page.is-active').textContent).toContain('1 workout more than in 2025.');
+  });
+
+  it('names last year plainly when this year has fewer', () => {
+    const s = state([session('a', [2025, 3, 1], bench(60, 8)), session('b', [2025, 3, 8], bench(60, 8)), session('c', [2026, 3, 1], bench(60, 8))]);
+    render(<YearInReview state={s} close={() => {}} initialYear={2026} today="2027-01-02" />);
+    click(button('Next page'));
+    expect(host.querySelector('.year-page.is-active').textContent).toContain('2025: 2 workouts.');
+  });
+});

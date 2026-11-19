@@ -72,6 +72,15 @@ function useFormat(units) {
   return { unit, load, set, volume: kg => Number(displayWeight(kg, units)) };
 }
 
+// Neutral: more reads as more, fewer simply names last year's number.
+function versusLastYear(current, before, year, word) {
+  if (current > before) return `${plural(current - before, word)} more than in ${year}.`;
+  if (current === before) return `Same as ${year}.`;
+  return `${year}: ${plural(before, word)}.`;
+}
+const lastYearNote = (stats, value, format = number) => stats.previous ? `${stats.previous.year}: ${format(value)}` : null;
+const fullTime = time => time.counted > 0 && time.counted === time.of;
+
 function Pair({ item, format }) {
   return <span className="year-pair"><span>{format.set(item.from)}</span><span className="year-pair-to"><span aria-hidden="true">→</span><span className="visually-hidden"> to </span><strong>{format.set(item.to)}</strong></span></span>;
 }
@@ -112,6 +121,7 @@ function Page({ page, stats, units, active, reduced, onStats }) {
       <h2 className="year-title year-reveal">{stats.workouts === 1 ? 'workout' : 'workouts'}</h2>
       <p className="year-lede year-reveal">on {plural(stats.strengthDays, 'different day')}.</p>
       {stats.firstDay && stats.lastDay !== stats.firstDay && <p className="year-note year-reveal">First on {shortDate(stats.firstDay)}, last on {shortDate(stats.lastDay)}.</p>}
+      {stats.previous && <p className="year-note year-reveal">{versusLastYear(stats.workouts, stats.previous.workouts, stats.previous.year, 'workout')}</p>}
     </div>;
     case 'rhythm': {
       const max = Math.max(1, ...stats.months.map(month => month.workouts + month.activities));
@@ -238,14 +248,15 @@ function ShareButton({ stats, units }) {
 function AllStats({ stats, units, onBack }) {
   const format = useFormat(units);
   const rows = [
-    ['Workouts', number(stats.workouts)],
+    ['Workouts', number(stats.workouts), lastYearNote(stats, stats.previous?.workouts)],
     ['Training days', number(stats.trainingDays), stats.trainingDays !== stats.strengthDays ? 'Includes conditioning and cardio days' : null],
-    ['Weeks with training', `${stats.activeWeeks} of ${stats.weeksInYear}`],
+    ['Weeks with training', `${stats.activeWeeks} of ${stats.weeksInYear}`, lastYearNote(stats, stats.previous?.activeWeeks)],
     stats.topMonth && ['Busiest month', `${new Intl.DateTimeFormat('en', { month: 'long' }).format(new Date(stats.year, stats.topMonth.index, 1))} · ${plural(stats.topMonth.workouts, 'workout')}`],
-    ['Logged training time', stats.time.counted ? durationLabel(stats.time.totalSeconds) : 'Not recorded', stats.time.counted < stats.time.of ? `${stats.time.counted} of ${stats.time.of} workouts have a recorded duration` : null],
+    ['Logged training time', stats.time.counted ? durationLabel(stats.time.totalSeconds) : 'Not recorded', stats.time.counted < stats.time.of ? `${stats.time.counted} of ${stats.time.of} workouts have a recorded duration`
+      : stats.previous && fullTime(stats.previous.time) ? lastYearNote(stats, stats.previous.time.totalSeconds, durationLabel) : null],
     stats.time.counted > 0 && ['Typical session', durationLabel(stats.time.typicalSeconds), 'Median of recorded durations'],
     stats.time.longest && ['Longest session', durationLabel(stats.time.longest.seconds), `${stats.time.longest.name} · ${shortDate(stats.time.longest.day)}`],
-    ['Sets', number(stats.sets)],
+    ['Sets', number(stats.sets), lastYearNote(stats, stats.previous?.sets)],
     ['Reps', number(stats.reps)],
     stats.volumeKg > 0 && ['Weight moved', `${number(Math.round(format.volume(stats.volumeKg)))} ${format.unit}`, `From ${plural(stats.volumeSets, 'set')} with logged external weight`],
     stats.holdSeconds > 0 && ['Timed holds', durationLabel(stats.holdSeconds)],
