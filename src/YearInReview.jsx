@@ -3,6 +3,7 @@ import { ExerciseIllustration } from './ExerciseIllustration.jsx';
 import { PersonalBestTrophy } from './WorkoutPersonalBestDetails.jsx';
 import { exerciseArt } from './exerciseArt.js';
 import { NavigationChevron } from './NavigationChevron.jsx';
+import { shareYearCard } from './yearShareCard.js';
 import { displayWeight, weightUnit, isoDay } from './domain.js';
 import { yearInReview, yearReviewPages, yearReviewYears, yearHeadline, monthName } from './yearInReview.js';
 import './yearInReview.css';
@@ -208,12 +209,31 @@ function Page({ page, stats, units, active, reduced, onStats, onClose }) {
         {stats.blocks.length > 0 && <div className="year-reveal"><dt>Blocks</dt><dd>{stats.blocks.length}</dd></div>}
       </dl>
       <div className="year-finale-actions year-reveal">
+        <ShareButton stats={stats} units={units} />
         <button type="button" className="button secondary" onClick={onStats}>ALL YEAR STATS</button>
         <button type="button" className="button quiet" onClick={onClose}>CLOSE</button>
       </div>
     </div>;
     default: return null;
   }
+}
+
+// Drawn on the device; Rook uploads nothing. Cancelling the share sheet is
+// not an error.
+function ShareButton({ stats, units }) {
+  const [status, setStatus] = useState('idle');
+  const share = async () => {
+    if (status === 'working') return;
+    setStatus('working');
+    try {
+      const result = await shareYearCard(stats, { units });
+      setStatus(result === 'downloaded' ? 'saved' : 'idle');
+    } catch { setStatus('error'); }
+  };
+  return <>
+    <button type="button" className="button primary" onClick={share} disabled={status === 'working'} aria-describedby="year-share-status">{status === 'working' ? 'PREPARING IMAGE…' : 'SHARE'}</button>
+    <p id="year-share-status" className="year-share-status" role="status">{status === 'saved' ? 'Image saved. Only totals and one lift are shown.' : status === 'error' ? 'The image could not be created. Try again.' : ''}</p>
+  </>;
 }
 
 function AllStats({ stats, units, onBack }) {

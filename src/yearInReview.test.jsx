@@ -320,3 +320,41 @@ describe('entry points', () => {
     expect([...host.querySelectorAll('.year-review-entry-row strong')].map(item => item.textContent)).toEqual(['Your year in Rook · 2026', 'Your year in Rook · 2025']);
   });
 });
+
+describe('share image', () => {
+  it('uses the story numbers, real sets and visible time coverage', async () => {
+    const { yearShareContent } = await import('./yearShareCard.js');
+    const short = yearShareContent(yearInReview(yearReviewDemoState('short'), 2026), 'kg');
+    expect(short).toMatchObject({ year: 2026, fileName: 'ROOK-year-2026.png', line: 'Biggest jump: Leg Press',
+      highlight: { from: '90 kg × 12', to: '110 kg × 10', gain: '+20 kg' } });
+    expect(short.tiles).toEqual([{ label: 'Workouts', value: '4' }, { label: 'Logged time · 2 of 4', value: '1 h 39 min' },
+      { label: 'Active weeks', value: '4' }, { label: 'Records', value: '7' }]);
+    const mixed = yearShareContent(yearInReview(yearReviewDemoState('mixed'), 2026), 'lb');
+    expect(mixed.highlight).toMatchObject({ from: '135 lb × 8', to: '215 lb × 8', gain: '+80 lb' });
+    const single = yearShareContent(yearInReview(state([session('a', [2026, 4, 1], bench(60, 8))]), 2026), 'kg');
+    expect(single).toMatchObject({ highlight: null, line: '1 workout logged' });
+  });
+
+  it('shares a PNG from the finale without uploading anything', async () => {
+    const calls = [], fetches = [];
+    const context = new Proxy({}, { get: (target, key) => key in target ? target[key] : key === 'measureText' ? () => ({ width: 10 }) : key === 'createRadialGradient' ? () => ({ addColorStop() {} }) : () => {}, set: (target, key, value) => { target[key] = value; return true; } });
+    const original = { getContext: HTMLCanvasElement.prototype.getContext, toBlob: HTMLCanvasElement.prototype.toBlob, share: navigator.share, canShare: navigator.canShare, fetch: globalThis.fetch };
+    HTMLCanvasElement.prototype.getContext = () => context;
+    HTMLCanvasElement.prototype.toBlob = callback => callback(new Blob(['png'], { type: 'image/png' }));
+    Object.assign(navigator, { share: async data => { calls.push(data); }, canShare: () => true });
+    globalThis.fetch = (...args) => { fetches.push(args); return Promise.reject(new Error('offline')); };
+    try {
+      render(<YearInReview state={yearReviewDemoState('short')} close={() => {}} initialYear={2026} today={YEAR_REVIEW_DEMO_TODAY} />);
+      for (let i = 0; i < 4; i++) click(button('Next page'));
+      await act(async () => { button('SHARE').dispatchEvent(new MouseEvent('click', { bubbles: true })); await new Promise(resolve => setTimeout(resolve, 1700)); });
+      expect(calls).toHaveLength(1);
+      expect(calls[0].files[0]).toMatchObject({ name: 'ROOK-year-2026.png', type: 'image/png' });
+      expect(fetches).toEqual([]);
+      expect(button('SHARE').disabled).toBe(false);
+    } finally {
+      Object.assign(HTMLCanvasElement.prototype, { getContext: original.getContext, toBlob: original.toBlob });
+      Object.assign(navigator, { share: original.share, canShare: original.canShare });
+      globalThis.fetch = original.fetch;
+    }
+  });
+});

@@ -122,6 +122,9 @@
 .year-grid dd { font-size: 1.75rem; letter-spacing: -.03em; }
 .year-finale-actions { display: grid; gap: 4px; margin-top: auto; padding-top: 26px; }
 .year-finale-actions .button { width: 100%; }
+.year-finale-actions .button.primary { margin-bottom: 6px; }
+:root .screen.year-review p.year-share-status { min-height: 0; margin: 0 0 6px; color: var(--rook-secondary); font-size: .8125rem; line-height: 1.4; text-align: center; }
+:root .screen.year-review p.year-share-status:empty { display: none; }
 
 /* A short burst on the records page and the finale. */
 .year-celebration { position: absolute; top: 72px; left: 50%; width: 0; height: 0; pointer-events: none; z-index: 1; }
