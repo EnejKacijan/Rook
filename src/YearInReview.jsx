@@ -356,7 +356,7 @@ export function YearInReview({ state, close, initialYear, today = isoDay() }) {
       </div>
     </header>
     {view === 'stats' && stats ? <div className="year-stats-scroll"><AllStats stats={stats} units={units} onBack={() => setView('story')} /></div> : <>
-      <div ref={viewport} className="year-viewport" onPointerDown={onPointerDown} onPointerMove={onPointerMove}
+      <div ref={viewport} className="year-viewport" data-horizontal-gesture="true" onPointerDown={onPointerDown} onPointerMove={onPointerMove}
         onPointerUp={event => endDrag(event)} onPointerCancel={event => endDrag(event, true)} onLostPointerCapture={event => { if (event.target === viewport.current) endDrag(event, true); }}>
         <div ref={track} className="year-track" style={{ '--index': index }}>
           {pages.map((page, i) => <section key={`${year}-${page.kind}`} className={`year-page is-${page.kind}${i === index ? ' is-active' : ''}`}

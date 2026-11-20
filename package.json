@@ -31,6 +31,7 @@
     "qa:active-workout-bottom": "node scripts/active-workout-bottom-qa.mjs",
     "qa:active-workout-clarity": "node scripts/active-workout-clarity-qa.mjs && npm run qa:header-alignment",
     "qa:header-alignment": "node scripts/header-alignment-qa.mjs",
+    "qa:full-width-swipe-back": "node scripts/full-width-swipe-back-qa.mjs",
     "qa:workout-restart": "node scripts/workout-restart-qa.mjs",
     "qa:workout-resume": "node scripts/workout-resume-qa.mjs",
     "qa:warmup-sequencing": "node scripts/warmup-sequencing-qa.mjs",

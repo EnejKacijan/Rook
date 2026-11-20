@@ -25,3 +25,15 @@ it('injected feedback respects preference/reduced motion, prevents storms and im
 it('a future bridge exception does not escape the feedback abstraction',()=>{
  const feedback=createInteractionFeedback({adapter:{request(){throw Error('bridge offline');}},reducedMotion:()=>false});expect(()=>feedback.threshold()).not.toThrow();
 });
+it('outcome haptics use the native engine in the iOS app and vibration on the web',async()=>{
+ const {createOutcomeHaptics}=await import('./interactionFeedback.js');
+ const haptics={impact:vi.fn(()=>Promise.resolve()),notification:vi.fn(()=>Promise.resolve())},visible=()=>({visibilityState:'visible'});
+ const native=createOutcomeHaptics({haptics,platform:{hasPlugin:()=>true},document:visible});
+ expect(native('tap')).toBe('requested');expect(haptics.impact).toHaveBeenCalledOnce();
+ native('success');native('complete');expect(haptics.notification).toHaveBeenCalledTimes(2);
+ expect(createOutcomeHaptics({haptics,platform:{hasPlugin:()=>true},document:()=>({visibilityState:'hidden'})})('tap')).toBe('suppressed');
+ const vibrate=vi.fn(),web=createOutcomeHaptics({haptics,platform:{hasPlugin:()=>false},navigator:()=>({vibrate})});
+ web('tap');web('success');web('complete');expect(vibrate.mock.calls.map(([p])=>p)).toEqual([8,14,[18,32,18]]);
+ expect(createOutcomeHaptics({platform:{hasPlugin:()=>false},navigator:()=>({})})('tap')).toBe('unavailable');
+ expect(createOutcomeHaptics({platform:{hasPlugin:()=>false},navigator:()=>({vibrate(){throw Error('denied');}})})('tap')).toBe('unavailable');
+});

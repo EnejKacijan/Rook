@@ -1,4 +1,4 @@
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
+import { Haptics, ImpactStyle, NotificationType } from '@capacitor/haptics';
 import { rookPlatform } from './platform.js';
 // Discrete training-list feedback only. No audio session or native-control hacks.
 const pulses = Object.freeze({selection:6, threshold:9, pickup:9, drop:10});
@@ -46,3 +46,30 @@ export function createInteractionFeedback({adapter=rookPlatform.isIOSNative ? cr
 }
 
 export const interactionFeedback = createInteractionFeedback();
+
+// Outcome haptics for taps, saves and finished sets/workouts. The web build
+// has only the Vibration API, which iOS lacks, so the iOS app uses the
+// native engine: a light tap, or the system success pattern.
+const outcomePatterns = Object.freeze({ tap: 8, success: 14, complete: [18, 32, 18] });
+export function createOutcomeHaptics({ haptics = Haptics, platform = rookPlatform, navigator: nav = () => globalThis.navigator,
+  document: doc = () => globalThis.document } = {}) {
+  return type => {
+    const kind = outcomePatterns[type] ? type : 'tap';
+    try {
+      if (platform.hasPlugin('Haptics')) {
+        if (doc()?.visibilityState === 'hidden') return 'suppressed';
+        const action = kind === 'tap' ? haptics.impact({ style: ImpactStyle.Light }) : haptics.notification({ type: NotificationType.Success });
+        void Promise.resolve(action).catch(() => {});
+        return 'requested';
+      }
+      const device = nav();
+      if (typeof device?.vibrate !== 'function') return 'unavailable';
+      device.vibrate(outcomePatterns[kind]);
+      return 'requested';
+    } catch {
+      // Haptics are an optional enhancement and must never block the action.
+      return 'unavailable';
+    }
+  };
+}
+export const outcomeHaptic = createOutcomeHaptics();

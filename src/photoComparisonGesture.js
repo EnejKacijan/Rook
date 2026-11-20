@@ -4,6 +4,7 @@ const clamp = (value, low, high) => Math.max(low, Math.min(high, value));
 export function bindPhotoComparisonGesture({ stage, divider, enabled = () => true, onMultitouch = () => {}, onZoom = () => {} }) {
   const win = stage.ownerDocument.defaultView;
   const points = new Map();
+  stage.dataset.horizontalGesture = 'true';
   let position = 50, scale = 1, x = 0, y = 0, gesture = null, frame = 0;
   const bounds = () => stage.getBoundingClientRect();
   const transform = () => ({ position, scale, x, y });

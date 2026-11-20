@@ -1,5 +1,5 @@
 import {afterEach,expect,it,vi} from 'vitest';
-import {semanticBackSurface} from './useSemanticSwipeBack.js';
+import {semanticBackSurface,backFromAnywhere} from './useSemanticSwipeBack.js';
 afterEach(()=>{document.body.innerHTML='';vi.restoreAllMocks();});
 function surface(html){document.body.innerHTML=html;for(const b of document.querySelectorAll('button'))b.getClientRects=()=>[{}];return document.querySelector('[data-touch]');}
 for(const cls of ['screen','workout-screen','profile-screen','onboarding','coach-history-surface','coach-content-surface','combine-review-surface'])it(`finds the existing ${cls} Back without a second navigation callback`,()=>{
@@ -42,4 +42,18 @@ it('does not borrow import Back through a child overlay or an inactive decision'
  expect(semanticBackSurface(surface('<main class="screen import-plan-screen"><section class="import-resolution" data-import-step-back="true"><button aria-label="Back"></button><div role="dialog"><p data-touch></p></div></section></main>'))).toBeNull();
  expect(semanticBackSurface(surface('<main class="screen import-plan-screen" data-touch><section inert class="import-resolution" data-import-step-back="true"><button aria-label="Back"></button></section></main>'))).toBeNull();
  expect(semanticBackSurface(surface('<main class="screen import-plan-screen" data-touch><section class="import-resolution"><button aria-label="Back"></button></section></main>'))).toBeNull();
+});
+it('full-width Back yields to pagers, add-swipe rows, reorder handles, steppers and sideways scrollers',()=>{
+ document.body.innerHTML=`<main class="screen"><button aria-label="Back">‹</button><p id="text">Text</p>
+  <div data-horizontal-gesture><span id="pager">Week</span></div>
+  <ul data-swipe-mode="add"><li data-swipe-row data-swipe-enabled="true"><span id="add">Add</span></li></ul>
+  <ul data-swipe-mode="remove"><li data-swipe-row data-swipe-enabled="true"><span id="remove">Remove</span></li></ul>
+  <button data-reorder-kind="exercise" id="handle">⋮</button><div class="stepper"><button id="step">+</button></div>
+  <div id="scroller" style="overflow-x:auto"><span id="chip">Chip</span></div></main>`;
+ const surface=document.querySelector('main'),scroller=document.getElementById('scroller');
+ Object.defineProperties(scroller,{scrollWidth:{value:600},clientWidth:{value:300}});
+ const allowed=id=>backFromAnywhere(document.getElementById(id),surface);
+ expect(allowed('text')).toBe(true);expect(allowed('remove')).toBe(true);
+ for(const id of ['pager','add','handle','step','chip'])expect(allowed(id)).toBe(false);
+ surface.setAttribute('data-active-workout','true');expect(allowed('text')).toBe(false);
 });

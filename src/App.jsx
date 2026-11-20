@@ -796,14 +796,7 @@ function Button({ children, variant = "primary", className = "", ...props }) {
   );
 }
 function triggerHaptic(type = "tap") {
-  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
-    return;
-  const pattern = type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
-  try {
-    navigator.vibrate(pattern);
-  } catch {
-    // Haptics are an optional enhancement and must never block the action.
-  }
+  outcomeHaptic(type);
 }
 function BackLabel() {
   return (
@@ -20988,4 +20981,5 @@ import { applyHybridDecision } from './hybridImportReview.js';
 import { setSourceDecisionPending } from './importSourceFidelity.js';
 import { ImportInterpretationOffer } from './ImportInterpretationOffer.jsx';
 import { useSemanticSwipeBack } from './useSemanticSwipeBack.js';
+import { outcomeHaptic } from './interactionFeedback.js';
 import { YearInReview, YearReviewTodayCard, YearReviewProgressEntry } from './YearInReview.jsx';

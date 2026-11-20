@@ -1,6 +1,8 @@
 import {useEffect} from 'react';
 import {bindEdgeBack,standaloneNavigation} from './edgeBack.js';
 import {pageBackMotion} from './swipePageMotion.js';
+import {bindSwipeHistory} from './swipeHistory.js';
+import {rookPlatform} from './platform.js';
 const SURFACE = 'main.screen,.screen,.workout-screen,.profile-screen,.onboarding,.coach-history-surface,.coach-content-surface,.supplemental-limits-input,.import-resolution,.combine-review-surface';
 function workoutOverlayOpen(surface) {
   return surface.hasAttribute('data-active-workout') && [...document.querySelectorAll('[role="dialog"],[role="alertdialog"],[role="menu"],[role="tooltip"],.modal-layer')].some(layer=>!layer.closest('[inert],[aria-hidden="true"],[hidden]')&&layer.getClientRects().length);
@@ -10,6 +12,23 @@ function firstRunOverlayOpen(surface) {
   return !!page && [...document.querySelectorAll('[role="dialog"],[role="alertdialog"],[role="menu"],[role="listbox"],.modal-layer')].some(layer =>
     !layer.contains(surface) && !layer.closest('[hidden],[inert],[aria-hidden="true"]') && layer.getClientRects().length);
 }
+// Places that own a horizontal drag of their own keep it; Back stays on the
+// edge there. Remove-swipes go left, so only rightward Add rows conflict.
+const HORIZONTAL_OWNERS='[data-horizontal-gesture],[data-swipe-mode="add"] [data-swipe-row][data-swipe-enabled="true"],[data-reorder-kind],.stepper,[draggable="true"],[data-swipe-back-edge-only]';
+function scrollsSideways(node){
+  if(node.scrollWidth<=node.clientWidth+1)return false;
+  const overflow=getComputedStyle(node).overflowX;
+  return overflow==='auto'||overflow==='scroll';
+}
+// Full-width Back: a drag that starts anywhere on the page, not only at the
+// left edge. The active logger stays edge-only, as its rows are dense controls.
+export function backFromAnywhere(target,surface){
+  if(!(target instanceof Element)||!surface||surface.hasAttribute('data-active-workout')||target.closest(HORIZONTAL_OWNERS))return false;
+  for(let node=target;node&&node!==surface.parentElement;node=node.parentElement)if(scrollsSideways(node))return false;
+  return true;
+}
+// Installed web apps and the iOS app have no browser edge gesture of their own.
+export const ownsEdgeGesture=()=>standaloneNavigation()||rookPlatform.isNative;
 export function semanticBackSurface(target) {
   if(!(target instanceof Element)||target.closest('[data-no-edge-back]'))return null;
   let surface=target.closest(SURFACE),edgeSurface=surface;
@@ -37,22 +56,29 @@ export function semanticBackSurface(target) {
 }
 export function useSemanticSwipeBack(){
   useEffect(()=>{
-    let selected=null, motion=null, pointerBlocked=false;
+    let selected=null, motion=null, leaving=null, pointerBlocked=false;
     const pointerStart=event=>{
       if(event.pointerType==='touch')pointerBlocked=firstRunOverlayOpen(event.target.closest?.(SURFACE));
     };
     const enabled=event=>{
       if(event) { selected=pointerBlocked?null:semanticBackSurface(event.target); pointerBlocked=false; motion?.clear(); motion=null; }
-      return standaloneNavigation()&&!!selected&&selected.surface.isConnected&&selected.button.isConnected&&!selected.button.disabled&&selected.surface.getAttribute('aria-busy')!=='true'&&!selected.surface.closest('[inert],[aria-hidden="true"]')&&!workoutOverlayOpen(selected.surface)&&!firstRunOverlayOpen(selected.surface);
+      return !!selected&&selected.surface.isConnected&&selected.button.isConnected&&!selected.button.disabled&&selected.surface.getAttribute('aria-busy')!=='true'&&!selected.surface.closest('[inert],[aria-hidden="true"]')&&!workoutOverlayOpen(selected.surface)&&!firstRunOverlayOpen(selected.surface);
     };
     document.addEventListener('pointerdown',pointerStart,true);
+    const disposeHistory=bindSwipeHistory(document,SURFACE);
     const dispose=bindEdgeBack(document.documentElement,{
-      enabled,allowFocusedInput:input=>selected?.surface.hasAttribute('data-active-workout')&&selected.surface.contains(input),getBounds:()=>selected.edgeSurface.getBoundingClientRect(),
+      enabled,edgeAllowed:ownsEdgeGesture,anywhere:target=>backFromAnywhere(target,selected?.surface),allowFocusedInput:input=>selected?.surface.hasAttribute('data-active-workout')&&selected.surface.contains(input),getBounds:()=>selected.edgeSurface.getBoundingClientRect(),
       duration:(gesture,commit)=>motion ? Math.min(200,Math.max(40,200*(commit ? gesture.width-gesture.distance : gesture.distance)/gesture.width)) : 0,
-      clear:()=>{motion?.clear();motion=null;},
+      clear:()=>{
+        const settled=motion;motion=null;
+        // A sheet that already left the screen waits for Back to close it,
+        // so it never flashes back into place first.
+        if(settled?.dismisses&&settled.away){leaving=settled;setTimeout(()=>{if(leaving===settled){leaving=null;settled.clear();}});}
+        else settled?.clear();
+      },
       render:(x,ms)=>{motion ||= pageBackMotion(selected.surface);motion?.render(x,ms);},
-      onBack:()=>{selected.surface.dataset.swipeBackCommitted='true';selected.button.click();},
+      onBack:()=>{selected.surface.dataset.swipeBackCommitted='true';selected.button.click();const settled=leaving;leaving=null;settled?.afterBack();},
     });
-    return()=>{document.removeEventListener('pointerdown',pointerStart,true);dispose();};
+    return()=>{document.removeEventListener('pointerdown',pointerStart,true);dispose();disposeHistory();};
   },[]);
 }

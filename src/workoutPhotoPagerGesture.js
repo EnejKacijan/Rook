@@ -12,6 +12,7 @@ export function commitPhotoPager(distance, width, velocity) {
 export function bindWorkoutPhotoPager({ viewport, track, state, onNavigate, onMoving = () => {} }) {
   const win = viewport.ownerDocument.defaultView;
   let gesture, timer, done, settling = false, alive = true;
+  viewport.dataset.horizontalGesture = 'true';
   const allowed = () => viewport.isConnected && !state().disabled && (win.visualViewport?.scale || 1) <= 1.01;
   const pose = (distance, duration = 0) => {
     track.style.transition = duration ? `transform ${duration}ms cubic-bezier(.2,0,0,1)` : 'none';
