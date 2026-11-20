@@ -153,6 +153,7 @@ import { PlanEditorExercisePicker } from './PlanEditorExercisePicker.jsx';
 import { PlanConflictResolution, planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './PlanConflictResolution.jsx';
 import { removalRows, stagePlanRemoval, undoPlanRemoval } from './planRemovalDraft.js';
 import './planRemovalDraft.css';
+import './completionMotion.css';
 import { revealPlanConflict } from './revealPlanConflict.js';
 import { useAvailableImage } from './useAvailableImage.js';
 import { workoutPhotoFile, exportWorkoutPhoto } from './exportWorkoutPhoto.js';
@@ -8991,6 +8992,9 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   const [liveEntry] = useState(()=>Boolean(liveFinish && !liveFinish.presented && liveFinish.startedAt===session?.startedAt));
   const [motionCancelled,setMotionCancelled] = useState(false);
   useEffect(()=>{if(persistenceFailed)setMotionCancelled(true);},[persistenceFailed]);
+  // The entrance plays once. Drop its class when done so a section that later
+  // remounts (feedback, photos, notes) never replays the rise.
+  useEffect(()=>{if(!liveEntry)return undefined;const timer=setTimeout(()=>setMotionCancelled(true),2400);return()=>clearTimeout(timer);},[liveEntry]);
   const recognition = useMemo(() => {
     if (persistenceFailed || !session || !liveFinish || liveFinish.startedAt !== session.startedAt) return null;
     return completionRecognition(session, liveFinish.priorWorkouts, {
@@ -9047,14 +9051,16 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
     });
   }, [endedEarly, session?.id, liveEntry, liveFinish, persistenceFailed]);
   if (!session) return null;
+  const liveMotion = liveEntry && !persistenceFailed && !motionCancelled;
   return (
     <main
-      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : "fully-completed"} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
+      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : "fully-completed"} ${liveMotion ? "is-live-completion" : ""}`}
     >
       {!endedEarly ? <CompletedSessionOverview
         ref={headingRef}
         workout={session}
         recognitionId={recognitionId}
+        live={liveMotion}
       /> : <>
       <div className="complete-mark" aria-hidden="true">
         <span>✓</span>

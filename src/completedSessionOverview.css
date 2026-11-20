@@ -26,12 +26,6 @@
 .today-hero .completed-session-overview { margin-top: 18px; }
 .complete-screen.fully-completed { padding-top: calc(36px + env(safe-area-inset-top)); }
 .complete-screen.fully-completed > .complete-session-log { margin-top: 30px; }
-.is-live-completion .completion-badge {
-  animation: rook-workout-complete-mark var(--rook-motion-state, 200ms) var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1)) 1 both;
-}
-@media (prefers-reduced-motion: reduce) {
-  .complete-screen .completion-badge { animation: none; }
-}
 @media (max-width: 350px) {
   .completed-session-overview .completion-hero h1 { font-size: 2rem; }
   .completion-summary { gap: 10px; padding: 16px 12px; }

@@ -1,3 +1,4 @@
+import { useId, useState } from 'react';
 import { ExerciseIllustration } from './ExerciseIllustration.jsx';
 import { PersonalBestTrophy } from './WorkoutPersonalBestDetails.jsx';
 import { exerciseArt } from './exerciseArt.js';
@@ -10,10 +11,20 @@ const plural = (count, word) => `${count} ${count === 1 ? word : `${word}s`}`;
 export function primaryRecord(bests = []) {
   return bests.find(best => best.previousHeaviest) || bests.find(best => best.previousReps != null) || bests.find(best => best.estimate) || null;
 }
+const recordRank = best => best.previousHeaviest ? 0 : best.previousReps != null ? 1 : 2;
+// Heaviest-set records lead, then rep records, then estimates; workout order
+// breaks ties, so the first cards are always the strongest wins.
 export function completionRecordItems(personalBests) {
   if (!personalBests?.size) return [];
-  return [...personalBests.entries()].map(([exercise, bests]) => ({ exercise, best: primaryRecord(bests) })).filter(item => item.best);
+  return [...personalBests.entries()].map(([exercise, bests]) => ({ exercise, best: primaryRecord(bests) }))
+    .filter(item => item.best)
+    .sort((a, b) => recordRank(a.best) - recordRank(b.best));
 }
+// Up to four records fit on one phone screen next to the summary, so all
+// show. Past that, hiding a single card behind a button saves nothing, so
+// the list opens with three and one tap reveals the rest in place.
+export const RECORDS_SHOWN_IN_FULL = 4;
+export const RECORDS_PREVIEW = 3;
 
 function RecordValue({ best, units }) {
   const unit = weightUnit(units), load = kg => `${displayWeight(kg, units)} ${unit}`;
@@ -35,21 +46,34 @@ function RecordValue({ best, units }) {
   </>;
 }
 
-export function CompletionRecords({ personalBests, units, limit = 3 }) {
+function RecordItem({ exercise, best, units, index, revealed }) {
+  const src = exerciseArt(exercise);
+  return <li style={{ '--i': index }} className={revealed ? 'is-revealed' : undefined}>
+    <span className="completion-record-art" aria-hidden="true">{src && <ExerciseIllustration src={src} alt="" decoding="async" />}</span>
+    <div><h3>{exerciseName(exercise)}</h3><RecordValue best={best} units={units} /></div>
+  </li>;
+}
+
+export function CompletionRecords({ personalBests, units }) {
   const items = completionRecordItems(personalBests);
+  const [expanded, setExpanded] = useState(false);
+  const listId = useId();
   if (!items.length) return null;
-  const shown = items.slice(0, limit), more = items.length - shown.length;
+  const collapsible = items.length > RECORDS_SHOWN_IN_FULL;
+  const visible = collapsible && !expanded ? items.slice(0, RECORDS_PREVIEW) : items;
+  const hidden = items.length - RECORDS_PREVIEW;
   return <section className="completion-records" aria-labelledby="completion-records-title">
     <h2 className="completion-records-title" id="completion-records-title"><PersonalBestTrophy />{items.length === 1 ? 'New personal record' : `${items.length} new personal records`}</h2>
-    <ol>
-      {shown.map(({ exercise, best }, index) => {
-        const src = exerciseArt(exercise);
-        return <li key={exercise.id || `${exercise.exerciseId}-${index}`} style={{ '--i': index }}>
-          <span className="completion-record-art" aria-hidden="true">{src && <ExerciseIllustration src={src} alt="" decoding="async" />}</span>
-          <div><h3>{exerciseName(exercise)}</h3><RecordValue best={best} units={units} /></div>
-        </li>;
+    <ol id={listId}>
+      {visible.map(({ exercise, best }, index) => {
+        const revealed = collapsible && index >= RECORDS_PREVIEW;
+        return <RecordItem key={exercise.id || `${exercise.exerciseId}-${index}`} exercise={exercise} best={best} units={units}
+          index={revealed ? index - RECORDS_PREVIEW : index} revealed={revealed} />;
       })}
     </ol>
-    {more > 0 && <p className="completion-records-more">{plural(more, 'more record')} in the workout details below.</p>}
+    {collapsible && <button type="button" className="text-button completion-records-toggle" aria-expanded={expanded} aria-controls={listId}
+      onClick={() => setExpanded(open => !open)}>
+      {expanded ? 'Show fewer' : `Show ${plural(hidden, 'more record')}`}
+    </button>}
   </section>;
 }

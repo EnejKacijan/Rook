@@ -19,7 +19,7 @@ import { prescribeTrainingBlockWorkout, advanceTrainingBlockAfterWorkout } from 
 import { normalizePlanHistoryState } from './planHistory.js';
 import { normalizeGymProfilesState } from './gymProfiles.js';
 import { BlockReviewSummary } from './BlockReviewSummary.jsx';
-import { CompletionRecords, primaryRecord } from './CompletionRecords.jsx';
+import { CompletionRecords, completionRecordItems, primaryRecord } from './CompletionRecords.jsx';
 
 // Same synthetic block as blockReview.test.js.
 function completedBlockFixture({lowData=false}={}) {
@@ -107,6 +107,34 @@ describe('completion records', () => {
     expect(screen.getByText('55 kg × 8')).toBeTruthy();
     expect(screen.getByText('Heaviest set yet · +5 kg · +2 reps')).toBeTruthy();
     expect(screen.getByText(/an estimate$/)).toBeTruthy();
+  });
+  const records = count => new Map(Array.from({ length: count }, (_, i) => [
+    { id: `e${i}`, exerciseId: 'barbell-bench-press', name: `Lift ${i}` },
+    [i % 2 ? { weight: 40, reps: 10, estimate: { current: 53, previous: 50 } } : { weight: 60, reps: 8, previousHeaviest: { weight: 55, reps: 8 } }],
+  ]));
+  it('ranks weight records before estimates and keeps workout order within a kind', () => {
+    expect(completionRecordItems(records(4)).map(item => item.exercise.id)).toEqual(['e0', 'e2', 'e1', 'e3']);
+  });
+  it('shows up to four records in full with no toggle', () => {
+    render(<CompletionRecords personalBests={records(4)} units="kg" />);
+    expect(host.querySelectorAll('.completion-records li')).toHaveLength(4);
+    expect(host.querySelector('.completion-records-toggle')).toBeNull();
+  });
+  it('opens with three of five or more and reveals the rest in place', () => {
+    render(<CompletionRecords personalBests={records(6)} units="kg" />);
+    expect(screen.getByRole('heading', { name: /6 new personal records/ })).toBeTruthy();
+    const toggle = host.querySelector('.completion-records-toggle');
+    expect(host.querySelectorAll('.completion-records li')).toHaveLength(3);
+    expect(toggle.textContent).toBe('Show 3 more records');
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-controls')).toBe(host.querySelector('.completion-records ol').id);
+    act(() => toggle.click());
+    expect(host.querySelectorAll('.completion-records li')).toHaveLength(6);
+    expect(host.querySelectorAll('.completion-records li.is-revealed')).toHaveLength(3);
+    expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    expect(toggle.textContent).toBe('Show fewer');
+    act(() => toggle.click());
+    expect(host.querySelectorAll('.completion-records li')).toHaveLength(3);
   });
   it('renders nothing without records', () => {
     const { container } = render(<CompletionRecords personalBests={new Map()} units="kg" />);
