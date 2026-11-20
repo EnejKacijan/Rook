@@ -127,3 +127,19 @@ it('a failed initial status check does not claim any photos were selected or ana
   expect(host.querySelector('.offline-banner').textContent).not.toContain('selected photos');
   expect(AIService.reviewPhysique).not.toHaveBeenCalled();
 });
+it('every step but the running review has a Back: photos return to the intro, the intro and results leave', async () => {
+  const back = label => host.querySelector(`button[aria-label="${label}"]`);
+  AIService.status.mockResolvedValue({ available: false, reason: 'config_missing' });
+  await mount();
+  await act(async () => back('Back').click()); expect(onClose).toHaveBeenCalledTimes(1);
+  AIService.status.mockResolvedValue({ available: true });
+  await act(async () => root.unmount()); root = createRoot(host);
+  await reachUpload();
+  await act(async () => back('Back to physique review').click());
+  expect(button('CONTINUE')).toBeDefined(); expect(onClose).toHaveBeenCalledTimes(1);
+  await click('CONTINUE'); expect(host.querySelector('input[type="file"]')).not.toBeNull();
+  let finish; AIService.reviewPhysique.mockReturnValue(new Promise(resolve => { finish = resolve; }));
+  await click('REVIEW PHOTOS'); expect(host.querySelector('button[aria-label^="Back"]')).toBeNull();
+  await act(async () => finish(success));
+  await act(async () => back('Back').click()); expect(onClose).toHaveBeenCalledTimes(2); expect(onUse).not.toHaveBeenCalled();
+});

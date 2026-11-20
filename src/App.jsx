@@ -2533,9 +2533,17 @@ export function PhysiqueReview({ profile, onUse, onClose }) {
         ? current.filter((value) => value !== id)
         : [...current, id],
     );
+  // Every step but the running review has a Back, so the header button and
+  // the swipe both leave or step back. Intro and results return to the caller.
+  const back = mode === "upload" ? { label: "Back to physique review", onClick: () => { setError(""); setMode("intro"); } }
+    : mode === "failure" ? { label: "Back to photos", onClick: () => { setReviewFailure(null); setMode("upload"); } }
+    : mode === "analyzing" ? null : { label: "Back", onClick: onClose };
   const shell = (children) => (
     <main className="onboarding screen physique-review-screen">
-      <div className="brand">ROOK</div>
+      <div className="physique-review-top">
+        {back && <FirstRunBackButton onClick={back.onClick} label={back.label} />}
+        <div className="brand">ROOK</div>
+      </div>
       {children}
     </main>
   );
