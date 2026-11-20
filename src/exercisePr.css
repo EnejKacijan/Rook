@@ -26,6 +26,9 @@
   transform-origin: left center;
 }
 .active-performance-pr > strong { font: inherit; font-weight: 700; }
+.active-record-trophy { display: inline-flex; margin-right: -2px; }
+.active-record-trophy .session-log-trophy { width: 15px; height: 15px; margin: 0; }
+.active-record-trophy .visually-hidden { display: none; }
 .active-performance-pr .active-record-gain { font-variant-numeric: tabular-nums; white-space: nowrap; }
 .active-record-info { display:inline-flex;align-items:center;margin-left:6px;vertical-align:middle; }
 .active-record-info .rook-information-icon { width:14px;height:14px; }

@@ -799,7 +799,7 @@ function Button({ children, variant = "primary", className = "", ...props }) {
 function triggerHaptic(type = "tap") {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
     return;
-  const pattern = type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
+  const pattern = type === "record" ? [14, 40, 28] : type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
   try {
     navigator.vibrate(pattern);
   } catch {
@@ -6731,7 +6731,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       });
       setCombinedSaveError("");
       if (!result.changed) return;
-      recordFeedback.logged(before, result.state, current.id, expectedSetId);
+      // A record set gets its own longer double tap. vibrate() replaces the
+      // set-logged tap already playing, so the record pattern is what's felt.
+      if (recordFeedback.logged(before, result.state, current.id, expectedSetId)) triggerHaptic("record");
       const updated = result.state.activeWorkout;
       if (updated.exerciseIndex !== live.exerciseIndex) {
         workoutActionLockRef.current = true;
@@ -7837,10 +7839,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         </aside>
       )}
       {restLeft > 0 && !confirmation && (
-        <aside className="rest-timer">
+        <aside className={`rest-timer${restLeft <= 3 ? " rest-final" : ""}`}>
           <span>
             <Eyebrow>REST</Eyebrow>
-            <strong>{formatDuration(restLeft)}</strong>
+            {/* Remount each of the last three seconds so the tick replays. */}
+            <strong key={restLeft <= 3 ? restLeft : "running"}>{formatDuration(restLeft)}</strong>
           </span>
           <div>
             <i
