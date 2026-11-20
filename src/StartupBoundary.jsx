@@ -81,12 +81,13 @@ export function StartupAccountRecovery({startup={},onRetry,onStartFresh,renderIm
   const [busy,setBusy]=useState(false),[error,setError]=useState('');
   if(importing&&renderImport)return renderImport({close:()=>setImporting(false),onRestored:()=>{setImporting(false);onRetry();}});
   const conflict=startup.code==='account-identity-conflict';
-  return <main className="fatal-error-screen startup-recovery" role="alert">
+  const setupChoice=startup.code==='unverified-anonymous-first-run'&&startup.verifiedEmpty===true&&startup.allowStartFresh===true&&!startup.cloudFound;
+  return <main className="fatal-error-screen startup-recovery" role={setupChoice?'status':'alert'}>
     <p className="eyebrow">ROOK ACCOUNT</p>
-    <h1>{startup.cloudFound?'Your training data was found.':conflict?'Your saved account needs review.':'We couldn’t check your training data.'}</h1>
-    <p>{startup.cloudFound?'ROOK has not replaced the data on this device. Retry when your account and connection are available.':conflict?'ROOK kept the existing profile separate from this account. No data was replaced.':'ROOK has not treated an uncertain account or cloud result as a new profile.'}</p>
+    <h1>{setupChoice?(startup.setupAlreadyStarted?'Continue setting up Rook.':'Ready to set up Rook?'):startup.cloudFound?'Your training data was found.':conflict?'Your saved account needs review.':'We couldn’t check your training data.'}</h1>
+    <p>{setupChoice?'No training data was found for this guest account. If you used ROOK with another account, restore it below. Otherwise, continue setup.':startup.cloudFound?'ROOK has not replaced the data on this device. Retry when your account and connection are available.':conflict?'ROOK kept the existing profile separate from this account. No data was replaced.':'ROOK has not treated an uncertain account or cloud result as a new profile.'}</p>
     <div className="startup-recovery-actions">
-      <button type="button" className="button primary" onClick={onRetry}>TRY AGAIN</button>
+      {setupChoice?<button type="button" className="button primary" onClick={onStartFresh}>{startup.setupAlreadyStarted?'CONTINUE SETUP':'START NEW SETUP'}</button>:<button type="button" className="button primary" onClick={onRetry}>TRY AGAIN</button>}
       {startup.restoreCloud&&<button type="button" className="button secondary" disabled={busy} onClick={async()=>{
         setBusy(true);setError('');
         try { await startup.restoreCloud(); onRetry(); }
@@ -94,7 +95,7 @@ export function StartupAccountRecovery({startup={},onRetry,onStartFresh,renderIm
         finally { setBusy(false); }
       }}>{busy?'RESTORING…':'RESTORE DATA'}</button>}
       <StartupProviderRestore {...{startup,busy,setBusy,setError,onRetry}}/>
-      {startup.allowStartFresh&&<button type="button" className="button secondary" onClick={onStartFresh}>{startup.setupAlreadyStarted?'CONTINUE SETUP':'START NEW SETUP'}</button>}
+      {startup.allowStartFresh&&!setupChoice&&<button type="button" className="button secondary" onClick={onStartFresh}>{startup.setupAlreadyStarted?'CONTINUE SETUP':'START NEW SETUP'}</button>}
       {renderImport&&<button type="button" className="button secondary" onClick={()=>setImporting(true)}>IMPORT BACKUP</button>}
     </div>
     {error&&<p role="alert">{error}</p>}

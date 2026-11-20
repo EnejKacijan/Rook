@@ -108,10 +108,18 @@ function improvementsFor(workouts) {
   for (const workout of workouts) {
     if (isDeloadWorkout(workout)) continue;
     const day = workoutPerformedDate(workout);
+    const sessionSets = new Map();
     for (const exercise of workout.exercises || []) {
       if (!exercise.exerciseId || !recordEligible(exercise)) continue;
       const set = topSet(exercise);
       if (!set) continue;
+      const best = sessionSets.get(exercise.exerciseId);
+      if (!best || set.weight > best.set.weight || set.weight === best.set.weight && set.reps > best.set.reps)
+        sessionSets.set(exercise.exerciseId, { exercise, set });
+    }
+    // The same lift can appear twice in a workout. It still supplies only one
+    // session to a comparison, using weight and reps from its best real set.
+    for (const { exercise, set } of sessionSets.values()) {
       if (!byExercise.has(exercise.exerciseId)) byExercise.set(exercise.exerciseId, { exercise, sessions: [] });
       byExercise.get(exercise.exerciseId).sessions.push({ ...set, day, workoutId: workout.id });
     }
@@ -218,15 +226,19 @@ export function yearInReview(state, year) {
   // the first January session is not a record by calendar alone.
   const ids = new Set(workouts.map(workout => workout.id));
   const events = prEventsForWorkouts(all, { e1rmEligible: recordEligible }).filter(event => ids.has(event.workoutId) && recordEligible(event.exercise));
-  const prSessions = new Set(events.map(event => `${event.workoutId}:${event.exerciseId}`));
+  const prSessions = new Set();
+  const recordCounts = new Map();
   const prExercises = new Map();
   for (const event of events) {
+    const sessionKey = JSON.stringify([event.workoutId, event.exerciseId]);
+    if (!prSessions.has(sessionKey)) {
+      prSessions.add(sessionKey);
+      recordCounts.set(event.exerciseId, (recordCounts.get(event.exerciseId) || 0) + 1);
+    }
     const best = prExercises.get(event.exerciseId);
     if (!best || event.weight > best.weight || event.weight === best.weight && event.reps > best.reps)
       prExercises.set(event.exerciseId, { exerciseId: event.exerciseId, exercise: event.exercise, name: exerciseName(event.exercise), weight: event.weight, reps: event.reps, date: event.date, type: event.type });
   }
-  const recordCounts = new Map();
-  for (const key of prSessions) { const id = key.slice(key.indexOf(':') + 1); recordCounts.set(id, (recordCounts.get(id) || 0) + 1); }
 
   const blockMap = new Map();
   for (const block of [...(state.completedTrainingBlocks || []), state.program?.trainingBlock].filter(Boolean))

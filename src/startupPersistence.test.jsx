@@ -64,8 +64,10 @@ it('holds first-run UI behind an account check and only accepts explicit fresh s
  await act(async()=>root.render(<StartupBoundary load={load}>{()=>{mounted();return <p>First-run setup</p>;}}</StartupBoundary>));
  expect(mounted).not.toHaveBeenCalled();
  expect(document.body.textContent).not.toContain('First-run setup');
- expect(document.body.textContent).toContain('We couldn’t check your training data');
- await act(async()=>document.querySelector('button.button.secondary').click());
+ expect(document.querySelector('[role=status] h1')?.textContent).toBe('Ready to set up Rook?');
+ expect(document.body.textContent).not.toContain('We couldn’t check your training data');
+ expect(document.body.textContent).not.toContain('TRY AGAIN');
+ await act(async()=>[...document.querySelectorAll('button')].find(button=>button.textContent==='START NEW SETUP').click());
  expect(load).toHaveBeenLastCalledWith({allowStartFresh:true});
  expect(mounted).toHaveBeenCalledOnce();
 });

@@ -291,6 +291,8 @@ export function YearInReview({ state, close, initialYear, today = isoDay() }) {
   const last = pages.length - 1;
   const goTo = useCallback(next => setIndex(current => Math.max(0, Math.min(last, typeof next === 'function' ? next(current) : next))), [last]);
   useEffect(() => { setIndex(0); setView('story'); }, [year]);
+  // A history correction or cloud refresh can remove pages while this is open.
+  useLayoutEffect(() => { setIndex(current => Math.min(current, last)); }, [last]);
   useLayoutEffect(() => { track.current?.style.setProperty('--drag', '0'); }, [index]);
   useEffect(() => { viewport.current?.querySelectorAll('.year-page')[index]?.scrollTo?.({ top: 0 }); }, [index]);
   // Stagger each page's content in reading order.
