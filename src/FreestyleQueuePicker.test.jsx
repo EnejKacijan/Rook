@@ -4,6 +4,7 @@ import {it,expect,vi,beforeEach,afterEach} from 'vitest';
 import * as domain from './domain.js';
 import {createReturningUserFixture} from './demoFixture.js';
 import {startFreestyleWorkout} from './freestyleWorkout.js';
+import {createCustomExercise} from './customExercises.js';
 import {FreestyleExercisePicker} from './FreestyleQueuePicker.jsx';
 let host,root,current,close;
 beforeEach(()=>{globalThis.IS_REACT_ACT_ENVIRONMENT=true;vi.useFakeTimers();vi.stubGlobal('matchMedia',()=>({matches:true,addEventListener(){},removeEventListener(){}}));HTMLElement.prototype.scrollTo=()=>{};host=document.createElement('div');document.body.append(host);root=createRoot(host);close=vi.fn();});
@@ -97,3 +98,17 @@ it('cancels pending preparation on accepted close while a veto keeps the picker 
  await act(async()=>{host.querySelector('main').dispatchEvent(new CustomEvent('rook:before-sheet-close',{cancelable:true}));await Promise.resolve();vi.advanceTimersByTime(80);});
  expect(host.querySelectorAll('.queue-search-row')).toHaveLength(0);
 });
+it('creates a custom exercise from the same library action as the plan builder and adds it to this workout',()=>{
+ const initial=startFreestyleWorkout(createReturningUserFixture(0));
+ const Modal=({children})=><div data-modal>{children}</div>;
+ function Editor({initialName,update,onCreated}){return <button onClick={()=>{let result;update(state=>{result=createCustomExercise(state,{name:initialName,equipment:['dumbbells'],primaryMuscle:'chest',pattern:'horizontal-push',loggingType:'weight_reps'});return state;});onCreated(result.exercise);}}>Create {initialName}</button>;}
+ function Harness(){const [state,setState]=useState(initial);current=state;return <FreestyleExercisePicker state={state} update={fn=>setState(s=>fn(structuredClone(s)))} close={close} Header={()=><header/>} Modal={Modal} CustomExerciseEditor={Editor}/>;}
+ act(()=>root.render(<Harness/>));act(()=>vi.advanceTimersByTime(80));
+ const input=host.querySelector('input');
+ act(()=>{Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'Owner press');input.dispatchEvent(new Event('input',{bubbles:true}));});
+ click(host.querySelector('[aria-label="Create custom exercise"]'));
+ click([...document.querySelectorAll('[data-modal] button')].find(b=>b.textContent==='Create Owner press'));
+ const custom=current.customExercises.find(item=>item.name==='Owner press');
+ expect(custom).toBeDefined();expect(current.activeWorkout.exercises.map(e=>e.exerciseId)).toEqual([custom.id]);expect(document.querySelector('[data-modal]')).toBeNull();
+});
+it('omits custom creation when no editor is supplied',()=>{mount();expect(host.querySelector('[aria-label="Create custom exercise"]')).toBeNull();});

@@ -20,6 +20,7 @@ import {planWorkoutChoices,resolvePlanWorkout,startPlanWorkoutExtra} from './pla
 import {planScheduledOptions,reviewPlanWorkoutStart,startScheduledPlanWorkout} from './planWorkoutSchedule.js';
 import {PlanWorkoutStartSheet} from './PlanWorkoutStartSheet.jsx';
 import {searchWorkoutNames} from './workoutSearch.js';
+import {registerCustomExerciseRecord,rememberExerciseAlias} from './customExercises.js';
 import './savedWorkouts.css';
 
 export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,initialTemplateId=null,createNew=false,firstRun=false,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved,dialogLabel}) {
@@ -155,6 +156,8 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
     {!embedded&&<Header title={planSelection?'From your plan':source?'Save workout':editing&&!selected?'Create workout':editing?'Edit saved workout':draft&&!selected?'Save workout':review?'Saved workout':'Choose a workout'} onBack={firstRun||review?back:undefined} backLabel={firstRun?'Back to start':'Back'} onClose={firstRun?undefined:close}/>}
     {!review&&scopeBar}
     {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
+      onRegisterCustomExercise={record=>update(current=>{registerCustomExerciseRecord(current,record);return current;})}
+      onRememberExerciseAlias={(alias,id)=>update(current=>{rememberExerciseAlias(current,alias,id,{builtInCatalog:exerciseCatalog});return current;})}
       copyOverride={{eyebrow:selected?'SAVED WORKOUT':'CREATE WORKOUT',title:selected?'Edit workout':'Build your workout',body:'Choose exercises and set targets for your workout.',action:'REVIEW WORKOUT'}}
       onSave={program=>{editorDirty.current=true;setDraft({name:review.name,exercises:program.days[0].exercises});setEditing(false);setRenaming(true);}} onCancel={firstRun?leaveFirstRun:()=>setEditing(false)} onDirtyChange={firstRun?value=>{editorDirty.current=value;}:undefined}/>:review?<>
       <div className="saved-workout-preview" data-sheet-form-scroll data-exercise-search-scroll>
