@@ -21,6 +21,7 @@ import {planScheduledOptions,reviewPlanWorkoutStart,startScheduledPlanWorkout} f
 import {PlanWorkoutStartSheet} from './PlanWorkoutStartSheet.jsx';
 import {searchWorkoutNames} from './workoutSearch.js';
 import {registerCustomExerciseRecord,rememberExerciseAlias} from './customExercises.js';
+import {effectiveGymContext} from './gymProfiles.js';
 import './savedWorkouts.css';
 
 export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,source=null,initialTemplateId=null,createNew=false,firstRun=false,embedded=false,scopeBar=null,onEditingChange,hidden=false,browseQuery,navigationRef,onViewChange,onBack,onSaved,dialogLabel}) {
@@ -151,11 +152,13 @@ export function SavedWorkouts({state,update,close,Header,Editor,Modal,onStarted,
   };
   const issues=review?templateUseIssues(state,review):[],overlaps=selected?templateOverlaps(state,selected):[];
   const editorSource=useMemo(()=>editing&&review&&{id:'saved-workout-editor',source:'manual',name:review.name,days:[{id:'saved-workout-day',name:review.name,workoutName:review.name,weekday:'Mon',exercises:structuredClone(review.exercises).map(e=>({...e,sets:e.sets.map(s=>({...s,completed:false}))}))}]},[editing,review]);
+  // Same equipment the workout itself is checked against when it is used.
+  const libraryProfile=useMemo(()=>effectiveGymContext(state,{}).profile,[state.profile,state.gymProfiles,state.defaultGymProfileId]);
   const applied=state.activeWorkout?.queueCommandIds?.includes(request.current);
   return <><main hidden={hidden} data-plan-start-open={Boolean(planStart)} ref={screen} role={dialogLabel ? 'dialog' : undefined} aria-modal={dialogLabel ? 'true' : undefined} aria-label={dialogLabel} className={`${embedded?'':'screen detail-screen '}${editing?'edit-plan-screen ':''}saved-workouts`}>
     {!embedded&&<Header title={planSelection?'From your plan':source?'Save workout':editing&&!selected?'Create workout':editing?'Edit saved workout':draft&&!selected?'Save workout':review?'Saved workout':'Choose a workout'} onBack={firstRun||review?back:undefined} backLabel={firstRun?'Back to start':'Back'} onClose={firstRun?undefined:close}/>}
     {!review&&scopeBar}
-    {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={state.profile} exerciseState={state}
+    {editing?<Editor mode="edit" workoutOnly source={editorSource} profile={libraryProfile} exerciseState={state}
       onRegisterCustomExercise={record=>update(current=>{registerCustomExerciseRecord(current,record);return current;})}
       onRememberExerciseAlias={(alias,id)=>update(current=>{rememberExerciseAlias(current,alias,id,{builtInCatalog:exerciseCatalog});return current;})}
       copyOverride={{eyebrow:selected?'SAVED WORKOUT':'CREATE WORKOUT',title:selected?'Edit workout':'Build your workout',body:'Choose exercises and set targets for your workout.',action:'REVIEW WORKOUT'}}

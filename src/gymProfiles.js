@@ -178,6 +178,13 @@ export function deleteGymProfile(state, id, replacementDefaultId = null) {
   return { status: "deleted", gym };
 }
 
+// Equipment the person never chose is not a restriction. The plan builder has
+// always treated it as a full gym; workouts, freestyle and Create workout use
+// the same rule so every picker offers the same exercise library.
+export function declaredEquipment(profile) {
+  return profile?.equipment?.length ? profile.equipment : ["full gym"];
+}
+
 export function effectiveGymContext(state, workout = state?.activeWorkout) {
   const adjustment = workout?.adjustment || workout?.recoveredMove || (workout ? null : state?.todayAdaptation);
   if (!adjustment?.temporaryEquipment?.length && workout?.temporaryPlanAdjustment?.equipment?.length) {
@@ -198,7 +205,7 @@ export function effectiveGymContext(state, workout = state?.activeWorkout) {
     name: gym?.name || null,
     profile: equipmentProfile(
       state.profile,
-      gym?.equipment || state.profile?.equipment || [],
+      gym?.equipment || declaredEquipment(state.profile),
       gym?.environment || state.profile?.environment,
     ),
     todayOnly: false,
