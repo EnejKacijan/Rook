@@ -85,10 +85,28 @@ it('summary excludes empty and partly logged exercises and only counts recorded 
 });
 it('historical display is static and contains no celebration overlay',()=>{
   render(<Complete {...props(fixture())}/>);expect(host.querySelector('.is-live-completion')).toBeNull();expect(host.querySelector('.completion-badge').getAttribute('aria-hidden')).toBe('true');
-  const css=readFileSync('src/completedSessionOverview.css','utf8');expect(css).not.toMatch(/@keyframes|infinite|confetti/i);
-  expect(css).toContain('var(--rook-motion-state, 200ms)');expect(css).toContain('1 both');
-  expect(css).toMatch(/@media\s*\(prefers-reduced-motion: reduce\)\s*\{\s*\.complete-screen \.completion-badge\s*\{\s*animation: none;/);
+  expect(readFileSync('src/completedSessionOverview.css','utf8')).not.toMatch(/animation|@keyframes/i);
+});
+it('entrance motion plays once, only on the live finish, and only when motion is allowed',()=>{
+  const css=readFileSync('src/completionMotion.css','utf8');
+  expect(css).not.toMatch(/infinite|confetti/i);
+  const gated=css.slice(css.indexOf('@media (prefers-reduced-motion: no-preference)'),css.indexOf('@keyframes'));
+  expect(css.replace(gated,'')).not.toMatch(/animation:/);
+  // No transform may outlive an animation: fixed sheets inside these sections must stay viewport-fixed.
+  expect(gated).not.toMatch(/\b(both|forwards)\s*;/);
+  for(const rule of gated.match(/[^{}]+\{[^{}]*animation:[^{}]*\}/g)) expect(rule).toMatch(/is-live-completion|is-revealed/);
 });
 it('the completion surface uses central theme tokens for readable hero, stats and accent',()=>{
   const css=readFileSync('src/completedSessionOverview.css','utf8');expect(css).toContain('var(--rook-text)');expect(css).toContain('var(--rook-secondary)');expect(css).toContain('color: var(--rook-accent-text)');expect(css).toContain('var(--rook-accent)');expect(css).toContain('var(--rook-surface)');expect(css).not.toMatch(/#[\da-f]{3,8}\b/i);
+});
+it('live summary counts up to the saved totals when motion is allowed, and starts final otherwise',()=>{
+  const w={name:'Push',durationSeconds:1800,exercises:[{sets:[{completed:true},{completed:true}]},{sets:[{completed:true}]}]};
+  const values=()=>[...host.querySelectorAll('.completion-summary dd')].map(dd=>dd.textContent);
+  render(<CompletedSessionOverview workout={w} live/>);expect(values()).toEqual(['2','3','30 min']);
+  act(()=>root.unmount());root=createRoot(host);
+  vi.stubGlobal('matchMedia',query=>({matches:query.includes('no-preference'),addEventListener(){},removeEventListener(){}}));
+  render(<CompletedSessionOverview workout={w} live/>);expect(values()).toEqual(['0','0','30 min']);
+  act(()=>vi.advanceTimersByTime(1400));expect(values()).toEqual(['2','3','30 min']);
+  act(()=>root.unmount());root=createRoot(host);
+  render(<CompletedSessionOverview workout={w}/>);expect(values()).toEqual(['2','3','30 min']);
 });

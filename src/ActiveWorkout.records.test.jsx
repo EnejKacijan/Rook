@@ -75,3 +75,21 @@ it('prepared values alone never create a badge, and a same-weight rep improvemen
   click('Increase Reps for set 1');expect(badge()).toBeNull();expect(pulses()).toHaveLength(0);
   click('Log set 1');expect(badge().getAttribute('aria-label')).toBe('View rep best, +1 rep');expect(pulses()).toHaveLength(1);
 });
+it('a record set gets the record haptic and trophy pop; a plain set keeps the short tap',()=>{
+  const vibrate=vi.fn(()=>true);Object.defineProperty(navigator,'vibrate',{configurable:true,value:vibrate});
+  try{
+    mount();click('Log set 1');
+    expect(vibrate).toHaveBeenLastCalledWith([14,40,28]);
+    expect(animations.some(({node,options})=>node.classList.contains('active-record-trophy')&&options.duration===520)).toBe(true);
+    const plain=fixture();plain.activeWorkout.exercises[0].sets.forEach(set=>Object.assign(set,{weight:15}));
+    act(()=>root.render(null));vibrate.mockClear();mount(plain);click('Log set 1');
+    expect(vibrate).toHaveBeenLastCalledWith(14);
+  }finally{delete navigator.vibrate;}
+});
+it('the rest timer marks its last three seconds and remounts the digits each second',()=>{
+  mount();click('Log set 1');const timer=()=>host.querySelector('.rest-timer');
+  act(()=>vi.advanceTimersByTime(86000));expect(timer().classList.contains('rest-final')).toBe(false);
+  act(()=>vi.advanceTimersByTime(1500));expect(timer().classList.contains('rest-final')).toBe(true);
+  const digits=timer().querySelector('strong');act(()=>vi.advanceTimersByTime(1000));
+  expect(timer().querySelector('strong')).not.toBe(digits);
+});

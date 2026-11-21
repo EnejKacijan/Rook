@@ -10,16 +10,11 @@
 .completion-record-to { display: inline-flex; align-items: baseline; gap: 6px; white-space: nowrap; color: var(--rook-accent-text); }
 .completion-record-pair strong { color: var(--rook-text); font-size: 1.125rem; font-weight: 750; }
 .completion-records small { display: block; margin-top: 3px; color: var(--rook-accent-text); font-size: .875rem; font-weight: 650; line-height: 1.35; }
-.completion-records-more { margin: 10px 0 0; color: var(--rook-secondary); font-size: .875rem; }
 .completion-block-card { margin-top: 22px !important; padding: 18px 18px 8px; border-radius: 18px; border: 1px solid var(--rook-border); background: var(--rook-surface); }
 .completion-block-card > p { margin: 6px 0 0; color: var(--rook-secondary); line-height: 1.45; }
 .completion-block-card > strong { display: block; margin-top: 4px; font-size: 1.125rem; line-height: 1.3; overflow-wrap: anywhere; }
 .completion-block-card .text-button { min-height: 44px; }
 .completion-deload-note { margin: 14px 0 0; color: var(--rook-secondary); font-size: .9375rem; line-height: 1.45; }
-@media (prefers-reduced-motion: no-preference) {
-  .is-live-completion .completion-records li { animation: completion-record-rise 320ms var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1)) both; animation-delay: calc(160ms + var(--i, 0) * 70ms); }
-}
-@keyframes completion-record-rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (max-width: 350px) {
   .completion-records li { grid-template-columns: 48px minmax(0, 1fr); gap: 12px; }
   .completion-record-art { width: 48px; height: 48px; }

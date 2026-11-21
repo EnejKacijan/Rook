@@ -153,6 +153,7 @@ import { PlanEditorExercisePicker } from './PlanEditorExercisePicker.jsx';
 import { PlanConflictResolution, planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './PlanConflictResolution.jsx';
 import { removalRows, stagePlanRemoval, undoPlanRemoval } from './planRemovalDraft.js';
 import './planRemovalDraft.css';
+import './completionMotion.css';
 import { revealPlanConflict } from './revealPlanConflict.js';
 import { useAvailableImage } from './useAvailableImage.js';
 import { workoutPhotoFile, exportWorkoutPhoto } from './exportWorkoutPhoto.js';
@@ -798,7 +799,7 @@ function Button({ children, variant = "primary", className = "", ...props }) {
 function triggerHaptic(type = "tap") {
   if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
     return;
-  const pattern = type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
+  const pattern = type === "record" ? [14, 40, 28] : type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
   try {
     navigator.vibrate(pattern);
   } catch {
@@ -6730,7 +6731,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       });
       setCombinedSaveError("");
       if (!result.changed) return;
-      recordFeedback.logged(before, result.state, current.id, expectedSetId);
+      // A record set gets its own longer double tap. vibrate() replaces the
+      // set-logged tap already playing, so the record pattern is what's felt.
+      if (recordFeedback.logged(before, result.state, current.id, expectedSetId)) triggerHaptic("record");
       const updated = result.state.activeWorkout;
       if (updated.exerciseIndex !== live.exerciseIndex) {
         workoutActionLockRef.current = true;
@@ -7836,10 +7839,11 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         </aside>
       )}
       {restLeft > 0 && !confirmation && (
-        <aside className="rest-timer">
+        <aside className={`rest-timer${restLeft <= 3 ? " rest-final" : ""}`}>
           <span>
             <Eyebrow>REST</Eyebrow>
-            <strong>{formatDuration(restLeft)}</strong>
+            {/* Remount each of the last three seconds so the tick replays. */}
+            <strong key={restLeft <= 3 ? restLeft : "running"}>{formatDuration(restLeft)}</strong>
           </span>
           <div>
             <i
@@ -8991,6 +8995,9 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   const [liveEntry] = useState(()=>Boolean(liveFinish && !liveFinish.presented && liveFinish.startedAt===session?.startedAt));
   const [motionCancelled,setMotionCancelled] = useState(false);
   useEffect(()=>{if(persistenceFailed)setMotionCancelled(true);},[persistenceFailed]);
+  // The entrance plays once. Drop its class when done so a section that later
+  // remounts (feedback, photos, notes) never replays the rise.
+  useEffect(()=>{if(!liveEntry)return undefined;const timer=setTimeout(()=>setMotionCancelled(true),2400);return()=>clearTimeout(timer);},[liveEntry]);
   const recognition = useMemo(() => {
     if (persistenceFailed || !session || !liveFinish || liveFinish.startedAt !== session.startedAt) return null;
     return completionRecognition(session, liveFinish.priorWorkouts, {
@@ -9047,14 +9054,16 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
     });
   }, [endedEarly, session?.id, liveEntry, liveFinish, persistenceFailed]);
   if (!session) return null;
+  const liveMotion = liveEntry && !persistenceFailed && !motionCancelled;
   return (
     <main
-      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : "fully-completed"} ${liveEntry && !persistenceFailed && !motionCancelled ? "is-live-completion" : ""}`}
+      className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : "fully-completed"} ${liveMotion ? "is-live-completion" : ""}`}
     >
       {!endedEarly ? <CompletedSessionOverview
         ref={headingRef}
         workout={session}
         recognitionId={recognitionId}
+        live={liveMotion}
       /> : <>
       <div className="complete-mark" aria-hidden="true">
         <span>✓</span>

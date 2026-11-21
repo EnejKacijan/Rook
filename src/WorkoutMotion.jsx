@@ -87,7 +87,7 @@ export class WorkoutMotion extends React.Component {
     const animations = [];
     if (outgoing) {
       outgoing.mount();
-      animations.push(outgoing.layer.animate([{opacity:1, transform:'translate(0,0)'}, {opacity:0, transform:completion?'translateY(-4px)':`translateX(${-offset}px)`}], timing));
+      animations.push(outgoing.layer.animate([{opacity:1, transform:'translate(0,0)'}, {opacity:0, transform:completion?'translateY(-8px) scale(.98)':`translateX(${-offset}px)`}], timing));
     }
     // Completion contains a viewport-fixed Done dock: fade its screen without
     // turning it into a transformed containing block. The check scales locally.

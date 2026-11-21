@@ -1,0 +1,77 @@
+/* Workout complete: one staged entrance, played only on the live finish
+   (.is-live-completion) and only when the system allows motion. Revisits,
+   history and reduced motion render everything at rest.
+   DONE never moves, so a second tap on Finish cannot land somewhere new.
+   Fill mode is `backwards` on purpose: once an animation ends no transform is
+   left behind, so fixed sheets opened from these sections stay viewport-fixed. */
+@media (prefers-reduced-motion: no-preference) {
+  .complete-screen.is-live-completion {
+    --cm-rise: 440ms;
+    --cm-ease: var(--rook-ease-release, cubic-bezier(.2, .8, .2, 1));
+    --cm-spring: cubic-bezier(.34, 1.56, .64, 1);
+    --cm-base: 0ms;
+  }
+  .complete-screen.fully-completed.is-live-completion { --cm-base: 260ms; }
+
+  /* Hero: badge pops, a ring pulses out, the check draws itself. */
+  /* An early finish gets the calm rise only, never the celebration. */
+  .is-live-completion .completion-badge {
+    position: relative;
+    animation: cm-badge-pop 560ms var(--cm-spring) 40ms backwards;
+  }
+  .is-live-completion .completion-badge::after {
+    content: ""; position: absolute; inset: -1px; border-radius: 50%;
+    border: 2px solid var(--rook-accent, currentColor); pointer-events: none;
+    opacity: 0; animation: cm-ring 760ms var(--cm-ease) 200ms;
+  }
+  .is-live-completion .completion-badge-check { animation: cm-draw 380ms var(--cm-ease) 230ms backwards; }
+  .is-live-completion .completion-eyebrow { display: block; animation: cm-rise var(--cm-rise) var(--cm-ease) 110ms backwards; }
+  .is-live-completion .completion-hero h1 { animation: cm-rise var(--cm-rise) var(--cm-ease) 160ms backwards; }
+  .is-live-completion .completion-summary { animation: cm-rise var(--cm-rise) var(--cm-ease) 220ms backwards; }
+
+  /* Everything after the hero follows in order, 70 ms apart, capped so the
+     last section never waits more than about half a second. */
+  .complete-screen.is-live-completion > * { --stage-delay: calc(var(--cm-base) + var(--stage, 0) * 70ms); }
+  .complete-screen.is-live-completion > :nth-child(2) { --stage: 1; }
+  .complete-screen.is-live-completion > :nth-child(3) { --stage: 2; }
+  .complete-screen.is-live-completion > :nth-child(4) { --stage: 3; }
+  .complete-screen.is-live-completion > :nth-child(5) { --stage: 4; }
+  .complete-screen.is-live-completion > :nth-child(6) { --stage: 5; }
+  .complete-screen.is-live-completion > :nth-child(n+7) { --stage: 6; }
+  .complete-screen.is-live-completion > :not(.completed-session-overview, .complete-done-dock) {
+    animation: cm-rise var(--cm-rise) var(--cm-ease) var(--stage-delay) backwards;
+  }
+
+  /* Personal records: the trophy lands, cards rise one by one, then a single
+     light sweep crosses each card. */
+  .is-live-completion .completion-records-title .session-log-trophy {
+    animation: cm-trophy 620ms var(--cm-spring) calc(var(--stage-delay) + 80ms) backwards;
+  }
+  .is-live-completion .completion-records li {
+    position: relative; overflow: hidden; isolation: isolate;
+    --record-delay: calc(var(--stage-delay) + 140ms + var(--i, 0) * 90ms);
+    animation: cm-record-in 480ms var(--cm-ease) var(--record-delay) backwards;
+  }
+  .is-live-completion .completion-records li:not(.is-revealed)::after {
+    content: ""; position: absolute; inset: 0; z-index: -1; pointer-events: none;
+    background: linear-gradient(105deg, transparent 30%, var(--cm-shine, rgba(255, 255, 255, .55)) 50%, transparent 70%);
+    transform: translateX(-110%);
+    animation: cm-shine 900ms ease-in-out calc(var(--record-delay) + 260ms) backwards;
+  }
+  :root[data-appearance="dark"] .is-live-completion .completion-records li { --cm-shine: rgba(255, 255, 255, .1); }
+
+  /* Records revealed with "Show more" rise in place, live finish or not. */
+  .completion-records li.is-revealed { animation: cm-record-in 360ms var(--rook-ease-release, cubic-bezier(.2, .8, .2, 1)) calc(var(--i, 0) * 60ms) backwards; }
+}
+
+@keyframes cm-badge-pop { from { opacity: 0; transform: scale(.4); } }
+@keyframes cm-ring { from { opacity: .6; transform: scale(1); } to { opacity: 0; transform: scale(2.2); } }
+@keyframes cm-draw { from { stroke-dashoffset: 1; } }
+@keyframes cm-rise { from { opacity: 0; transform: translateY(14px); } }
+@keyframes cm-record-in { from { opacity: 0; transform: translateY(16px) scale(.97); } }
+@keyframes cm-trophy { from { opacity: 0; transform: scale(.3) rotate(-24deg); } 60% { transform: scale(1.15) rotate(8deg); } }
+@keyframes cm-shine { from { transform: translateX(-110%); } to { transform: translateX(110%); } }
+
+.completed-session-overview .completion-badge > svg { width: 22px; height: 22px; overflow: visible; }
+.completion-badge-check { fill: none; stroke: currentColor; stroke-width: 2.6; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 1; stroke-dashoffset: 0; }
+.completion-records-toggle { min-height: 44px; margin-top: 4px; }

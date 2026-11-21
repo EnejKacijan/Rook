@@ -612,6 +612,16 @@
 .rest-timer.rest-complete { border-color: var(--rook-accent-hairline, rgba(31,107,76,.2)); }
 .rest-timer.rest-complete > span { min-width: max-content; }
 .rest-timer.rest-complete strong { font-size: 12px; letter-spacing: .06em; }
+/* Last three seconds: each digit lands with a small accent tick, so the end
+   reads without looking at the numbers. Rest complete: the track fills once. */
+@media (prefers-reduced-motion: no-preference) {
+  .rest-timer.rest-final > span > strong { display: inline-block; transform-origin: left center; animation: rook-rest-tick 480ms cubic-bezier(.2, .8, .2, 1); }
+  .rest-timer.rest-complete > div > i { transform-origin: left center; animation: rook-rest-fill 360ms cubic-bezier(.2, .8, .2, 1) backwards; }
+  .rest-timer.rest-complete > span > strong { animation: rook-rest-done 320ms cubic-bezier(.2, .8, .2, 1) 120ms backwards; }
+}
+@keyframes rook-rest-tick { from { transform: scale(1.14); color: var(--rook-accent-text, #1f6b4c); } }
+@keyframes rook-rest-fill { from { transform: scaleX(0); } }
+@keyframes rook-rest-done { from { opacity: 0; transform: translateY(4px); } }
 @keyframes rook-rest-timer-enter {
   from { opacity: 0; transform: translateY(10px); }
   to { opacity: 1; transform: translateY(0); }

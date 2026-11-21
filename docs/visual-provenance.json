@@ -6,7 +6,7 @@
     "licensed_third_party": 93,
     "rook_ai_generated": 662,
     "unknown": 11,
-    "rook_original": 24
+    "rook_original": 25
   },
   "exerciseReferenceSources": [
     {
@@ -32060,6 +32060,40 @@
       "notes": [
         "Source-defined trophy icon used beside personal-best exercise results in the workout log. No downloaded image or copyright ownership assertion.",
         "Reviewed the cup, handles and base strokes in PersonalBestTrophy; the accessible label is rendered separately from the SVG."
+      ]
+    },
+    {
+      "assetId": "inline-completionbadgecheck-1",
+      "path": "src/CompletedSessionOverview.jsx",
+      "sourceLine": 47,
+      "selector": "inline_svg",
+      "codeSha256": "9eb00cebbef7bd293df3e02fa71cc3c55f2379648f5a94a566575571e499e2d9",
+      "lfCodeSha256": "9eb00cebbef7bd293df3e02fa71cc3c55f2379648f5a94a566575571e499e2d9",
+      "crlfCodeSha256": "9eb00cebbef7bd293df3e02fa71cc3c55f2379648f5a94a566575571e499e2d9",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/CompletedSessionOverview.jsx",
+          "line": 47,
+          "reviewedAt": "2026-11-20"
+        }
+      ],
+      "notes": [
+        "Source-defined check mark in the workout-complete badge; a single stroked path drawn in on the live finish. No downloaded image or copyright ownership assertion.",
+        "Replaces the text check character so the stroke can be drawn; the badge stays aria-hidden."
       ]
     }
   ]

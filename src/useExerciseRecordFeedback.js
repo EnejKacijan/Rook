@@ -19,9 +19,10 @@ export function useExerciseRecordFeedback(state,eligible) {
     const presentation=tracker.current.receipt.claim(before,after,exerciseId,setId);
     const set=after.activeWorkout.exercises.find(e=>e.id===exerciseId)?.sets.find(s=>s.id===setId);
     if(!set?.completed)setPulse(null);
-    if(!presentation)return;
+    if(!presentation)return null;
     clearTimeout(timer.current);
     setPulse({exerciseId,signature:presentation.signature,key:`${scope}:${exerciseId}`});
     timer.current=setTimeout(()=>setPulse(null),600);
+    return presentation;
   }};
 }
