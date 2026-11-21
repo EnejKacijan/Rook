@@ -41,7 +41,8 @@ it.each(['weighted','bodyweight','timed','per-side','mixed','empty'])('ended-ear
  s.workouts[0].endedEarly=true;s.workouts[0].status='ended-early';
  render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);
  const row=document.querySelector('.exercise-preview .exercise-list-row');
- expect(row.querySelector('.navigation-row-end').textContent).toBe(exerciseHistoryPerformanceLabel(e,e.sets)||'Not logged');
+ // An empty row says "No sets logged" once, beside the name; the end column stays empty.
+ expect(row.querySelector('.navigation-row-end').textContent).toBe(exerciseHistoryPerformanceLabel(e,e.sets)||'');
  expect(row.querySelector('.navigation-row-end').textContent).not.toContain('15');
  if(kind==='bodyweight')expect(row.textContent).toContain('10 / 7 / 6 reps');
  if(kind==='timed')expect(row.textContent).toContain('45 / 45 / 45 sec');

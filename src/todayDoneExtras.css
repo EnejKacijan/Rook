@@ -1,0 +1,36 @@
+/* Same card language as the completed-session summary above it. */
+.today-done-extras { margin-top: 28px; }
+.today-done-extras > .eyebrow { margin: 0 0 10px; }
+.today-done-extras-list {
+  border: 1px solid var(--rook-border); border-radius: 18px;
+  background: var(--rook-surface); overflow: hidden;
+}
+:root[data-appearance] .today-done-extras .today-done-extra {
+  width: 100%; min-height: 64px; margin: 0; padding: 12px 14px 12px 16px;
+  display: grid; grid-template-columns: 28px minmax(0, 1fr) 16px; align-items: center; gap: 12px;
+  border: 0; border-radius: 0; background: transparent; color: var(--rook-text);
+  font: inherit; text-align: left;
+}
+.today-done-extra + .today-done-extra { box-shadow: inset 0 1px 0 var(--rook-border); }
+.today-done-extra-mark {
+  width: 28px; height: 28px; border-radius: 50%; display: grid; place-items: center;
+  background: color-mix(in srgb, var(--rook-accent) 12%, var(--rook-surface));
+  border: 1px solid color-mix(in srgb, var(--rook-accent) 35%, var(--rook-border));
+  color: var(--rook-accent-text);
+}
+/* CSS check mark: no new inline SVG to register in the visual inventory. */
+.today-done-extra-mark::after {
+  content: ""; width: 5px; height: 10px; margin-top: -3px;
+  border: solid currentColor; border-width: 0 2.25px 2.25px 0; border-radius: 1px;
+  transform: rotate(45deg);
+}
+.today-done-extra-text { min-width: 0; display: grid; gap: 3px; }
+.today-done-extra-text strong { font-size: 1rem; font-weight: 650; line-height: 1.3; overflow-wrap: anywhere; }
+.today-done-extra-text small { color: var(--rook-secondary); font-size: .8125rem; line-height: 1.35; overflow-wrap: anywhere; }
+.today-done-extra > .rook-navigation-chevron { width: 16px; height: 16px; color: var(--rook-secondary); }
+.today-done-extra:focus-visible { outline: 2px solid var(--rook-accent); outline-offset: -3px; border-radius: 16px; }
+.today-done-extras + .today-training-options { margin-top: 16px; }
+@media (max-width: 350px) {
+  :root[data-appearance] .today-done-extras .today-done-extra { padding-inline: 12px 10px; gap: 10px; }
+}
+.today-hero .today-meta-keep { white-space: nowrap; }
