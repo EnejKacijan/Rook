@@ -11,6 +11,7 @@ import { assertTemporaryPlanState, temporaryOccurrenceWorkout, temporaryPlanBloc
 import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplates} from './workoutTemplateSchema.js';
 import {workoutElapsedSeconds} from './workoutTiming.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
+import {applySavedExerciseLoggingMode,normalizeExerciseLoggingPreferences} from './sessionLoggingSetup.js';
 import {normalizeCoachConversations} from './coachConversations.js';
 import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
 import {recoveredWorkoutForDate} from './recoveredWorkout.js';
@@ -2111,6 +2112,7 @@ export function defaultProfile() {
     followUpAnswers: [],
     units: "kg",
     rirEnabled: false,
+    exerciseLoggingPreferences: {},
     showProgressionTips: true,
     recommendedWarmupsEnabled: true,
     rampUpSetsEnabled: true,
@@ -2482,6 +2484,7 @@ export function deserializeState(input, { strict = false } = {}) {
       themePreference:
         stylePreference === "premium" ? "premium" : appearancePreference,
       prioritySources: normalizedPrioritySources,
+      exerciseLoggingPreferences: normalizeExerciseLoggingPreferences(stored.profile?.exerciseLoggingPreferences),
       increments: {
         ...base.profile.increments,
         ...(stored.profile?.increments || {}),
@@ -9138,7 +9141,7 @@ export function startWorkout(state, template) {
       ? structuredClone(template.warmupPlan)
       : { mode: "auto" },
     exercises: template.exercises.map((base) => {
-      const definition = preparedExercise(base);
+      const definition = applySavedExerciseLoggingMode(state.profile, preparedExercise(base));
       const loadRequirement = exerciseLoadRequirement(base);
       const reviewedStart = base.nextBlockStartingLoad && template.trainingBlock && base.nextBlockStartingLoad.blockId === template.trainingBlock.blockId &&
         !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
@@ -9146,7 +9149,7 @@ export function startWorkout(state, template) {
       const repeatedPrescription=template.exercises.filter(e=>e.exerciseId===base.exerciseId).length>1;
       const previous = previousExercise(normalProgressionHistory(state.workouts), base.exerciseId, base.importRole, repeatedPrescription?base.id:null);
       const compatiblePrevious = previous &&
-        loggingModeOf(previous) === loggingModeOf(base) &&
+        loggingModeOf(previous) === loggingModeOf(definition) &&
         exerciseMeasure(previous) === exerciseMeasure(base) &&
         exerciseLoadRequirement(previous) === loadRequirement ? previous : null;
       const completedPreviousSets =
@@ -9206,7 +9209,7 @@ export function restartActiveWorkout(state, restartedAt = Date.now()) {
   if (!activeWorkoutCanRestart(active)) return state;
   const snapshot = restartBaseline(active);
   // Restored instances must not coexist with removal tombstones or Undo data.
-  const {removedUpNextExercises,unreviewedIdleSince,exerciseReplacements, ...session}=active;
+  const {removedUpNextExercises,unreviewedIdleSince,exerciseReplacements,loggingSetupChoices, ...session}=active;
   return {
     ...state,
     activeWorkout: {
@@ -9871,6 +9874,7 @@ export function completeWorkout(state, timing = null) {
   delete completedActiveWorkout.restartSnapshot;
   delete completedActiveWorkout.unreviewedIdleSince;
   delete completedActiveWorkout.exerciseReplacements;
+  delete completedActiveWorkout.loggingSetupChoices;
   if (completedActiveWorkout.source === 'freestyle') completedActiveWorkout.exercises = completedActiveWorkout.exercises.filter(exercise => exercise.sets.some(set => set.completed));
   const session = {
     ...completedActiveWorkout,

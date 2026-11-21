@@ -54,7 +54,7 @@ import {stopFollowingPlan} from './stopFollowingPlan.js';
 import { SwipeActionRow, useSwipeActionList, useExerciseRemoveUndo } from './SwipeActionRow.jsx';
 import { useTransientSnackbar } from './TransientSnackbar.jsx';
 import { canRemoveUpNext, hasMeaningfulExerciseProgress, hasLoggedExerciseProgress, removeUpNext, undoUpNextRemoval, canUndoUpNextRemoval, canRemoveCurrentExercise, removeCurrentExercise, canUndoCurrentExerciseRemoval, undoCurrentExerciseRemoval } from './upNextRemoval.js';
-import {changeSessionLoggingMode,supportsPerSideLogging} from './sessionLoggingSetup.js';
+import {changeSessionLoggingMode,clearSavedExerciseLoggingMode,resolveSessionLoggingChoice,savedExerciseLoggingMode,sessionLoggingChoice,supportsPerSideLogging} from './sessionLoggingSetup.js';
 import {persistCoachEntry,enterCoachConversation,pendingCoachWorkflows,touchCoachConversation,hasCoachDraft} from './coachConversations.js';
 import {applyCoachRequestResult,createCoachReplyCommit} from './coachRequestResult.js';
 import {removeImportedExercise,undoImportedExerciseRemoval,removedImportAnswers} from './importRemoval.js';
@@ -6477,6 +6477,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       </main>
     );
   const exercise = currentExercise;
+  const loggingChoice = sessionLoggingChoice(active, exercise);
   const replacement = activeExerciseReplacement(active, exercise);
   const replacementVisible = replacement && !replacement.detailsHidden;
   const saveOptions = replacementVisible ? replacementSaveOptions(state, active, replacement) : null;
@@ -7445,13 +7446,13 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           </div>
         </div>
       </section>
-      {replacementVisible && <section className="active-replacement" aria-label="Exercise replacement">
-        <div className="active-replacement-summary">
+      {replacementVisible && <section className="active-exercise-change active-replacement" aria-label="Exercise replacement">
+        <div className="active-exercise-change-summary">
           <p><strong>{saveOptions.saved ? saveOptions.savedLabel : 'Replaced for this session'}</strong><small>Original: {exerciseName(replacement.original)}</small></p>
-          <button type="button" className="text-button active-replacement-hide" aria-label="Hide replacement details"
+          <button type="button" className="text-button active-exercise-change-hide" aria-label="Hide replacement details"
             title="Actions stay in Exercise options" data-workout-options onClick={() => changeReplacement('hide')}>Hide</button>
         </div>
-        <div className="active-replacement-actions">
+        <div className="active-exercise-change-actions">
           {!saveOptions.saved && !revertIssue && <button type="button" className="text-button" onClick={() => changeReplacement('revert')}>Revert to original</button>}
           {saveOptions.canSave && <button type="button" className="text-button" onClick={() => changeReplacement('save')}>{saveOptions.saveLabel}</button>}
           {saveOptions.canUndo && <button type="button" className="text-button" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
@@ -7460,6 +7461,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
         {revertIssue && <small>{revertIssue}</small>}
         {replacementError?.revision === replacement.revision && <small role="alert">{replacementError.message}</small>}
       </section>}
+      {loggingChoice && <ActiveLoggingChange key={`${active.id}:${exercise.id}:${exercise.exerciseId}:${loggingChoice.mode}`}
+        state={state} exercise={exercise} choice={loggingChoice} update={update}
+        onAction={() => focusNavigationTarget(screenRef.current?.querySelector('.exercise-options-button'))}/>}
       {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} screenRef={screenRef} controllerRef={previousValuesController} Modal={ModalLayer} Header={SheetHeader} />}
       {progressionTipsEnabled(state.profile) && recommendation && (
         <section
@@ -20218,9 +20222,9 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       </section>}
       {isCurrent && onShowPreviousValues && <button type="button" className="list-row" onClick={() => {showPreviousOnClose.current = true; close();}}><span>Use previous values</span><NavigationChevron/></button>}
       {supportsPerSideLogging(current) && (
-        <button className="choice-row rook-menu-navigation" onClick={() => setDetail({sessionLoggingSetup:{sessionId:active.id,exerciseId:current.id}})}>
+        <button type="button" className="choice-row rook-menu-navigation" onClick={() => setDetail({sessionLoggingSetup:{sessionId:active.id,exerciseId:current.id,expectedExerciseId:current.exerciseId}})}>
           <span className="rook-menu-copy"><strong>Edit logging setup</strong>
-          <small>Reps per side or total reps · this workout only.</small>
+          <small>Reps per side or total reps</small>
         </span><NavigationChevron/></button>
       )}
       {(moveable||loggedWork&&onMoveCurrent)&&<button type="button" className="list-row" disabled={!moveable} onClick={()=>apply(()=>onMoveCurrent?.(current.id))}>Move to Up Next</button>}
@@ -20274,38 +20278,81 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
   );
 }
 
-function ActiveLoggingSetup({request,state,update,close}) {
-  const action=useDurableAction(state,update);
-  const [error,setError]=useState('');
-  const active=state.activeWorkout;
-  const exercise=active?.id===request.sessionId && active.exercises.find(entry=>entry.id===request.exerciseId);
-  const available=supportsPerSideLogging(exercise);
-  const locked=hasMeaningfulExerciseProgress(active,request.exerciseId);
-  const mode=loggingModeOf(exercise);
-  const choose=nextMode=>{
+const loggingSetupOptions = {
+  per_side: {label:"Reps per side", description:"Log left and right reps separately."},
+  normal: {label:"Total reps", description:"Log one rep count for each set."},
+};
+
+function ActiveLoggingChange({state, exercise, choice, update, onAction}) {
+  const { commit } = useDurableAction(state, update);
+  const [error, setError] = useState('');
+  const saved = savedExerciseLoggingMode(state.profile, exercise.exerciseId) === choice.mode;
+  const act = action => {
     setError('');
     try {
-      action.commit(current=>{
-        const result=changeSessionLoggingMode(current,request.sessionId,request.exerciseId,nextMode);
-        if(result.error)throw Error(result.error);
-        return result.state;
-      });
-      close();
-    } catch(failure) { setError(failure.message); }
+      const request = {sessionId:state.activeWorkout.id, exerciseId:exercise.id, expectedExerciseId:exercise.exerciseId};
+      commit(current => resolveSessionLoggingChoice(current, request, choice.mode, action));
+      onAction();
+    } catch (failure) { setError(failure.message); }
   };
+  return <section className="active-exercise-change active-logging-change" aria-label="Logging setup change">
+    <div className="active-exercise-change-summary">
+      <p role="status">
+        <strong>{saved ? "Saved for future workouts" : choice.futureOnly ? "Logging setup for future workouts" : "Logging setup updated"}</strong>
+        <small>{loggingSetupOptions[choice.mode].label}</small>
+      </p>
+      <button type="button" className="text-button active-exercise-change-hide" aria-label="Hide logging setup details"
+        data-workout-options onClick={() => act('hide')}>Hide</button>
+    </div>
+    {!saved && <div className="active-exercise-change-actions">
+      <button type="button" className="text-button" onClick={() => act('save')}>Save for future workouts</button>
+    </div>}
+    {error && <small role="alert">{error}</small>}
+  </section>;
+}
+
+function ActiveLoggingSetup({request, state, update, close}) {
+  const { commit } = useDurableAction(state, update);
+  const [error, setError] = useState('');
+  const active = state.activeWorkout;
+  const exercise = active?.id === request.sessionId && active.exercises.find(entry =>
+    entry.id === request.exerciseId && (!request.expectedExerciseId || entry.exerciseId === request.expectedExerciseId));
+  const locked = Boolean(exercise && hasMeaningfulExerciseProgress(active, exercise.id));
+  const mode = loggingModeOf(exercise);
+  const savedMode = exercise && savedExerciseLoggingMode(state.profile, exercise.exerciseId);
+  const save = operation => {
+    setError('');
+    try {
+      commit(operation);
+      close();
+    } catch (failure) { setError(failure.message); }
+  };
+  const choose = nextMode => save(current => {
+    const result = changeSessionLoggingMode(current, request, nextMode);
+    if (result.error) throw Error(result.error);
+    return result.state;
+  });
   return <WorkoutOptionsSheet className="active-logging-setup-sheet" titleId="active-logging-setup-title" close={close}>
-    <Eyebrow>THIS WORKOUT ONLY</Eyebrow>
+    <Eyebrow>EXERCISE</Eyebrow>
     <h2 id="active-logging-setup-title">Edit logging setup</h2>
-    {available ? <>
-      <p>{exerciseName(exercise)} · Your program and previous workouts stay unchanged.</p>
-      {locked&&<p id="logging-setup-locked" role="status">Logging setup cannot change after values or completed sets have been recorded. Your logged values will not be reinterpreted.</p>}
-      {[['per_side','Reps per side','Log left and right reps separately.'],['normal','Total reps','Log one rep count for each set.']].map(([value,label,description])=>
-        <button key={value} className="choice-row" type="button" aria-pressed={mode===value}
-          aria-describedby={locked?'logging-setup-locked':undefined} disabled={locked&&mode!==value} onClick={()=>choose(value)}>
-          <strong>{label}{mode===value&&<span aria-hidden="true"> ✓</span>}</strong><small>{description}</small>
+    {supportsPerSideLogging(exercise) ? <>
+      <p>{exerciseName(exercise)}</p>
+      {locked && <p id="logging-setup-locked" role="status">You’ve already logged values for this exercise. You can still choose a default for future workouts.</p>}
+      {Object.entries(loggingSetupOptions).map(([value, {label, description}]) =>
+        <button key={value} className="choice-row" type="button" aria-pressed={mode === value}
+          aria-describedby={locked ? 'logging-setup-locked' : undefined} onClick={() => choose(value)}>
+          <strong>{label}{mode === value && <span aria-hidden="true"> ✓</span>}</strong>
+          <small>{description}</small>
         </button>)}
+      {savedMode && <>
+        <p>Current default is {loggingSetupOptions[savedMode].label}.</p>
+        <button type="button" className="text-button logging-setup-clear"
+          onClick={() => save(current => clearSavedExerciseLoggingMode(current, exercise.exerciseId))}>
+          Clear saved default
+        </button>
+      </>}
     </> : <p role="status">This exercise is no longer available for this logging setup.</p>}
-    {error&&<p role="alert">{error}</p>}
+    {error && <p role="alert">{error}</p>}
   </WorkoutOptionsSheet>;
 }
 

@@ -5,6 +5,7 @@ import {compileProfileTrainingSafety,trainingSafetyBlocks} from './trainingSafet
 import {planEditorExerciseAllowed} from './exerciseEligibility.js';
 import {customExerciseSnapshot} from './customExercises.js';
 import {assertWorkoutTemplates,reusableWorkoutStructure,reusableExerciseDefinition} from './workoutTemplateSchema.js';
+import {applySavedExerciseLoggingMode} from './sessionLoggingSetup.js';
 
 export {reusableWorkoutStructure} from './workoutTemplateSchema.js';
 export function templateDraft(workout,state) {
@@ -43,13 +44,14 @@ export function templateUseIssues(state,template) {
   });
 }
 export function templateOverlaps(state,template){const ids=new Set(state.activeWorkout?.exercises.map(e=>e.exerciseId)||[]);return template.exercises.filter(e=>ids.has(e.exerciseId));}
-export function instantiateTemplate(template,requestId) {
+export function instantiateTemplate(template,requestId,profile) {
   const groups=new Map();
   const newSet=s=>({...structuredClone(s),id:uid('set'),completed:false,planned:true,added:false,...(s.segments?{segments:s.segments.map(newSet)}:{})});
   return template.exercises.map(e=>{
     if(e.supersetId&&!groups.has(e.supersetId))groups.set(e.supersetId,uid('superset'));
-    return {...structuredClone(e),id:uid('freestyle-exercise'),prescriptionSource:'saved-template',templatePrescription:structuredClone(e),queueAdditionId:requestId,
+    const exercise = {...structuredClone(e),id:uid('freestyle-exercise'),prescriptionSource:'saved-template',templatePrescription:structuredClone(e),queueAdditionId:requestId,
       ...(e.supersetId?{supersetId:groups.get(e.supersetId)}:{}),sets:e.sets.map(newSet)};
+    return applySavedExerciseLoggingMode(profile, exercise);
   });
 }
 export function useSavedWorkout(state,{templateId,revision,sessionId=null,requestId,confirmDuplicates=false}) {
@@ -61,7 +63,7 @@ export function useSavedWorkout(state,{templateId,revision,sessionId=null,reques
   if(!template||template.revision!==revision)throw Error('This saved workout changed. Open its preview again.');
   const issues=templateUseIssues(state,template);if(issues.length)throw Error(issues.join(' '));
   if(templateOverlaps(state,template).length&&!confirmDuplicates)throw Error('Confirm the overlapping exercises before adding this workout.');
-  const next=state.activeWorkout?state:startFreestyleWorkout(state),active=next.activeWorkout,entries=instantiateTemplate(template,requestId);
+  const next=state.activeWorkout?state:startFreestyleWorkout(state),active=next.activeWorkout,entries=instantiateTemplate(template,requestId,state.profile);
   return {...next,activeWorkout:{...active,...(!sessionId?{name:template.name,workoutName:template.name,savedWorkoutTemplateId:template.id}:{}),
     exercises:[...active.exercises,...entries],queueCommandIds:[...(active.queueCommandIds||[]),requestId],updatedAt:Date.now()}};
 }

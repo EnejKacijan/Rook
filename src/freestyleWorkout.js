@@ -6,6 +6,7 @@ import { effectiveGymContext } from './gymProfiles.js';
 import { compileProfileTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
 import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
 import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
+import {applySavedExerciseLoggingMode} from './sessionLoggingSetup.js';
 
 export function freestyleCatalog(state) {
   const profile = effectiveGymContext(state, state.activeWorkout || {}).profile;
@@ -56,7 +57,7 @@ export function addWorkoutExercise(state, exerciseId, {allowDuplicate=false,requ
     sets: [{ id: uid('set'), weight: null, reps: null, rir: null, completed: false, planned: true, added: false,
       ...(item.loggingMode === 'per_side' ? { sides: { left: { reps: null }, right: { reps: null } } } : {}) }],
   };
-  return { ...state, activeWorkout: { ...active, updatedAt: Date.now(), ...(requestId?{queueCommandIds:[...(active.queueCommandIds||[]),requestId]}:{}), exercises: [...active.exercises, exercise] } };
+  return { ...state, activeWorkout: { ...active, updatedAt: Date.now(), ...(requestId?{queueCommandIds:[...(active.queueCommandIds||[]),requestId]}:{}), exercises: [...active.exercises, applySavedExerciseLoggingMode(state.profile, exercise)] } };
 }
 
 export const freestyleEntryHasWork=entry=>Boolean(entry?.startedAt||entry?.completedAt||(entry?.sets||[]).some(function worked(set){return set.completed||set.completedAt||set.touched||Object.values(set.sides||{}).some(worked)||(set.segments||[]).some(worked);}));

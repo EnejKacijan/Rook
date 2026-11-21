@@ -53,7 +53,7 @@ export function startCoachWorkoutReuse(state,{reference,requestId,reviewedPrescr
   if(snapshot(draft)!==reviewedPrescription)throw Error('This workout changed. Review its latest targets before starting.');
   const issues=templateUseIssues(state,draft);if(issues.length)throw Error(issues.join(' '));
   const next=startFreestyleWorkout(state),active={...next.activeWorkout,name:draft.name,workoutName:draft.name,
-    reusedWorkoutOrigin:Object.fromEntries(Object.entries(reference).filter(([key])=>!['signature','prescription'].includes(key))),exercises:instantiateTemplate(draft,requestId),queueCommandIds:[requestId]};
+    reusedWorkoutOrigin:Object.fromEntries(Object.entries(reference).filter(([key])=>!['signature','prescription'].includes(key))),exercises:instantiateTemplate(draft,requestId,state.profile),queueCommandIds:[requestId]};
   const source=reference.kind==='plan'?state.program.days.find(day=>day.id===reference.dayId):reference.kind==='occurrence'?flexibleOccurrencesForDate(state,reference.date).find(item=>item.logicalSessionId===reference.occurrenceId)?.workout:null;
   if(source){active.planWorkoutOrigin={programId:state.program.id,dayId:source.id,requestId};active.warmupPlan=structuredClone(source.warmupPlan||{mode:'auto'});}
   refreshWorkoutWarmup(active,state.profile,state.program);

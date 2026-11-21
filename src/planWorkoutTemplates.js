@@ -36,7 +36,7 @@ export function startPlanWorkoutExtra(state,{reference,requestId}) {
   const next=startFreestyleWorkout(state);
   const active={...next.activeWorkout,name:draft.name,workoutName:draft.name,
     planWorkoutOrigin:{programId:state.program.id,dayId:day.id,requestId},
-    exercises:instantiateTemplate(draft,requestId),queueCommandIds:[requestId],
+    exercises:instantiateTemplate(draft,requestId,state.profile),queueCommandIds:[requestId],
     warmupPlan:structuredClone(day.warmupPlan||{mode:'auto'}),
   };
   // Source remains freestyle: finishing this detached copy cannot resolve a
