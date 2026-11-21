@@ -1,5 +1,12 @@
 import { isExerciseAllowed, exerciseCatalog } from './domain.js';
 import { compileProfileTrainingSafety } from './trainingSafety.js';
+import { availableCustomExerciseItems } from './customExercises.js';
+
+// The one exercise library every picker searches: built-in catalog plus the
+// person's own custom exercises. Pickers differ only in the profile they filter by.
+export function exerciseLibraryItems(state) {
+  return [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(state)];
+}
 
 // Shared library-selection policy for Plan Editor and freestyle workouts.
 export function planEditorExerciseAllowed(item, profile, compiledSafety) {

@@ -151,6 +151,7 @@ import { SearchInput } from './SearchInput.jsx';
 import { CustomExerciseFallback } from './CustomExerciseFallback.jsx';
 import { PlanEditorExercisePicker } from './PlanEditorExercisePicker.jsx';
 import { PlanConflictResolution, planEditorExerciseAllowed, createPlanEditorExerciseFilter } from './PlanConflictResolution.jsx';
+import { exerciseLibraryItems } from './exerciseEligibility.js';
 import { removalRows, stagePlanRemoval, undoPlanRemoval } from './planRemovalDraft.js';
 import './planRemovalDraft.css';
 import './completionMotion.css';
@@ -13527,7 +13528,7 @@ export function PlanEditor({
       ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
     ).length;
   const allEditorItems = useMemo(
-    () => [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(exerciseState)],
+    () => exerciseLibraryItems(exerciseState),
     [exerciseState?.customExercises],
   );
   const catalogNeeded = exercisePickerId !== null || addingToDayId !== null;
@@ -14387,6 +14388,7 @@ export function PlanEditor({
     <>
       {customCreation && createPortal(<ModalLayer close={() => setCustomCreation(null)} backgroundRef={customBackgroundRef} returnFocusRef={customTriggerRef}>
         <CustomExercisesScreen state={exerciseState} createOnly initialName={customCreation.name} createLabel={customCreation.addToDayId ? 'CREATE & ADD' : 'CREATE EXERCISE'}
+          creationDescription={workoutOnly ? 'Saved to your exercise library, even if you discard this workout. Saved training restrictions still apply.' : undefined}
           update={updater => {
             const next = updater(clone(exerciseState));
             const record = next.customExercises.find(item => !exerciseState.customExercises?.some(existing => existing.id === item.id));
@@ -18790,7 +18792,7 @@ export function Detail({
     panelRef.current?.scrollTo({ top: 0 });
   }, [detail]);
   if (detail?.yearReview) return <YearInReview state={state} close={close} initialYear={detail.yearReview.year} />;
-  if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} Illustration={ExerciseDetailIllustration} />;
+  if (detail?.freestylePicker) return <FreestyleExercisePicker state={state} update={update} close={close} Header={SheetHeader} Editor={PlanEditor} Modal={ModalLayer} Illustration={ExerciseDetailIllustration} CustomExerciseEditor={CustomExercisesScreen} />;
   if(detail?.deloadWeek)return <DeloadWeekChoice state={state} update={update} close={close} Header={SheetHeader} request={detail.deloadWeek}/>;
   if(detail?.coachWorkoutReuse)return <CoachWorkoutReuseSheet state={state} update={update} reference={detail.coachWorkoutReuse} entryId={detail.coachEntryId} Header={SheetHeader} close={close} setDetail={setDetail} onStarted={()=>{close();setPage('workout');}}/>;
   if(detail==='saved-workouts'||detail?.saveWorkoutTemplate||detail?.savedWorkout||detail?.createSavedWorkout){

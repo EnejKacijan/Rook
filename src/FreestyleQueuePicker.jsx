@@ -1,11 +1,13 @@
 import React,{useRef,useState,useLayoutEffect,useEffect,memo} from 'react';
+import {createPortal} from 'react-dom';
 import {ExercisePickerIdentity} from './ExercisePickerIdentity.jsx';
 import {SearchInput} from './SearchInput.jsx';
 import {useExerciseSearchSheet} from './useExerciseSearchSheet.js';
 import {useDurableAction} from './useDurableAction.js';
 import {useExerciseRemoveUndo,useSwipeActionList} from './SwipeActionRow.jsx';
 import {uid} from './domain.js';
-import {addWorkoutExercise,canUndoWorkoutAddition,undoWorkoutAddition,doWorkoutExerciseNow} from './freestyleWorkout.js';
+import {addWorkoutExercise,canUndoWorkoutAddition,undoWorkoutAddition,doWorkoutExerciseNow,freestyleCatalog} from './freestyleWorkout.js';
+import {CustomExerciseFallback} from './CustomExerciseFallback.jsx';
 import './freestyleQueuePicker.css';
 import {SheetActionFooter} from './SheetActionFooter.jsx';
 import {usePickerResults} from './usePickerResults.js';
@@ -13,7 +15,7 @@ import {SavedWorkouts} from './SavedWorkouts.jsx';
 import {ExerciseQueuePreview} from './ExerciseQueuePreview.jsx';
 import {useExercisePreviewMotion} from './useExercisePreviewMotion.js';
 
-export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,Illustration}) {
+export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,Illustration,CustomExerciseEditor}) {
   const screen=useRef(null),list=useRef(null),position=useRef(0),returnFocus=useRef(null);
   const sessionId=useRef(state.activeWorkout?.id).current;
   const [query,setQuery]=useState(''),[preview,setPreview]=useState(null),[error,setError]=useState(''),[notice,setNotice]=useState('');
@@ -43,10 +45,11 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
     return()=>{stop();reduced?.removeEventListener?.('change',stop);};
   },[scope]);
   const [savedEditing,setSavedEditing]=useState(false);
+  const [customCreation,setCustomCreation]=useState(null),customTrigger=useRef(null);
   const [limit,setLimit]=useState(24),[savedQuery,setSavedQuery]=useState(''),[savedVisited,setSavedVisited]=useState(false),[savedView,setSavedView]=useState(false);
   const browsing=!preview&&!(scope==='saved'&&savedView);
   const {commit,latest}=useDurableAction(state,update),undo=useExerciseRemoveUndo();
-  useExerciseSearchSheet(screen,!savedEditing,{focusedSearch:true,browsing});
+  useExerciseSearchSheet(screen,!savedEditing&&!customCreation,{focusedSearch:true,browsing});
   // Keep the canonical sheet/viewport owner while the reused editor mounts its
   // footer. Do not overwrite classes installed by the shared footer binder.
   useLayoutEffect(()=>{const root=screen.current;root.classList.toggle('edit-plan-screen',savedEditing);root.classList.toggle('is-template-editing',savedEditing);},[savedEditing]);
@@ -109,6 +112,16 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
     // screen-reader activations remain immediately available.
     if(!preview&&tap&&event.detail>0&&Date.now()-tap.at<350&&Math.abs(event.clientX-tap.x)<=24&&Math.abs(event.clientY-tap.y)<=24){event.preventDefault();event.stopPropagation();}
   };
+  // Same library action as the plan builder: create a custom exercise, then
+  // add it here when this workout's equipment and restrictions allow it.
+  const beginCustom=event=>{customTrigger.current=event?.currentTarget||null;setError('');setNotice('');setCustomCreation({name:query.trim().slice(0,100),profileId:state.profile.id});};
+  const customCreated=record=>{
+    setCustomCreation(null);
+    const item=freestyleCatalog(latest.current).find(entry=>entry.id===record.id);
+    if(item&&add(item))return;
+    setQuery(record.name);
+    if(!item)setNotice('Exercise saved to your library, but it isn’t available for this workout with the current equipment and training restrictions.');
+  };
   const changeScope=next=>{if(next==='saved')setSavedVisited(true);setScope(next);};
   const scopes=<nav className="queue-search-scopes" data-scope={scope} aria-label="Search scope"><button type="button" aria-pressed={scope==='exercises'} onMouseDown={keepSearchFocus} onClick={()=>changeScope('exercises')}>Exercises</button><button type="button" aria-pressed={scope==='saved'} onMouseDown={keepSearchFocus} onClick={()=>changeScope('saved')}>Saved workouts</button></nav>;
   useLayoutEffect(()=>{if(preview){screen.current.querySelector('.queue-exercise-preview h1')?.focus({preventScroll:true});}else if(list.current){list.current.scrollTop=position.current;if(returnFocus.current){[...list.current.querySelectorAll('[data-catalog-id]')].find(row=>row.dataset.catalogId===returnFocus.current)?.querySelector('.queue-search-body')?.focus({preventScroll:true});returnFocus.current=null;}}},[preview]);
@@ -139,6 +152,7 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
     {savedVisited&&<SavedWorkouts embedded hidden={scope!=='saved'} browseQuery={savedQuery} navigationRef={savedBack} onViewChange={setSavedView} state={state} update={update} close={close} Header={Header} Editor={Editor} Modal={Modal} onEditingChange={setSavedEditing}/>}
     <div className="exercise-search-body" hidden={Boolean(preview)||scope!=='exercises'} data-preview-motion>
       <div ref={list} data-exercise-search-scroll>
+        {CustomExerciseEditor&&<CustomExerciseFallback onCreate={beginCustom}/>}
         {results.slice(0,limit).map((item,index)=><PickerRow key={item.id} item={item} priority={index<6} status={status(item.id)} showImages={state.profile.showExerciseImages!==false} actions={actions}/>)}
         {limit<results.length&&<button ref={more} className="text-button queue-more-results" onClick={()=>setLimit(n=>n+24)}>Show more exercises</button>}
         {ready&&!results.length&&<p>No compatible exercises found. Try another search or review your equipment and restrictions in Profile.</p>}
@@ -159,6 +173,16 @@ export function FreestyleExercisePicker({state,update,close,Header,Editor,Modal,
       </>}
     </SheetActionFooter>}
     {undo.surface}
+    {customCreation&&CustomExerciseEditor&&createPortal(<Modal close={()=>setCustomCreation(null)} backgroundRef={screen} returnFocusRef={customTrigger}>
+      <CustomExerciseEditor state={state} createOnly initialName={customCreation.name} createLabel="CREATE & ADD"
+        creationDescription="Save it to your exercise library and add it to this workout. Equipment and restrictions still apply."
+        close={()=>setCustomCreation(null)}
+        update={operation=>commit(current=>{
+          if(current.profile.id!==customCreation.profileId||current.activeWorkout?.id!==sessionId)throw Error('This workout has ended or changed. Return to your workout.');
+          return operation(structuredClone(current));
+        })}
+        onCreated={customCreated}/>
+    </Modal>,document.body)}
   </main>;
 }
 

@@ -1,7 +1,7 @@
 import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, isoDay, uid, workoutSetSummary, previousExercise } from './domain.js';
 import {loggingModeOf,setTypeOf,unilateralSetReps} from './advancedLogging.js';
-import { planEditorExerciseAllowed } from './exerciseEligibility.js';
-import { availableCustomExerciseItems, customExerciseSnapshot } from './customExercises.js';
+import { planEditorExerciseAllowed, exerciseLibraryItems } from './exerciseEligibility.js';
+import { customExerciseSnapshot } from './customExercises.js';
 import { effectiveGymContext } from './gymProfiles.js';
 import { compileProfileTrainingSafety, trainingSafetyBlocks } from './trainingSafety.js';
 import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
@@ -11,7 +11,7 @@ export function freestyleCatalog(state) {
   const profile = effectiveGymContext(state, state.activeWorkout || {}).profile;
   const safety = compileProfileTrainingSafety(profile, Object.values(exerciseCatalog));
   if (trainingSafetyBlocks(safety.status)) return [];
-  return [...Object.values(exerciseCatalog), ...availableCustomExerciseItems(state)].filter(item => planEditorExerciseAllowed(item, profile, safety));
+  return exerciseLibraryItems(state).filter(item => planEditorExerciseAllowed(item, profile, safety));
 }
 
 export function freestyleEffortLimit(state, exerciseId) {

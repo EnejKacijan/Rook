@@ -166,3 +166,17 @@ describe('freestyle sessions', () => {
     expect(restored.state.workouts[0].exercises[0].sets[0].weight).toBe(80);
   });
 });
+
+it('offers the plan builder library when no equipment has been chosen yet', async () => {
+  const { createPlanEditorExerciseFilter, exerciseLibraryItems } = await import('./exerciseEligibility.js');
+  const state = startFreestyleWorkout(blankState());
+  const freestyle = freestyleCatalog(state).map(item => item.id);
+  const builder = exerciseLibraryItems(state).filter(createPlanEditorExerciseFilter({ ...state.profile, equipment: ['full gym'] })).map(item => item.id);
+  expect(freestyle).toContain('pull-up');
+  expect(freestyle.sort()).toEqual(builder.sort());
+});
+
+it('still respects equipment the person did choose', () => {
+  const state = startFreestyleWorkout({ ...blankState(), profile: { ...blankState().profile, equipment: ['bodyweight only'] } });
+  expect(freestyleCatalog(state).some(item => item.id === 'pull-up')).toBe(false);
+});
