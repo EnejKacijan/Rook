@@ -20,3 +20,6 @@
 .active-replacement-menu { display: grid; gap: 4px; margin-bottom: 14px; }
 .active-replacement-menu .list-row { min-height: 44px; }
 .active-replacement-menu small { color: var(--rook-secondary); font-size: 12px; line-height: 1.4; }
+.active-replacement-future { display: grid; gap: 0; margin-top: 2px; }
+.active-replacement-future small strong,
+.active-replacement-menu small strong { color: var(--rook-text); font-weight: 600; }
