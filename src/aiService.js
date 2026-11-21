@@ -6,6 +6,7 @@ import {coachMissedReply} from './coachMissed.js';
 import {flexibleSessions} from './flexibleWeek.js';
 import {resolveCoachDayContext,coachActionMatchesDay} from './coachDayContext.js';
 import {coachWorkoutReuseReply} from './coachWorkoutReuse.js';
+import {requestedCoachWorkoutMinutes} from './coachWorkoutTimeRequest.js';
 import {
   HOME_EQUIPMENT,
   PHYSIQUE_PRIORITY_OPTIONS,
@@ -30,7 +31,7 @@ import {
   normalizeWorkoutName,
   optionalStrengthForDate,
   plannedWorkoutForDate,
-  requestedCoachWorkoutMinutes,
+  requestedCoachWorkoutDate,
   splitImportedExerciseLabel,
   validateProgramExerciseChanges,
   validateWeekScheduleChanges,
@@ -2065,7 +2066,11 @@ export const AIService = {
     if(combined)return combined;
     const missed=selectedDay||explicitDate?null:coachMissedReply(state,message);
     if(missed)return missed;
-    const deterministic = selectedDay||explicitDate?{action:null,source:'offline',text:'Review the selected calendar day in Coach.'}:deterministicCoach(state, message);
+    const requestedMinutes = requestedCoachWorkoutMinutes(message);
+    const adaptationDate = selectedDay?.date || (requestedMinutes != null ? requestedCoachWorkoutDate(message) : null);
+    const deterministic = selectedDay || (explicitDate && !adaptationDate)
+      ? {action:null,source:'offline',text:'Review the selected calendar day in Coach.'}
+      : deterministicCoach(state, message);
     if (deterministic.final) return deterministic;
     try {
       // The UI has already checked configuration. A real send needs no probe
@@ -2095,9 +2100,9 @@ export const AIService = {
         selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,
       });
       if(data.action?.type==='revise-combined-workout')return coachCombineReply(state,message,{revisionIntent:data.action,language:responseLanguage});
-      const requestedMinutes = requestedCoachWorkoutMinutes(message);
-      const aiAction = validateAIAction(data.action, state, requestedMinutes);
-      const fallbackAction = validateAIAction(deterministic.action, state, requestedMinutes);
+      const adaptationOptions = {timeBudget:requestedMinutes, adaptationDate};
+      const aiAction = validateAIAction(data.action, state, adaptationOptions);
+      const fallbackAction = validateAIAction(deterministic.action, state, adaptationOptions);
       if (!aiAction && fallbackAction?.type === "add-today-workout")
         return { ...deterministic, action: fallbackAction };
       if (data.action && !aiAction && !fallbackAction)
@@ -2232,7 +2237,7 @@ function inferImportedProfile(profile, program, schedule) {
   };
 }
 
-function validateAIAction(action, state, timeBudget) {
+function validateAIAction(action, state, {timeBudget,adaptationDate} = {}) {
   if (!action || typeof action !== "object") return null;
   if (action.type === "resume-empty-completed-workout") {
     const target = state.workouts.find(
@@ -2309,12 +2314,12 @@ function validateAIAction(action, state, timeBudget) {
   }
   if (action.type === "adapt-today") {
     const today = isoDay();
-    const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(
-      String(action.targetDate || ""),
-    )
+    if (adaptationDate && action.targetDate && action.targetDate !== adaptationDate) return null;
+    const targetDate = /^\d{4}-\d{2}-\d{2}$/.test(String(action.targetDate || ""))
       ? action.targetDate
-      : today;
+      : adaptationDate || today;
     const target = new Date(`${targetDate}T12:00:00`);
+    if (!Number.isFinite(target.getTime()) || isoDay(target) !== targetDate) return null;
     const daysAhead = Math.round(
       (target - new Date(`${today}T12:00:00`)) / 86400000,
     );

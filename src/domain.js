@@ -1,3 +1,4 @@
+import {coachWorkoutDayReference,requestedCoachWorkoutMinutes} from './coachWorkoutTimeRequest.js';
 import { assertStateShape, readLocalState, persistLocalState } from './localStateStorage.js';
 import {progressionHistory,isDeloadWorkout,normalProgressionHistory} from './progressionHistory.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
@@ -10709,10 +10710,20 @@ export function proposeWeekScheduleChange(state, message, date = new Date()) {
     weekKey: weekKey(date),
   };
 }
-export function requestedCoachWorkoutMinutes(message) {
-  const minutes = Number(message.match(/\b(\d{2,3})\s*(?:min\b|minut\p{L}*\b)/iu)?.[1]);
-  return minutes >= 10 && minutes <= 240 ? minutes : null;
+export function requestedCoachWorkoutDate(message, today = new Date()) {
+  const reference = coachWorkoutDayReference(message);
+  if (!reference) return null;
+  if (reference.date) return reference.date;
+  if (reference.weekday) {
+    const target = weekDate(reference.weekday, today);
+    if (isoDay(target) < isoDay(today)) target.setDate(target.getDate() + 7);
+    return isoDay(target);
+  }
+  const target = new Date(today);
+  target.setDate(target.getDate() + reference.offset);
+  return isoDay(target);
 }
+
 export function deterministicCoach(state, message) {
   const lower = message.toLowerCase();
   const requestedMinutes = requestedCoachWorkoutMinutes(message);
@@ -10768,11 +10779,12 @@ export function deterministicCoach(state, message) {
     };
   }
   if (requestedMinutes != null) {
-    const requestedDay = mentionedWeekdays(lower)[0];
-    const target = requestedDay ? weekDate(requestedDay) : new Date();
-    if (requestedDay && isoDay(target) < isoDay())
-      target.setDate(target.getDate() + 7);
-    const action = adaptTodayProposal(state, requestedMinutes, target, {strict: true});
+    const requestedDate = requestedCoachWorkoutDate(message);
+    const today = isoDay();
+    const target = requestedDate ? new Date(requestedDate+'T12:00:00') : new Date();
+    const withinWindow = !requestedDate || (Number.isFinite(target.getTime()) && isoDay(target) === requestedDate &&
+      requestedDate >= today && Date.parse(requestedDate)-Date.parse(today) <= 28*86400000);
+    const action = withinWindow ? adaptTodayProposal(state, requestedMinutes, target, {strict: true}) : null;
     if (action)
       return {
         text: action.estimatedMinutes > requestedMinutes
@@ -10781,6 +10793,11 @@ export function deterministicCoach(state, message) {
         action,
         source: "deterministic",
       };
+    if (requestedDate) return {
+      text: withinWindow ? "There is no scheduled workout on that day to shorten." : "Choose a workout date within the next 28 days.",
+      action: null,
+      source: "deterministic",
+    };
   }
   const optionalWorkout = proposeOptionalStrengthWorkout(state, message);
   if (optionalWorkout)
