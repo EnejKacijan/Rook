@@ -129,3 +129,38 @@ it.each(['pull-up','plank'])('does not carry external weights or old rep units i
   expect(result.repMin).not.toBe(5);expect(result.measure).toBe(id==='plank'?'seconds':'reps');
   expect(row.sets[0].weight).toBe(78);
 });
+it('offers Use for the last workout, applies its values for today and can undo them',async()=>{
+  await mount(fixture());
+  const card=()=>host.querySelector('.plan-editor-last-session');
+  const name=exerciseCatalog[current.program.days[0].exercises[0].exerciseId].name;
+  expect(card().textContent).toContain('53 kg');
+  await click(button(`Use last workout values for ${name}`));
+  expect(button(`Use last workout values for ${name}`)).toBeUndefined();
+  expect(host.querySelector('.plan-editor-weight-reference summary').textContent).toContain('53 kg');
+  await click(button(`Undo last workout values for ${name}`));
+  expect(button(`Use last workout values for ${name}`)).toBeDefined();
+  await click(button(`Use last workout values for ${name}`));
+  await click(button('SAVE FOR TODAY'));
+  expect(adaptedTemplateForToday(current).exercises[0].sets.map(set=>[set.weight,set.reps])).toEqual([[53,5],[53,5],[53,5]]);
+});
+it('marks history already applied by a swap as in use',async()=>{
+  await mount(fixture());await replace('Cable Curl');
+  expect(host.querySelector('.plan-editor-last-session-status')?.textContent).toBe('In use');
+  expect(button('Use last workout values for Cable Curl')).toBeUndefined();
+});
+it('lists the closest swaps before the A–Z library',async()=>{
+  await mount(fixture());
+  await click(host.querySelector('.plan-editor-picker-trigger'));
+  const labels=[...host.querySelectorAll('.plan-editor-picker-label')].map(node=>node.textContent);
+  expect(labels).toEqual(['Best swaps','All exercises']);
+  const source=exerciseCatalog[current.program.days[0].exercises[0].exerciseId];
+  const best=[...host.querySelectorAll('[role="option"].is-best-swap')];
+  expect(best.length).toBeGreaterThan(0);expect(best.length).toBeLessThanOrEqual(5);
+  for(const node of best){
+    const item=Object.values(exerciseCatalog).find(entry=>entry.name===node.querySelector('strong').textContent);
+    expect(item.pattern===source.pattern||item.muscles[0]===source.muscles[0]).toBe(true);
+  }
+  expect(best[0].querySelector('small').textContent).toMatch(/Same (movement|target)|Preferred/);
+  await input(host.querySelector('.plan-editor-picker input'),'curl');
+  expect(host.querySelectorAll('.plan-editor-picker-label')).toHaveLength(0);
+});

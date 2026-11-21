@@ -103,7 +103,7 @@ import { startFreestyleWorkout } from './freestyleWorkout.js';
 import { startFirstRunFreestyle } from './firstRunNoPlan.js';
 import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancellation.js';
 import { removeFreestyleExercise } from './freestyleWorkout.js';
-import {prepareTodayReplacementValues} from './previousValues.js';
+import {prefillReplacementValues,prepareTodayReplacementValues} from './previousValues.js';
 import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
 import {DeloadWeekNotice,DeloadWeekChoice} from './DeloadWeekChoice.jsx';
 import {needsDeloadChoice} from './deloadWeek.js';
@@ -155,6 +155,7 @@ import { exerciseLibraryItems } from './exerciseEligibility.js';
 import { removalRows, stagePlanRemoval, undoPlanRemoval } from './planRemovalDraft.js';
 import './planRemovalDraft.css';
 import './completionMotion.css';
+import './planEditorActions.css';
 import { revealPlanConflict } from './revealPlanConflict.js';
 import { useAvailableImage } from './useAvailableImage.js';
 import { workoutPhotoFile, exportWorkoutPhoto } from './exportWorkoutPhoto.js';
@@ -13147,6 +13148,26 @@ function EditorSummaryAction({direct,expanded,name,needsReview,children}) {
     : <span className="plan-editor-summary-action">{children}</span>;
 }
 
+function PlanEditorActionIcon({ kind }) {
+  const paths = {
+    remove: "M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v5M14 11v5",
+    link: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1",
+    unlink: "M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1M4 4l16 16",
+  };
+  return <svg className="plan-editor-action-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" focusable="false"><path d={paths[kind]} /></svg>;
+}
+// The closest swaps for an exercise already in a workout: same movement
+// pattern or same primary muscle, ranked by the shared substitution score
+// (pattern, muscles, equipment family, load type, saved preferences).
+function bestSwapCandidates(exercise, profile, candidates, preferences, limit = 5) {
+  const source = exerciseCatalog[exercise.exerciseId] || exercise.importedExercise;
+  if (!source?.pattern) return [];
+  const primary = source.muscles?.[0];
+  return userSelectableReplacementCandidates(exercise, profile, [], { candidates, preferences })
+    .filter((item) => item.id !== exercise.exerciseId &&
+      (item.pattern === source.pattern || (primary && item.muscles?.[0] === primary)))
+    .slice(0, limit);
+}
 export function PlanEditor({
   source,
   profile,
@@ -13336,6 +13357,8 @@ export function PlanEditor({
       .find((exercise) =>
         ["unresolved", "needs-name-review"].includes(exercise.matchStatus),
       )?.id ?? null;
+  // Today only: the values before "Use last workout", so the action can be undone.
+  const [lastWorkoutUndo, setLastWorkoutUndo] = useState({});
   const [expandedExerciseId, setExpandedExerciseId] = useState(() =>
     reviewExerciseIds[0] || firstUnresolvedExercise(source),
   );
@@ -14815,6 +14838,17 @@ export function PlanEditor({
                 const lastPreparedExercise = todayPreparation
                   ? previousExercise(exerciseState?.workouts || [],exercise.exerciseId) : null;
                 const lastPreparedSets = lastPreparedExercise?.sets.filter(set => set.completed) || [];
+                const lastPreparedDate = lastPreparedExercise
+                  ? workoutPerformedDate((exerciseState?.workouts || []).find(workout => workout.exercises?.includes(lastPreparedExercise)) || {})
+                  : null;
+                const plannedValuesKey = sets => JSON.stringify(sets.map(set => [set.weight ?? null, set.reps ?? null, set.sides ?? null]));
+                const lastWorkoutValues = todayPreparation && lastPreparedSets.length && exerciseState
+                  ? prefillReplacementValues(exerciseState, exercise) : null;
+                const lastWorkoutInUse = Boolean(lastWorkoutValues && plannedValuesKey(lastWorkoutValues.sets) === plannedValuesKey(exercise.sets));
+                const lastWorkoutCanUse = Boolean(lastWorkoutValues && !lastWorkoutInUse &&
+                  lastWorkoutValues.sets.some(set => set.weight != null || set.reps != null));
+                const lastWorkoutUndoRecord = lastWorkoutUndo[exercise.id];
+                const lastWorkoutCanUndo = Boolean(lastWorkoutUndoRecord && lastWorkoutUndoRecord.after === plannedValuesKey(exercise.sets));
                 const timed = exerciseMeasure(exercise) === "seconds";
                 const loadRequirement = exerciseLoadRequirement(exercise);
                 const acceptsStartingWeight =
@@ -14879,6 +14913,16 @@ export function PlanEditor({
                 const pickerExercises = preview
                   ? similarExercises
                   : availableExercises;
+                // Replacing a known exercise: lead with the closest swaps (same
+                // movement, then same target muscle), ranked like the active
+                // workout's Replace sheet, before the full A–Z library.
+                const bestSwaps = pickerOpen && !preview && !needsReview && !exerciseQuery.trim()
+                  ? bestSwapCandidates(exercise, profile, availableExercises, exerciseState?.substitutionPreferences)
+                  : [];
+                const bestSwapIds = new Set(bestSwaps.map((item) => item.id));
+                const remainingPickerExercises = bestSwaps.length
+                  ? pickerExercises.filter((item) => !bestSwapIds.has(item.id))
+                  : pickerExercises;
                 const pendingMatch = exercise.matchStatus === 'confirmed-match' ? editorCatalog[exercise.exerciseId] : null;
                 return (
                   <SwipeActionRow as="article"
@@ -15213,8 +15257,30 @@ export function PlanEditor({
                                   role="listbox"
                                   aria-label="Available exercises"
                                 >
+                                  {bestSwaps.length > 0 && <small className="plan-editor-picker-label" role="presentation">Best swaps</small>}
+                                  {bestSwaps.map((item) => (
+                                    <button
+                                      type="button"
+                                      role="option"
+                                      aria-selected={false}
+                                      className="is-best-swap"
+                                      key={item.id}
+                                      onClick={() => replaceExercise(day.id, exercise.id, item.id)}
+                                    >
+                                      <ExercisePickerIdentity item={item} enabled={profile.showExerciseImages!==false} priority>
+                                        <strong>{item.name}</strong>
+                                        <small>{substitutionReason(
+                                          exerciseCatalog[exercise.exerciseId] || exercise.importedExercise,
+                                          item,
+                                          (exerciseState?.substitutionPreferences || []).some((pref) =>
+                                            pref.sourceExerciseId === exercise.exerciseId && pref.replacementExerciseId === item.id),
+                                        )}</small>
+                                      </ExercisePickerIdentity>
+                                    </button>
+                                  ))}
+                                  {bestSwaps.length > 0 && remainingPickerExercises.length > 0 && <small className="plan-editor-picker-label" role="presentation">All exercises</small>}
                                   {pickerExercises.length ? (
-                                    pickerExercises.map((item) => (
+                                    remainingPickerExercises.map((item) => (
                                       <button
                                         type="button"
                                         role="option"
@@ -15249,7 +15315,26 @@ export function PlanEditor({
                           </div>
                         )}
                         {todayPreparation && <section className="plan-editor-last-session" aria-label={`Last workout for ${exerciseName(exercise)}`}>
-                          <span>LAST WORKOUT</span>
+                          <header className="plan-editor-last-session-header">
+                            <span>LAST WORKOUT{lastPreparedDate ? <small> · {new Intl.DateTimeFormat('en',{month:'short',day:'numeric'}).format(new Date(`${lastPreparedDate}T12:00:00`))}</small> : null}</span>
+                            {lastWorkoutCanUndo ? <button type="button" className="plan-editor-last-session-action"
+                              aria-label={`Undo last workout values for ${exerciseName(exercise)}`}
+                              onClick={() => {
+                                mutateExercise(day.id, exercise.id, target => { target.sets = structuredClone(lastWorkoutUndoRecord.sets); });
+                                setLastWorkoutUndo(current => { const next = {...current}; delete next[exercise.id]; return next; });
+                              }}>UNDO</button>
+                            : lastWorkoutCanUse ? <button type="button" className="plan-editor-last-session-action"
+                              aria-label={`Use last workout values for ${exerciseName(exercise)}`}
+                              onClick={() => {
+                                flushSync(() => [...pendingNumberCommits.current].forEach(commit => commit()));
+                                const fresh = programRef.current?.days.find(item => item.id === day.id)?.exercises.find(item => item.id === exercise.id);
+                                if (!fresh) return;
+                                const values = prefillReplacementValues(exerciseState, fresh).sets;
+                                setLastWorkoutUndo(current => ({...current, [exercise.id]: {sets: structuredClone(fresh.sets), after: plannedValuesKey(values)}}));
+                                mutateExercise(day.id, exercise.id, target => { target.sets = structuredClone(values); });
+                              }}>USE</button>
+                            : lastWorkoutInUse ? <small className="plan-editor-last-session-status">In use</small> : null}
+                          </header>
                           {lastPreparedSets.length ? lastPreparedSets.map((set,index) => <div key={set.id || index}>
                             <small>Set {index + 1}</small>
                             <strong>{exerciseHistoryWeightLabel({timed,bodyweight:exerciseCatalog[exercise.exerciseId]?.bodyweight,
@@ -15369,7 +15454,7 @@ export function PlanEditor({
                             </small>
                           </label>
                         )}
-                        {mode==='edit'&&<PlanWeightReference key={exercise.exerciseId} exercise={exercise} workouts={exerciseState?.workouts} units={profile.units} commits={pendingNumberCommits.current}
+                        {mode==='edit'&&<PlanWeightReference key={exercise.exerciseId} exercise={exercise} showHistory={!todayPreparation} workouts={exerciseState?.workouts} units={profile.units} commits={pendingNumberCommits.current}
                           onWeightChange={(index,weight)=>setWeight(day.id,exercise.id,index,weight??'')}
                           onWeightsChange={weights=>mutateExercise(day.id,exercise.id,target=>{
                             if(!supportsPlannedLoads(target)||weights.length!==target.sets.length)return;
@@ -15509,24 +15594,27 @@ export function PlanEditor({
                           <button
                             type="button"
                             className="plan-exercise-remove danger-text"
+                            aria-label="Remove exercise"
                             disabled={!scratch && day.exercises.length <= 1}
                             onClick={() => removeExercise(day.id, exercise.id)}
                           >
-                            Remove exercise
+                            <PlanEditorActionIcon kind="remove" />Remove
                           </button>
                           {allowSupersets && pair && (
                             <button
                               type="button"
+                              aria-label="Unpair superset"
                               onClick={() =>
                                 removeSuperset(day.id, pair.id)
                               }
                             >
-                              REMOVE SUPERSET
+                              <PlanEditorActionIcon kind="unlink" />Unpair
                             </button>
                           )}
                           {allowSupersets && !pair && eligiblePartners.length > 0 && (
                             <button
                               type="button"
+                              aria-label="CREATE SUPERSET"
                               aria-expanded={
                                 pairingExerciseId === exercise.id
                               }
@@ -15536,11 +15624,12 @@ export function PlanEditor({
                                 setPairingExerciseId(pairingExerciseId === exercise.id ? null : exercise.id);
                               }}
                             >
-                              CREATE SUPERSET
+                              <PlanEditorActionIcon kind="link" />Superset
                             </button>
                           )}
                           <button
                             type="button"
+                            className="plan-editor-done"
                             onClick={() => {
                               setExpandedExerciseId(null);
                               setExercisePickerId(null);

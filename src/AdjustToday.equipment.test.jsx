@@ -124,18 +124,20 @@ it('review shows current and target delta; Apply persists only one-workout adjus
 });
 
 const openWorkoutEditor=()=>click([...host.querySelectorAll('summary')].find(node=>node.textContent.startsWith('Edit workout')));
+// Remove now lives in the open card's toolbar (swipe covers collapsed rows).
+const removeFirst=()=>{const row=host.querySelector('[data-adjust-entry-id]');if(row.querySelector('.adjust-exercise-toggle').getAttribute('aria-expanded')!=='true')click(row.querySelector('.adjust-exercise-toggle'));click(row.querySelector('.adjust-exercise-remove'));};
 const editInput=(node,value)=>{
   act(()=>{node.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(node,value);node.dispatchEvent(new Event('input',{bubbles:true}));});
 };
 it('uses compact expandable rows with visible removal, safe Undo and a single final confirmation',async()=>{
   const s=fixture(),original=structuredClone(s);mount(s);check('Home');await review();openWorkoutEditor();
   const initial=[...host.querySelectorAll('[data-adjust-entry-id]')].map(node=>node.dataset.adjustEntryId);
-  expect(host.textContent).not.toContain('Edit targets');expect(host.querySelectorAll('.adjust-exercise-remove')).toHaveLength(initial.length);
-  click(host.querySelector('.adjust-exercise-remove'));expect(host.querySelectorAll('.adjust-exercise-card')).toHaveLength(initial.length-1);expect(save).not.toHaveBeenCalled();
+  expect(host.textContent).not.toContain('Edit targets');expect(host.querySelectorAll('.adjust-exercise-card[data-swipe-enabled="true"]')).toHaveLength(initial.length);
+  removeFirst();expect(host.querySelectorAll('.adjust-exercise-card')).toHaveLength(initial.length-1);expect(save).not.toHaveBeenCalled();
   click(host.querySelector('.adjust-exercise-toggle'));const field=input('Sets for');editInput(field,'2');act(()=>field.blur());
   click(button('Undo'));expect([...host.querySelectorAll('[data-adjust-entry-id]')].map(node=>node.dataset.adjustEntryId)).toEqual(initial);
   expect(input('Sets for').value).toBe('2');expect(s).toEqual(original);
-  click(host.querySelector('.adjust-exercise-remove'));click(button('USE THIS WORKOUT'));
+  removeFirst();click(button('USE THIS WORKOUT'));
   expect(save).toHaveBeenCalledOnce();expect(current.program).toEqual(original.program);expect(current.todayAdaptation.workout.exercises).toHaveLength(initial.length-1);
 });
 it('opens only one exercise and commits a pending target on Apply without using Enter as confirmation',async()=>{
@@ -148,7 +150,8 @@ it('opens only one exercise and commits a pending target on Apply without using 
 });
 it('keeps one exercise and retries the same removal after a failed save',async()=>{
   const s=fixture(),original=structuredClone(s);mount(s);check('Home');await review();openWorkoutEditor();
-  while(host.querySelectorAll('.adjust-exercise-remove').length>1)click(host.querySelector('.adjust-exercise-remove'));
+  while(host.querySelectorAll('.adjust-exercise-card').length>1)removeFirst();
+  click(host.querySelector('.adjust-exercise-toggle'));expect(host.querySelector('.adjust-exercise-card[data-swipe-enabled="true"]')).toBeNull();
   expect(host.querySelector('.adjust-exercise-remove').disabled).toBe(true);expect(host.textContent).toContain('Keep at least one exercise.');expect(save).not.toHaveBeenCalled();
   save.mockReturnValueOnce(false);click(button('USE THIS WORKOUT'));expect(close).not.toHaveBeenCalled();expect(update).not.toHaveBeenCalled();expect(current.program).toEqual(original.program);
   click(button('TRY AGAIN'));expect(close).toHaveBeenCalledOnce();expect(current.todayAdaptation.workout.exercises).toHaveLength(1);expect(current.program).toEqual(original.program);
