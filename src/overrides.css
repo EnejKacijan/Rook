@@ -1316,6 +1316,7 @@ body {
 .adjust-loading > small { color: var(--rook-secondary, #6f6c68); }
 @keyframes rook-adjust-spin { to { transform: rotate(360deg); } }
 .adjust-review-section { margin-top: 26px !important; }
+.adjust-review-section + .review-details { margin-top: 0; }
 .adjust-keep-row, .adjust-change-row { display: grid; gap: 4px; padding: 13px 0; border-bottom: 1px solid var(--rook-border, rgba(27,26,25,.08)); }
 .adjust-keep-row { grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
 .adjust-keep-row strong, .adjust-change-row strong { overflow-wrap: anywhere; font-size: 14px; }
