@@ -20,7 +20,7 @@ it('shared warm-up checks and completed summary follow the theme rather than sem
  for(const d of declarations('.warmup-summary-check','color'))expect(d.value).toBe('var(--rook-accent-text)');
 });
 it('audited interactive accent primitives have no standalone brand-green declarations',()=>{
- const selectors=['.primary','.text-button','.consistency-bars .filled','.chart i','.setting-switch input:checked','.toggle-row input','.disclosure-chevron','.building-spinner','.restriction-spinner','.progression-next','.week-navigation','.coach-send.is-sending','.adapt-review-list > button.selected','.exercise-note-button:focus-visible','.set-row.set-ready'];
+ const selectors=['.primary','.text-button','.consistency-bars .filled','.chart i','.setting-switch input:checked','.toggle-row input','.disclosure-chevron','.building-spinner','.restriction-spinner','.progression-next','.week-navigation','.coach-send.is-sending','.exercise-note-button:focus-visible','.set-row.set-ready'];
  for(const selector of selectors)for(const {rule}of rules.filter(x=>x.rule.selector.includes(selector)))for(const d of rule.nodes.filter(n=>n.type==='decl'&&!n.prop.startsWith('--'))){
   const value=d.value.replace(/var\([^)]*\)/g,'');
   expect(value,`${rule.selector} ${d.prop}`).not.toMatch(/#(?:1f6b4c|206b4c|4fbf87)|rgba?\(\s*31\s*,\s*107\s*,\s*76/i);
@@ -31,7 +31,6 @@ it('generic applied, completed and saved controls follow the theme, while semant
  expect(declarations('.set-row.set-done .check','background').some(d=>d.value==='var(--rook-accent-fill)')).toBe(true);
  expect(declarations('.backup-status','color').map(d=>d.value)).toContain('var(--rook-accent-text, #1f6b4c)');
  for(const selector of ['.coach-screen .action-applied','.coach-screen .today-update-check','.warmup-complete-status','.recommendation.applied'])for(const prop of ['background','color','border-color'])for(const d of declarations(selector,prop))expect(d.value).not.toContain('--rook-success');
- for(const d of declarations('.adapt-review-list > button.selected .adapt-check','background'))expect(d.value).not.toContain('success');
  expect(readFileSync('docs/theme-token-audit.md','utf8')).toContain('BRAND IDENTITY');
 });
 describe.each(THEME_PRESETS)('$name progress and semantic roles',preset=>{

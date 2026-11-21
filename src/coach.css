@@ -184,15 +184,6 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-screen .adapt-suggestion-row { min-height: 43px; padding: 8px 0; border-bottom: 1px solid rgba(27, 26, 25, .07); display: flex; align-items: center; justify-content: space-between; gap: 14px; }
 .coach-screen .adapt-suggestion-row strong { min-width: 0; font-size: 13px; }
 .coach-screen .adapt-suggestion-row small { flex: 0 0 auto; margin: 0; color: #8a8783; font-size: 10px; }
-.coach-screen .adapt-review-list { margin-top: 12px; padding: 0; border: 0; }
-.coach-screen .adapt-review-list > button { width: 100%; min-height: 56px; padding: 9px 0; border: 0; border-bottom: 1px solid rgba(27, 26, 25, .07); background: transparent; color: #1b1a19; display: flex; align-items: center; gap: 11px; text-align: left; }
-.coach-screen .adapt-review-list > button:disabled { opacity: 1; }
-.coach-screen .adapt-review-list > button > span:last-child { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
-.coach-screen .adapt-review-list strong { font-size: 13px; }
-.coach-screen .adapt-review-list small { margin: 0; color: #8a8783; font-size: 10px; text-align: left; }
-.coach-screen .adapt-check { width: 22px; height: 22px; flex: 0 0 22px; border: 1px solid #cbc8c3; border-radius: 7px; display: grid; place-items: center; color: #fff; font-size: 12px; }
-.coach-screen .adapt-review-list > button.selected .adapt-check { border-color: var(--rook-accent-text); background: var(--rook-accent-fill); color: var(--rook-on-accent-fill); }
-.coach-screen .adapt-review-list > button:disabled .adapt-check { border-color: var(--rook-control-border); background: var(--rook-disabled-surface); color: var(--rook-disabled-text); }
 .coach-screen .schedule-change { padding: 14px 0; display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; }
 .coach-screen .schedule-change > span { display: flex; flex-direction: column; gap: 5px; }
 .coach-screen .schedule-change > span:last-child { min-width: 54px; padding-left: 14px; border-left: 1px solid rgba(27,26,25,.08); }

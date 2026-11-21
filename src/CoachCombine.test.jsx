@@ -32,7 +32,15 @@ it('revision shows factual changes and separate Apply; Cancel and Back never per
  act(()=>button('Edit workout').click());expect(node.textContent).toContain('Target 75 min');expect(node.querySelector('.combined-provenance').textContent).toContain('Combined from');
  expect(button('USE UPDATED WORKOUT')).toBeDefined();expect(button('USE THIS WORKOUT')).toBeUndefined();
  act(()=>button('CANCEL').click());expect(accept).not.toHaveBeenCalled();expect(state.todayAdaptation.requestedMinutes).toBe(45);
- act(()=>button('Edit workout').click());const removable=node.querySelector('.adapt-review-list button:not(:disabled)');
- if(removable){act(()=>removable.click());expect(onReviewChange).toHaveBeenCalledOnce();}
+ act(()=>button('Edit workout').click());
+ const removable=node.querySelector('.adjust-exercise-card[data-swipe-enabled="true"]');
+ expect(removable).not.toBeNull();
+ act(()=>removable.querySelector('.adjust-exercise-toggle').click());
+ expect(removable.querySelector('.adjust-exercise-set-targets').textContent).toContain('Set 1');
+ act(()=>removable.querySelector('.adjust-exercise-remove').click());
+ expect(onReviewChange).toHaveBeenCalledOnce();
+ const omitted=node.querySelector(`[data-adjust-entry-id="${removable.dataset.adjustEntryId}"][data-adjust-omitted]`);
+ act(()=>omitted.querySelector('.adjust-exercise-restore').click());
+ expect(onReviewChange).toHaveBeenCalledTimes(2);
  act(()=>{button('USE UPDATED WORKOUT').click();button('USE UPDATED WORKOUT').click();});expect(accept).toHaveBeenCalledOnce();
 });

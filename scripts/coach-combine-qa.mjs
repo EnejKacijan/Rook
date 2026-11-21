@@ -29,7 +29,7 @@ try{for(const width of (process.env.COMBINE_QA_ONE?[390]:[320,390]))for(const st
  await review(p);await p.getByRole('button',{name:'CANCEL',exact:true}).click();
  assert.equal((await read(p)).todayAdaptation,null);
  await review(p);
- await p.locator('.combine-card .adapt-review-list').evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await p.screenshot({path:`${out}/${width}-${style}-${appearance}-review.png`});
+ await p.locator('.combine-card .adjust-exercise-list').evaluate(el=>el.scrollIntoView({block:'start',behavior:'instant'}));await p.screenshot({path:`${out}/${width}-${style}-${appearance}-review.png`});
  assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'no horizontal overflow');
  // Failure at the actual storage boundary; Apply must remain recoverable.
  await p.evaluate(()=>{window.qaSetItem=Storage.prototype.setItem;Storage.prototype.setItem=function(k,v){if(k==='lift-v2-state')throw new DOMException('QA quota','QuotaExceededError');return window.qaSetItem.call(this,k,v);};});

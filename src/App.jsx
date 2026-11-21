@@ -130,7 +130,6 @@ import { moveReorderPreview } from './reorderPresentation.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import './loggedExercises.css';
 import { PlanNumberInput } from './PlanNumberInput.jsx';
-import { AdjustmentTargetsEditor } from './AdjustmentTargetsEditor.jsx';
 import { AdjustmentExerciseList } from './AdjustmentExerciseList.jsx';
 import { applyAdjustmentPrescription, cleanAdjustmentSupersets } from './adjustmentPrescription.js';
 import { createWorkoutDurationEstimator, estimatePersonalWorkoutMinutes, makeProgramExercise } from './domain.js';
@@ -9426,13 +9425,20 @@ export function AdaptActionCard({
   );
   const suggestedMinutes = selectedMinutes;
   const requestedMinutes = Number(action.requestedMinutes || action.minutes);
-  const toggleExercise = (id) => {
-    if (lockedIds.has(id)) return;
-    const next = selectedIds.includes(id)
-      ? selectedIds.length > 1 ? selectedIds.filter(value => value !== id) : selectedIds
-      : [...selectedIds, id];
+  const draftRef = useRef(null);
+  draftRef.current = {exerciseIds:selectedIds,prescriptionTargets};
+  const toggleExercise = (exercise) => {
+    const id=exercise.exerciseId;
+    if (lockedIds.has(id)) return false;
+    flushSync(()=>[...targetCommits.current].forEach(commit=>commit()));
+    const {exerciseIds, prescriptionTargets:targets}=draftRef.current;
+    const removing=exerciseIds.includes(id);
+    if (removing && exerciseIds.length<=1) return false;
+    const next=removing ? exerciseIds.filter(value=>value!==id) : [...exerciseIds,id];
     setSelectedIds(next);
-    onReviewChange?.({exerciseIds:next,prescriptionTargets});
+    if (removing) setEditingId(current=>current===exercise.id?null:current);
+    onReviewChange?.({exerciseIds:next,prescriptionTargets:targets});
+    return true;
   };
   const editTargets = target => {
     const next = [...prescriptionTargets.filter(item => item.exerciseId !== target.exerciseId), target];
@@ -9574,6 +9580,11 @@ export function AdaptActionCard({
         </Button>
       </div>
     );
+  const editorExercises=reviewing ? displayIds.map(materialize) : [];
+  const toggleFromEditor=id=>{
+    const exercise=editorExercises.find(item=>item.id===id);
+    return exercise ? toggleExercise(exercise) : false;
+  };
   return (
     <div className={`action-card ${reviewing ? "action-card-reviewing" : ""}`}>
       <p className="review-scope">{source===state.activeWorkout?'Current workout':'Today only'}</p>
@@ -9591,50 +9602,18 @@ export function AdaptActionCard({
       </p>
       {lockedIds.size>0&&<p className="review-scope">{lockedIds.size} {lockedIds.size===1?'exercise':'exercises'} locked · Current and logged work is kept.</p>}
       {reviewing ? (
-        <div className="adapt-review-list">
-          {displayIds.map((id) => {
-            const exercise = sourceExercises.find(
-              (item) => item.exerciseId === id,
-            );
-            const checked = selected.has(id);
-            const locked = lockedIds.has(id);
-            const original = exercise?.sets.length;
-            const sets = setCountFor(id);
-            return (
-              <div className="adapt-review-row" key={exercise?.id || id}>
-              <button
-                type="button"
-                className={`adapt-review-toggle${checked ? ' selected' : ''}`}
-                aria-pressed={checked}
-                disabled={locked}
-                onClick={() => toggleExercise(id)}
-              >
-                <span className="adapt-check" aria-hidden="true">
-                  {checked ? "✓" : ""}
-                </span>
-                <span>
-                  <strong>{nameFor(id)}</strong>
-                  <small>
-                    {locked
-                      ? exercise?.sets.some((set) => set.completed)
-                        ? `Already logged · ${pluralize(sets, "set")} kept`
-                        : `Current exercise · ${pluralize(sets, "set")} kept`
-                      : checked
-                        ? original
-                          ? sets < original
-                            ? `Keep · ${sets} of ${original} sets`
-                            : `Keep · ${pluralize(sets, "set")}`
-                          : `Add · ${pluralize(sets, "set")}`
-                        : "Skip today"}
-                  </small>
-                </span>
-              </button>
-              {checked && !locked && <button className="text-button" aria-label={`Edit targets for ${nameFor(id)}`} aria-expanded={editingId === id} onClick={() => setEditingId(editingId === id ? null : id)}>{editingId === id ? 'Done' : 'Edit'}</button>}
-              {checked && !locked && <Disclosure open={editingId===id} className="adjustment-target-disclosure"><AdjustmentTargetsEditor exercise={materialize(id)} name={nameFor(id)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current} onChange={editTargets}/></Disclosure>}
-              </div>
-            );
-          })}
-        </div>
+        <AdjustmentExerciseList exercises={editorExercises} editingId={editingId} onToggle={setEditingId}
+          onEdit={(_,target)=>editTargets(target)} rirEnabled={state.profile.rirEnabled} commits={targetCommits.current}
+          onRemove={toggleFromEditor} onRestore={toggleFromEditor}
+          getRowState={exercise=>{
+            const id=exercise.exerciseId;
+            const locked=lockedIds.has(id),omitted=!selected.has(id);
+            return {
+              locked,omitted,removable:selected.size>1,
+              note:locked ? (exercise.sets.some(set=>set.completed) ? 'Already logged' : 'Current exercise') :
+                omitted ? 'Omitted today' : !sourceIds.includes(id) ? 'Added today' : undefined,
+            };
+          }}/>
       ) : (
         <>
           <div className="adapt-suggestion-list">

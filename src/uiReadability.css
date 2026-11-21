@@ -176,10 +176,8 @@
 
 :root :is(.coach-empty p,.coach-shortcut-helper,.coach-history-group small,
   .coach-history-header button:last-child,.coach-screen .adapt-duration-contract,
-  .coach-screen .adapt-suggestion-row small,.coach-screen .adapt-review-list small,
-  .coach-screen .adapt-review-row > .text-button) { font-size:14px; line-height:1.45; }
-:root .coach-screen .adapt-suggestion-row strong,
-:root .coach-screen .adapt-review-list strong { font-size:15px; line-height:1.35; }
+  .coach-screen .adapt-suggestion-row small) { font-size:14px; line-height:1.45; }
+:root .coach-screen .adapt-suggestion-row strong { font-size:15px; line-height:1.35; }
 :root .coach-screen .action-card-buttons .button { font-size:12px; line-height:1.4; }
 :root .coach-header { gap:8px; }
 :root .coach-header-context { flex:1 1 0; }

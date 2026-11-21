@@ -26,7 +26,14 @@ const button=name=>[...document.querySelectorAll('button')].find(b=>b.getAttribu
 const click=name=>act(()=>button(name).click());
 const type=value=>act(()=>{const input=document.querySelector('textarea');input.focus();Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype,'value').set.call(input,value);input.dispatchEvent(new Event('input',{bubbles:true}));});
 function history(){click('Chat history');act(()=>vi.advanceTimersByTime(1));}
-function swipe(target){for(const [type,x]of [['touchstart',4],['touchmove',260],['touchend',260]]){const e=new Event(type,{bubbles:true,cancelable:true});Object.defineProperty(e,'touches',{value:type==='touchend'?[]:[{identifier:1,clientX:x,clientY:300}]});act(()=>target.dispatchEvent(e));}act(()=>vi.advanceTimersByTime(250));}
+function swipe(target,from=4,to=260){
+  for(const [type,x] of [['touchstart',from],['touchmove',to],['touchend',to]]){
+    const event=new Event(type,{bubbles:true,cancelable:true}),point={identifier:1,clientX:x,clientY:300};
+    Object.assign(event,{touches:type==='touchend'?[]:[point],changedTouches:[point]});
+    act(()=>target.dispatchEvent(event));
+  }
+  act(()=>vi.advanceTimersByTime(250));
+}
 it('M History is read-only and Back/swipe restores the same current chat/draft',()=>{
   mount(fixture());const id=current.activeCoachConversationId;history();act(()=>document.querySelector('[title="Yesterday question"]').closest('button').click());
   expect(document.querySelector('textarea')).toBeNull();expect(document.querySelector('.conversation').textContent).toContain('Yesterday answer');expect(current.activeCoachConversationId).toBe(id);
@@ -135,8 +142,16 @@ it('partial source selection survives tab remount and interrupted reply retries 
 });
 it('Adjust Today review selections survive remount, and resolving a review keeps today’s conversation',()=>{
   const state=fixture(),day=state.program.days[0];state.coachDraft='';state.conversations[1].createdAt=new Date('2026-09-17T12:00:00').getTime();state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:30,label:'USE WORKOUT'}};
-  mount(state);click('EDIT WORKOUT');const controls=[...document.querySelectorAll('.adapt-review-list button[aria-pressed]:not([disabled])')];act(()=>controls.at(-1).click());const chosen=current.conversations[1].actionReview.exerciseIds;
-  act(()=>page(false));click('Coach');click('EDIT WORKOUT');expect([...document.querySelectorAll('.adapt-review-list button[aria-pressed="true"]')]).toHaveLength(chosen.length);
+  mount(state);click('EDIT WORKOUT');
+  const card=[...document.querySelectorAll('.adjust-exercise-card')].at(-1), id=card.dataset.adjustEntryId;
+  swipe(card.querySelector('.adjust-exercise-toggle'),340,60);
+  const chosen=current.conversations[1].actionReview.exerciseIds;
+  expect(chosen).toHaveLength(day.exercises.length-1);
+  act(()=>page(false));click('Coach');click('EDIT WORKOUT');
+  expect(document.querySelectorAll('.adjust-exercise-card:not([data-adjust-omitted])')).toHaveLength(chosen.length);
+  const omitted=document.querySelector(`[data-adjust-entry-id="${id}"][data-adjust-omitted]`);
+  act(()=>omitted.querySelector('.adjust-exercise-restore').click());
+  expect(current.conversations[1].actionReview.exerciseIds).toHaveLength(day.exercises.length);
   click('CANCEL');expect(pendingCoachWorkflows(current)).toEqual([]);expect(current.conversations[1].coachReviewCancelled).toBe(true);
   expect(current.activeCoachConversationId).toBe('current');
   click('EDIT WORKOUT');expect(pendingCoachWorkflows(current)).toHaveLength(1);
@@ -146,13 +161,15 @@ it('Adjust Today review selections survive remount, and resolving a review keeps
 it('edits targets in the Coach draft, retains them across remount, and applies only to today',()=>{
   const state=fixture(),day=state.program.days[0];day.weekday='Fri';const original=structuredClone(state.program),exercise=day.exercises[0];
   state.conversations[1].reply={text:'Review a shorter workout',action:{type:'adapt-today',programDayId:day.id,targetDate:'2026-09-18',exerciseIds:day.exercises.map(e=>e.exerciseId),minutes:40,label:'USE WORKOUT'}};
-  mount(state);click('EDIT WORKOUT');click(`Edit targets for ${document.querySelector('.adapt-review-toggle strong').textContent}`);
+  mount(state);click('EDIT WORKOUT');act(()=>document.querySelector('.adjust-exercise-toggle').click());
   const input=document.querySelector('.adjustment-target-editor input');
   act(()=>{input.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(input,'4');input.dispatchEvent(new Event('input',{bubbles:true}));});
   act(()=>input.blur());
   expect(current.program).toEqual(original);expect(current.todayAdaptation).toBeNull();
   expect(current.conversations[1].actionReview.prescriptionTargets[0].sets).toBe(4);
-  act(()=>page(false));click('Coach');click('EDIT WORKOUT');click(`Edit targets for ${document.querySelector('.adapt-review-toggle strong').textContent}`);
+  click('DONE');
+  expect(document.activeElement.getAttribute('aria-expanded')).toBe('false');
+  act(()=>page(false));click('Coach');click('EDIT WORKOUT');act(()=>document.querySelector('.adjust-exercise-toggle').click());
   const pending=document.querySelector('.adjustment-target-editor input');
   act(()=>{pending.focus();Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(pending,'5');pending.dispatchEvent(new Event('input',{bubbles:true}));});
   click('APPLY CHANGES');

@@ -10,6 +10,7 @@ import {Disclosure} from './Disclosure.jsx';
 import {useDurableAction} from './useDurableAction.js';
 import {flexibleSessionById} from './flexibleWeek.js';
 import {ReviewDetails} from './ReviewDetails.jsx';
+import {AdjustmentExerciseList} from './AdjustmentExerciseList.jsx';
 import {combinedWorkoutNoticeKey,combinedWorkoutNoticeHidden,setCombinedWorkoutNoticeHidden} from './combinedWorkoutPresentation.js';
 
 const dateLabel=date=>new Intl.DateTimeFormat('en',{month:'short',day:'numeric'}).format(new Date(`${date}T12:00:00`));
@@ -103,6 +104,7 @@ export function combinedReviewChanges(state,proposal){
 }
 export function CoachCombineCard({action,result,state,onAccept,onViewToday,reviewDraft,onReviewChange,onReviewCancelled,initialReviewing=false,draftSchedule=false}){
  const [reviewing,setReviewing]=useState(initialReviewing),[error,setError]=useState(''),[proposal,setProposal]=useState(reviewDraft||action.proposal),lock=useRef(false);
+ const [editingId,setEditingId]=useState(null);
  const backRef=useRef(null),reviewRef=useRef(null),wasReviewing=useRef(false),editStart=useRef(null);
  useLayoutEffect(()=>{
    if(reviewing)backRef.current?.focus({preventScroll:true});
@@ -122,10 +124,17 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
    group.forEach(e=>selected.has(exercise.id)?ids.delete(e.id):ids.add(e.id));
    return reviewCombinedSelection(original,[...ids],effectiveGymContext(state,{}).profile);
  };
+ const alternatives=new Map(reviewing ? original.workout.exercises.map(exercise=>[exercise.id,candidate(exercise)]) : []);
+ const updateSelection=id=>{
+   const next=alternatives.get(id);
+   if(!next)return false;
+   setProposal(next);setEditingId(null);onReviewChange?.(next);setError('');
+   return true;
+ };
  const apply=()=>{if(lock.current)return;lock.current=true;setError('');try{onAccept({...action,proposal});}catch(e){lock.current=false;setError(e.message);}};
  const changes=combinedReviewChanges(state,proposal),stale=proposal.fingerprint!==combineFingerprint(state)||!changes;
  const edit=()=>{editStart.current=structuredClone(proposal);setReviewing(true);setError('');onReviewCancelled?.(false);};
- const cancel=()=>{if(editStart.current)setProposal(editStart.current);setReviewing(false);setError('');onReviewCancelled?.(true);};
+ const cancel=()=>{if(editStart.current)setProposal(editStart.current);setReviewing(false);setEditingId(null);setError('');onReviewCancelled?.(true);};
  const workoutRows=<div className="review-change-list">{proposal.workout.exercises.map(exercise=><div className="review-change-row" key={exercise.id}><strong>{exerciseName(exercise)}</strong><span>{pluralize(exercise.sets.length,'set')} · {reviewPrescription(exercise,{units:state.profile.units})} · {exercise.restSeconds} sec rest{exercise.supersetId?' · Superset':''}</span><ReviewDetails title="Set targets">{exercise.sets.map((set,index)=><p key={set.id}>Set {index+1} · {reviewSetTarget(exercise,set,{units:state.profile.units})}</p>)}</ReviewDetails></div>)}</div>;
  return <div onMouseDownCapture={keepComposerFocus} className={`action-card combine-card${reviewing?' action-card-reviewing combine-review-surface':''}`}>
    {reviewing&&!draftSchedule&&<button ref={backRef} type="button" className="text-button" aria-label="Back to combined workout proposal" onClick={cancel}>‹ Back</button>}
@@ -141,10 +150,19 @@ export function CoachCombineCard({action,result,state,onAccept,onViewToday,revie
      <div className="action-card-buttons"><button type="button" className="button primary" disabled={stale} onClick={apply}>{draftSchedule?'ADD TO SCHEDULE':proposal.revisionSummary?'USE UPDATED WORKOUT':'USE THIS WORKOUT'}</button><button ref={reviewRef} type="button" className="button secondary" disabled={stale} onClick={edit}>Edit workout</button></div>
      {draftSchedule&&<small>Added to the draft. Apply the schedule to save.</small>}
    </>:<>
-     <div className="adapt-review-list">{original.workout.exercises.map(e=>{
-       const next=candidate(e);
-       return <button type="button" key={e.id} aria-pressed={selected.has(e.id)} disabled={!next} onClick={()=>{setProposal(next);onReviewChange?.(next);setError('');}}><span aria-hidden="true">{selected.has(e.id)?'✓':'+'}</span><span><strong>{exerciseName(e)}</strong><small>{pluralize(e.sets.length,'set')} · {reviewPrescription(e,{units:state.profile.units,completed:false})}{e.supersetId?' · Superset':''}{e.combinedOrigin==='coach-added'?' · Coach-added recommendation':''}</small></span></button>;
-     })}</div><small>Main movement coverage and linked supersets stay together.</small>
+     <AdjustmentExerciseList
+       exercises={original.workout.exercises.map(exercise=>proposal.workout.exercises.find(item=>item.id===exercise.id) || exercise)}
+       editingId={editingId} onToggle={setEditingId} onRemove={updateSelection} onRestore={updateSelection}
+       scopeHint="Main movement coverage and linked supersets stay together."
+       getRowState={exercise=>{
+         const omitted=!selected.has(exercise.id),canChange=Boolean(alternatives.get(exercise.id));
+         return {omitted,removable:canChange,restorable:canChange,
+           detail:`${pluralize(exercise.sets.length,'set')} · ${reviewPrescription(exercise,{units:state.profile.units,completed:false})}${exercise.supersetId?' · Superset':''}`,
+           note:omitted?'Omitted today':exercise.combinedOrigin==='coach-added'?'Coach-added recommendation':undefined,
+           removeHint:'Required for this workout'};
+       }}
+       renderDetails={exercise=><ul className="adjust-exercise-set-targets">{exercise.sets.map((set,index)=>
+         <li key={set.id}>Set {index+1} · {reviewSetTarget(exercise,set,{units:state.profile.units})}</li>)}</ul>}/>
      {stale&&<p role="alert">The source workouts changed. Ask Coach for an updated proposal.</p>}
      {error&&<p role="alert">{error}</p>}<div className="action-card-buttons"><button type="button" className="button primary" disabled={stale} onClick={apply}>{draftSchedule?'ADD TO SCHEDULE':proposal.revisionSummary?'USE UPDATED WORKOUT':'USE THIS WORKOUT'}</button><button type="button" className="button secondary" onClick={cancel}>CANCEL</button></div>
    </>}
