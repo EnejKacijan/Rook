@@ -4876,6 +4876,14 @@ export function roundedEstimate(minutes, step = 5) {
   if (!Number.isFinite(value) || value <= 0) return 0;
   return Math.max(increment, Math.round(value / increment) * increment);
 }
+// Keep the display on the correct side of the requested limit after rounding.
+export function adaptationDisplayMinutes(estimatedMinutes, requestedMinutes) {
+  const rounded = roundedEstimate(estimatedMinutes);
+  return Number.isFinite(requestedMinutes) && requestedMinutes > 0 &&
+    (estimatedMinutes > requestedMinutes) !== (rounded > requestedMinutes)
+    ? Math.ceil(estimatedMinutes)
+    : rounded;
+}
 export function createWorkoutDurationEstimator(state, source) {
   // All runtime surfaces use the same event-based timing, including imported
   // workouts. Legacy plan validation can still read its original estimator.
@@ -10337,13 +10345,12 @@ function withSetCount(exercise, count) {
   );
   return copy;
 }
-function coverageAwareAdaptation(source, minutes, profile, lockedIds = new Set(), estimate = exercises => estimateSessionMinutes(exercises)) {
-  const limit = Math.max(10, Number(minutes));
-  const moderate = limit >= estimate(source.exercises) * 0.75;
-  const originalSets = source.exercises.reduce((sum,row) => sum + row.sets.length, 0);
+function coverageAwareAdaptation(exercises, limit, profile, lockedIds, estimate, {strict, preserveSelection}) {
+  const moderate = limit >= estimate(exercises) * 0.75;
+  const originalSets = exercises.reduce((sum,row) => sum + row.sets.length, 0);
   const maxRemoved = moderate ? Math.max(1, Math.floor(originalSets * 0.25)) : Infinity;
   let removedSets = 0;
-  const rows = source.exercises.map((exercise, index) => ({ exercise, index,
+  const rows = exercises.map((exercise, index) => ({ exercise, index,
     group: adaptationCoverageGroup(exercise), value: adaptationValue(exercise, profile, lockedIds.has(exercise.exerciseId)),
     sets: exercise.sets.length }));
   const selected = new Map(rows.map(row => [row.exercise.id || row.index, row]));
@@ -10361,29 +10368,43 @@ function coverageAwareAdaptation(source, minutes, profile, lockedIds = new Set()
     (exerciseCatalog[row.exercise.exerciseId]?.kind === 'compound' ? 2 : 1) + (Number(row.exercise.protectedPrioritySets) || 0)));
   // Start with the full workout and remove lower-priority sets one at a time.
   while (estimate(materialized()) > limit) {
-    const reducible = units().find(unit => removedSets + unit.length <= maxRemoved && unit.every(row => !lockedIds.has(row.exercise.exerciseId) &&
-      !(moderate && row.exercise.programmingRole === 'main') && row.sets > floor(row)));
-    if (reducible) { reducible.forEach(row => row.sets--); removedSets += reducible.length; continue; }
-    if (moderate) break;
-    const removable = units().find(unit => {
+    const candidates = units();
+    const reducible = candidates.filter(unit => unit.every(row => !lockedIds.has(row.exercise.exerciseId) && row.sets > floor(row)));
+    // Try the usual modest cut first. A time ceiling can require a bigger cut.
+    const preferred = reducible.find(unit => removedSets + unit.length <= maxRemoved &&
+      (!moderate || unit.every(row => row.exercise.programmingRole !== 'main')));
+    const reduction = preferred || ((strict || preserveSelection) ? reducible[0] : null);
+    if (reduction) { reduction.forEach(row => row.sets--); removedSets += reduction.length; continue; }
+    if (preserveSelection || (moderate && !strict)) break;
+    const removable = candidates.find(unit => {
       if (selected.size <= unit.length || unit.some(row => lockedIds.has(row.exercise.exerciseId) || row.exercise.programmingRole === 'main' || row.exercise.protectedPrioritySets)) return false;
       return unit.every(row => row.exercise.requiredRole === false || !['push','pull','knee-dominant','posterior-chain'].includes(row.group) ||
         [...selected.values()].some(other => !unit.includes(other) && other.group === row.group));
     });
     if (removable) { removable.forEach(row => selected.delete(row.exercise.id || row.index)); continue; }
-    // Preserve coverage and logged/current work if the time is infeasible.
+    // For a tight budget, keep one working set rather than losing a main lift.
+    const minimumReduction = strict && candidates.find(unit => unit.every(row => !lockedIds.has(row.exercise.exerciseId) &&
+      row.sets > 1 + (Number(row.exercise.protectedPrioritySets) || 0)));
+    if (minimumReduction) { minimumReduction.forEach(row => row.sets--); continue; }
     break;
   }
-  return [...selected.values()].sort((a,b) => a.index-b.index)
-    .map(row => ({ exerciseId: row.exercise.exerciseId, sets: row.sets }));
+  // Removing a whole exercise can free time for higher-priority sets.
+  if (strict && selected.size < rows.length) {
+    for (const unit of units().reverse()) {
+      while (unit.every(row => row.sets < row.exercise.sets.length)) {
+        unit.forEach(row => row.sets++);
+        if (estimate(materialized()) <= limit) continue;
+        unit.forEach(row => row.sets--);
+        break;
+      }
+    }
+  }
+  return materialized();
 }
-export function adaptTodayProposal(state, minutes, date = new Date()) {
-  const targetDate = isoDay(date);
-  const active = targetDate === isoDay() ? state.activeWorkout : null;
-  const source = active || adaptedTemplateForToday(state, date);
-  if (!source) return null;
+
+export function fitWorkoutToTimeBudget(state, source, minutes, exercises = source.exercises, {strict = false, preserveSelection = false} = {}) {
   const locked = new Set(
-    active
+    source === state.activeWorkout
       ? source.exercises
           .filter(
             (exercise, index) =>
@@ -10394,15 +10415,23 @@ export function adaptTodayProposal(state, minutes, date = new Date()) {
       : [],
   );
   const timing = createWorkoutDurationEstimator(state, source);
-  const setTargets = coverageAwareAdaptation(source, minutes, state.profile, locked,
-    exercises => timing.estimate({ ...source, exercises }));
-  const keep = setTargets.map((item) => item.exerciseId);
-  const targets = new Map(
-    setTargets.map((item) => [item.exerciseId, item.sets]),
-  );
-  const estimatedMinutes = timing.estimate({ ...source, exercises: source.exercises
-    .filter(item => keep.includes(item.exerciseId))
-    .map(item => withSetCount(item, targets.get(item.exerciseId))) });
+  const estimate = rows => timing.estimate({ ...source, exercises: cleanAdjustmentSupersets(rows.map(row => ({...row}))) });
+  const fitted = coverageAwareAdaptation(exercises, minutes, state.profile, locked, estimate, {strict, preserveSelection});
+  return {
+    exerciseIds: fitted.map(exercise => exercise.exerciseId),
+    setTargets: fitted.map(exercise => ({exerciseId:exercise.exerciseId,sets:exercise.sets.length})),
+    estimatedMinutes: estimate(fitted),
+    durationCalibration: {scale:timing.scale,sampleCount:timing.sampleCount},
+  };
+}
+
+export function adaptTodayProposal(state, minutes, date = new Date(), {strict = false} = {}) {
+  const targetDate = isoDay(date);
+  const active = targetDate === isoDay() ? state.activeWorkout : null;
+  const source = active || adaptedTemplateForToday(state, date);
+  if (!source) return null;
+  const fitted = fitWorkoutToTimeBudget(state, source, minutes, source.exercises, {strict});
+  const keep = new Set(fitted.exerciseIds);
   const dayLabel =
     targetDate === isoDay()
       ? "TODAY"
@@ -10412,16 +10441,13 @@ export function adaptTodayProposal(state, minutes, date = new Date()) {
   return {
     type: "adapt-today",
     label: `APPLY TO ${dayLabel}`,
-    exerciseIds: keep,
-    setTargets,
+    ...fitted,
     skippedExerciseIds: source.exercises
       .map((item) => item.exerciseId)
-      .filter((id) => !keep.includes(id)),
+      .filter((id) => !keep.has(id)),
     minutes: Number(minutes),
     requestedMinutes: Number(minutes),
-    estimatedMinutes,
     workoutId: active?.id || null,
-    durationCalibration: {scale:timing.scale,sampleCount:timing.sampleCount},
     baseProgramVersion: Number(state.program?.version || 1),
     baseAdaptationId: state.todayAdaptation?.id || null,
     baseWorkoutUpdatedAt: active?.updatedAt || null,
@@ -10683,9 +10709,13 @@ export function proposeWeekScheduleChange(state, message, date = new Date()) {
     weekKey: weekKey(date),
   };
 }
+export function requestedCoachWorkoutMinutes(message) {
+  const minutes = Number(message.match(/\b(\d{2,3})\s*(?:min\b|minut\p{L}*\b)/iu)?.[1]);
+  return minutes >= 10 && minutes <= 240 ? minutes : null;
+}
 export function deterministicCoach(state, message) {
   const lower = message.toLowerCase();
-  const minuteMatch = lower.match(/(\d{2,3})\s*(?:min|minute)/);
+  const requestedMinutes = requestedCoachWorkoutMinutes(message);
   const latestApplied = [...(state.conversations || [])]
     .reverse()
     .find(
@@ -10737,15 +10767,17 @@ export function deterministicCoach(state, message) {
       final: true,
     };
   }
-  if (minuteMatch) {
+  if (requestedMinutes != null) {
     const requestedDay = mentionedWeekdays(lower)[0];
     const target = requestedDay ? weekDate(requestedDay) : new Date();
     if (requestedDay && isoDay(target) < isoDay())
       target.setDate(target.getDate() + 7);
-    const action = adaptTodayProposal(state, Number(minuteMatch[1]), target);
+    const action = adaptTodayProposal(state, requestedMinutes, target, {strict: true});
     if (action)
       return {
-        text: `I used the actual ${action.targetDate === isoDay() ? state.activeWorkout?.name || "selected workout" : state.program?.days.find((day) => day.id === action.programDayId)?.name || "requested workout"} and kept the highest-value work that fits the time. Review the change below.`,
+        text: action.estimatedMinutes > requestedMinutes
+          ? `Keeping the essential work takes about ${action.estimatedMinutes} minutes. That exceeds your ${requestedMinutes}-minute limit.`
+          : "I kept the highest-priority work within your estimated time limit. Review the changes below.",
         action,
         source: "deterministic",
       };
@@ -10981,7 +11013,9 @@ export function applyCoachAction(state, action) {
         exercises.push(added);
       }
       if (!exercises.length) return state;
-      const timing = createWorkoutDurationEstimator(state, state.activeWorkout);
+      const timing = createWorkoutDurationEstimator(state, {
+        ...state.activeWorkout, durationCalibration: action.durationCalibration || state.activeWorkout.durationCalibration,
+      });
       exercises = cleanAdjustmentSupersets(exercises.map(item => applyAdjustmentPrescription(item,
         action.prescriptionTargets?.find(target => target.exerciseId === item.exerciseId))));
       state.activeWorkout.exercises = exercises;
@@ -11047,7 +11081,9 @@ export function applyCoachAction(state, action) {
         return applyAdjustmentPrescription(withSetCount(base, targets.get(id) || base.sets.length),
           action.prescriptionTargets?.find(item => item.exerciseId === id));
       });
-      const timing = createWorkoutDurationEstimator(state, template);
+      const timing = createWorkoutDurationEstimator(state, {
+        ...template, durationCalibration: action.durationCalibration || template.durationCalibration,
+      });
       const estimatedMinutes = timing.estimate({ ...template, exercises: cleanAdjustmentSupersets(selectedExercises) });
       state.todayAdaptation = {
         id: uid("adaptation"),

@@ -1,6 +1,6 @@
 import { beforeEach, afterEach, expect, it, vi } from 'vitest';
 import { createReturningUserFixture } from './demoFixture.js';
-import { createWorkoutDurationEstimator, estimatePersonalWorkoutMinutes, estimateWorkoutMinutes,
+import { adaptationDisplayMinutes, createWorkoutDurationEstimator, deterministicCoach, estimatePersonalWorkoutMinutes, estimateWorkoutMinutes,
   adaptTodayProposal, applyCoachAction, adaptedTemplateForToday, serializeState, deserializeState, startWorkout } from './domain.js';
 import { buildTodayAdjustment, editTodayAdjustmentTargets, applyTodayAdjustment, ADJUST_TODAY_MODES } from './adjustToday.js';
 import { applyAdjustmentPrescription } from './adjustmentPrescription.js';
@@ -56,6 +56,27 @@ it('55 to 45 style reductions preserve every exercise, main work and at least 75
   const total=day.exercises.reduce((sum,row)=>sum+row.sets.length,0);
   expect(action.setTargets.reduce((sum,row)=>sum+row.sets,0)).toBeGreaterThanOrEqual(Math.ceil(total*0.75));
   day.exercises.filter(row=>row.programmingRole==='main').forEach(row=>expect(action.setTargets.find(target=>target.exerciseId===row.exerciseId).sets).toBe(row.sets.length));
+});
+it('fits the stated deadline locally using logged pace and preserves the estimate through Apply',()=>{
+  const state=fixture();
+  history(state,6,1.45);
+  const {action}=deterministicCoach(state,'Danes imam samo 30 min.');
+  expect(action.durationCalibration.sampleCount).toBe(6);
+  expect(action.estimatedMinutes).toBeLessThanOrEqual(30);
+  applyCoachAction(state,action);
+  expect(state.todayAdaptation.estimatedMinutes).toBe(action.estimatedMinutes);
+});
+it('reports when locked work leaves a deadline infeasible',()=>{
+  const state=fixture(),day=state.program.days[0];
+  state.activeWorkout=startWorkout(state,day);
+  state.activeWorkout.exercises[0].restSeconds=600;
+  const {action,text}=deterministicCoach(state,'I only have 10 minutes.');
+  const locked=state.activeWorkout.exercises[0];
+  expect(action.setTargets.find(target=>target.exerciseId===locked.exerciseId).sets).toBe(locked.sets.length);
+  expect(action.estimatedMinutes).toBeGreaterThan(10);
+  expect(text).toContain('exceeds your 10-minute limit');
+  expect(adaptationDisplayMinutes(31,30)).toBe(31);
+  expect(adaptationDisplayMinutes(33,33)).toBe(33);
 });
 it('freezes calibration through fitting, Apply and storage reload',()=>{
   const state=fixture();history(state);const action=adaptTodayProposal(state,35);

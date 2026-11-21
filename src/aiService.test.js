@@ -19,6 +19,7 @@ import {
   buildProgram,
   compatibleReplacementCandidates,
   completeWorkout,
+  estimatePersonalWorkoutMinutes,
   exerciseCatalog,
   exerciseName,
   isExerciseAllowed,
@@ -1461,6 +1462,37 @@ Use double progression.`;
       state.activeWorkout.exercises[1].exerciseId,
       requested,
     ]);
+  });
+  it("fits a provider draft to the stated 30 minute limit using the lifter's pace", async () => {
+    const state = stateWithTodayPlan();
+    const day = adaptedTemplateForToday(state);
+    const estimated = estimatePersonalWorkoutMinutes(state, day);
+    const exercises = day.exercises.map(exercise => ({
+      ...exercise, sets: exercise.sets.map(set => ({...set, completed: true})),
+    }));
+    state.workouts = Array.from({length: 6}, (_, index) => ({
+      ...structuredClone(day), id: `coach-pace-${index}`, programDayId: day.id,
+      durationSeconds: Math.round(estimated * 1.45 * 60), status: "completed",
+      completedAt: new Date(Date.now() - (index + 1) * 3 * 86400000).toISOString(),
+      exercises: structuredClone(exercises),
+    }));
+    vi.stubGlobal("fetch", vi.fn(async url => ({
+      ok: true,
+      json: async () => url === "/api/ai/status" ? {available: true} : {data: {
+        text: "Pripravil sem krajši trening.",
+        action: {
+          type: "adapt-today", exerciseIds: day.exercises.map(exercise => exercise.exerciseId),
+          minutes: 35,
+        },
+      }},
+    })));
+    const reply = await AIService.coach(state, "Danes imam samo 30 minut. Skrajšaj trening.");
+    expect(reply.action.requestedMinutes).toBe(30);
+    expect(reply.action.durationCalibration.sampleCount).toBe(6);
+    expect(reply.action.estimatedMinutes).toBeLessThanOrEqual(30);
+    expect(state.todayAdaptation).toBeNull();
+    applyCoachAction(state, reply.action);
+    expect(state.todayAdaptation.estimatedMinutes).toBe(reply.action.estimatedMinutes);
   });
   it("keeps the verified local Adapt Today action when the model omits its action", async () => {
     const state = stateWithTodayPlan();

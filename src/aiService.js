@@ -10,6 +10,7 @@ import {
   HOME_EQUIPMENT,
   PHYSIQUE_PRIORITY_OPTIONS,
   adaptedTemplateForToday,
+  adaptationDisplayMinutes,
   authoritativeImportedExerciseNames,
   authoritativeImportedWeights,
   cleanImportedExerciseLabel,
@@ -17,17 +18,19 @@ import {
   completedWorkoutCanResume,
   compatibleReplacementCandidates,
   deterministicCoach,
-  estimateSessionMinutes,
+  fitWorkoutToTimeBudget,
   exerciseCatalog,
   isExerciseAllowed,
   isExerciseAutoGenerationBlocked,
   isExerciseGloballyBlocked,
   isoDay,
+  makeProgramExercise,
   matchImportedExerciseName,
   normalizeGeneratedProgram,
   normalizeWorkoutName,
   optionalStrengthForDate,
   plannedWorkoutForDate,
+  requestedCoachWorkoutMinutes,
   splitImportedExerciseLabel,
   validateProgramExerciseChanges,
   validateWeekScheduleChanges,
@@ -62,8 +65,12 @@ const planCatalog = plannerCatalog(
 function pendingAdaptationText(action, responseLanguage) {
   const rawEstimate =
     Number(action?.estimatedMinutes) || Number(action?.minutes) || 0;
-  const estimated =
-    rawEstimate > 0 ? Math.max(5, Math.round(rawEstimate / 5) * 5) : 0;
+  const requested = Number(action.requestedMinutes || action.minutes);
+  const estimated = adaptationDisplayMinutes(rawEstimate, requested);
+  if (requested > 0 && rawEstimate > requested)
+    return responseLanguage === "Slovenian"
+      ? `Z najpomembnejšimi vajami trening traja približno ${estimated} minut. Tvoja meja je ${requested} minut. Pred odločitvijo jo lahko pregledaš spodaj.`
+      : `Keeping the essential work takes about ${estimated} minutes. Your limit is ${requested} minutes. You can review it below.`;
   if (responseLanguage === "Slovenian")
     return estimated
       ? `Pripravil sem približno ${estimated}-minutno različico te vadbe. Preglej jo spodaj, preden uporabiš spremembe.`
@@ -2088,8 +2095,9 @@ export const AIService = {
         selection:{sourceIds:Array.isArray(data.action.sourceSessionIds)?data.action.sourceSessionIds:[]},interpretedMinutes:data.action.minutes,language:responseLanguage,
       });
       if(data.action?.type==='revise-combined-workout')return coachCombineReply(state,message,{revisionIntent:data.action,language:responseLanguage});
-      const aiAction = validateAIAction(data.action, state);
-      const fallbackAction = validateAIAction(deterministic.action, state);
+      const requestedMinutes = requestedCoachWorkoutMinutes(message);
+      const aiAction = validateAIAction(data.action, state, requestedMinutes);
+      const fallbackAction = validateAIAction(deterministic.action, state, requestedMinutes);
       if (!aiAction && fallbackAction?.type === "add-today-workout")
         return { ...deterministic, action: fallbackAction };
       if (data.action && !aiAction && !fallbackAction)
@@ -2101,7 +2109,10 @@ export const AIService = {
           action: null,
           source: "validated-fallback",
         };
-      const action = aiAction || fallbackAction;
+      const useLocalFit = aiAction?.type === "adapt-today" && fallbackAction?.type === "adapt-today" &&
+        aiAction.targetDate === fallbackAction.targetDate &&
+        aiAction.estimatedMinutes > aiAction.requestedMinutes && fallbackAction.estimatedMinutes <= fallbackAction.requestedMinutes;
+      const action = useLocalFit ? fallbackAction : aiAction || fallbackAction;
         if(!coachActionMatchesDay(action,selectedDay))return {text:responseLanguage==='Slovenian'?'Predlagana sprememba se ne ujema z izbranim dnevom. Odstrani kontekst ali ponovno izberi dan, nato pojasni, kaj želiš spremeniti. Ničesar nisem spremenil.':'That proposed change does not match the selected day. Remove the context or choose the day again, then clarify the change. Nothing was changed.',action:null,source:'validated-fallback'};
       // A proposal is not a mutation. Keep the conversational copy aligned with
       // the explicit Apply control even if a provider phrases a draft as complete.
@@ -2221,7 +2232,7 @@ function inferImportedProfile(profile, program, schedule) {
   };
 }
 
-function validateAIAction(action, state) {
+function validateAIAction(action, state, timeBudget) {
   if (!action || typeof action !== "object") return null;
   if (action.type === "resume-empty-completed-workout") {
     const target = state.workouts.find(
@@ -2309,6 +2320,7 @@ function validateAIAction(action, state) {
     );
     const active = targetDate === today ? state.activeWorkout : null;
     const source = active || adaptedTemplateForToday(state, target);
+    if (!source) return null;
     const actual = new Set(
       (source?.exercises || []).map((item) => item.exerciseId),
     );
@@ -2352,19 +2364,19 @@ function validateAIAction(action, state) {
         existing?.sets.filter((set) => set.completed).length || 0;
       return {
         exerciseId: id,
-        sets: Math.max(
+        sets: locked.includes(id) ? maximum : Math.max(
           1,
           completed,
           Math.min(
             maximum,
             Number.isFinite(requestedSets.get(id))
-              ? requestedSets.get(id)
+              ? Math.floor(requestedSets.get(id))
               : maximum,
           ),
         ),
       };
     });
-    const minutes = Number(action.minutes || state.profile.sessionMinutes);
+    const minutes = timeBudget ?? Number(action.minutes || state.profile.sessionMinutes);
     if (
       !Number.isFinite(target.getTime()) ||
       daysAhead < 0 ||
@@ -2378,42 +2390,16 @@ function validateAIAction(action, state) {
       minutes > 240
     )
       return null;
-    const fittedTargets = setTargets.map((item) => ({ ...item }));
-    const materialized = () =>
-      ids.map((id) => {
-        const existing = sourceById.get(id);
-        const targetSets =
-          fittedTargets.find((item) => item.exerciseId === id)?.sets || 1;
-        return existing
-          ? { ...existing, sets: existing.sets.slice(0, targetSets) }
-          : {
-              exerciseId: id,
-              restSeconds: exerciseCatalog[id]?.restSeconds || 90,
-              sets: Array.from({ length: targetSets }, () => ({})),
-            };
+    const exercises = setTargets.map(({exerciseId,sets}) => {
+      const exercise = sourceById.get(exerciseId) || makeProgramExercise(exerciseCatalog[exerciseId], state.profile, {
+        role: exerciseCatalog[exerciseId].kind === 'compound' ? 'main' : 'accessory',
       });
-    while (fittedTargets.length) {
-      const currentEstimate = estimateSessionMinutes(materialized());
-      const currentDistance = Math.abs(currentEstimate - minutes);
-      const candidates = fittedTargets
-        .map((item) => {
-          const existing = sourceById.get(item.exerciseId);
-          const completed =
-            existing?.sets.filter((set) => set.completed).length || 0;
-          if (item.sets <= Math.max(1, completed)) return null;
-          item.sets -= 1;
-          const estimate = estimateSessionMinutes(materialized());
-          item.sets += 1;
-          return { item, estimate, distance: Math.abs(estimate - minutes) };
-        })
-        .filter(
-          (candidate) => candidate && candidate.distance < currentDistance,
-        )
-        .sort((a, b) => a.distance - b.distance || b.item.sets - a.item.sets);
-      if (!candidates.length) break;
-      candidates[0].item.sets -= 1;
-    }
-    const estimatedMinutes = estimateSessionMinutes(materialized());
+      return {...exercise,sets:exercise.sets.slice(0,sets)};
+    });
+    const fitted = fitWorkoutToTimeBudget(state, source, minutes, exercises, {
+      strict: timeBudget != null, preserveSelection: timeBudget == null,
+    });
+    const kept = new Set(fitted.exerciseIds);
     const dayLabel =
       targetDate === today
         ? "TODAY"
@@ -2423,13 +2409,13 @@ function validateAIAction(action, state) {
     return {
       type: "adapt-today",
       label: `APPLY TO ${dayLabel}`,
-      exerciseIds: ids,
-      setTargets: fittedTargets,
-      addedExerciseIds: ids.filter((id) => !actual.has(id)),
-      skippedExerciseIds: [...actual].filter((id) => !ids.includes(id)),
+      ...fitted,
+      addedExerciseIds: fitted.exerciseIds.filter((id) => !actual.has(id)),
+      skippedExerciseIds: [...actual].filter((id) => !kept.has(id)),
       minutes,
       requestedMinutes: minutes,
-      estimatedMinutes,
+      baseProgramVersion: Number(state.program?.version || 1),
+      baseAdaptationId: state.todayAdaptation?.id || null,
       workoutId: active?.id || null,
       baseWorkoutUpdatedAt: active?.updatedAt || null,
       programDayId: source.programDayId || source.id,

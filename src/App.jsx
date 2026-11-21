@@ -309,6 +309,7 @@ import {
   PHYSIQUE_PRIORITY_OPTIONS,
   WEEKDAYS,
   adaptedTemplateForToday,
+  adaptationDisplayMinutes,
   activeWorkoutCanRestart,
   applyCoachAction,
   applyProgramExerciseChanges,
@@ -9413,7 +9414,9 @@ export function AdaptActionCard({
         };
     return applyAdjustmentPrescription(base, prescriptionTargets.find(item => item.exerciseId === id));
   };
-  const timing = createWorkoutDurationEstimator(state, source || { exercises: [] });
+  const timing = createWorkoutDurationEstimator(state, {
+    ...source, durationCalibration: action.durationCalibration || source?.durationCalibration,
+  });
   const selected = new Set(selectedIds);
   const selectedExercises = displayIds
     .filter((id) => selected.has(id))
@@ -9425,6 +9428,7 @@ export function AdaptActionCard({
   );
   const suggestedMinutes = selectedMinutes;
   const requestedMinutes = Number(action.requestedMinutes || action.minutes);
+  const overBudget = requestedMinutes > 0 && selectedMinutes > requestedMinutes;
   const draftRef = useRef(null);
   draftRef.current = {exerciseIds:selectedIds,prescriptionTargets};
   const toggleExercise = (exercise) => {
@@ -9457,6 +9461,7 @@ export function AdaptActionCard({
     skippedExerciseIds: sourceIds.filter((id) => !selected.has(id)),
     requestedMinutes,
     estimatedMinutes: selectedMinutes,
+    durationCalibration: {scale:timing.scale,sampleCount:timing.sampleCount},
     minutes: requestedMinutes,
     prescriptionTargets: prescriptionTargets.filter(item => selected.has(item.exerciseId)),
   };
@@ -9562,6 +9567,7 @@ export function AdaptActionCard({
         <p className="adapt-duration-contract">
           {adaptationDurationLabel(requestedMinutes, suggestedMinutes)}
         </p>
+        {overBudget && <p className="review-scope">This workout may exceed your time limit.</p>}
         <div className="adapt-suggestion-list">
           {changedIds.map(suggestionRow)}
         </div>
@@ -9600,6 +9606,7 @@ export function AdaptActionCard({
           reviewing ? selectedMinutes : suggestedMinutes,
         )}
       </p>
+      {overBudget && <p className="review-scope">This workout may exceed your time limit.</p>}
       {lockedIds.size>0&&<p className="review-scope">{lockedIds.size} {lockedIds.size===1?'exercise':'exercises'} locked · Current and logged work is kept.</p>}
       {reviewing ? (
         <AdjustmentExerciseList exercises={editorExercises} editingId={editingId} onToggle={setEditingId}
@@ -11606,7 +11613,7 @@ export function latestLoggedWeightSet(history = []) {
 }
 export function adaptationDurationLabel(requestedMinutes, estimatedMinutes) {
   const requested = Number(requestedMinutes);
-  const estimate = `About ${roundedEstimate(estimatedMinutes)} min`;
+  const estimate = `About ${adaptationDisplayMinutes(estimatedMinutes, requested)} min`;
   return Number.isFinite(requested) && requested > 0
     ? `${estimate} · Goal: ${requested} min`
     : estimate;
