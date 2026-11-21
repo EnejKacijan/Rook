@@ -41,12 +41,12 @@ export function FreestyleActions({ setDetail, hideAdd = false }) {
   if (hideAdd) return null;
   return <div className="freestyle-actions"><button className="button secondary" onClick={() => setDetail({ freestylePicker: true })}>+ ADD EXERCISE</button></div>;
 }
-export function FreestylePrevious({ state, exercise, update, screenRef, controllerRef, Modal, Header }) {
+export function FreestylePrevious({ state, exercise, update, screenRef, controllerRef, Modal, Header, workoutName }) {
   const limit = useMemo(() => freestyleEffortLimit(state, exercise.exerciseId), [state.profile, exercise.exerciseId]);
   const previous = freestylePreviousSets(state, exercise);
   const deload=isDeloadWorkout(state.activeWorkout)||exercise.blockPrescription?.phase==='deload';
   const hasDeloadHistory=state.workouts.some(workout=>isDeloadWorkout(workout)&&workout.exercises?.some(item=>item.exerciseId===exercise.exerciseId));
-  const historyLabel=deload?'Previous deload workout':hasDeloadHistory?'Previous normal workout':'Previous workout';
+  const historyLabel=workoutName ? `Last in ${workoutName}` : deload?'Previous deload workout':hasDeloadHistory?'Previous normal workout':'Previous workout';
   const index = exercise.sets.findIndex(s => !s.completed);
   const ordinal = exercise.sets.slice(0,index).filter(set=>setTypeOf(set)==='standard'&&!set.segments?.length).length;
   const set = exercise.sets[index];

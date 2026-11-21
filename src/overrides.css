@@ -1591,6 +1591,8 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   .workout-exercise-actions .text-button { white-space: normal; text-align: right; line-height: 1.25; }
   .exercise-heading .exercise-meta > span:first-child { white-space: normal; }
 }
+.exercise-history-filter { display: grid; gap: 6px; margin-block: 0 18px; font-size: 13px; font-weight: 650; color: var(--rook-secondary); }
+.exercise-history-filter select { min-width: 0; width: 100%; min-height: 44px; padding: 8px 12px; border: 1px solid var(--rook-control-border); border-radius: 12px; background: var(--rook-surface); color: var(--rook-text); font: inherit; font-size: 16px; }
 .exercise-detail-overview.has-illustration { display: grid; grid-template-columns: minmax(0, 1fr) 92px; align-items: start; gap: 18px; }
 .exercise-detail-overview > div { min-width: 0; }
 .exercise-detail-art-button { width: 92px; height: 92px; padding: 0; border: 0; border-radius: 20px; background: transparent; color: inherit; transition: transform 120ms cubic-bezier(.2, 0, 0, 1); }

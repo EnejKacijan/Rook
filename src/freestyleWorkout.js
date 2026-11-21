@@ -1,4 +1,4 @@
-import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, isoDay, uid, workoutSetSummary, previousExercise } from './domain.js';
+import { exerciseCatalog, exerciseLoadRequirement, exerciseMeasure, isoDay, uid, workoutSetSummary, previousExerciseForWorkout } from './domain.js';
 import {loggingModeOf,setTypeOf,unilateralSetReps} from './advancedLogging.js';
 import { planEditorExerciseAllowed, exerciseLibraryItems } from './exerciseEligibility.js';
 import { customExerciseSnapshot } from './customExercises.js';
@@ -7,6 +7,7 @@ import { compileProfileTrainingSafety, trainingSafetyBlocks } from './trainingSa
 import { combinedAdjustment } from './combinedWorkoutLifecycle.js';
 import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
 import {applySavedExerciseLoggingMode} from './sessionLoggingSetup.js';
+import {plannedExerciseSlot} from './workoutExerciseSlots.js';
 
 export function freestyleCatalog(state) {
   const profile = effectiveGymContext(state, state.activeWorkout || {}).profile;
@@ -123,7 +124,9 @@ export function removeFreestyleExercise(state, id) {
 // Copy one ordinary working set, including explicit per-side values when the
 // logging modes match. Advanced sets remain inspectable, never flattened.
 export function freestylePreviousSets(state, exercise) {
-  const prior = previousExercise(progressionHistoryForPhase(state.workouts,isDeloadWorkout(state.activeWorkout)||exercise.blockPrescription?.phase==='deload'), exercise.exerciseId);
+  const slot = plannedExerciseSlot(state.program, exercise, state.activeWorkout);
+  const history = progressionHistoryForPhase(state.workouts, isDeloadWorkout(state.activeWorkout) || exercise.blockPrescription?.phase === 'deload');
+  const prior = previousExerciseForWorkout(history, exercise, slot);
   if (!prior || loggingModeOf(prior) !== loggingModeOf(exercise) ||
       exerciseMeasure(prior) !== exerciseMeasure(exercise) ||
       exerciseLoadRequirement(prior) !== exerciseLoadRequirement(exercise)) return [];

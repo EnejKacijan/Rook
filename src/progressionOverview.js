@@ -1,6 +1,7 @@
 import {workoutPerformedDate,workoutSetSummary} from './domain.js';
 import {nextWorkoutAdvice} from './nextWorkoutAdvice.js';
 import {isDeloadWorkout} from './progressionHistory.js';
+import {plannedSlotsForExercise} from './workoutExerciseSlots.js';
 
 export function completedProgressWorkouts(workouts=[]) {
   return workouts.filter(workout=>
@@ -18,8 +19,8 @@ function priority(result) {
   return 3;
 }
 
-// One read-only collection feeds the goal summary, four-row preview and full list.
-// Preserve the existing latest-logged-first, then planned, exercise-ID identity.
+// The advice list can show several prescriptions for a catalog exercise.
+// The exercise library and record views still group by the catalog ID.
 export function selectProgressionRows(state,completedWorkouts=completedProgressWorkouts(state.workouts)) {
   const latest=[],seenLogged=new Set();
   for(const workout of [...completedWorkouts].reverse())
@@ -42,7 +43,11 @@ export function selectProgressionRows(state,completedWorkouts=completedProgressW
       seen.add(exercise.exerciseId);
       exercises.push(exercise);
     }
-  return exercises.map(exercise=>({exercise,result:nextWorkoutAdvice(exercise,state.workouts,state.profile,state)}))
+  const targets = exercises.flatMap(exercise => {
+    const slots = plannedSlotsForExercise(state.program, exercise.exerciseId);
+    return slots.length > 1 ? slots.map(slot => ({exercise:slot.exercise, slot, slots})) : [{exercise}];
+  });
+  return targets.map(target => ({...target,result:nextWorkoutAdvice(target.exercise,state.workouts,state.profile,state)}))
     .filter(item=>item.result)
     .sort((left,right)=>priority(left.result)-priority(right.result));
 }
@@ -51,6 +56,7 @@ export function progressionSummary(rows=[]) {
   const repeatLoad=rows.filter(({result})=>result.title==='Repeat this load').length;
   const repeatConfirm=rows.filter(({result})=>result.title==='Repeat to confirm').length;
   const other=rows.length-repeatLoad-repeatConfirm;
+  const noun = rows.some(row => row.slot) ? 'workout target' : 'exercise';
   const parts=[
     repeatLoad&&`Repeat this load: ${repeatLoad}`,
     repeatConfirm&&`Repeat to confirm: ${repeatConfirm}`,
@@ -58,7 +64,7 @@ export function progressionSummary(rows=[]) {
   ].filter(Boolean);
   return {
     total:rows.length,
-    label:`${rows.length} ${rows.length===1?'exercise':'exercises'} with progression guidance`,
+    label:`${rows.length} ${rows.length === 1 ? noun : noun + 's'} with progression guidance`,
     breakdown:parts.join(' · '),
   };
 }

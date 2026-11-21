@@ -2,6 +2,7 @@ import { progressionFor } from './domain.js';
 import { sessionFeedbackLabel } from './sessionFeedback.js';
 import {progressionHistory,isDeloadWorkout} from './progressionHistory.js';
 import {currentTrainingBlockWeek} from './trainingBlocks.js';
+import {exerciseInPlannedSlot, plannedExerciseSlot} from './workoutExerciseSlots.js';
 
 // The rating describes the whole session, not an individual lift. It can
 // temper or contextualize a result-based suggestion, but never create a load
@@ -14,9 +15,11 @@ export function nextWorkoutAdvice(exercise, history, profile, state=null) {
   if(!block?.completed&&currentTrainingBlockWeek(state)?.phase==='deload')
     advice={...advice,afterDeload:true,detail:`For your next normal workout after deload. ${advice.detail}`};
 
-  const lastExposure = progressionHistory(history).reverse().find(workout =>
-    workout.exercises?.some(item => (exercise.id&&item.id===exercise.id) || item.exerciseId === exercise.exerciseId),
-  );
+  const active = state?.activeWorkout;
+  const slot = plannedExerciseSlot(state?.program, exercise, active?.exercises?.includes(exercise) ? active : null);
+  const lastExposure = progressionHistory(history).reverse().find(workout => slot
+    ? exerciseInPlannedSlot(workout, slot)?.exerciseId === exercise.exerciseId
+    : workout.exercises?.some(item => (exercise.id&&item.id===exercise.id) || item.exerciseId === exercise.exerciseId));
   if (!lastExposure?.completedAt || isDeloadWorkout(lastExposure) || lastExposure.endedEarly ||
       lastExposure.adjustment || lastExposure.optionalSessionId ||
       lastExposure.trainingBlock?.plannedDeload ||

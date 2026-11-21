@@ -12,6 +12,7 @@ import {reusableExerciseDefinition,reusableWorkoutStructure,assertWorkoutTemplat
 import {workoutElapsedSeconds} from './workoutTiming.js';
 import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSessionStart.js';
 import {applySavedExerciseLoggingMode,normalizeExerciseLoggingPreferences} from './sessionLoggingSetup.js';
+import {exerciseInPlannedSlot, plannedExerciseSlot, plannedLoadChanged} from './workoutExerciseSlots.js';
 import {normalizeCoachConversations} from './coachConversations.js';
 import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
 import {recoveredWorkoutForDate} from './recoveredWorkout.js';
@@ -8857,6 +8858,15 @@ export function previousExercise(workouts, exerciseId, importRole = null, entryI
   }
   return null;
 }
+export function previousExerciseForWorkout(workouts, exercise, slot) {
+  if (!slot) return previousExercise(workouts, exercise.exerciseId);
+  for (const workout of [...workouts].reverse()) {
+    const entry = exerciseInPlannedSlot(workout, slot);
+    if (entry?.exerciseId === exercise.exerciseId && entry.sets.some(set => set.completed))
+      return entry;
+  }
+  return null;
+}
 export function warmupForWorkout(workout, profile, program = null) {
   const warmupPlan = workout?.warmupPlan;
   if (warmupPlan?.mode === "none") return null;
@@ -9097,6 +9107,8 @@ export function startWorkout(state, template) {
   const occurrence=currentWeekSchedule(state,state.selectedDate || isoDay(startedAt)).find(item=>item.workoutId===template.id && (!template.logicalSessionId || (item.logicalSessionId || `${item.workoutId}:${item.originalDate}`)===template.logicalSessionId));
   const logicalSessionId=template.logicalSessionId || (occurrence ? `${occurrence.workoutId}:${occurrence.originalDate}` : null);
   const canonicalPlanDate = template.recoveredMove?.date || occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
+  const normalHistory = normalProgressionHistory(state.workouts);
+  const source = {...template, programDayId:template.id};
   const workout = {
     id: uid("active"),
     ...(isRepeatAdjustment(template.todayOnlyAdjustment)?{source:'repeat',repeatedFromWorkoutId:template.todayOnlyAdjustment.sourceWorkoutId}:{}),
@@ -9142,12 +9154,15 @@ export function startWorkout(state, template) {
       : { mode: "auto" },
     exercises: template.exercises.map((base) => {
       const definition = applySavedExerciseLoggingMode(state.profile, preparedExercise(base));
+      const slot = plannedExerciseSlot(state.program, base, source);
       const loadRequirement = exerciseLoadRequirement(base);
       const reviewedStart = base.nextBlockStartingLoad && template.trainingBlock && base.nextBlockStartingLoad.blockId === template.trainingBlock.blockId &&
-        !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId && session.exercises?.some(item => item.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
+        !(state.workouts || []).some(session => session.completedAt && session.trainingBlock?.blockId === template.trainingBlock?.blockId &&
+          (slot ? [exerciseInPlannedSlot(session, slot)] : session.exercises || []).some(item => item?.exerciseId === base.exerciseId && item.sets?.some(set => set.completed)))
         ? base.nextBlockStartingLoad.weight : null;
       const repeatedPrescription=template.exercises.filter(e=>e.exerciseId===base.exerciseId).length>1;
-      const previous = previousExercise(normalProgressionHistory(state.workouts), base.exerciseId, base.importRole, repeatedPrescription?base.id:null);
+      const previous = slot ? previousExerciseForWorkout(normalHistory, base, slot)
+        : previousExercise(normalHistory, base.exerciseId, base.importRole, repeatedPrescription?base.id:null);
       const compatiblePrevious = previous &&
         loggingModeOf(previous) === loggingModeOf(definition) &&
         exerciseMeasure(previous) === exerciseMeasure(base) &&
@@ -9161,7 +9176,8 @@ export function startWorkout(state, template) {
           const candidatePreviousSet = completedPreviousSets[index];
           const previousSet =
             candidatePreviousSet &&
-            setTypeOf(candidatePreviousSet) === setTypeOf(set)
+            setTypeOf(candidatePreviousSet) === setTypeOf(set) &&
+            !(slot && plannedLoadChanged(set.weight, compatiblePrevious, index))
               ? candidatePreviousSet
               : null;
           const weight = loadRequirement === "none"
@@ -9362,7 +9378,9 @@ export function collectProgressionEvidence(exercise, history, state=null) {
   const catalogItem = exerciseCatalog[exercise.exerciseId];
   const loadRequirement = exerciseLoadRequirement(exercise);
   const contextCache=new Map();
-  const context=trainingBlockExerciseContext(state,exercise,progressionWorkout(state,history,exercise),contextCache);
+  const owner = progressionWorkout(state, history, exercise);
+  const context=trainingBlockExerciseContext(state,exercise,owner,contextCache);
+  const slot = plannedExerciseSlot(state?.program, exercise, owner);
   const restBoundaries=trainingRestBoundaries(state);
   let recoveryEpoch=0,restCursor=0;
   const appearances = progressionHistory(history)
@@ -9371,10 +9389,11 @@ export function collectProgressionEvidence(exercise, history, state=null) {
       index,
       // A known slot with a different variation interrupts evidence instead of
       // silently recovering an older appearance of the original exercise.
-      item: (exercise.id && workout.exercises?.find(item => item.id === exercise.id)) ||
+      item: slot ? exerciseInPlannedSlot(workout, slot)
+        : (exercise.id && workout.exercises?.find(item => item.id === exercise.id)) ||
         (workout.exercises?.filter(item=>item.exerciseId===exercise.exerciseId).length===1
           ? workout.exercises.find(item=>item.exerciseId===exercise.exerciseId) : null),
-      ambiguous: workout.exercises?.filter(item=>item.exerciseId===exercise.exerciseId).length>1,
+      ambiguous: !slot && workout.exercises?.filter(item=>item.exerciseId===exercise.exerciseId).length>1,
     }))
     .filter((entry) => entry.item || entry.ambiguous)
     .flatMap(entry=>{
@@ -9466,7 +9485,7 @@ export function collectProgressionEvidence(exercise, history, state=null) {
     })
     .filter((entry) => entry.completed.length);
   recoveryEpoch+=restBoundaries.length-restCursor;
-  return {min, max, timed, catalogItem, loadRequirement, appearances, observations,context,recoveryEpoch};
+  return {min, max, timed, catalogItem, loadRequirement, appearances, observations,context,recoveryEpoch,slot};
 }
 
 export function progressionFor(exercise, history, profile = null, state=null) {
@@ -9478,11 +9497,14 @@ export function progressionFor(exercise, history, profile = null, state=null) {
   };
   const evidence = collectProgressionEvidence(exercise, history,state);
   if (!evidence) return null;
-  const {min, max, timed, catalogItem, loadRequirement, appearances, observations,context,recoveryEpoch} = evidence;
+  const {min, max, timed, catalogItem, loadRequirement, appearances, observations,context,recoveryEpoch,slot} = evidence;
   if (!observations.length) return null;
   const latest = observations.at(-1);
   if (!latest.complete || latest.index !== appearances.at(-1)?.index ||
       !progressionTargetsComparable(latest.item, exercise,latest.blockContext,context)) return null;
+  if (slot && (exercise.templatePrescription || slot.exercise).sets.some(
+    (set, index) => plannedLoadChanged(set.weight, latest.item, index),
+  )) return null;
   const requested=exercise.sets?.filter(set=>set.planned!==false&&!set.added&&progressionComparableSet(set));
   if(requested && requested.length!==latest.planned.length){
     if(!sameBlockPrescription(latest.blockContext,context))return null;

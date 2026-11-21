@@ -24,9 +24,9 @@ function PlannedLoadInput({weight,units,label,commits,onCommit}){
     }}} />;
 }
 
-export function PlanWeightReference({exercise,workouts,units,commits,onWeightsChange,onWeightChange,showHistory=true}){
+export function PlanWeightReference({exercise,workouts,slot,units,commits,onWeightsChange,onWeightChange,showHistory=true}){
   const [undo,setUndo]=useState(null);
-  const {rows,reusable}=planWeightHistory(workouts,exercise);
+  const {rows,reusable}=planWeightHistory(workouts,exercise,slot);
   const supportsLoads=supportsPlannedLoads(exercise);
   const current=loadValues(exercise.sets);
   const name=exerciseName(exercise),unit=weightUnit(units);

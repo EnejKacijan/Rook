@@ -106,6 +106,7 @@ import { cancelActiveWorkout, hasMeaningfulSessionWork } from './workoutCancella
 import { removeFreestyleExercise } from './freestyleWorkout.js';
 import {prepareTodayReplacementValues,projectTodayPreviousValues} from './previousValues.js';
 import {progressionHistoryForPhase,isDeloadWorkout} from './progressionHistory.js';
+import {exerciseInPlannedSlot, plannedExerciseSlot, plannedSlotsForExercise} from './workoutExerciseSlots.js';
 import {DeloadWeekNotice,DeloadWeekChoice} from './DeloadWeekChoice.jsx';
 import {needsDeloadChoice} from './deloadWeek.js';
 import { adjustedMovedLabel } from './progressPresentation.js';
@@ -358,7 +359,7 @@ import {
   pauseOptionalSession,
   plannedWorkoutForDate,
   pluralize,
-  previousExercise,
+  previousExerciseForWorkout,
   profileIsUnder18,
   recentExerciseProgress,
   refreshWorkoutWarmup,
@@ -1618,6 +1619,19 @@ function WorkoutTitle({ workout, name, day }) {
       )}
     </h1>
   );
+}
+function plannedSlotLabel(slot, slots) {
+  const titleOf = ({day}) => {
+    const {primary, detail, context} = workoutDisplayParts(day);
+    return [primary, detail, context].filter(Boolean).join(' · ');
+  };
+  const title = titleOf(slot);
+  const sameTitle = slots.filter(option => titleOf(option).toLowerCase() === title.toLowerCase());
+  if (sameTitle.length === 1) return title;
+  const sameDay = sameTitle.filter(option => option.day.id === slot.day.id);
+  const dayLabel = slot.day.weekday ? `${title} (${slot.day.weekday})` : title;
+  const position = sameDay.findIndex(option => option.exercise.id === slot.exercise.id) + 1;
+  return sameDay.length > 1 ? `${dayLabel} · ${slot.exercise.importRole || `Part ${position}`}` : dayLabel;
 }
 function shortDisplayDate(value) {
   return new Intl.DateTimeFormat("en", { weekday: "short", month: "short", day: "numeric" }).format(localDate(value));
@@ -5633,12 +5647,11 @@ export function Today({
   const historyBeforeSelectedDate = datedWorkouts.filter(
     (workout) => workoutPerformedDate(workout) < selectedIso,
   );
-  const exerciseHistory = new Map(
-    session.exercises.map((exercise) => [
-      exercise.exerciseId,
-      previousExercise(historyBeforeSelectedDate, exercise.exerciseId),
-    ]),
-  );
+  const ownHistory = progressionHistoryForPhase(historyBeforeSelectedDate, isDeloadWorkout(session));
+  const exerciseHistory = new Map(session.exercises.map(exercise => {
+    const slot = plannedExerciseSlot(state.program, exercise, {...session, programDayId:template?.id || session.id});
+    return [exercise.id, previousExerciseForWorkout(slot ? ownHistory : historyBeforeSelectedDate, exercise, slot)];
+  }));
   const isFirstSession =
     !completed && !prior && ![...exerciseHistory.values()].some(Boolean);
   const start = () => {
@@ -5868,7 +5881,7 @@ export function Today({
           {todayEditAnnouncement}
         </span>
         {displayedExercises.map((exercise) => {
-          const previous = exerciseHistory.get(exercise.exerciseId);
+          const previous = exerciseHistory.get(exercise.id);
           const completedSets = exercise.sets.filter(
             (set) => set.completed,
           ).length;
@@ -6510,8 +6523,24 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     ? nextSupersetStep(active.exercises, superset.id)
     : null;
   const deloadSession=isDeloadWorkout(active);
-  const prior = previousExercise(progressionHistoryForPhase(state.workouts,deloadSession), exercise.exerciseId);
-  const hasDeloadHistory=state.workouts.some(workout=>isDeloadWorkout(workout)&&workout.exercises?.some(item=>item.exerciseId===exercise.exerciseId));
+  const slot = plannedExerciseSlot(state.program, exercise, active);
+  const sameExerciseSlots = slot ? plannedSlotsForExercise(state.program, exercise.exerciseId) : [];
+  const scopedWorkoutName = !deloadSession && slot && sameExerciseSlots.length > 1
+    ? plannedSlotLabel(slot, sameExerciseSlots) : null;
+  const prior = previousExerciseForWorkout(progressionHistoryForPhase(state.workouts,deloadSession), exercise, slot);
+  const hasDeloadHistory = state.workouts.some(workout => isDeloadWorkout(workout) && (slot
+    ? exerciseInPlannedSlot(workout, slot)?.exerciseId === exercise.exerciseId
+    : workout.exercises?.some(item => item.exerciseId === exercise.exerciseId)));
+  const priorSets = prior?.sets.filter(set => set.completed) || [];
+  const lastWeights = [...new Set(priorSets.filter(set => Number.isFinite(set.weight) && set.weight > 0).map(set => set.weight))].sort((a,b) => a-b);
+  const priorLoad = lastWeights.length ? `${displayWeight(lastWeights[0],state.profile.units)}${lastWeights.length > 1
+    ? `–${displayWeight(lastWeights.at(-1),state.profile.units)}` : ''} ${weightUnit(state.profile.units)}` : null;
+  const priorLabel = scopedWorkoutName ? `Last in ${scopedWorkoutName} ·`
+    : deloadSession ? 'Last deload' : hasDeloadHistory ? 'Last normal' : 'Last';
+  const priorValues = scopedWorkoutName && priorLoad ? priorLoad : priorSets
+    .map(set => exerciseValueLabel(exercise, set.reps)).join(' / ');
+  const firstLabel = scopedWorkoutName ? `First in ${scopedWorkoutName}`
+    : deloadSession ? 'First deload session' : hasDeloadHistory ? 'First normal session' : 'First session';
   const elapsed = workoutElapsedSeconds(active,now);
   const item = exerciseCatalog[exercise.exerciseId];
   const performancePr = deloadSession?null:exerciseRecordPresentation(activeExercisePrDetails(state.workouts, exercise, {
@@ -7407,12 +7436,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             </p>
             {deloadSession&&<small className="exercise-history-meta">Deload · recovery session</small>}
             {(!sessionExercise || !prior) && <small className="exercise-history-meta">
-              {prior
-                ? `${deloadSession?'Last deload':hasDeloadHistory?'Last normal':'Last'} ${prior.sets
-                  .filter((set) => set.completed)
-                  .map((set) => exerciseValueLabel(exercise, set.reps))
-                  .join(" / ")}`
-                : deloadSession?'First deload session':hasDeloadHistory?'First normal session':'First session'}
+              {prior ? `${priorLabel} ${priorValues}` : firstLabel}
             </small>}
             {performancePr && (
                 <ExerciseRecordBadge
@@ -7464,7 +7488,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       {loggingChoice && <ActiveLoggingChange key={`${active.id}:${exercise.id}:${exercise.exerciseId}:${loggingChoice.mode}`}
         state={state} exercise={exercise} choice={loggingChoice} update={update}
         onAction={() => focusNavigationTarget(screenRef.current?.querySelector('.exercise-options-button'))}/>}
-      {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} screenRef={screenRef} controllerRef={previousValuesController} Modal={ModalLayer} Header={SheetHeader} />}
+      {(sessionExercise || prior) && <FreestylePrevious state={state} exercise={exercise} update={update} workoutName={scopedWorkoutName} screenRef={screenRef} controllerRef={previousValuesController} Modal={ModalLayer} Header={SheetHeader} />}
       {progressionTipsEnabled(state.profile) && recommendation && (
         <section
           className={`recommendation ${recommendation.type} guidance-${progressionCopy.tone} ${recommendationApplied ? "applied" : ""}`}
@@ -11207,12 +11231,13 @@ function ProgressionRow({row,units,onClick}) {
   return <ExerciseNavigationButton
     type="button"
     data-progression-exercise-id={exercise.exerciseId}
+    data-progression-entry-id={row.slot?.exercise.id}
     className={`list-row progression-row progression-${result.type}${/smaller increment/i.test(result.title)?' progression-caution':''}`}
     onClick={onClick}
   >
     <span>
       <strong>{exerciseName(exercise)}</strong>
-      <small>{progressionPresentation(result,exercise,units).heading}</small>
+      <small>{row.slot && `${plannedSlotLabel(row.slot, row.slots)} · `}{progressionPresentation(result,exercise,units).heading}</small>
       {result.type==='progress'&&result.weight?<small className="progression-next">Next: {displayWeight(result.weight,units)} {weightUnit(units)}</small>:null}
     </span>
     <NavigationChevron className="navigation-chevron"/>
@@ -11227,19 +11252,20 @@ function ProgressionOverview({state,setDetail,close,initial={}}) {
     surface.scrollTop=initial.scroll||0;
     if(!initial.focusExerciseId)return undefined;
     const frame=requestAnimationFrame(()=>{
-      const row=[...surface.querySelectorAll('[data-progression-exercise-id]')].find(item=>item.dataset.progressionExerciseId===initial.focusExerciseId);
+      const row=[...surface.querySelectorAll('[data-progression-exercise-id]')].find(item=>item.dataset.progressionExerciseId===initial.focusExerciseId &&
+        (!initial.focusEntryId || item.dataset.progressionEntryId===initial.focusEntryId));
       row?.focus({preventScroll:true});
       surface.scrollTop=initial.scroll||0;
     });
     return()=>cancelAnimationFrame(frame);
-  },[initial.scroll,initial.focusExerciseId]);
+  },[initial.scroll,initial.focusExerciseId,initial.focusEntryId]);
   return <main ref={ref} className="screen detail-screen progression-all-screen">
     <SheetHeader title="Exercise progression" onBack={close} backLabel="Back to Progress" onClose={close}/>
     <p className="progression-all-count">{progressionSummary(rows).label}</p>
     <div className="progression-all-list">
-      {rows.map(row=><ProgressionRow key={row.exercise.exerciseId} row={row} units={state.profile.units} onClick={()=>{
-        const returnTo={...initial,scroll:ref.current?.scrollTop||0,focusExerciseId:row.exercise.exerciseId};
-        setDetail({exercise:row.exercise,returnToProgression:returnTo});
+      {rows.map(row=><ProgressionRow key={row.slot?.exercise.id || row.exercise.exerciseId} row={row} units={state.profile.units} onClick={()=>{
+        const returnTo={...initial,scroll:ref.current?.scrollTop||0,focusExerciseId:row.exercise.exerciseId,focusEntryId:row.slot?.exercise.id};
+        setDetail({exercise:row.exercise,exerciseSlotId:row.slot?.exercise.id,returnToProgression:returnTo});
       }}/>)}
     </div>
     {!rows.length&&<p className="progression-empty">More comparable sessions are needed before ROOK can suggest a progression.</p>}
@@ -11305,7 +11331,7 @@ export function Progress({ state, update, setDetail, setPage }) {
         <Eyebrow>PROGRESSION</Eyebrow>
         {progressionRows.length ? (
           progressionRows.map(row => (
-            <ProgressionRow key={row.exercise.exerciseId} row={row} units={state.profile.units} onClick={() => setDetail({ exercise: row.exercise })}/>
+            <ProgressionRow key={row.slot?.exercise.id || row.exercise.exerciseId} row={row} units={state.profile.units} onClick={() => setDetail({ exercise: row.exercise, exerciseSlotId:row.slot?.exercise.id })}/>
           ))
         ) : (
           <p className="progression-empty">
@@ -11578,10 +11604,10 @@ export function exerciseHistoryPerformanceLabel(exercise, sets = []) {
       : "";
   return `${values.join(" / ")} ${timed ? "sec" : "reps"}${commonRir}`;
 }
-export function exerciseHistoryEntries(workouts = [], exerciseId, limit = 8) {
+export function exerciseHistoryEntries(workouts = [], exerciseId, limit = 8, slot = null) {
   return workouts
     .flatMap((workout) =>
-      (workout.exercises || [])
+      (slot ? [exerciseInPlannedSlot(workout, slot)].filter(Boolean) : workout.exercises || [])
         .filter(
           (item) =>
             item.exerciseId === exerciseId &&
@@ -14838,7 +14864,8 @@ export function PlanEditor({
                 const lastPreparedWorkouts = todayPreparation && expanded
                   ? progressionHistoryForPhase(exerciseState?.workouts, isDeloadWorkout(exerciseState?.activeWorkout) || exercise.blockPrescription?.phase === 'deload')
                   : [];
-                const lastPreparedExercise = previousExercise(lastPreparedWorkouts, exercise.exerciseId);
+                const historySlot = plannedExerciseSlot(exerciseState?.program, exercise);
+                const lastPreparedExercise = previousExerciseForWorkout(lastPreparedWorkouts, exercise, historySlot);
                 const lastPreparedSets = lastPreparedExercise?.sets.filter(set => set.completed) || [];
                 const lastPreparedDate = lastPreparedExercise
                   ? workoutPerformedDate(lastPreparedWorkouts.find(workout => workout.exercises?.includes(lastPreparedExercise)))
@@ -15462,7 +15489,7 @@ export function PlanEditor({
                             </small>
                           </label>
                         )}
-                        {mode==='edit'&&<PlanWeightReference key={exercise.exerciseId} exercise={exercise} showHistory={!todayPreparation} workouts={exerciseState?.workouts} units={profile.units} commits={pendingNumberCommits.current}
+                        {mode==='edit'&&<PlanWeightReference key={exercise.exerciseId} exercise={exercise} slot={historySlot} showHistory={!todayPreparation} workouts={exerciseState?.workouts} units={profile.units} commits={pendingNumberCommits.current}
                           onWeightChange={(index,weight)=>setWeight(day.id,exercise.id,index,weight??'')}
                           onWeightsChange={weights=>mutateExercise(day.id,exercise.id,target=>{
                             if(!supportsPlannedLoads(target)||weights.length!==target.sets.length)return;
@@ -18884,6 +18911,7 @@ export function Detail({
   onAskCoach,
 }) {
   const panelRef = useRef(null);
+  const [workoutFilter, setWorkoutFilter] = useState(null);
   const detailArtwork = useAvailableImage(state.profile.showExerciseImages !== false ? exerciseArt(detail?.exercise) : null);
   useEffect(() => {
     panelRef.current?.scrollTo({ top: 0 });
@@ -19231,13 +19259,20 @@ export function Detail({
         close={close}
       />
     );
-  const exercise = detail?.exercise;
-  if (!exercise) return null;
+  const requestedExercise = detail?.exercise;
+  if (!requestedExercise) return null;
+  const slots = plannedSlotsForExercise(state.program, requestedExercise.exerciseId);
+  const showWorkoutFilter = slots.length > 1;
+  const selectedSlotId = workoutFilter?.detail === detail ? workoutFilter.entryId : detail.exerciseSlotId;
+  const selectedSlot = showWorkoutFilter ? slots.find(slot => slot.exercise.id === selectedSlotId) : null;
+  const exercise = selectedSlot?.exercise || requestedExercise;
   const history = exerciseHistoryEntries(
     state.workouts,
     exercise.exerciseId,
+    8,
+    selectedSlot,
   );
-  const latestSet = latestLoggedWeightSet(history);
+  const latestSet = latestLoggedWeightSet(selectedSlot ? history.filter(item => !item.deload) : history);
   const unit = weightUnit(state.profile.units);
   const timed = exerciseMeasure(exercise) === "seconds";
   const catalogExercise = exerciseCatalog[exercise.exerciseId];
@@ -19276,7 +19311,8 @@ export function Detail({
           : loadRequirement === "optional"
             ? "No added weight"
             : "Not set yet";
-  const progression = sourceOnlyHistory ? null : nextWorkoutAdvice(exercise, state.workouts, state.profile,state);
+  const showWorkoutTargets = !showWorkoutFilter || Boolean(selectedSlot);
+  const progression = sourceOnlyHistory || !showWorkoutTargets ? null : nextWorkoutAdvice(exercise, state.workouts, state.profile,state);
   const detailIllustration = detailArtwork.source;
   return (
     <main ref={panelRef} className="screen detail-screen">
@@ -19287,6 +19323,15 @@ export function Detail({
         backLabel={detail.returnToPr?'Back to personal record':detail.returnToProgression?'Back to exercise progression':detail.returnToLogged?'Back to logged exercises':'Back'}
         closeLabel={`Close ${exerciseName(exercise)} details`}
       />
+      {showWorkoutFilter && <label className="exercise-history-filter">
+        Workout
+        <select value={selectedSlot?.exercise.id || ''} onChange={event => setWorkoutFilter({
+          detail, entryId:event.target.value,
+        })}>
+          <option value="">All workouts</option>
+          {slots.map(slot => <option key={slot.exercise.id} value={slot.exercise.id}>{plannedSlotLabel(slot, slots)}</option>)}
+        </select>
+      </label>}
       <div className={`exercise-detail-overview${detailIllustration ? " has-illustration" : ""}`}>
         <div>
           {sourceOnlyHistory ? (
@@ -19333,7 +19378,7 @@ export function Detail({
               </p>
             </>
           )}
-          {!importedHistoryOnly && <p className="exercise-detail-target">
+          {!importedHistoryOnly && showWorkoutTargets && <p className="exercise-detail-target">
             {exercise.prescriptionSource === 'freestyle' ? 'Freestyle · ' : 'Target · '}{targetLabel(exercise, state.profile.rirEnabled)}
           </p>}
           {exerciseNote(exercise) && (
@@ -19349,7 +19394,7 @@ export function Detail({
       </div>
       {performance.setCount > 0 && (
         <section className="exercise-performance-insights">
-          <Eyebrow>PERFORMANCE</Eyebrow>
+          <Eyebrow>{selectedSlot ? 'OVERALL PERFORMANCE' : 'PERFORMANCE'}</Eyebrow>
           <dl className="exercise-performance-metrics">
             <div>
               <dt>Best weight</dt>

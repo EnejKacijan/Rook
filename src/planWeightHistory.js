@@ -2,13 +2,14 @@ import {exerciseLoadRequirement,exerciseMeasure} from './domain.js';
 import {loggingModeOf,setTypeOf} from './advancedLogging.js';
 import {previousWorkingSetValues} from './freestyleWorkout.js';
 import {workoutPerformedDate} from './workoutDates.js';
+import {exerciseInPlannedSlot} from './workoutExerciseSlots.js';
 
 const ordinary=set=>setTypeOf(set)==='standard'&&!set.segments?.length;
 export const supportsPlannedLoads=exercise=>exerciseMeasure(exercise)==='reps'&&
   exerciseLoadRequirement(exercise)!=='none'&&loggingModeOf(exercise)!=='per_side'&&
   exercise.sets.length>0&&exercise.sets.every(ordinary)&&exercise.trackingSupport!=='history-only';
 
-export function planWeightHistory(workouts,exercise){
+export function planWeightHistory(workouts,exercise,slot=null){
   const rows=[];
   const compatible=entry=>entry.exerciseId===exercise.exerciseId&&
     (entry.importRole||null)===(exercise.importRole||null)&&
@@ -16,7 +17,7 @@ export function planWeightHistory(workouts,exercise){
     exerciseLoadRequirement(entry)===exerciseLoadRequirement(exercise)&&loggingModeOf(entry)===loggingModeOf(exercise);
   for(const workout of workouts||[]){
     if(!workout.completedAt)continue;
-    const matches=workout.exercises.filter(compatible);
+    const matches=(slot ? [exerciseInPlannedSlot(workout, slot)].filter(Boolean) : workout.exercises).filter(compatible);
     const entry=matches.find(entry=>entry.id===exercise.id)||(matches.length===1?matches[0]:null);
     if(!entry)continue;
     const sets=entry.sets.filter(ordinary);
