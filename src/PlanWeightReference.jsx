@@ -24,7 +24,7 @@ function PlannedLoadInput({weight,units,label,commits,onCommit}){
     }}} />;
 }
 
-export function PlanWeightReference({exercise,workouts,units,commits,onWeightsChange,onWeightChange}){
+export function PlanWeightReference({exercise,workouts,units,commits,onWeightsChange,onWeightChange,showHistory=true}){
   const [undo,setUndo]=useState(null);
   const {rows,reusable}=planWeightHistory(workouts,exercise);
   const supportsLoads=supportsPlannedLoads(exercise);
@@ -52,7 +52,8 @@ export function PlanWeightReference({exercise,workouts,units,commits,onWeightsCh
   const lastSummary=lastSets.some(set=>set.rawImport?.version===2&&!['external','added','normal','bodyweight'].includes(set.rawImport.loadKind))
     ? weightLabel(lastSets.at(-1)) : summary(lastSets.map(set=>set.weight))|| (lastSets.length?weightLabel(lastSets.at(-1)):null);
   const apply=value=>{setUndo(null);onWeightsChange(value);};
-  if(!supportsLoads&&!latest)return null;
+  // Today's preparation shows its own Last workout card with a Use action.
+  if(!supportsLoads&&(!latest||!showHistory))return null;
   return <section className="plan-editor-weight-reference" aria-label={`Weights for ${name}`}>
     {supportsLoads&&<AnimatedDetails>
       <summary>Planned weight · {summary(current.map(set=>set.weight))||'Not set'}</summary>
@@ -62,7 +63,7 @@ export function PlanWeightReference({exercise,workouts,units,commits,onWeightsCh
           onCommit={weight=>{setUndo(null);onWeightChange(index,weight);}} />
       </label>)}</div></div>
     </AnimatedDetails>}
-    {latest&&<AnimatedDetails>
+    {showHistory&&latest&&<AnimatedDetails>
       <summary>Last logged · {lastSummary}</summary>
       <div className="plan-weight-history-list">{rows.map(row=><div key={row.id}>
         <strong>{dateLabel(row.date)}</strong>
@@ -72,7 +73,7 @@ export function PlanWeightReference({exercise,workouts,units,commits,onWeightsCh
       </div>)}</div>
     </AnimatedDetails>}
     {undo?<button className="text-button" type="button" onClick={()=>apply(undo)}>Undo weight change</button>
-      : reusable?.some((weight,index)=>current[index].weight!==weight)&&<button className="text-button" type="button" onClick={()=>{
+      : showHistory&&reusable?.some((weight,index)=>current[index].weight!==weight)&&<button className="text-button" type="button" onClick={()=>{
         setUndo(current);onWeightsChange(reusable.map(weight=>({weight,weightProvenance:'explicit-plan'})));
       }}>Use last logged weights</button>}
   </section>;

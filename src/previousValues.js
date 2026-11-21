@@ -121,6 +121,29 @@ export function undoPreviousValues(state,record) {
   return {...state,activeWorkout:{...active,exercises}};
 }
 
+// Today already has set targets. Only overwrite values present in compatible history.
+export function projectTodayPreviousValues(state, exercise) {
+  const previous = freestylePreviousSets(state, exercise);
+  let ordinal = 0, reusable = false;
+  const sets = exercise.sets.map(set => {
+    if (!previousValuesSetEligible(set)) return set;
+    const values = previousWorkingSetValues(exercise, previous[ordinal++]);
+    if (!Object.keys(values).length) return set;
+    reusable = true;
+    const next = {...set, ...values};
+    if (Object.hasOwn(values, 'weight')) next.weightProvenance = 'history';
+    if (values.sides) {
+      next.sides = {...set.sides};
+      for (const [side, {rir, ...fields}] of Object.entries(values.sides)) {
+        next.sides[side] = {...set.sides?.[side], ...fields};
+      }
+      next.reps = unilateralSetReps(next);
+    }
+    return next;
+  });
+  return reusable ? sets : null;
+}
+
 export function prefillReplacementValues(state,exercise) {
   const previous=freestylePreviousSets(state,exercise),load=exerciseLoadRequirement(exercise);
   return {...exercise,sets:exercise.sets.map((set,index)=>{

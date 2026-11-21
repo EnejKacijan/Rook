@@ -13,3 +13,5 @@
 .adjust-time-context { font-weight:600; }
 .adjust-time-validation { color:var(--rook-secondary); font-size:14px; line-height:1.5; }
 .adjustment-target-disclosure { width:100%;min-width:0;flex-basis:100%;grid-column:1 / -1; }
+/* Field labels match the plan editor's Sets / Min reps / Max reps eyebrows. */
+:root .adjustment-target-editor label > span { color: var(--rook-secondary, #77736f); font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }

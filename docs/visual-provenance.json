@@ -6,7 +6,7 @@
     "licensed_third_party": 93,
     "rook_ai_generated": 662,
     "unknown": 11,
-    "rook_original": 25
+    "rook_original": 26
   },
   "exerciseReferenceSources": [
     {
@@ -31971,18 +31971,18 @@
         {
           "type": "repository_inline_geometry",
           "path": "src/AdjustmentExerciseList.jsx",
-          "line": 28,
-          "reviewedAt": "2026-10-26"
+          "line": 42,
+          "reviewedAt": "2026-11-21"
         }
       ],
       "notes": [
         "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion.",
-        "Reviewed the source-defined remove action icon used by the shared Adjust Today exercise list."
+        "Reviewed the source-defined remove action icon in the Review adjustment card toolbar (same geometry as before)."
       ],
-      "sourceLine": 28,
-      "codeSha256": "294ef6ab1bd7c1e8a6606ebd6a0da91c65c5a5f564391ee65a8256961b304907",
-      "lfCodeSha256": "294ef6ab1bd7c1e8a6606ebd6a0da91c65c5a5f564391ee65a8256961b304907",
-      "crlfCodeSha256": "294ef6ab1bd7c1e8a6606ebd6a0da91c65c5a5f564391ee65a8256961b304907"
+      "sourceLine": 42,
+      "codeSha256": "b142c1dcd8f73df3980881b6c0a8d578ed4a4aaa96e1ad1a7b443cbf79daadfc",
+      "lfCodeSha256": "b142c1dcd8f73df3980881b6c0a8d578ed4a4aaa96e1ad1a7b443cbf79daadfc",
+      "crlfCodeSha256": "b142c1dcd8f73df3980881b6c0a8d578ed4a4aaa96e1ad1a7b443cbf79daadfc"
     },
     {
       "assetId": "inline-informationicon-1",
@@ -32095,6 +32095,40 @@
         "Source-defined check mark in the workout-complete badge; a single stroked path drawn in on the live finish. No downloaded image or copyright ownership assertion.",
         "Replaces the text check character so the stroke can be drawn; the badge stays aria-hidden."
       ]
+    },
+    {
+      "assetId": "inline-app-plan-editor-actions",
+      "path": "src/App.jsx",
+      "selector": "inline_svg",
+      "exerciseIds": [],
+      "movementIds": [],
+      "usage": "inline_ui_renderer",
+      "provenanceType": "rook_original",
+      "creator": "ROOK JSX implementation",
+      "sourceUrl": null,
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousDisplayedCredit": "None",
+      "previousStoredCredits": [],
+      "evidence": [
+        {
+          "type": "repository_inline_geometry",
+          "path": "src/App.jsx",
+          "line": 13157,
+          "reviewedAt": "2026-11-21"
+        }
+      ],
+      "notes": [
+        "Source-defined icon/status/chart renderer; no downloaded image or copyright ownership assertion.",
+        "Reviewed the source-defined remove, superset and unpair icons in the plan editor exercise card toolbar."
+      ],
+      "sourceLine": 13157,
+      "codeSha256": "3ddbfe05876162163c7eea41f15aa9a9cbdb8fd2f42c0dba4279c47d7438ecba",
+      "lfCodeSha256": "3ddbfe05876162163c7eea41f15aa9a9cbdb8fd2f42c0dba4279c47d7438ecba",
+      "crlfCodeSha256": "3ddbfe05876162163c7eea41f15aa9a9cbdb8fd2f42c0dba4279c47d7438ecba"
     }
   ]
 }

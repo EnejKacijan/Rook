@@ -1,0 +1,52 @@
+/* Expanded exercise card in the plan editor and Edit today's exercises.
+   One toolbar: every action shares size, case and weight. Colour carries
+   meaning only: destructive red for Remove, the theme accent for the rest. */
+:root .plan-editor-exercise .plan-editor-actions:not(.import-review-footer-actions) {
+  display: flex; flex-wrap: nowrap; align-items: center; justify-content: flex-start;
+  gap: 2px; margin-top: 14px; padding-top: 4px; border-top: 1px solid var(--rook-border);
+}
+:root .plan-editor-exercise .plan-editor-actions:not(.import-review-footer-actions) > button {
+  display: inline-flex; align-items: center; gap: 6px; min-width: 0; min-height: 44px; padding: 0 8px;
+  font-size: 12px; font-weight: 750; line-height: 1; letter-spacing: .08em; text-transform: uppercase; white-space: nowrap;
+}
+:root .plan-editor-exercise .plan-editor-actions:not(.import-review-footer-actions) > button:first-child { margin-left: -8px; }
+:root .plan-editor-exercise .plan-editor-actions > .plan-editor-done { margin-left: auto; margin-right: -8px; }
+:root[data-appearance] .plan-editor-exercise .plan-editor-actions:not(.import-review-footer-actions) > button:not(.plan-exercise-remove):not(:disabled) {
+  color: var(--rook-accent-text) !important;
+}
+.plan-editor-exercise .plan-editor-actions > .plan-exercise-remove:not(:disabled) {
+  color: var(--rook-error-text);
+}
+:root[data-appearance] .plan-editor-exercise .plan-editor-actions > button:disabled {
+  color: var(--rook-disabled-text, #aaa7a2) !important;
+}
+.plan-editor-action-icon { flex: 0 0 16px; }
+
+/* Last workout card: date in the eyebrow, Use/Undo on the same line. */
+:root .plan-editor-last-session { margin-top: 10px; gap: 6px; }
+.plan-editor-last-session-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 28px; margin: -4px 0 0; }
+:root .plan-editor-last-session-header > span {
+  font-size: 11px; font-weight: 750; letter-spacing: .08em; color: var(--rook-secondary, #77736f);
+}
+:root .plan-editor-last-session-header > span > small { font-size: inherit; font-weight: inherit; letter-spacing: inherit; text-transform: uppercase; }
+:root .plan-editor-last-session-action {
+  min-height: 44px; margin: -8px -8px -8px 0; padding: 0 8px; border: 0; background: transparent;
+  font: inherit; font-size: 12px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase;
+  color: var(--rook-accent-text) !important;
+}
+:root .plan-editor-last-session-header > .plan-editor-last-session-status {
+  display: inline-flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 650; color: var(--rook-secondary);
+}
+:root .plan-editor-last-session-header > .plan-editor-last-session-status::before { content: '✓'; color: var(--rook-accent-text); }
+
+/* Swap picker: closest matches first, then the full library. */
+:root .plan-editor-picker > div > .plan-editor-picker-label {
+  display: block; padding: 12px 12px 6px; color: var(--rook-secondary, #77736f); text-align: left;
+  font-size: 11px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase;
+}
+:root .plan-editor-picker > div > button.is-best-swap .exercise-picker-identity small {
+  display: block; margin-top: 2px; color: var(--rook-secondary); font-size: 12px; font-weight: 500;
+}
+
+/* EDIT / CLOSE on each card uses the same accent as the card toolbar in every theme. */
+:root[data-appearance] .plan-editor-exercise:not(.needs-review) .plan-editor-summary-action { color: var(--rook-accent-text) !important; }
