@@ -111,6 +111,32 @@ it('saves only this recurring workout slot and uses the replacement when the wor
  expect(next.exercises[1].exerciseId).toBe('t-bar-row');
  expect(next.exercises[1].sets[0]).toMatchObject({weight:40,reps:10,completed:false});
 });
+it.each([
+ ['Hypertrophy', 'Upper · Strength'],
+ ['Strength', 'Upper · Strength (Mon)'],
+])('names the specific planned workout when another Upper workout is %s', async (otherDescriptor, title) => {
+ const s = fixture();
+ const day = s.program.days[0];
+ const otherDay = s.program.days[2];
+ day.name = 'Upper · Strength';
+ day.workoutName = 'Upper';
+ day.workoutDescriptor = 'Strength';
+ otherDay.name = `Upper · ${otherDescriptor}`;
+ otherDay.workoutName = 'Upper';
+ otherDay.workoutDescriptor = otherDescriptor;
+ const original = exerciseName(day.exercises[1]);
+ mount(s);
+ await replace('T-Bar Row');
+ const summary = () => host.querySelector('.active-replacement-future [role="status"]');
+ expect(summary().textContent).toBe(`Future ${title} sessions still use ${original}.`);
+ expect(summary().querySelector('strong').textContent).toBe(title);
+ click(button('Save to plan'));
+ expect(summary().textContent).toBe(`Future ${title} sessions will use T-Bar Row.`);
+ expect(current.program.days[2]).toEqual(otherDay);
+ click(button('Hide'));
+ click(host.querySelector('.exercise-options-button'));
+ expect(host.querySelector('.active-replacement-menu [role="status"] strong:last-of-type').textContent).toBe(title);
+});
 it('after two swaps and a reload, undo restores only the future workout and Revert restores the active superset slot',async()=>{
  const s=fixture(),original=structuredClone(s.activeWorkout.exercises[1]),plan=structuredClone(s.program);
  s.activeWorkout.exercises[1].supersetId=s.activeWorkout.exercises[2].supersetId='my-pair';

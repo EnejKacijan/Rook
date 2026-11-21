@@ -1,4 +1,4 @@
-import { estimateWorkoutMinutes, exerciseCatalog, exerciseName, exerciseLoadRequirement, exerciseMeasure, makeProgramExercise, refreshWorkoutWarmup } from './domain.js';
+import { estimateWorkoutMinutes, exerciseCatalog, exerciseName, exerciseLoadRequirement, exerciseMeasure, makeProgramExercise, refreshWorkoutWarmup, workoutDisplayParts } from './domain.js';
 import { availableCustomExerciseItems, customExerciseSnapshot } from './customExercises.js';
 import { effectiveGymContext } from './gymProfiles.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
@@ -120,13 +120,29 @@ function matchesDestination(destination, target) {
   return Boolean(destination && target && Object.keys(destination.owner).every(key => destination.owner[key] === target[key]));
 }
 
+function plannedWorkoutTitle(workout) {
+  const {primary, detail, context} = workoutDisplayParts(workout);
+  return [primary, detail, context].filter(Boolean).join(' · ');
+}
+
+function destinationWorkoutTitle(destination, program) {
+  if (!destination) return undefined;
+  const {workout, owner} = destination;
+  if (owner.kind === 'template') return workout.name;
+  const title = plannedWorkoutTitle(workout);
+  const titleKey = title.toLowerCase();
+  const repeatedTitle = program.days.some(day =>
+    day.id !== workout.id && plannedWorkoutTitle(day).toLowerCase() === titleKey);
+  return repeatedTitle && workout.weekday ? `${title} (${workout.weekday})` : title;
+}
+
 export function replacementSaveOptions(state, workout, record) {
   const destination = workoutDestination(state, workout, record.original);
   // Older local sessions did not store a destination. Only link them when the
   // original stable slot and exercise both still match.
   const target = record.target === undefined && destination?.entry.exerciseId === record.original.exerciseId
     ? {...destination.owner, exerciseId:record.original.exerciseId} : record.target;
-  const name = destination?.workout.workoutName || destination?.workout.name;
+  const name = destinationWorkoutTitle(destination, state.program);
   const savedTemplate = (destination?.owner.kind || record.saved?.target?.kind) === 'template';
   const labels = {saveLabel:savedTemplate?'Update saved workout':'Save to plan', savedLabel:savedTemplate?'Saved workout updated':'Saved to plan'};
   // Name the workout and the exercise its future sessions use, so the save
