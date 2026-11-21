@@ -25,7 +25,7 @@ const currentExpected=expected=>({...expected,dismissedTemporarySchedule:null,di
     id,{...metadata,lastUserActivityAt:metadata.createdAt},
   ])),
   ...(expected.program ? {program:{...expected.program,days:expected.program.days.map((day,index)=>({...day,estimatedMinutes:approvedEstimatedMinutes[index]}))}} : {}),
-  profile:{preferredTrainingStyle:null,noPlanReceipt:null,showProgressionTips:true,...expected.profile}});
+  profile:{preferredTrainingStyle:null,noPlanReceipt:null,showProgressionTips:true,exerciseLoggingPreferences:{},...expected.profile}});
 const allFixtures=[fixtures,olderFixtures].flatMap(collection=>collection.fixtures.map(fixture=>({
   ...fixture,name:`${collection.commit.slice(0,7)}/${fixture.name}`,
   // Prescriptions, sessions, elapsed durations, history and IDs stay identical.
