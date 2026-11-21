@@ -798,14 +798,7 @@ function Button({ children, variant = "primary", className = "", ...props }) {
   );
 }
 function triggerHaptic(type = "tap") {
-  if (typeof navigator === "undefined" || typeof navigator.vibrate !== "function")
-    return;
-  const pattern = type === "record" ? [14, 40, 28] : type === "complete" ? [18, 32, 18] : type === "success" ? 14 : 8;
-  try {
-    navigator.vibrate(pattern);
-  } catch {
-    // Haptics are an optional enhancement and must never block the action.
-  }
+  outcomeHaptic(type);
 }
 function BackLabel() {
   return (
@@ -2542,9 +2535,17 @@ export function PhysiqueReview({ profile, onUse, onClose }) {
         ? current.filter((value) => value !== id)
         : [...current, id],
     );
+  // Every step but the running review has a Back, so the header button and
+  // the swipe both leave or step back. Intro and results return to the caller.
+  const back = mode === "upload" ? { label: "Back to physique review", onClick: () => { setError(""); setMode("intro"); } }
+    : mode === "failure" ? { label: "Back to photos", onClick: () => { setReviewFailure(null); setMode("upload"); } }
+    : mode === "analyzing" ? null : { label: "Back", onClick: onClose };
   const shell = (children) => (
     <main className="onboarding screen physique-review-screen">
-      <div className="brand">ROOK</div>
+      <div className="physique-review-top">
+        {back && <FirstRunBackButton onClick={back.onClick} label={back.label} />}
+        <div className="brand">ROOK</div>
+      </div>
       {children}
     </main>
   );
@@ -6732,8 +6733,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       });
       setCombinedSaveError("");
       if (!result.changed) return;
-      // A record set gets its own longer double tap. vibrate() replaces the
-      // set-logged tap already playing, so the record pattern is what's felt.
+      // Upgrade the set-logged tap to the record cue when a record is earned.
       if (recordFeedback.logged(before, result.state, current.id, expectedSetId)) triggerHaptic("record");
       const updated = result.state.activeWorkout;
       if (updated.exerciseIndex !== live.exerciseIndex) {
@@ -20999,4 +20999,5 @@ import { applyHybridDecision } from './hybridImportReview.js';
 import { setSourceDecisionPending } from './importSourceFidelity.js';
 import { ImportInterpretationOffer } from './ImportInterpretationOffer.jsx';
 import { useSemanticSwipeBack } from './useSemanticSwipeBack.js';
+import { outcomeHaptic } from './interactionFeedback.js';
 import { YearInReview, YearReviewTodayCard, YearReviewProgressEntry } from './YearInReview.jsx';

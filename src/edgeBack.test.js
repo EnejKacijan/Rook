@@ -88,3 +88,30 @@ it('another edge direction cannot take ownership during an active gesture/settle
 });
 it('keeps the existing focused-input policy unless the caller explicitly owns that editor',()=>{const s=setup();const input=document.createElement('input');s.surface.append(input);input.focus();s.fire('touchstart',4);s.fire('touchmove',200);s.fire('touchend',200,100,0);vi.runAllTimers();expect(s.onBack).not.toHaveBeenCalled();s.dispose();});
 it('focused-input opt-in never permits gestures starting on an input or button',()=>{const s=setup(true,{allowFocusedInput:()=>true});for(const tag of ['input','button']){const target=document.createElement(tag);s.surface.append(target);target.focus();s.fire('touchstart',4,100,1,target);s.fire('touchmove',200,100,1,target);s.fire('touchend',200,100,0,target);}vi.runAllTimers();expect(s.onBack).not.toHaveBeenCalled();s.dispose();});
+it('a mid-screen start needs less travel, scaled to the run left to the far edge', () => {
+  expect(commitBack(130, 390, 0, 390)).toBe(true);
+  expect(commitBack(70, 390, 0, 150)).toBe(true); expect(commitBack(60, 390, 0, 150)).toBe(false);
+  expect(commitBack(56, 390, 0, 40)).toBe(true); expect(commitBack(40, 390, 0, 40)).toBe(false);
+});
+it('full-width Back accepts a mid-screen start only when the caller allows that target', () => {
+  const allow = vi.fn(() => true), s = setup(true, { anywhere: allow, duration: 0 });
+  s.fire('touchstart', 150); s.fire('touchmove', 290); s.fire('touchend', 290, 100, 0);
+  expect(allow).toHaveBeenCalledWith(s.surface, expect.objectContaining({ clientX: 150 }));
+  expect(s.onBack).toHaveBeenCalledTimes(1); expect(s.render).toHaveBeenCalledWith(140, 0); s.dispose();
+  const refuse = setup(true, { anywhere: () => false, duration: 0 });
+  refuse.fire('touchstart', 150); refuse.fire('touchmove', 300); refuse.fire('touchend', 300, 100, 0);
+  expect(refuse.onBack).not.toHaveBeenCalled(); refuse.dispose();
+});
+it('full-width Back may start on a row button, never on inputs, sliders or switches', () => {
+  for (const [html, allowed] of [['<button>Row</button>', true], ['<a href="#">Link</a>', true], ['<input>', false], ['<div role="slider"></div>', false], ['<button role="switch"></button>', false], ['<div data-no-edge-back><span>x</span></div>', false]]) {
+    const s = setup(true, { anywhere: () => true, duration: 0 });
+    s.surface.innerHTML = html; const target = s.surface.querySelector('span') || s.surface.firstElementChild;
+    s.fire('touchstart', 150, 100, 1, target); s.fire('touchmove', 300, 100, 1, target); s.fire('touchend', 300, 100, 0, target);
+    expect(s.onBack).toHaveBeenCalledTimes(allowed ? 1 : 0); s.dispose(); document.body.innerHTML = '';
+  }
+});
+it('a browser tab leaves the edge to its own history gesture but keeps mid-screen Back', () => {
+  const s = setup(true, { anywhere: () => true, edgeAllowed: () => false, duration: 0 });
+  s.fire('touchstart', 4); s.fire('touchmove', 200); s.fire('touchend', 200, 100, 0); expect(s.onBack).not.toHaveBeenCalled();
+  s.fire('touchstart', 120); s.fire('touchmove', 300); s.fire('touchend', 300, 100, 0); expect(s.onBack).toHaveBeenCalledTimes(1); s.dispose();
+});

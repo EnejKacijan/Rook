@@ -48,8 +48,11 @@ it('cancels the existing entrance without toggling animation CSS and replaying i
  const motion=pageBackMotion(main);motion.render(70,100);expect(cancel).toHaveBeenCalledOnce();
  expect(content.style.animation).toBe('');motion.clear();expect(content.style.animation).toBe('');
 });
-it('does not opt other onboarding surfaces into motion or animate questionnaire content under reduced motion',()=>{
- const {main,content}=questionnaire();content.removeAttribute('data-swipe-back-content');expect(pageBackMotion(main)).toBeNull();
+it('moves any other Back surface as a whole page and still never animates under reduced motion',()=>{
+ const {main,content}=questionnaire();content.removeAttribute('data-swipe-back-content');main.getBoundingClientRect=()=>({left:0,top:0,width:390,height:844});main.getAnimations=()=>[];
+ const motion=pageBackMotion(main);motion.render(120,0);motion.render(120,100);
+ expect(main.style.transform).toBe('translate3d(120px,0,0)');expect(content.getAttribute('style')).toBe('padding:12px');expect(document.querySelector('[data-swipe-parent]')).not.toBeNull();
+ motion.clear();expect(main.getAttribute('style')).toBeNull();expect(document.querySelector('[data-swipe-parent]')).toBeNull();
  expect(pageBackMotion(questionnaire(true).main)).toBeNull();
 });
 it('Active Workout uses the exact Profile renderer, easing and parent parallax without cloning live inputs',()=>{

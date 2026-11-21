@@ -10,6 +10,8 @@ const interactive='button,a,input,textarea,select,[contenteditable],[role="butto
 /** Finger presentation only; the registered row callback owns removal/Undo. */
 export function bindSwipeRowActions(list,{mode='remove',onAdd,feedback=interactionFeedback}={}) {
   const adding=mode==='add';
+  // Full-width Back reads this to leave rightward Add swipes to the row.
+  list.dataset.swipeMode=mode;
   const settles=new Set();
   const clearSettles=()=>{for(const clear of [...settles])clear();};
   for(const event of ['blur','resize','pagehide'])window.addEventListener(event,clearSettles);
@@ -99,7 +101,7 @@ export function bindSwipeRowActions(list,{mode='remove',onAdd,feedback=interacti
     },
   });
   return ()=>{
-    release();clearSettles();
+    release();clearSettles();delete list.dataset.swipeMode;
     for(const event of ['blur','resize','pagehide'])window.removeEventListener(event,clearSettles);
     document.removeEventListener('visibilitychange',clearSettles);
     window.visualViewport?.removeEventListener('resize',clearSettles);

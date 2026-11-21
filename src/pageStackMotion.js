@@ -20,14 +20,17 @@ export function capturePageSurface(surface) {
   return { copy, bounds, scrolls };
 }
 
-function snapshotLayer(snapshot, bounds) {
+// A framed layer sits exactly behind a sheet (same box, corners and colour),
+// so an in-sheet step reveals the previous step, not the page behind.
+function snapshotLayer(snapshot, bounds, frame = null) {
   const layer = document.createElement('div');
   layer.dataset.swipeParent = 'true';
   layer.setAttribute('inert', ''); layer.setAttribute('aria-hidden', 'true');
   Object.assign(layer.style, { position: 'fixed', left: `${bounds.left}px`, top: '0', width: `${bounds.width}px`, height: '100dvh', overflow: 'clip', pointerEvents: 'none', background: 'var(--rook-bg)', opacity: '1' });
+  if (frame) Object.assign(layer.style, { top: `${bounds.top}px`, height: `${bounds.height}px`, borderRadius: frame.radius, background: frame.background });
   if (snapshot) {
     const copy = snapshot.copy.cloneNode(true);
-    Object.assign(copy.style, { position: 'absolute', margin: '0', top: `${snapshot.bounds.top}px`, left: `${snapshot.bounds.left - bounds.left}px`, width: `${snapshot.bounds.width}px`, height: `${snapshot.bounds.height}px`, maxHeight: 'none', transform: 'none' });
+    Object.assign(copy.style, { position: 'absolute', margin: '0', top: `${frame ? 0 : snapshot.bounds.top}px`, left: `${snapshot.bounds.left - bounds.left}px`, width: `${snapshot.bounds.width}px`, height: `${frame ? Math.max(snapshot.bounds.height, bounds.height) : snapshot.bounds.height}px`, maxHeight: 'none', transform: 'none' });
     layer.append(copy);
   }
   return { layer, mount(anchor) {
@@ -40,12 +43,14 @@ function snapshotLayer(snapshot, bounds) {
 // Transforming a page establishes a containing block for fixed descendants.
 // Freeze their current viewport geometry once, so footers do not jump to the
 // bottom of a long document. Live nodes, focus, selection and scroll stay intact.
-function preparePage(surface, zIndex) {
+function preparePage(surface, zIndex, shadow = false) {
   const original = surface.getAttribute('style'), bounds = surface.getBoundingClientRect();
   const fixed = [...surface.querySelectorAll('*')].filter(node => getComputedStyle(node).position === 'fixed');
   const anchors = fixed.map(node => [node, node.getAttribute('style'), node.getBoundingClientRect()]);
   for (const animation of surface.getAnimations?.() || []) animation.cancel();
   Object.assign(surface.style, { position: getComputedStyle(surface).position === 'static' ? 'relative' : getComputedStyle(surface).position, zIndex: String(zIndex), background: 'var(--rook-bg)', opacity: '1', animation: 'none', willChange: 'transform' });
+  // The page on top casts a soft edge shadow over the one it reveals.
+  if (shadow) surface.style.boxShadow = '-12px 0 28px -10px rgba(0,0,0,.22)';
   for (const [node, , rect] of anchors) Object.assign(node.style, { position: 'absolute', top: `${rect.top - bounds.top + surface.scrollTop}px`, left: `${rect.left - bounds.left + surface.scrollLeft}px`, right: 'auto', bottom: 'auto', width: `${rect.width}px`, height: `${rect.height}px`, margin: '0', maxWidth: 'none' });
   return () => { restoreStyle(surface, original); anchors.forEach(([node, style]) => restoreStyle(node, style)); };
 }
@@ -79,14 +84,18 @@ function physicalStack(child, parent, width, mount, dispose) {
   };
 }
 
-export function createPageBackMotion(surface, snapshot) {
+export function createPageBackMotion(surface, snapshot, { framed = false } = {}) {
   if (!surface || reduced()) return null;
   stopPageNavigation(surface);
-  const bounds = surface.getBoundingClientRect(), parent = snapshotLayer(snapshot, bounds);
+  const bounds = surface.getBoundingClientRect(), style = framed ? getComputedStyle(surface) : null;
+  const opaque = style && !/^(transparent|rgba\(.*,\s*0\))$/.test(style.backgroundColor);
+  const frame = framed ? { radius: style.borderRadius, background: opaque ? style.backgroundColor : 'var(--rook-bg)' } : null;
+  const parent = snapshotLayer(snapshot, bounds, frame);
   let restore;
   return physicalStack(surface, parent.layer, bounds.width, () => {
     parent.mount(surface); parent.layer.style.zIndex = '1';
-    restore = preparePage(surface, 2);
+    restore = preparePage(surface, 2, true);
+    if (frame) surface.style.background = frame.background;
   }, () => { parent.layer.remove(); restore(); });
 }
 

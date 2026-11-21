@@ -8,6 +8,9 @@ export function bindWeekPager({root, viewport, track, labelTrack=null, getOption
   let gesture = null, phase = 'idle', width = 0, stride = 0, labelWidth = 0, labelStride = 0, frame = 0, timer = 0;
   let dragX = 0, suppressUntil = 0, disposed = false, finish = null, settlingDirection = null, resumedTap = null;
   const removers = [];
+  // Full-width Back yields to this pager; its own edge stays Back.
+  root.dataset.horizontalGesture = 'true';
+  removers.push(() => delete root.dataset.horizontalGesture);
   const now = () => performance.now();
   const listen = (node, name, handler, options) => {
     node.addEventListener(name, handler, options);

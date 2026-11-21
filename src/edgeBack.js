@@ -7,8 +7,11 @@ export function backIntent(dx, dy) {
   if (dx < -EDGE_BACK.intent || Math.abs(dy) >= EDGE_BACK.intent && Math.abs(dy) * EDGE_BACK.ratio >= dx) return 'ignore';
   return dx > EDGE_BACK.intent && dx > Math.abs(dy) * EDGE_BACK.ratio ? 'back' : 'pending';
 }
-export function commitBack(distance, width, velocity) {
-  return distance >= width * EDGE_BACK.fraction || distance >= EDGE_BACK.flickDistance && velocity >= EDGE_BACK.velocity;
+// A gesture that starts mid-screen has less room to travel, so its distance
+// threshold scales with the run left to the far edge (never below the flick).
+export function commitBack(distance, width, velocity, available = width) {
+  const needed = Math.min(width * EDGE_BACK.fraction, Math.max(EDGE_BACK.flickDistance, available * .45));
+  return distance >= needed || distance >= EDGE_BACK.flickDistance && velocity >= EDGE_BACK.velocity;
 }
 
 // Scoped native touch events allow vertical scrolling until horizontal intent is
@@ -20,18 +23,27 @@ export function bindEdgeBack(surface, options) {
 // The questionnaire's Forward gesture mirrors the same intent, cancellation,
 // input ownership and motion policy. Distances stay positive for thresholds;
 // only physical input/output direction changes.
-export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear, getBounds, duration = 180, edge = 'left', allowFocusedInput = () => false }) {
+// `anywhere` lets a caller accept starts away from the edge (full-width Back,
+// as in current iOS and Spotify). It receives the touch target and decides
+// whether another horizontal owner (pager, slider, scroller) lives there.
+// `edgeAllowed` lets a browser tab keep its own edge history gesture.
+export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear, getBounds, duration = 180, edge = 'left', allowFocusedInput = () => false, anywhere = null, edgeAllowed = () => true }) {
   const direction = edge === 'right' ? -1 : 1;
   let touch = null, timer = null, settling = false, suppressUntil = 0, suppressTarget = null;
   const blocked = target => target?.closest?.('input, textarea, select, button, a, [contenteditable], [role="slider"], [role="tablist"], canvas, svg, img, .modal-drag-handle, [data-no-edge-back]');
+  // Mid-screen starts may begin on ordinary buttons and rows; the click that
+  // would follow a recognized drag is suppressed below.
+  const blockedAnywhere = target => target?.closest?.('input, textarea, select, [contenteditable], [role="slider"], [role="switch"], [role="tablist"], canvas, .modal-drag-handle, [data-no-edge-back]');
   const reset = () => { clearTimeout(timer); timer = null; touch = null; settling = false; delete surface.dataset.edgeBackActive; clear(); };
   const start = event => {
     if (event.touches.length !== 1) { reset(); return; }
-    if (settling || document.querySelector('[data-edge-back-active]') || !enabled(event) || blocked(event.target) || (document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') && !allowFocusedInput(document.activeElement)) || String(window.getSelection?.() || '')) return;
+    if (settling || document.querySelector('[data-edge-back-active]') || !enabled(event) || (document.activeElement?.matches('input,textarea,select,[contenteditable="true"]') && !allowFocusedInput(document.activeElement)) || String(window.getSelection?.() || '')) return;
     const point = event.touches[0], bounds = getBounds?.() || surface.getBoundingClientRect();
     const edgeDistance = edge === 'right' ? bounds.left + bounds.width - point.clientX : point.clientX - bounds.left;
-    if (edgeDistance < 0 || edgeDistance > EDGE_BACK.edge) return;
-    touch = { target: event.target, id: point.identifier, x: point.clientX, y: point.clientY, lastX: point.clientX, at: performance.now(), velocity: 0, distance: 0, width: bounds.width, active: false };
+    if (edgeDistance < 0 || edgeDistance > bounds.width) return;
+    const fromEdge = edgeDistance <= EDGE_BACK.edge;
+    if (fromEdge ? !edgeAllowed() || blocked(event.target) : !anywhere || blockedAnywhere(event.target) || !anywhere(event.target, point)) return;
+    touch = { target: event.target, id: point.identifier, x: point.clientX, y: point.clientY, lastX: point.clientX, at: performance.now(), velocity: 0, distance: 0, width: bounds.width, available: bounds.width - edgeDistance, active: false };
   };
   const move = event => {
     if (!touch) return;
@@ -60,7 +72,7 @@ export function bindEdgeNavigation(surface, { enabled, onNavigate, render, clear
     event.stopPropagation();
     suppressUntil = performance.now() + 350;
     suppressTarget = gesture.target;
-    const commit = event.type !== 'touchcancel' && enabled() && commitBack(gesture.distance, gesture.width, performance.now() - gesture.at > 100 ? 0 : gesture.velocity);
+    const commit = event.type !== 'touchcancel' && enabled() && commitBack(gesture.distance, gesture.width, performance.now() - gesture.at > 100 ? 0 : gesture.velocity, gesture.available);
     settling = true;
     const ms = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ? 0 : typeof duration === 'function' ? duration(gesture, commit) : duration;
     render(commit ? gesture.width * direction : 0, ms);

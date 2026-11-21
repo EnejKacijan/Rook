@@ -287,6 +287,9 @@
 .physique-review-entry small { color: var(--rook-accent-text); font-size: 12px; }
 .physique-review-entry i { font-size: 20px; font-style: normal; }
 .physique-review-screen { overflow-y: auto; }
+.physique-review-top { display: flex; align-items: center; gap: 4px; min-height: 44px; margin-left: -12px; }
+.physique-review-top .brand { margin: 0; }
+.physique-review-top:not(:has(.first-run-back-button)) { margin-left: 0; }
 .physique-review-content { flex: 1; padding: 52px 0 30px; }
 .physique-review-content > p { max-width: 410px; }
 .physique-caution,.photo-guidance { margin-top: 24px; padding: 14px 15px; border-radius: 14px; background: #efeee9; color: #6f6c68; font-size: 12px; line-height: 1.5; }

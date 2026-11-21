@@ -26,10 +26,12 @@ await openAdjustWeek(page);await page.waitForTimeout(300);
 await gesture();assert.equal(await title(),'What changed?');
 await page.getByRole('button',{name:/My available days changed/}).click();await page.waitForTimeout(300);
 const original=await page.evaluate(()=>localStorage.getItem('lift-v2-state'));
-for(const config of [{dx:30},{dx:-80},{dy:-240},{dx:25,dy:-25},{count:2},{cancel:true},{center:true}]){await gesture(config);assert.equal(await title(),'When can you train?');}
+for(const config of [{dx:30},{dx:-80},{dy:-240},{dx:25,dy:-25},{count:2},{cancel:true}]){await gesture(config);assert.equal(await title(),'When can you train this week?');}
 assert.equal(await page.evaluate(()=>localStorage.getItem('lift-v2-state')),original);
-await page.evaluate(()=>Object.defineProperty(navigator,'standalone',{value:false,configurable:true}));await gesture();assert.equal(await title(),'When can you train?');
+await page.evaluate(()=>Object.defineProperty(navigator,'standalone',{value:false,configurable:true}));await gesture();assert.equal(await title(),'When can you train this week?');
 await page.evaluate(()=>Object.defineProperty(navigator,'standalone',{value:true,configurable:true}));
+// Full-width Back: a mid-sheet start goes Back like the edge.
+await gesture({center:true});assert.equal(await title(),'What changed?');await page.getByRole('button',{name:/My available days changed/}).click();await page.waitForTimeout(300);
 await gesture({dx:70,pause:0});assert.equal(await title(),'What changed?');
 await page.getByRole('button',{name:/My available days changed/}).click();await page.emulateMedia({reducedMotion:'reduce'});await gesture();assert.equal(await title(),'What changed?');await page.emulateMedia({reducedMotion:'no-preference'});
 await page.getByRole('button',{name:/Move a workout Choose/}).click();await page.locator('.flexible-workout-list button').first().click();await page.locator('.flexible-week-sheet').evaluate(el=>el.scrollTop=180);await gesture();assert.equal(await title(),'Choose a workout');
@@ -42,5 +44,5 @@ await page.evaluate(day=>{const s=JSON.parse(localStorage.getItem('lift-v2-state
 await page.reload({waitUntil:'networkidle'});await page.getByRole('button',{name:'ADJUST TODAY',exact:true}).click();await page.getByRole('button',{name:/Specific exercise unavailable/}).click();await page.locator('.adjust-check-list button').first().click();await page.getByRole('button',{name:'FIND REPLACEMENTS',exact:true}).click();await page.getByRole('button',{name:'Choose replacement',exact:true}).first().click();
 const search=page.getByRole('searchbox',{name:'Search replacement exercises'});await search.fill('press');await search.blur();await gesture();assert.equal(await page.locator('.adjust-unresolved').count(),1);assert.equal(await page.getByRole('button',{name:'USE THIS WORKOUT',exact:true}).isDisabled(),true);
 await page.locator('.adjust-today-sheet').evaluate(el=>el.scrollTop=0);await gesture();assert.equal(await title(),'Choose affected exercises');assert.equal(await page.locator('.adjust-check-list [aria-pressed="true"]').count(),1);
-assert.deepEqual(errors,[]);console.log('Edge Back adversarial runtime passed: root/browser gates, direction, diagonal, vertical, multitouch, cancel, fast flick, reduced motion, scrolled view, input, state interruption and manual replacement preservation.');
+assert.deepEqual(errors,[]);console.log('Edge Back adversarial runtime passed: root/browser gates, full-width start, direction, diagonal, vertical, multitouch, cancel, fast flick, reduced motion, scrolled view, input, state interruption and manual replacement preservation.');
 }finally{await browser.close();}

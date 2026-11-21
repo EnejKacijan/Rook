@@ -164,8 +164,11 @@ it('preserves Scratch name, days and the same manual editor across a full Landin
   expect(page().querySelector('input[aria-label="Weekly plan name"]').value).toBe('Retained week');
   expect(button('Mon').getAttribute('aria-pressed')).toBe('true'); click('CONTINUE'); expect(page().querySelector('.scratch-editor-screen')).toBe(editor);
 });
-it('does not navigate on a non-edge, vertical or leftward gesture, or during typing', () => {
-  click('Import a plan'); settle(); swipe(50); swipe(4, 28, 130); swipe(20, 0);
+it('navigates Back from mid-screen as well as from the edge', () => {
+  click('Import a plan'); settle(); swipe(120, 300); expect(page().dataset.firstRunPage).toBe('bring');
+});
+it('does not navigate on a short mid-screen, vertical or leftward gesture, or during typing', () => {
+  click('Import a plan'); settle(); swipe(50, 70); swipe(4, 28, 130); swipe(20, 0); swipe(200, 60);
   const field = page().querySelector('textarea'); field.focus(); edit(field, 'Draft stays'); swipe();
   expect(page().dataset.firstRunPage).toBe('import'); expect(field.value).toBe('Draft stays');
   field.blur(); swipe(); expect(page().dataset.firstRunPage).toBe('bring');
@@ -188,7 +191,7 @@ it('releases the utility Restore screen on Back while retaining form drafts', ()
   click('Restore'); settle(); expect(page().querySelector('main')).not.toBe(original);
 });
 it('retains native browser history policy and has no Landing forward/back target', () => {
-  expect(pageBackMotion(page().querySelector('main'))).toBeNull(); swipe(); expect(page().dataset.firstRunPage).toBe('landing');
+  swipe(); swipe(120, 320); expect(page().dataset.firstRunPage).toBe('landing');
   standalone = false; click('Enter it myself'); settle(); swipe(); expect(page().dataset.firstRunPage).toBe('scratch');
 });
 it('does not reuse a touch that dismisses the age picker as page Back', () => {
