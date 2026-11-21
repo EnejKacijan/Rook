@@ -42,6 +42,7 @@ import {exerciseRecordPresentation} from './exerciseRecords.js';
 import { OptionalActivityEditor } from './OptionalActivityEditor.jsx';
 import { OptionalActivityDetails } from './OptionalActivityDetails.jsx';
 import { ConditioningSheet, TodayOptionalActivities } from './ConditioningSheet.jsx';
+import { TodayDoneExtras } from './TodayDoneExtras.jsx';
 import { isConditioning, optionalActivitySummary, optionalActivityDurationLabel } from './optionalActivity.js';
 import {SavedWorkouts} from './SavedWorkouts.jsx';
 import {createCoachDayContext,coachDayStarter,coachDayLabel,resolveCoachDayContext,coachActionMatchesDay} from './coachDayContext.js';
@@ -5691,6 +5692,10 @@ export function Today({
       console.error("Unable to start workout", error);
     }
   };
+  const exerciseCount = pluralize(session.exercises.length, 'exercise');
+  const exerciseProgress = (endedEarly || endedWithoutSets) && session.exercises.length
+    ? `${session.exercises.filter(exercise => exercise.sets?.some(set => set.completed)).length} of ${exerciseCount}`
+    : exerciseCount;
   const duration = completed
     ? completed.durationSeconds ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min elapsed` : 'Duration not recorded'
     : `About ${roundedEstimate(estimatePersonalWorkoutMinutes(state, template))} min`;
@@ -5725,9 +5730,9 @@ export function Today({
           </button>
         )}
         {!fullyCompleted && <p>
-          {session.exercises.length} exercises · {duration}
+          {exerciseProgress} · {duration}
           {completed
-            ? ` · ${workoutVisibleStatus({workout:completed,summary:completedSummary})}`
+            ? <> · <span className="today-meta-keep">{workoutVisibleStatus({workout:completed,summary:completedSummary})}</span></>
             : occurrence?.status === 'missed'
               ? ` · ${workoutVisibleStatus({status:occurrence.status})}`
               : prior
@@ -5835,7 +5840,7 @@ export function Today({
           catch(error){setStartError(error.message);}
         }}>Remove one-off workout</button>}
         {startError&&<p className="today-start-error" role="alert">{startError}</p>}
-        <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly representedWorkoutId={completed?.id} />
+        {!completed && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
       </section>
       {combineHint}
       {viewingToday && !trackedActive && !todayEditMode && campaignSlot}
@@ -5846,7 +5851,7 @@ export function Today({
               {todayEditMode
                 ? "EDIT EXERCISES"
                 : completed
-                  ? "WORKOUT DETAILS"
+                  ? "EXERCISES"
                   : viewingToday
                     ? "TODAY'S EXERCISES"
                     : "WORKOUT EXERCISES"}
@@ -5883,8 +5888,9 @@ export function Today({
           const preparedResult=preparedWeights.length
             ? `Prepared: ${[...new Set(preparedWeights)].join(' / ')} ${weightUnit(state.profile.units)}${preparedWeights.length<exercise.sets.length?` · ${preparedWeights.length}/${exercise.sets.length} sets`:''}`
             : null;
+          // Completed rows show the logged result once; partial exercises say how much was done.
           const detail = completed
-            ? completedSets ? pluralize(completedSets, 'set') + ' logged' : 'No sets logged'
+            ? !completedSets ? 'No sets logged' : completedSets < exercise.sets.length ? `${completedSets} of ${pluralize(exercise.sets.length, 'set')} logged` : pluralize(completedSets, 'set') + ' logged'
             : isHistoricalWeek
               ? "Not logged"
               : preparedResult || previousResult || (!isFirstSession ? "First session" : null);
@@ -5893,7 +5899,7 @@ export function Today({
               key={exercise.id}
               exercise={exercise}
               detail={detail}
-              result={completed ? exerciseHistoryPerformanceLabel(exercise, exercise.sets) || 'Not logged' : undefined}
+              result={completed ? exerciseHistoryPerformanceLabel(exercise, exercise.sets) || '' : undefined}
               profile={state.profile}
               setDetail={setDetail}
               actions={actionForExercise(exercise)}
@@ -5923,7 +5929,9 @@ export function Today({
           </div>
         )}
       </section>}
-      <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
+      {completed
+        ? <TodayDoneExtras state={state} date={selectedIso} viewingToday={viewingToday} representedWorkoutId={completed.id} setDetail={setDetail} />
+        : <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />}
       <TodayTrainingOptions state={state} date={selectedIso} setDetail={setDetail} />
       {undoBanner}
     </main>
