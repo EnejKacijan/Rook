@@ -1,4 +1,5 @@
 import {AnimatedDetails} from './AnimatedDetails.jsx';
+import {WEEKLY_BAR_FILL_MS,WEEKLY_MARK_EMPHASIS_MS,weeklyConsistencyKey,noteWeeklyConsistencyChange,peekWeeklyConsistencyMotion,consumeWeeklyConsistencyMotion,clearWeeklyConsistencyMotion,prefersReducedMotion} from './weeklyConsistencyMotion.js';
 import {ReviewDetails} from './ReviewDetails.jsx';
 import {reviewPrescription} from './reviewPrescription.js';
 import { CustomWeeklyStructureEditor } from './CustomWeeklyStructureEditor.jsx';
@@ -695,6 +696,7 @@ export function useLiftState(startup) {
   }, []);
   const update = useCallback((fn, options = {}) =>
       setState((previous) => {
+        if (options.replacement) clearWeeklyConsistencyMotion();
         if (options.navigationDate) {
           const {day,date} = options.navigationDate;
           if (previous.selectedDate === date && previous.selectedDay === day) return previous;
@@ -6893,6 +6895,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       else if (!saveState(next, {reason:'workout-complete'}))
         throw new Error('Could not save the workout. Your active workout is still here. Try Finish again.');
       const completed = next.workouts.length > before.workouts.length;
+      if (completed) noteWeeklyConsistencyFromFinish(before, next);
       if (completed) {
         onLiveFinish?.({priorWorkouts:before.workouts,startedAt:before.activeWorkout.startedAt,workoutId:reversal?.workoutId,reversal,presented:false});
         if (!before.workouts.length) trackFunnelEventOnce('first_workout_completed', {setCount:summary.completed,endedEarly:summary.completed<summary.total});
@@ -11292,18 +11295,86 @@ function ProgressionOverview({state,setDetail,close,initial={}}) {
     {!rows.length&&<p className="progression-empty">More comparable sessions are needed before ROOK can suggest a progression.</p>}
   </main>;
 }
+const WEEKLY_REVIEW_OPTIONS = {
+  e1rmEligible: exerciseSupportsEstimatedOneRepMax,
+  exerciseLabel: exerciseName,
+};
+// The Weekly Review counter. Flexible weeks count through the review itself.
+function weeklyReviewConsistency(state, date = new Date(), weeklyReview = null) {
+  if (!state.flexibleWeek) return consistencyForCurrentWeek(state, date);
+  const review = weeklyReview || weeklyPerformanceReview(state, date, WEEKLY_REVIEW_OPTIONS);
+  return { completed: review.completed, planned: review.planned };
+}
+export function noteWeeklyConsistencyFromFinish(before, next) {
+  try {
+    const date = new Date();
+    const prior = weeklyReviewConsistency(before, date);
+    const after = weeklyReviewConsistency(next, date);
+    noteWeeklyConsistencyChange({
+      before: prior,
+      after,
+      beforeKey: weeklyConsistencyKey(before, prior, date),
+      afterKey: weeklyConsistencyKey(next, after, date),
+    });
+  } catch { clearWeeklyConsistencyMotion(); }
+}
+// Fills bars for sessions completed since the card was last shown, once, when
+// the bars are on screen. Everything else renders the real state at once.
+function useWeeklyBarFill(key, barsRef) {
+  const [motion, setMotion] = useState(() => {
+    const found = peekWeeklyConsistencyMotion(key);
+    if (found && prefersReducedMotion()) { consumeWeeklyConsistencyMotion(found); return null; }
+    return found ? { ...found, phase: 'waiting' } : null;
+  });
+  const active = motion && motion.key === key ? motion : null;
+  useEffect(() => {
+    if (motion && motion.key !== key) setMotion(null);
+  }, [key, motion]);
+  const phase = active?.phase;
+  useEffect(() => {
+    if (phase !== 'waiting') return undefined;
+    const bars = barsRef.current;
+    const start = () => {
+      consumeWeeklyConsistencyMotion(peekWeeklyConsistencyMotion(key));
+      if (prefersReducedMotion()) { setMotion(null); return; }
+      setMotion(current => current && current.key === key ? { ...current, phase: 'playing' } : current);
+    };
+    if (!bars || typeof IntersectionObserver !== 'function') { start(); return undefined; }
+    const observer = new IntersectionObserver(entries => {
+      if (entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.99)) {
+        observer.disconnect();
+        start();
+      }
+    }, { threshold: [0, 1] });
+    observer.observe(bars);
+    return () => observer.disconnect();
+  }, [phase, key, barsRef]);
+  useEffect(() => {
+    if (phase !== 'playing') return undefined;
+    const count = active.to - active.from;
+    const total = count * WEEKLY_BAR_FILL_MS + (active.to === active.planned ? WEEKLY_MARK_EMPHASIS_MS : 0);
+    const timer = setTimeout(() => setMotion(null), total + 80);
+    return () => clearTimeout(timer);
+  }, [phase]); // eslint-disable-line react-hooks/exhaustive-deps
+  return active;
+}
 export function Progress({ state, update, setDetail, setPage }) {
   const screenRef = useRef(null);
+  const consistencyBarsRef = useRef(null);
   const completedWorkouts = completedProgressWorkouts(state.workouts);
   const photos = useWorkoutPhotoCollection(state.workouts);
-  const weeklyReview = weeklyPerformanceReview(state, new Date(), {
-    e1rmEligible: exerciseSupportsEstimatedOneRepMax,
-    exerciseLabel: exerciseName,
-  });
-  const consistency = state.flexibleWeek ? { completed: weeklyReview.completed, planned: weeklyReview.planned } : consistencyForCurrentWeek(state);
+  const reviewDate = new Date();
+  const weeklyReview = weeklyPerformanceReview(state, reviewDate, WEEKLY_REVIEW_OPTIONS);
+  const consistency = weeklyReviewConsistency(state, reviewDate, weeklyReview);
   const weekComplete =
     consistency.planned > 0 &&
     consistency.completed === consistency.planned;
+  const barFill = useWeeklyBarFill(weeklyConsistencyKey(state, consistency, reviewDate), consistencyBarsRef);
+  const barFillState = (index) => {
+    if (!barFill || index < barFill.from || index >= barFill.to) return null;
+    return barFill.phase === 'waiting' ? 'waiting' : 'playing';
+  };
+  const markEmphasis = barFill && weekComplete && barFill.to === consistency.planned ? barFill.phase : null;
   const unit = weightUnit(state.profile.units);
   const loggedRows = loggedExercises(state.workouts);
   const allProgressionRows = selectProgressionRows(state, completedWorkouts);
@@ -11475,15 +11546,26 @@ export function Progress({ state, update, setDetail, setPage }) {
                 <strong>{consistency.completed} / {consistency.planned}</strong>
                 <span>planned sessions completed</span>
                 {weekComplete && (
-                  <span className="weekly-completion-mark" aria-hidden="true">
+                  <span
+                    className={`weekly-completion-mark${markEmphasis === 'waiting' ? ' is-awaiting-fill' : markEmphasis === 'playing' ? ' is-emphasized' : ''}`}
+                    style={markEmphasis === 'playing' ? { '--weekly-mark-delay': `${(barFill.to - barFill.from) * WEEKLY_BAR_FILL_MS}ms` } : undefined}
+                    aria-hidden="true"
+                  >
                     <svg viewBox="0 0 16 16"><path d="m4 8.2 2.5 2.5L12 5.5" /></svg>
                   </span>
                 )}
               </div>
-              <div className="consistency-bars">
-                {Array.from({ length: consistency.planned }, (_, index) => (
-                  <i className={index < consistency.completed ? "filled" : ""} key={index} />
-                ))}
+              <div className="consistency-bars" ref={consistencyBarsRef} aria-hidden="true">
+                {Array.from({ length: consistency.planned }, (_, index) => {
+                  const fill = barFillState(index);
+                  return (
+                    <i
+                      className={fill === 'playing' ? "is-filling" : fill === 'waiting' ? "" : index < consistency.completed ? "filled" : ""}
+                      style={fill === 'playing' ? { '--weekly-bar-delay': `${(index - barFill.from) * WEEKLY_BAR_FILL_MS}ms` } : undefined}
+                      key={index}
+                    />
+                  );
+                })}
               </div>
             </>
           ) : (

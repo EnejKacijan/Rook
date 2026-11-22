@@ -259,6 +259,22 @@ body {
 .weekly-review-card .consistency { margin-top: 0; }
 .weekly-review-card .consistency-bars { margin-top: 13px; }
 .weekly-review-card .consistency-bars i { height: 5px; border-radius: 999px; }
+:root .weekly-review-card .consistency-bars > i:not(.filled) {
+  background: color-mix(in srgb, var(--rook-surface-elevated), var(--rook-control-border) 40%);
+}
+.consistency-bars i.is-filling { position: relative; overflow: hidden; }
+.consistency-bars i.is-filling::after { content: ""; position: absolute; inset: 0; border-radius: inherit; background: var(--rook-progress); transform-origin: left center; }
+.progress-screen .weekly-completion-mark.is-awaiting-fill { opacity: 0; transform: scale(.6); }
+@media (prefers-reduced-motion: no-preference) {
+  .consistency-bars i.is-filling::after { animation: weekly-bar-fill 250ms var(--rook-ease-standard, cubic-bezier(.2, 0, 0, 1)) var(--weekly-bar-delay, 0ms) both; }
+  .progress-screen .weekly-completion-mark.is-emphasized { animation: weekly-mark-emphasis 360ms var(--rook-ease-release, cubic-bezier(.2, .8, .2, 1)) var(--weekly-mark-delay, 0ms) both; }
+}
+@keyframes weekly-bar-fill { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes weekly-mark-emphasis {
+  0% { opacity: 0; transform: scale(.6); box-shadow: 0 0 0 0 color-mix(in srgb, var(--rook-accent, #1f6b4c) 28%, transparent); }
+  55% { opacity: 1; transform: scale(1.14); box-shadow: 0 0 0 5px color-mix(in srgb, var(--rook-accent, #1f6b4c) 14%, transparent); }
+  100% { opacity: 1; transform: scale(1); box-shadow: 0 0 0 7px transparent; }
+}
 .weekly-review-metrics { margin: 17px 0 0; padding-top: 15px; border-top: 1px solid var(--rook-border, rgba(27,26,25,.08)); display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px 18px; }
 .weekly-review-metrics > div { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .weekly-review-metrics dt,
