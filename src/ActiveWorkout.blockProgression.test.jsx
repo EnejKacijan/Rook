@@ -49,8 +49,9 @@ it('labels deload, displays its reduced targets, and has no increase action or n
   expect(host.querySelector('.progression-apply-action')).toBeNull();expect(current.activeWorkout.exercises[0].targetRir).toBe(4);
   expect(current.activeWorkout.exercises[0].sets.every(set=>set.reps===6&&!set.completed)).toBe(true);
 });
-it('makes the normal source clear after deload and keeps the normal working load',()=>{
-  mount(fixture(1,{afterDeload:true}));expect(host.textContent).toContain('Last normal');
+it('shows the last normal load for the same planned workout after deload',()=>{
+  mount(fixture(1,{afterDeload:true}));
+  expect(host.querySelector('.exercise-history-meta').textContent).toBe('Last in Upper A · 50 kg');
   expect(current.activeWorkout.exercises[0].sets[0].weight).toBe(50);expect(host.textContent).not.toContain('Review the load');
 });
 it('keeps deload in exercise history while the normal strength trend skips it',()=>{
