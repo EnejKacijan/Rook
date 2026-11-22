@@ -1,6 +1,6 @@
 import React, {act, useRef, useState} from 'react';
 import {createRoot} from 'react-dom/client';
-import {afterEach, beforeEach, expect, it, vi} from 'vitest';
+import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest';
 import {ActiveWorkout, Detail, ModalLayer} from './App.jsx';
 import * as domain from './domain.js';
 import {exerciseNotePresentation} from './exerciseNotePresentation.js';
@@ -37,9 +37,9 @@ beforeEach(() => {
   host = document.createElement('div'); document.body.append(host); root = createRoot(host);
 });
 afterEach(() => {act(() => root.unmount()); host.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); vi.useRealTimers();});
-function mount(payload = initial.activeWorkout.exercises[0]) {
+function mount(payload = initial.activeWorkout.exercises[0], noteId = domain.LEGACY_PERSONAL_NOTE_ID) {
   function Harness() {
-    const [state, setState] = useState(initial), [detail, setDetail] = useState(payload === null ? null : {exerciseNote: payload}), background = useRef(null);
+    const [state, setState] = useState(initial), [detail, setDetail] = useState(payload === null ? null : {exerciseNote: payload, noteId}), background = useRef(null);
     current = state;
     const update = fn => {updates(); setState(before => fn(structuredClone(before)));};
     return <><div ref={background}><ActiveWorkout state={state} update={update} setDetail={setDetail} setPage={() => {}}/></div>
@@ -108,19 +108,21 @@ it('opening, dismissing and saving the direct note preserves raw logger drafts a
   expect(current.workouts).toEqual(before.workouts); expect(updates).toHaveBeenCalledOnce();
 });
 
-it('puts the personal-note indicator and preview on Edit note, not above the overflow button', () => {
+it('puts the personal-note indicator and preview on Exercise notes, not above the overflow button', () => {
   mount(null); const overflow = document.querySelector('button[aria-label="Exercise options"]');
   expect(overflow.querySelector('.exercise-note-present')).toBeNull();
   expect(overflow.getAttribute('aria-description')).toContain('Note added');
   const action = openOptions();
-  expect(action.getAttribute('aria-label')).toBe('Edit note');
+  expect(action.getAttribute('aria-label')).toBe('Exercise notes');
   expect(action.querySelector('.exercise-note-present').getAttribute('aria-hidden')).toBe('true');
   expect(action.querySelector('small').textContent).toBe('Use the same box height');
   expect(action.getAttribute('aria-describedby')).toBe(action.querySelector('small').id);
   expect(action.querySelector('svg')).not.toBeNull();
   expect(current).toEqual(initial); expect(updates).not.toHaveBeenCalled();
   click(action); advance(300);
-  expect(field().value).toBe('Use the same box height');
+  // The menu opens the full list with an empty field for another note.
+  expect(field().value).toBe('');
+  expect(document.querySelector('.exercise-note-item p').textContent).toBe('Use the same box height');
   expect(document.querySelector('.exercise-plan-note p').textContent).toBe('pocasi dol, hitro gor');
 });
 
@@ -137,10 +139,13 @@ it('Add note has no existing-note indicator or preview, even when a plan cue exi
 
 it('saving and removing through the same editor updates the menu and preserves instructions/history', () => {
   const history = structuredClone(initial.workouts);
+  for (const row of [initial.program.days[0].exercises[0], initial.activeWorkout.exercises[0]]) delete row.personalNote;
   mount(null); click(openOptions()); advance(300); type('Seat 4, controlled pace');
   click(button('SAVE')); advance(300);
   let action = openOptions(); expect(action.querySelector('small').textContent).toBe('Seat 4, controlled pace');
-  click(action); advance(300); click(button('Remove note')); advance(300);
+  click(action); advance(300); click(document.querySelector('[aria-label="Remove note: Seat 4, controlled pace"]')); advance(300);
+  expect(document.querySelector('.exercise-note-item')).toBeNull();
+  click(document.querySelector('.exercise-note-sheet [aria-label="Close"]')); advance(300);
   action = openOptions(); expect(action.getAttribute('aria-label')).toBe('Add note');
   expect(action.querySelector('.exercise-note-present,small')).toBeNull();
   expect(domain.exercisePersonalNote(current.program.days[0].exercises[0])).toBeNull();
@@ -202,7 +207,7 @@ it.each([[true,true],[true,false],[false,true],[false,false]])('J: plan=%s/perso
     row.notes = plan ? 'pocasi dol, hitro gor' : ''; row.personalNote = personal ? 'Use the same box height' : '';
   }
   mount(); expect(Boolean(document.querySelector('.exercise-plan-note'))).toBe(plan);
-  expect(document.querySelector('.exercise-note-sheet').textContent).toContain('PERSONAL REMINDER');
+  expect(document.querySelector('.exercise-note-sheet').textContent).toContain(personal ? 'EDIT NOTE' : 'PERSONAL REMINDER');
   expect(field().value).toBe(personal ? 'Use the same box height' : '');
   expect(field().value).not.toContain('pocasi dol');
   expect(document.querySelector('.exercise-source-reference')).toBeNull();
@@ -235,7 +240,7 @@ it('keeps a long multiline plan instruction intact outside the 120-character edi
   expect(field().value).toBe('Use the same box height'); expect(field().maxLength).toBe(120);
 });
 it('preserves the template-slot and session-only reminder scopes', () => {
-  mount(); expect(document.querySelector('.exercise-note-meta').textContent).toContain(`Shown next time in ${initial.program.days[0].name}.`);
+  mount(); expect(document.querySelector('.exercise-note-meta').textContent).toContain(`Shown in Future ${initial.program.days[0].name} workouts.`);
   const scoped = structuredClone(initial); scoped.activeWorkout.programDayId = 'not-a-template';
   const id = scoped.activeWorkout.exercises[0].id;
   expect(domain.saveActiveExercisePersonalNote(scoped, id, 'One-session reminder').scope).toBe('workout');
@@ -297,4 +302,101 @@ it('H/I: reload and existing program/active-workout sync preserve separate field
   }
   expect(domain.saveState(restored)).toBe(true);
   expect(domain.loadState().activeWorkout.exercises[0]).toMatchObject({notes:'pocasi dol, hitro gor',personalNote:'Updated personal reminder'});
+});
+
+describe('multiple notes per exercise', () => {
+  const ex = () => current.activeWorkout.exercises[0];
+  const tpl = () => current.program.days[0].exercises[0];
+  const texts = row => domain.exercisePersonalNotes(row).map(note => note.text);
+
+  it('keeps the existing reminder as a pinned note in its original scope', () => {
+    const [note] = domain.exercisePersonalNotes(initial.activeWorkout.exercises[0]);
+    expect(note).toEqual({id: domain.LEGACY_PERSONAL_NOTE_ID, text: 'Use the same box height', pinned: true});
+    mount(); const item = document.querySelector('.exercise-note-item');
+    expect(item.textContent).toContain(`Pinned · Future ${initial.program.days[0].name} workouts`);
+  });
+
+  it('adds a session-only note by default and keeps the pinned reminder under the name', () => {
+    mount(null); click(openOptions()); advance(300);
+    expect(document.querySelector('.exercise-note-option input').checked).toBe(false);
+    expect(document.querySelector('.exercise-note-sheet').textContent).toContain(`Save for future workouts${'Future ' + initial.program.days[0].name + ' workouts'}`);
+    type('Left shoulder felt tight'); click(button('ADD NOTE')); advance(300);
+    expect(texts(ex())).toEqual(['Use the same box height', 'Left shoulder felt tight']);
+    expect(texts(tpl())).toEqual(['Use the same box height']);
+    expect(document.querySelector('.exercise-personal-note-action').textContent).toContain('Use the same box height');
+    const more = document.querySelector('.exercise-more-notes');
+    expect(more.textContent).toBe('+1 more note');
+    click(more); advance(300);
+    expect([...document.querySelectorAll('.exercise-note-item small')].map(node => node.textContent))
+      .toEqual([`Pinned · Future ${initial.program.days[0].name} workouts`, 'This workout only']);
+  });
+
+  it('Save for future workouts copies the note to the planned workout only', () => {
+    mount(null); click(openOptions()); advance(300); type('Bench 2 has the good bar');
+    click(document.querySelector('.exercise-note-option input')); click(button('ADD NOTE')); advance(300);
+    expect(texts(tpl())).toEqual(['Use the same box height', 'Bench 2 has the good bar']);
+    expect(texts(current.program.days[1].exercises[0])).toEqual(['Tuesday reminder']);
+  });
+
+  it('pins another note in place and can unpin it', () => {
+    mount(null); click(openOptions()); advance(300); type('Today: lighter warm-up'); click(button('ADD NOTE')); advance(300);
+    click(document.querySelector('.exercise-more-notes')); advance(300);
+    click(document.querySelector('[aria-label="Pin note: Today: lighter warm-up"]')); advance(50);
+    expect(document.querySelector('.exercise-personal-note-action').textContent).toContain('Today: lighter warm-up');
+    expect(ex().personalNote).toBe('Today: lighter warm-up');
+    // A session note pinned today leaves next time’s pinned reminder alone.
+    expect(domain.pinnedExercisePersonalNote(tpl()).text).toBe('Use the same box height');
+    click(document.querySelector('[aria-label="Unpin note: Today: lighter warm-up"]')); advance(50);
+    expect(domain.pinnedExercisePersonalNote(ex())).toBeNull();
+    expect(document.querySelector('.exercise-personal-note-action')).toBeNull();
+  });
+});
+
+describe('note scopes across sessions', () => {
+  function upperState() {
+    const state = fixture(); state.activeWorkout = null;
+    state.program.days[0].name = 'Upper B'; state.program.days[1].name = 'Upper A';
+    state.program.days.forEach(day => { day.exercises[0].exerciseId = 'barbell-bench-press'; });
+    state.activeWorkout = domain.startWorkout(state, state.program.days[0]);
+    return state;
+  }
+  it('shows a future note and the pinned reminder in the next Upper B, not in Upper A, and keeps today’s note in history', () => {
+    const state = upperState(); const id = state.activeWorkout.exercises[0].id;
+    expect(domain.saveActiveExerciseNote(state, id, {text: 'Today: elbow ok at 80 kg'}).scope).toBe('workout');
+    expect(domain.saveActiveExerciseNote(state, id, {text: 'Pause first rep', scope: 'template'}).scope).toBe('template');
+    state.activeWorkout.exercises[0].sets[0].completed = true;
+    const done = domain.completeWorkout(state);
+    const history = done.workouts.at(-1).exercises[0];
+    expect(domain.exercisePersonalNotes(history).map(note => note.text)).toEqual(['Use the same box height', 'Today: elbow ok at 80 kg', 'Pause first rep']);
+    const nextB = domain.startWorkout(done, done.program.days[0]).exercises[0];
+    expect(domain.exercisePersonalNotes(nextB).map(note => [note.text, Boolean(note.pinned)]))
+      .toEqual([['Use the same box height', true], ['Pause first rep', false]]);
+    const upperA = domain.startWorkout(done, done.program.days[1]).exercises[0];
+    expect(domain.exercisePersonalNotes(upperA).map(note => note.text)).toEqual(['Tuesday reminder']);
+  });
+  it('moving a note between scopes and removing a future note update the planned workout', () => {
+    const state = upperState(); const id = state.activeWorkout.exercises[0].id;
+    const {note} = domain.saveActiveExerciseNote(state, id, {text: 'Grip ring finger'});
+    domain.saveActiveExerciseNote(state, id, {id: note.id, text: 'Grip ring finger', scope: 'template'});
+    expect(domain.exercisePersonalNotes(state.program.days[0].exercises[0]).map(item => item.text)).toContain('Grip ring finger');
+    domain.saveActiveExerciseNote(state, id, {id: note.id, text: 'Grip ring finger', scope: 'workout'});
+    expect(domain.exercisePersonalNotes(state.program.days[0].exercises[0]).map(item => item.text)).toEqual(['Use the same box height']);
+    domain.removeActiveExerciseNote(state, id, domain.LEGACY_PERSONAL_NOTE_ID);
+    expect(state.program.days[0].exercises[0].personalNote).toBeUndefined();
+    expect(domain.exercisePersonalNotes(state.activeWorkout.exercises[0]).map(item => item.text)).toEqual(['Grip ring finger']);
+  });
+  it('treats the legacy mirror as the pinned note when an older client edits it', () => {
+    const state = upperState(); const id = state.activeWorkout.exercises[0].id;
+    domain.saveActiveExerciseNote(state, id, {text: 'Second'});
+    const row = state.activeWorkout.exercises[0];
+    row.personalNote = 'Edited elsewhere';
+    expect(domain.exercisePersonalNotes(row).map(note => note.text)).toEqual(['Edited elsewhere', 'Second']);
+    row.personalNote = null;
+    expect(domain.exercisePersonalNotes(row).map(note => note.text)).toEqual(['Second']);
+  });
+  it('limits each exercise to ten notes', () => {
+    const state = upperState(); const id = state.activeWorkout.exercises[0].id;
+    for (let i = 1; i < domain.EXERCISE_PERSONAL_NOTES_MAX; i++) expect(domain.saveActiveExerciseNote(state, id, {text: `n${i}`}).saved).toBe(true);
+    expect(domain.saveActiveExerciseNote(state, id, {text: 'one too many'})).toMatchObject({saved: false});
+  });
 });

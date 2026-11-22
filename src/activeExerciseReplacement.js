@@ -81,7 +81,7 @@ export function revertActiveExerciseReplacement(state, request) {
   const live = workout.exercises[workout.exerciseIndex];
   const restored = structuredClone(context.record.original);
   // A pairing, note or navigation timestamp can change independently of a swap.
-  for (const key of ['supersetId', 'startedAt', 'personalNote']) {
+  for (const key of ['supersetId', 'startedAt', 'personalNote', 'personalNotes']) {
     if (Object.hasOwn(live, key)) restored[key] = live[key];
     else delete restored[key];
   }
@@ -125,15 +125,21 @@ function plannedWorkoutTitle(workout) {
   return [primary, detail, context].filter(Boolean).join(' · ');
 }
 
+// The name a person sees for a planned workout, with its weekday added when
+// another planned workout shares the same title.
+export function programWorkoutTitle(workout, program) {
+  const title = plannedWorkoutTitle(workout);
+  const titleKey = title.toLowerCase();
+  const repeatedTitle = (program?.days || []).some(day =>
+    day.id !== workout.id && plannedWorkoutTitle(day).toLowerCase() === titleKey);
+  return repeatedTitle && workout.weekday ? `${title} (${workout.weekday})` : title;
+}
+
 function destinationWorkoutTitle(destination, program) {
   if (!destination) return undefined;
   const {workout, owner} = destination;
   if (owner.kind === 'template') return workout.name;
-  const title = plannedWorkoutTitle(workout);
-  const titleKey = title.toLowerCase();
-  const repeatedTitle = program.days.some(day =>
-    day.id !== workout.id && plannedWorkoutTitle(day).toLowerCase() === titleKey);
-  return repeatedTitle && workout.weekday ? `${title} (${workout.weekday})` : title;
+  return programWorkoutTitle(workout, program);
 }
 
 export function replacementSaveOptions(state, workout, record) {

@@ -74,7 +74,7 @@ import { capturePageSurface, playPageNavigation, stopPageNavigation } from './pa
 import { FirstRunNavigation, FirstRunStepMotion } from './FirstRunNavigation.jsx';
 import { FirstRunBackButton, NavigationChevron } from './NavigationChevron.jsx';
 import { WorkoutMotion, workoutMotionDuration } from './WorkoutMotion.jsx';
-import { activeExerciseReplacement, exerciseRevertIssue, rememberActiveExerciseReplacement, replacementSaveOptions, revertActiveExerciseReplacement, saveActiveReplacementToWorkout, setActiveReplacementDetailsHidden } from './activeExerciseReplacement.js';
+import { activeExerciseReplacement, exerciseRevertIssue, programWorkoutTitle, rememberActiveExerciseReplacement, replacementSaveOptions, revertActiveExerciseReplacement, saveActiveReplacementToWorkout, setActiveReplacementDetailsHidden } from './activeExerciseReplacement.js';
 import './activeExerciseReplacement.css';
 import { CurrentExerciseContext } from './CurrentExerciseContext.jsx';
 import { createTodayScheduleReader } from './todayScheduleReader.js';
@@ -379,6 +379,11 @@ import {
   hydrateStoredState,
   STORAGE_KEY,
   saveActiveExercisePersonalNote,
+  saveActiveExerciseNote,
+  removeActiveExerciseNote,
+  pinActiveExerciseNote,
+  exercisePersonalNotes,
+  EXERCISE_PERSONAL_NOTES_MAX,
   splitImportedExerciseLabel,
   startWorkout,
   canStartOptionalSession,
@@ -6518,6 +6523,9 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     <section className="freestyle-empty"><h1>No exercises yet</h1><p>Add the first exercise when you’re ready. Your plan won’t change.</p><FreestyleActions setDetail={setDetail} /></section>
   </main>;
   const exerciseIllustration = activeArtwork.source;
+  const exerciseNotes = exercisePersonalNotes(exercise);
+  const pinnedNote = exerciseNotes.find(note => note.pinned);
+  const otherNoteCount = exerciseNotes.length - (pinnedNote ? 1 : 0);
   const superset = supersetMeta(active.exercises, active.exerciseIndex);
   const canonicalSupersetStep = superset
     ? nextSupersetStep(active.exercises, superset.id)
@@ -7383,7 +7391,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             <button
               className="exercise-options-button"
               aria-label="Exercise options"
-              aria-description={replacement?.detailsHidden ? "Includes replacement actions." : exercisePersonalNote(exercise) ? "Note added. Edit note in this menu." : "Includes Add note."}
+              aria-description={replacement?.detailsHidden ? "Includes replacement actions." : exerciseNotes.length ? `${exerciseNotes.length === 1 ? "Note" : `${exerciseNotes.length} notes`} added. Open Exercise notes in this menu.` : "Includes Add note."}
               title="Exercise options"
               data-workout-options
               onPointerDown={event => event.preventDefault()}
@@ -7449,10 +7457,24 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
             {exerciseNotePresentation(exercise,state.program).cue && (
               <small className="exercise-user-note exercise-program-note">{exerciseNotePresentation(exercise,state.program).cue}</small>
             )}
-            {exercisePersonalNote(exercise) && (
+            {pinnedNote && (
               <ExerciseNavigationButton
                 className="exercise-personal-note exercise-personal-note-action"
-                aria-label={`Edit note: ${exercisePersonalNote(exercise)}`}
+                aria-label={`Edit note: ${pinnedNote.text}`}
+                aria-haspopup="dialog"
+                data-workout-options
+                onPointerDown={event => { if (event.button === 0) event.preventDefault(); }}
+                onClick={event => {
+                  focusNavigationTarget(event.currentTarget);
+                  setDetail({ exerciseNote: exercise, noteId: pinnedNote.id });
+                }}
+              >
+                <span>Your note</span> · {pinnedNote.text}
+              </ExerciseNavigationButton>
+            )}
+            {otherNoteCount > 0 && (
+              <ExerciseNavigationButton
+                className="exercise-more-notes"
                 aria-haspopup="dialog"
                 data-workout-options
                 onPointerDown={event => { if (event.button === 0) event.preventDefault(); }}
@@ -7461,7 +7483,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                   setDetail({ exerciseNote: exercise });
                 }}
               >
-                <span>Your note</span> · {exercisePersonalNote(exercise)}
+                {pinnedNote ? `+${otherNoteCount} more ${otherNoteCount === 1 ? "note" : "notes"}` : `${otherNoteCount} ${otherNoteCount === 1 ? "note" : "notes"}`}
               </ExerciseNavigationButton>
             )}
             {supersetNextLabel && (
@@ -8676,7 +8698,7 @@ function WorkoutSessionLog({ exercises, units, label = "SESSION LOG", emptyCopy,
                       </div>
                     );
                   })}
-                  {(exercise.personalNote || exercise.sets.some(s=>s.rawImport?.version===2)&&exercise.notes) && <p className="sheet-footnote">{[...new Set([exercise.personalNote,exercise.sets.some(s=>s.rawImport?.version===2)?exercise.notes:null].filter(Boolean))].join('\n')}</p>}
+                  {(exercisePersonalNotes(exercise).length>0 || exercise.sets.some(s=>s.rawImport?.version===2)&&exercise.notes) && <p className="sheet-footnote session-log-notes">{[...new Set([...exercisePersonalNotes(exercise).map(note=>note.text),exercise.sets.some(s=>s.rawImport?.version===2)?exercise.notes:null].filter(Boolean))].join('\n')}</p>}
                 </div>
               </Disclosure>
             </div>
@@ -19224,6 +19246,7 @@ export function Detail({
     return (
       <ExerciseNoteEditor
         exercise={detail.exerciseNote}
+        noteId={detail.noteId}
         state={state}
         update={update}
         close={close}
@@ -20094,34 +20117,74 @@ export function UpNextExerciseOptions({close,workout,request,onMoveUpNext,onRemo
   </WorkoutOptionsSheet>;
 }
 
-function ExerciseNoteEditor({ exercise, state, update, close }) {
-  const sheetRef = useRef(null);
+function exerciseNoteScopeLabel(note, futureLabel) {
+  return note.scope === "template" ? futureLabel : "This workout only";
+}
+
+function ExerciseNoteEditor({ exercise, noteId, state, update, close }) {
   const saving = useRef(false);
+  const listHeadingRef = useRef(null);
   const active = state.activeWorkout;
   const current =
     active?.exercises?.find((item) => item.id === exercise.id) || exercise;
-  const initialNote = exercisePersonalNote(current) || "";
   const {reference,cue}=exerciseNotePresentation(current,state.program);
-  const [draft, setDraft] = useState(initialNote);
   const templateDay = state.program?.days?.find(
     (day) => day.id === active?.programDayId,
   );
   const persistsToTemplate = Boolean(
     templateDay?.exercises?.some((item) => item.id === current.id),
   );
+  const futureLabel = `Future ${persistsToTemplate ? programWorkoutTitle(templateDay, state.program) || active?.name || "planned" : "planned"} workouts`;
+  // Notes saved before scopes existed follow the planned workout, as they did.
+  const notes = exercisePersonalNotes(current).map((note) => ({
+    ...note,
+    scope: note.scope === "template" && persistsToTemplate ? "template" : note.scope ? "workout" : persistsToTemplate ? "template" : "workout",
+  }));
+  const startEditing = (id) => {
+    const note = notes.find((item) => item.id === id);
+    return note
+      ? { id: note.id, text: note.text, scope: note.scope, pinned: Boolean(note.pinned) }
+      : { id: null, text: "", scope: "workout", pinned: !notes.some((item) => item.pinned) };
+  };
+  const [form, setForm] = useState(() => startEditing(noteId));
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const editing = form.id ? notes.find((item) => item.id === form.id) : null;
+  const full = !editing && notes.length >= EXERCISE_PERSONAL_NOTES_MAX;
   const helperId = `exercise-note-helper-${current.id}`;
-  const save = (value = draft) => {
+  const commit = (change) => update((next) => {
+    change(next);
+    return next;
+  });
+  const save = () => {
     if (saving.current) return;
+    if (!form.text.trim()) { setError("Write a note first."); return; }
     saving.current = true;
-    update((next) => {
-      saveActiveExercisePersonalNote(next, current.id, value);
-      return next;
-    });
-    close();
+    try {
+      commit((next) => saveActiveExerciseNote(next, current.id, {
+        id: form.id || undefined, text: form.text, scope: form.scope, pinned: form.pinned,
+      }));
+      close();
+    } catch (failure) { saving.current = false; setError(failure.message); }
+  };
+  const remove = (note, closeAfter) => {
+    try {
+      commit((next) => removeActiveExerciseNote(next, current.id, note.id));
+      if (closeAfter) { close(); return; }
+      if (form.id === note.id) setForm(startEditing(null));
+      setStatus(note.scope === "template" ? `Note removed from this workout and ${futureLabel}.` : "Note removed.");
+      requestAnimationFrame(() => listHeadingRef.current?.focus());
+    } catch (failure) { setError(failure.message); }
+  };
+  const togglePin = (note) => {
+    try {
+      commit((next) => pinActiveExerciseNote(next, current.id, note.id, !note.pinned));
+      if (form.id === note.id) setForm((value) => ({ ...value, pinned: !note.pinned }));
+      setStatus(note.pinned ? "Note unpinned." : "Note pinned under the exercise name.");
+    } catch (failure) { setError(failure.message); }
   };
   return (
     <main
-      ref={sheetRef}
       className="sheet replace-sheet exercise-note-sheet"
       role="dialog"
       aria-modal="true"
@@ -20145,41 +20208,67 @@ function ExerciseNoteEditor({ exercise, state, update, close }) {
         <p>Original wording may include unselected options. Follow the prescription under Target.</p>
         <blockquote>{reference}</blockquote>
       </section>}
-      <Eyebrow>PERSONAL REMINDER</Eyebrow>
+      {notes.length > 0 && <section className="exercise-note-list" aria-labelledby="exercise-note-list-title">
+        <h3 id="exercise-note-list-title" ref={listHeadingRef} tabIndex={-1} className="eyebrow">YOUR NOTES · {notes.length}</h3>
+        <ul>
+          {notes.map((note) => (
+            <li key={note.id} className={`exercise-note-item${note.pinned ? " pinned" : ""}${form.id === note.id ? " editing" : ""}`}>
+              <p className="rook-selectable">{note.text}</p>
+              <small>{note.pinned ? "Pinned · " : ""}{exerciseNoteScopeLabel(note, futureLabel)}</small>
+              <div className="exercise-note-item-actions">
+                <button type="button" className="text-button" aria-label={`Edit note: ${note.text}`} disabled={form.id === note.id} onClick={() => { setError(""); setStatus(""); setForm(startEditing(note.id)); }}>Edit</button>
+                <button type="button" className="text-button" aria-pressed={Boolean(note.pinned)} aria-label={`${note.pinned ? "Unpin" : "Pin"} note: ${note.text}`} onClick={() => togglePin(note)}>{note.pinned ? "Unpin" : "Pin"}</button>
+                <button type="button" className="text-button danger-text" aria-label={`Remove note: ${note.text}`} onClick={() => remove(note)}>Remove</button>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>}
+      <p className="visually-hidden" role="status" aria-live="polite">{status}</p>
+      <Eyebrow>{editing ? "EDIT NOTE" : notes.length ? "NEW NOTE" : "PERSONAL REMINDER"}</Eyebrow>
+      {full ? <p className="exercise-note-full">You have {EXERCISE_PERSONAL_NOTES_MAX} notes for this exercise. Remove one to add another.</p> : <>
       <label className="exercise-note-field">
         <span className="visually-hidden">Exercise note</span>
         <textarea
           aria-describedby={helperId}
           maxLength={EXERCISE_PERSONAL_NOTE_MAX_LENGTH}
-          placeholder="Add a personal reminder…"
+          placeholder={notes.length && !editing ? "Add another note…" : "Add a personal reminder…"}
           rows={3}
-          value={draft}
-          onChange={(event) =>
-            setDraft(
-              event.target.value.slice(0, EXERCISE_PERSONAL_NOTE_MAX_LENGTH),
-            )
-          }
+          value={form.text}
+          onChange={(event) => {
+            setError("");
+            const text = event.target.value.slice(0, EXERCISE_PERSONAL_NOTE_MAX_LENGTH);
+            setForm((value) => ({ ...value, text }));
+          }}
         />
       </label>
       <div className="exercise-note-meta" id={helperId}>
         <small>
-          {persistsToTemplate
-            ? `Shown next time in ${templateDay.name || active?.name || "this workout"}.`
-            : "Saved with this workout only."}
+          {form.scope === "template" ? `Shown in ${futureLabel}.` : "Saved with this workout only."}
         </small>
         <small aria-live="polite">
-          {draft.length} / {EXERCISE_PERSONAL_NOTE_MAX_LENGTH}
+          {form.text.length} / {EXERCISE_PERSONAL_NOTE_MAX_LENGTH}
         </small>
       </div>
+      {persistsToTemplate && <label className="exercise-note-option">
+        <input type="checkbox" checked={form.scope === "template"} onChange={(event) => setForm((value) => ({ ...value, scope: event.target.checked ? "template" : "workout" }))} />
+        <span><strong>Save for future workouts</strong><small>{futureLabel}</small></span>
+      </label>}
+      <label className="exercise-note-option">
+        <input type="checkbox" checked={form.pinned} onChange={(event) => setForm((value) => ({ ...value, pinned: event.target.checked }))} />
+        <span><strong>Pin under exercise name</strong><small>{notes.some((item) => item.pinned && item.id !== form.id) ? "Replaces the pinned note in this workout." : "Shown while you train."}</small></span>
+      </label>
+      </>}
+      {error && <p className="danger-text" role="alert">{error}</p>}
       <SheetActionFooter containViewport keyboardBehavior="pin-if-room">
-      <button type="button" className="button primary exercise-note-save" onPointerDown={event=>{if(event.button===0)event.preventDefault();}} onClick={() => save()}>
-        SAVE
-      </button>
-      {initialNote && (
+      {!full && <button type="button" className="button primary exercise-note-save" onPointerDown={event=>{if(event.button===0)event.preventDefault();}} onClick={save}>
+        {editing ? "SAVE" : notes.length ? "ADD NOTE" : "SAVE"}
+      </button>}
+      {editing && (
         <button
           type="button"
           className="text-button exercise-note-remove" data-keyboard-secondary
-          onClick={() => save("")}
+          onClick={() => remove(editing, true)}
         >
           Remove note
         </button>
@@ -20206,7 +20295,9 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
     (item) => item.id === exercise.id,
   );
   const current = active?.exercises[exerciseIndex] || exercise;
-  const personalNote = exercisePersonalNote(current);
+  const exerciseNotes = exercisePersonalNotes(current);
+  const pinnedNote = exerciseNotes.find(note => note.pinned);
+  const personalNote = exerciseNotes.length ? [pinnedNote?.text || exerciseNotes[0].text, exerciseNotes.length > 1 ? `${exerciseNotes.length} notes` : ""].filter(Boolean).join(" · ") : null;
   const notePreviewId = `exercise-options-note-${current.id}`;
   const pair =
     active && exerciseIndex >= 0
@@ -20280,14 +20371,14 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       {(removable||loggedWork&&onRemoveCurrent)&&<button type="button" className="list-row danger-text" disabled={!removable} onClick={()=>apply(()=>onRemoveCurrent?.(current.id))}>Remove from this workout</button>}
       {loggedWork&&(onMoveCurrent||onRemoveCurrent)&&<p>Move and remove are locked after work has been logged.</p>}
       <button type="button" className="list-row active-exercise-note-action"
-        aria-label={personalNote ? "Edit note" : "Add note"}
+        aria-label={personalNote ? "Exercise notes" : "Add note"}
         aria-describedby={personalNote ? notePreviewId : undefined}
         onClick={() => setDetail({ exerciseNote: current })}>
         <span className="exercise-note-action-copy">
           <span className="exercise-note-action-label">
             {personalNote && <i className="exercise-note-present" aria-hidden="true" />}
             {!personalNote && <span aria-hidden="true">+</span>}
-            {personalNote ? "Edit note" : "Add note"}
+            {personalNote ? "Exercise notes" : "Add note"}
           </span>
           {personalNote && <small id={notePreviewId} className="exercise-note-action-preview">{personalNote}</small>}
         </span>

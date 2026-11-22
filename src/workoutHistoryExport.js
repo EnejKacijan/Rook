@@ -1,6 +1,6 @@
 import { workoutPerformedDate as dateOf } from './workoutDates.js';
 import { presentNativeFile } from './platformFileActions.js';
-import { exerciseName, exerciseMeasure } from './domain.js';
+import { exerciseName, exerciseMeasure, exercisePersonalNotes } from './domain.js';
 import { loggingModeOf } from './advancedLogging.js';
 import { validSessionFeedback } from './sessionFeedback.js';
 
@@ -36,7 +36,7 @@ function portableWorkout(w, index, includeNotes, names) {
       exercise_id: text(e.exerciseId), exercise_number: ei + 1, exercise_name: names(e),
       logging_mode: loggingModeOf(e),
       superset_id: text(e.supersetId), source_superset_id: text(e.sourceSupersetId), source_exercise_order: number(e.sourceExerciseOrder),
-      ...(includeNotes ? { exercise_note: [...new Set([text(e.personalNote), text(e.notes)].filter(Boolean))].join('\n') || null } : {}),
+      ...(includeNotes ? { exercise_note: [...new Set([...exercisePersonalNotes(e).map(note => note.text), text(e.notes)].filter(Boolean))].join('\n') || null } : {}),
       sets: (e.sets || []).flatMap((s, si) => {
         const segments = (s.segments || []).flatMap((segment, i) => segment.completed ? [{
           segment_number: i + 1, segment_type: text(segment.kind) || text(s.setType), ...performance(segment, exerciseMeasure(e)),
