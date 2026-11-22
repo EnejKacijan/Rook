@@ -38,22 +38,24 @@ export function CountUp({ value, animate, delay = 320, duration = 720 }) {
 }
 
 export const CompletedSessionOverview = forwardRef(function CompletedSessionOverview(
-  { workout, recognitionId, live = false }, headingRef,
+  { workout, exerciseProgress, recognitionId, live = false }, headingRef,
 ) {
   const metrics = completedSessionMetrics(workout);
-  return <section className="completed-session-overview" aria-label="Completed workout">
+  return <section className="completed-session-overview" aria-label={exerciseProgress ? "Logged workout" : "Completed workout"}>
     <div className="completion-hero">
       <div className="completion-badge" aria-hidden="true">
         <svg viewBox="0 0 24 24" focusable="false"><path className="completion-badge-check" pathLength="1" d="M5.5 12.5l4 4 9-9.5" /></svg>
       </div>
-      <span className="completion-eyebrow">WORKOUT COMPLETE</span>
+      {exerciseProgress
+        ? <span className="completion-eyebrow completion-logged-status">Workout logged · {exerciseProgress}</span>
+        : <span className="completion-eyebrow">WORKOUT COMPLETE</span>}
       <h1 ref={headingRef} tabIndex={-1} aria-describedby={recognitionId}>
         {workout.name || 'Workout'}
       </h1>
     </div>
-    <dl className="completion-summary" aria-label="Completed session summary">
-      <div><dt>Exercises</dt><dd><CountUp value={metrics.exercises} animate={live} /></dd></div>
-      <div><dt>Sets</dt><dd><CountUp value={metrics.sets} animate={live} delay={380} /></dd></div>
+    <dl className="completion-summary" aria-label={exerciseProgress ? "Logged session summary" : "Completed session summary"}>
+      {!exerciseProgress && <div><dt>Exercises</dt><dd><CountUp value={metrics.exercises} animate={live} /></dd></div>}
+      <div><dt>{exerciseProgress ? "Sets logged" : "Sets"}</dt><dd><CountUp value={metrics.sets} animate={live} delay={380} /></dd></div>
       <div><dt>Elapsed</dt><dd>{metrics.elapsed}</dd></div>
     </dl>
   </section>;

@@ -5293,8 +5293,9 @@ export function Today({
   const session = completed || template;
   const completedSummary = completed ? workoutSetSummary(completed) : null;
   const endedWithoutSets = completedSummary?.completed === 0;
+  const hasLoggedWorkout = completedSummary?.completed > 0;
   const endedEarly = completed && (completed.endedEarly || completed.status === 'ended-early' || completedSummary.completed < completedSummary.total);
-  const fullyCompleted = Boolean(completed && !endedWithoutSets && !endedEarly);
+  const fullyCompleted = hasLoggedWorkout && !endedEarly;
   const blockPhaseLabel = (session.trainingBlock?.label || (session.trainingBlock?.plannedDeload ? "Planned deload" : "")).trim();
   const editableTodayWorkout = Boolean(
     !completed &&
@@ -5739,7 +5740,9 @@ export function Today({
       )}
       <section className="today-hero">
         {dayHeader(displayDate(selectedDate))}
-        {fullyCompleted ? <CompletedSessionOverview workout={completed} /> : <WorkoutTitle workout={session} day={selectedDay} />}
+        {hasLoggedWorkout
+          ? <CompletedSessionOverview workout={completed} exerciseProgress={endedEarly ? exerciseProgress : undefined} />
+          : <WorkoutTitle workout={session} day={selectedDay} />}
         <CombinedProvenance adjustment={session.adjustment || session.todayOnlyAdjustment} />
         {showingOneOff&&<p className="muted">One-off workout · {viewingToday?'Today only':displayDate(selectedDate)}</p>}
         {session.flexibleWeekMoved && <div className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))}{scheduleReview.moved.some(change=>change.id===session.logicalSessionId)&&<button type="button" className="text-button schedule-change-link" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button>}</div>}
@@ -5751,10 +5754,10 @@ export function Today({
             ) : <span className="today-block-chevron" aria-hidden="true">›</span>}
           </button>
         )}
-        {!fullyCompleted && <p>
+        {!hasLoggedWorkout && <p>
           {exerciseProgress} · {duration}
           {completed
-            ? <> · <span className="today-meta-keep">{workoutVisibleStatus({workout:completed,summary:completedSummary})}</span></>
+            ? <> · <span className="today-meta-keep">Workout ended</span></>
             : occurrence?.status === 'missed'
               ? ` · ${workoutVisibleStatus({status:occurrence.status})}`
               : prior
@@ -5769,7 +5772,7 @@ export function Today({
         {selectedIso!==isoDay() && (completed || occurrence) && scheduleReader.canUseToday(completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}) && <button className="text-button" onClick={()=>setDetail({useWorkoutToday:completed?{workoutId:completed.id}:{sessionId:occurrence.logicalSessionId}})}>{completed?'Repeat today':'Train today instead'}</button>}
         {isRepeatAdjustment(session.todayOnlyAdjustment) && <><p>Repeating workout from {session.todayOnlyAdjustment.sourceDate}. Original history is unchanged.</p><button className="text-button" onClick={()=>{try{const next=cancelRepeatedWorkout(state);update(()=>next,{planVersion:false,persistedState:next});}catch(e){setStartError(e.message);}}}>Cancel repeated workout</button></>}
         {completed ? (
-          <div className={fullyCompleted ? "completion-actions" : undefined}>
+          <div className={hasLoggedWorkout ? "completion-actions" : undefined}>
             <Button
               variant={fullyCompleted ? "primary" : "secondary"}
               onClick={() => setDetail({ completedWorkout: completed.id })}

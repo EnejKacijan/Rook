@@ -20,8 +20,7 @@ afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear();vi.use
 function planned({early=false}={}){
   let s=createReturningUserFixture(0);s.selectedDate='2026-10-08';Object.assign(s.profile,{showExerciseImages:false,restTimerEnabled:false});
   s.activeWorkout=startWorkout(s,plannedWorkoutForDate(s,s.selectedDate));s.activeWorkout.startedAt=Date.now()-60*60000;
-  s.activeWorkout.exercises.forEach((e,i)=>e.sets.forEach(set=>Object.assign(set,{completed:!early||i===0,weight:30,reps:8})));
-  if(early)s.activeWorkout.endedEarly=true;
+  s.activeWorkout.exercises.forEach((e,i)=>e.sets.forEach(set=>Object.assign(set,{completed:!early||i<s.activeWorkout.exercises.length-1,weight:30,reps:8})));
   return completeWorkout(s);
 }
 function freestyle(s,minutes){vi.advanceTimersByTime(minutes*60000);s=addFreestyleExercise(startFreestyleWorkout(s),'push-up');Object.assign(s.activeWorkout.exercises[0].sets[0],{reps:12,completed:true});return completeWorkout(s);}
@@ -69,10 +68,12 @@ it('a past day labels extras for that date and uses the activity duration format
   expect(host.querySelector('.today-done-extra small').textContent).toBe('Cardio · 12 min · Easy');
 });
 
-it('an early finish says how much was done and does not repeat empty rows',()=>{
+it('a skipped exercise shows a logged badge and the number of exercises worked',()=>{
   const s=planned({early:true}),workout=s.workouts.at(-1);
   render(s);
-  expect(host.querySelector('.today-hero').textContent).toContain(`1 of ${workout.exercises.length} exercises`);
+  const overview=host.querySelector('[aria-label="Logged workout"]');
+  expect(overview.querySelector('.completion-badge-check')).not.toBeNull();
+  expect(overview.querySelector('.completion-eyebrow').textContent).toBe(`Workout logged · ${workout.exercises.length-1} of ${workout.exercises.length} exercises`);
   expect(host.querySelector('.exercise-preview .eyebrow').textContent).toBe('EXERCISES');
   expect(host.querySelector('.exercise-preview').textContent).not.toContain('Not logged');
   expect(host.querySelector('.exercise-preview').textContent).toContain('No sets logged');

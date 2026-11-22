@@ -21,8 +21,17 @@ it.each([false,true])('Monday links to the single Thursday fact without complete
 it('completed day overflow offers one Repeat action, with History on the completed UI and no Move or Swap for the fact',()=>{
  const s=fixture();render(<TodayActionsSheet state={s} update={()=>{}} close={()=>{}} setDetail={()=>{}} date="2026-09-17" hasWorkout/>);expect(document.body.textContent).toContain('Repeat a workout');expect(document.body.textContent).not.toContain('View history');expect(document.body.textContent).not.toContain('Move to another day');expect(document.body.textContent).not.toContain('Swap with another workout');
 });
-it('zero-set Finish Anyway is an ended session, not a fully completed workout',()=>{const s=fixture(false);s.selectedDate='2026-09-17';expect(s.workouts[0].status).toBe('ended-early');render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);expect(document.body.textContent).toContain('Ended early');expect(document.body.textContent).toContain('No sets logged');expect(document.body.textContent).toContain(`0 of ${s.workouts[0].exercises.length} exercises`);expect(document.body.textContent).toContain('VIEW WORKOUT DETAILS');expect(document.body.textContent).not.toContain('WORKOUT COMPLETE');});
-it('completed factual rows bind to logged sets and partial rows remain explicit',()=>{const s=fixture();s.selectedDate='2026-09-17';s.workouts[0].exercises[0].sets.forEach(x=>x.completed=false);s.workouts[0].endedEarly=true;s.workouts[0].status='ended-early';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);expect(document.body.textContent).toContain('Ended early');expect(document.body.textContent).toContain('No sets logged');expect(document.body.textContent).toMatch(/\d+ sets logged/);expect(document.body.textContent).not.toContain('WORKOUT COMPLETE');});
+it('zero-set Finish Anyway shows Workout ended without a completion badge',()=>{
+ const s=fixture(false);s.selectedDate='2026-09-17';
+ expect(s.workouts[0].status).toBe('ended-early');
+ render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);
+ expect(document.body.textContent).toContain('Workout ended');
+ expect(document.body.textContent).toContain('No sets logged');
+ expect(document.body.textContent).toContain(`0 of ${s.workouts[0].exercises.length} exercises`);
+ expect(document.body.textContent).toContain('VIEW WORKOUT DETAILS');
+ expect(document.querySelector('.today-hero .completion-badge')).toBeNull();
+});
+it('completed factual rows bind to logged sets and partial rows remain explicit',()=>{const s=fixture();s.selectedDate='2026-09-17';s.workouts[0].exercises[0].sets.forEach(x=>x.completed=false);s.workouts[0].endedEarly=true;s.workouts[0].status='ended-early';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);expect(document.body.textContent).toContain('Workout logged');expect(document.body.textContent).toContain('No sets logged');expect(document.body.textContent).toMatch(/\d+ sets logged/);expect(document.body.textContent).not.toContain('WORKOUT COMPLETE');});
 it('fully completed session keeps completion action and actual set counts',()=>{const s=fixture();s.selectedDate='2026-09-17';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);expect(document.body.textContent).toContain('WORKOUT COMPLETE');expect(document.body.textContent).toContain('VIEW WORKOUT DETAILS');expect(document.body.textContent).not.toContain('WORKOUT COMPLETE · VIEW HISTORY');expect(document.body.textContent).not.toContain('No sets logged');});
 it('week and month give one execution only its performed-date check while the source stays fulfilled',()=>{
  const s=fixture();s.selectedDate='2026-09-14';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);

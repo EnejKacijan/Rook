@@ -8,6 +8,7 @@
   color: var(--rook-accent-text); font-size: 22px;
 }
 .completion-eyebrow { color: var(--rook-secondary); font-size: .6875rem; line-height: 1.5; letter-spacing: .14em; font-weight: 700; }
+.completion-logged-status { font-size: .8125rem; letter-spacing: normal; }
 .completed-session-overview .completion-hero h1 {
   grid-column: 1 / -1; margin: 4px 0 0; color: var(--rook-text);
   font-size: 2.25rem; font-weight: 750; line-height: 1.1; letter-spacing: -.035em;
