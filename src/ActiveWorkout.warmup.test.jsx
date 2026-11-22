@@ -16,7 +16,7 @@ beforeEach(()=>{
   HTMLElement.prototype.animate=function(frames,timing){const a={node:this,frames,timing,cancel:vi.fn()};animations.push(a);return a;};
   host=document.createElement('div');document.body.append(host);root=createRoot(host);
 });
-afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();delete HTMLElement.prototype.animate;});
+afterEach(()=>{act(()=>root.unmount());host.remove();localStorage.clear();sessionStorage.clear();vi.useRealTimers();vi.restoreAllMocks();vi.unstubAllGlobals();delete HTMLElement.prototype.animate;});
 function fixture(){
   const s=createReturningUserFixture(0);Object.assign(s.profile,{recommendedWarmupsEnabled:true,rampUpSetsEnabled:true,showExerciseImages:false,rirEnabled:true,restTimerEnabled:true});
   s.activeWorkout=startWorkout(s,s.program.days[0]);
@@ -24,8 +24,13 @@ function fixture(){
   s.activeWorkout.rest={startedAt:Date.now(),endsAt:Date.now()+600000,duration:600};
   return deserializeState(serializeState(s),{strict:true});
 }
+let setCurrent;
+// A new session: nothing logged and no rest running yet.
+function fresh(){const s=fixture();s.activeWorkout.exercises[0].sets[0].completed=false;s.activeWorkout.rest=null;return s;}
+const expanded=()=>node('.workout-warmup-toggle')?.getAttribute('aria-expanded');
+const goTo=index=>act(()=>setCurrent(prev=>({...prev,activeWorkout:{...prev.activeWorkout,exerciseIndex:index}})));
 function mount(initial=fixture()){
-  function Harness(){const[s,set]=useState(initial);current=s;return <ActiveWorkout state={s} update={fn=>set(prev=>fn(structuredClone(prev)))} setPage={()=>{}} setDetail={()=>{}}/>;}
+  function Harness(){const[s,set]=useState(initial);current=s;setCurrent=set;return <ActiveWorkout state={s} update={fn=>set(prev=>fn(structuredClone(prev)))} setPage={()=>{}} setDetail={()=>{}}/>;}
   act(()=>root.render(<Harness key={Math.random()}/>));
 }
 const node=q=>host.querySelector(q), rows=()=>[...host.querySelectorAll('.warmup-check-row')];
@@ -36,12 +41,12 @@ function settle(){act(()=>{for(const a of animations)a.onfinish?.();});animation
 it('whole rows toggle once, final check stays open, one shared collapse retains a reviewable summary',()=>{
   mount();const before=structuredClone(current),header=node('.workout-header'),rest=node('.rest-timer');
   tap('.workout-warmup-toggle');settle();
-  expect(node('.warmup-skip')).toBeNull();expect(node('.warmup-exit').textContent).toBe('Skip warm-up');
+  expect(node('.warmup-skip').getAttribute('aria-label')).toBe('Skip warm-up');expect(node('.warmup-exit').textContent).toBe('Skip warm-up');
   tap(rows().at(-1).querySelector('span'));expect(progress().done).toBe(1);
   expect(node('.warmup-exit').textContent).toBe('Skip remaining');
   tap(rows().at(-1).querySelector('i'));expect(progress().done).toBe(0);
   for(const row of rows())tap(row);
-  expect(node('.workout-warmup-toggle').getAttribute('aria-expanded')).toBe('true');
+  expect(node('.workout-warmup-toggle').getAttribute('aria-expanded')).toBe('true');expect(node('.warmup-skip')).toBeNull();
   expect(node('.warmup-exit').textContent).toBe('Continue to workout');expect(progress().outcome).toBe('pending');
   const checks=progress().steps.map(s=>s.item.completed);tap('.warmup-exit');
   expect(progress().outcome).toBe('complete');expect(node('.warmup-summary-check')).not.toBeNull();
@@ -129,7 +134,7 @@ it('keeps the expanded checklist concise while routine guidance stays available 
   expect(tips.textContent).toContain("Shorten this if you're already warm");
   tap('.warmup-tips summary');expect(tips.querySelector('summary').getAttribute('aria-expanded')).toBe('false');
   expect(tips.querySelector('.rook-disclosure').hasAttribute('inert')).toBe(true);settle();
-  expect(tips.open).toBe(false);expect(current).toEqual(before);expect(save).not.toHaveBeenCalled();
+  expect(tips.open).toBe(false);expect(current).toEqual(before);expect(save.mock.calls.filter(([key])=>key===STORAGE_KEY)).toEqual([]);
 });
 
 it.each(['custom','imported','user','legacy'])('%s instructions and safety messages stay visible outside optional tips',kind=>{
@@ -171,4 +176,78 @@ it('reload keeps an already-started automatic warm-up prescription and its progr
   expect(rows()[0].textContent).toContain('3 min');
   expect(rows()[0].getAttribute('aria-checked')).toBe('true');
   expect(node('.warmup-general-guidance')).toBeNull();
+});
+
+it('a new workout opens the first warm-up on the first paint, without animation or scrolling',()=>{
+  const scroll=vi.fn();Object.assign(HTMLElement.prototype,{scrollBy:scroll,scrollTo:scroll});
+  let firstPaint;
+  const state=fresh();
+  function Probe(){const[s,set]=useState(state);current=s;return <ActiveWorkout state={s} update={fn=>set(prev=>fn(structuredClone(prev)))} setPage={()=>{}} setDetail={()=>{}}/>;}
+  act(()=>root.render(<Probe/>));firstPaint=expanded();
+  expect(firstPaint).toBe('true');expect(rows().length).toBe(progress().total);
+  expect(node('.warmup-skip').getAttribute('aria-label')).toBe('Skip warm-up');
+  expect(animations).toHaveLength(0);expect(scroll).not.toHaveBeenCalled();
+  expect(host.querySelector('.rook-disclosure').style.height).toBe('auto');
+  act(()=>vi.advanceTimersByTime(500));expect(scroll).not.toHaveBeenCalled();
+  delete HTMLElement.prototype.scrollBy;delete HTMLElement.prototype.scrollTo;
+});
+it('a later warm-up, a finished one and a skipped one start collapsed',()=>{
+  const later=fresh(),stage=later.activeWorkout.warmup.stages[0];
+  const second=later.activeWorkout.exercises[1];
+  later.activeWorkout.warmup.stages.push({...structuredClone(stage),id:'later-stage',exerciseIndex:1,exerciseId:second.exerciseId,exerciseInstanceId:second.id});
+  later.activeWorkout.exerciseIndex=1;mount(later);expect(expanded()).toBe('false');
+  for(const outcome of ['complete','skipped']){
+    const state=fresh(),done=state.activeWorkout.warmup.stages[0];
+    if(outcome==='complete'){for(const step of warmupProgress(done).steps)step.item.completed=true;done.completed=true;}else done.skipped=true;
+    mount(state);expect(expanded()).toBe('false');expect(node('.warmup-skip')).toBeNull();
+  }
+});
+it('a manual collapse stays collapsed after leaving and returning to the exercise, and after reload',()=>{
+  mount(fresh());expect(expanded()).toBe('true');tap('.workout-warmup-toggle');settle();expect(expanded()).toBe('false');
+  goTo(1);goTo(0);expect(expanded()).toBe('false');
+  mount(deserializeState(serializeState(current)));expect(expanded()).toBe('false');
+  tap('.workout-warmup-toggle');settle();goTo(1);goTo(0);expect(expanded()).toBe('true');
+});
+it('resume restores an open, unfinished warm-up only until working sets start',()=>{
+  mount(fresh());tap(rows()[0]);expect(progress().done).toBe(1);
+  const stored=deserializeState(localStorage.getItem(STORAGE_KEY));mount(stored);
+  expect(expanded()).toBe('true');expect(rows()[0].getAttribute('aria-checked')).toBe('true');
+  const started=structuredClone(stored);started.activeWorkout.exercises[0].sets[0].completed=true;
+  mount(started);expect(expanded()).toBe('false');
+  expect(node('.workout-warmup-toggle').textContent).toContain(`1/${progress().total} done`);
+});
+it('logging a working set does not collapse the open warm-up under the person',()=>{
+  mount(fresh());expect(expanded()).toBe('true');
+  act(()=>setCurrent(prev=>{const next=structuredClone(prev);next.activeWorkout.exercises[0].sets[0].completed=true;return next;}));
+  expect(expanded()).toBe('true');
+});
+it('a saved check gets a short emphasis, the counter refreshes and the next step is marked',()=>{
+  mount(fresh());const counter=node('.warmup-inline-progress');
+  tap(rows()[0]);
+  expect(rows()[0].classList.contains('just-checked')).toBe(true);expect(rows()[1].classList.contains('current')).toBe(true);
+  expect(node('.warmup-inline-progress')).not.toBe(counter);expect(node('.warmup-inline-progress').classList.contains('just-updated')).toBe(true);
+  expect(node('.warmup-inline-progress').textContent).toBe(`1/${progress().total}`);
+  act(()=>vi.advanceTimersByTime(800));expect(rows()[0].classList.contains('just-checked')).toBe(false);
+  tap(rows()[0]);expect(host.querySelector('.just-checked')).toBeNull();expect(rows()[0].classList.contains('current')).toBe(true);
+});
+it('the last check keeps the list open with Continue; Continue collapses into a marked summary',()=>{
+  mount(fresh());for(const row of rows())tap(row);
+  expect(expanded()).toBe('true');expect(node('.warmup-exit').textContent).toBe('Continue to workout');
+  expect(node('.warmup-exit').classList.contains('warmup-finish')).toBe(true);
+  tap('.warmup-exit');expect(progress().outcome).toBe('complete');expect(expanded()).toBe('false');
+  expect(node('.warmup-summary-check').classList.contains('just-completed')).toBe(true);settle();
+  expect(node('.workout-warmup-toggle').textContent).toBe('✓Warm-up complete');
+  goTo(1);goTo(0);expect(expanded()).toBe('false');
+});
+it('Skip in the header bar stays reachable while open and keeps checked steps',()=>{
+  mount(fresh());tap(rows()[0]);expect(node('.warmup-skip').getAttribute('aria-label')).toBe('Skip remaining');
+  const sets=structuredClone(current.activeWorkout.exercises);tap('.warmup-skip');settle();
+  expect(progress().outcome).toBe('partial');expect(expanded()).toBe('false');expect(progress().done).toBe(1);
+  expect(current.activeWorkout.exercises).toEqual(sets);
+  expect(document.activeElement).toBe(node('.workout-warmup-toggle'));
+});
+it('restarting the workout opens the first warm-up again',()=>{
+  mount(fresh());tap('.workout-warmup-toggle');settle();expect(expanded()).toBe('false');
+  act(()=>setCurrent(prev=>({...prev,activeWorkout:{...prev.activeWorkout,startedAt:prev.activeWorkout.startedAt+1000}})));
+  expect(expanded()).toBe('true');
 });

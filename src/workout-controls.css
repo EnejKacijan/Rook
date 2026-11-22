@@ -947,3 +947,29 @@
   min-height: 40px;
   justify-self: start;
 }
+
+/* Warm-up feedback: theme colors only, and no motion when reduced motion is set. */
+.workout-screen .warmup-inline-progress { display:inline-block; }
+@media (prefers-reduced-motion: no-preference) {
+  .workout-screen button.warmup-check-row,
+  .workout-screen button.warmup-check-row > i {
+    transition: background-color 220ms ease-out, border-color 220ms ease-out, color 220ms ease-out;
+  }
+  .workout-screen button.warmup-check-row.just-checked > i { animation: rook-warmup-check 280ms cubic-bezier(.2,0,0,1); }
+  .workout-screen .warmup-inline-progress.just-updated { animation: rook-warmup-count 240ms cubic-bezier(.2,0,0,1); }
+  .workout-screen .warmup-exit.warmup-finish { animation: rook-warmup-finish 240ms cubic-bezier(.2,0,0,1) 60ms both; }
+  .workout-screen .warmup-summary-check.just-completed { display:inline-block; animation: rook-warmup-check 320ms cubic-bezier(.2,0,0,1) 120ms both; }
+}
+@keyframes rook-warmup-check {
+  0% { transform: scale(.7); }
+  55% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+@keyframes rook-warmup-count {
+  from { opacity: .3; transform: translateY(3px); }
+  to { opacity: 1; transform: none; }
+}
+@keyframes rook-warmup-finish {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
+}

@@ -17,7 +17,7 @@ const root = new URL("../artifacts/warmup-sequencing/", import.meta.url);
 await mkdir(root, { recursive: true });
 const output = (name) => fileURLToPath(new URL(name, root));
 const browser = await chromium.launch({
-  executablePath: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  executablePath: process.env.CHROME_PATH || "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
   headless: true,
 });
 
@@ -76,192 +76,215 @@ async function openActive(page) {
   });
 }
 
-const context = await browser.newContext({
-  viewport: { width: 390, height: 844 },
-  colorScheme: "dark",
-  serviceWorkers: "block",
-});
-await context.addInitScript((state) => {
-  localStorage.setItem("lift-v2-state", JSON.stringify(state));
-}, fixture());
-const page = await context.newPage();
-const errors = [];
-page.on("pageerror", (error) => errors.push(error.message));
-page.on("console", (message) => {
-  if (message.type() === "error") errors.push(message.text());
-});
-await page.route("**/api/ai/status", (route) =>
-  route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ available: false, provider: null }),
-  }),
-);
-await openActive(page);
+// Record every aria-expanded value the warm-up toggle ever shows, from the first
+// paint on, so a closed-then-open flash cannot hide between two assertions.
+function recordWarmupStates() {
+  window.__warmupStates = [];
+  const seen = () => {
+    const toggle = document.querySelector(".workout-warmup-toggle");
+    const value = toggle?.getAttribute("aria-expanded");
+    if (value && window.__warmupStates.at(-1) !== value) window.__warmupStates.push(value);
+  };
+  new MutationObserver(seen).observe(document, { subtree: true, childList: true, attributes: true, attributeFilter: ["aria-expanded"] });
+}
 
-const warmup = page.locator(".workout-warmup");
-await warmup.getByText("For Machine Chest Press").waitFor();
-await warmup.locator(".workout-warmup-toggle").click();
-assert.equal(await warmup.getByText(/Machine Chest Press · RAMP-UP/i).count(), 1);
-assert.equal(await warmup.getByText(/Chest Supported Row · RAMP-UP/i).count(), 0);
-assert.equal(await warmup.locator(".warmup-checklist-section").count(), 1);
-assert.equal(
-  await warmup.getByText(/Practice Machine Chest Press/i).count(),
-  0,
-  "the expanded checklist does not repeat a vague timed practice block",
-);
-const generalStep = warmup.locator(".warmup-checklist-section .warmup-check-row").first();
-assert.equal(await generalStep.getAttribute("aria-checked"), "false");
-await generalStep.click();
-assert.equal(await generalStep.getAttribute("aria-checked"), "true");
-assert.equal(await warmup.locator(".warmup-ramp .warmup-check-row.current").count(), 1);
-await page.waitForTimeout(250);
-await page.screenshot({ path: output("00-first-exercise-expanded-dark.png") });
-assert.equal(await warmup.getByRole('button', {name:'Skip remaining'}).count(), 1);
-for (const step of await warmup.locator('.warmup-check-row[aria-checked="false"]').all()) await step.click();
-assert.equal(await warmup.locator('.workout-warmup-toggle').getAttribute('aria-expanded'), 'true');
-await warmup.getByRole('button', {name:'Continue to workout'}).click();
-await warmup.locator('.warmup-details').waitFor({state:'detached'});
-assert.equal(await warmup.locator('.workout-warmup-toggle').innerText(), '✓Warm-up complete');
-assert.equal(await warmup.count(), 1, 'completed summary remains reviewable');
-assert.equal(await page.evaluate(() => JSON.parse(localStorage.getItem('lift-v2-state')).activeWorkout.warmup.stages[0].completed), true);
-assert.equal(await warmup.locator('.workout-warmup-toggle').evaluate(button => button === document.activeElement), true);
-await page.screenshot({ path: output("01-first-exercise-complete-dark.png") });
+async function newPage({ width, height = 844, colorScheme, reducedMotion = "no-preference", state = fixture() }) {
+  const context = await browser.newContext({ viewport: { width, height }, colorScheme, reducedMotion, serviceWorkers: "block" });
+  await context.addInitScript((value) => {
+    if (!sessionStorage.getItem("qa-seeded")) {
+      localStorage.setItem("lift-v2-state", JSON.stringify(value));
+      sessionStorage.setItem("qa-seeded", "1");
+    }
+  }, state);
+  await context.addInitScript(recordWarmupStates);
+  const page = await context.newPage();
+  const errors = [];
+  page.on("pageerror", (error) => errors.push(error.message));
+  page.on("console", (message) => { if (message.type() === "error") errors.push(message.text()); });
+  await page.route("**/api/ai/status", (route) =>
+    route.fulfill({ status: 200, contentType: "application/json", body: JSON.stringify({ available: false, provider: null }) }));
+  await openActive(page);
+  return { context, page, errors };
+}
 
-await page
-  .locator(".up-next .swipe-up-next-body")
-  .filter({ hasText: "Chest Supported Row" })
-  .click();
-await page.locator(".workout-motion-paint").waitFor({state:"detached"});
-await page.locator(".workout-warmup").getByText("For Chest Supported Row").waitFor();
-await page.locator(".workout-warmup-toggle").click();
-assert.equal(await page.locator(".workout-warmup .warmup-checklist-section").count(), 0);
-assert.equal(
-  await page.locator(".workout-warmup").getByText(/Chest Supported Row · RAMP-UP/i).count(),
-  1,
-);
-await page.locator(".workout-warmup").getByRole("button", { name: "Skip warm-up" }).waitFor();
-await page.screenshot({ path: output("02-second-exercise-ramp-dark.png") });
+const expanded = (page) => page.locator(".workout-warmup-toggle").getAttribute("aria-expanded");
+const saved = (page) => page.evaluate(() => JSON.parse(localStorage.getItem("lift-v2-state")).activeWorkout);
+const settle = (page) => page.waitForTimeout(400);
+async function goToExercise(page, name) {
+  await page.locator(".up-next .swipe-up-next-body").filter({ hasText: name }).click();
+  await page.locator(".workout-motion-paint").waitFor({ state: "detached" });
+}
+async function goBack(page) {
+  await page.locator(".workout-previous").click();
+  await page.locator(".workout-motion-paint").waitFor({ state: "detached" });
+}
+async function headingBelowHeader(page) {
+  return page.evaluate(() => {
+    const header = document.querySelector(".workout-header").getBoundingClientRect().bottom;
+    const heading = document.querySelector(".exercise-heading").getBoundingClientRect();
+    return heading.top >= header - 1 && heading.top < innerHeight;
+  });
+}
 
-await page.locator(".up-next .swipe-up-next-body").filter({ hasText: "Leg Press" }).click();
-await page.locator(".workout-motion-paint").waitFor({state:"detached"});
-assert.equal(await page.locator(".workout-warmup").count(), 0);
-assert.equal(
-  await page.getByRole("heading", { name: exerciseCatalog["leg-press"].name }).count(),
-  1,
-);
-assert.deepEqual(errors, []);
+// 1. A new workout: the first warm-up is open from the first paint, with no scroll.
+{
+  const { context, page, errors } = await newPage({ width: 393, colorScheme: "dark" });
+  const warmup = page.locator(".workout-warmup");
+  assert.equal(await expanded(page), "true");
+  assert.deepEqual(await page.evaluate(() => window.__warmupStates), ["true"], "no closed frame before the open checklist");
+  assert.equal(await page.locator(".workout-screen").evaluate((node) => node.scrollTop), 0, "opening does not scroll");
+  assert.equal(await warmup.getByText(/^Warm-up sets$/).count(), 1, "single ramp group uses the short label");
+  assert.equal(await warmup.getByText(/Chest Supported Row · Warm-up sets/i).count(), 0);
+  assert.equal(await warmup.locator(".warmup-checklist-section").count(), 1);
+  assert.equal(await warmup.getByText(/Practice Machine Chest Press/i).count(), 0, "no vague timed practice block");
+  assert.equal(await warmup.locator(".warmup-skip").getAttribute("aria-label"), "Skip warm-up", "Skip stays in the bar while open");
 
-await context.close();
+  const generalStep = warmup.locator(".warmup-checklist-section .warmup-check-row").first();
+  await generalStep.click();
+  assert.equal(await generalStep.getAttribute("aria-checked"), "true");
+  assert.equal(await generalStep.evaluate((node) => node.classList.contains("just-checked")), true);
+  assert.match(await warmup.locator(".warmup-inline-progress").innerText(), /^1\/\d+$/);
+  assert.equal(await warmup.locator(".warmup-ramp .warmup-check-row.current").count(), 1);
+  await settle(page);
+  await page.screenshot({ path: output("00-first-exercise-open-dark-393.png") });
+  assert.equal(await warmup.locator(".warmup-skip").getAttribute("aria-label"), "Skip remaining");
 
-const skipContext = await browser.newContext({
-  viewport: { width: 320, height: 700 },
-  colorScheme: "light",
-  serviceWorkers: "block",
-});
-await skipContext.addInitScript((state) => {
-  localStorage.setItem("lift-v2-state", JSON.stringify(state));
-}, fixture());
-const skipPage = await skipContext.newPage();
-const skipErrors = [];
-skipPage.on("pageerror", (error) => skipErrors.push(error.message));
-skipPage.on("console", (message) => {
-  if (message.type() === "error") skipErrors.push(message.text());
-});
-await skipPage.route("**/api/ai/status", (route) =>
-  route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ available: false, provider: null }),
-  }),
-);
-await openActive(skipPage);
-await skipPage.locator(".workout-warmup-toggle").click();
-assert.ok(await skipPage.locator(".warmup-check-row").count() > 0);
-assert.equal(
-  await skipPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-  true,
-  "expanded Light warm-up stays narrow-safe at 320 px",
-);
-await skipPage.screenshot({ path: output("03-expanded-light-320.png") });
-await skipPage.locator(".workout-warmup-toggle").click();
-await skipPage.locator(".workout-warmup").getByRole("button", { name: "Skip" }).click();
-await skipPage.locator(".workout-warmup-toggle").getByText("Warm-up skipped").waitFor();
-assert.equal(await skipPage.locator(".exercise-heading-art-button").count(), 1);
-await skipPage.screenshot({ path: output("04-warmup-skipped-light-320.png") });
-assert.deepEqual(skipErrors, []);
-await skipContext.close();
+  // Manual collapse sticks across exercise changes and a reload.
+  await warmup.locator(".workout-warmup-toggle").click();
+  await settle(page);
+  assert.equal(await expanded(page), "false");
+  await goToExercise(page, "Chest Supported Row");
+  assert.equal(await expanded(page), "false", "later warm-ups start collapsed");
+  await page.locator(".workout-warmup").getByText("For Chest Supported Row").waitFor();
+  await goBack(page);
+  assert.equal(await page.getByRole("heading", { name: exerciseCatalog["machine-chest-press"].name }).count(), 1);
+  assert.equal(await expanded(page), "false", "manual collapse stays after returning");
+  await page.reload({ waitUntil: "networkidle" });
+  await openActive(page);
+  assert.equal(await expanded(page), "false", "manual collapse stays after reload");
+  await warmup.locator(".workout-warmup-toggle").click();
+  await settle(page);
+  await page.reload({ waitUntil: "networkidle" });
+  await openActive(page);
+  assert.equal(await expanded(page), "true", "an open unfinished warm-up is restored after reload");
+  assert.equal(await generalStep.getAttribute("aria-checked"), "true");
 
-const reducedContext = await browser.newContext({
-  viewport: { width: 390, height: 844 },
-  colorScheme: "dark",
-  reducedMotion: "reduce",
-  serviceWorkers: "block",
-});
-await reducedContext.addInitScript((state) => {
-  localStorage.setItem("lift-v2-state", JSON.stringify(state));
-}, fixture());
-const reducedPage = await reducedContext.newPage();
-const reducedErrors = [];
-reducedPage.on("pageerror", (error) => reducedErrors.push(error.message));
-reducedPage.on("console", (message) => {
-  if (message.type() === "error") reducedErrors.push(message.text());
-});
-await reducedPage.route("**/api/ai/status", (route) =>
-  route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ available: false, provider: null }),
-  }),
-);
-await openActive(reducedPage);
-await reducedPage.locator(".workout-warmup-toggle").click();
-await reducedPage.getByRole('button', {name:'Skip warm-up'}).click();
-assert.equal(await reducedPage.locator('.warmup-details').count(), 0);
-assert.equal(await reducedPage.locator('.workout-warmup-toggle').innerText(), 'Warm-up skipped');
-await reducedPage.screenshot({path:output('reduced-motion-settled.png')});
-assert.deepEqual(reducedErrors, []);
-await reducedContext.close();
+  // Rapid taps on one step still end in one clean state.
+  const firstRamp = warmup.locator(".warmup-ramp .warmup-check-row").first();
+  for (let index = 0; index < 5; index += 1) await firstRamp.click({ delay: 0 });
+  assert.equal(await firstRamp.getAttribute("aria-checked"), "true");
+  for (const step of await warmup.locator('.warmup-check-row[aria-checked="false"]').all()) await step.click();
+  assert.equal(await expanded(page), "true", "the last check keeps the list open");
+  assert.equal(await warmup.locator(".warmup-skip").count(), 0);
+  await warmup.getByRole("button", { name: "Continue to workout" }).waitFor();
+  await settle(page);
+  await page.screenshot({ path: output("01-all-checked-dark-393.png") });
+  const exercisesBefore = (await saved(page)).exercises;
+  await page.locator(".workout-screen").evaluate((node) => { node.scrollTop = node.scrollHeight; });
+  await warmup.getByRole("button", { name: "Continue to workout" }).click();
+  await warmup.locator(".warmup-details").waitFor({ state: "detached" });
+  await settle(page);
+  assert.equal(await warmup.locator(".workout-warmup-toggle").innerText(), "✓Warm-up complete");
+  assert.equal(await headingBelowHeader(page), true, "the current exercise stays visible below the header");
+  assert.equal((await saved(page)).warmup.stages[0].completed, true);
+  assert.deepEqual((await saved(page)).exercises, exercisesBefore, "working sets stay untouched");
+  assert.equal(await warmup.locator(".workout-warmup-toggle").evaluate((button) => button === document.activeElement), true);
+  await page.screenshot({ path: output("02-complete-dark-393.png") });
 
-const premiumState = fixture();
-premiumState.profile.themePreference = "premium";
-const premiumContext = await browser.newContext({
-  viewport: { width: 390, height: 844 },
-  colorScheme: "dark",
-  serviceWorkers: "block",
-});
-await premiumContext.addInitScript((state) => {
-  localStorage.setItem("lift-v2-state", JSON.stringify(state));
-}, premiumState);
-const premiumPage = await premiumContext.newPage();
-const premiumErrors = [];
-premiumPage.on("pageerror", (error) => premiumErrors.push(error.message));
-premiumPage.on("console", (message) => {
-  if (message.type() === "error") premiumErrors.push(message.text());
-});
-await premiumPage.route("**/api/ai/status", (route) =>
-  route.fulfill({
-    status: 200,
-    contentType: "application/json",
-    body: JSON.stringify({ available: false, provider: null }),
-  }),
-);
-await openActive(premiumPage);
-await premiumPage.locator(".workout-warmup-toggle").click();
-assert.equal(
-  await premiumPage.evaluate(() => document.documentElement.dataset.theme),
-  "premium",
-);
-assert.equal(
-  await premiumPage.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
-  true,
-  "expanded Premium warm-up stays narrow-safe",
-);
-await premiumPage.screenshot({ path: output("05-expanded-premium.png") });
-assert.deepEqual(premiumErrors, []);
-await premiumContext.close();
+  // The first working set still logs and starts rest as before.
+  await page.locator(".set-row button[data-workout-complete]").first().click();
+  await page.locator(".rest-timer").waitFor();
+  const afterSet = await saved(page);
+  assert.equal(afterSet.exercises[0].sets[0].completed, true);
+  assert.ok(afterSet.rest?.endsAt, "rest timer runs after the first working set");
+  assert.equal(afterSet.warmup.stages[0].completed, true);
+
+  await goToExercise(page, "Chest Supported Row");
+  assert.equal(await expanded(page), "false");
+  await page.locator(".workout-warmup-toggle").click();
+  assert.equal(await page.locator(".workout-warmup .warmup-checklist-section").count(), 0);
+  assert.equal(await page.locator(".workout-warmup").getByText(/^Warm-up sets$/).count(), 1);
+  await settle(page);
+  await page.screenshot({ path: output("03-second-exercise-ramp-dark-393.png") });
+
+  await goToExercise(page, "Leg Press");
+  assert.equal(await page.locator(".workout-warmup").count(), 0, "no warm-up, no card");
+  assert.equal(await page.getByRole("heading", { name: exerciseCatalog["leg-press"].name }).count(), 1);
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+// 2. Skip from the bar, narrow light theme.
+{
+  const { context, page, errors } = await newPage({ width: 320, height: 700, colorScheme: "light" });
+  assert.equal(await expanded(page), "true");
+  assert.ok((await page.locator(".warmup-check-row").count()) > 0);
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true, "open warm-up fits 320 px");
+  const skip = await page.locator(".warmup-skip").boundingBox();
+  assert.ok(skip && skip.y + skip.height <= 700 && skip.x + skip.width <= 320, "Skip is on screen without scrolling");
+  await page.screenshot({ path: output("04-open-light-320.png") });
+  await page.locator(".warmup-skip").click();
+  await page.locator(".workout-warmup-toggle").getByText("Warm-up skipped").waitFor();
+  await settle(page);
+  assert.equal(await page.locator(".exercise-heading-art-button").count(), 1);
+  await page.screenshot({ path: output("05-skipped-light-320.png") });
+  await page.reload({ waitUntil: "networkidle" });
+  await openActive(page);
+  assert.equal(await expanded(page), "false", "skipped warm-ups stay collapsed");
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+// 3. Narrow dark and wide light screenshots of the open first warm-up.
+for (const [width, colorScheme] of [[320, "dark"], [393, "light"]]) {
+  const { context, page, errors } = await newPage({ width, colorScheme });
+  assert.equal(await expanded(page), "true");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: output(`06-open-${colorScheme}-${width}.png`) });
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+// 4. Reduced motion: no keyframes, and exit settles at once.
+{
+  const { context, page, errors } = await newPage({ width: 390, colorScheme: "dark", reducedMotion: "reduce" });
+  assert.equal(await expanded(page), "true");
+  const row = page.locator(".warmup-check-row").first();
+  await row.click();
+  assert.equal(await row.evaluate((node) => getComputedStyle(node.querySelector("i")).animationName), "none");
+  await page.getByRole("button", { name: "Skip remaining" }).last().click();
+  assert.equal(await page.locator(".warmup-details").count(), 0);
+  assert.match(await page.locator(".workout-warmup-toggle").innerText(), /Remaining steps skipped/);
+  await page.screenshot({ path: output("reduced-motion-settled.png") });
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+// 5. A started workout does not reopen the first warm-up.
+{
+  const state = fixture();
+  state.activeWorkout.exercises[0].sets[0].completed = true;
+  state.activeWorkout.exercises[0].sets[0].reps = 8;
+  const { context, page, errors } = await newPage({ width: 390, colorScheme: "light", state });
+  assert.equal(await expanded(page), "false");
+  assert.deepEqual(errors, []);
+  await context.close();
+}
+
+// 6. Premium theme.
+{
+  const state = fixture();
+  state.profile.themePreference = "premium";
+  const { context, page, errors } = await newPage({ width: 390, colorScheme: "dark", state });
+  assert.equal(await page.evaluate(() => document.documentElement.dataset.theme), "premium");
+  assert.equal(await expanded(page), "true");
+  assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  await page.screenshot({ path: output("07-open-premium.png") });
+  assert.deepEqual(errors, []);
+  await context.close();
+}
 
 await browser.close();
 console.log(
-  "Warm-up sequencing QA passed: the first exercise gets a compact actionable checklist, explicit completion retains a reviewable summary, the second distinct compound gets just-in-time ramp sets, and Skip stays clean at 320 px.",
+  "Warm-up sequencing QA passed: the first warm-up opens on first paint before any working set, manual collapse survives exercise changes and reloads, an unfinished open warm-up is restored, later and finished warm-ups stay collapsed, Skip stays in the bar, and the exercise stays visible after Continue at 320 and 393 px.",
 );
