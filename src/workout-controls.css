@@ -406,6 +406,28 @@
 .exercise-note-meta small:last-child { flex: 0 0 auto; font-variant-numeric: tabular-nums; }
 .exercise-note-save { margin-top: 18px; }
 .exercise-note-remove { width: 100%; min-height: 44px; margin-top: 5px; color: #a84740; text-align: center; }
+.exercise-heading .exercise-more-notes { display: block; min-height: 32px; margin-top: -6px; padding: 4px 0; border: 0; background: transparent; color: var(--rook-accent-text); font-size: 12px; font-weight: 600; text-align: left; }
+.exercise-note-list { margin-top: 16px; }
+.exercise-note-list h3.eyebrow { margin: 0; }
+.exercise-note-list h3:focus { outline: none; }
+.exercise-note-list ul { margin: 8px 0 0; padding: 0; list-style: none; display: grid; gap: 8px; }
+.exercise-note-item { padding: 11px 13px 4px; border: 1px solid var(--rook-border, rgba(27,26,25,.1)); border-radius: 14px; background: var(--rook-surface, #fff); }
+.exercise-note-item.pinned { border-color: var(--rook-accent-hairline, rgba(31,107,76,.35)); }
+.exercise-note-item.editing { outline: 2px solid var(--rook-accent-hairline, rgba(31,107,76,.35)); outline-offset: -1px; }
+.exercise-note-item > p { margin: 0; color: var(--rook-text, #1b1a19); font-size: 14px; line-height: 1.4; overflow-wrap: anywhere; white-space: pre-wrap; }
+.exercise-note-item > small { display: block; margin-top: 4px; color: var(--rook-secondary, #6f6c68); font-size: 11.5px; }
+.exercise-note-item.pinned > small { color: var(--rook-accent-text, #1f6b4c); font-weight: 600; }
+.exercise-note-item-actions { display: flex; gap: 4px; margin: 2px -8px 0; }
+.exercise-note-item-actions .text-button { min-height: 40px; padding: 0 8px; font-size: 12.5px; font-weight: 600; }
+.exercise-note-item-actions .text-button:disabled { opacity: .45; }
+.exercise-note-item-actions .danger-text { margin-left: auto; }
+.exercise-note-option { margin-top: 10px; display: flex; align-items: center; gap: 12px; min-height: 44px; cursor: pointer; }
+.exercise-note-option + .exercise-note-option { margin-top: 2px; }
+.exercise-note-option input { width: 20px !important; height: 20px; flex: 0 0 auto; margin: 0; accent-color: var(--rook-accent, #1f6b4c); }
+.exercise-note-option span { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.exercise-note-option strong { color: var(--rook-text, #1b1a19); font-size: 13.5px; font-weight: 600; }
+.exercise-note-option small { color: var(--rook-secondary, #6f6c68); font-size: 12px; overflow-wrap: anywhere; }
+.exercise-note-full { margin: 8px 0 0; color: var(--rook-secondary, #6f6c68); font-size: 13px; }
 .exercise-detail-program-note,
 .exercise-detail-personal-note { margin-top: 8px !important; color: #77736f; font-size: 12px; line-height: 1.45; white-space: pre-wrap; }
 .workout-screen .stepper.unset input::placeholder { color: transparent; font-size: 9.5px; font-weight: 600; letter-spacing: 0; }
@@ -947,3 +969,4 @@
   min-height: 40px;
   justify-self: start;
 }
+.complete-session-log .session-log-notes { white-space: pre-line; }

@@ -95,7 +95,7 @@ export function applyWorkoutToday(state,proposal,{persist=saveState}={}) {
     // by its normal rules; no historical actuals, segments or completion flags.
     const workout={id,name:record.name,workoutName:record.workoutName,weekday:weekday(calendarDate(checked.today)),logicalSessionId:id,originalScheduledDate:checked.today,
       exercises:record.exercises.map(e=>{
-        const {originalPrescription,personalNote,notes,...base}=preparedExercise(e);
+        const {originalPrescription,personalNote,personalNotes,notes,...base}=preparedExercise(e);
         return {...base,id:uid('repeat-exercise'),...(originalPrescription?{repMin:originalPrescription.repMin,repMax:originalPrescription.repMax,targetRir:originalPrescription.targetRir}:{}),
           sets:(originalPrescription?.sets || e.sets).map(s=>({id:uid('set'),...(s.setType?{setType:s.setType}:{}),weight:null,reps:null,rir:null,completed:false,planned:true,added:false}))};
       })};

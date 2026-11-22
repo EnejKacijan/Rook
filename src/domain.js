@@ -8704,44 +8704,172 @@ export function normalizeExercisePersonalNote(note) {
 export const exercisePersonalNote = (value) =>
   normalizeExercisePersonalNote(value?.personalNote);
 
-function assignExercisePersonalNote(exercise, note) {
+// Personal notes on one exercise. `personalNotes` holds every note; the legacy
+// `personalNote` field mirrors the pinned note so older clients, backups and
+// history corrections keep reading and editing the note under the exercise
+// name. When the two disagree, the mirror wins for the pinned note.
+export const EXERCISE_PERSONAL_NOTES_MAX = 10;
+export const LEGACY_PERSONAL_NOTE_ID = "pinned-note";
+const NOTE_SCOPES = new Set(["workout", "template"]);
+
+function normalizedNoteEntry(entry) {
+  const text = normalizeExercisePersonalNote(entry?.text);
+  if (!text || typeof entry?.id !== "string" || !entry.id) return null;
+  return {
+    id: entry.id,
+    text,
+    ...(NOTE_SCOPES.has(entry.scope) ? { scope: entry.scope } : {}),
+    ...(entry.pinned ? { pinned: true } : {}),
+  };
+}
+
+export function exercisePersonalNotes(exercise) {
+  const mirror = exercisePersonalNote(exercise);
+  if (!Array.isArray(exercise?.personalNotes))
+    return mirror ? [{ id: LEGACY_PERSONAL_NOTE_ID, text: mirror, pinned: true }] : [];
+  const seen = new Set();
+  let pinSeen = false;
+  const notes = exercise.personalNotes
+    .map(normalizedNoteEntry)
+    .filter((note) => note && !seen.has(note.id) && seen.add(note.id))
+    .map((note) => {
+      if (!note.pinned) return note;
+      if (pinSeen) { const { pinned, ...rest } = note; return rest; }
+      pinSeen = true;
+      return note;
+    });
+  const pinned = notes.find((note) => note.pinned);
+  if (pinned && !mirror) return notes.filter((note) => note !== pinned);
+  if (pinned) { pinned.text = mirror; return notes; }
+  if (!mirror) return notes;
+  const id = seen.has(LEGACY_PERSONAL_NOTE_ID) ? uid("note") : LEGACY_PERSONAL_NOTE_ID;
+  return [{ id, text: mirror, pinned: true }, ...notes];
+}
+
+export const pinnedExercisePersonalNote = (exercise) =>
+  exercisePersonalNotes(exercise).find((note) => note.pinned) || null;
+
+function writeExercisePersonalNotes(exercise, notes) {
   if (!exercise) return;
-  if (note) exercise.personalNote = note;
+  const pinned = notes.find((note) => note.pinned);
+  if (notes.length) exercise.personalNotes = notes.map((note) => ({ ...note }));
+  else delete exercise.personalNotes;
+  if (pinned) exercise.personalNote = pinned.text;
   else delete exercise.personalNote;
 }
 
-export function saveActiveExercisePersonalNote(
-  state,
-  activeExerciseId,
-  note,
-) {
+function activeNoteContext(state, activeExerciseId) {
   const active = state?.activeWorkout;
-  const activeExercise = active?.exercises?.find(
-    (exercise) => exercise.id === activeExerciseId,
-  );
-  if (!activeExercise) return { saved: false, scope: null };
-
-  const normalized = normalizeExercisePersonalNote(note);
-  assignExercisePersonalNote(activeExercise, normalized);
+  const exercise = active?.exercises?.find((item) => item.id === activeExerciseId);
+  if (!exercise) return null;
   const restartExercise = active.restartSnapshot?.exercises?.find(
-    (exercise) => exercise.id === activeExerciseId,
+    (item) => item.id === activeExerciseId,
   );
-  assignExercisePersonalNote(restartExercise, normalized);
+  const programDay = state.program?.days?.find((day) => day.id === active.programDayId);
+  const templateExercise = programDay?.exercises?.find((item) => item.id === activeExerciseId);
+  // A note saved before scopes existed kept the old behaviour: it followed the
+  // planned workout whenever the exercise belonged to one.
+  const fallbackScope = templateExercise ? "template" : "workout";
+  const notes = exercisePersonalNotes(exercise).map((note) => ({
+    ...note,
+    scope: note.scope === "template" && templateExercise ? "template"
+      : note.scope ? "workout" : fallbackScope,
+  }));
+  const templateNotes = templateExercise
+    ? exercisePersonalNotes(templateExercise).map((note) => ({ ...note, scope: "template" }))
+    : [];
+  return { active, exercise, restartExercise, templateExercise, notes, templateNotes };
+}
 
-  const programDay = state.program?.days?.find(
-    (day) => day.id === active.programDayId,
-  );
-  const templateExercise = programDay?.exercises?.find(
-    (exercise) => exercise.id === activeExerciseId,
-  );
-  assignExercisePersonalNote(templateExercise, normalized);
-  active.updatedAt = Date.now();
+function commitNoteContext(context, notes, templateNotes) {
+  writeExercisePersonalNotes(context.exercise, notes);
+  writeExercisePersonalNotes(context.restartExercise, notes);
+  if (context.templateExercise) writeExercisePersonalNotes(context.templateExercise, templateNotes);
+  context.active.updatedAt = Date.now();
+}
 
-  return {
-    saved: true,
-    scope: templateExercise ? "template" : "workout",
-    note: normalized,
-  };
+const withPin = (notes, id) =>
+  notes.map(({ pinned, ...note }) => (note.id === id ? { ...note, pinned: true } : note));
+
+// Adds a note, or changes the text, scope or pin of an existing one. New notes
+// stay with this session unless the person chooses the planned workout.
+export function saveActiveExerciseNote(state, activeExerciseId, { id, text, scope, pinned } = {}) {
+  const context = activeNoteContext(state, activeExerciseId);
+  if (!context) return { saved: false, error: "This exercise is no longer in the workout." };
+  const normalized = normalizeExercisePersonalNote(text);
+  if (!normalized) return { saved: false, error: "Write a note first." };
+  const existing = id ? context.notes.find((note) => note.id === id) : null;
+  if (id && !existing) return { saved: false, error: "This note was removed. Add it again." };
+  if (!existing && context.notes.length >= EXERCISE_PERSONAL_NOTES_MAX)
+    return { saved: false, error: `You can keep up to ${EXERCISE_PERSONAL_NOTES_MAX} notes per exercise.` };
+  const nextScope = scope === "template" && context.templateExercise ? "template"
+    : scope === undefined && existing ? existing.scope : "workout";
+  const nextPinned = pinned === undefined ? Boolean(existing?.pinned) : Boolean(pinned);
+  const note = { id: existing?.id || uid("note"), text: normalized, scope: nextScope };
+  let notes = existing
+    ? context.notes.map((item) => (item.id === note.id ? { ...note, ...(item.pinned ? { pinned: true } : {}) } : item))
+    : [...context.notes, note];
+  if (nextPinned) notes = withPin(notes, note.id);
+  else notes = notes.map((item) => (item.id === note.id ? note : item));
+
+  let templateNotes = context.templateNotes.filter((item) => item.id !== note.id);
+  if (nextScope === "template") {
+    const before = context.templateNotes.find((item) => item.id === note.id);
+    const templatePinned = pinned === undefined && before ? Boolean(before.pinned) : nextPinned;
+    const templateNote = { ...note, ...(templatePinned ? { pinned: true } : {}) };
+    templateNotes = before
+      ? context.templateNotes.map((item) => (item.id === note.id ? templateNote : item))
+      : [...templateNotes, templateNote];
+    if (templatePinned) templateNotes = withPin(templateNotes, note.id);
+  }
+  commitNoteContext(context, notes, templateNotes);
+  return { saved: true, note: notes.find((item) => item.id === note.id), scope: nextScope };
+}
+
+export function removeActiveExerciseNote(state, activeExerciseId, noteId) {
+  const context = activeNoteContext(state, activeExerciseId);
+  const note = context?.notes.find((item) => item.id === noteId);
+  if (!note) return { saved: false, error: "This note was already removed." };
+  commitNoteContext(
+    context,
+    context.notes.filter((item) => item.id !== noteId),
+    note.scope === "template" ? context.templateNotes.filter((item) => item.id !== noteId) : context.templateNotes,
+  );
+  return { saved: true, scope: note.scope };
+}
+
+// Only one note sits under the exercise name. Pinning a note for this session
+// leaves the planned workout's own pinned note in place for next time.
+export function pinActiveExerciseNote(state, activeExerciseId, noteId, pinned = true) {
+  const context = activeNoteContext(state, activeExerciseId);
+  const note = context?.notes.find((item) => item.id === noteId);
+  if (!note) return { saved: false, error: "This note was removed." };
+  const unpin = (items) => items.map((item) => {
+    if (item.id !== noteId) return item;
+    const { pinned: _, ...rest } = item;
+    return rest;
+  });
+  const notes = pinned ? withPin(context.notes, noteId) : unpin(context.notes);
+  const templateNotes = note.scope !== "template" ? context.templateNotes
+    : pinned ? withPin(context.templateNotes, noteId) : unpin(context.templateNotes);
+  commitNoteContext(context, notes, templateNotes);
+  return { saved: true, scope: note.scope };
+}
+
+// Legacy single-note API: edits the pinned note in its existing scope.
+export function saveActiveExercisePersonalNote(state, activeExerciseId, note) {
+  const context = activeNoteContext(state, activeExerciseId);
+  if (!context) return { saved: false, scope: null };
+  const pinned = context.notes.find((item) => item.pinned);
+  const normalized = normalizeExercisePersonalNote(note);
+  if (!normalized) {
+    if (pinned) removeActiveExerciseNote(state, activeExerciseId, pinned.id);
+    return { saved: true, scope: pinned?.scope || (context.templateExercise ? "template" : "workout"), note: null };
+  }
+  const result = saveActiveExerciseNote(state, activeExerciseId, pinned
+    ? { id: pinned.id, text: normalized }
+    : { text: normalized, scope: context.templateExercise ? "template" : "workout", pinned: true });
+  return { saved: result.saved, scope: result.scope, note: normalized };
 }
 export function templateForToday(program, date = new Date(), selectedDay) {
   if (!program) return null;
