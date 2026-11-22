@@ -271,6 +271,7 @@ function runRookViewTransition(change) {
 import { rampWeightForWorkingLoad } from "./warmups.js";
 import {changeWarmup, warmupProgress} from './warmupSession.js';
 import {useWarmupCollapseAnchor} from './useWarmupCollapseAnchor.js';
+import {useWarmupDisclosure} from './useWarmupDisclosure.js';
 import {
   isSupersetRoundBoundary,
   nextSupersetStep,
@@ -6222,7 +6223,8 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const [exerciseCompleting, setExerciseCompleting] = useState(false);
   const [exerciseNavigationAnnouncement, setExerciseNavigationAnnouncement] =
     useState("");
-  const [warmupOpen, setWarmupOpen] = useState(false);
+  const {stage: warmup, open: warmupOpen, setOpen: setWarmupOpen, pulse: warmupPulse, markSaved: markWarmupSaved} =
+    useWarmupDisclosure(active);
   const [warmupError, setWarmupError] = useState('');
   const warmupRegionRef = useRef(null);
   useWarmupCollapseAnchor(warmupOpen, warmupRegionRef);
@@ -6466,7 +6468,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   );
   useEffect(
     () => {
-      setWarmupOpen(false);
       setWarmupError('');
     },
     [active?.id, active?.exerciseIndex],
@@ -6994,7 +6995,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     setQueueError('');
     setNow(restartedAt);
     setConfirmation(null);
-    setWarmupOpen(false);
     setRecentlyCompletedSetId(null);
     setExerciseCompleting(false);
     setExerciseNavigationAnnouncement("");
@@ -7027,13 +7027,6 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
       : "Weight";
   const timerVisible =
     restEligible && !confirmation && (restReady || restLeft > 0 || restCompleteVisible);
-  const warmup = (active.warmup?.stages || []).find(
-    (stage) =>
-      stage.exerciseIndex === active.exerciseIndex &&
-      stage.exerciseId === exercise.exerciseId &&
-      (!stage.exerciseInstanceId || stage.exerciseInstanceId === exercise.id) &&
-      warmupProgress(stage).total > 0,
-  );
   const warmupExercise = warmup
     ? active.exercises.find(
         (entry) =>
@@ -7114,8 +7107,10 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const updateWarmup = (action) => {
     if (!warmup) return false;
     try {
+      const checking = action.stepKey && !warmupProgress(warmup).steps.find(step => step.key === action.stepKey)?.item.completed;
       queueAction.commit(current => changeWarmup(current, {sessionId: active.id, stageId: warmup.id, ...action}));
       setWarmupError('');
+      markWarmupSaved(checking ? action.stepKey : action.exit && warmupProgress(warmup).all ? 'complete' : null);
       return true;
     } catch (error) {setWarmupError(error.message); return false;}
   };
@@ -7123,7 +7118,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
     if (!updateWarmup({exit: true})) return;
     // Focus the retained control before its checklist becomes inert.
     warmupRegionRef.current?.querySelector('.workout-warmup-toggle')?.focus({preventScroll: true});
-    setWarmupOpen(false);
+    setWarmupOpen(false, {remember: false});
   };
   const rampLabel = (entry, set) => {
     const workingExercise = active.exercises.find(
@@ -7152,7 +7147,7 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
   const warmupStatus = warmupProgress(warmup);
   const currentWarmupStepId = warmupStatus.steps.find(step => !step.item.completed)?.key;
   const warmupStepClass = (key, completed) =>
-    `warmup-check-row${completed ? " completed" : key === currentWarmupStepId ? " current" : ""}`;
+    `warmup-check-row${completed ? " completed" : key === currentWarmupStepId ? " current" : ""}${completed && warmupPulse?.key === key ? " just-checked" : ""}`;
   const warmupSummary = warmupStatus.outcome === 'complete' ? 'Warm-up complete'
     : warmupStatus.outcome === 'skipped' ? 'Warm-up skipped'
     : warmupStatus.done && !warmupOpen ? `Warm-up · ${warmupStatus.done}/${warmupStatus.total} done`
@@ -7258,17 +7253,17 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
                 aria-label={warmupOpen ? `${warmupSummary}, ${warmupStatus.done} of ${warmupStatus.total} warm-up steps complete` : undefined}
                 aria-expanded={warmupOpen}
                 aria-controls={`warmup-${warmup.id}`}
-                onClick={() => setWarmupOpen(value => !value)}
+                onClick={() => setWarmupOpen(!warmupOpen)}
               >
                 <span>
-                  <strong>{warmupStatus.outcome === 'complete' && <i className="warmup-summary-check" aria-hidden="true">✓</i>}{warmupSummary}</strong>
+                  <strong>{warmupStatus.outcome === 'complete' && <i className={`warmup-summary-check${warmupPulse?.key === 'complete' ? ' just-completed' : ''}`} aria-hidden="true">✓</i>}{warmupSummary}</strong>
                   {warmupSubtitle && <small>{warmupSubtitle}</small>}
                 </span>
-                {warmupOpen && <small className="warmup-inline-progress" aria-hidden="true">{warmupStatus.done}/{warmupStatus.total}</small>}
+                {warmupOpen && <small key={warmupStatus.done} className={`warmup-inline-progress${warmupPulse ? ' just-updated' : ''}`} aria-hidden="true">{warmupStatus.done}/{warmupStatus.total}</small>}
                 <i className="disclosure-chevron" aria-hidden="true" />
               </button>
-              {!warmupOpen && warmupStatus.outcome === 'pending' && !warmupStatus.all && <button
-                type="button" className="text-button warmup-skip" onClick={exitWarmup}
+              {warmupStatus.outcome === 'pending' && !warmupStatus.all && <button
+                type="button" className="text-button warmup-skip" aria-label={warmupOpen ? warmupStatus.action : undefined} onClick={exitWarmup}
               >Skip</button>}
             </div>
             {warmupError && <p className="form-error warmup-error" role="alert">{warmupError}</p>}
