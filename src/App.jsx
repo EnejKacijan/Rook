@@ -7476,13 +7476,17 @@ export function ActiveWorkout({ state, update, setPage, setDetail, onLiveFinish 
           <button type="button" className="text-button active-exercise-change-hide" aria-label="Hide replacement details"
             title="Actions stay in Exercise options" data-workout-options onClick={() => changeReplacement('hide')}>Hide</button>
         </div>
-        <div className="active-exercise-change-actions">
-          {!saveOptions.saved && !revertIssue && <button type="button" className="text-button" onClick={() => changeReplacement('revert')}>Revert to original</button>}
-          {saveOptions.canSave && <button type="button" className="text-button" onClick={() => changeReplacement('save')}>{saveOptions.saveLabel}</button>}
-          {saveOptions.canUndo && <button type="button" className="text-button" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
-        </div>
-        <small role="status">{saveOptions.message}</small>
+        {!saveOptions.saved && !revertIssue && <div className="active-exercise-change-actions">
+          <button type="button" className="text-button" onClick={() => changeReplacement('revert')}>Revert to original</button>
+        </div>}
         {revertIssue && <small>{revertIssue}</small>}
+        {saveOptions.message && <div className="active-replacement-future">
+          <small role="status"><ReplacementFutureLine options={saveOptions}/></small>
+          {(saveOptions.canSave || saveOptions.canUndo) && <div className="active-exercise-change-actions">
+            {saveOptions.canSave && <button type="button" className="text-button" onClick={() => changeReplacement('save')}>{saveOptions.saveLabel}</button>}
+            {saveOptions.canUndo && <button type="button" className="text-button" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
+          </div>}
+        </div>}
         {replacementError?.revision === replacement.revision && <small role="alert">{replacementError.message}</small>}
       </section>}
       {loggingChoice && <ActiveLoggingChange key={`${active.id}:${exercise.id}:${exercise.exerciseId}:${loggingChoice.mode}`}
@@ -20259,11 +20263,11 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
         <Eyebrow>REPLACEMENT</Eyebrow>
         <small>Original: {exerciseName(hiddenReplacement.original)}</small>
         {!saveOptions.saved && !revertIssue && <button type="button" className="list-row" onClick={() => changeReplacement('revert')}>Revert to original</button>}
+        {revertIssue && <small>{revertIssue}</small>}
+        {saveOptions.message && <small role="status">{saveOptions.saved && <><strong>{saveOptions.savedLabel}.</strong> </>}<ReplacementFutureLine options={saveOptions}/></small>}
         {saveOptions.canSave && <button type="button" className="list-row" onClick={() => changeReplacement('save')}>{saveOptions.saveLabel}</button>}
         {saveOptions.canUndo && <button type="button" className="list-row" onClick={() => changeReplacement('undo-save')}>Undo saved change</button>}
         <button type="button" className="list-row" onClick={() => changeReplacement('show')}>Show replacement details</button>
-        <small role="status">{saveOptions.saved ? `${saveOptions.savedLabel}. ` : ''}{saveOptions.message}</small>
-        {revertIssue && <small>{revertIssue}</small>}
       </section>}
       {isCurrent && onShowPreviousValues && <button type="button" className="list-row" onClick={() => {showPreviousOnClose.current = true; close();}}><span>Use previous values</span><NavigationChevron/></button>}
       {supportsPerSideLogging(current) && (
@@ -20321,6 +20325,12 @@ function ActiveExerciseOptions({ exercise, state, update, close, setDetail, onMo
       )}
     </WorkoutOptionsSheet>
   );
+}
+
+function ReplacementFutureLine({options}) {
+  if (!options.future) return options.message;
+  const {workout, verb, exercise} = options.future;
+  return <>Future <strong>{workout}</strong> sessions {verb} {exercise}.</>;
 }
 
 const loggingSetupOptions = {
