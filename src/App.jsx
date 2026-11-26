@@ -67,7 +67,7 @@ import {UseWorkoutTodaySheet} from './UseWorkoutTodaySheet.jsx';
 import {useCalendarDay} from './useCalendarDay.js';
 import {useContextPress} from './useContextPress.js';
 import {workoutDraftScope,ownsWorkoutDraft} from './workoutDraftScope.js';
-import {isRepeatAdjustment,cancelRepeatedWorkout,canUseWorkoutToday,proposeWorkoutToday} from './useWorkoutToday.js';
+import {isRepeatAdjustment,cancelRepeatedWorkout,canUseWorkoutToday,proposeWorkoutToday,additionalRepeatForDate,removeAdditionalRepeat} from './useWorkoutToday.js';
 import {MissedWorkoutSummary} from './missedWorkoutPresentation.jsx';
 import {TemporaryScheduleSummary} from './TemporaryScheduleSummary.jsx';
 import { PlanProcessing as BuildingOverlay, finishPlanProcessing } from './PlanProcessing.jsx';
@@ -4947,7 +4947,8 @@ export function Today({
     : null;
   const selectedActiveWorkout = Boolean(active && selectedIso === activeDateKey);
   const scheduled=scheduleReader.read(selectedIso);
-  const oneOff=recoveredWorkoutForDate(state,selectedIso);
+  const additionalRepeat = viewingToday ? additionalRepeatForDate(state, selectedIso) : null;
+  const oneOff = additionalRepeat || recoveredWorkoutForDate(state,selectedIso);
   const showingOneOff=Boolean(oneOff&&(!scheduled.template||scheduled.template.id===oneOff.id||selectedOneOff===oneOff.id));
   const {recurringTemplate,adaptedTemplate,template,occurrence}=showingOneOff
     ? {recurringTemplate:null,adaptedTemplate:oneOff,template:oneOff,occurrence:null} : scheduled;
@@ -5046,7 +5047,7 @@ export function Today({
       <TemporaryScheduleSummary review={scheduleReview} onView={()=>setDetail({flexibleWeek:{reviewExisting:true}})} />
       {!selectedActiveWorkout&&oneOff&&scheduled.template&&scheduled.template.id!==oneOff.id&&
         <ExerciseNavigationButton className="list-row today-recovered-workout-switch" onClick={()=>{setSelectedOneOff(showingOneOff?null:oneOff.id);setStartError('');}}>
-          <span><strong>{showingOneOff?'View other workout':'View one-off workout'}</strong><small>{showingOneOff?(scheduled.template.workoutName||scheduled.template.name):(oneOff.workoutName||oneOff.name)}</small></span><NavigationChevron/>
+          <span><strong>{additionalRepeat ? (showingOneOff ? 'View planned workout' : 'View extra workout') : (showingOneOff ? 'View other workout' : 'View one-off workout')}</strong><small>{showingOneOff?(scheduled.template.workoutName||scheduled.template.name):(oneOff.workoutName||oneOff.name)}</small></span><NavigationChevron/>
         </ExerciseNavigationButton>}
       {showMissed && missedReminder}
       {planReady && (
@@ -5092,7 +5093,8 @@ export function Today({
     const sets = active.exercises.flatMap((exercise) => exercise.sets);
     const completedSets = sets.filter((set) => set.completed).length;
     const elapsed = workoutElapsedSeconds(active,now);
-    const plannedOccurrence = active.source === 'freestyle' ? occurrence : null;
+    const activeExtraRepeat = additionalRepeat && additionalRepeat.optionalSessionId === active.optionalSessionId;
+    const plannedOccurrence = active.source === 'freestyle' ? occurrence : activeExtraRepeat ? scheduled.occurrence : null;
     const scheduledDate = linkedOccurrence?.scheduledDate || active.canonicalPlanDate;
     return (
       <main className="screen today-screen">
@@ -5756,7 +5758,7 @@ export function Today({
           ? <CompletedSessionOverview workout={completed} exerciseProgress={endedEarly ? exerciseProgress : undefined} />
           : <WorkoutTitle workout={session} day={selectedDay} />}
         <CombinedProvenance adjustment={session.adjustment || session.todayOnlyAdjustment} />
-        {showingOneOff&&<p className="muted">One-off workout · {viewingToday?'Today only':displayDate(selectedDate)}</p>}
+        {showingOneOff && <p className="muted">{additionalRepeat ? 'Extra workout · Repeat' : <>One-off workout · {viewingToday?'Today only':displayDate(selectedDate)}</>}</p>}
         {session.flexibleWeekMoved && <div className="flexible-week-origin">Moved from {displayDate(localDate(session.originalScheduledDate))}{scheduleReview.moved.some(change=>change.id===session.logicalSessionId)&&<button type="button" className="text-button schedule-change-link" onClick={()=>setDetail({flexibleWeek:{reviewExisting:true,focusSessionId:session.logicalSessionId}})}>View change</button>}</div>}
         {session.trainingBlock && (
           <button type="button" onClick={() => setDetail("training-block")} aria-label="View training block" className={`today-block-week${session.trainingBlock.plannedDeload ? " is-deload" : ""}`}>
@@ -5880,10 +5882,14 @@ export function Today({
           </div>
         )}
         {showingOneOff&&!completed&&selectedIso>=todayKey&&<button className="text-button today-recovered-workout-remove" onClick={()=>{
-          if(!window.confirm('Remove this one-off workout from the schedule?'))return;
-          try{recoveryAction.commit(current=>cancelRecoveredWorkout(current,oneOff.optionalSessionId));setSelectedOneOff(null);setStartError('');}
+          if(!window.confirm(additionalRepeat ? 'Remove this repeat from today?' : 'Remove this one-off workout from the schedule?'))return;
+          try{
+            recoveryAction.commit(current => additionalRepeat ? removeAdditionalRepeat(current,oneOff.optionalSessionId) : cancelRecoveredWorkout(current,oneOff.optionalSessionId));
+            setSelectedOneOff(null);
+            setStartError('');
+          }
           catch(error){setStartError(error.message);}
-        }}>Remove one-off workout</button>}
+        }}>{additionalRepeat ? 'Remove repeat' : 'Remove one-off workout'}</button>}
         {startError&&<p className="today-start-error" role="alert">{startError}</p>}
         {!completed && <FreestyleEntry state={state} update={update} setPage={setPage} setDetail={setDetail} date={selectedIso} historyOnly />}
       </section>

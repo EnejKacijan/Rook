@@ -14,7 +14,7 @@ import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSe
 import {applySavedExerciseLoggingMode,normalizeExerciseLoggingPreferences} from './sessionLoggingSetup.js';
 import {exerciseInPlannedSlot, plannedExerciseSlot, plannedLoadChanged} from './workoutExerciseSlots.js';
 import {normalizeCoachConversations} from './coachConversations.js';
-import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
+import {repeatTemplate,isRepeatAdjustment,additionalRepeatForDate} from './useWorkoutToday.js';
 import {recoveredWorkoutForDate} from './recoveredWorkout.js';
 import {workoutPerformedDate} from './workoutDates.js';
 export {workoutPerformedDate} from './workoutDates.js';
@@ -8976,6 +8976,7 @@ export function optionalStrengthForDate(state, date = new Date()) {
         session.kind === "Strength" &&
         session.status === "planned" &&
         session.date === isoDay(date) &&
+        (!session.workout?.repeatedFromWorkoutId || session.date === isoDay()) &&
         Array.isArray(session.workout?.exercises),
     )?.workout || null
   );
@@ -9191,6 +9192,14 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
 export function startWorkout(state, template) {
   if(trainingRestForDate(state,isoDay())&&state.program?.days?.some(day=>day.id===template?.id))
     throw Error('This is a planned rest week. Change your week choice before starting a plan workout.');
+  const extraRepeat = Boolean(template?.optionalSessionId && template.repeatedFromWorkoutId);
+  if (extraRepeat) {
+    const saved = additionalRepeatForDate(state, isoDay());
+    if (!saved || saved.optionalSessionId !== template.optionalSessionId ||
+        state.workouts?.some(workout => workout.optionalSessionId === saved.optionalSessionId))
+      throw Error('This repeat is no longer scheduled for today.');
+    template = saved;
+  }
   const recovered=Boolean(template?.recoveredMove);
   if(recovered){
     const saved=recoveredWorkoutForDate(state,isoDay());
@@ -9241,11 +9250,12 @@ export function startWorkout(state, template) {
   const startedAt = Date.now();
   const occurrence=currentWeekSchedule(state,state.selectedDate || isoDay(startedAt)).find(item=>item.workoutId===template.id && (!template.logicalSessionId || (item.logicalSessionId || `${item.workoutId}:${item.originalDate}`)===template.logicalSessionId));
   const logicalSessionId=template.logicalSessionId || (occurrence ? `${occurrence.workoutId}:${occurrence.originalDate}` : null);
-  const canonicalPlanDate = template.recoveredMove?.date || occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
+  const canonicalPlanDate = (extraRepeat ? isoDay(startedAt) : template.recoveredMove?.date) || occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
   const normalHistory = normalProgressionHistory(state.workouts);
   const source = {...template, programDayId:template.id};
   const workout = {
     id: uid("active"),
+    ...(extraRepeat ? {source:'repeat', repeatedFromWorkoutId:template.repeatedFromWorkoutId} : {}),
     ...(isRepeatAdjustment(template.todayOnlyAdjustment)?{source:'repeat',repeatedFromWorkoutId:template.todayOnlyAdjustment.sourceWorkoutId}:{}),
     templateId: template.weekday,
     programDayId: template.id,
@@ -10071,7 +10081,7 @@ export function completeWorkout(state, timing = null) {
     return next;
   }
   if(isRepeatAdjustment(session.adjustment)){next.todayAdaptation=null;return next;}
-  if (session.source === 'freestyle') return next;
+  if (session.source === 'freestyle' || session.source === 'repeat') return next;
   return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), temporaryPlanBlockSkipRecords(next, session).filter(record => record.blockId === next.program?.trainingBlock?.id));
 }
 export function optionalSessionElapsedSeconds(session, now = Date.now()) {

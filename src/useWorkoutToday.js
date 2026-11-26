@@ -1,4 +1,4 @@
-import {isoDay, uid, workoutPerformedDate, saveState, weekday,calendarDate,estimateSessionMinutes} from './domain.js';
+import {isoDay, uid, workoutPerformedDate, saveState, weekday,calendarDate,estimateSessionMinutes,optionalStrengthForDate} from './domain.js';
 import {addCalendarDays, createFlexibleWeekPlanner, flexibleSessionById, flexibleReviewFingerprint, proposeFlexibleWeek, applyFlexibleWeek, completedWorkoutForOccurrence} from './flexibleWeek.js';
 import {preparedExercise} from './workoutSessionStart.js';
 
@@ -16,6 +16,19 @@ export function repeatTemplate(state,date) {
   if(!isRepeatAdjustment(a) || a.date!==date)return null;
   return {...structuredClone(a.workout),adapted:true,todayOnlyAdjustment:structuredClone(a)};
 }
+export function additionalRepeatForDate(state, date) {
+  return (state.optionalSessions || []).find(session => session.date === date && session.kind === 'Strength' &&
+    session.status === 'planned' && session.workout?.repeatedFromWorkoutId && session.workout.optionalSessionId === session.id)?.workout || null;
+}
+
+export function removeAdditionalRepeat(state, id, today = isoDay()) {
+  if (additionalRepeatForDate(state, today)?.optionalSessionId !== id ||
+      state.activeWorkout?.optionalSessionId === id || state.workouts.some(workout => workout.optionalSessionId === id))
+    throw Error('This repeat is no longer available to remove.');
+  return {...state, optionalSessions:state.optionalSessions.map(session =>
+    session.id === id ? {...session, status:'cancelled'} : session)};
+}
+
 export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnly=false,planner=createFlexibleWeekPlanner(state,today)}={}) {
   const sessions=planner.sessions();
   const record=request.workoutId ? state.workouts.find(w=>w.id===request.workoutId && w.completedAt) : null;
@@ -27,6 +40,7 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
   if(record && !record.exercises?.length)return fail('This workout has no exercises to repeat.');
   if(state.activeWorkout || state.activeOptionalSession)return fail('Finish or cancel your active workout first.');
   if(state.todayAdaptation)return fail('Finish or cancel the pending workout adjustment first.');
+  if(additionalRepeatForDate(state,today))return fail('Finish or remove the extra workout scheduled for today.');
   if(source?.scheduledDate===today)return fail('This workout is already scheduled for today.');
   const displaced=sessions.find(s=>s.scheduledDate===today && s.logicalSessionId!==source?.logicalSessionId && ['planned','missed','optional'].includes(s.status));
   const swapRequest=displaced && source ? {mode:'swap',sessionId:source.logicalSessionId,otherSessionId:displaced.logicalSessionId} : null;
@@ -37,8 +51,11 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
     return {status:'ready',today,request:structuredClone(request),fingerprint:flexibleReviewFingerprint(state),kind:'swap',
       sourceName:source.workout.name,sourceDate:source.originalDate,displaced,swapProposal};
   }
-  if(displaced && !request.displacedToDate){
-    if(eligibilityOnly && swapProposal?.status==='ready')return {status:'choose-date'};
+  const canKeepBoth = Boolean(record && displaced && !optionalStrengthForDate(state,calendarDate(today)));
+  if(request.keepBoth && (!canKeepBoth || request.displacedToDate))
+    return fail('These workouts can no longer be kept together today. Review your selection again.');
+  if(displaced && !request.displacedToDate && !request.keepBoth){
+    if(eligibilityOnly && (canKeepBoth || swapProposal?.status==='ready'))return {status:'choose-date'};
     const dates=[];
     for(let i=1;i<=13;i++){
       const toDate=addCalendarDays(today,i);
@@ -48,11 +65,11 @@ export function proposeWorkoutToday(state,request,today=isoDay(),{eligibilityOnl
       // enumerates every date using exactly the same canonical move validation.
       if(eligibilityOnly)break;
     }
-    if(!dates.length && swapProposal?.status!=='ready')return fail('No dates are free for today’s workout. Adjust your week first.');
-    return {status:'choose-date',sourceName:record?.name || source.workout.name,displaced,dates,swapProposal:swapProposal?.status==='ready'?swapProposal:null};
+    if(!dates.length && !canKeepBoth && swapProposal?.status!=='ready')return fail('No dates are free for today’s workout. Adjust your week first.');
+    return {status:'choose-date',sourceName:record?.name || source.workout.name,displaced,dates,canKeepBoth,swapProposal:swapProposal?.status==='ready'?swapProposal:null};
   }
   let displacedProposal=null,staged=state;
-  if(displaced){
+  if(displaced && !request.keepBoth){
     if(request.displacedToDate<=today)return fail('Choose a future date for today’s workout.');
     displacedProposal=proposeFlexibleWeek(state,{mode:'move',sessionId:displaced.logicalSessionId,toDate:request.displacedToDate},today);
     if(displacedProposal.status!=='ready')return displacedProposal;
@@ -100,7 +117,13 @@ export function applyWorkoutToday(state,proposal,{persist=saveState}={}) {
           sets:(originalPrescription?.sets || e.sets).map(s=>({id:uid('set'),...(s.setType?{setType:s.setType}:{}),weight:null,reps:null,rir:null,completed:false,planned:true,added:false}))};
       })};
     workout.estimatedMinutes=estimateSessionMinutes(workout.exercises);
-    next.todayAdaptation={schemaVersion:1,id,mode:'repeat',date:checked.today,programDayId:id,sourceWorkoutId:record.id,sourceDate:checked.sourceDate,workout,originalWorkout:structuredClone(workout),appliedAt:new Date().toISOString()};
+    if (checked.request.keepBoth) {
+      next.optionalSessions = [...(next.optionalSessions || []), {
+        id, date:checked.today, kind:'Strength', activity:workout.name, duration:workout.estimatedMinutes,
+        intensity:'Repeat', status:'planned', createdAt:Date.now(),
+        workout:{...workout, optionalSessionId:id, repeatedFromWorkoutId:record.id},
+      }];
+    } else next.todayAdaptation={schemaVersion:1,id,mode:'repeat',date:checked.today,programDayId:id,sourceWorkoutId:record.id,sourceDate:checked.sourceDate,workout,originalWorkout:structuredClone(workout),appliedAt:new Date().toISOString()};
   }
   next.selectedDate=checked.today;next.selectedDay=weekday(calendarDate(checked.today));
   if(!persist(next))throw Error('Couldn’t save the schedule. Your previous schedule is unchanged. Try again.');

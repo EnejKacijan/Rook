@@ -11,7 +11,7 @@ import './todayDoneExtras.css';
 const optionalOnDay = (state, date) => (state.optionalSessions || []).filter(item => item.date === date && item.status === 'completed'
   && (['Cardio', 'Mobility'].includes(item.kind) || isConditioning(item)));
 const time = value => new Date(value).getTime() || 0;
-const workoutSource = w => w.planWorkoutOrigin ? 'Extra from plan' : w.savedWorkoutTemplateId ? 'Saved workout' : w.source === 'freestyle' ? 'Freestyle' : 'Planned';
+const workoutSource = w => w.planWorkoutOrigin ? 'Extra from plan' : w.savedWorkoutTemplateId ? 'Saved workout' : w.source === 'freestyle' ? 'Freestyle' : w.source === 'repeat' ? 'Repeat' : 'Planned';
 const workoutMeta = w => {
   if (w.historicalImport?.version === 2) return `Imported · ${importedSessionTimeLabel(w)}`;
   const { sets, elapsed } = completedSessionMetrics(w);
