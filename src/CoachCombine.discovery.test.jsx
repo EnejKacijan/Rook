@@ -6,6 +6,7 @@ import {combineExample} from './combineWorkouts.fixture.js';
 import {coachCombineReply} from './coachCombine.js';
 import {AIService} from './aiService.js';
 import {saveState,isoDay} from './domain.js';
+import {dismissMissedReminder} from './missedWorkoutActions.js';
 vi.mock('./domain.js',async original=>({...await original(),saveState:vi.fn(()=>true)}));
 vi.mock('./aiService.js',async original=>({...await original(),AIService:{...(await original()).AIService,coach:vi.fn()}}));
 globalThis.IS_REACT_ACT_ENVIRONMENT=true;
@@ -76,13 +77,18 @@ it('waits for Coach availability and does not replay an abandoned navigation',as
  expect(AIService.coach).not.toHaveBeenCalled();await render({entryIntent:null,availability:{state:'ready'}});
  expect(AIService.coach).not.toHaveBeenCalled();
 });
-it('Today hint appears only on the real date in an actionable missed context',async()=>{
+it('Today shows the hint on the real date until the missed reminder is hidden',async()=>{
  const state=fixture(),start=vi.fn(),props={state,update:()=>{},setPage:()=>{},setDetail:()=>{},onCombineWorkouts:start};
  await act(async()=>root.render(<Today {...props}/>));
  expect(host.textContent).toContain('Choose two available sessions and review one workout.');
  act(()=>button('Combine two workouts for todayChoose two available sessions and review one workout.').click());expect(start).toHaveBeenCalledOnce();
+ const hidden = dismissMissedReminder(state,{persist:()=>true});
+ await act(async()=>root.render(<Today {...props} state={hidden}/>));
+ expect(host.querySelector('.combine-discovery-hint')).toBeNull();
  await act(async()=>root.render(<Today {...props} state={{...state,selectedDate:'2026-09-09'}}/>));
  expect(host.querySelector('.combine-discovery-hint')).toBeNull();
+ await act(async()=>root.render(<TodayActionsSheet {...props} state={hidden} close={()=>{}} date={isoDay()} hasWorkout/>));
+ expect(host.textContent).toContain('Combine two workouts');
 });
 it('More options offers planned pairs without a missed-workout requirement and updates live',async()=>{
  vi.setSystemTime(new Date('2026-09-07T08:00:00'));const state=fixture(),start=vi.fn();

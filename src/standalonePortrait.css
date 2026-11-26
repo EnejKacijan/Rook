@@ -1,0 +1,27 @@
+#rook-portrait-notice:not([open]) { display: none; }
+
+#rook-portrait-notice[open] {
+  position: fixed;
+  inset: 0;
+  box-sizing: border-box;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+  margin: 0;
+  padding: max(24px, env(safe-area-inset-top)) max(24px, env(safe-area-inset-right))
+    max(24px, env(safe-area-inset-bottom)) max(24px, env(safe-area-inset-left));
+  border: 0;
+  display: grid;
+  place-items: center;
+  overflow: auto;
+  background: var(--rook-bg);
+  color: var(--rook-text);
+  text-align: center;
+}
+
+#rook-portrait-notice h1 {
+  margin: 0;
+  font-size: 1.375rem;
+  line-height: 1.3;
+}

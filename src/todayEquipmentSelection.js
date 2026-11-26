@@ -1,12 +1,9 @@
-import { equipmentAvailabilityKey, isoDay, plannedWorkoutForDate } from './domain.js';
+import { equipmentAvailabilityKey, plannedWorkoutForDate, workoutAdjustmentForDate } from './domain.js';
 import { effectiveGymContext, normalizeGymEquipment } from './gymProfiles.js';
 
 // Draft-only selection. Persisting still belongs to applyTodayAdjustment.
-export function todayEquipmentContext(state) {
-  const original = plannedWorkoutForDate(state);
-  const adjustment = state.todayAdaptation;
-  const todayAdaptation = adjustment?.date === isoDay() && adjustment.programDayId === original?.id
-    ? adjustment : null;
+export function todayEquipmentContext(state, date = new Date(), original = plannedWorkoutForDate(state,date)) {
+  const todayAdaptation = workoutAdjustmentForDate(state,date,original);
   const context = effectiveGymContext({ ...state, todayAdaptation },
     !todayAdaptation && original?.temporaryPlanAdjustment ? original : null);
   return { ...context, equipment: normalizeGymEquipment(context.profile.equipment) };

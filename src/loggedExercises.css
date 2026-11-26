@@ -6,6 +6,10 @@
 :is(.logged-exercises-all,.progression-view-all) { width:100%;text-align:left;color:var(--rook-accent-text);font-size:13px;min-height:48px; }
 :root :is(.logged-exercises-all,.progression-view-all) { border-bottom: 0; font-weight: 650; }
 :root :is(.logged-exercises-all,.progression-view-all) > span:first-child { color: var(--rook-accent-text); white-space: normal; overflow-wrap: anywhere; }
+.logged-exercises-preview > .logged-exercise-row:has(+ .logged-exercises-all),
+.progression-overview > .progression-row:is(:last-child, :has(+ .progression-view-all)) { border-bottom:0; }
+.logged-exercises-preview > .logged-exercises-all,
+.progression-overview > .progression-view-all { margin-top:8px; }
 .progression-all-count { margin: 0 0 8px; color: var(--rook-secondary); font-size: 12px; }
 .progression-all-list .progression-row { min-height: 60px; }
 .logged-exercises-preview > h3 { margin-bottom:6px; }

@@ -5,6 +5,7 @@ import { bindNavigationFocus } from './navigationFocus.js';
 import { bindPressFeedback } from './pressFeedback.js';
 import { observeVisibleViewport } from './sheetVisibleViewport.js';
 import { bindStandalonePageZoom } from './standalonePageZoom.js';
+import { bindStandalonePortrait } from './standalonePortrait.js';
 import { bindNativeShell } from './nativeShell.js';
 import { registerWebServiceWorker } from './webServiceWorker.js';
 import './styles.css';
@@ -20,12 +21,15 @@ import './theme.css';
 import './navigationFocus.css';
 import './activeLoggerTouch.css';
 import './standalonePageZoom.css';
+import './standalonePortrait.css';
 import './pressFeedback.css';
 import './uiReadability.css';
 
 // Set the installed-PWA policy before the first interactive app render.
 const releasePageZoom = bindStandalonePageZoom();
 if (import.meta.hot) import.meta.hot.dispose(releasePageZoom);
+const releasePortrait = bindStandalonePortrait();
+if (import.meta.hot) import.meta.hot.dispose(releasePortrait);
 
 const releaseNavigationFocus = bindNavigationFocus();
 if (import.meta.hot) import.meta.hot.dispose(releaseNavigationFocus);

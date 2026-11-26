@@ -27,13 +27,13 @@ for(const width of process.env.ROOK_QA_EXTRAS_ONLY?[]:[320,390,430])for(const ap
  const shot=async name=>{await page.waitForTimeout(350);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);await page.screenshot({path:`${out}/${width}-${style}-${appearance}-${name}.png`});};
  await shot('01-complete-entry');await page.getByRole('button',{name:'REVIEW BLOCK',exact:true}).click();await shot('02-summary');
  await page.locator('.block-review-sheet').evaluate(el=>el.scrollTop=el.scrollHeight);await shot('02-summary-actions');
- await page.getByRole('button',{name:'Exercise outcomes',exact:true}).click();await shot('03-outcomes');await page.getByRole('button',{name:'Back',exact:true}).click();
+ await page.getByRole('button',{name:/^All exercise results/}).click();await shot('03-outcomes');await page.getByRole('button',{name:'Back',exact:true}).click();
  await page.getByRole('button',{name:'REVIEW NEXT BLOCK',exact:true}).click();await shot('04-next-review');
  const replacement=page.locator('.block-next-change').filter({has:page.getByRole('button',{name:'Choose another replacement',exact:true})}).first();await replacement.scrollIntoViewIfNeeded();await shot('05-replacement-keep');
  assert.equal(await replacement.getByRole('radio',{name:'Keep current',exact:true}).isChecked(),true);
  await replacement.getByRole('button',{name:'Choose another replacement',exact:true}).click();await shot('06-replacement-search');const searchBox=await page.getByRole('searchbox',{name:'Search next-block replacements'}).boundingBox();assert.ok(searchBox.height>=48&&searchBox.height<=52,'single-line mobile search height');await page.locator('.block-review-sheet .choice-row').first().click();
  const screen=page.locator('.block-review-sheet');await screen.evaluate(el=>el.scrollTop=el.scrollHeight);await shot('07-long-review-bottom');
- const footer=page.locator('.block-review-sheet .flexible-week-footer');const last=page.locator('.block-next-content > p').last();assert.ok((await last.boundingBox()).y+(await last.boundingBox()).height <=(await footer.boundingBox()).y+2,'last review explanation clears footer');
+ const footer=page.locator('.block-review-sheet .flexible-week-footer');const last=page.locator('.block-next-content > :last-child');assert.ok((await last.boundingBox()).y+(await last.boundingBox()).height <=(await footer.boundingBox()).y+2,'last review explanation clears footer');
  await page.getByText(/^Current program · \d+ exercises$/).click();await page.getByText(/^Current program · \d+ exercises$/).scrollIntoViewIfNeeded();await shot('07-current-program');
  const before=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));await page.getByRole('button',{name:'CONFIRM NEXT BLOCK',exact:true}).click();await shot('08-new-block');
  const saved=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state')));assert.equal(saved.program.trainingBlock.currentWeek,1);assert.notEqual(saved.program.trainingBlock.id,before.program.trainingBlock.id);assert.equal(saved.planVersions.length,before.planVersions.length+1);assert.deepEqual(saved.workouts,before.workouts);
@@ -70,7 +70,8 @@ for(const applied of [false,true]){
  let seed=fixture();if(applied)seed=applyNextBlock(seed,proposeNextBlock(seed)).state;
  const archive=await buildBackupArchive(seed,[]),context=await browser.newContext({viewport:{width:390,height:844},serviceWorkers:'block'}),page=await context.newPage();
  await page.route('**/api/ai/status',r=>r.fulfill({json:{available:false}}));await page.goto('http://127.0.0.1:4173',{waitUntil:'networkidle'});
- await page.locator('.restore-backup-action').click();await page.getByLabel('Choose ROOK backup file').setInputFiles({name:'block-review-backup.zip',mimeType:'application/zip',buffer:Buffer.from(archive.bytes)});
+ await page.getByRole('button',{name:'Skip intro',exact:true}).click();
+ await page.getByRole('button',{name:'Restore backup',exact:true}).click();await page.getByLabel('Choose ROOK backup file').setInputFiles({name:'block-review-backup.zip',mimeType:'application/zip',buffer:Buffer.from(archive.bytes)});
  await page.getByRole('button',{name:'RESTORE & REPLACE',exact:true}).click();
  await page.waitForFunction(id=>JSON.parse(localStorage.getItem('lift-v2-state')||'{}').program?.trainingBlock?.id===id,seed.program.trainingBlock.id);
  const restored=await page.evaluate(()=>JSON.parse(localStorage.getItem('lift-v2-state'))),durable=JSON.parse(JSON.stringify((await parseBackupArchive(archive.bytes)).state));assert.deepEqual(restored.program.trainingBlock,durable.program.trainingBlock);assert.deepEqual(restored.completedTrainingBlocks,durable.completedTrainingBlocks);assert.deepEqual(restored.workouts,durable.workouts);

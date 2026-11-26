@@ -1,6 +1,8 @@
 import { it, expect } from 'vitest';
-import { exerciseCatalog, exerciseMatchesQuery, rankExerciseSearch, createExerciseSearchIndex } from './domain.js';
+import { exerciseCatalog, exerciseMatchesQuery, rankExerciseSearch, createExerciseSearchIndex, matchImportedExerciseName, isExerciseAutoGenerationBlocked } from './domain.js';
 import { createPlanEditorExerciseFilter } from './exerciseEligibility.js';
+import { unilateralExercises } from './unilateralExercises.js';
+import { supportsPerSideLogging } from './sessionLoggingSetup.js';
 
 const all = Object.values(exerciseCatalog).sort((a,b)=>a.name.localeCompare(b.name));
 const queries = [...new Set(['',' ','---','s','squ','squat','press','zzqnoresult','pull ups','zgibi','RDL','lateral raises','PULL-UPS','café',...all.flatMap(item=>[item.name,...(item.aliases||[])])])];
@@ -19,4 +21,44 @@ it('a new index accepts changed custom names and aliases; searches never mutate 
   const old={id:'custom',name:'Old move',aliases:['old alias']},updated={...old,name:'New move',aliases:['new alias']};
   const first=createExerciseSearchIndex([old]),next=createExerciseSearchIndex([updated]);
   expect(first('old alias')).toEqual([old]);expect(next('old alias')).toEqual([]);expect(next('new alias')).toEqual([updated]);expect(updated).toEqual({id:'custom',name:'New move',aliases:['new alias']});
+});
+
+it('muscle searches match every eligible primary and secondary target, with primary exercises first', () => {
+  const profile = { equipment: ['bodyweight'] };
+  const filter = createPlanEditorExerciseFilter(profile);
+  const local = { id:'custom-core', name:'My brace practice', muscles:['Shoulders','Core'], pattern:'core', equipment:['bodyweight'], custom:true };
+  const eligible = [...all, local].filter(filter);
+  const occupied = new Set(['plank']);
+  const search = createExerciseSearchIndex(eligible, { searchMuscles: true });
+  const primary = eligible.filter(item => !occupied.has(item.id) && item.muscles?.[0] === 'Core');
+  const secondary = eligible.filter(item => !occupied.has(item.id) && item.muscles?.slice(1).includes('Core'));
+  for (const query of ['abs', 'CORE', 'abdominals', ' abdominal ']) {
+    expect(search(query, occupied)).toEqual([...primary, ...secondary]);
+  }
+  expect(search('abs', occupied)).toContain(local);
+  expect(search('abs', occupied)).not.toContain(exerciseCatalog['cable-crunch']);
+  expect(search('Chest')).toEqual([
+    ...eligible.filter(item => item.muscles?.[0] === 'Chest'),
+    ...eligible.filter(item => item.muscles?.slice(1).includes('Chest')),
+  ]);
+  expect(search('Plank')[0]).toBe(exerciseCatalog.plank);
+  expect(createExerciseSearchIndex(eligible)('abs', occupied)).toEqual([]);
+});
+
+it('finds the new one-sided variants by name and alias as separate exercises', () => {
+  const searchable = all.filter(createPlanEditorExerciseFilter({ equipment:['full gym'] }));
+  const search = createExerciseSearchIndex(searchable);
+  for (const { id, name, aliases } of unilateralExercises) {
+    expect(search(name)[0]?.id).toBe(id);
+    for (const alias of aliases) expect(matchImportedExerciseName(alias).exerciseId).toBe(id);
+    expect(supportsPerSideLogging({exerciseId:id})).toBe(true);
+    expect(isExerciseAutoGenerationBlocked(exerciseCatalog[id])).toBe(true);
+  }
+  expect(search('tricep pushdown').map(item=>item.id)).toEqual(expect.arrayContaining([
+    'cable-triceps-pressdown', 'single-arm-cable-triceps-pressdown',
+  ]));
+  expect(search('unilateral cable lateral raise')[0]).toBe(exerciseCatalog['cable-lateral-raise']);
+  const home = createExerciseSearchIndex(all.filter(createPlanEditorExerciseFilter({ equipment:['resistance bands', 'secure band anchor'] })));
+  expect(home('single arm band triceps pushdown')[0]?.id).toBe('single-arm-band-triceps-pressdown');
+  expect(home('single arm cable triceps pushdown')).toEqual([]);
 });

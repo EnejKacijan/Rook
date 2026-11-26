@@ -1,4 +1,4 @@
-import {isoDay,startWorkout,weekday} from './domain.js';
+import {adaptedTemplateForToday,isoDay,startWorkout,weekday} from './domain.js';
 import {resolvePlanWorkout} from './planWorkoutTemplates.js';
 import {templateUseIssues,templateDraft} from './savedWorkouts.js';
 import {reusableExerciseDefinition} from './workoutTemplateSchema.js';
@@ -55,10 +55,12 @@ function stage(state,source,today,displacedTo){
     const after=flexibleSessions(next,today).find(item=>item.logicalSessionId===change.logicalSessionId);
     if(before?.workout.temporaryPlanAdjustment?.id&&before.workout.temporaryPlanAdjustment.id!==after?.workout.temporaryPlanAdjustment?.id)throw Error('This move leaves your temporary plan. Review that schedule first.');
   }
-  const issues=templateUseIssues({...next,activeWorkout:occurrence.workout},occurrence.workout);if(issues.length)throw Error(issues.join(' '));
+  const workout=adaptedTemplateForToday(next,today,occurrence.workout);
+  const activeWorkout=workout.todayOnlyAdjustment ? {...workout,adjustment:workout.todayOnlyAdjustment} : workout;
+  const issues=templateUseIssues({...next,activeWorkout},workout);if(issues.length)throw Error(issues.join(' '));
   const finalDates=flexibleSessions(next,today).filter(item=>item.scheduledDate>=today&&item.scheduledDate<=addCalendarDays(today,13)&&!['skipped','completed','combined'].includes(item.status)).map(item=>item.scheduledDate).sort();
   const warnings=changes.length&&finalDates.some((date,index)=>index&&addCalendarDays(finalDates[index-1],1)===date)?['Your schedule includes back-to-back training days.']:[];
-  return {state:next,workout:occurrence.workout,changes,warnings,mode,other};
+  return {state:next,workout,changes,warnings,mode,other};
 }
 
 export function planScheduledOptions(state,reference,today=isoDay()){

@@ -52,6 +52,22 @@ it('only a successfully persisted fresh log earns one inline acknowledgement; la
   advance();click('Undo logged set 2');expect(badge().textContent).toContain('+2.5 kg');
   click('Log set 2');expect(pulses()).toHaveLength(1);
 });
+it('keeps a record pulse pending until the badge clears the sticky header',()=>{
+  const observers=[];
+  vi.stubGlobal('IntersectionObserver',class {
+    constructor(callback){this.callback=callback;this.targets=new Set();observers.push(this);}
+    observe(target){this.targets.add(target);}
+    unobserve(target){this.targets.delete(target);}
+    disconnect(){this.targets.clear();}
+  });
+  mount();click('Log set 1');advance();
+  const target=badge().querySelector('.active-performance-pr');
+  const observer=observers.find(item=>item.targets.has(target));
+  const show=intersectionRatio=>act(()=>observer.callback([{target,isIntersecting:true,intersectionRatio}]));
+  show(.4);expect(pulses()).toHaveLength(0);
+  show(.95);expect(pulses()).toHaveLength(1);
+  expect(observer.targets.has(target)).toBe(false);
+});
 it('a failed save produces no record, no acknowledgement and no logged state, and retry remains possible',()=>{
   mount();const before=structuredClone(current);save.mockReturnValue(false);click('Log set 1');
   expect(current).toEqual(before);expect(badge()).toBeNull();expect(pulses()).toHaveLength(0);

@@ -524,7 +524,7 @@ function buildFlexibleWeekProposal(state, request, today, {sessions, hasConflict
   } else if (request.mode === 'recover-week') {
     const source=byId.get(request.sessionId);
     const completed=source&&completedWorkoutForOccurrence(state,source);
-    const shift=missedWeekShift(state,source,all,today,{extraDates:request.extraDates,performedDate:completed&&workoutPerformedDate(completed)});
+    const shift=missedWeekShift(state,source,all,today,{startDate:request.shiftStartDate,performedDate:completed&&workoutPerformedDate(completed)});
     if(shift.status!=='ready')return fail(shift.error);
     for(const {item,toDate} of shift.moves){
       const sourceError=moveSourceError(state,item,today);

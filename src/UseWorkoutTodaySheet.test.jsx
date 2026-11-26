@@ -5,7 +5,7 @@ import{blankState,buildProgram}from'./domain.js';import{flexibleSessions,propose
 let root,state,source,occupied,update,close;
 const Header=({title,onBack,onClose})=><header>{title}{onBack&&<button onClick={onBack}>Back</button>}<button onClick={onClose}>Close</button></header>;
 const button=text=>[...document.querySelectorAll('button')].find(node=>node.textContent.includes(text));
-function render(next=state){act(()=>root.render(<UseWorkoutTodaySheet state={next} update={update} close={close} Header={Header} request={{sessionId:source.logicalSessionId}}/>));}
+function render(next=state,request={sessionId:source.logicalSessionId}){act(()=>root.render(<UseWorkoutTodaySheet key={request.workoutId || request.sessionId} state={next} update={update} close={close} Header={Header} request={request}/>));}
 beforeEach(()=>{
  vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-09T12:00:00'));globalThis.IS_REACT_ACT_ENVIRONMENT=true;
  state=blankState();Object.assign(state.profile,{goal:'Build muscle',experience:'Intermediate',daysPerWeek:3,availableDays:['Mon','Wed','Fri'],sessionMinutes:60,equipment:['full gym'],environment:'Commercial gym',priorities:['Balanced'],onboardingComplete:true});state.program=buildProgram(state.profile);state.program.trainingBlock.startDate='2026-08-31';
@@ -37,4 +37,21 @@ it('no conflict leaves the existing safe Apply flow with no relocation step',()=
 });
 it('a changed schedule removes the stale Swap action and Cancel never mutates',()=>{
  render();render({...state,weekScheduleOverrides:{'2026-09-07':{}}});expect(button('SWAP WORKOUTS')).toBeUndefined();expect(document.querySelector('[role=alert]').textContent).toContain('schedule changed');act(()=>button('CANCEL').click());expect(update).not.toHaveBeenCalled();expect(close).toHaveBeenCalledOnce();
+});
+
+it('offers Keep both today beside relocation only for a completed workout repeat', () => {
+ render();
+ expect(button('Keep both today')).toBeUndefined();
+ const record = {...source.workout,id:'completed-source',completedAt:'2026-09-07T10:00:00',workoutDateKey:'2026-09-07'};
+ const history = {...state,workouts:[record]};
+ render(history,{workoutId:record.id});
+ expect(button('Keep both today')).toBeDefined();
+ expect(button('Choose another date')).toBeDefined();
+ expect(update).not.toHaveBeenCalled();
+ act(()=>{button('Keep both today').click();button('Keep both today').click();});
+ expect(update).toHaveBeenCalledOnce();
+ expect(close).toHaveBeenCalledOnce();
+ const next = update.mock.calls[0][0]();
+ expect(next.flexibleWeek).toEqual(state.flexibleWeek);
+ expect(next.optionalSessions[0]).toMatchObject({date:'2026-09-09',status:'planned',workout:{repeatedFromWorkoutId:record.id}});
 });

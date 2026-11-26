@@ -17,7 +17,7 @@ const ExerciseOption = memo(function ExerciseOption({ item, images, onSelect }) 
 export function PlanEditorExercisePicker({ catalog, day, images, onSelect, onCancel, onCreate }) {
   const [query, setQuery] = useState('');
   const root = useRef(null);
-  const search = useMemo(() => createExerciseSearchIndex(catalog), [catalog]);
+  const search = useMemo(() => createExerciseSearchIndex(catalog, { searchMuscles: true }), [catalog]);
   const candidates = useMemo(() => {
     const occupied = new Set(day.exercises.map(exercise => exercise.exerciseId));
     return search(query, occupied);

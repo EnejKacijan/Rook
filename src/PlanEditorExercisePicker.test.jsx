@@ -34,6 +34,16 @@ it.each(['s','squat','zzqnoresult','press','pull ups','zgibi','---'])('query %s 
   const expected=rankExerciseSearch(catalog.filter(item => item.id !== 'plank' && exerciseMatchesQuery(item,query)),query);
   expect(names()).toEqual(expected.map(item=>item.name));expect(select).not.toHaveBeenCalled();
 });
+it('abs and core show the same results and omit exercises already in the workout', () => {
+  type('abs');
+  const abs = names();
+  expect(abs).toContain('Cable Crunch');
+  expect(abs).toContain('Reverse Crunch');
+  expect(abs).not.toContain('Plank');
+  type('core');
+  expect(names()).toEqual(abs);
+  expect(select).not.toHaveBeenCalled();
+});
 it('rapid old and new queries cannot overwrite the latest results, including no-results and clear',() => {
   for(const query of ['squ','squat','zzqnoresult','press','squat'])type(query);
   const final=names();expect(final).toContain('Squat');expect(final).not.toContain('Arnold Press');

@@ -30,7 +30,7 @@ export function FreestyleEntry({ state, update, setPage, setDetail, date, histor
     </>}
     {records.length > 0 && <section className="today-completed-workouts" aria-label="Completed workouts">
       {records.length > 1 && <div className="eyebrow">Completed workouts · {records.length}</div>}
-      {records.map(w => <ExerciseNavigationButton className="list-row" key={w.id} data-workout-id={w.id} onClick={() => setDetail({ completedWorkout: w.id })}><span>{w.name || 'Workout'}<small>{w.historicalImport?.version===2?`Imported · ${importedSessionTimeLabel(w)}`:<>{w.planWorkoutOrigin ? 'Extra · From plan' : w.savedWorkoutTemplateId ? 'Saved workout' : w.source === 'freestyle' ? 'Freestyle' : 'Planned'} · Finished {new Date(w.completedAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</>}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
+      {records.map(w => <ExerciseNavigationButton className="list-row" key={w.id} data-workout-id={w.id} onClick={() => setDetail({ completedWorkout: w.id })}><span>{w.name || 'Workout'}<small>{w.historicalImport?.version===2?`Imported · ${importedSessionTimeLabel(w)}`:<>{w.planWorkoutOrigin ? 'Extra · From plan' : w.savedWorkoutTemplateId ? 'Saved workout' : w.source === 'freestyle' ? 'Freestyle' : w.source === 'repeat' ? 'Repeat' : 'Planned'} · Finished {new Date(w.completedAt).toLocaleTimeString('en', { hour: 'numeric', minute: '2-digit' })}</>}</small></span><NavigationChevron/></ExerciseNavigationButton>)}
     </section>}
   </div>;
 }

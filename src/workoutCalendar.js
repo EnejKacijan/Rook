@@ -73,7 +73,7 @@ export function calendarDayPresentation(state,dates) {
       else if(optional.id&&state.activeWorkout?.optionalSessionId===optional.id) {
         if(workoutPerformedDate(state.activeWorkout)!==date)provenance.push('workout already started elsewhere');
       }
-      else if(optional.status==='planned')counts.planned++;
+      else if(optional.status==='planned' && (!optional.workout.repeatedFromWorkoutId || date===isoDay()))counts.planned++;
     }
     const adjustment=state.todayAdaptation;
     if(state.program && adjustment?.date===date && (isRepeatAdjustment(adjustment)||isCombinedAdjustment(adjustment))){

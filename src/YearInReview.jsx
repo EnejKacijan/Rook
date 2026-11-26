@@ -6,6 +6,7 @@ import { NavigationChevron } from './NavigationChevron.jsx';
 import { shareYearCard } from './yearShareCard.js';
 import { displayWeight, weightUnit, isoDay } from './domain.js';
 import { yearInReview, yearReviewPages, yearReviewYears, yearHeadline, monthName } from './yearInReview.js';
+import { observeVisibleMotion } from './visibleMotion.js';
 import './yearInReview.css';
 
 const number = value => new Intl.NumberFormat('en').format(value);
@@ -35,11 +36,13 @@ function usePrefersReducedMotion() {
 // Counts up once when its page becomes active. The final value is the
 // accessible text; animated digits are decoration.
 function CountUp({ value, active, reduced, decimals = 0, format = number }) {
-  const [shown, setShown] = useState(reduced || !active ? value : 0);
+  const [shown, setShown] = useState(0);
+  const ref = useRef(null);
   const played = useRef(false);
   useEffect(() => {
-    if (reduced || !active || played.current) { if (reduced || played.current) setShown(value); return; }
-    played.current = true;
+    if (reduced || played.current) { setShown(value); return; }
+    if (!active) return;
+    const node = ref.current;
     let frame, start;
     const duration = 900;
     const tick = time => {
@@ -48,12 +51,16 @@ function CountUp({ value, active, reduced, decimals = 0, format = number }) {
       setShown(progress === 1 ? value : Math.round(value * eased * 10 ** decimals) / 10 ** decimals);
       if (progress < 1) frame = requestAnimationFrame(tick);
     };
-    frame = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(frame);
+    const stop = observeVisibleMotion([node], () => {
+      played.current = true;
+      frame = requestAnimationFrame(tick);
+    }, { after: [node.closest('.year-track'), node.closest('.year-reveal')], threshold: .85 });
+    return () => { stop(); cancelAnimationFrame(frame); };
   }, [active, reduced, value]);
-  const text = decimals ? Number(shown).toFixed(decimals) : format(shown);
+  const visible = reduced || !active ? value : shown;
+  const text = decimals ? Number(visible).toFixed(decimals) : format(visible);
   const final = decimals ? Number(value).toFixed(decimals) : format(value);
-  return <span className="year-count"><span aria-hidden="true">{text}</span><span className="visually-hidden">{final}</span></span>;
+  return <span ref={ref} className="year-count"><span aria-hidden="true">{text}</span><span className="visually-hidden">{final}</span></span>;
 }
 
 function Art({ exerciseId, className = '' }) {

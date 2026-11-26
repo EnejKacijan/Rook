@@ -74,14 +74,21 @@ it('incomplete historical drafts and completed sessions on another date do not h
   state.workouts.push({ id: 'draft', workoutDateKey: isoDay(), completedAt: null, exercises: [] });
   render(state); expect(train()).toBeDefined(); expect(rows()).toHaveLength(0);
 });
-it('selection and the next empty calendar day retain independent state, including reload', () => {
+it('upcoming rest days show the next workout while past rest days preserve only history', () => {
   const state = deserializeState(JSON.stringify(fixture(1))); render(state); expect(train()).toBeDefined();
+  state.optionalSessions = [{ id: 'walk', date: '2026-09-13', status: 'completed', kind: 'Cardio', activity: 'Walking', elapsedSeconds: 1200 }];
   state.selectedDate = '2026-09-14'; state.selectedDay = 'Mon'; render(state);
-  expect(rows()).toHaveLength(0); expect(train()).toBeDefined(); // The chooser may browse saved workouts; it cannot start Freestyle on a future date.
-  vi.setSystemTime(new Date('2026-09-14T12:00:00')); render(state);
+  expect(rows()).toHaveLength(0); expect(train()).toBeDefined(); // Future Train anyway allows browsing saved workouts.
+  expect(document.querySelector('.rest-up-next')).not.toBeNull();
+  vi.setSystemTime(new Date('2026-09-14T12:00:00'));
+  act(() => window.dispatchEvent(new Event('focus')));
   expect(train()).toBeDefined(); expect(helper()).toBe(false);
   state.selectedDate = '2026-09-13'; state.selectedDay = 'Sun'; render(state);
-  expect(train()).toBeDefined(); expect(rows()).toHaveLength(1);
+  expect(train()).toBeUndefined(); expect(rows()).toHaveLength(1);
+  expect(document.querySelector('.rest-up-next')).toBeNull();
+  expect(document.querySelector('.rest-day-actions')).toBeNull();
+  expect(document.querySelector('.rest-day-activity-history').textContent).toContain('COMPLETED ACTIVITIES');
+  expect(document.querySelector('.optional-session-note').textContent).toContain('Walking');
 });
 it('an optional active session retains its existing Resume affordance', () => {
   const state = fixture(1);

@@ -34,13 +34,19 @@ export function hasMeaningfulSessionWork(active) {
 export function cancelActiveWorkout(state, sessionId, today = isoDay()) {
   const active = state.activeWorkout;
   if (!sessionId || active?.id !== sessionId) return state;
-  const selectedDate = active.source === 'freestyle' || active.source === 'repeat'
-    ? today : workoutPlanDate(active) || today;
+  const scheduledDate = active.source === 'freestyle' || active.source === 'repeat'
+    ? null : workoutPlanDate(active);
+  const selectedDate = scheduledDate && scheduledDate > today ? scheduledDate : today;
   const next = {...state, activeWorkout: null, selectedDate, selectedDay: weekday(`${selectedDate}T12:00:00`)};
   // Release only reservations owned by this execution, never an unrelated
   // adjustment, schedule override, completed record or remembered preference.
   if ((isCombinedAdjustment(active.adjustment) || isRepeatAdjustment(active.adjustment)) &&
       next.todayAdaptation?.id === active.adjustment.id) next.todayAdaptation = null;
+  if (active.source === 'repeat' && active.optionalSessionId) {
+    next.optionalSessions = (state.optionalSessions || []).map(item => item.id === active.optionalSessionId
+      ? {...item, status:'cancelled', completedAt:null} : item);
+    return next;
+  }
   // Older resumed optional-strength sessions can carry an explicit active flag.
   if (active.optionalSessionId && state.optionalSessions?.some(item => item.id === active.optionalSessionId && item.status === 'active'))
     next.optionalSessions = state.optionalSessions.map(item => item.id === active.optionalSessionId && item.status === 'active'

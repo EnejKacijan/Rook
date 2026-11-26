@@ -14,7 +14,7 @@ import {preparedExercise,sessionStartSnapshot,restartBaseline} from './workoutSe
 import {applySavedExerciseLoggingMode,normalizeExerciseLoggingPreferences} from './sessionLoggingSetup.js';
 import {exerciseInPlannedSlot, plannedExerciseSlot, plannedLoadChanged} from './workoutExerciseSlots.js';
 import {normalizeCoachConversations} from './coachConversations.js';
-import {repeatTemplate,isRepeatAdjustment} from './useWorkoutToday.js';
+import {repeatTemplate,isRepeatAdjustment,additionalRepeatForDate} from './useWorkoutToday.js';
 import {recoveredWorkoutForDate} from './recoveredWorkout.js';
 import {workoutPerformedDate} from './workoutDates.js';
 export {workoutPerformedDate} from './workoutDates.js';
@@ -23,7 +23,7 @@ import { matchImportCatalogName } from './importExerciseMatching.js';
 import { normalizePartialTargets } from './importPartialPrescription.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { combinedAdjustment, combinedTemplate, isCombinedAdjustment, validateCombinedState, cancelCombinedWorkout } from './combinedWorkoutLifecycle.js';
-import { allMuscleFullBody, customFullBodyExerciseLimit, customFullBodyWorkingSetLimit, customFullBodyMaxSets, customFullBodyHingeSetLimit, customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns } from './customTrainingStructure.js';
+import { allMuscleFullBody, customFullBodyExerciseLimit, customFullBodyWorkingSetLimit, customFullBodyMaxSets, customFullBodyHingeSetLimit, customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns, CUSTOM_FOCUS_ALIASES } from './customTrainingStructure.js';
 import { customWorkoutFidelityErrors } from './customWorkoutFidelity.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import {
@@ -49,6 +49,7 @@ import {
 } from "./prescriptionPolicy.js";
 import { validateSupersetExercises } from "./supersets.js";
 import { workoutGuideExercises } from "./workoutGuideCatalog.js";
+import { unilateralExercises } from "./unilateralExercises.js";
 import { PLATE_LOADING_RELATION_BY_EXERCISE_ID } from "./plateCalculator.js";
 import { effectiveGymContext, normalizeGymProfilesState } from "./gymProfiles.js";
 import {
@@ -56,7 +57,7 @@ import {
   rankSubstitutionCandidates,
 } from "./substitutions.js";
 import { normalizePlanHistoryState } from "./planHistory.js";
-import { normalizeCustomExercisesState } from "./customExercises.js";
+import { CUSTOM_EXERCISE_MUSCLES, normalizeCustomExercisesState } from "./customExercises.js";
 import {
   advancedSetCanComplete,
   hasOpenRepTarget,
@@ -1175,6 +1176,22 @@ for (const rawSource of workoutGuideExercises) {
   const id = `wg-${source.sourceSlug}`;
   exerciseCatalog[id] = { ...source, id };
   catalogByWorkoutGuideName.set(workoutGuideNameKey(source.name), exerciseCatalog[id]);
+}
+
+for (const exercise of unilateralExercises) exerciseCatalog[exercise.id] = { ...exercise };
+
+// These movements already use one side and have a matching illustration.
+const existingUnilateralAliases = {
+  "cable-lateral-raise": ["Unilateral Cable Lateral Raise"],
+  "one-arm-dumbbell-row": ["Single-Arm Dumbbell Row", "Unilateral Dumbbell Row"],
+  "standing-leg-curl": ["Single-Leg Standing Leg Curl", "Standing Single-Leg Hamstring Curl"],
+  "wg-concentration-curl": ["Single-Arm Concentration Curl", "One-Arm Dumbbell Concentration Curl"],
+  "wg-landmine-press": ["Single-Arm Landmine Press"],
+  "wg-cable-kickback": ["Single-Leg Cable Glute Kickback"],
+};
+for (const [id, aliases] of Object.entries(existingUnilateralAliases)) {
+  const exercise = exerciseCatalog[id];
+  exercise.aliases = [...new Set([...exercise.aliases, ...aliases])];
 }
 
 // Preserve the user's imported wording while resolving common Slovenian names
@@ -7991,13 +8008,18 @@ export function rankExerciseSearch(candidates, query) {
     .sort((a, b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
     .map(entry => entry.item);
 }
+const exerciseSearchMuscles = new Map([
+  ...CUSTOM_EXERCISE_MUSCLES.map(muscle => [normalizedExerciseName(muscle), muscle]),
+  ...CUSTOM_FOCUS_ALIASES.core.map(alias => [alias, 'Core']),
+]);
+
 // Explicit interactive search, distinct from strict importer identity matching.
-export function searchExercises(candidates,query) {
-  return createExerciseSearchIndex(candidates)(query);
+export function searchExercises(candidates, query, options) {
+  return createExerciseSearchIndex(candidates, options)(query);
 }
 // Prepared local search. Exact names and aliases retain their existing order;
 // small typo suggestions are considered when there is no complete exact name.
-export function createExerciseSearchIndex(items) {
+export function createExerciseSearchIndex(items, { searchMuscles = false } = {}) {
   if(!items.length)return()=>[];
   const prepared = new Map();
   const name = value => {
@@ -8015,6 +8037,16 @@ export function createExerciseSearchIndex(items) {
     const normalized = normalizedExerciseName(query);
     const available = entries.filter(entry => !occupied.has(entry.item.id));
     if (!normalized) return available.map(entry => entry.item);
+    const muscle = searchMuscles && exerciseSearchMuscles.get(normalized);
+    if (muscle) {
+      const primary = [], secondary = [];
+      for (const { item } of available) {
+        const position = item.muscles?.indexOf(muscle) ?? -1;
+        if (position === 0) primary.push(item);
+        else if (position > 0) secondary.push(item);
+      }
+      return primary.concat(secondary);
+    }
     const compact = normalized.replace(/\s+/g, ''), tokens = normalized.split(' ');
     const queryForms = new Set([compact, pluralizedExerciseName(query).replace(/\s+/g, '')]);
     const whole = form => queryForms.has(form.compact) || queryForms.has(form.pluralCompact);
@@ -8879,19 +8911,25 @@ export function templateForToday(program, date = new Date(), selectedDay) {
     ) || null
   );
 }
+export function workoutAdjustmentForDate(state, date, template) {
+  if (!template) return null;
+  const day = isoDay(calendarDate(date));
+  const current = state.todayAdaptation;
+  if (current?.date === day && current.programDayId === template.id) return current;
+  const saved = state.workoutOccurrenceOverrides?.[day]?.[template.id]?.sessionAdjustment;
+  if (saved?.schemaVersion !== 1 || saved.programId !== state.program?.id ||
+      saved.baseProgramVersion !== Number(state.program?.version || 1) ||
+      saved.originalWorkout?.trainingBlock?.phase !== template.trainingBlock?.phase ||
+      !saved.workout?.exercises?.length) return null;
+  return { ...saved, date: day };
+}
 export function adaptedTemplateForToday(state, date = new Date(), plannedTemplate) {
   const repeat=repeatTemplate(state,isoDay(date));if(repeat)return repeat;
   const combined=combinedTemplate(state,isoDay(date));
   if(combined)return combined;
   const template = plannedTemplate === undefined ? plannedWorkoutForDate(state, date) : plannedTemplate;
-  const adaptation = state.todayAdaptation;
-  if (
-    !template ||
-    !adaptation ||
-    adaptation.date !== isoDay(date) ||
-    adaptation.programDayId !== template.id
-  )
-    return template;
+  const adaptation = workoutAdjustmentForDate(state, date, template);
+  if (!adaptation) return template;
   if (
     adaptation.schemaVersion === 1 &&
     Array.isArray(adaptation.workout?.exercises) &&
@@ -8899,6 +8937,7 @@ export function adaptedTemplateForToday(state, date = new Date(), plannedTemplat
   )
     return {
       ...structuredClone(adaptation.workout),
+      ...(adaptation.programId ? {trainingBlock:template.trainingBlock} : {}),
       logicalSessionId: template.logicalSessionId,
       originalScheduledDate: template.originalScheduledDate,
       flexibleWeekMoved: template.flexibleWeekMoved,
@@ -8969,6 +9008,7 @@ export function optionalStrengthForDate(state, date = new Date()) {
         session.kind === "Strength" &&
         session.status === "planned" &&
         session.date === isoDay(date) &&
+        (!session.workout?.repeatedFromWorkoutId || session.date === isoDay()) &&
         Array.isArray(session.workout?.exercises),
     )?.workout || null
   );
@@ -9184,6 +9224,14 @@ export function refreshWorkoutWarmup(workout, profile, program = null) {
 export function startWorkout(state, template) {
   if(trainingRestForDate(state,isoDay())&&state.program?.days?.some(day=>day.id===template?.id))
     throw Error('This is a planned rest week. Change your week choice before starting a plan workout.');
+  const extraRepeat = Boolean(template?.optionalSessionId && template.repeatedFromWorkoutId);
+  if (extraRepeat) {
+    const saved = additionalRepeatForDate(state, isoDay());
+    if (!saved || saved.optionalSessionId !== template.optionalSessionId ||
+        state.workouts?.some(workout => workout.optionalSessionId === saved.optionalSessionId))
+      throw Error('This repeat is no longer scheduled for today.');
+    template = saved;
+  }
   const recovered=Boolean(template?.recoveredMove);
   if(recovered){
     const saved=recoveredWorkoutForDate(state,isoDay());
@@ -9234,11 +9282,12 @@ export function startWorkout(state, template) {
   const startedAt = Date.now();
   const occurrence=currentWeekSchedule(state,state.selectedDate || isoDay(startedAt)).find(item=>item.workoutId===template.id && (!template.logicalSessionId || (item.logicalSessionId || `${item.workoutId}:${item.originalDate}`)===template.logicalSessionId));
   const logicalSessionId=template.logicalSessionId || (occurrence ? `${occurrence.workoutId}:${occurrence.originalDate}` : null);
-  const canonicalPlanDate = template.recoveredMove?.date || occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
+  const canonicalPlanDate = (extraRepeat ? isoDay(startedAt) : template.recoveredMove?.date) || occurrence?.scheduledDate || template.todayOnlyAdjustment?.date || state.selectedDate || isoDay(startedAt);
   const normalHistory = normalProgressionHistory(state.workouts);
   const source = {...template, programDayId:template.id};
   const workout = {
     id: uid("active"),
+    ...(extraRepeat ? {source:'repeat', repeatedFromWorkoutId:template.repeatedFromWorkoutId} : {}),
     ...(isRepeatAdjustment(template.todayOnlyAdjustment)?{source:'repeat',repeatedFromWorkoutId:template.todayOnlyAdjustment.sourceWorkoutId}:{}),
     templateId: template.weekday,
     programDayId: template.id,
@@ -9333,7 +9382,9 @@ export function startWorkout(state, template) {
     }),
   };
   normalizeAdvancedLoggingState({ activeWorkout: workout, workouts: [] });
-  const prepared = refreshWorkoutWarmup(workout, workout.temporaryPlanAdjustment || recovered ? effectiveGymContext(state, workout).profile : state.profile, state.program);
+  const gymProfile = workout.temporaryPlanAdjustment || workout.adjustment?.temporaryEquipment?.length || recovered
+    ? effectiveGymContext(state, workout).profile : state.profile;
+  const prepared = refreshWorkoutWarmup(workout, gymProfile, state.program);
   prepared.restartSnapshot = sessionStartSnapshot(prepared);
   return prepared;
 }
@@ -10062,7 +10113,7 @@ export function completeWorkout(state, timing = null) {
     return next;
   }
   if(isRepeatAdjustment(session.adjustment)){next.todayAdaptation=null;return next;}
-  if (session.source === 'freestyle') return next;
+  if (session.source === 'freestyle' || session.source === 'repeat') return next;
   return resolveTrainingBlockSkips(advanceTrainingBlockAfterWorkout(next, session), temporaryPlanBlockSkipRecords(next, session).filter(record => record.blockId === next.program?.trainingBlock?.id));
 }
 export function optionalSessionElapsedSeconds(session, now = Date.now()) {

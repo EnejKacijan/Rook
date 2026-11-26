@@ -16,8 +16,8 @@ function readMissedReminder(key) {
 
 export function isMissedReminderHidden(state, missed = missedFlexibleSessions(state)) {
  if(!missed.length || !state.dismissedMissedReminderKey)return false;
- const hiddenIds=new Set(readMissedReminder(state.dismissedMissedReminderKey).map(([id])=>id));
- return missed.every(session=>hiddenIds.has(session.logicalSessionId));
+ const hiddenDates=new Map(readMissedReminder(state.dismissedMissedReminderKey).map(([id,date])=>[id,date]));
+ return missed.every(session=>hiddenDates.get(session.logicalSessionId)===session.scheduledDate);
 }
 
 export function dismissMissedReminder(state,{persist=saveState,missed=missedFlexibleSessions(state)}={}) {

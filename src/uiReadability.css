@@ -144,7 +144,7 @@
 :root .month-calendar-legend { font-size:14px; line-height:1.4; flex-wrap:wrap; }
 
 :root :is(.today-screen .exercise-list-row > .navigation-row-end,
-  .today-optional-actions > button,.rest-day-actions > .rest-day-action,
+  .today-optional-actions > button,.today-screen .today-secondary-action,
   .up-next .up-next-prescription,.up-next .up-next-note,
   .session-log-summary,.session-log-set,.session-feedback-options button,
   .session-feedback-skip,.session-feedback-change,.optional-session-header > div small,

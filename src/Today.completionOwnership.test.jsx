@@ -3,6 +3,7 @@ import {createRoot} from 'react-dom/client';
 import {beforeEach, afterEach, it, expect, vi} from 'vitest';
 import {Today, Detail, ModalLayer, BottomNav} from './App.jsx';
 import {createReturningUserFixture} from './demoFixture.js';
+import {applyFlexibleWeek, flexibleOccurrenceForDate, proposeFlexibleWeek} from './flexibleWeek.js';
 import * as domain from './domain.js';
 
 let host, root, state, target, route, update, setPage, persist;
@@ -108,6 +109,31 @@ it('groups Training options below the workout and opens Conditioning without cha
   click(document.querySelector('.conditioning-sheet .detail-header-close'));settle();
   expect(route).toBeNull();expect(document.querySelector('.today-screen')).toBe(today);
   expect(domain.serializeState(state)).toBe(before);expect(update).not.toHaveBeenCalled();expect(persist).not.toHaveBeenCalled();
+});
+it('keeps the previous day’s completed workout view free of today’s training options',()=>{
+  state.selectedDate='2026-10-07';
+  mount();
+  expect(document.querySelector('.completion-summary')).not.toBeNull();
+  expect(document.querySelector('.today-training-options')).toBeNull();
+  click(button('VIEW WORKOUT DETAILS'));settle();
+  expect(route).toEqual({completedWorkout:'other-same-name'});
+});
+it('offers the workout chooser after deliberately skipping today’s planned workout',()=>{
+  state.workouts=state.workouts.filter(workout=>workout.id!==target.id);
+  const occurrence=flexibleOccurrenceForDate(state,state.selectedDate);
+  const proposal=proposeFlexibleWeek(state,{mode:'skip',sessionId:occurrence.logicalSessionId});
+  const result=applyFlexibleWeek(state,proposal);
+  expect(result.status).toBe('applied');
+  state=result.state;
+  mount();
+  const today=document.querySelector('.today-screen');
+  expect(today.querySelector('.today-hero p').textContent).toBe('Skipped');
+  const choose=button('Choose a workout');
+  expect(today.querySelector('.today-training-options').contains(choose)).toBe(true);
+  click(choose);settle();
+  expect(route).toBe('saved-workouts');
+  expect(document.querySelector('.saved-workout-list')).not.toBeNull();
+  expect(update).not.toHaveBeenCalled();
 });
 it('completed Today overflow also reaches the same Conditioning setup without changing history',()=>{
  mount();const before=domain.serializeState(state),today=document.querySelector('.today-screen');

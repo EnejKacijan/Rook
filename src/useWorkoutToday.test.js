@@ -2,8 +2,10 @@ import {it,expect,beforeEach,afterEach,vi} from 'vitest';
 import {createReturningUserFixture} from './demoFixture.js';
 import {isoDay,deserializeState,serializeState,adaptedTemplateForToday,startWorkout,completeWorkout,plannedWorkoutForDate} from './domain.js';
 import {applyFlexibleWeek,createFlexibleWeekPlanner,flexibleSessions,proposeFlexibleWeek} from './flexibleWeek.js';
-import {proposeWorkoutToday,applyWorkoutToday,cancelRepeatedWorkout,canUseWorkoutToday} from './useWorkoutToday.js';
+import {proposeWorkoutToday,applyWorkoutToday,cancelRepeatedWorkout,canUseWorkoutToday,additionalRepeatForDate,removeAdditionalRepeat} from './useWorkoutToday.js';
 import {buildBackupArchive,parseBackupArchive} from './backup.js';
+import {cancelActiveWorkout} from './workoutCancellation.js';
+import {calendarDayPresentation} from './workoutCalendar.js';
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-09-17T12:00:00'));});
 afterEach(()=>{vi.useRealTimers();vi.unstubAllGlobals();vi.restoreAllMocks();});
 function fixture(){const s=deserializeState(createReturningUserFixture(2));s.program.trainingBlock.startDate='2026-09-01';s.workouts=[];s.todayAdaptation=null;return s;}
@@ -51,7 +53,10 @@ it('swap revalidates persistence, active guards, stale state and double applicat
  expect(()=>apply({...s,activeWorkout:{id:'active'}},p)).toThrow(/changed/);expect(()=>apply(apply(s,p),p)).toThrow(/changed/);
 });
 it('stops menu eligibility at the first valid destination while the real proposal retains all dates',()=>{
- const s=completed(fixture()),request={workoutId:s.workouts[0].id},before=serializeState(s);
+ const s=completed(fixture()),request={workoutId:s.workouts[0].id};
+ // With a separate strength workout already scheduled, relocation remains the only option.
+ s.optionalSessions.push({id:'extra',date:isoDay(),kind:'Strength',status:'planned',workout:{exercises:[]}});
+ const before=serializeState(s);
  const planner=createFlexibleWeekPlanner(s),validate=vi.spyOn(planner,'check');
  const proposal=proposeWorkoutToday(s,request,isoDay(),{planner});expect(proposal.status).toBe('choose-date');expect(proposal.dates.length).toBeGreaterThan(1);
  const fullChecks=validate.mock.calls.length;expect(fullChecks).toBe(13);validate.mockClear();
@@ -133,4 +138,60 @@ it('keeps two same-title occurrences from different weeks distinct after complet
  const next=apply(s,p);expect(adaptedTemplateForToday(next).logicalSessionId).toBe(current.logicalSessionId);expect(next.workouts).toEqual(history);
  const restored=(await parseBackupArchive((await buildBackupArchive(next,[])).bytes)).state;
  expect(adaptedTemplateForToday(restored).logicalSessionId).toBe(current.logicalSessionId);expect(restored.workouts).toEqual(history);
+});
+
+it.each([false, true])('keeps the repeat and planned workout independent in either order (repeat first=%s)', repeatFirst => {
+ const state = completed(fixture());
+ const today = isoDay();
+ const record = state.workouts[0];
+ const planned = flexibleSessions(state).find(item=>item.scheduledDate===today);
+ const request = {workoutId:record.id};
+ const choice = proposeWorkoutToday(state, request);
+ expect(choice).toMatchObject({status:'choose-date', canKeepBoth:true});
+ expect(choice.dates.length).toBeGreaterThan(0);
+ const proposal = proposeWorkoutToday(state, {...request, keepBoth:true});
+ expect(() => applyWorkoutToday(state, proposal, {persist:()=>false})).toThrow(/save the schedule/);
+ let next = deserializeState(serializeState(apply(state, proposal)));
+ const repeat = additionalRepeatForDate(next, today);
+ expect(repeat.repeatedFromWorkoutId).toBe(record.id);
+ expect(repeat.id).not.toBe(planned.workoutId);
+ expect(adaptedTemplateForToday(next).id).toBe(planned.workoutId);
+ expect(next.todayAdaptation).toBeNull();
+ expect(next.flexibleWeek).toEqual(state.flexibleWeek);
+ expect(calendarDayPresentation(next,[today])[today].counts.planned).toBe(2);
+ expect(() => apply(next, proposal)).toThrow();
+ for (const useRepeat of [repeatFirst, !repeatFirst]) {
+  const template = useRepeat ? additionalRepeatForDate(next, today) : adaptedTemplateForToday(next);
+  next.activeWorkout = startWorkout(next, template);
+  if (useRepeat) expect(next.activeWorkout).toMatchObject({source:'repeat', repeatedFromWorkoutId:record.id});
+  for (const exercise of next.activeWorkout.exercises)
+   for (const set of exercise.sets) Object.assign(set,{completed:true,reps:8,weight:20});
+  next = completeWorkout(next);
+ }
+ expect(next.workouts[0]).toEqual(record);
+ expect(next.workouts.at(-1).id).not.toBe(next.workouts.at(-2).id);
+ expect(next.workouts.filter(workout=>workout.workoutDateKey===today)).toHaveLength(2);
+ expect(flexibleSessions(next).find(item=>item.logicalSessionId===planned.logicalSessionId).status).toBe('completed');
+ expect(additionalRepeatForDate(next, today)).toBeNull();
+ expect(calendarDayPresentation(next,[today])[today].counts).toMatchObject({completed:2,planned:0});
+});
+
+it('removes only the extra repeat, including when cancelling its active session', () => {
+ const state = completed(fixture());
+ const today = isoDay();
+ const request = {workoutId:state.workouts[0].id, keepBoth:true};
+ const proposal = proposeWorkoutToday(state, request);
+ const pending = apply(state, proposal);
+ const repeat = additionalRepeatForDate(pending, today);
+ const removed = removeAdditionalRepeat(pending, repeat.id);
+ expect(() => startWorkout(removed, repeat)).toThrow(/no longer scheduled/);
+ const active = startWorkout(pending, repeat);
+ for (const next of [removed, cancelActiveWorkout({...pending, activeWorkout:active}, active.id)]) {
+  expect(next.activeWorkout).toBeNull();
+  expect(additionalRepeatForDate(next, today)).toBeNull();
+  expect(plannedWorkoutForDate(next, today)).toEqual(plannedWorkoutForDate(state, today));
+  expect(next.workouts).toEqual(state.workouts);
+ }
+ const conflict = proposeWorkoutToday(state, {sessionId:flexibleSessions(state).find(item=>item.status==='missed').logicalSessionId, keepBoth:true});
+ expect(conflict.status).toBe('conflict');
 });

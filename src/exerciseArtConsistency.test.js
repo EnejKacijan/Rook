@@ -18,10 +18,10 @@ it('ships every catalog-wide replacement as an identical reviewed/live vector',(
   expect(source).toMatch(/viewBox="[-\d.]+ [-\d.]+ [\d.]+ [\d.]+"/);
  }
 });
-it('retains 349 catalog records with three apparatus-specific artwork splits',()=>{
+it('keeps one reviewed illustration for every new variant and existing catalog mappings',()=>{
  const catalog=Object.values(exerciseCatalog),ids=new Set(catalog.map(e=>e.artId));
- expect(catalog).toHaveLength(349);expect(ids.size).toBe(331);
- expect(readdirSync(root).filter(f=>/^wg-.*\.svg$/.test(f)).length).toBe(331);
+ expect(catalog).toHaveLength(371);expect(ids.size).toBe(353);
+ expect(readdirSync(root).filter(f=>/^wg-.*\.svg$/.test(f)).length).toBe(353);
  for(const file of files)expect(ids.has(file.slice(0,-4))).toBe(true);
 });
 it('only supersedes earlier correction masters after renewed full-system visual approval',()=>{
