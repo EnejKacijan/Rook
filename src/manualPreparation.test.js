@@ -15,10 +15,16 @@ it('applies only the occurrence, survives reload, and is consumed without starti
  const second=createManualTodayPreparation(restored);second.workout.exercises.pop();
  expect(restored.todayAdaptation.workout.exercises).toHaveLength(draft.workout.exercises.length);
 });
-it('rejects stale drafts, other dates, active sessions and completed occurrences',()=>{
+it('rejects stale drafts, invalid occurrences, active sessions and completed workouts',()=>{
  const state=fixture(),draft=createManualTodayPreparation(state),applied=applyTodayAdjustment(state,draft).state;
  expect(applyTodayAdjustment(applied,draft).status).toBe('conflict');
- expect(()=>createManualTodayPreparation(state,'2026-09-22')).toThrow();
+ const upcoming = createManualTodayPreparation(state, '2026-09-22');
+ expect(upcoming.date).toBe('2026-09-22');
+ expect(applyTodayAdjustment(state, upcoming).status).toBe('applied');
+ expect(() => createManualTodayPreparation(state, '2026-09-23')).toThrow('This occurrence is no longer available to prepare.');
+ for (const date of ['2026-09-20', '2026-09-28']) {
+   expect(() => createManualTodayPreparation(state, date)).toThrow('Choose an upcoming workout in this week.');
+ }
  const active={...state,activeWorkout:startWorkout(state,state.program.days[0])};expect(()=>createManualTodayPreparation(active)).toThrow();
  expect(applyTodayAdjustment(active,draft).status).toBe('conflict');
  active.activeWorkout.exercises.forEach(e=>e.sets.forEach(s=>s.completed=true));
