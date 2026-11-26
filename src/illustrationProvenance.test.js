@@ -13,17 +13,17 @@ const manifest=JSON.parse(fs.readFileSync(new URL('../docs/visual-provenance.jso
 describe('evidence-backed illustration provenance',()=>{
   it('covers every maintained visual and detects changed bytes or inline geometry',()=>{
     expect(execFileSync(process.execPath,['scripts/audit-visual-provenance.mjs'],{cwd:root,encoding:'utf8'})).toContain(`${manifest.assets.length} records`);
-    expect(execFileSync(process.execPath,['scripts/compile-visual-provenance.mjs','--check'],{cwd:root,encoding:'utf8'})).toContain('331 runtime records');
+    expect(execFileSync(process.execPath,['scripts/compile-visual-provenance.mjs','--check'],{cwd:root,encoding:'utf8'})).toContain('353 runtime records');
   });
   it('does not confuse a generation master or unused legacy drawing with shipped art',()=>{
-    expect(manifest.assets.filter(asset=>asset.usage==='runtime_exercise')).toHaveLength(331);
-    expect(manifest.assets.filter(asset=>asset.usage==='regeneration_master')).toHaveLength(332);
+    expect(manifest.assets.filter(asset=>asset.usage==='runtime_exercise')).toHaveLength(353);
+    expect(manifest.assets.filter(asset=>asset.usage==='regeneration_master')).toHaveLength(354);
     expect(manifest.assets.filter(asset=>asset.usage==='unused_legacy')).toHaveLength(92);
-    expect(Object.keys(illustrationProvenance)).toHaveLength(331);
+    expect(Object.keys(illustrationProvenance)).toHaveLength(353);
   });
   it('requires positive generation evidence and identical live/master hashes for AI images',()=>{
     const ai=manifest.assets.filter(asset=>asset.usage==='runtime_exercise'&&asset.provenanceType==='rook_ai_generated');
-    expect(ai).toHaveLength(330);
+    expect(ai).toHaveLength(352);
     for(const asset of ai){
       expect(asset.evidence.some(e=>e.type==='generation_record'&&e.sourceSha256)).toBe(true);
       expect(asset.evidence.some(e=>e.type==='identical_reviewed_master'&&e.sha256===asset.sha256)).toBe(true);

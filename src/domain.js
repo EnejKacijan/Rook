@@ -49,6 +49,7 @@ import {
 } from "./prescriptionPolicy.js";
 import { validateSupersetExercises } from "./supersets.js";
 import { workoutGuideExercises } from "./workoutGuideCatalog.js";
+import { unilateralExercises } from "./unilateralExercises.js";
 import { PLATE_LOADING_RELATION_BY_EXERCISE_ID } from "./plateCalculator.js";
 import { effectiveGymContext, normalizeGymProfilesState } from "./gymProfiles.js";
 import {
@@ -1175,6 +1176,22 @@ for (const rawSource of workoutGuideExercises) {
   const id = `wg-${source.sourceSlug}`;
   exerciseCatalog[id] = { ...source, id };
   catalogByWorkoutGuideName.set(workoutGuideNameKey(source.name), exerciseCatalog[id]);
+}
+
+for (const exercise of unilateralExercises) exerciseCatalog[exercise.id] = { ...exercise };
+
+// These movements already use one side and have a matching illustration.
+const existingUnilateralAliases = {
+  "cable-lateral-raise": ["Unilateral Cable Lateral Raise"],
+  "one-arm-dumbbell-row": ["Single-Arm Dumbbell Row", "Unilateral Dumbbell Row"],
+  "standing-leg-curl": ["Single-Leg Standing Leg Curl", "Standing Single-Leg Hamstring Curl"],
+  "wg-concentration-curl": ["Single-Arm Concentration Curl", "One-Arm Dumbbell Concentration Curl"],
+  "wg-landmine-press": ["Single-Arm Landmine Press"],
+  "wg-cable-kickback": ["Single-Leg Cable Glute Kickback"],
+};
+for (const [id, aliases] of Object.entries(existingUnilateralAliases)) {
+  const exercise = exerciseCatalog[id];
+  exercise.aliases = [...new Set([...exercise.aliases, ...aliases])];
 }
 
 // Preserve the user's imported wording while resolving common Slovenian names

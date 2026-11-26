@@ -1,6 +1,8 @@
 import { it, expect } from 'vitest';
-import { exerciseCatalog, exerciseMatchesQuery, rankExerciseSearch, createExerciseSearchIndex } from './domain.js';
+import { exerciseCatalog, exerciseMatchesQuery, rankExerciseSearch, createExerciseSearchIndex, matchImportedExerciseName, isExerciseAutoGenerationBlocked } from './domain.js';
 import { createPlanEditorExerciseFilter } from './exerciseEligibility.js';
+import { unilateralExercises } from './unilateralExercises.js';
+import { supportsPerSideLogging } from './sessionLoggingSetup.js';
 
 const all = Object.values(exerciseCatalog).sort((a,b)=>a.name.localeCompare(b.name));
 const queries = [...new Set(['',' ','---','s','squ','squat','press','zzqnoresult','pull ups','zgibi','RDL','lateral raises','PULL-UPS','café',...all.flatMap(item=>[item.name,...(item.aliases||[])])])];
@@ -41,4 +43,22 @@ it('muscle searches match every eligible primary and secondary target, with prim
   ]);
   expect(search('Plank')[0]).toBe(exerciseCatalog.plank);
   expect(createExerciseSearchIndex(eligible)('abs', occupied)).toEqual([]);
+});
+
+it('finds the new one-sided variants by name and alias as separate exercises', () => {
+  const searchable = all.filter(createPlanEditorExerciseFilter({ equipment:['full gym'] }));
+  const search = createExerciseSearchIndex(searchable);
+  for (const { id, name, aliases } of unilateralExercises) {
+    expect(search(name)[0]?.id).toBe(id);
+    for (const alias of aliases) expect(matchImportedExerciseName(alias).exerciseId).toBe(id);
+    expect(supportsPerSideLogging({exerciseId:id})).toBe(true);
+    expect(isExerciseAutoGenerationBlocked(exerciseCatalog[id])).toBe(true);
+  }
+  expect(search('tricep pushdown').map(item=>item.id)).toEqual(expect.arrayContaining([
+    'cable-triceps-pressdown', 'single-arm-cable-triceps-pressdown',
+  ]));
+  expect(search('unilateral cable lateral raise')[0]).toBe(exerciseCatalog['cable-lateral-raise']);
+  const home = createExerciseSearchIndex(all.filter(createPlanEditorExerciseFilter({ equipment:['resistance bands', 'secure band anchor'] })));
+  expect(home('single arm band triceps pushdown')[0]?.id).toBe('single-arm-band-triceps-pressdown');
+  expect(home('single arm cable triceps pushdown')).toEqual([]);
 });

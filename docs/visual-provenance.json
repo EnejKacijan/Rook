@@ -4,7 +4,7 @@
   "scope": "Maintained src/public/branding assets, native icon/splash outputs, regeneration masters, legacy exercise SVGs and inline SVG renderer blocks. Compiled bundles are duplicates, listed separately in the review report.",
   "counts": {
     "licensed_third_party": 93,
-    "rook_ai_generated": 662,
+    "rook_ai_generated": 706,
     "unknown": 11,
     "rook_original": 26
   },
@@ -32129,6 +32129,1700 @@
       "codeSha256": "3ddbfe05876162163c7eea41f15aa9a9cbdb8fd2f42c0dba4279c47d7438ecba",
       "lfCodeSha256": "3ddbfe05876162163c7eea41f15aa9a9cbdb8fd2f42c0dba4279c47d7438ecba",
       "crlfCodeSha256": "3ddbfe05876162163c7eea41f15aa9a9cbdb8fd2f42c0dba4279c47d7438ecba"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-cable-triceps-pressdown",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-triceps-pressdown.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-cable-triceps-pressdown"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "e4a75fe3273406834904aeb668a11b2696cff8f1b4d40f1cdeca6a91fa9981aa",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-triceps-pressdown",
+          "sourceSha256": "12c3a9741862bc746071e32974f575bcf58fa7a25612b2580658895fe200b73b",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "e4a75fe3273406834904aeb668a11b2696cff8f1b4d40f1cdeca6a91fa9981aa"
+    },
+    {
+      "assetId": "wg-rook-single-arm-cable-triceps-pressdown",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-cable-triceps-pressdown.svg",
+      "exerciseIds": [
+        "single-arm-cable-triceps-pressdown"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "e4a75fe3273406834904aeb668a11b2696cff8f1b4d40f1cdeca6a91fa9981aa",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-triceps-pressdown",
+          "sourceSha256": "12c3a9741862bc746071e32974f575bcf58fa7a25612b2580658895fe200b73b",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-triceps-pressdown.svg",
+          "sha256": "e4a75fe3273406834904aeb668a11b2696cff8f1b4d40f1cdeca6a91fa9981aa"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "e4a75fe3273406834904aeb668a11b2696cff8f1b4d40f1cdeca6a91fa9981aa"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-cable-overhead-triceps-extension",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-overhead-triceps-extension.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-cable-overhead-triceps-extension"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "b6d897cef999c6ffee0d4b34c262978e09c23ad14285e04aa21af5540eb2c687",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-overhead-triceps-extension",
+          "sourceSha256": "6afcbeaab103408651e68fa55e7619cf9e3a64ae4f9b4fbe9d397e1a155737be",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "b6d897cef999c6ffee0d4b34c262978e09c23ad14285e04aa21af5540eb2c687"
+    },
+    {
+      "assetId": "wg-rook-single-arm-cable-overhead-triceps-extension",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-cable-overhead-triceps-extension.svg",
+      "exerciseIds": [
+        "single-arm-cable-overhead-triceps-extension"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "b6d897cef999c6ffee0d4b34c262978e09c23ad14285e04aa21af5540eb2c687",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-overhead-triceps-extension",
+          "sourceSha256": "6afcbeaab103408651e68fa55e7619cf9e3a64ae4f9b4fbe9d397e1a155737be",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-overhead-triceps-extension.svg",
+          "sha256": "b6d897cef999c6ffee0d4b34c262978e09c23ad14285e04aa21af5540eb2c687"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "b6d897cef999c6ffee0d4b34c262978e09c23ad14285e04aa21af5540eb2c687"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-band-triceps-pressdown",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-band-triceps-pressdown.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-band-triceps-pressdown"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "41bf8f3540ebbc86c65c89a98e6f2c075c8be228cb54cc62c365bd216dd0d65e",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-band-triceps-pressdown",
+          "sourceSha256": "cfedcc90c322d91dbffa6d76a6f007326d41c0e6bebe1519b4bd030e3d597f6c",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "41bf8f3540ebbc86c65c89a98e6f2c075c8be228cb54cc62c365bd216dd0d65e"
+    },
+    {
+      "assetId": "wg-rook-single-arm-band-triceps-pressdown",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-band-triceps-pressdown.svg",
+      "exerciseIds": [
+        "single-arm-band-triceps-pressdown"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "41bf8f3540ebbc86c65c89a98e6f2c075c8be228cb54cc62c365bd216dd0d65e",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-band-triceps-pressdown",
+          "sourceSha256": "cfedcc90c322d91dbffa6d76a6f007326d41c0e6bebe1519b4bd030e3d597f6c",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-band-triceps-pressdown.svg",
+          "sha256": "41bf8f3540ebbc86c65c89a98e6f2c075c8be228cb54cc62c365bd216dd0d65e"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "41bf8f3540ebbc86c65c89a98e6f2c075c8be228cb54cc62c365bd216dd0d65e"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-dumbbell-skull-crusher",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-skull-crusher.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-dumbbell-skull-crusher"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "1860785f5c7b90e310701ccdf93c81b05e7eb636f2e304f05d57c04c12b73903",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-skull-crusher",
+          "sourceSha256": "9aefa5bdd1032a03071ca294b6db163a78814e5abd76a69c50f408362e89f480",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1860785f5c7b90e310701ccdf93c81b05e7eb636f2e304f05d57c04c12b73903"
+    },
+    {
+      "assetId": "wg-rook-single-arm-dumbbell-skull-crusher",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-dumbbell-skull-crusher.svg",
+      "exerciseIds": [
+        "single-arm-dumbbell-skull-crusher"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "1860785f5c7b90e310701ccdf93c81b05e7eb636f2e304f05d57c04c12b73903",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-skull-crusher",
+          "sourceSha256": "9aefa5bdd1032a03071ca294b6db163a78814e5abd76a69c50f408362e89f480",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-skull-crusher.svg",
+          "sha256": "1860785f5c7b90e310701ccdf93c81b05e7eb636f2e304f05d57c04c12b73903"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1860785f5c7b90e310701ccdf93c81b05e7eb636f2e304f05d57c04c12b73903"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-cable-curl",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-curl.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-cable-curl"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "1fde4b1f6d1d3702209aa053bcfe1f7c59147e268c6cd6567e6d47a83fd4965a",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-curl",
+          "sourceSha256": "69c891984e1a5ba3c053a822c28cd83b9fc90eb9fa56c833e7ed3ce11a7cc799",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1fde4b1f6d1d3702209aa053bcfe1f7c59147e268c6cd6567e6d47a83fd4965a"
+    },
+    {
+      "assetId": "wg-rook-single-arm-cable-curl",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-cable-curl.svg",
+      "exerciseIds": [
+        "single-arm-cable-curl"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "1fde4b1f6d1d3702209aa053bcfe1f7c59147e268c6cd6567e6d47a83fd4965a",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-curl",
+          "sourceSha256": "69c891984e1a5ba3c053a822c28cd83b9fc90eb9fa56c833e7ed3ce11a7cc799",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-curl.svg",
+          "sha256": "1fde4b1f6d1d3702209aa053bcfe1f7c59147e268c6cd6567e6d47a83fd4965a"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1fde4b1f6d1d3702209aa053bcfe1f7c59147e268c6cd6567e6d47a83fd4965a"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-dumbbell-preacher-curl",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-preacher-curl.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-dumbbell-preacher-curl"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "86f6a24ba4030c18f7b96d9a8363ec284d53081fb84b683f947ff51c40521ff5",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-preacher-curl",
+          "sourceSha256": "8e50d3d5e536775cbb671df632e25fdc55b3268b4af208a0f49586482d7d934a",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "86f6a24ba4030c18f7b96d9a8363ec284d53081fb84b683f947ff51c40521ff5"
+    },
+    {
+      "assetId": "wg-rook-single-arm-dumbbell-preacher-curl",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-dumbbell-preacher-curl.svg",
+      "exerciseIds": [
+        "single-arm-dumbbell-preacher-curl"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "86f6a24ba4030c18f7b96d9a8363ec284d53081fb84b683f947ff51c40521ff5",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-preacher-curl",
+          "sourceSha256": "8e50d3d5e536775cbb671df632e25fdc55b3268b4af208a0f49586482d7d934a",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-preacher-curl.svg",
+          "sha256": "86f6a24ba4030c18f7b96d9a8363ec284d53081fb84b683f947ff51c40521ff5"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "86f6a24ba4030c18f7b96d9a8363ec284d53081fb84b683f947ff51c40521ff5"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-incline-dumbbell-curl",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-incline-dumbbell-curl.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-incline-dumbbell-curl"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "0c6005ecff0d2acf51e06aa4875c55a3169c1e58e71616a28aaab65216db83e3",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-incline-dumbbell-curl",
+          "sourceSha256": "cbe4e7317fa9d1369a18466d6a471321272c201e7769085c578a72a151ecd303",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "0c6005ecff0d2acf51e06aa4875c55a3169c1e58e71616a28aaab65216db83e3"
+    },
+    {
+      "assetId": "wg-rook-single-arm-incline-dumbbell-curl",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-incline-dumbbell-curl.svg",
+      "exerciseIds": [
+        "single-arm-incline-dumbbell-curl"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "0c6005ecff0d2acf51e06aa4875c55a3169c1e58e71616a28aaab65216db83e3",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-incline-dumbbell-curl",
+          "sourceSha256": "cbe4e7317fa9d1369a18466d6a471321272c201e7769085c578a72a151ecd303",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-incline-dumbbell-curl.svg",
+          "sha256": "0c6005ecff0d2acf51e06aa4875c55a3169c1e58e71616a28aaab65216db83e3"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "0c6005ecff0d2acf51e06aa4875c55a3169c1e58e71616a28aaab65216db83e3"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-dumbbell-bench-press",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-bench-press.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-dumbbell-bench-press"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "223b5d192c29772ed87acacb30f6c4cec0d99e8101538afe6b1ea71f3436a907",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-bench-press",
+          "sourceSha256": "92d4e3f7a008810d155cb464cbaac9eb0a8df3a54adc115b1ba530bc37420996",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "223b5d192c29772ed87acacb30f6c4cec0d99e8101538afe6b1ea71f3436a907"
+    },
+    {
+      "assetId": "wg-rook-single-arm-dumbbell-bench-press",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-dumbbell-bench-press.svg",
+      "exerciseIds": [
+        "single-arm-dumbbell-bench-press"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "223b5d192c29772ed87acacb30f6c4cec0d99e8101538afe6b1ea71f3436a907",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-bench-press",
+          "sourceSha256": "92d4e3f7a008810d155cb464cbaac9eb0a8df3a54adc115b1ba530bc37420996",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-bench-press.svg",
+          "sha256": "223b5d192c29772ed87acacb30f6c4cec0d99e8101538afe6b1ea71f3436a907"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "223b5d192c29772ed87acacb30f6c4cec0d99e8101538afe6b1ea71f3436a907"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-incline-dumbbell-press",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-incline-dumbbell-press.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-incline-dumbbell-press"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "1a2fe158cd3997648c5eadb30c93b13e7360a368ad5977ea4101f70cefeb5d4b",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-incline-dumbbell-press",
+          "sourceSha256": "4ef6d086d0d3e4e348ecec795a61ac08eee160c597726dc429b412f42192d306",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1a2fe158cd3997648c5eadb30c93b13e7360a368ad5977ea4101f70cefeb5d4b"
+    },
+    {
+      "assetId": "wg-rook-single-arm-incline-dumbbell-press",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-incline-dumbbell-press.svg",
+      "exerciseIds": [
+        "single-arm-incline-dumbbell-press"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "1a2fe158cd3997648c5eadb30c93b13e7360a368ad5977ea4101f70cefeb5d4b",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-incline-dumbbell-press",
+          "sourceSha256": "4ef6d086d0d3e4e348ecec795a61ac08eee160c597726dc429b412f42192d306",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-incline-dumbbell-press.svg",
+          "sha256": "1a2fe158cd3997648c5eadb30c93b13e7360a368ad5977ea4101f70cefeb5d4b"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1a2fe158cd3997648c5eadb30c93b13e7360a368ad5977ea4101f70cefeb5d4b"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-cable-chest-press",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-chest-press.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-cable-chest-press"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "bc2b88d99517acf29413631ddd1d7d910433185a03e544bab7c7c6f982099aa6",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-chest-press",
+          "sourceSha256": "096b13cfec81322443dc06d697eaf2ffd01a49c8105a3966676a4ae12bbee905",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "bc2b88d99517acf29413631ddd1d7d910433185a03e544bab7c7c6f982099aa6"
+    },
+    {
+      "assetId": "wg-rook-single-arm-cable-chest-press",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-cable-chest-press.svg",
+      "exerciseIds": [
+        "single-arm-cable-chest-press"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "bc2b88d99517acf29413631ddd1d7d910433185a03e544bab7c7c6f982099aa6",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-chest-press",
+          "sourceSha256": "096b13cfec81322443dc06d697eaf2ffd01a49c8105a3966676a4ae12bbee905",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-chest-press.svg",
+          "sha256": "bc2b88d99517acf29413631ddd1d7d910433185a03e544bab7c7c6f982099aa6"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "bc2b88d99517acf29413631ddd1d7d910433185a03e544bab7c7c6f982099aa6"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-cable-fly",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-fly.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-cable-fly"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "5e463526d95fa55cd49a4b0512f6861b6c0b63bec8c304f2f7e93cf88d545675",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-fly",
+          "sourceSha256": "6336edcac6d9aa344856e1d973f251e2c4e85b53d750ab0050e020496ae1bb76",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "5e463526d95fa55cd49a4b0512f6861b6c0b63bec8c304f2f7e93cf88d545675"
+    },
+    {
+      "assetId": "wg-rook-single-arm-cable-fly",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-cable-fly.svg",
+      "exerciseIds": [
+        "single-arm-cable-fly"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "5e463526d95fa55cd49a4b0512f6861b6c0b63bec8c304f2f7e93cf88d545675",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-fly",
+          "sourceSha256": "6336edcac6d9aa344856e1d973f251e2c4e85b53d750ab0050e020496ae1bb76",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-fly.svg",
+          "sha256": "5e463526d95fa55cd49a4b0512f6861b6c0b63bec8c304f2f7e93cf88d545675"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "5e463526d95fa55cd49a4b0512f6861b6c0b63bec8c304f2f7e93cf88d545675"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-dumbbell-shoulder-press",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-shoulder-press.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-dumbbell-shoulder-press"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "99976c98439db8541a190352a70af6a9f2b6b3c20210d04b47a63d0c05e1bd4a",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-shoulder-press",
+          "sourceSha256": "346f7daa490aacedd14dff26cfbacf4624c3414cdca02235aef5ce160b17d5f8",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "99976c98439db8541a190352a70af6a9f2b6b3c20210d04b47a63d0c05e1bd4a"
+    },
+    {
+      "assetId": "wg-rook-single-arm-dumbbell-shoulder-press",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-dumbbell-shoulder-press.svg",
+      "exerciseIds": [
+        "single-arm-dumbbell-shoulder-press"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "99976c98439db8541a190352a70af6a9f2b6b3c20210d04b47a63d0c05e1bd4a",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-shoulder-press",
+          "sourceSha256": "346f7daa490aacedd14dff26cfbacf4624c3414cdca02235aef5ce160b17d5f8",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-shoulder-press.svg",
+          "sha256": "99976c98439db8541a190352a70af6a9f2b6b3c20210d04b47a63d0c05e1bd4a"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "99976c98439db8541a190352a70af6a9f2b6b3c20210d04b47a63d0c05e1bd4a"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-dumbbell-lateral-raise",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-lateral-raise.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-dumbbell-lateral-raise"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "6cae437e36350080096caaccfeb320b59f85dc79de1f4683bd5c89123c20c611",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-lateral-raise",
+          "sourceSha256": "2e334429e39199cb8d1b1c0e7fbceafec4e3250bea25765532395da2bb97c406",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "6cae437e36350080096caaccfeb320b59f85dc79de1f4683bd5c89123c20c611"
+    },
+    {
+      "assetId": "wg-rook-single-arm-dumbbell-lateral-raise",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-dumbbell-lateral-raise.svg",
+      "exerciseIds": [
+        "single-arm-dumbbell-lateral-raise"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "6cae437e36350080096caaccfeb320b59f85dc79de1f4683bd5c89123c20c611",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-dumbbell-lateral-raise",
+          "sourceSha256": "2e334429e39199cb8d1b1c0e7fbceafec4e3250bea25765532395da2bb97c406",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-dumbbell-lateral-raise.svg",
+          "sha256": "6cae437e36350080096caaccfeb320b59f85dc79de1f4683bd5c89123c20c611"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "6cae437e36350080096caaccfeb320b59f85dc79de1f4683bd5c89123c20c611"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-cable-front-raise",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-front-raise.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-cable-front-raise"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "1d26ee21e3fc55ce022c82cef41e29af06bcab38cbc95eb3f49cc4f16eccabb4",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-front-raise",
+          "sourceSha256": "3bcf085e45dccffe5ce210506e34e063fe4fae22d91445792cc2963216ab74a0",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1d26ee21e3fc55ce022c82cef41e29af06bcab38cbc95eb3f49cc4f16eccabb4"
+    },
+    {
+      "assetId": "wg-rook-single-arm-cable-front-raise",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-cable-front-raise.svg",
+      "exerciseIds": [
+        "single-arm-cable-front-raise"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "1d26ee21e3fc55ce022c82cef41e29af06bcab38cbc95eb3f49cc4f16eccabb4",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-cable-front-raise",
+          "sourceSha256": "3bcf085e45dccffe5ce210506e34e063fe4fae22d91445792cc2963216ab74a0",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-cable-front-raise.svg",
+          "sha256": "1d26ee21e3fc55ce022c82cef41e29af06bcab38cbc95eb3f49cc4f16eccabb4"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "1d26ee21e3fc55ce022c82cef41e29af06bcab38cbc95eb3f49cc4f16eccabb4"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-reverse-cable-fly",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-reverse-cable-fly.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-reverse-cable-fly"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "406b0c511c0042c26a1ed96fbff3f80ed2c93031b2d43455ddcbd3e869227c63",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-reverse-cable-fly",
+          "sourceSha256": "c4d17b95cda2a802c5d65473de4c00876229389f3d05e9465a7803cf4cb1768c",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "406b0c511c0042c26a1ed96fbff3f80ed2c93031b2d43455ddcbd3e869227c63"
+    },
+    {
+      "assetId": "wg-rook-single-arm-reverse-cable-fly",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-reverse-cable-fly.svg",
+      "exerciseIds": [
+        "single-arm-reverse-cable-fly"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "406b0c511c0042c26a1ed96fbff3f80ed2c93031b2d43455ddcbd3e869227c63",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-reverse-cable-fly",
+          "sourceSha256": "c4d17b95cda2a802c5d65473de4c00876229389f3d05e9465a7803cf4cb1768c",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-reverse-cable-fly.svg",
+          "sha256": "406b0c511c0042c26a1ed96fbff3f80ed2c93031b2d43455ddcbd3e869227c63"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "406b0c511c0042c26a1ed96fbff3f80ed2c93031b2d43455ddcbd3e869227c63"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-straight-arm-cable-pulldown",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-straight-arm-cable-pulldown.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-straight-arm-cable-pulldown"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "b4dcc3488c6f20cd58bafb7a059e1e59eec5e8fe51875188db1bb16dca2eb352",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-straight-arm-cable-pulldown",
+          "sourceSha256": "605502bc5861a6d40a4882f2a4745b5b990e58e16a5340e1efce20e6cab9aba3",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "b4dcc3488c6f20cd58bafb7a059e1e59eec5e8fe51875188db1bb16dca2eb352"
+    },
+    {
+      "assetId": "wg-rook-single-arm-straight-arm-cable-pulldown",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-straight-arm-cable-pulldown.svg",
+      "exerciseIds": [
+        "single-arm-straight-arm-cable-pulldown"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "b4dcc3488c6f20cd58bafb7a059e1e59eec5e8fe51875188db1bb16dca2eb352",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-straight-arm-cable-pulldown",
+          "sourceSha256": "605502bc5861a6d40a4882f2a4745b5b990e58e16a5340e1efce20e6cab9aba3",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-straight-arm-cable-pulldown.svg",
+          "sha256": "b4dcc3488c6f20cd58bafb7a059e1e59eec5e8fe51875188db1bb16dca2eb352"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "b4dcc3488c6f20cd58bafb7a059e1e59eec5e8fe51875188db1bb16dca2eb352"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-arm-chest-supported-machine-row",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-chest-supported-machine-row.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-arm-chest-supported-machine-row"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "8f935781f3cb10df8b2252aa230a5addc85d269925b69e808ea949f4416b160e",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-chest-supported-machine-row",
+          "sourceSha256": "2b8aa50d578591cf5e9bdfcd2008e3c4a45ad25d64c25986340a44a78f56c084",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "8f935781f3cb10df8b2252aa230a5addc85d269925b69e808ea949f4416b160e"
+    },
+    {
+      "assetId": "wg-rook-single-arm-chest-supported-machine-row",
+      "path": "src/assets/exercise-art/wg-rook-single-arm-chest-supported-machine-row.svg",
+      "exerciseIds": [
+        "single-arm-chest-supported-machine-row"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "8f935781f3cb10df8b2252aa230a5addc85d269925b69e808ea949f4416b160e",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-arm-chest-supported-machine-row",
+          "sourceSha256": "2b8aa50d578591cf5e9bdfcd2008e3c4a45ad25d64c25986340a44a78f56c084",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-arm-chest-supported-machine-row.svg",
+          "sha256": "8f935781f3cb10df8b2252aa230a5addc85d269925b69e808ea949f4416b160e"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "8f935781f3cb10df8b2252aa230a5addc85d269925b69e808ea949f4416b160e"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-leg-lying-leg-curl",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-lying-leg-curl.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-leg-lying-leg-curl"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-lying-leg-curl",
+          "sourceSha256": "42a712517c2ddb31e70393a98e0dcd019e76049dee1843e272ba8891ac7f8458",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152"
+    },
+    {
+      "assetId": "wg-rook-single-leg-lying-leg-curl",
+      "path": "src/assets/exercise-art/wg-rook-single-leg-lying-leg-curl.svg",
+      "exerciseIds": [
+        "single-leg-lying-leg-curl"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-lying-leg-curl",
+          "sourceSha256": "42a712517c2ddb31e70393a98e0dcd019e76049dee1843e272ba8891ac7f8458",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-lying-leg-curl.svg",
+          "sha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-leg-seated-leg-curl",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-seated-leg-curl.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-leg-seated-leg-curl"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "7482542125a0939892d8842cae72ade5b7ae9632690badcb82cbb58fe9984da3",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-seated-leg-curl",
+          "sourceSha256": "77b020b35e05d6a368ac4877f09c91189f36310c7149d1cc3eeafbfd00f092fe",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "7482542125a0939892d8842cae72ade5b7ae9632690badcb82cbb58fe9984da3"
+    },
+    {
+      "assetId": "wg-rook-single-leg-seated-leg-curl",
+      "path": "src/assets/exercise-art/wg-rook-single-leg-seated-leg-curl.svg",
+      "exerciseIds": [
+        "single-leg-seated-leg-curl"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "7482542125a0939892d8842cae72ade5b7ae9632690badcb82cbb58fe9984da3",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-seated-leg-curl",
+          "sourceSha256": "77b020b35e05d6a368ac4877f09c91189f36310c7149d1cc3eeafbfd00f092fe",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-seated-leg-curl.svg",
+          "sha256": "7482542125a0939892d8842cae72ade5b7ae9632690badcb82cbb58fe9984da3"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "7482542125a0939892d8842cae72ade5b7ae9632690badcb82cbb58fe9984da3"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-leg-hip-thrust",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-hip-thrust.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-leg-hip-thrust"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-hip-thrust",
+          "sourceSha256": "b2e4119c3011b0d7a3a5181e39bcdffcf130afbbaeeaa4b525a99b217c8dc8ff",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe"
+    },
+    {
+      "assetId": "wg-rook-single-leg-hip-thrust",
+      "path": "src/assets/exercise-art/wg-rook-single-leg-hip-thrust.svg",
+      "exerciseIds": [
+        "single-leg-hip-thrust"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-hip-thrust",
+          "sourceSha256": "b2e4119c3011b0d7a3a5181e39bcdffcf130afbbaeeaa4b525a99b217c8dc8ff",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-hip-thrust.svg",
+          "sha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-leg-leg-press-calf-raise",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-leg-press-calf-raise.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-leg-leg-press-calf-raise"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-leg-press-calf-raise",
+          "sourceSha256": "f093a676fb900c1a6dce378ade8b4995df48b398b49cc919bebb802a3f4e746e",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2"
+    },
+    {
+      "assetId": "wg-rook-single-leg-leg-press-calf-raise",
+      "path": "src/assets/exercise-art/wg-rook-single-leg-leg-press-calf-raise.svg",
+      "exerciseIds": [
+        "single-leg-leg-press-calf-raise"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-leg-press-calf-raise",
+          "sourceSha256": "f093a676fb900c1a6dce378ade8b4995df48b398b49cc919bebb802a3f4e746e",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-leg-press-calf-raise.svg",
+          "sha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2"
+    },
+    {
+      "assetId": "master-consistent:wg-rook-single-leg-seated-calf-raise",
+      "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-seated-calf-raise.svg",
+      "exerciseIds": [],
+      "relatedExerciseIds": [
+        "single-leg-seated-calf-raise"
+      ],
+      "usage": "regeneration_master",
+      "movementIds": [],
+      "sha256": "5909354a9c64cfdc193f3dc9705bf7f09e8ac76f6eb5c6bdb173ca98db72ad18",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-seated-calf-raise",
+          "sourceSha256": "e12d10de6d461bf29534066e09f5ba862c80142e93c01d46d9401a4a9ac0d5c5",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "5909354a9c64cfdc193f3dc9705bf7f09e8ac76f6eb5c6bdb173ca98db72ad18"
+    },
+    {
+      "assetId": "wg-rook-single-leg-seated-calf-raise",
+      "path": "src/assets/exercise-art/wg-rook-single-leg-seated-calf-raise.svg",
+      "exerciseIds": [
+        "single-leg-seated-calf-raise"
+      ],
+      "relatedExerciseIds": [],
+      "usage": "runtime_exercise",
+      "movementIds": [],
+      "sha256": "5909354a9c64cfdc193f3dc9705bf7f09e8ac76f6eb5c6bdb173ca98db72ad18",
+      "provenanceType": "rook_ai_generated",
+      "sourceUrl": null,
+      "creator": "AI generation for ROOK",
+      "license": null,
+      "attributionRequired": false,
+      "generatedAt": null,
+      "generationProvider": null,
+      "generationModel": null,
+      "previousStoredCredits": [],
+      "previousDisplayedCredit": "None: new illustration",
+      "evidence": [
+        {
+          "type": "generation_record",
+          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "key": "single-leg-seated-calf-raise",
+          "sourceSha256": "e12d10de6d461bf29534066e09f5ba862c80142e93c01d46d9401a4a9ac0d5c5",
+          "generationOriginRecorded": true,
+          "workflow": "docs/exercise-illustration-system.md"
+        },
+        {
+          "type": "identical_reviewed_master",
+          "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-seated-calf-raise.svg",
+          "sha256": "5909354a9c64cfdc193f3dc9705bf7f09e8ac76f6eb5c6bdb173ca98db72ad18"
+        }
+      ],
+      "notes": [
+        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+      ],
+      "generationTool": "Codex built-in imagegen",
+      "canonicalSha256": "5909354a9c64cfdc193f3dc9705bf7f09e8ac76f6eb5c6bdb173ca98db72ad18"
     }
   ]
 }
