@@ -5194,7 +5194,10 @@ export function Today({
     </main>
   );
   if (!template && !completed) {
-    const upcoming = state.program.trainingBlock?.completed&&deloadRest?null:scheduleReader.next(selectedIso);
+    const pastRestDay = selectedIso < todayKey;
+    const upcoming = pastRestDay || (state.program.trainingBlock?.completed && deloadRest)
+      ? null
+      : scheduleReader.next(selectedIso);
     const upcomingTitle = upcoming
       ? workoutDisplayParts(upcoming.workout, upcoming.workout.weekday)
       : null;
@@ -5204,7 +5207,6 @@ export function Today({
         item.status === "completed" &&
         (["Cardio", "Mobility"].includes(item.kind) || isConditioning(item)),
     );
-    const isToday = selectedIso === isoDay();
     const dateOccurrences = scheduleReader.occurrences(selectedIso);
     const movedAway = dateOccurrences.filter(item=>item.originalDate===selectedIso && item.scheduledDate!==selectedIso && item.moved && !item.skipped);
     const movedAwayRest = movedAway.length>0 && !movedSourceIssue &&
@@ -5217,15 +5219,15 @@ export function Today({
         {calendar(false)}
         {activeNotice}
         {activeOptionalNotice}
-        {isToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
-        {isToday && <YearReviewTodayCard state={state} open={year=>setDetail({yearReview:{year}})} />}
+        {viewingToday && state.program.trainingBlock?.completed && <section className="block-complete-card"><Eyebrow>BLOCK COMPLETE</Eyebrow><strong>{state.program.trainingBlock.name}</strong><p>Review the completed block before choosing what comes next.</p><button className="text-button" onClick={()=>setDetail('block-review')}>REVIEW BLOCK</button></section>}
+        {viewingToday && <YearReviewTodayCard state={state} open={year=>setDetail({yearReview:{year}})} />}
         <section className="rest-day-state">
           {dayHeader(movedAwayRest ? displayDate(selectedDate) : 'REST DAY')}
           <h1>{deloadRest?'Rest week':'Rest day'}</h1>
           <p>
             {movedAwayRest ? "No workout scheduled for this day." : isHistoricalWeek
               ? "No workout was planned on this date."
-              : "This is a planned recovery day."}
+              : pastRestDay ? "This was a planned recovery day." : "This is a planned recovery day."}
           </p>
           {movedAwayRest && <div className="today-moved-provenance" aria-label="Moved workouts">{movedAway.map(item=><div key={item.logicalSessionId}>
             <p>{item.workout.name} · {workoutVisibleStatus({status:'moved',destination:displayDate(localDate(item.scheduledDate))})}</p>
@@ -5261,8 +5263,8 @@ export function Today({
               </ExerciseNavigationButton>
             </div>
           )}
-          <div className="rest-day-actions">
-            {isToday && <ExerciseNavigationButton className="text-button today-secondary-action" aria-haspopup="dialog"
+          {!pastRestDay && <div className="rest-day-actions">
+            {viewingToday && <ExerciseNavigationButton className="text-button today-secondary-action" aria-haspopup="dialog"
               onClick={() => setDetail({ restDayAction: { date: selectedIso, kind: 'optional' } })}>
               <span><span aria-hidden="true">+ </span>Add optional activity</span>
             </ExerciseNavigationButton>}
@@ -5270,10 +5272,10 @@ export function Today({
               onClick={() => setDetail({ restDayAction: { date: selectedIso, kind: 'training' } })}>
               <span>Train anyway</span><NavigationChevron className="inline-navigation-chevron" />
             </ExerciseNavigationButton>
-          </div>
-          {isToday && !trackedActive && campaignSlot}
-          {completedOptional.length > 0 && <section className="rest-day-activity-history" aria-label="Today's completed activities">
-            <Eyebrow>TODAY</Eyebrow>
+          </div>}
+          {viewingToday && !trackedActive && campaignSlot}
+          {completedOptional.length > 0 && <section className="rest-day-activity-history" aria-label={viewingToday ? "Today's completed activities" : "Completed activities"}>
+            <Eyebrow>{viewingToday ? "TODAY" : "COMPLETED ACTIVITIES"}</Eyebrow>
             <TodayOptionalActivities state={state} date={selectedIso} setDetail={setDetail} historyOnly />
           </section>}
         </section>
