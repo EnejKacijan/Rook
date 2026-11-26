@@ -32,7 +32,23 @@ it('zero-set Finish Anyway shows Workout ended without a completion badge',()=>{
  expect(document.querySelector('.today-hero .completion-badge')).toBeNull();
 });
 it('completed factual rows bind to logged sets and partial rows remain explicit',()=>{const s=fixture();s.selectedDate='2026-09-17';s.workouts[0].exercises[0].sets.forEach(x=>x.completed=false);s.workouts[0].endedEarly=true;s.workouts[0].status='ended-early';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);expect(document.body.textContent).toContain('Workout logged');expect(document.body.textContent).toContain('No sets logged');expect(document.body.textContent).toMatch(/\d+ sets logged/);expect(document.body.textContent).not.toContain('WORKOUT COMPLETE');});
-it('fully completed session keeps completion action and actual set counts',()=>{const s=fixture();s.selectedDate='2026-09-17';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);expect(document.body.textContent).toContain('WORKOUT COMPLETE');expect(document.body.textContent).toContain('VIEW WORKOUT DETAILS');expect(document.body.textContent).not.toContain('WORKOUT COMPLETE · VIEW HISTORY');expect(document.body.textContent).not.toContain('No sets logged');});
+it.each([false, true])('fully completed session keeps its details before Repeat today (past=%s)', past => {
+ const s = fixture(); s.selectedDate = '2026-09-17';
+ if (past) vi.setSystemTime(new Date('2026-09-18T18:10:00'));
+ const detail = vi.fn();
+ render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={detail}/>);
+ expect(document.body.textContent).toContain('WORKOUT COMPLETE');
+ expect(document.body.textContent).not.toContain('WORKOUT COMPLETE · VIEW HISTORY');
+ expect(document.body.textContent).not.toContain('No sets logged');
+ const actions = [...document.querySelectorAll('.today-hero .completion-actions button')];
+ expect(actions.map(action => action.textContent)).toEqual(past ? ['VIEW WORKOUT DETAILS', 'Repeat today'] : ['VIEW WORKOUT DETAILS']);
+ act(() => actions[0].click());
+ expect(detail).toHaveBeenLastCalledWith({completedWorkout:s.workouts[0].id});
+ if (past) {
+  act(() => actions[1].click());
+  expect(detail).toHaveBeenLastCalledWith({useWorkoutToday:{workoutId:s.workouts[0].id}});
+ }
+});
 it('week and month give one execution only its performed-date check while the source stays fulfilled',()=>{
  const s=fixture();s.selectedDate='2026-09-14';render(<Today state={s} update={()=>{}} setPage={()=>{}} setDetail={()=>{}}/>);
  const source=document.querySelector('.week-strip button[aria-label^="Mon "]'),actual=document.querySelector('.week-strip button[aria-label^="Thu "]');

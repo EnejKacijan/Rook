@@ -5722,6 +5722,18 @@ export function Today({
   const duration = completed
     ? completed.durationSeconds ? `${Math.max(1, Math.round(completed.durationSeconds / 60))} min elapsed` : 'Duration not recorded'
     : `About ${roundedEstimate(estimatePersonalWorkoutMinutes(state, template))} min`;
+  const trainTodayRequest = completed ? { workoutId: completed.id }
+    : occurrence ? { sessionId: occurrence.logicalSessionId } : null;
+  const trainTodayAction = selectedIso !== isoDay() && trainTodayRequest && scheduleReader.canUseToday(trainTodayRequest) && (
+    <ExerciseNavigationButton
+      className="text-button today-secondary-action"
+      aria-haspopup="dialog"
+      onClick={() => setDetail({ useWorkoutToday: trainTodayRequest })}
+    >
+      <span>{completed ? 'Repeat today' : 'Train today instead'}</span>
+      <NavigationChevron className="inline-navigation-chevron" />
+    </ExerciseNavigationButton>
+  );
   return (
     <main className={`screen today-screen${trackedActive ? " viewing-other-workout" : ""}`}>
       {calendar()}
@@ -5769,17 +5781,7 @@ export function Today({
         {!completed && !isHistoricalWeek && trainingPaused && (
           <TrainingSafetySummary safety={todaySafety} />
         )}
-        {selectedIso !== isoDay() && (completed || occurrence) &&
-          scheduleReader.canUseToday(completed ? { workoutId: completed.id } : { sessionId: occurrence.logicalSessionId }) && (
-            <ExerciseNavigationButton
-              className="text-button today-secondary-action"
-              aria-haspopup="dialog"
-              onClick={() => setDetail({ useWorkoutToday: completed ? { workoutId: completed.id } : { sessionId: occurrence.logicalSessionId } })}
-            >
-              <span>{completed ? 'Repeat today' : 'Train today instead'}</span>
-              <NavigationChevron className="inline-navigation-chevron" />
-            </ExerciseNavigationButton>
-          )}
+        {!completed && trainTodayAction}
         {isRepeatAdjustment(session.todayOnlyAdjustment) && <><p>Repeating workout from {session.todayOnlyAdjustment.sourceDate}. Original history is unchanged.</p><button className="text-button" onClick={()=>{try{const next=cancelRepeatedWorkout(state);update(()=>next,{planVersion:false,persistedState:next});}catch(e){setStartError(e.message);}}}>Cancel repeated workout</button></>}
         {completed ? (
           <div className={hasLoggedWorkout ? "completion-actions" : undefined}>
@@ -5789,6 +5791,7 @@ export function Today({
             >
               VIEW WORKOUT DETAILS
             </Button>
+            {trainTodayAction}
           </div>
         ) : selectedIso < isoDay() || showingOneOff&&!viewingToday ? null : trackedActive ? (
           <p id="other-active-workout-edit-lock" className="active-workout-start-lock">
