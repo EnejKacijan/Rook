@@ -1,8 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   ADJUST_TODAY_MODES,
   applyTodayAdjustment,
   buildTodayAdjustment,
+  createManualTodayPreparation,
   resolveTodayAdjustment,
   restoreOriginalTodayWorkout,
   todayAdjustmentConflict,
@@ -10,12 +11,14 @@ import {
 import {
   adaptedTemplateForToday,
   blankState,
+  buildProgram,
   completeWorkout,
   deserializeState,
   estimateSessionMinutes,
   estimatePersonalWorkoutMinutes,
   exerciseCatalog,
   isoDay,
+  plannedWorkoutForDate,
   isExerciseAllowed,
   progressionFor,
   serializeState,
@@ -23,6 +26,7 @@ import {
   validateProgram,
   weekday,
 } from "./domain.js";
+import { applyFlexibleWeek, flexibleOccurrenceForDate, proposeFlexibleWeek } from "./flexibleWeek.js";
 import { validateSupersetExercises } from "./supersets.js";
 import { buildBackupArchive, parseBackupArchive } from "./backup.js";
 
@@ -399,6 +403,54 @@ describe("Adjust Today domain", () => {
     expect(adaptedTemplateForToday(restored.state)).toEqual(
       {...restored.state.program.days[0],estimatedMinutes:estimatePersonalWorkoutMinutes(restored.state,restored.state.program.days[0])},
     );
+  });
+
+  it("saves upcoming adjustments independently, follows a moved workout, and restores just that workout", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-11-25T12:00:00'));
+    try {
+      const state = fixture();
+      state.profile = {...state.profile, daysPerWeek:3, availableDays:['Wed','Thu','Sat']};
+      state.program = buildProgram(state.profile);
+      state.program.createdAt = '2026-11-23T09:00:00';
+      state.program.rotationStartDate = '2026-11-23';
+      state.program.trainingBlock.startDate = '2026-11-23';
+      const [wed,thu,sat,sun] = ['2026-11-25','2026-11-26','2026-11-28','2026-11-29'];
+      const adjust = (input,date) => {
+        const draft = buildTodayAdjustment(input,{mode:ADJUST_TODAY_MODES.lowEnergy,date});
+        expect(draft.status).toBe('ready');
+        const applied = applyTodayAdjustment(input,draft.proposal);
+        expect(applied.status).toBe('applied');
+        return applied.state;
+      };
+      const withToday = adjust(state,wed);
+      const withThursday = adjust(withToday,thu);
+      const draft = createManualTodayPreparation(withThursday,sat);
+      const first = draft.workout.exercises[0];
+      first.sets = first.sets.slice(0,1);
+      const prepared = applyTodayAdjustment(withThursday,draft);
+      expect(prepared.status).toBe('applied');
+      const reloaded = deserializeState(serializeState(prepared.state));
+      expect(reloaded.todayAdaptation.id).toBe(withToday.todayAdaptation.id);
+      expect(adaptedTemplateForToday(reloaded,new Date(thu+'T12:00:00')).adapted).toBe(true);
+      expect(adaptedTemplateForToday(reloaded,new Date(sat+'T12:00:00')).exercises[0].sets).toHaveLength(1);
+      const saturday = flexibleOccurrenceForDate(reloaded,sat);
+      const move = proposeFlexibleWeek(reloaded,{mode:'move',sessionId:saturday.logicalSessionId,toDate:sun});
+      const moved = applyFlexibleWeek(reloaded,move);
+      expect(moved.status).toBe('applied');
+      const adjusted = adaptedTemplateForToday(moved.state,new Date(sun+'T12:00:00'));
+      expect(adjusted.todayOnlyAdjustment.date).toBe(sun);
+      expect(adjusted.exercises[0].sets).toHaveLength(1);
+      expect(startWorkout({...moved.state,selectedDate:sun},adjusted).exercises[0].sets).toHaveLength(1);
+      const restored = restoreOriginalTodayWorkout(moved.state,sun,adjusted.todayOnlyAdjustment.id);
+      expect(restored.status).toBe('restored');
+      expect(adaptedTemplateForToday(restored.state,new Date(sun+'T12:00:00')).exercises).toEqual(plannedWorkoutForDate(restored.state,sun).exercises);
+      expect(adaptedTemplateForToday(restored.state,new Date(thu+'T12:00:00')).adapted).toBe(true);
+      expect(restored.state.todayAdaptation.id).toBe(withToday.todayAdaptation.id);
+      expect(restoreOriginalTodayWorkout(restored.state,sun,adjusted.todayOnlyAdjustment.id).status).toBe('unavailable');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it("rejects stale proposals and adjustments after workout start", () => {

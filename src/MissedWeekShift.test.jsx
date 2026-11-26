@@ -39,20 +39,20 @@ function mount(state,request={sessionId:source(state).logicalSessionId}){
 }
 it('previews all dates, saves once, and Undo restores the entire original week',()=>{
   const state=fixture(),id=source(state).logicalSessionId;mount(state);click('SHIFT THE REST OF THIS WEEK');
-  expect(host.querySelectorAll('[data-shift-session]')).toHaveLength(3);expect(host.textContent).toContain('Next week keeps its existing dates.');expect(host.textContent).toContain('Sun, Nov 22');
+  expect(host.querySelectorAll('[data-shift-session]')).toHaveLength(3);expect(host.textContent).toContain('Next week keeps its existing dates.');expect(host.textContent).toContain('Every workout shifts by 2 days.');
   expect(persist).not.toHaveBeenCalled();expect(current).toEqual(state);
   const apply=button('SHIFT THIS WEEK');act(()=>{apply.click();apply.click();});
   expect(persist).toHaveBeenCalledOnce();expect(closed).toHaveBeenCalledOnce();expect(domain.plannedWorkoutForDate(current,'2026-11-18').logicalSessionId).toBe(id);
   click('Undo');expect(current.flexibleWeek.sessions).toEqual({});expect(domain.plannedWorkoutForDate(current,'2026-11-18').id).toBe(state.program.days[1].id);
   expect(current.workouts).toEqual(state.workouts);expect(current.program).toEqual(state.program);
 });
-it('keeps a chosen extra day through persistence failure and supports retry',()=>{
-  const state=fixture();mount(state);click('SHIFT THE REST OF THIS WEEK');click('Change extra day');
-  act(()=>host.querySelector('[data-shift-extra="2026-11-22"]').click());
-  act(()=>host.querySelector('[data-shift-extra="2026-11-21"]').click());click('USE THESE DAYS');
-  expect(host.textContent).toContain('Extra training day this week: Sat, Nov 21.');persist.mockReturnValue(false);click('SHIFT THIS WEEK');
+it('keeps a chosen start day through persistence failure and supports retry',()=>{
+  vi.setSystemTime(new Date('2026-11-17T12:00:00'));
+  const state=fixture();mount(state);click('SHIFT THE REST OF THIS WEEK');click('Change start day');
+  act(()=>host.querySelector('[data-shift-start="2026-11-18"]').click());click('USE THIS DAY');
+  expect(host.textContent).toContain('Every workout shifts by 2 days.');persist.mockReturnValue(false);click('SHIFT THIS WEEK');
   expect(current).toEqual(state);expect(closed).not.toHaveBeenCalled();expect(host.querySelector('[role="alert"]').textContent).toContain('previous schedule is unchanged');
-  persist.mockReturnValue(true);click('TRY AGAIN');expect(closed).toHaveBeenCalledOnce();expect(Object.values(current.flexibleWeek.sessions).at(-1).scheduledDate).toBe('2026-11-21');
+  persist.mockReturnValue(true);click('TRY AGAIN');expect(closed).toHaveBeenCalledOnce();expect(Object.values(current.flexibleWeek.sessions).at(-1).scheduledDate).toBe('2026-11-22');
 });
 it('Back and Cancel do not change dates or discard any workout',()=>{
   const state=fixture();mount(state);click('SHIFT THE REST OF THIS WEEK');click('Back');
@@ -63,7 +63,7 @@ it('provides a working updated preview after relevant availability changes',()=>
   mount(fixture());click('SHIFT THE REST OF THIS WEEK');
   act(()=>external(state=>{state.profile.availableDays.push('Sat');return state;}));
   expect(button('SHIFT THIS WEEK').disabled).toBe(true);click('UPDATE PREVIEW');expect(button('SHIFT THIS WEEK').disabled).toBe(false);
-  expect(host.textContent).toContain('Extra training day this week: Sat, Nov 21.');click('SHIFT THIS WEEK');expect(closed).toHaveBeenCalledOnce();
+  expect(host.textContent).toContain('Every workout shifts by 2 days.');click('SHIFT THIS WEEK');expect(closed).toHaveBeenCalledOnce();
 });
 it('offers the same shift from Train Today instead of forcing individual displacement dates',()=>{
   const state=fixture(),route=vi.fn(),id=source(state).logicalSessionId;
@@ -86,6 +86,5 @@ it('offers the correction after a completed recovery and preserves the completed
   mount(state,{sessionId:id,shift:true});expect(host.querySelectorAll('[data-shift-session]')).toHaveLength(2);click('SHIFT THIS WEEK');expect(current.workouts).toEqual(history);
 });
 it('hides a shift that has no room before Sunday while keeping ordinary recovery available',()=>{
-  vi.setSystemTime(new Date('2026-11-22T12:00:00'));
   mount(fixture(['Mon','Wed','Sun']));expect(button('SHIFT THE REST OF THIS WEEK')).toBeUndefined();expect(button('MOVE TO ANOTHER DAY')).toBeDefined();
 });

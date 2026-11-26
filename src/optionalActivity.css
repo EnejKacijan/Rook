@@ -15,9 +15,9 @@
 .today-optional-actions { display: flex; flex-wrap: wrap; gap: 4px 16px; }
 .today-optional-actions > button { min-height: 44px; height: auto; padding: 8px 0; text-align: left; white-space: normal; font-size: 13px; }
 .rest-day-actions { display: grid; margin-top: 20px; }
-.rest-day-actions > .rest-day-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; height: auto; padding: 10px 0; text-align: left; white-space: normal; color: var(--rook-accent-text); font-size: 13px; font-weight: 500; line-height: 1.4; }
-.rest-day-action > span:first-child { min-width: 0; overflow-wrap: anywhere; }
-.rest-day-action > .inline-navigation-chevron { flex: 0 0 auto; }
+.today-screen .today-secondary-action { display: flex; align-items: center; justify-content: space-between; gap: 12px; width: 100%; min-height: 44px; height: auto; padding: 10px 0; text-align: left; white-space: normal; color: var(--rook-accent-text); font-size: 13px; font-weight: 500; line-height: 1.4; }
+.today-secondary-action > span:first-child { min-width: 0; overflow-wrap: anywhere; }
+.today-secondary-action > .inline-navigation-chevron { flex: 0 0 auto; }
 .rest-day-activity-history { margin-top: 24px; }
 .rest-day-activity-history > .today-optional-activities { margin-block: 8px 0; }
 .rest-day-activity-history .optional-session-history { margin-top: 0; }

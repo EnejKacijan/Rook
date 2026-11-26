@@ -1,14 +1,16 @@
 import { readFileSync } from 'node:fs';
 import { it, expect } from 'vitest';
 const policy=readFileSync('src/uiSelectionPolicy.css','utf8');
-it('scopes non-selection to semantic controls and chrome, with explicit content escapes',()=>{
+it('blocks selection across the installed app and keeps native editing and browser prose selection',()=>{
   const blocks=[...policy.matchAll(/([^{}]+)\{([^{}]+)\}/g)];
   const suppressed=blocks.filter(([, ,body])=>/user-select:\s*none/.test(body));
-  expect(suppressed).toHaveLength(1);
+  expect(suppressed).toHaveLength(2);
   expect(suppressed[0][1]).toContain('button');expect(suppressed[0][1]).toContain('.rook-ui');
   expect(suppressed[0][1]).not.toMatch(/(?:^|[,\s(])(?:\*|body|html|#root|\.app-shell)(?:[,\s)]|$)/);
+  expect(suppressed[1][1]).toContain(':root[data-rook-standalone]');
   expect(policy).toMatch(/:where\(input, textarea,[\s\S]+?user-select:\s*text/);
-  expect(policy).toContain('.coach-message p');expect(policy).toContain('-webkit-touch-callout: default');
+  expect(policy).toContain(':root:not([data-rook-standalone]) :where(.rook-selectable, .coach-message p');
+  expect(policy).toContain('-webkit-touch-callout: default');
 });
 it('leaves keyboard focus rules intact and removes the navigation tile layer',()=>{
   const feedback=readFileSync('src/exerciseRowFeedback.css','utf8');

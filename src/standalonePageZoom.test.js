@@ -32,12 +32,14 @@ it('uses real PWA signals rather than mobile width, user agent or installability
 it('leaves browser mode without touch interceptors, scale mutations or a lock attribute', () => {
   const add = vi.spyOn(document, 'addEventListener'); mount();
   expect(add.mock.calls.some(([name]) => name === 'touchmove' || name === 'gesturestart')).toBe(false);
+  expect(document.documentElement.hasAttribute('data-rook-standalone')).toBe(false);
   expect(document.documentElement.hasAttribute('data-rook-page-zoom')).toBe(false);
   touch('touchstart'); expect(touch('touchmove', target(), 2).defaultPrevented).toBe(false);
   expect(gesture('gesturestart').defaultPrevented).toBe(false);
 });
 it('leaves the native container in charge even if it reports a standalone display mode', () => {
   standalone = true; release = bindStandalonePageZoom(window, { isNative: true });
+  expect(document.documentElement.hasAttribute('data-rook-standalone')).toBe(false);
   expect(document.documentElement.hasAttribute('data-rook-page-zoom')).toBe(false);
   expect(gesture('gesturestart').defaultPrevented).toBe(false);
 });
@@ -96,14 +98,17 @@ it('applies the saved accessibility choice immediately and after rebinding', () 
   install(); setStandalonePageZoomAllowed(true);
   expect(standalonePageZoomMode()).toBe('allowed');
   expect(document.documentElement.hasAttribute('data-rook-page-zoom')).toBe(false);
+  expect(document.documentElement.hasAttribute('data-rook-standalone')).toBe(true);
   touch('touchstart'); expect(touch('touchmove', target(), 2).defaultPrevented).toBe(false);
   release(); mount(); expect(standalonePageZoomMode()).toBe('allowed');
   setStandalonePageZoomAllowed(false); expect(gesture('gesturestart').defaultPrevented).toBe(true);
 });
 it('responds to display-mode changes and removes the lock when returning to browser mode', () => {
   mount(); standalone = true; media.dispatchEvent(new Event('change'));
+  expect(document.documentElement.hasAttribute('data-rook-standalone')).toBe(true);
   expect(gesture('gesturestart').defaultPrevented).toBe(true);
   standalone = false; media.dispatchEvent(new Event('change'));
+  expect(document.documentElement.hasAttribute('data-rook-standalone')).toBe(false);
   expect(gesture('gesturestart').defaultPrevented).toBe(false);
 });
 it('responds to storage updates from another tab, and pageshow after suspension', () => {
@@ -125,6 +130,7 @@ it('disposes interceptors, restores previous state and leaves viewport metadata 
   document.documentElement.setAttribute('data-rook-page-zoom', 'prior'); install();
   release(); release = null;
   expect(document.documentElement.getAttribute('data-rook-page-zoom')).toBe('prior');
+  expect(document.documentElement.hasAttribute('data-rook-standalone')).toBe(false);
   expect(gesture('gesturestart').defaultPrevented).toBe(false);
   expect(viewport.content).toBe('width=device-width, initial-scale=1, viewport-fit=cover');
   document.documentElement.removeAttribute('data-rook-page-zoom'); viewport.remove();

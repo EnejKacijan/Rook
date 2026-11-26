@@ -8879,19 +8879,25 @@ export function templateForToday(program, date = new Date(), selectedDay) {
     ) || null
   );
 }
+export function workoutAdjustmentForDate(state, date, template) {
+  if (!template) return null;
+  const day = isoDay(calendarDate(date));
+  const current = state.todayAdaptation;
+  if (current?.date === day && current.programDayId === template.id) return current;
+  const saved = state.workoutOccurrenceOverrides?.[day]?.[template.id]?.sessionAdjustment;
+  if (saved?.schemaVersion !== 1 || saved.programId !== state.program?.id ||
+      saved.baseProgramVersion !== Number(state.program?.version || 1) ||
+      saved.originalWorkout?.trainingBlock?.phase !== template.trainingBlock?.phase ||
+      !saved.workout?.exercises?.length) return null;
+  return { ...saved, date: day };
+}
 export function adaptedTemplateForToday(state, date = new Date(), plannedTemplate) {
   const repeat=repeatTemplate(state,isoDay(date));if(repeat)return repeat;
   const combined=combinedTemplate(state,isoDay(date));
   if(combined)return combined;
   const template = plannedTemplate === undefined ? plannedWorkoutForDate(state, date) : plannedTemplate;
-  const adaptation = state.todayAdaptation;
-  if (
-    !template ||
-    !adaptation ||
-    adaptation.date !== isoDay(date) ||
-    adaptation.programDayId !== template.id
-  )
-    return template;
+  const adaptation = workoutAdjustmentForDate(state, date, template);
+  if (!adaptation) return template;
   if (
     adaptation.schemaVersion === 1 &&
     Array.isArray(adaptation.workout?.exercises) &&
@@ -8899,6 +8905,7 @@ export function adaptedTemplateForToday(state, date = new Date(), plannedTemplat
   )
     return {
       ...structuredClone(adaptation.workout),
+      ...(adaptation.programId ? {trainingBlock:template.trainingBlock} : {}),
       logicalSessionId: template.logicalSessionId,
       originalScheduledDate: template.originalScheduledDate,
       flexibleWeekMoved: template.flexibleWeekMoved,
@@ -9333,7 +9340,9 @@ export function startWorkout(state, template) {
     }),
   };
   normalizeAdvancedLoggingState({ activeWorkout: workout, workouts: [] });
-  const prepared = refreshWorkoutWarmup(workout, workout.temporaryPlanAdjustment || recovered ? effectiveGymContext(state, workout).profile : state.profile, state.program);
+  const gymProfile = workout.temporaryPlanAdjustment || workout.adjustment?.temporaryEquipment?.length || recovered
+    ? effectiveGymContext(state, workout).profile : state.profile;
+  const prepared = refreshWorkoutWarmup(workout, gymProfile, state.program);
   prepared.restartSnapshot = sessionStartSnapshot(prepared);
   return prepared;
 }

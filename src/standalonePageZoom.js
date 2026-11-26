@@ -49,6 +49,7 @@ export function bindStandalonePageZoom(win = globalThis.window, platform = rookP
   const doc = win?.document, html = doc?.documentElement;
   if (!html) return () => {};
   const previous = html.getAttribute('data-rook-page-zoom');
+  const previousStandalone = html.getAttribute('data-rook-standalone');
   let listening = false, origin = null, releaseStepperTouch = null;
   const element = target => target?.nodeType === 1 ? target : target?.parentElement;
   const start = event => {
@@ -90,10 +91,12 @@ export function bindStandalonePageZoom(win = globalThis.window, platform = rookP
   const update = () => {
     const mode = standalonePageZoomMode(win, platform);
     const locked = mode === 'locked';
+    const installed = mode !== 'browser';
+    html.toggleAttribute('data-rook-standalone', installed);
     // Repeated +/- taps are actions even when the user allows page pinch.
     // Ordinary tabs and native containers keep their existing input behavior.
-    if (mode !== 'browser' && !releaseStepperTouch) releaseStepperTouch = bindStepperTouch(doc);
-    else if (mode === 'browser' && releaseStepperTouch) { releaseStepperTouch(); releaseStepperTouch = null; }
+    if (installed && !releaseStepperTouch) releaseStepperTouch = bindStepperTouch(doc);
+    else if (!installed && releaseStepperTouch) { releaseStepperTouch(); releaseStepperTouch = null; }
     if (locked) html.setAttribute('data-rook-page-zoom', 'locked');
     else html.removeAttribute('data-rook-page-zoom');
     if (locked && !listening) {
@@ -109,5 +112,7 @@ export function bindStandalonePageZoom(win = globalThis.window, platform = rookP
     releaseStepperTouch?.();
     if (previous === null) html.removeAttribute('data-rook-page-zoom');
     else html.setAttribute('data-rook-page-zoom', previous);
+    if (previousStandalone === null) html.removeAttribute('data-rook-standalone');
+    else html.setAttribute('data-rook-standalone', previousStandalone);
   };
 }

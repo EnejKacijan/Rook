@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react';
 import { ExerciseIllustration } from './ExerciseIllustration.jsx';
 import { PersonalBestTrophy } from './WorkoutPersonalBestDetails.jsx';
 import { NavigationChevron } from './NavigationChevron.jsx';
@@ -5,6 +6,7 @@ import { ReviewDetails } from './ReviewDetails.jsx';
 import { exerciseArt } from './exerciseArt.js';
 import { displayWeight, displayEstimatedOneRepMax, weightUnit } from './domain.js';
 import { blockHeadline, blockHighlights, improvementOf } from './blockReviewStory.js';
+import { observeVisibleMotion } from './visibleMotion.js';
 
 const plural = (count, word, many = `${word}s`) => `${count} ${count === 1 ? word : many}`;
 export const shortDate = value => new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(`${String(value).slice(0, 10)}T12:00:00`));
@@ -19,9 +21,9 @@ export function useBlockFormat(units) {
   return { unit, load, set };
 }
 
-function ExerciseArt({ exerciseId, className = '' }) {
+function ExerciseArt({ exerciseId }) {
   const src = exerciseArt({ exerciseId });
-  return <span className={`block-art ${className}`.trim()} aria-hidden="true">
+  return <span className="block-art" aria-hidden="true">
     {src && <ExerciseIllustration src={src} alt="" decoding="async" loading="lazy" />}
   </span>;
 }
@@ -38,17 +40,19 @@ export function ChangePair({ row, format }) {
 const recordLabel = types => types?.includes('weight') ? 'Heaviest set yet' : types?.includes('reps') ? 'Most reps at this weight' : 'Best estimated 1RM · estimate';
 function changeLabel(change, format) {
   if (change.kind === 'load') return [`+${format.load(change.loadGain)}`, change.repGain ? `+${plural(change.repGain, 'rep')}` : null].filter(Boolean).join(' · ');
-  return `+${plural(change.repGain, 'rep')} at the same weight`;
+  return `+${plural(change.repGain, 'rep')}`;
 }
 
 function Highlight({ item, format }) {
   return <li className={`block-highlight is-${item.kind}`}>
     <ExerciseArt exerciseId={item.exerciseId} />
     <div>
-      <h3>{item.name}{item.pr && <PersonalBestTrophy />}</h3>
-      {item.change
-        ? <><p><ChangePair row={item.row} format={format} /></p><small>{changeLabel(item.change, format)}</small></>
-        : <><p className="block-pair"><strong>{format.set(item.pr.weight, item.pr.reps)}</strong></p><small>{recordLabel(item.pr.types)}</small></>}
+      <h3><span>{item.name}</span>{item.pr && <PersonalBestTrophy />}</h3>
+      <div className="block-highlight-detail">
+        {item.change
+          ? <><ChangePair row={item.row} format={format} /><small>{changeLabel(item.change, format)}</small></>
+          : <><span className="block-pair"><strong>{format.set(item.pr.weight, item.pr.reps)}</strong></span><small>{recordLabel(item.pr.types)}</small></>}
+      </div>
     </div>
   </li>;
 }
@@ -99,6 +103,19 @@ function notes(review) {
 }
 
 export function BlockReviewSummary({ review, block, units, historical, onOutcomes, next }) {
+  const heroRef = useRef(null), highlightsRef = useRef(null);
+  useLayoutEffect(() => {
+    const hero = heroRef.current;
+    const sheet = hero.closest('.block-review-sheet');
+    if (!sheet || !window.IntersectionObserver || window.matchMedia?.('(prefers-reduced-motion: reduce)')?.matches) return;
+    const targets = [hero, hero.querySelector('.block-week-strip'), ...(highlightsRef.current?.children || [])]
+      .filter(node => node && node.dataset.blockReveal !== 'visible');
+    for (const target of targets) target.dataset.blockReveal = 'waiting';
+    const headerHeight = Math.ceil(sheet.querySelector(':scope > .detail-header')?.getBoundingClientRect().height ?? 0);
+    return observeVisibleMotion(targets, node => { node.dataset.blockReveal = 'visible'; }, {
+      after: [sheet], root: sheet, rootMargin: `-${headerHeight}px 0px 0px`, threshold: .2,
+    });
+  }, [review]);
   const format = useBlockFormat(units);
   const highlights = blockHighlights(review, 3), headline = blockHeadline(review);
   const [title, detail] = headlineCopy(review, headline, highlights[0], format);
@@ -109,7 +126,7 @@ export function BlockReviewSummary({ review, block, units, historical, onOutcome
     <h1>{review.name}</h1>
     <p className="block-review-dates">{plural(review.totalWeeks, 'week')} · {blockDateRange(review)}</p>
     {block?.historyCorrectedAt && <p className="sheet-footnote">Historical data changed after this block was reviewed. This summary reflects corrected history; approved plan decisions remain unchanged.</p>}
-    <section className={`block-review-hero is-${headline.kind}`} aria-labelledby="block-review-headline">
+    <section ref={heroRef} className={`block-review-hero is-${headline.kind}`} aria-labelledby="block-review-headline">
       <h2 id="block-review-headline">{title}</h2>
       {detail && <p>{detail}</p>}
       <WeekStrip weeks={review.weeks} />
@@ -122,7 +139,7 @@ export function BlockReviewSummary({ review, block, units, historical, onOutcome
     </section>
     {!!highlights.length && <section className="block-review-highlights" aria-labelledby="block-highlights-title">
       <h2 className="eyebrow" id="block-highlights-title">{highlights.length === 1 ? 'TOP RESULT' : 'TOP RESULTS'}</h2>
-      <ol>{highlights.map(item => <Highlight key={item.exerciseId} item={item} format={format} />)}</ol>
+      <ol ref={highlightsRef}>{highlights.map(item => <Highlight key={item.exerciseId} item={item} format={format} />)}</ol>
     </section>}
     {review.sessionFeedback && <p className="sheet-footnote session-feedback-block">{review.sessionFeedback.text}</p>}
     <button className="list-row block-review-outcomes-row" onClick={onOutcomes}>
@@ -156,7 +173,7 @@ export function BlockOutcomes({ review, units }) {
         {rows.map(row => {
           const change = improvementOf(row);
           return <article key={row.id}>
-            <ExerciseArt exerciseId={row.exerciseId} className="is-small" />
+            <ExerciseArt exerciseId={row.exerciseId} />
             <div>
               <h3>{row.name}{prs.has(row.exerciseId) && <PersonalBestTrophy />}</h3>
               {change ? <p><ChangePair row={row} format={format} /></p>

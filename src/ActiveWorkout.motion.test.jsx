@@ -152,6 +152,27 @@ it.each(['planned','freestyle'])('%s: acknowledges then crossfades one exercise 
   expect(navigation).not.toHaveBeenCalled(); advance(180);
   expect(document.querySelector('.workout-motion-paint')).toBeNull();
 });
+it('reveals the next exercise at the top after the skip sheet restores scroll', () => {
+  const state = fixture();
+  state.activeWorkout.exercises[0].sets[0].completed = false;
+  const scroller = document.scrollingElement || document.documentElement;
+  const previous = scroller.scrollTop;
+  const offset = 440;
+  vi.stubGlobal('scrollY', offset);
+  window.scrollTo.mockImplementation((_left, top) => { scroller.scrollTop = top; });
+  try {
+    mount(state);
+    scroller.scrollTop = offset;
+    click('NEXT EXERCISE →');
+    const skip = [...document.querySelectorAll('.workout-confirm button')]
+      .find(button => button.textContent === 'SKIP INCOMPLETE SET');
+    act(() => skip.click());
+    expect(current.activeWorkout.exerciseIndex).toBe(1);
+    advance(32);
+    expect(scroller.scrollTop).toBe(0);
+    expect(document.activeElement).toBe(host.querySelector('.exercise-heading h1'));
+  } finally { scroller.scrollTop = previous; }
+});
 it('final exercise stays active; timer rerenders do not replay exercise motion or remount inputs', () => {
   const state = fixture('planned',true); state.activeWorkout.exerciseIndex=2; mount(state);
   expect(find('NEXT EXERCISE →')).toBeUndefined(); expect(find('FINISH WORKOUT')).toBeTruthy();

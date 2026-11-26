@@ -3,7 +3,8 @@ import {cancelActiveWorkout, hasMeaningfulSessionWork} from './workoutCancellati
 import {calendarStatusFixture} from './calendarStatus.fixture.js';
 import {startWorkout, plannedWorkoutForDate, completeWorkout, workoutSetSummary, saveState, loadState, deserializeState, saveActiveExercisePersonalNote} from './domain.js';
 import {startFreestyleWorkout, addFreestyleExercise, undoFreestyleAddition} from './freestyleWorkout.js';
-import {flexibleOccurrenceForDate, proposeFlexibleWeek, applyFlexibleWeek} from './flexibleWeek.js';
+import {flexibleOccurrenceForDate, missedFlexibleSessions, proposeFlexibleWeek, applyFlexibleWeek} from './flexibleWeek.js';
+import {dismissMissedReminder, isMissedReminderHidden} from './missedWorkoutActions.js';
 import {calendarDayPresentation} from './workoutCalendar.js';
 import {repeatedRestartFixture} from './restartWorkout.fixture.js';
 const today='2026-09-21';
@@ -26,7 +27,7 @@ it.each(['empty','logged'])('freestyle %s discards exactly the active session an
 it.each([today,'2026-09-23','2026-09-18'])('planned %s becomes canonically unresolved, without changing its dates or plan',date=>{
   const s=logFour(planned(date)),before=structuredClone(s),next=cancel(s);
   expect(next.workouts).toBe(s.workouts);expect(next.program).toBe(s.program);expect(s).toEqual(before);
-  expect(next.selectedDate).toBe(date);expect(flexibleOccurrenceForDate(next,date).status).toBe(date<today?'missed':'planned');
+  expect(next.selectedDate).toBe(date<today?today:date);expect(flexibleOccurrenceForDate(next,date).status).toBe(date<today?'missed':'planned');
   const calendar=calendarDayPresentation(next,[today,date]);expect(calendar[today].markers).not.toContain('active');expect(calendar[today].markers).not.toContain('completed');
 });
 it('early Tuesday source started on Monday returns to Tuesday, and Monday has no credit',()=>{
@@ -97,4 +98,41 @@ it('combined cancellation releases source reservations even with logged work, wi
 it('successful durable cancellation does not recover an active session after reload',()=>{
   const s=logFour(planned());expect(saveState(s)).toBe(true);expect(saveState(cancel(s))).toBe(true);
   const loaded=loadState();expect(loaded.activeWorkout).toBeNull();expect(loaded.workouts).toEqual(s.workouts);
+});
+it.each(['empty','logged'])('a cancelled %s workout appears as missed the following day after reload',kind=>{
+  const state=planned(),id=state.activeWorkout.logicalSessionId;
+  if(kind==='logged')logFour(state);
+  expect(saveState(cancel(state))).toBe(true);
+  vi.setSystemTime(new Date('2026-09-22T09:00:00'));
+  const loaded=loadState();
+  expect(loaded.activeWorkout).toBeNull();
+  expect(loaded.workouts).toEqual(state.workouts);
+  expect(missedFlexibleSessions(loaded).map(item=>item.logicalSessionId)).toContain(id);
+});
+it('after midnight cancellation shows Today with the unfinished occurrence in the backlog',()=>{
+  const state=logFour(planned()),id=state.activeWorkout.logicalSessionId;
+  vi.setSystemTime(new Date('2026-09-22T09:00:00'));
+  const next=cancelActiveWorkout(state,state.activeWorkout.id);
+  expect(next.selectedDate).toBe('2026-09-22');
+  expect(next.selectedDay).toBe('Tue');
+  expect(missedFlexibleSessions(next).map(item=>item.logicalSessionId)).toContain(id);
+});
+it('a cancelled moved workout resurfaces on the day after its new date even if the old reminder was dismissed',()=>{
+  let state=calendarStatusFixture();
+  const occurrence=flexibleOccurrenceForDate(state,today);
+  const scheduledDate='2026-09-22';
+  vi.setSystemTime(new Date(`${scheduledDate}T12:00:00`));
+  state=dismissMissedReminder(state,{persist:()=>true});
+  expect(isMissedReminderHidden(state)).toBe(true);
+  const moved=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'move',sessionId:occurrence.logicalSessionId,toDate:scheduledDate}));
+  expect(moved.status).toBe('applied');
+  state={...moved.state,selectedDate:scheduledDate};
+  state.activeWorkout=startWorkout(state,plannedWorkoutForDate(state,scheduledDate));
+  const next=cancelActiveWorkout(state,state.activeWorkout.id);
+  expect(next.flexibleWeek).toBe(state.flexibleWeek);
+  expect(next.workouts).toBe(state.workouts);
+  vi.setSystemTime(new Date('2026-09-23T12:00:00'));
+  const missed=missedFlexibleSessions(next);
+  expect(missed.map(item=>item.logicalSessionId)).toContain(occurrence.logicalSessionId);
+  expect(isMissedReminderHidden(next,missed)).toBe(false);
 });

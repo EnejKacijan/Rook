@@ -1,5 +1,5 @@
 import {
-  adaptTodayProposal,
+  fitWorkoutToTimeBudget,
   adaptedTemplateForToday,
   compatibleReplacementCandidates,
   estimateSessionMinutes,
@@ -11,7 +11,11 @@ import {
   searchExercises,
   isExerciseAllowed,
   isoDay,
+  calendarDate,
+  weekKey,
   plannedWorkoutForDate,
+  restoreOccurrenceOverride,
+  workoutAdjustmentForDate,
   userSelectableReplacementCandidates,
   uid,
 } from "./domain.js";
@@ -62,6 +66,7 @@ export function todayWorkoutFingerprint(workout, programVersion = null) {
   return JSON.stringify({
     programVersion: Number(programVersion || 1),
     id: workout.id,
+    logicalSessionId: workout.logicalSessionId ?? null,
     weekday: workout.weekday,
     warmupPlan: workout.warmupPlan || null,
     exercises: (workout.exercises || []).map(stableExerciseShape),
@@ -281,13 +286,8 @@ function adaptForLowEnergy(workout) {
   return adjusted;
 }
 
-function adaptForLessTime(state, workout, minutes, date) {
-  const proposal = adaptTodayProposal(
-    { ...state, todayAdaptation: null, activeWorkout: null },
-    minutes,
-    date,
-  );
-  if (!proposal) return clone(workout);
+function adaptForLessTime(state, workout, minutes) {
+  const proposal = fitWorkoutToTimeBudget(state, workout, minutes);
   const targets = new Map(
     proposal.setTargets.map((item) => [item.exerciseId, item.sets]),
   );
@@ -319,15 +319,11 @@ export function buildTodayAdjustment(
     manualReplacements = {},
   },
 ) {
+  date = calendarDate(date);
   const targetDate = isoDay(date);
-  if(combinedAdjustment(state) || state.todayAdaptation?.mode==='repeat')return {status:'unavailable',reason:'Finish or cancel the pending workout before preparing another adjustment.'};
-  if (targetDate !== isoDay())
-    return { status: "unavailable", reason: "Adjust Today is available for the current day only." };
-  if (state.activeWorkout || state.activeOptionalSession)
-    return { status: "unavailable", reason: "Finish the active session before adjusting today’s workout." };
   const planned = plannedWorkoutForDate(state, date);
-  if (!planned)
-    return { status: "unavailable", reason: "Today does not have a planned workout to adjust." };
+  const unavailable = manualTodayEligibility(state, targetDate, planned);
+  if (unavailable) return { status: 'unavailable', reason: unavailable };
   const original = clone(planned);
 
   let adjusted = clone(original);
@@ -339,13 +335,13 @@ export function buildTodayAdjustment(
       return { status: 'invalid', reason: 'Enter a whole number from 15 to 180 minutes.' };
     if (target >= roundedEstimate(createWorkoutDurationEstimator(state, original).estimate()))
       return { status: "unchanged", reason: "This workout already fits within that time." };
-    adjusted = adaptForLessTime(state, original, target, date);
+    adjusted = adaptForLessTime(state, original, target);
   } else if (mode === ADJUST_TODAY_MODES.lowEnergy) {
     adjusted = adaptForLowEnergy(original);
   } else if (mode === ADJUST_TODAY_MODES.equipment) {
     temporaryEquipment = [...new Set(equipment || [])];
     if (!temporaryEquipment.length)
-      return { status: "invalid", reason: "Choose the equipment available today." };
+      return { status: "invalid", reason: "Choose the equipment available for this workout." };
     const temporaryProfile = normalizeEquipmentProfile(state.profile, temporaryEquipment);
     ({ adjusted, unresolved } = adaptForEquipment(
       original,
@@ -372,7 +368,7 @@ export function buildTodayAdjustment(
       },
     ));
   } else {
-    return { status: "invalid", reason: "Choose what changed today." };
+    return { status: "invalid", reason: "Choose what changed for this workout." };
   }
 
   const timing = createWorkoutDurationEstimator(state, original);
@@ -405,7 +401,7 @@ export function buildTodayAdjustment(
         original,
         state.program?.version,
       ),
-      replacesAdaptationId: state.todayAdaptation?.id || null,
+      replacesAdaptationId: workoutAdjustmentForDate(state,targetDate,original)?.id || null,
       originalWorkout: clone(original),
       workout: adjusted,
       changes,
@@ -533,17 +529,17 @@ export function resolveTodayAdjustment(
 }
 
 export function todayAdjustmentConflict(state, proposal) {
-  if(combinedAdjustment(state)||state.todayAdaptation?.mode==='repeat')return 'workout-changed';
-  if (!proposal || proposal.date !== isoDay()) return "workout-changed";
+  if (!proposal) return "workout-changed";
   if (state.activeWorkout || state.activeOptionalSession) return "workout-started";
-  const current = plannedWorkoutForDate(state, new Date(`${proposal.date}T12:00:00`));
+  const current = plannedWorkoutForDate(state, calendarDate(proposal.date));
+  if (manualTodayEligibility(state, proposal.date, current)) return "workout-changed";
   if (!current || current.id !== proposal.programDayId) return "workout-changed";
   if (
     todayWorkoutFingerprint(current, state.program?.version) !==
     proposal.baseWorkoutFingerprint
   )
     return "workout-changed";
-  if ((state.todayAdaptation?.id || null) !== (proposal.replacesAdaptationId || null))
+  if ((workoutAdjustmentForDate(state,proposal.date,current)?.id || null) !== (proposal.replacesAdaptationId || null))
     return "workout-changed";
   return null;
 }
@@ -588,51 +584,65 @@ function adjustedWorkoutIsValid(proposal, state) {
 export function applyTodayAdjustment(state, proposal, appliedAt = Date.now()) {
   const conflict = todayAdjustmentConflict(state, proposal);
   if (conflict) return { status: "conflict", reason: conflict, state };
-  if (proposal.mode==='manual' && manualTodayEligibility(state,proposal.date)) return {status:'conflict',reason:'workout-changed',state};
   if (!proposal.meaningful || !adjustedWorkoutIsValid(proposal,state))
     return { status: "invalid", reason: "invalid-adjustment", state };
   const next = clone(state);
-  next.todayAdaptation = {
+  const saved = {
     ...clone(proposal),
     id: uid("today-adjustment"),
     proposalId: proposal.id,
     appliedAt,
     originalSessionIdentity: `${proposal.programDayId}:${proposal.date}`,
   };
+  const { date, programDayId } = proposal;
+  const previous = next.workoutOccurrenceOverrides?.[date]?.[programDayId];
+  if (date !== isoDay() || previous?.sessionAdjustment ||
+      next.todayAdaptation?.date > date) {
+    restoreOccurrenceOverride(next,{planDate:date,workoutId:programDayId,
+      previousOverride:{...previous,sessionAdjustment:{...saved,programId:next.program.id}}});
+    if (next.todayAdaptation?.date === date && next.todayAdaptation.programDayId === programDayId) next.todayAdaptation = null;
+  } else {
+    next.todayAdaptation = saved;
+  }
   return { status: "applied", state: next };
 }
 
-export function manualTodayEligibility(state,date=isoDay()) {
-  if(date!==isoDay())return 'Prepare the workout on its scheduled day, or move it to today first.';
+export function manualTodayEligibility(state,date=isoDay(),workout=plannedWorkoutForDate(state,calendarDate(date))) {
+  const today=isoDay();
+  if(!/^\d{4}-\d{2}-\d{2}$/.test(date) || isoDay(calendarDate(date))!==date || date<today || weekKey(date)!==weekKey(today))
+    return 'Choose an upcoming workout in this week.';
   if(state.activeWorkout||state.activeOptionalSession)return 'Finish the active session before preparing this workout.';
   if(combinedAdjustment(state)||state.todayAdaptation?.mode==='repeat')return 'Finish or cancel the pending workout first.';
-  const workout=plannedWorkoutForDate(state,new Date(`${date}T12:00:00`));
   const occurrence=workout&&flexibleOccurrenceForDate(state,date,workout.id);
   if(!workout||!occurrence||!['planned','missed'].includes(occurrence.status))return 'This occurrence is no longer available to prepare.';
   return null;
 }
 
-// A draft of the existing todayAdaptation transaction, never a second store.
 export function createManualTodayPreparation(state,date=isoDay()) {
-  const error=manualTodayEligibility(state,date);if(error)throw Error(error);
-  const original=plannedWorkoutForDate(state,new Date(`${date}T12:00:00`));
-  const workout=clone(adaptedTemplateForToday(state,new Date(`${date}T12:00:00`)));
+  const original=plannedWorkoutForDate(state,calendarDate(date));
+  const error=manualTodayEligibility(state,date,original);if(error)throw Error(error);
+  const existing=workoutAdjustmentForDate(state,date,original);
+  const workout=clone(adaptedTemplateForToday(state,calendarDate(date),original));
   delete workout.todayOnlyAdjustment;delete workout.adapted;
   return {schemaVersion:TODAY_ADJUSTMENT_VERSION,id:uid('today-adjustment-proposal'),date,programDayId:original.id,mode:'manual',
     baseProgramVersion:Number(state.program?.version||1),baseWorkoutFingerprint:todayWorkoutFingerprint(original,state.program?.version),
-    replacesAdaptationId:state.todayAdaptation?.id||null,originalWorkout:clone(original),workout,
-    temporaryEquipment:state.todayAdaptation?.temporaryEquipment||null,gymProfileId:state.todayAdaptation?.gymProfileId||null,
-    gymProfileName:state.todayAdaptation?.gymProfileName||null,changes:[],unresolved:[],meaningful:true};
+    replacesAdaptationId:existing?.id||null,originalWorkout:clone(original),workout,
+    temporaryEquipment:existing?.temporaryEquipment||null,gymProfileId:existing?.gymProfileId||null,
+    gymProfileName:existing?.gymProfileName||null,changes:[],unresolved:[],meaningful:true};
 }
 
-export function restoreOriginalTodayWorkout(state, date = new Date()) {
-  if (
-    state.activeWorkout ||
-    !state.todayAdaptation ||
-    state.todayAdaptation.date !== isoDay(date)
-  )
-    return { status: "unavailable", state };
+export function restoreOriginalTodayWorkout(state, date = new Date(), expectedId) {
+  const day = isoDay(calendarDate(date));
+  const workout = plannedWorkoutForDate(state,calendarDate(date));
+  const existing = workoutAdjustmentForDate(state,day,workout);
+  if (!existing || expectedId && existing.id !== expectedId || manualTodayEligibility(state,day,workout))
+    return { status: 'unavailable', state };
   const next = clone(state);
-  next.todayAdaptation = null;
+  if (next.todayAdaptation?.id === existing.id) next.todayAdaptation = null;
+  const override = next.workoutOccurrenceOverrides?.[day]?.[workout.id];
+  if (override?.sessionAdjustment) {
+    delete override.sessionAdjustment;
+    if (!Object.keys(override).length) restoreOccurrenceOverride(next,{planDate:day,workoutId:workout.id});
+  }
   return { status: "restored", state: next };
 }

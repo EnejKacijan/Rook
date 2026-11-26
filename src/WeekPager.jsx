@@ -4,6 +4,7 @@ import {isoDay, weekDate, weekday, WEEKDAYS} from './domain.js';
 import {calendarDayPresentation} from './workoutCalendar.js';
 import {CalendarIcon, CalendarStatusSlot} from './MonthCalendar.jsx';
 import {bindWeekPager} from './weekPager.js';
+import {useContextPress} from './useContextPress.js';
 
 export function weekLabel(date) {
   const monday = weekDate('Mon', date), sunday = weekDate('Sun', date);
@@ -14,26 +15,31 @@ export function weekLabel(date) {
     : `${month(monday)} ${day(monday)}–${month(sunday)} ${day(sunday)}`;
 }
 
-export function WeekStrip({page, selected, today, selectDate, dayLabel=day=>day}) {
+function WeekDay({day,date,dateKey,status,pageOffset,selected,today,selectDate,openDayOptions,dayLabel}) {
+  const isSelected = dateKey === selected, isToday = dateKey === today;
+  const options = useContextPress(!pageOffset && openDayOptions ? target=>openDayOptions(dateKey,target) : null);
+  const workoutState = status.statuses.includes('completed') ? 'workout-completed'
+    : status.planned || status.markers.length ? 'workout-planned' : 'workout-rest';
+  return <button type="button" {...options}
+    tabIndex={pageOffset ? -1 : undefined}
+    aria-label={`${dayLabel(day,date)} ${date.getDate()}${isToday ? ', today' : ''}, ${status.label}`}
+    aria-current={isToday ? 'date' : undefined} aria-pressed={isSelected}
+    className={`${isSelected ? 'selected-day' : ''} ${isToday ? 'today-date' : ''} ${workoutState}`}
+    onClick={() => { if (!pageOffset && !isSelected) selectDate(day, date); }}>
+    <small>{day[0]}</small><CalendarStatusSlot statuses={status.markers} week/><strong>{date.getDate()}</strong>
+  </button>;
+}
+
+export function WeekStrip({page, selected, today, selectDate, openDayOptions, dayLabel=day=>day}) {
   return <div className="week-strip" aria-label={page.label}>
-    {page.days.map(({day, date, key, status}) => {
-      const isSelected = key === selected, isToday = key === today;
-      const workoutState = status.statuses.includes('completed') ? 'workout-completed'
-        : status.planned || status.markers.length ? 'workout-planned' : 'workout-rest';
-      return <button key={day} type="button"
-        tabIndex={page.offset ? -1 : undefined}
-        aria-label={`${dayLabel(day,date)} ${date.getDate()}${isToday ? ', today' : ''}, ${status.label}`}
-        aria-current={isToday ? 'date' : undefined} aria-pressed={isSelected}
-        className={`${isSelected ? 'selected-day' : ''} ${isToday ? 'today-date' : ''} ${workoutState}`}
-        onClick={() => { if (!page.offset && !isSelected) selectDate(day, date); }}>
-        <small>{day[0]}</small><CalendarStatusSlot statuses={status.markers} week/><strong>{date.getDate()}</strong>
-      </button>;
-    })}
+    {page.days.map(({day,date,key,status})=><WeekDay key={key} day={day} date={date} dateKey={key} status={status}
+      pageOffset={page.offset} selected={selected} today={today} selectDate={selectDate}
+      openDayOptions={openDayOptions} dayLabel={dayLabel}/>)}
   </div>;
 }
 
 export function WeekPager({state, date, canGoBack, canGoForward, selectDate, onCommit,
-  programName, openCalendar, calendarOpen}) {
+  programName, openCalendar, calendarOpen, openDayOptions}) {
   const root = useRef(null), viewport = useRef(null), track = useRef(null), labelTrack = useRef(null);
   const controller = useRef(null), options = useRef(null);
   const selected = isoDay(date), today = isoDay();
@@ -86,7 +92,7 @@ export function WeekPager({state, date, canGoBack, canGoForward, selectDate, onC
       <div className="week-pager-track" ref={track}>
         {pages.map(page => <div key={page.offset} className="week-pager-page" data-week-offset={page.offset}
           style={{order: page.offset + 1}} aria-hidden={page.offset ? true : undefined} inert={page.offset ? '' : undefined}>
-          {available(page) && <WeekStrip page={page} selected={selected} today={today} selectDate={selectDate}/>}
+          {available(page) && <WeekStrip page={page} selected={selected} today={today} selectDate={selectDate} openDayOptions={openDayOptions}/>}
         </div>)}
       </div>
     </div>

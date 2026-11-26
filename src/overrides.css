@@ -1274,10 +1274,7 @@ body {
   white-space: nowrap !important;
   border: 0 !important;
 }
-.today-exercise-actions-sheet {
-  padding: 24px var(--rook-sheet-content-inline) var(--rook-sheet-safe-bottom);
-}
-.today-exercise-actions-sheet:not(.confirming) > h2 { margin: 16px 42px 18px 0; }
+.today-exercise-actions-sheet .sheet-scroll > h2 { margin-bottom: 16px; line-height: 1.2; }
 .today-exercise-actions-sheet .choice-row { min-height: 60px; }
 
 /* Adjust Today reuses the standard detail-sheet scaffold and ROOK controls. */
@@ -2326,4 +2323,3 @@ button.today-block-week:focus-visible { outline: 2px solid var(--rook-accent); o
   z-index: 1;
 }
 .modal-layer > .sheet > .detail-header > strong { pointer-events: none; }
-.today-exercise-actions-sheet > .sheet-header-chrome { margin-top: -24px; }

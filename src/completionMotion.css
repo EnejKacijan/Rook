@@ -10,23 +10,22 @@
     --cm-ease: var(--rook-ease-release, cubic-bezier(.2, .8, .2, 1));
     --cm-spring: cubic-bezier(.34, 1.56, .64, 1);
     --cm-base: 0ms;
+    --cm-badge-delay: var(--rook-motion-state, 200ms);
   }
   .complete-screen.fully-completed.is-live-completion { --cm-base: 260ms; }
 
-  /* Hero: badge pops, a ring pulses out, the check draws itself. */
+  /* The badge begins after the workout-to-complete fade. */
   /* An early finish gets the calm rise only, never the celebration. */
   .is-live-completion .completion-badge {
     position: relative;
-    animation: cm-badge-pop 560ms var(--cm-spring) 40ms backwards;
+    animation: cm-badge-pop 560ms var(--cm-spring) var(--cm-badge-delay) backwards;
   }
   .is-live-completion .completion-badge::after {
     content: ""; position: absolute; inset: -1px; border-radius: 50%;
     border: 2px solid var(--rook-accent, currentColor); pointer-events: none;
-    opacity: 0; animation: cm-ring 760ms var(--cm-ease) 200ms;
+    opacity: 0; animation: cm-ring 760ms var(--cm-ease) calc(var(--cm-badge-delay) + 80ms);
   }
-  .is-live-completion .completion-badge-check { animation: cm-draw 380ms var(--cm-ease) 230ms backwards; }
-  .is-live-completion .completion-eyebrow { display: block; animation: cm-rise var(--cm-rise) var(--cm-ease) 110ms backwards; }
-  .is-live-completion .completion-hero h1 { animation: cm-rise var(--cm-rise) var(--cm-ease) 160ms backwards; }
+  .is-live-completion .completion-badge-check { animation: cm-draw 380ms var(--cm-ease) calc(var(--cm-badge-delay) + 100ms) backwards; }
   .is-live-completion .completion-summary { animation: cm-rise var(--cm-rise) var(--cm-ease) 220ms backwards; }
 
   /* Everything after the hero follows in order, 70 ms apart, capped so the

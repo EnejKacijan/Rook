@@ -107,6 +107,9 @@ export function normalizeGymProfilesState(state, now = new Date().toISOString())
     target.gymProfileMissing = true;
   };
   repairReference(state.todayAdaptation);
+  for (const workouts of Object.values(state.workoutOccurrenceOverrides || {})) {
+    for (const override of Object.values(workouts || {})) repairReference(override?.sessionAdjustment);
+  }
   repairReference(state.activeWorkout?.adjustment);
   for (const workout of state.workouts || []) repairReference(workout?.adjustment);
   return state;

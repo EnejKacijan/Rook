@@ -69,6 +69,32 @@ it('offers a working free-date picker when a linked original date belongs to a c
   expect(current.flexibleWeek.sessions[b.logicalSessionId].scheduledDate).toBe('2026-11-19');expect(current.workouts).toEqual(history);expect(closed).toHaveBeenCalledOnce();
 });
 
+it('can change just one day after shifting the week and return to the updated changes',()=>{
+  const state=shifted(),id=byDate(state,'2026-11-20').logicalSessionId;
+  const others=Object.entries(state.flexibleWeek.sessions).filter(([sessionId])=>sessionId!==id);
+  mount(state);
+  const changeDay=()=>act(()=>row(id).querySelector('.schedule-change-day-action').click());
+  const date=value=>host.querySelector(`[data-move-date="${value}"]`);
+  expect(row(id).textContent).toContain('Revert move');
+  changeDay();
+  expect(date('2026-11-20').disabled).toBe(true);
+  expect(date('2026-11-22').disabled).toBe(true);
+  act(()=>date('2026-11-21').click());
+  click('CANCEL');
+  expect(row(id).textContent).toContain('Now Sun, Nov 22');
+  expect(persist).not.toHaveBeenCalled();
+
+  changeDay();
+  expect(button('MOVE WORKOUT').disabled).toBe(true);
+  act(()=>date('2026-11-21').click());
+  click('MOVE WORKOUT');
+  expect(row(id).textContent).toContain('Now Sat, Nov 21');
+  expect(current.flexibleWeek.sessions[id]).toMatchObject({originalDate:'2026-11-20',scheduledDate:'2026-11-21'});
+  expect(Object.entries(current.flexibleWeek.sessions).filter(([sessionId])=>sessionId!==id)).toEqual(others);
+  expect(persist).toHaveBeenCalledOnce();
+  expect(closed).not.toHaveBeenCalled();
+});
+
 it('rejects a confirmation after an external change and returns to the updated overview',()=>{
   const state=shifted(),id=byDate(state,'2026-11-16').logicalSessionId;mount(state);revert(id);
   act(()=>external(value=>applyFlexibleWeek(value,proposeFlexibleWeek(value,{mode:'move',sessionId:id,toDate:'2026-11-19'})).state));
@@ -85,6 +111,7 @@ it('shows reset of a past-date adjustment before confirmation and lets the user 
 
 it('allows a simple skip to be reverted from the same overview',()=>{
   let state=fixture();const item=byDate(state,'2026-11-20');state=applyFlexibleWeek(state,proposeFlexibleWeek(state,{mode:'skip',sessionId:item.logicalSessionId})).state;mount(state);
+  expect(row(item.logicalSessionId).querySelector('.schedule-change-day-action')).toBeNull();
   expect(row(item.logicalSessionId).textContent).toContain('Revert skip');revert(item.logicalSessionId);click('REVERT CHANGE');expect(byDate(current,'2026-11-20').status).toBe('planned');expect(current.program).toEqual(state.program);
 });
 

@@ -5,6 +5,7 @@ import {applyTodayAdjustment,createManualTodayPreparation} from './adjustToday.j
 import {applyWorkoutToday,proposeWorkoutToday} from './useWorkoutToday.js';
 import {scheduleRevisionUndo,undoScheduleRevision} from './scheduleTransactions.js';
 import {buildBackupArchive,parseBackupArchive} from './backup.js';
+import {missedWeekShift} from './missedWeekShift.js';
 
 beforeEach(()=>{vi.useFakeTimers();vi.setSystemTime(new Date('2026-11-18T12:00:00'));});
 afterEach(()=>vi.useRealTimers());
@@ -24,11 +25,11 @@ function finish(state,date){
   return deserializeState(serializeState(completeWorkout(state)),{strict:true});
 }
 
-it('inserts the missed workout into the next planned slot and shifts only this week in one transaction',()=>{
+it('shifts each workout by the same two days in one transaction',()=>{
   const state=fixture(),before=serializeState(state),future=nextWeek(state),proposal=propose(state);
   expect(proposal.status).toBe('ready');expect(proposal.changes.map(item=>[item.fromDate,item.toDate])).toEqual([
     ['2026-11-16','2026-11-18'],['2026-11-18','2026-11-20'],['2026-11-20','2026-11-22']]);
-  expect(proposal.recoveryShift.extraDates).toEqual(['2026-11-22']);expect(serializeState(state)).toBe(before);
+  expect(proposal.recoveryShift.dayOffset).toBe(2);expect(serializeState(state)).toBe(before);
   const next=deserializeState(serializeState(apply(state,proposal)),{strict:true});
   expect(next.program).toEqual(state.program);expect(next.workouts).toEqual(state.workouts);expect(nextWeek(next)).toEqual(future);
   expect(temporaryScheduleReview(next).unresolved).toEqual([]);expect(next.selectedDate).toBe('2026-11-18');
@@ -36,16 +37,29 @@ it('inserts the missed workout into the next planned slot and shifts only this w
   const undone=undoScheduleRevision(next,scheduleRevisionUndo(state,next));expect(undone.flexibleWeek.sessions).toEqual({});expect(nextWeek(undone)).toEqual(future);
 });
 
-it('allows choosing Saturday explicitly and rejects occupied, duplicate and next-week extras',()=>{
-  const state=fixture();expect(propose(state,{extraDates:['2026-11-21']}).changes.at(-1).toDate).toBe('2026-11-21');
-  for(const extraDates of [['2026-11-20'],['2026-11-23'],['2026-11-21','2026-11-21'],[]])expect(propose(state,{extraDates}).status).toBe('conflict');
+it('offers a choice of start days, with one calendar offset for the entire shift',()=>{
+  vi.setSystemTime(new Date('2026-11-17T12:00:00'));
+  const state=fixture(),proposal=propose(state);
+  expect(proposal.recoveryShift.startDateOptions).toEqual(['2026-11-17','2026-11-18']);
+  expect(proposal.changes.map(item=>item.toDate)).toEqual(['2026-11-17','2026-11-19','2026-11-21']);
+  expect(propose(state,{shiftStartDate:'2026-11-18'}).changes.map(item=>item.toDate)).toEqual(['2026-11-18','2026-11-20','2026-11-22']);
+  for(const shiftStartDate of ['2026-11-16','2026-11-19','2026-11-23',null])expect(propose(state,{shiftStartDate}).status).toBe('conflict');
 });
 
-it('keeps later missed workouts in order and proposes enough extra days instead of dropping them',()=>{
-  const state=fixture();vi.setSystemTime(new Date('2026-11-19T12:00:00'));
+it('moves the whole shift one day later when Saturday is occupied',()=>{
+  vi.setSystemTime(new Date('2026-11-17T12:00:00'));
+  const state=fixture(),missed=source(state);
+  const saturday={logicalSessionId:'fixed-saturday',scheduledDate:'2026-11-21',status:'reserved'};
+  const shift=missedWeekShift(state,missed,[...flexibleSessions(state),saturday],'2026-11-17');
+  expect(shift.status).toBe('ready');
+  expect(shift.details.startDateOptions).toEqual(['2026-11-18']);
+  expect(shift.moves.map(item=>item.toDate)).toEqual(['2026-11-18','2026-11-20','2026-11-22']);
+});
+
+it('keeps later missed workouts in order at their original intervals',()=>{
+  const state=fixture(['Mon','Tue','Thu']);
   const proposal=propose(state);expect(proposal.status).toBe('ready');
-  expect(proposal.changes.map(item=>item.toDate)).toEqual(['2026-11-20','2026-11-21','2026-11-22']);
-  expect(proposal.recoveryShift.extraDates).toEqual(['2026-11-21','2026-11-22']);
+  expect(proposal.changes.map(item=>item.toDate)).toEqual(['2026-11-18','2026-11-19','2026-11-21']);
   const next=apply(state,proposal);expect(new Set(Object.values(next.flexibleWeek.sessions).map(item=>item.scheduledDate)).size).toBe(3);
 });
 
@@ -92,10 +106,20 @@ it('does not advertise a shift that cannot finish this week or that has an activ
   }
 });
 
-it('uses a free gap when the final planned workout already occupies Sunday',()=>{
+it('declines to compress the gaps when a shift would move the last workout past Sunday',()=>{
   const state=fixture(['Mon','Wed','Sun']),proposal=propose(state);
-  expect(proposal.status).toBe('ready');expect(proposal.changes.map(item=>item.toDate)).toEqual(['2026-11-18','2026-11-20']);
-  const next=apply(state,proposal);expect(plannedWorkoutForDate(next,'2026-11-22').id).toBe(state.program.days[2].id);
+  expect(proposal.status).toBe('conflict');expect(proposal.error).toContain('keeping their spacing');
+});
+
+it('preserves both the consecutive pair and the longer gap in a mixed schedule',()=>{
+  vi.setSystemTime(new Date('2026-11-17T12:00:00'));
+  const state=fixture(['Mon','Tue','Fri']),proposal=propose(state);
+  expect(proposal.status).toBe('ready');
+  expect(proposal.changes.map(item=>[item.fromDate,item.toDate])).toEqual([
+    ['2026-11-16','2026-11-17'],['2026-11-17','2026-11-18'],['2026-11-20','2026-11-21']]);
+  const next=apply(state,proposal);
+  expect(plannedWorkoutForDate(next,'2026-11-21').id).toBe(state.program.days[2].id);
+  expect(nextWeek(next)).toEqual(nextWeek(state));
 });
 
 it('corrects logical order after a recovery displaced a workout past another planned session',()=>{
@@ -104,17 +128,16 @@ it('corrects logical order after a recovery displaced a workout past another pla
   state=finish(state,'2026-11-17');const history=structuredClone(state.workouts);
   const proposal=proposeFlexibleWeek(state,{mode:'recover-week',sessionId:id});expect(proposal.status).toBe('ready');
   expect(proposal.changes.map(item=>[item.originalDate,item.toDate])).toEqual([
-    ['2026-11-17','2026-11-18'],['2026-11-18','2026-11-20'],['2026-11-20','2026-11-22']]);
+    ['2026-11-17','2026-11-18'],['2026-11-18','2026-11-19'],['2026-11-20','2026-11-21']]);
   const next=apply(state,proposal);expect(next.workouts).toEqual(history);expect(proposeFlexibleWeek(next,{mode:'recover-week',sessionId:id}).status).toBe('conflict');
 });
 
-it('can reuse the displaced workout\'s freed date while leaving a planned Sunday intact',()=>{
+it('does not repack the rest of the week when the completed workout anchors a shift past Sunday',()=>{
   vi.setSystemTime(new Date('2026-11-17T12:00:00'));let state=fixture(['Mon','Tue','Fri','Sun']),id=source(state).logicalSessionId;
   state=applyWorkoutToday(state,proposeWorkoutToday(state,{sessionId:id,displacedToDate:'2026-11-21'}),{persist:()=>true});
   state=finish(state,'2026-11-17');
-  const proposal=proposeFlexibleWeek(state,{mode:'recover-week',sessionId:id});expect(proposal.status).toBe('ready');
-  expect(proposal.changes.map(item=>[item.originalDate,item.toDate])).toEqual([['2026-11-17','2026-11-20'],['2026-11-20','2026-11-21']]);
-  const next=apply(state,proposal);expect(plannedWorkoutForDate(next,'2026-11-22').id).toBe(state.program.days[3].id);expect(temporaryScheduleReview(next).unresolved).toEqual([]);
+  const before=serializeState(state),proposal=proposeFlexibleWeek(state,{mode:'recover-week',sessionId:id});
+  expect(proposal.status).toBe('conflict');expect(proposal.error).toContain('keeping their spacing');expect(serializeState(state)).toBe(before);
 });
 
 it('rejects stale, changed-day and tampered previews without partial writes',()=>{
@@ -142,6 +165,7 @@ for(const days of [['Mon','Thu'],['Mon','Wed','Fri'],['Mon','Tue','Thu','Sat'],[
       expect(planner.check(request).status).toBe(preview.status);
       if(preview.status!=='ready')continue;
       expect(preview.changes.every(item=>item.toDate>=today&&item.toDate<='2026-11-22')).toBe(true);
+      expect(preview.changes.every(item=>item.toDate===addCalendarDays(item.fromDate,preview.recoveryShift.dayOffset))).toBe(true);
       const next=deserializeState(serializeState(apply(state,preview)),{strict:true});
       expect(temporaryScheduleReview(next).unresolved).toEqual([]);expect(nextWeek(next)).toEqual(future);
       expect(next.workouts).toEqual(state.workouts);expect(next.program).toEqual(state.program);

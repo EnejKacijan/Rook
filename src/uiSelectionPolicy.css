@@ -1,5 +1,4 @@
-/* Controls and short app chrome are UI, while content and editing surfaces
-   retain native copying. Never put this policy on the app/body or a wildcard. */
+/* Controls and short app chrome do not select text in either display mode. */
 :where(button, [role="button"], [role="tab"], [role="menuitem"], summary,
   .rook-ui, .eyebrow, .bottom-nav, .detail-header, .screen-top, .workout-header,
   .week-selector, .month-calendar-grid, .calendar-status-mark, .set-labels,
@@ -11,11 +10,16 @@
   -webkit-tap-highlight-color: transparent;
 }
 
-/* Explicit escape hatches also work inside a non-selectable control surface.
-   Genuine detail prose, notes and import/export text otherwise inherit normal
-   browser behavior because their containers never opt into the UI policy. */
-:where(input, textarea, [contenteditable="true"], .rook-selectable,
-  .coach-message p, .user-message, pre, code) {
+/* The installed app treats display text as UI. Editing fields still use the
+   system text selection and editing actions, including paste for imports. */
+:root[data-rook-standalone] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+:where(input, textarea, [contenteditable="true"], [contenteditable=""], [contenteditable="plaintext-only"]),
+:root:not([data-rook-standalone]) :where(.rook-selectable, .coach-message p, .user-message, pre, code) {
   -webkit-user-select: text;
   user-select: text;
   -webkit-touch-callout: default;

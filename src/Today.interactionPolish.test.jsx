@@ -73,7 +73,7 @@ it('Today optional rows, Rest Day actions and Profile navigation use the shared 
   const state=createTrainingReviewState(blankState());
   state.optionalSessions=[{id:'walking',date:state.selectedDate,status:'completed',kind:'Cardio',activity:'Walking',intensity:'Easy',elapsedSeconds:65}];
   renderToday(state);
-  for(const selector of ['.rest-day-action','.optional-session-note']) expect(host.querySelector(selector).classList.contains('rook-ui')).toBe(true);
+  for(const selector of ['.rest-day-actions .today-secondary-action','.optional-session-note']) expect(host.querySelector(selector).classList.contains('rook-ui')).toBe(true);
   draw(<Profile state={state} update={()=>{}} setDetail={()=>{}} setPage={()=>{}}/>);
   expect(host.querySelector('[data-profile-area="preferences"]').classList.contains('exercise-row-feedback')).toBe(true);
 });

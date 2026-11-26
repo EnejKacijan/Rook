@@ -34,8 +34,9 @@ export function hasMeaningfulSessionWork(active) {
 export function cancelActiveWorkout(state, sessionId, today = isoDay()) {
   const active = state.activeWorkout;
   if (!sessionId || active?.id !== sessionId) return state;
-  const selectedDate = active.source === 'freestyle' || active.source === 'repeat'
-    ? today : workoutPlanDate(active) || today;
+  const scheduledDate = active.source === 'freestyle' || active.source === 'repeat'
+    ? null : workoutPlanDate(active);
+  const selectedDate = scheduledDate && scheduledDate > today ? scheduledDate : today;
   const next = {...state, activeWorkout: null, selectedDate, selectedDay: weekday(`${selectedDate}T12:00:00`)};
   // Release only reservations owned by this execution, never an unrelated
   // adjustment, schedule override, completed record or remembered preference.
