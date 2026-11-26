@@ -33602,7 +33602,7 @@
       ],
       "usage": "regeneration_master",
       "movementIds": [],
-      "sha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe",
+      "sha256": "d16b037bf64ed4aea332bd258ae30c221b69f6098533ad01974292b6b4dd7cdb",
       "provenanceType": "rook_ai_generated",
       "sourceUrl": null,
       "creator": "AI generation for ROOK",
@@ -33616,18 +33616,18 @@
       "evidence": [
         {
           "type": "generation_record",
-          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "manifest": "artifacts/unilateral-exercise-art/hip-thrust-face-revision/generated-sources.json",
           "key": "single-leg-hip-thrust",
-          "sourceSha256": "b2e4119c3011b0d7a3a5181e39bcdffcf130afbbaeeaa4b525a99b217c8dc8ff",
+          "sourceSha256": "1d01520ceec9eb2da780bfd4fc3ce160af5ebc78e5cc7db8543e0e7f5ca47b34",
           "generationOriginRecorded": true,
           "workflow": "docs/exercise-illustration-system.md"
         }
       ],
       "notes": [
-        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+        "Redrew the face in line art to remove muddy shading and keep the profile legible at thumbnail size."
       ],
       "generationTool": "Codex built-in imagegen",
-      "canonicalSha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe"
+      "canonicalSha256": "d16b037bf64ed4aea332bd258ae30c221b69f6098533ad01974292b6b4dd7cdb"
     },
     {
       "assetId": "wg-rook-single-leg-hip-thrust",
@@ -33638,7 +33638,7 @@
       "relatedExerciseIds": [],
       "usage": "runtime_exercise",
       "movementIds": [],
-      "sha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe",
+      "sha256": "d16b037bf64ed4aea332bd258ae30c221b69f6098533ad01974292b6b4dd7cdb",
       "provenanceType": "rook_ai_generated",
       "sourceUrl": null,
       "creator": "AI generation for ROOK",
@@ -33652,23 +33652,23 @@
       "evidence": [
         {
           "type": "generation_record",
-          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "manifest": "artifacts/unilateral-exercise-art/hip-thrust-face-revision/generated-sources.json",
           "key": "single-leg-hip-thrust",
-          "sourceSha256": "b2e4119c3011b0d7a3a5181e39bcdffcf130afbbaeeaa4b525a99b217c8dc8ff",
+          "sourceSha256": "1d01520ceec9eb2da780bfd4fc3ce160af5ebc78e5cc7db8543e0e7f5ca47b34",
           "generationOriginRecorded": true,
           "workflow": "docs/exercise-illustration-system.md"
         },
         {
           "type": "identical_reviewed_master",
           "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-hip-thrust.svg",
-          "sha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe"
+          "sha256": "d16b037bf64ed4aea332bd258ae30c221b69f6098533ad01974292b6b4dd7cdb"
         }
       ],
       "notes": [
-        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+        "Redrew the face in line art to remove muddy shading and keep the profile legible at thumbnail size."
       ],
       "generationTool": "Codex built-in imagegen",
-      "canonicalSha256": "c5a193c4e9c4da536b2732c44c450d8cc7fe2e00dc1b877d41a02f4b28d459fe"
+      "canonicalSha256": "d16b037bf64ed4aea332bd258ae30c221b69f6098533ad01974292b6b4dd7cdb"
     },
     {
       "assetId": "master-consistent:wg-rook-single-leg-leg-press-calf-raise",
