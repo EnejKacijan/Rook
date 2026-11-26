@@ -107,12 +107,12 @@ for (const [appearance, style, themeColor, accent] of combinations) {
   );
 
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await openProfileArea(page, 'preferences');
+  await openProfileArea(page, 'display');
   assert.match(
     await page.getByRole("button", { name: /^Appearance/ }).innerText(),
     new RegExp(`ROOK ${style === "premium" ? "Gold" : "Green"}.*${appearance}.*Illustrations on`, "i"),
   );
-  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'display'); await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await page.locator(".theme-choice-layer").count(), 0);
   assert.equal(await page.getByRole("radiogroup", { name: "Theme" }).count(), 1);
   assert.equal(
@@ -120,7 +120,7 @@ for (const [appearance, style, themeColor, accent] of combinations) {
     "true",
   );
   assert.equal(await page.locator(".appearance-style-choice").count(), 0);
-  assert.match(await page.getByRole("button", { name: /^Personal themes/ }).innerText(),
+  assert.match(await page.getByRole("button", { name: /^Choose a theme/ }).innerText(),
     new RegExp(`ROOK ${style === "premium" ? "Gold" : "Green"}`, "i"));
   const targets = await page.locator('.appearance-theme-group [role="radio"], .appearance-palettes-group > button').evaluateAll(
     (items) => items.map((item) => ({ width: item.getBoundingClientRect().width, height: item.getBoundingClientRect().height })),
@@ -175,10 +175,10 @@ for (const legacy of ["system", "light", "dark", "premium"]) {
 {
   const { context, page, errors } = await open(fixture("light", "standard"));
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'display'); await page.getByRole("button", { name: /^Appearance/ }).click();
   const illustrations = page.getByRole("switch", { name: "Exercise illustrations" });
   await illustrations.uncheck({ force: true });
-  await page.getByRole("button", { name: /^Personal themes/ }).click();
+  await page.getByRole("button", { name: /^Choose a theme/ }).click();
   await page.getByRole("button", { name: "ROOK Gold", exact: true }).click();
   await page.getByRole("button", { name: "Apply theme", exact: true }).click();
   await page.locator('.pro-theme-studio').waitFor({ state: 'hidden' });
@@ -186,12 +186,12 @@ for (const legacy of ["system", "light", "dark", "premium"]) {
   assert.equal(await page.locator(".modal-layer").count(), 1, "theme Apply keeps Appearance open");
   await page.getByRole("button", { name: "Close Appearance" }).click();
   assert.match(await page.getByRole("button", { name: /^Appearance/ }).innerText(), /ROOK Gold.*Light.*Illustrations off/i);
-  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'display'); await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await illustrations.isChecked(), false, "illustration preference survives reopening");
   await page.reload({ waitUntil: "networkidle" });
   assert.equal(await page.locator("html").getAttribute("data-style"), "premium");
   await page.getByRole("button", { name: "PROFILE", exact: true }).click();
-  await openProfileArea(page, 'preferences'); await page.getByRole("button", { name: /^Appearance/ }).click();
+  await openProfileArea(page, 'display'); await page.getByRole("button", { name: /^Appearance/ }).click();
   assert.equal(await page.getByRole("switch", { name: "Exercise illustrations" }).isChecked(), false);
   assert.deepEqual(errors, []);
   await context.close();
