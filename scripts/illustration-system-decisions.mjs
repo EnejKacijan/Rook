@@ -153,7 +153,7 @@ export const systemApprovedRedraws = {
   "rook-single-leg-lying-leg-curl": "Single-Leg Lying Leg Curl; side view separates both legs and shows the roller against the working ankle.",
   "rook-single-leg-seated-leg-curl": "Single-Leg Seated Leg Curl; working side, equipment and thumbnail silhouette reviewed.",
   "rook-single-leg-hip-thrust": "Single-Leg Hip Thrust; working side, equipment and thumbnail silhouette reviewed.",
-  "rook-single-leg-leg-press-calf-raise": "Single-Leg Leg Press Calf Raise; working side, equipment and thumbnail silhouette reviewed.",
+  "rook-single-leg-leg-press-calf-raise": "Single-Leg Leg Press Calf Raise; working shoe shows forefoot contact at the lower edge of the plate with the heel clear.",
   "rook-single-leg-seated-calf-raise": "Single-Leg Seated Calf Raise; working side, equipment and thumbnail silhouette reviewed.",
   'seated-leg-curl': 'Seated hamstring curl starting position with underside Achilles roller and thigh restraint, not front-shin leg extension pad.',
   'treadmill-incline-walk': 'Reviewed treadmill incline walk with canonical anatomical lines and activity-specific equipment.',

@@ -33679,7 +33679,7 @@
       ],
       "usage": "regeneration_master",
       "movementIds": [],
-      "sha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2",
+      "sha256": "32aec215a78d12474fe842e4d58f2a90fd87ba71f8776f706be6f7507926c597",
       "provenanceType": "rook_ai_generated",
       "sourceUrl": null,
       "creator": "AI generation for ROOK",
@@ -33693,18 +33693,18 @@
       "evidence": [
         {
           "type": "generation_record",
-          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "manifest": "artifacts/unilateral-exercise-art/leg-press-calf-raise-shoe-revision/generated-sources.json",
           "key": "single-leg-leg-press-calf-raise",
-          "sourceSha256": "f093a676fb900c1a6dce378ade8b4995df48b398b49cc919bebb802a3f4e746e",
+          "sourceSha256": "8ed1e897c66edc768876ab2750c8119841b83134132b7eb099fbe39fc1fb4205",
           "generationOriginRecorded": true,
           "workflow": "docs/exercise-illustration-system.md"
         }
       ],
       "notes": [
-        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+        "Redrew the working shoe to show its forefoot against the lower edge of the footplate and the heel clear of it."
       ],
       "generationTool": "Codex built-in imagegen",
-      "canonicalSha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2"
+      "canonicalSha256": "32aec215a78d12474fe842e4d58f2a90fd87ba71f8776f706be6f7507926c597"
     },
     {
       "assetId": "wg-rook-single-leg-leg-press-calf-raise",
@@ -33715,7 +33715,7 @@
       "relatedExerciseIds": [],
       "usage": "runtime_exercise",
       "movementIds": [],
-      "sha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2",
+      "sha256": "32aec215a78d12474fe842e4d58f2a90fd87ba71f8776f706be6f7507926c597",
       "provenanceType": "rook_ai_generated",
       "sourceUrl": null,
       "creator": "AI generation for ROOK",
@@ -33729,23 +33729,23 @@
       "evidence": [
         {
           "type": "generation_record",
-          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
+          "manifest": "artifacts/unilateral-exercise-art/leg-press-calf-raise-shoe-revision/generated-sources.json",
           "key": "single-leg-leg-press-calf-raise",
-          "sourceSha256": "f093a676fb900c1a6dce378ade8b4995df48b398b49cc919bebb802a3f4e746e",
+          "sourceSha256": "8ed1e897c66edc768876ab2750c8119841b83134132b7eb099fbe39fc1fb4205",
           "generationOriginRecorded": true,
           "workflow": "docs/exercise-illustration-system.md"
         },
         {
           "type": "identical_reviewed_master",
           "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-leg-press-calf-raise.svg",
-          "sha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2"
+          "sha256": "32aec215a78d12474fe842e4d58f2a90fd87ba71f8776f706be6f7507926c597"
         }
       ],
       "notes": [
-        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+        "Redrew the working shoe to show its forefoot against the lower edge of the footplate and the heel clear of it."
       ],
       "generationTool": "Codex built-in imagegen",
-      "canonicalSha256": "6fcd6ee85a2ea0038b5a3a8aefc2d52b03604c2a36b46f04ff2d31bc6e7042e2"
+      "canonicalSha256": "32aec215a78d12474fe842e4d58f2a90fd87ba71f8776f706be6f7507926c597"
     },
     {
       "assetId": "master-consistent:wg-rook-single-leg-seated-calf-raise",
