@@ -150,7 +150,7 @@ export const systemApprovedRedraws = {
   "rook-single-arm-reverse-cable-fly": "Single-Arm Reverse Cable Fly; working side, equipment and thumbnail silhouette reviewed.",
   "rook-single-arm-straight-arm-cable-pulldown": "Single-Arm Straight-Arm Cable Pulldown; working side, equipment and thumbnail silhouette reviewed.",
   "rook-single-arm-chest-supported-machine-row": "Single-Arm Chest-Supported Machine Row; working side, equipment and thumbnail silhouette reviewed.",
-  "rook-single-leg-lying-leg-curl": "Single-Leg Lying Leg Curl; working side, equipment and thumbnail silhouette reviewed.",
+  "rook-single-leg-lying-leg-curl": "Single-Leg Lying Leg Curl; side view separates both legs and shows the roller against the working ankle.",
   "rook-single-leg-seated-leg-curl": "Single-Leg Seated Leg Curl; working side, equipment and thumbnail silhouette reviewed.",
   "rook-single-leg-hip-thrust": "Single-Leg Hip Thrust; working side, equipment and thumbnail silhouette reviewed.",
   "rook-single-leg-leg-press-calf-raise": "Single-Leg Leg Press Calf Raise; working side, equipment and thumbnail silhouette reviewed.",

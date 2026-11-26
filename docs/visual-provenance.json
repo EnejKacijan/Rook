@@ -33448,7 +33448,7 @@
       ],
       "usage": "regeneration_master",
       "movementIds": [],
-      "sha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152",
+      "sha256": "f87b8f6b42a596f2f496c3ed47b91b0eef386293af4ad22fabe0519f5f0e07f0",
       "provenanceType": "rook_ai_generated",
       "sourceUrl": null,
       "creator": "AI generation for ROOK",
@@ -33462,18 +33462,18 @@
       "evidence": [
         {
           "type": "generation_record",
-          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
-          "key": "single-leg-lying-leg-curl",
-          "sourceSha256": "42a712517c2ddb31e70393a98e0dcd019e76049dee1843e272ba8891ac7f8458",
+          "manifest": "artifacts/unilateral-exercise-art/lying-leg-curl-revision/generated-sources.json",
+          "key": "single-leg-lying-leg-curl-oblique",
+          "sourceSha256": "373c3a745d09f17515d2a92f697b28ba0fa1214c7f4fb15f1f54cae9948f661b",
           "generationOriginRecorded": true,
           "workflow": "docs/exercise-illustration-system.md"
         }
       ],
       "notes": [
-        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+        "Redrawn with a side view that separates both legs and shows contact between the working ankle and the machine roller."
       ],
       "generationTool": "Codex built-in imagegen",
-      "canonicalSha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152"
+      "canonicalSha256": "f87b8f6b42a596f2f496c3ed47b91b0eef386293af4ad22fabe0519f5f0e07f0"
     },
     {
       "assetId": "wg-rook-single-leg-lying-leg-curl",
@@ -33484,7 +33484,7 @@
       "relatedExerciseIds": [],
       "usage": "runtime_exercise",
       "movementIds": [],
-      "sha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152",
+      "sha256": "f87b8f6b42a596f2f496c3ed47b91b0eef386293af4ad22fabe0519f5f0e07f0",
       "provenanceType": "rook_ai_generated",
       "sourceUrl": null,
       "creator": "AI generation for ROOK",
@@ -33498,23 +33498,23 @@
       "evidence": [
         {
           "type": "generation_record",
-          "manifest": "artifacts/unilateral-exercise-art/generated-sources.json",
-          "key": "single-leg-lying-leg-curl",
-          "sourceSha256": "42a712517c2ddb31e70393a98e0dcd019e76049dee1843e272ba8891ac7f8458",
+          "manifest": "artifacts/unilateral-exercise-art/lying-leg-curl-revision/generated-sources.json",
+          "key": "single-leg-lying-leg-curl-oblique",
+          "sourceSha256": "373c3a745d09f17515d2a92f697b28ba0fa1214c7f4fb15f1f54cae9948f661b",
           "generationOriginRecorded": true,
           "workflow": "docs/exercise-illustration-system.md"
         },
         {
           "type": "identical_reviewed_master",
           "path": "src/assets/exercise-art/consistent-masters/wg-rook-single-leg-lying-leg-curl.svg",
-          "sha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152"
+          "sha256": "f87b8f6b42a596f2f496c3ed47b91b0eef386293af4ad22fabe0519f5f0e07f0"
         }
       ],
       "notes": [
-        "Built-in image generation, vectorized and reviewed for one-sided movement and matching equipment."
+        "Redrawn with a side view that separates both legs and shows contact between the working ankle and the machine roller."
       ],
       "generationTool": "Codex built-in imagegen",
-      "canonicalSha256": "bf58ec26609e5e6512525cead2da8a6eaf200e3a613df09c714080de6297d152"
+      "canonicalSha256": "f87b8f6b42a596f2f496c3ed47b91b0eef386293af4ad22fabe0519f5f0e07f0"
     },
     {
       "assetId": "master-consistent:wg-rook-single-leg-seated-leg-curl",
