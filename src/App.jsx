@@ -21,6 +21,9 @@ import { subscribeNativeForeground } from './nativeLifecycle.js';
 import { presentNativeFile } from './platformFileActions.js';
 import { handleExternalLinkClick } from './externalLink.js';
 import { PersonalThemesProvider, usePersonalThemes } from './PersonalThemesContext.jsx';
+import { SeasonArrival } from './SeasonArrival.jsx';
+import { ProfileTrainingStreak, StreakReward } from './TrainingStreak.jsx';
+import { completedActivityStreakGain, completedWorkoutStreakGain } from './trainingStreak.js';
 import { ThemeNewBadge } from './ThemeNewBadge.jsx';
 import { useInitialThemeDiscovery } from './useThemeDiscovery.js';
 import {FirstRunWelcome,WelcomeProgress,WELCOME_TOTAL_PAGES,useWelcomeGestures} from './FirstRunWelcome.jsx';
@@ -4618,6 +4621,8 @@ export function ActiveOptionalSession({ state, update, setPage }) {
   const active = state.activeOptionalSession;
   const [now, setNow] = useState(Date.now());
   const [completedSummary, setCompletedSummary] = useState(null);
+  const [streakGain, setStreakGain] = useState(null);
+  const completedHeading = useRef(null);
   const [confirmCancel, setConfirmCancel] = useState(false);
   const [sessionError, setSessionError] = useState('');
   const { commit } = useDurableAction(state, update);
@@ -4653,7 +4658,7 @@ export function ActiveOptionalSession({ state, update, setPage }) {
         <section className="optional-session-complete-body">
           <span className="optional-session-complete-mark" aria-hidden="true">✓</span>
           <Eyebrow>SESSION COMPLETE</Eyebrow>
-          <h1>{completedSummary.activity}</h1>
+          <h1 ref={completedHeading} tabIndex={-1}>{completedSummary.activity}</h1>
           <strong className="optional-session-summary-time">
             {formatDuration(completedSummary.elapsedSeconds)}
           </strong>
@@ -4669,6 +4674,8 @@ export function ActiveOptionalSession({ state, update, setPage }) {
               </div>
             )}
           </dl>
+          <StreakReward gain={streakGain} profileId={state.profile.id} Modal={ModalLayer}
+            backgroundRef={screenRef} headingRef={completedHeading}/>
           <p>{isConditioning(completedSummary) ? 'Your strength plan is unchanged.' : 'Your planned rest day is unchanged.'}</p>
           <Button onClick={() => setPage("today")}>DONE</Button>
         </section>
@@ -4697,9 +4704,19 @@ export function ActiveOptionalSession({ state, update, setPage }) {
     const finishedAt = Date.now();
     completing.current = true;
     try {
-      const result = commit(current => current.activeOptionalSession?.id === active.id ? finishOptionalSession(current, finishedAt) : current);
+      let priorSessions;
+      const result = commit(current => {
+        if (current.activeOptionalSession?.id !== active.id) return current;
+        priorSessions = current.optionalSessions;
+        return finishOptionalSession(current, finishedAt);
+      });
       const completed = result.state.optionalSessions.find(item => item.id === active.id && item.status === 'completed');
-      if (completed) { setCompletedSummary(completed); setSessionError(''); triggerHaptic('success'); }
+      if (result.changed && completed) {
+        setCompletedSummary(completed);
+        setStreakGain(completedActivityStreakGain(result.state, completed, priorSessions));
+        setSessionError('');
+        triggerHaptic('success');
+      }
     } catch (failure) { setSessionError(failure.message); }
     finally { completing.current = false; }
   };
@@ -9080,7 +9097,7 @@ export function CompletedWorkoutDetail({ workoutId, state, update, close, setPag
   );
 }
 
-export function Complete({ state, update, setPage, setDetail, liveFinish, persistenceFailed }) {
+export function Complete({ state, update, setPage, setDetail, liveFinish, persistenceFailed, allowStreakMoment = true }) {
   const session = liveFinish?.workoutId ? state.workouts.find(workout => workout.id === liveFinish.workoutId) : state.workouts.at(-1);
   const continuation = useDurableAction(state, update);
   const [continueError, setContinueError] = useState('');
@@ -9122,6 +9139,11 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       eligible: exercise => exerciseSupportsEstimatedOneRepMax(exercise) && !/assist/i.test(exerciseName(exercise)),
     });
   }, [liveFinish, session, persistenceFailed]);
+  const streakGain = useMemo(() => {
+    if (!liveEntry || persistenceFailed || liveFinish.startedAt !== session?.startedAt) return null;
+    return completedWorkoutStreakGain(state, session, liveFinish.priorWorkouts);
+  }, [state.workouts, state.optionalSessions, liveEntry, liveFinish, session, persistenceFailed]);
+  const completeScreenRef = useRef(null);
   const recognitionId = recognition?.type === 'milestone' ? 'completion-recognition' : undefined;
   const personalBests = recognition?.type === 'pr' ? recognition.byExercise : undefined;
   const currentBlock = state.program?.trainingBlock;
@@ -9175,6 +9197,7 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
   const liveMotion = liveEntry && !persistenceFailed && !motionCancelled;
   return (
     <main
+      ref={completeScreenRef}
       className={`screen complete-screen ${canContinue || continueError ? "can-continue" : ""} ${endedEarly ? "ended-early" : "fully-completed"} ${liveMotion ? "is-live-completion" : ""}`}
     >
       {!endedEarly ? <CompletedSessionOverview
@@ -9209,6 +9232,8 @@ export function Complete({ state, update, setPage, setDetail, liveFinish, persis
       {recognition?.type === 'milestone' && <p id={recognitionId} className="completion-recognition">
         <strong>{recognition.label}</strong>
       </p>}
+      <StreakReward gain={streakGain} profileId={state.profile.id} Modal={ModalLayer}
+        backgroundRef={completeScreenRef} headingRef={headingRef} allowMoment={allowStreakMoment}/>
       {finishedBlock && <section className="completion-block-card" aria-label="Training block complete">
         <Eyebrow>BLOCK COMPLETE</Eyebrow>
         <strong>{finishedBlock.name}</strong>
@@ -12094,6 +12119,7 @@ export function Profile({ state, update, setDetail, setPage, onLogout, accountSy
         </div>}
       </header>
       {!area && membershipSlot}
+      {!area && <ProfileTrainingStreak state={state} Modal={ModalLayer} backgroundRef={profileRef}/>}
       {area === 'training' && (
         <section>
           <Eyebrow>ABOUT YOU</Eyebrow>
@@ -21325,6 +21351,7 @@ function HydratedApp({startup,placements}) {
         setDetail={setDetail}
         liveFinish={liveCompletion.current}
         persistenceFailed={persistenceFailed}
+        allowStreakMoment={!detail && !repairPreview}
       />
     ) : page === "coach" ? (
       <Coach state={state} update={update} setPage={setPage} setDetail={setDetail} scrollMemory={coachScrollMemory.current} availability={coachAvailability} entryIntent={coachEntry} onEntryHandled={consumeCoachEntry} />
@@ -21349,6 +21376,7 @@ function HydratedApp({startup,placements}) {
     <MissedWorkoutFeedbackProvider state={state} update={update} onViewSchedule={()=>setDetail({flexibleWeek:{reviewExisting:true}})}>
     <div className="app-shell">
       <div className="app-content" ref={backgroundRef}>
+        {page === 'today' && !seasonalTransitionBlocked && personalThemes.personalTheme?.basePalette === 'winter' && <SeasonArrival/>}
         {['workout','complete'].includes(page) ? <WorkoutMotion kind="completion" identity={page}>{content}</WorkoutMotion> : content}
         {(!detail || detailClosing) &&
           !repairPreview &&

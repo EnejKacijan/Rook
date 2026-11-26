@@ -1,0 +1,24 @@
+.streak-moment-sheet { --streak-flame-base:#e8572a; --streak-flame-tip:#ffb648; --streak-flame-core:#ffe08a;
+  display:flex; flex-direction:column; min-height:min(88dvh, 720px); }
+.streak-moment-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:8px 4px 24px; text-align:center; }
+.streak-moment-body > h1 { margin:6px 0 8px; font-size:1.75rem; line-height:1.2; }
+.streak-moment-eyebrow { margin:20px 0 0; color:var(--rook-accent-text); font-size:.8125rem; font-weight:700; letter-spacing:.08em; text-transform:uppercase; }
+.streak-moment-lead { max-width:30ch; margin:0; color:var(--rook-text); font-size:1rem; line-height:1.5; }
+.streak-moment-count { font-variant-numeric:tabular-nums; }
+.streak-moment-number { font-size:3.5rem; line-height:1; font-weight:800; color:var(--rook-accent-text); }
+.streak-moment-actions { display:grid; gap:8px; padding:8px 0 calc(env(safe-area-inset-bottom, 0px) + 12px); }
+.streak-moment-actions > .button { width:100%; }
+
+.streak-flame { position:relative; display:grid; place-items:center; width:132px; height:150px; }
+.streak-flame svg { position:relative; width:96px; height:120px; overflow:visible; }
+.streak-flame-glow { position:absolute; inset:8px; border-radius:50%; background:radial-gradient(circle at 50% 60%, color-mix(in srgb, #ffb648 38%, transparent), transparent 70%); }
+/* Start after the sheet has travelled into view. The glow and flame settle once. */
+.streak-flame { width:176px; height:200px; }
+.streak-flame svg { width:136px; height:170px; }
+@media (prefers-reduced-motion:no-preference) {
+  .streak-flame svg { transform-origin:50% 95%; animation:streak-flame-rise 520ms var(--rook-ease-release) var(--rook-sheet-enter-duration, 180ms) both; }
+  .streak-flame-glow { animation:streak-flame-light 700ms var(--rook-ease-standard) var(--rook-sheet-enter-duration, 180ms) both; }
+}
+@keyframes streak-flame-rise { from { opacity:0; transform:translateY(12px) scale(.66); } to { opacity:1; transform:none; } }
+@keyframes streak-flame-light { from { opacity:0; transform:scale(.7); } to { opacity:1; transform:none; } }
+@media (forced-colors:active) { .streak-flame-glow { display:none; } .streak-flame path { fill:CanvasText; } }

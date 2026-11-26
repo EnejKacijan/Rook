@@ -1,3 +1,4 @@
+import {STREAK_PRESENTATION_KEY} from './trainingStreak.js';
 import { gzipSync, gunzipSync, strToU8, strFromU8 } from 'fflate';
 import { sha256 } from '@noble/hashes/sha2.js';
 import {assertWorkoutTemplates} from './workoutTemplateSchema.js';
@@ -338,7 +339,7 @@ async function deleteLocalStateLocked({ storage = globalThis.localStorage, clear
   const intent = { version: 1, generation: (meta?.generation || 0) + 1, everInitialized: true, deletePending: true, explicitDeleteAt: stamp(), lastWriteReason: reason, build, appVersion: version };
   writeMeta(storage, intent);
   await clearPhotos?.();
-  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, ...LEGACY_EVIDENCE_KEYS]) storage.removeItem(key);
+  for (const key of [PRIMARY_KEY, RECOVERY_KEY, JOURNAL_KEY, FIRST_RUN_ACCOUNT_CLAIM_KEY, STREAK_PRESENTATION_KEY, ...LEGACY_EVIDENCE_KEYS]) storage.removeItem(key);
   await clearProfiles?.(storage);
   writeMeta(storage, { ...intent, everInitialized: false, deletePending: false });
   sessions.delete(storage);

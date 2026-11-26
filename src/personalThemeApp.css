@@ -28,3 +28,23 @@ html[data-personal-theme] .brand { color:var(--rook-accent-text); }
   :root[data-personal-theme] :is(.today-screen, .progress-screen, .profile-screen, .coach-screen) { background-image: none; }
   :root[data-season] .today-start-button::after { display: none; }
 }
+
+/* A brief seasonal arrival in the same 24px band as the static decoration. */
+.season-arrival {
+  position:absolute; top:env(safe-area-inset-top, 0px); right:0;
+  width:min(100%, 360px); height:24px; overflow:hidden; pointer-events:none;
+}
+.season-arrival > span {
+  position:absolute; top:-7px; width:7px; height:7px; opacity:0;
+  background:var(--rook-season-flake, none) no-repeat center / contain;
+  animation:rook-season-fall linear both;
+}
+@keyframes rook-season-fall {
+  0% { opacity:0; transform:translate(0, 0) rotate(0deg); }
+  27%, 66% { opacity:.48; }
+  100% { opacity:0; transform:translate(-5px, 30px) rotate(65deg); }
+}
+body:has(.modal-layer) .season-arrival > span { display:none; }
+@media (prefers-reduced-motion:reduce), (forced-colors:active) {
+  .season-arrival > span { display:none; animation:none; }
+}
