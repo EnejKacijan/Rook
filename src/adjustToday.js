@@ -429,7 +429,7 @@ export function manualReplacementChoices(
   return searchExercises(userSelectableReplacementCandidates(source, temporaryProfile, occupied, {
     preferences,
     gymProfileId: proposal.gymProfileId,
-  }), query).slice(0,80);
+  }), query, { searchMuscles: true }).slice(0,80);
 }
 
 function refreshEditedAdjustment(proposal, state, editedEntryId) {

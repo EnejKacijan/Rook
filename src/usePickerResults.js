@@ -23,7 +23,7 @@ export function usePickerResults(state,query,enabled=true,screen) {
     if(!warm||key.some((value,i)=>value!==warm.key[i]))warm={key,items:freestyleCatalog(state).sort((a,b)=>a.name.localeCompare(b.name))};
     return warm.items;
   },[ready,state.profile,state.gymProfiles,state.customExercises,state.activeWorkout?.id,state.activeWorkout?.adjustment,state.defaultGymProfileId]);
-  const search=useMemo(()=>createExerciseSearchIndex(catalog),[catalog]);
+  const search=useMemo(()=>createExerciseSearchIndex(catalog, { searchMuscles: true }),[catalog]);
   const results=useMemo(()=>{
     if(!catalog.length)return [];
     if(query)return search(query);

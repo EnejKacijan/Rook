@@ -15073,7 +15073,7 @@ export function PlanEditor({
                         other.id !== exercise.id &&
                         other.exerciseId === item.id,
                     ),
-                ), exerciseQuery) : [];
+                ), exerciseQuery, { searchMuscles: true }) : [];
                 const likelyMatches = pickerOpen && needsReview
                   ? likelyImportedMatches(exercise, availableExercises)
                   : [];
@@ -15096,7 +15096,7 @@ export function PlanEditor({
                         other.id !== exercise.id &&
                         other.exerciseId === item.id,
                     ),
-                ), exerciseQuery) : [];
+                ), exerciseQuery, { searchMuscles: true }) : [];
                 const pickerExercises = preview
                   ? similarExercises
                   : availableExercises;
@@ -20976,7 +20976,7 @@ function Replace({ exercise, state, update, close }) {
       close();
     } catch (error) { setReplaceError(error.message); }
   };
-  const pickerChoices = searchExercises(allAllowed,query);
+  const pickerChoices = searchExercises(allAllowed, query, { searchMuscles: true });
   const choiceButton = (choice, allowAnyAllowed = false, priority = false) => (
     <button
       className="choice-row"

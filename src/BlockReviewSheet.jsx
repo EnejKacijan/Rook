@@ -44,7 +44,7 @@ export function BlockReviewSheet({state,update,close,Header,blockId,onBack}) {
   const reviewBlocked=!!error && !persistenceFailed;
   const change=proposal?.changes.find(item=>item.id===replacementId);
   const source=change && state.program.days.find(d=>d.id===change.dayId)?.exercises.find(e=>e.id===change.id);
-  const candidates=source?searchExercises(nextBlockReplacementChoices(state,source),query):[];
+  const candidates=source?searchExercises(nextBlockReplacementChoices(state,source), query, { searchMuscles: true }):[];
   const firstWorkout=proposal && new Intl.DateTimeFormat('en',{weekday:'long',month:'short',day:'numeric'}).format(new Date(`${proposal.startDate}T12:00:00`));
   return <main ref={ref} className="screen detail-screen block-review-sheet">
     <Header title={step==='next'?(proposal?.repeat?'Repeat block':'Next block'):step==='replacement'?'Choose replacement':step==='exercises'?'Exercise results':'Block review'} onClose={close} onBack={step!=='summary'||onBack?back:undefined}/>

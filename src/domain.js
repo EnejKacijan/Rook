@@ -23,7 +23,7 @@ import { matchImportCatalogName } from './importExerciseMatching.js';
 import { normalizePartialTargets } from './importPartialPrescription.js';
 import { planEditorExerciseAllowed } from './exerciseEligibility.js';
 import { combinedAdjustment, combinedTemplate, isCombinedAdjustment, validateCombinedState, cancelCombinedWorkout } from './combinedWorkoutLifecycle.js';
-import { allMuscleFullBody, customFullBodyExerciseLimit, customFullBodyWorkingSetLimit, customFullBodyMaxSets, customFullBodyHingeSetLimit, customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns } from './customTrainingStructure.js';
+import { allMuscleFullBody, customFullBodyExerciseLimit, customFullBodyWorkingSetLimit, customFullBodyMaxSets, customFullBodyHingeSetLimit, customSessionDefinition, customFocusSatisfied, customFocusGroups, customFocusPatterns, CUSTOM_FOCUS_ALIASES } from './customTrainingStructure.js';
 import { customWorkoutFidelityErrors } from './customWorkoutFidelity.js';
 import { warmupPrescriptionLabel } from './warmupPrescription.js';
 import {
@@ -56,7 +56,7 @@ import {
   rankSubstitutionCandidates,
 } from "./substitutions.js";
 import { normalizePlanHistoryState } from "./planHistory.js";
-import { normalizeCustomExercisesState } from "./customExercises.js";
+import { CUSTOM_EXERCISE_MUSCLES, normalizeCustomExercisesState } from "./customExercises.js";
 import {
   advancedSetCanComplete,
   hasOpenRepTarget,
@@ -7991,13 +7991,18 @@ export function rankExerciseSearch(candidates, query) {
     .sort((a, b) => a.tier - b.tier || Number(b.item.id === target) - Number(a.item.id === target) || a.index - b.index)
     .map(entry => entry.item);
 }
+const exerciseSearchMuscles = new Map([
+  ...CUSTOM_EXERCISE_MUSCLES.map(muscle => [normalizedExerciseName(muscle), muscle]),
+  ...CUSTOM_FOCUS_ALIASES.core.map(alias => [alias, 'Core']),
+]);
+
 // Explicit interactive search, distinct from strict importer identity matching.
-export function searchExercises(candidates,query) {
-  return createExerciseSearchIndex(candidates)(query);
+export function searchExercises(candidates, query, options) {
+  return createExerciseSearchIndex(candidates, options)(query);
 }
 // Prepared local search. Exact names and aliases retain their existing order;
 // small typo suggestions are considered when there is no complete exact name.
-export function createExerciseSearchIndex(items) {
+export function createExerciseSearchIndex(items, { searchMuscles = false } = {}) {
   if(!items.length)return()=>[];
   const prepared = new Map();
   const name = value => {
@@ -8015,6 +8020,16 @@ export function createExerciseSearchIndex(items) {
     const normalized = normalizedExerciseName(query);
     const available = entries.filter(entry => !occupied.has(entry.item.id));
     if (!normalized) return available.map(entry => entry.item);
+    const muscle = searchMuscles && exerciseSearchMuscles.get(normalized);
+    if (muscle) {
+      const primary = [], secondary = [];
+      for (const { item } of available) {
+        const position = item.muscles?.indexOf(muscle) ?? -1;
+        if (position === 0) primary.push(item);
+        else if (position > 0) secondary.push(item);
+      }
+      return primary.concat(secondary);
+    }
     const compact = normalized.replace(/\s+/g, ''), tokens = normalized.split(' ');
     const queryForms = new Set([compact, pluralizedExerciseName(query).replace(/\s+/g, '')]);
     const whole = form => queryForms.has(form.compact) || queryForms.has(form.pluralCompact);

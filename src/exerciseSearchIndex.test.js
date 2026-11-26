@@ -20,3 +20,25 @@ it('a new index accepts changed custom names and aliases; searches never mutate 
   const first=createExerciseSearchIndex([old]),next=createExerciseSearchIndex([updated]);
   expect(first('old alias')).toEqual([old]);expect(next('old alias')).toEqual([]);expect(next('new alias')).toEqual([updated]);expect(updated).toEqual({id:'custom',name:'New move',aliases:['new alias']});
 });
+
+it('muscle searches match every eligible primary and secondary target, with primary exercises first', () => {
+  const profile = { equipment: ['bodyweight'] };
+  const filter = createPlanEditorExerciseFilter(profile);
+  const local = { id:'custom-core', name:'My brace practice', muscles:['Shoulders','Core'], pattern:'core', equipment:['bodyweight'], custom:true };
+  const eligible = [...all, local].filter(filter);
+  const occupied = new Set(['plank']);
+  const search = createExerciseSearchIndex(eligible, { searchMuscles: true });
+  const primary = eligible.filter(item => !occupied.has(item.id) && item.muscles?.[0] === 'Core');
+  const secondary = eligible.filter(item => !occupied.has(item.id) && item.muscles?.slice(1).includes('Core'));
+  for (const query of ['abs', 'CORE', 'abdominals', ' abdominal ']) {
+    expect(search(query, occupied)).toEqual([...primary, ...secondary]);
+  }
+  expect(search('abs', occupied)).toContain(local);
+  expect(search('abs', occupied)).not.toContain(exerciseCatalog['cable-crunch']);
+  expect(search('Chest')).toEqual([
+    ...eligible.filter(item => item.muscles?.[0] === 'Chest'),
+    ...eligible.filter(item => item.muscles?.slice(1).includes('Chest')),
+  ]);
+  expect(search('Plank')[0]).toBe(exerciseCatalog.plank);
+  expect(createExerciseSearchIndex(eligible)('abs', occupied)).toEqual([]);
+});
