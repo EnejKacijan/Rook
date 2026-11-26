@@ -5,14 +5,19 @@ import { createCoachAvailability } from './coachAvailability.js';
 import { subscribeNativeForeground } from './nativeLifecycle.js';
 import { trackFunnelEvent } from './analytics.js';
 
+const initialAvailability = { state: 'connecting', reason: 'unknown', auth: 'pending' };
+
 export function useCoachAvailability({ profileId, enabled = true, visiting = false }) {
-  const [value, setValue] = useState({ state: 'connecting', reason: 'unknown', auth: 'pending', network: navigator.onLine ? 'online' : 'offline' });
+  const [runtimeValue, setRuntimeValue] = useState(null);
+  const value = enabled && runtimeValue && runtimeValue.profileId === profileId
+    ? runtimeValue.snapshot
+    : { ...initialAvailability, network: navigator.onLine ? 'online' : 'offline' };
   const controller = useRef(null);
   useEffect(() => {
-    if (!enabled) return undefined;
+    if (!enabled) { setRuntimeValue(null); return undefined; }
     const runtime = createCoachAvailability({ status: () => AIService.status(),
       watchAuth: watchCoachAuth,
-      onChange: setValue,
+      onChange: snapshot => setRuntimeValue({ profileId, snapshot }),
       telemetry: properties => trackFunnelEvent('coach_availability_changed', properties),
     });
     controller.current = runtime;
@@ -36,7 +41,7 @@ export function useCoachAvailability({ profileId, enabled = true, visiting = fal
       release();
     };
   }, [profileId, enabled]);
-  useEffect(() => { if (visiting) void controller.current?.check('visit'); }, [visiting]);
+  useEffect(() => { if (visiting) void controller.current?.check('visit'); }, [visiting, profileId, enabled]);
   return { ...value, retry: () => controller.current?.check('manual'),
     failure: error => controller.current?.failure(error), success: () => controller.current?.success() };
 }

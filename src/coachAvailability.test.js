@@ -23,9 +23,14 @@ it('D/E offline startup does not request; reconnect succeeds', async () => {
   online = false; await start(); expect(runtime.getSnapshot().state).toBe('offline'); expect(status).not.toHaveBeenCalled();
   online = true; await runtime.check('online'); expect(runtime.getSnapshot().state).toBe('ready');
 });
-it('F 500 then manual retry recovers', async () => {
-  status.mockRejectedValueOnce({ status: 500 }); await start(); expect(runtime.getSnapshot().reason).toBe('server_error');
-  await runtime.check(); expect(runtime.getSnapshot().state).toBe('ready');
+it('a quick startup 500 stays connecting until a second check confirms a temporary failure', async () => {
+  status.mockRejectedValueOnce({status: 500}).mockRejectedValueOnce({status: 503});
+  await start();
+  expect(runtime.getSnapshot()).toMatchObject({state: 'connecting', lastFailure: {reason: 'server_error'}});
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(runtime.getSnapshot()).toMatchObject({state: 'temporary', reason: 'server_error'});
+  await runtime.check();
+  expect(runtime.getSnapshot().state).toBe('ready');
 });
 it('G fair-use 429 obeys retry time even on manual, resume, auth or online signals', async () => {
   await start(); const retryAt = Date.now() + 60000;
@@ -77,4 +82,35 @@ it('failed auth initialization is retried on demand', async () => {
   const watch = vi.fn().mockRejectedValueOnce(new Error('import failed')).mockImplementation(callback => { callback('ready'); return release; });
   runtime = createCoachAvailability({ status, watchAuth: watch }); runtime.start(); await flush();
   expect(runtime.getSnapshot().state).toBe('auth_attention'); await runtime.check(); await flush(); expect(runtime.getSnapshot().state).toBe('ready');
+});
+
+it('a warm recheck and one brief network error keep the ready connection usable', async () => {
+  await start();
+  await vi.advanceTimersByTimeAsync(10000);
+  let resolve;
+  status.mockImplementationOnce(() => new Promise(done => resolve = done));
+  const refresh = runtime.check('visit');
+  expect(runtime.getSnapshot().state).toBe('ready');
+  resolve({available: false, reason: 'network_error'});
+  await refresh;
+  expect(runtime.getSnapshot().state).toBe('ready');
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(runtime.getSnapshot().state).toBe('ready');
+  expect(changes.some(change => change.state === 'temporary')).toBe(false);
+  expect(status).toHaveBeenCalledTimes(3);
+});
+
+it('a real send error is visible immediately and can recover before an older status check returns', async () => {
+  await start();
+  await vi.advanceTimersByTimeAsync(10000);
+  let resolveStale;
+  status.mockImplementationOnce(() => new Promise(done => resolveStale = done));
+  const stale = runtime.check('visit');
+  runtime.failure({status: 502, code: 'ai-failed'});
+  expect(runtime.getSnapshot()).toMatchObject({state: 'temporary', reason: 'provider_error'});
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(runtime.getSnapshot().state).toBe('ready');
+  resolveStale({available: false, reason: 'config_missing'});
+  await stale;
+  expect(runtime.getSnapshot().state).toBe('ready');
 });

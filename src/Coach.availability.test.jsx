@@ -39,9 +39,19 @@ async function mount() {
   act(() => root.render(<Harness />)); await settle();
 }
 it('A/B connecting auth enables automatically, preserves draft and ignores persisted stale ai.available=false', async () => {
-  auth.initial = 'pending'; await mount(); expect(host.textContent).toContain('Connecting to Coach…'); expect(host.querySelector('textarea').disabled).toBe(true);
-  expect(host.querySelector('textarea').value).toBe('Saved draft'); act(() => auth.callback('ready')); await settle();
-  expect(host.querySelector('textarea').disabled).toBe(false); expect(host.textContent).not.toContain('Connecting to Coach');
+  auth.initial = 'pending'; await mount();
+  expect(host.querySelector('textarea').disabled).toBe(false);
+  expect(button('Send message').disabled).toBe(true);
+  expect(host.textContent).not.toContain('Connecting to Coach…');
+  await act(async () => vi.advanceTimersByTimeAsync(220));
+  expect(host.querySelector('.coach-connection-status[role="status"]').textContent).toContain('Connecting to Coach…');
+  expect(host.querySelector('.offline-banner')).toBeNull();
+  expect(host.querySelector('textarea').value).toBe('Saved draft');
+  type('Finish this draft while connecting');
+  act(() => auth.callback('ready')); await settle();
+  expect(host.querySelector('textarea').value).toBe('Finish this draft while connecting');
+  expect(button('Send message').disabled).toBe(false);
+  expect(host.textContent).not.toContain('Connecting to Coach');
   expect(current.ai.available).toBe(false); expect(AIService.coach).not.toHaveBeenCalled();
 });
 it('D/E offline preserves typed draft; reconnect restores shortcuts/composer and leaves training data unchanged', async () => {
@@ -89,4 +99,17 @@ it('L runtime errors never mutate program, logs, workouts, saved content, or pre
   const events = JSON.parse(localStorage.getItem(ANALYTICS_STORAGE_KEY));
   const availability = events.filter(event => event.name === 'coach_availability_changed'); expect(availability.length).toBeGreaterThan(0);
   expect(JSON.stringify(availability)).not.toContain('SECRET'); expect(JSON.stringify(availability)).not.toContain('Saved draft');
+});
+
+it('a brief startup service failure recovers without flashing an unavailable warning', async () => {
+  AIService.status.mockResolvedValueOnce({available: false, reason: 'server_error', status: 503});
+  await mount();
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(host.querySelector('.coach-connection-status').textContent).toContain('Connecting to Coach…');
+  expect(host.querySelector('.offline-banner')).toBeNull();
+  expect(button('Send message').disabled).toBe(true);
+  await act(async () => vi.advanceTimersByTimeAsync(500));
+  expect(button('Send message').disabled).toBe(false);
+  expect(host.querySelector('.coach-connection-status')).toBeNull();
+  expect(host.querySelector('.offline-banner')).toBeNull();
 });

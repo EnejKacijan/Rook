@@ -240,7 +240,15 @@ body:has(.app-content > .coach-screen) { position: fixed; inset: 0; }
 .coach-runtime-diagnostics { margin-block: 12px; padding: 12px; border: 1px solid var(--border); border-radius: 12px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
 .coach-runtime-diagnostics p { margin-block: 8px 0; }
 .coach-screen .offline-banner p { margin: 0 0 8px; }
-.coach-screen .coach-input:has(.coach-day-context){flex-wrap:wrap}
+.coach-screen .coach-input:has(.coach-day-context, .coach-connection-status){flex-wrap:wrap}
+.coach-connection-status {
+  flex:0 0 100%; display:flex; align-items:center; gap:7px;
+  min-height:20px; color:var(--rook-secondary); font-size:.8125rem; line-height:1.4;
+}
+.coach-connection-status > .restriction-spinner { width:13px; height:13px; flex-basis:13px; }
+@media (prefers-reduced-motion: reduce) {
+  .coach-connection-status > .restriction-spinner { animation:none; }
+}
 .coach-day-context{flex:0 0 100%;display:flex;align-items:center;gap:8px;padding:4px 8px 4px 12px;border:1px solid var(--rook-border);border-radius:12px;background:var(--rook-surface);color:var(--rook-secondary);font-size:13px;line-height:1.4;min-width:0;box-sizing:border-box}
 .coach-day-context>span{min-width:0;flex:1;overflow-wrap:anywhere}
 .coach-day-context>button{flex:0 0 44px;width:44px;height:44px;background:transparent;border:0;color:var(--rook-secondary);font-size:22px}

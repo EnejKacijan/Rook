@@ -9971,6 +9971,13 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
   const sendingRef = useRef(null);
   const [online, setOnline] = useState(navigator.onLine);
   const coachAvailable = online && availability.state === 'ready';
+  const connecting = online && availability.state === 'connecting';
+  const [showConnecting, setShowConnecting] = useState(false);
+  useEffect(() => {
+    if (!connecting) { setShowConnecting(false); return undefined; }
+    const timer = setTimeout(() => setShowConnecting(true), 220);
+    return () => clearTimeout(timer);
+  }, [connecting]);
   const availabilityCopy = coachAvailabilityCopy(online ? availability : { state: 'offline' });
   const [menuOpen, setMenuOpen] = useState(false);
   const [historyId, setHistoryId] = useState(null);
@@ -10591,7 +10598,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
             <h1>Your plan and real training data, in context.</h1>
           </header>
         )}
-        {!coachAvailable && (
+        {!coachAvailable && !connecting && (
           <div className="offline-banner" role="status">
             <p>{availabilityCopy?.text}</p>
             {availabilityCopy?.action && <button type="button" className="text-button" onClick={() => availability.retry?.()}>{availabilityCopy.action}</button>}
@@ -10678,12 +10685,16 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
           send(message);
         }}
       >
+        {connecting && showConnecting && <div className="coach-connection-status" role="status">
+          <span className="restriction-spinner" aria-hidden="true"/>
+          {availabilityCopy.text}
+        </div>}
         {dayContext&&<div className="coach-day-context"><span>{coachDayLabel(dayContext.date)} · {dayContext.unresolved?'Schedule needs review':dayContext.workoutName||'Schedule'}</span><button type="button" aria-label={`Remove context for ${coachDayLabel(dayContext.date)}`} onClick={()=>setDayContext(null)}>×</button></div>}
         <textarea
           ref={composerRef}
           rows="1"
           aria-label="Ask Coach"
-          disabled={!coachAvailable}
+          disabled={!coachAvailable && !connecting}
           value={message}
           onChange={(event) => {
             const draft = event.target.value;
@@ -10703,7 +10714,7 @@ export function Coach({ state, update, setPage, setDetail, scrollMemory, availab
               if (!sending && coachAvailable && message.trim()) send(message);
             }
           }}
-          placeholder={coachAvailable ? "Ask about your training…" : availabilityCopy?.placeholder}
+          placeholder={coachAvailable || connecting ? "Ask about your training…" : availabilityCopy?.placeholder}
         />
         <Button
           type="submit"

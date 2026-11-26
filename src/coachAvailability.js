@@ -12,7 +12,7 @@ export function coachFailure(error = {}, now = Date.now()) {
   if (error.status === 429) return { state: 'rate_limited', reason: 'rate_limit', retryAt: error.retryAt || now + 60000 };
   if (code === 'timeout' || error.name === 'AbortError') return { state: 'temporary', reason: 'timeout' };
   if (code === 'provider-output' || code === 'ai-failed') return { state: 'temporary', reason: 'provider_error' };
-  if (error.status >= 500) return { state: 'temporary', reason: 'server_error' };
+  if (code === 'server_error' || error.status >= 500) return { state: 'temporary', reason: 'server_error' };
   if (error.status >= 400) return { state: 'request_error', reason: 'request_error' };
   return { state: 'temporary', reason: code === 'network_error' || code === 'auth/network-request-failed' || error instanceof TypeError ? 'network_error' : 'unknown' };
 }
@@ -43,10 +43,24 @@ export function createCoachAvailability({ status, watchAuth, isOnline = () => na
     if (snapshot.retryAt && now() < snapshot.retryAt) return;
     publish({ state: 'ready', reason: 'ready' });
   };
-  const retryLater = () => {
-    if (!transient.has(snapshot.reason) || attempts >= COACH_RETRY_DELAYS.length || !isOnline()) return;
+  const retryLater = (reason = snapshot.reason) => {
+    if (!transient.has(reason) || attempts >= COACH_RETRY_DELAYS.length || !isOnline()) return;
     clearRetry();
     timer = schedule(() => { timer = null; void check('backoff'); }, COACH_RETRY_DELAYS[attempts++]);
+  };
+  const statusFailure = error => {
+    const checkedAt = now();
+    const failure = coachFailure(error, checkedAt);
+    // A quick failed health check gets one quiet retry. A timed-out check has
+    // already spent the status deadline and can report the issue immediately.
+    const softFailure = attempts === 0 && failure.state === 'temporary' && failure.reason !== 'timeout' &&
+      ['connecting', 'ready'].includes(snapshot.state);
+    if (softFailure) publish({ checkedAt, lastFailure: { reason: failure.reason, at: checkedAt } });
+    else {
+      backend = null;
+      publish({ ...failure, checkedAt });
+    }
+    retryLater(failure.reason);
   };
   const observeAuth = () => {
     if (observingAuth || stopped) return;
@@ -54,19 +68,19 @@ export function createCoachAvailability({ status, watchAuth, isOnline = () => na
     auth = 'pending';
     authTimer = schedule(() => {
       authTimer = null;
-      if (auth === 'pending') { auth = 'attention'; available(); }
+      if (auth === 'pending') { auth = 'attention'; if (backend) available(); else publish({ auth }); }
     }, COACH_AUTH_WAIT_MS);
     Promise.resolve().then(() => watchAuth(value => {
       if (stopped) return;
       auth = value;
       if (value !== 'pending' && authTimer != null) { cancel(authTimer); authTimer = null; }
       if (backend) available();
-      else if (value === 'ready') void check('auth');
+      else if (value === 'ready' && !inFlight && timer == null) void check('auth');
       else publish({ auth });
     })).then(release => { if (stopped) release?.(); else releaseAuth = release; }).catch(() => {
       observingAuth = false;
       if (authTimer != null) { cancel(authTimer); authTimer = null; }
-      auth = 'attention'; available();
+      auth = 'attention'; if (backend) available(); else publish({ auth });
     });
   };
   async function check(trigger = 'manual') {
@@ -79,15 +93,16 @@ export function createCoachAvailability({ status, watchAuth, isOnline = () => na
     observeAuth();
     if (trigger !== 'backoff') attempts = 0;
     const epoch = revision;
-    publish({ state: 'connecting', reason: auth === 'pending' ? 'auth_pending' : 'unknown' });
+    // A usable connection stays usable while refreshing status. Keep a
+    // confirmed temporary warning stable during background retry attempts.
+    if (snapshot.state !== 'ready' && (snapshot.state !== 'temporary' || trigger === 'manual'))
+      publish({ state: 'connecting', reason: auth === 'pending' ? 'auth_pending' : 'unknown' });
     const pending = (async () => {
       try {
         const result = await status();
         if (stopped || epoch !== revision) return;
         if (result.reason && result.reason !== 'config_missing' && !result.available) {
-          backend = null;
-          publish({ ...coachFailure({ code: result.reason, status: result.status, retryAt: result.retryAt }), checkedAt: now() });
-          retryLater();
+          statusFailure({ code: result.reason, status: result.status, retryAt: result.retryAt });
         } else {
           backend = result;
           publish({ checkedAt: now() });
@@ -95,9 +110,7 @@ export function createCoachAvailability({ status, watchAuth, isOnline = () => na
         }
       } catch (error) {
         if (stopped || epoch !== revision) return;
-        backend = null;
-        publish({ ...coachFailure(error, now()), checkedAt: now() });
-        retryLater();
+        statusFailure(error);
       }
     })();
     inFlight = pending;
@@ -111,8 +124,23 @@ export function createCoachAvailability({ status, watchAuth, isOnline = () => na
     },
     check,
     offline() { revision++; backend = null; inFlight = null; clearRetry(); publish({ state: 'offline', reason: 'offline' }); },
-    failure(error) { revision++; clearRetry(); publish(isOnline() ? coachFailure(error, now()) : { state: 'offline', reason: 'offline' }); retryLater(); },
-    success() { revision++; clearRetry(); attempts = 0; publish({ state: 'ready', reason: 'ready', checkedAt: now() }); },
+    failure(error) {
+      // A real request gives better evidence than an older in-flight probe.
+      revision++;
+      inFlight = null;
+      backend = null;
+      clearRetry();
+      attempts = 0;
+      publish(isOnline() ? coachFailure(error, now()) : { state: 'offline', reason: 'offline' });
+      retryLater();
+    },
+    success() {
+      revision++;
+      inFlight = null;
+      clearRetry();
+      attempts = 0;
+      publish({ state: 'ready', reason: 'ready', checkedAt: now() });
+    },
     stop() { stopped = true; revision++; clearRetry(); if (authTimer != null) cancel(authTimer); releaseAuth?.(); },
   };
 }
