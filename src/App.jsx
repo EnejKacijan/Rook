@@ -4930,8 +4930,6 @@ export function Today({
   const scheduleReader = useMemo(()=>createTodayScheduleReader(state),[scheduleState.current,todayKey]);
   const viewingToday = selectedIso === todayKey;
   const combineDiscovery=useMemo(()=>combineWorkoutDiscovery(state),[scheduleState.current,todayKey]);
-  const combineHint=viewingToday&&!todayEditMode&&onCombineWorkouts&&combineDiscovery.available&&combineDiscovery.hasMissed
-    ? <CombineWorkoutHint onStart={onCombineWorkouts}/> : null;
   useEffect(() => {
     todayReorderGesture.current?.cleanup?.();
     setStartError('');
@@ -5018,6 +5016,9 @@ export function Today({
   const canShowMissed = viewingToday && !trackedActive;
   const showMissedReminder = canShowMissed && !scheduleReview.unresolved.length;
   const missedReminderHidden = isMissedReminderHidden(state,missedSessions);
+  const combineHint = showMissedReminder && !missedReminderHidden && !todayEditMode && onCombineWorkouts
+    && combineDiscovery.available && combineDiscovery.hasMissed
+    ? <CombineWorkoutHint onStart={onCombineWorkouts}/> : null;
   const focusTodayOptions = () => focusNavigationTarget(todayOptionsButton.current);
   const missedReminder = showMissedReminder && <MissedWorkoutSummary state={scheduleState.current} update={update} today={todayKey} sessions={missedSessions}
     onHide={focusTodayOptions} onSelect={request=>{focusTodayOptions();setDetail({flexibleWeek:request});}}/>;
